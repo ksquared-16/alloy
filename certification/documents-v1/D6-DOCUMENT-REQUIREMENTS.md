@@ -181,6 +181,13 @@ version row's CURRENT `review_status`, so each decision overwrote the last; the 
 held both. D7.2 repairs it with an append-only review history (`document_version_review_events`, migration
 `20261213090000`) and is certified locally (`D7-REVIEW-EXPIRATION-RENEWAL.md`); it is not deployed.
 
+**Browser walk fixture order (added 2026-11-09).** The walk needs a live required requirement to list, and certify ends
+with R_ENR as an optional v2, which makes no work. On `1492a2dd` R_ENR was re-published by hand as a required v3; on
+`bce11ed7` (`qar_b74d93c3d853`) it was not, and the walk scored 2/6. That step is now the driver's `walk-seed` phase, and
+the order inside one `authz_q1` run is: `ensure` → `certify` → `walk-seed` (exits 0 only when Kid One is satisfied and
+Kid Two is missing, blocking and in work) → `d6_hosted_browser_walk.mjs` → `reset` (purges R_ENR with every version).
+The `bce11ed7` 2/6 and `1492a2dd` 5/8 records stand as they were run.
+
 **Browser walk** (fixture_admin session, visible controls; the run's requirement re-published as required v3 for the
 walk): Processing → Work → Documents → Missing documents lists the unmet requirement per child with due dates
 (`within_days 14`), Satisfied children absent, the row detail names the action, the due date and a reason-required

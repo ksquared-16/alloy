@@ -1,0 +1,188 @@
+{
+  "trusted_host_action_id": "tha_abe57e5a9f2a7e",
+  "query_hash": "e7e8d3d1442cf1c0705ee33eaae60cce09cfd4ba3e97bdf6ed4e72e6bae0655b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-09T00:21:18.585Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_abe57e5a9f2a7e",
+    "query_hash": "e7e8d3d1442cf1c0705ee33eaae60cce09cfd4ba3e97bdf6ed4e72e6bae0655b",
+    "authorization_id": "grnt_00e805ad4b6d47bf",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-09T00:21:24.791Z",
+    "question_ids": [
+      "d9_zr_00",
+      "d9_zr_qa_orgs_resolve",
+      "d9_zr_tagged_documents",
+      "d9_zr_tagged_objects",
+      "d9_zr_active_installations",
+      "d9_zr_active_credentials",
+      "d9_zr_fixture_people",
+      "d9w_zr_tagged_documents",
+      "d9w_zr_tagged_objects",
+      "d9w_zr_active_installations",
+      "d9w_zr_active_credentials",
+      "d9w_zr_escalation_cases",
+      "d9_xo_tagged_documents_outside_qa",
+      "d9_xo_link_audit_untagged",
+      "d9_xo_events_outside_qa",
+      "d9_xo_security_audit_outside_qa",
+      "d9_zr_retained_catalog_and_audit"
+    ],
+    "questions": {
+      "d9_zr_00": {
+        "question_id": "d9_zr_00",
+        "row_count": null,
+        "rows": [
+          {
+            "fixture": "qa_d9_external_fixture",
+            "namespace": "d9000000-",
+            "document_tags": [
+              "qa-d9r-",
+              "qa-d9w-"
+            ],
+            "qa_shared": "4acc9386-c485-486f-aa1f-05d83499d142",
+            "qa_secondary": "ad53fee2-2570-460f-9300-f0e106c473b6",
+            "read_applications": [
+              "d9-documents-read-cert",
+              "d9-documents-scope-cert"
+            ],
+            "write_applications": [
+              "d9-documents-write-cert",
+              "d9-documents-review-cert",
+              "d9-documents-write-scope-cert"
+            ],
+            "cleanup": "zero_residue"
+          }
+        ]
+      },
+      "d9_zr_qa_orgs_resolve": {
+        "question_id": "d9_zr_qa_orgs_resolve",
+        "row_count": null,
+        "rows": [
+          "orgs ~ qa_shared_and_qa_secondary ~ both_present ~ true"
+        ]
+      },
+      "d9_zr_tagged_documents": {
+        "question_id": "d9_zr_tagged_documents",
+        "row_count": null,
+        "rows": [
+          "documents ~ qa_d9r_tagged_or_on_d9000000_subject ~ zero ~ true"
+        ]
+      },
+      "d9_zr_tagged_objects": {
+        "question_id": "d9_zr_tagged_objects",
+        "row_count": null,
+        "rows": [
+          "storage_objects ~ qa_d9r_tagged_or_under_d9000000_subject ~ zero ~ true"
+        ]
+      },
+      "d9_zr_active_installations": {
+        "question_id": "d9_zr_active_installations",
+        "row_count": null,
+        "rows": [
+          "app_installations ~ d9_read_applications_not_revoked ~ zero ~ true"
+        ]
+      },
+      "d9_zr_active_credentials": {
+        "question_id": "d9_zr_active_credentials",
+        "row_count": null,
+        "rows": [
+          "app_credentials ~ d9_read_applications_active ~ zero ~ true"
+        ]
+      },
+      "d9_zr_fixture_people": {
+        "question_id": "d9_zr_fixture_people",
+        "row_count": null,
+        "rows": [
+          "customers_members_persons_relationships_enrollments ~ d9000000_fixture ~ zero ~ true"
+        ]
+      },
+      "d9w_zr_tagged_documents": {
+        "question_id": "d9w_zr_tagged_documents",
+        "row_count": null,
+        "rows": [
+          "documents ~ qa_d9w_tagged_or_api_v1_upload_in_qa_orgs ~ zero ~ true"
+        ]
+      },
+      "d9w_zr_tagged_objects": {
+        "question_id": "d9w_zr_tagged_objects",
+        "row_count": null,
+        "rows": [
+          "storage_objects ~ qa_d9w_tagged_or_qa_org_api_uploads_or_filed ~ zero ~ true"
+        ]
+      },
+      "d9w_zr_active_installations": {
+        "question_id": "d9w_zr_active_installations",
+        "row_count": null,
+        "rows": [
+          "app_installations ~ d9_write_applications_not_revoked ~ zero ~ true"
+        ]
+      },
+      "d9w_zr_active_credentials": {
+        "question_id": "d9w_zr_active_credentials",
+        "row_count": null,
+        "rows": [
+          "app_credentials ~ d9_write_applications_active ~ zero ~ true"
+        ]
+      },
+      "d9w_zr_escalation_cases": {
+        "question_id": "d9w_zr_escalation_cases",
+        "row_count": null,
+        "rows": [
+          "processing_cases ~ qa_orgs_api_upload_escalation_or_qa_d9w ~ zero ~ true"
+        ]
+      },
+      "d9_xo_tagged_documents_outside_qa": {
+        "question_id": "d9_xo_tagged_documents_outside_qa",
+        "row_count": null,
+        "rows": [
+          "documents ~ qa_d9_tagged_outside_qa_orgs ~ zero ~ true"
+        ]
+      },
+      "d9_xo_link_audit_untagged": {
+        "question_id": "d9_xo_link_audit_untagged",
+        "row_count": null,
+        "rows": [
+          "workflow_events ~ d9_document_link_issued_on_untagged_document ~ zero ~ true"
+        ]
+      },
+      "d9_xo_events_outside_qa": {
+        "question_id": "d9_xo_events_outside_qa",
+        "row_count": null,
+        "rows": [
+          "workflow_events ~ d9_application_actor_outside_qa_orgs ~ zero ~ true"
+        ]
+      },
+      "d9_xo_security_audit_outside_qa": {
+        "question_id": "d9_xo_security_audit_outside_qa",
+        "row_count": null,
+        "rows": [
+          "app_security_audit_installations ~ d9_applications_outside_qa_orgs ~ zero ~ true"
+        ]
+      },
+      "d9_zr_retained_catalog_and_audit": {
+        "question_id": "d9_zr_retained_catalog_and_audit",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "D9 application catalog rows, revoked installations / credentials, audit history",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "d9_applications": 2,
+            "d9_installations_revoked": 4,
+            "d9_security_audit_rows": 22,
+            "d9_document_link_issued_rows": 2
+          }
+        ]
+      }
+    },
+    "row_count": 17
+  }
+}

@@ -7,7 +7,7 @@ the driver's verdict to FAIL, and access must still be closed. A secret must nev
 
     python3 -I certification/documents-v1/test_d9_hosted_read_cert.py -v   (from the repository root)
 """
-import datetime, json, os, re, shutil, subprocess, sys, tempfile, threading, unittest, uuid
+import base64, datetime, json, os, re, shutil, subprocess, sys, tempfile, threading, time, unittest, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -30,6 +30,11 @@ class Product:
         self.apps = {"d9-documents-read-cert": str(uuid.uuid4()), "d9-documents-scope-cert": str(uuid.uuid4()), "alloy-cert-sandbox": str(uuid.uuid4())}
         self.inst, self.creds, self.tokens, self.docs = {}, {}, {}, {}
         self.secrets = set()
+        # workflow_events document_link_issued, per document: what the staff history reads (documentHistory.ts).
+        self.link_events, self.late_audits = {}, []
+
+    def audit_link(self, did):
+        self.link_events.setdefault(did, []).append(datetime.datetime.now(datetime.timezone.utc).isoformat())
 
     # the D9.1 read authority
     def visible(self, inst, doc):
@@ -56,6 +61,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def server_now(self):
+        """The product's clock. qar_143a8fbcad49 showed staging's leading the driver host's."""
+        return time.time() + (5.0 if "server_clock_ahead" in self.product.defects else 0.0)
+
+    def date_time_string(self, timestamp=None):
+        return super().date_time_string(self.server_now() if timestamp is None else timestamp)
+
     def reply(self, status, body, headers=None):
         raw = json.dumps(body).encode()
         self.send_response(status)
@@ -70,8 +82,12 @@ class Handler(BaseHTTPRequestHandler):
         return m.group(1) if m else None
 
     def body(self):
-        n = int(self.headers.get("content-length") or 0)
-        return self.rfile.read(n) if n else b""
+        # Read once, before any reply: a reply that leaves request bytes unread makes the socket close with a reset,
+        # which the driver saw as ConnectionResetError (an intermittent harness failure, not a product behaviour).
+        if not hasattr(self, "_body"):
+            n = int(self.headers.get("content-length") or 0)
+            self._body = self.rfile.read(n) if n else b""
+        return self._body
 
     def do_GET(self):
         self.route("GET")
@@ -86,6 +102,7 @@ class Handler(BaseHTTPRequestHandler):
         self.route("DELETE")
 
     def route(self, method):
+        self.body()
         P, u = self.product, urlparse(self.path)
         path, q = u.path, parse_qs(u.query)
         if path == "/api/build-info":
@@ -97,7 +114,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(401, {"error": "Unauthorized"})
         org = PERSONA_ORG[who]
         if path == "/api/admin/integrations/applications":
-            have = {i["app"] for i in P.inst.values() if i["org"] == org}
+            # listApprovedApplications at 5db26b46 (PR #1637): only a non-revoked installation holds the slot.
+            have = {i["app"] for i in P.inst.values() if i["org"] == org and i["state"] != "revoked"}
             return self.reply(200, {"applications": [{"id": i, "slug": s, "status": "active", "alreadyInstalled": i in have} for s, i in P.apps.items()]})
         if path == "/api/admin/integrations/installations" and method == "GET":
             slug = {i: s for s, i in P.apps.items()}
@@ -107,7 +125,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {"installations": rows})
         if path == "/api/admin/integrations/installations" and method == "POST":
             b = json.loads(self.body())
-            if any(i["app"] == b["applicationId"] and i["org"] == org for i in P.inst.values()):
+            if any(i["app"] == b["applicationId"] and i["org"] == org and i["state"] != "revoked" for i in P.inst.values()):
                 return self.reply(409, {"error": "already connected"})
             iid = str(uuid.uuid4())
             P.inst[iid] = {"app": b["applicationId"], "org": org, "scopes": b["grantedScopes"], "boundary": b["boundaryMode"],
@@ -139,6 +157,15 @@ class Handler(BaseHTTPRequestHandler):
             P.docs[did] = {"org": org, "entity_id": f[b"entity_id"].decode(), "doc_type": f[b"doc_type"].decode(),
                            "sensitivity": "standard", "quarantined": js, "version": 1}
             return self.reply(200, {"document": {"id": did}, **({"screening": {"verdict": "quarantine"}} if js else {})})
+        m = re.fullmatch(r"/api/admin/documents/([^/]+)/history", path)
+        if m and method == "GET":
+            # GET /api/admin/documents/{id}/history at d93d6e17: {ok, document_id, entries}; a link issuance is kind "access".
+            doc = P.docs.get(m.group(1))
+            if not doc or doc["org"] != org:
+                return self.reply(404, {"ok": False, "error": "Not found"})
+            entries = [{"at": doc.get("created_at", ""), "kind": "committed", "action": "Uploaded", "detail": None, "version_number": 1}]
+            entries += [{"at": at, "kind": "access", "action": "Download link issued", "detail": None, "version_number": None} for at in P.link_events.get(m.group(1), [])]
+            return self.reply(200, {"ok": True, "document_id": m.group(1), "entries": entries})
         m = re.fullmatch(r"/api/admin/documents/([^/]+)/(sensitivity|versions)", path)
         if m:
             doc = P.docs[m.group(1)]
@@ -167,6 +194,8 @@ class Handler(BaseHTTPRequestHandler):
             P.tokens[t] = c["inst"]
             P.secrets.add(t)
             return self.reply(200, {"access_token": t, "token_type": "Bearer", "expires_in": 900})
+        while P.late_audits:
+            P.audit_link(P.late_audits.pop())
         t = (self.headers.get("authorization") or "")[7:]
         inst = P.inst.get(P.tokens.get(t, ""))
         rid = str(uuid.uuid4())
@@ -176,7 +205,11 @@ class Handler(BaseHTTPRequestHandler):
             code = t if "echo_token" in P.defects else "insufficient_scope"
             return self.reply(403, {"error": {"code": code, "type": "forbidden_scope", "request_id": rid}})
         nf = lambda: self.reply(404, {"error": {"code": "not_found", "type": "not_found", "message": "Document not found.", "request_id": rid}}, {"x-request-id": rid})
-        pub = lambda k, d: {"id": k, "title": "t", "current_version": {"id": "v", "number": d["version"]}, "subjects": [{"id": d["entity_id"]}]}
+        # toPublicDocument (documentResources.ts at d93d6e17): the full allow-listed field set, nothing else.
+        pub = lambda k, d: {"id": k, "title": "t", "type": {"key": d["doc_type"], "label": None}, "category_path": [],
+                            "subjects": [{"type": "child" if d["entity_id"] in CHILD_SITE else "household" if d["entity_id"] == H1 else "person", "id": d["entity_id"], "role": "primary"}],
+                            "current_version": {"id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{k}/{d['version']}")), "number": d["version"], "content_type": "application/pdf", "size_bytes": 512, "received_at": "2026-11-08T17:23:00.000Z"},
+                            "review_status": None, "valid_until": None, "updated_at": "2026-11-08T17:23:00.000Z"}
         if path == "/api/v1/document-categories":
             return self.reply(200, {"data": [{"key": "general", "parent_key": None}], "next_cursor": None, "sync_token": "s"})
         if path == "/api/v1/documents":
@@ -193,13 +226,29 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             d = P.docs.get(m.group(1))
             if not d or not P.visible(inst, d):
+                if m.group(2) and "audit_refused_link" in P.defects and d:
+                    P.audit_link(m.group(1))
                 return nf()
+            # singleResourceThroughCollection (documentResources.ts:94 at d93d6e17): one resource answers {"data": {...}}.
+            one = (lambda body: body) if "flat_single_resource" in P.defects else (lambda body: {"data": body})
             if m.group(2):
-                exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=3600 if "long_link" in P.defects else 599)).isoformat()
-                url = f"https://ikaxilmwmrmbagoidedu.supabase.co/storage/v1/object/sign/x?token={uuid.uuid4().hex}"
+                # externalDocumentDownloadSource: createSignedUrl(path, 600), then expires_at = issuedAt + 600 on the
+                # function's clock. Storage's token carries iat/exp on Storage's clock.
+                srv = self.server_now()
+                declared = 3600 if {"long_link", "long_declared"} & P.defects else 600
+                enforced = 3600 if {"long_link", "long_token"} & P.defects else 600
+                exp = datetime.datetime.fromtimestamp(srv + declared, datetime.timezone.utc).isoformat()
+                b64 = lambda o: base64.urlsafe_b64encode(json.dumps(o).encode()).decode().rstrip("=")
+                token = ".".join([b64({"alg": "HS256", "typ": "JWT"}), b64({"url": f"documents/{uuid.uuid4().hex}", "iat": int(srv), "exp": int(srv) + enforced}), uuid.uuid4().hex])
+                url = f"https://ikaxilmwmrmbagoidedu.supabase.co/storage/v1/object/sign/x?token={token}"
                 P.secrets.add(url)
-                return self.reply(200, {"document_id": m.group(1), "url": url, "expires_at": exp})
-            return self.reply(200, pub(m.group(1), d))
+                # externalDocumentDownloadSource: recordDocumentAudit, then createSignedUrl, then the response.
+                if "audit_after_response" in P.defects:
+                    P.late_audits.append(m.group(1))
+                elif "audit_missing" not in P.defects:
+                    P.audit_link(m.group(1))
+                return self.reply(200, one({"document_id": m.group(1), "url": url, "expires_at": exp}))
+            return self.reply(200, one(pub(m.group(1), d)))
         return nf()
 
 
@@ -233,6 +282,7 @@ class D9DriverTest(unittest.TestCase):
     def written(self, name):
         p = os.path.join(self.out, f"{name}.{RUN}.json")
         if not os.path.exists(p):
+            sys.stderr.write(f"\n[{name} not written; driver transcript tail]\n{self.transcript[-1500:]}\n")
             return None
         with open(p) as f:
             return json.load(f)
@@ -260,7 +310,9 @@ class D9DriverTest(unittest.TestCase):
         self.assertEqual(self.drive("certify"), 0, self.transcript)
         res = self.written("d9r_hosted_results")
         self.assertEqual(res["verdict"], "PASS", [c for c in res["cases"] if not c["pass"]])
-        self.assertEqual(sorted({c["case"] for c in res["cases"]}), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14])
+        self.assertEqual(sorted({c["case"] for c in res["cases"]}), list(range(1, 15)))
+        c11 = [c for c in res["cases"] if c["case"] == 11]
+        self.assertEqual([(c["as"], c["links_issued_before"], c["links_issued_after"]) for c in c11], [("T_B", 0, 0), ("T_A", 0, 1), ("T_A", 1, 2)])
         self.assert_access_closed()
         self.assertEqual(self.drive("cleanup"), 0, self.transcript)
         self.assertEqual(self.written("d9r_hosted_reset_results")["verdict"], "CLEAN")
@@ -271,6 +323,30 @@ class D9DriverTest(unittest.TestCase):
             self.assertLessEqual(set(row), {"installation_id", "credential_id", "token_exp", "persona", "credential_revoke_status", "disconnect_status"})
         self.assert_no_secret_anywhere()
         self.assertEqual(self.drive("cleanup"), 0, "cleanup is idempotent")
+
+    def test_flat_single_resource_reproduces_exactly_the_hosted_failures(self):
+        """qar_7d7ec3d86bdd: the driver read detail and link bodies flat; staging answers {"data": {...}}. Against a flat
+        product the fixed driver must still FAIL those five, and nothing else: the envelope is required, not tolerated."""
+        self.start({"flat_single_resource"})
+        self.drive("preflight"), self.drive("docs")
+        self.assertEqual(self.drive("certify"), 1)
+        res = self.written("d9r_hosted_results")
+        failed = sorted((c["case"], c.get("call_index", 0)) for c in res["cases"] if not c["pass"])
+        self.assertEqual(failed, [(6, 0), (10, 1), (10, 2), (12, 0), (14, 0)])
+        self.assertIsNone(res["stop"])
+        self.assert_access_closed()
+
+    def test_case_11_ordering_defects_fail_case_11(self):
+        for defect, who in (("audit_after_response", "T_A"), ("audit_missing", "T_A"), ("audit_refused_link", "T_B")):
+            with self.subTest(defect=defect):
+                self.start({defect})
+                self.drive("preflight"), self.drive("docs")
+                self.assertEqual(self.drive("certify"), 1, defect)
+                res = self.written("d9r_hosted_results")
+                bad = {(c["case"], c["as"]) for c in res["cases"] if not c["pass"]}
+                self.assertIn((11, who), bad, defect)
+                self.assert_access_closed()
+                self.tearDown()
 
     def test_held_document_returned_is_a_security_stop_and_access_still_closes(self):
         self.start({"leak_held"})
@@ -283,7 +359,8 @@ class D9DriverTest(unittest.TestCase):
         self.assert_no_secret_anywhere()
 
     def test_each_authority_defect_fails_the_case_that_names_it(self):
-        for defect, case in (("boundary_leak", 9), ("cross_org", 8), ("emergency_contact_is_guardian", 5), ("long_link", 10)):
+        for defect, case in (("boundary_leak", 9), ("cross_org", 8), ("emergency_contact_is_guardian", 5), ("long_link", 10),
+                             ("long_token", 10), ("long_declared", 10)):
             with self.subTest(defect=defect):
                 self.start({defect})
                 self.drive("preflight"), self.drive("docs")
@@ -291,6 +368,35 @@ class D9DriverTest(unittest.TestCase):
                 res = self.written("d9r_hosted_results")
                 self.assertEqual(res["verdict"], "FAIL")
                 self.assertIn(case, {c["case"] for c in res["cases"] if not c["pass"]}, defect)
+                self.assert_access_closed()
+                self.tearDown()
+
+    def test_server_clock_ahead_passes_case_10_and_reproduces_the_hosted_reading(self):
+        """qar_143a8fbcad49: a correct 600 s link measured 600.13 / 600.27 s on the driver host's clock because staging's
+        clock leads. Measured on one clock each, the same link passes; this host's reading is kept, and decides nothing."""
+        self.start({"server_clock_ahead"})
+        self.drive("preflight"), self.drive("docs")
+        self.assertEqual(self.drive("certify"), 0, self.transcript)
+        c10 = [c for c in self.written("d9r_hosted_results")["cases"] if c["case"] == 10]
+        self.assertEqual(len(c10), 2)
+        for c in c10:
+            self.assertTrue(c["pass"], c)
+            self.assertEqual(c["ttl_enforced_s"], 600)
+            self.assertGreater(c["ttl_host_clock_s"], 600)
+            self.assertLessEqual(c["ttl_declared_s"], 602)
+        self.assert_no_secret_anywhere()
+
+    def test_an_overlong_link_fails_case_10_whichever_clock_carries_it(self):
+        """The regression the skew fix must not lose: a 3600 s link fails whether Storage enforces it or the API declares
+        it, and with the server clock leading as on staging."""
+        for defects in ({"long_token"}, {"long_declared"}, {"long_token", "server_clock_ahead"}, {"long_declared", "server_clock_ahead"}):
+            with self.subTest(defects=sorted(defects)):
+                self.start(defects)
+                self.drive("preflight"), self.drive("docs")
+                self.assertEqual(self.drive("certify"), 1, defects)
+                res = self.written("d9r_hosted_results")
+                failed = sorted((c["case"], c.get("call_index", 0)) for c in res["cases"] if not c["pass"])
+                self.assertEqual(failed, [(10, 1), (10, 2)], defects)
                 self.assert_access_closed()
                 self.tearDown()
 
@@ -330,10 +436,44 @@ class D9DriverTest(unittest.TestCase):
         self.assertEqual(self.drive("docs"), 1, "docs refuses without a READY preflight")
         self.assertEqual(self.product.docs, {})
 
+    def test_a_revoked_prior_installation_does_not_block_a_rerun(self):
+        """qar_31100f9d04e5 stopped at preflight on qar_7d7ec3d86bdd's revoked installations; PR #1637 frees the slot."""
+        self.start()
+        cid = str(uuid.uuid4())
+        self.product.inst["old"] = {"app": self.product.apps["d9-documents-read-cert"], "org": QA_SHARED, "scopes": [], "boundary": "org_wide",
+                                    "locations": [], "state": "revoked", "cred": cid}
+        self.product.creds[cid] = {"inst": "old", "secret": "sk_old", "client": "cl_old", "status": "revoked"}
+        self.assertEqual(self.drive("preflight"), 0, self.transcript)
+        self.drive("docs")
+        self.assertEqual(self.drive("certify"), 0, self.transcript)
+        self.assertEqual(self.product.inst["old"]["state"], "revoked")
+        self.assert_access_closed()
+
     def test_only_staging_or_loopback(self):
         self.start()
         self.assertNotEqual(self.drive("preflight", base="https://example.com"), 0)
         self.assertIn("refused", self.transcript)
+
+
+class HostedRunRecordTest(unittest.TestCase):
+    def test_hosted_run_qar_7d7ec3d86bdd_stays_recorded_as_run(self):
+        """The receipt of the hosted run is evidence, not a fixture: 35 passed, 5 failed, the five named, verdict FAIL."""
+        with open(os.path.join(HERE, "d9r_hosted_results.qar_7d7ec3d86bdd.json")) as f:
+            res = json.load(f)
+        self.assertEqual((res["passed"], res["failed"], res["verdict"], res["stop"]), (35, 5, "FAIL", None))
+        failed = sorted((c["case"], c.get("call_index", 0)) for c in res["cases"] if not c["pass"])
+        self.assertEqual(failed, [(6, 0), (10, 1), (10, 2), (12, 0), (14, 0)])
+        self.assertTrue(res["close"]["all_closed"])
+
+    def test_hosted_run_qar_143a8fbcad49_stays_recorded_as_run(self):
+        """Rerun 2 under driver bfed4a96: 41 passed, 2 failed (case 10 x2 on the cross-clock ttl bound). Evidence, not a fixture."""
+        with open(os.path.join(HERE, "d9r_hosted_results.qar_143a8fbcad49.json")) as f:
+            res = json.load(f)
+        self.assertEqual((res["passed"], res["failed"], res["verdict"], res["stop"]), (41, 2, "FAIL", None))
+        failed = sorted((c["case"], c.get("call_index", 0)) for c in res["cases"] if not c["pass"])
+        self.assertEqual(failed, [(10, 1), (10, 2)])
+        self.assertEqual([round(c["ttl_seconds"], 2) for c in res["cases"] if c["case"] == 10], [600.13, 600.27])
+        self.assertTrue(res["close"]["all_closed"])
 
 
 if __name__ == "__main__":

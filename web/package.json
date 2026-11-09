@@ -119,6 +119,8 @@
     "dev:qa:documents-shared-child-reset": "node scripts/qaDocumentsSharedChildFixture.mjs reset",
     "dev:qa:documents-d9-external-fixture-ensure": "node scripts/qaDocumentsD9ExternalFixture.mjs ensure",
     "dev:qa:documents-d9-external-fixture-reset": "node scripts/qaDocumentsD9ExternalFixture.mjs reset",
+    "dev:qa:documents-d9-aged-upload-ensure": "node scripts/qaDocumentsD9WriteFixture.mjs aged-ensure",
+    "dev:qa:documents-d9-write-fixture-reset": "node scripts/qaDocumentsD9WriteFixture.mjs write-reset",
     "dev:cert:seed-financials-demo-tenant": "node scripts/seedFinancialsDemoTenant.mjs",
     "dev:qa:converge-placement-waitlisted": "tsx --tsconfig tsconfig.json scripts/qaConvergePlacementWaitlistedChildren.ts",
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",

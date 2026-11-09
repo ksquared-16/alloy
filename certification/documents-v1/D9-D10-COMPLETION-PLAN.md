@@ -99,7 +99,7 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 
 | Item | L | R | H | C | D | A | Owner, then next step |
 |---|---|---|---|---|---|---|---|
-| D9-H1 hosted read proof | ✔ D9.1 (increment 1) | — | — | ✔ #1627 | ✔ `daf87893` | — | Host Capacity **H2** (QA plan) → DEC-1 app cards → DEC-2 hosted run (`D9-1-HOSTED-QA-PLAN.md`) |
+| D9-H1 hosted read proof | ✔ D9.1 (increment 1) | — | ✔ **PASSED** `qar_242c9c123886` on `5db26b46`: 43/0, ZERO_RESIDUE (`d9-hosted/D9-H1-HOSTED-RUN-RECORD.qar_242c9c123886.md`; earlier runs unchanged) | ✔ #1627 | ✔ `daf87893` | — | Kelly's acceptance; final hosted regression |
 | D9.2 write surface (Q1–Q8) | ✔ `2181bf936`…`30f71b2ee` | ✔ `documents-d9-application-filing.sql` PASSED on `certenv-dec617feb5` (`gar_46d2274f98232f`, rollback verified) | — | — | — | — | Documents: run on certenv (§8). Then hosted D9-H2 (`D9-2-3-HOSTED-QA-PLAN.md`) after deploy |
 | D9.2 24 h unfiled-upload handoff | ✔ `88ebd3848`, 13 + 2 tests | ✔ SQL half (one case per upload) in `processing-open-case-atomic-preapply.sql` PASSED (`gar_6bf71cba9a81ce`) | — | — | — | — | **Inert until D10-A3** applies the atomic open. Hosted W-ES after that apply |
 | D9.3 lifecycle (review, validity, replacement, archive, reads) | ✔ `6b3c80f8f`, `aae87158f` | ✔ Replacement with no user in the application-filing invariant PASSED (`gar_46d2274f98232f`) | — | — | — | — | Hosted W-RV1…W-RQ1 with `documents.review` (§2 of the D9.2/3 plan) |

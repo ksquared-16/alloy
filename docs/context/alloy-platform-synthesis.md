@@ -71,7 +71,7 @@ Communications and Configuration secondary.
 | Subsidy, Commercial | certified money |
 | Operational Intelligence, Communications, Configuration, Documents, AI/BOS | certified platform services |
 | **Financials / Payments** | **PENDING** — implemented on staging; not certified; stability gate CLOSED (see below) |
-| Documents | certified lane; D1a–D5 hosted ZERO_RESIDUE; **D6 hosted residue open debt** |
+| Documents | certified lane; D1a–D8 hosted ZERO_RESIDUE (D6 residue closed, census `gar_53d6744eb1cf1a`); D9.1 read proven hosted (`qar_143a8fbcad49`, case 10 driver re-pin pending); D9.2/D9.3 hosted proof and D10 scanner outstanding (`certification/documents-v1/DOCUMENTS-REMAINING-INVENTORY.md`) |
 | Tours | routed under Enrollment/Placement (no separate lane) |
 
 The per-domain certification state, owners and staleness triggers are in

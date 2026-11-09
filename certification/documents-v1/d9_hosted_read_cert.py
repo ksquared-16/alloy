@@ -15,14 +15,15 @@ cross_org_admin (QA Secondary) sessions.
              D9 installation, deletes every tagged document, then re-reads each to prove it is gone. Exits 1 if
              anything remains.
 
-After cleanup the operator runs qa_d9_external_fixture_reset, then d9-residue-census.sql (zero residue is the census
-verdict, not this driver's), then environment.qa_run_close.
+After cleanup, follow the run order of record (d9-hosted/D9-H1-HOSTED-RUN-ORDER.md): the case 11 link-audit census,
+qa_d9_external_fixture_reset, qa_run_close #1, then d9-residue-census.sql (all 15 registered checks) read after closed_at,
+then qa_run_close #2 naming that census. Zero residue is the census verdict, not this driver's.
 
 SECRET-BLIND. A client secret, an access token or a signed link url is held in memory only. Every line printed and
 every file written passes through emit(), which stops the run (exit 3) rather than write anything containing one.
 Receipts carry installation id, credential id and token expiry only.
 """
-import datetime, hashlib, json, os, re, subprocess, sys, urllib.error, urllib.parse, urllib.request, uuid
+import base64, datetime, email.utils, hashlib, json, os, re, subprocess, sys, urllib.error, urllib.parse, urllib.request, uuid
 
 STAGING = "https://staging.workwithalloy.com"
 # The driver's own tests point it at a loopback fake. Nothing else is accepted: hosted means staging.
@@ -140,6 +141,46 @@ def j(path, persona, body, method="POST"):
 def err(b):
     e = b.get("error") if isinstance(b, dict) else None
     return e if isinstance(e, dict) else {"code": b.get("code") if isinstance(b, dict) else None}
+
+
+def one(b):
+    """The deployed single-resource envelope: GET /documents/{id} and /download-link answer {"data": {...}}
+    (singleResourceThroughCollection, documentResources.ts at d93d6e17). A bare object is not that contract and reads as
+    empty, so a case built on it fails; it never passes on a shape the product does not serve."""
+    d = b.get("data") if isinstance(b, dict) else None
+    return d if isinstance(d, dict) else {}
+
+
+# Case 10 link lifetime. signedUrlExpirySeconds("download") is 600. qar_143a8fbcad49 measured expires_at against THIS
+# host's clock and got 600.13 / 600.27 s: the server's clock leads, so a cross-clock bound with no margin fails a correct
+# link. Each lifetime below is read on ONE clock, and this host's is reported but decides nothing.
+LINK_MAX_S = 600
+DATE_SLACK_S = 2  # the HTTP Date header has 1 s resolution, and the edge stamps it after the function stamps expires_at
+
+
+def token_lifetime(url):
+    """exp - iat of the Storage-signed token: the lifetime Storage will enforce, on Storage's clock alone. None if the
+    token is not a readable JWT. Only the two numbers leave this function; the claims name the object path."""
+    tok = (urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("token") or [""])[0]
+    parts = tok.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+    except Exception:
+        return None
+    iat, exp = claims.get("iat"), claims.get("exp")
+    ok = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (iat, exp))
+    return exp - iat if ok else None
+
+
+def declared_lifetime(expires_at, date_header):
+    """expires_at minus the response's own Date header: the lifetime the API declares, on the server side's clock."""
+    try:
+        exp = datetime.datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+        return (exp - email.utils.parsedate_to_datetime(date_header)).total_seconds()
+    except Exception:
+        return None
 
 
 def tiny_pdf(label):
@@ -296,6 +337,16 @@ def certify():
                     return s, b, raw, got, sync
             return 0, {}, b"", got, sync
 
+        def links_issued(did):
+            """Case 11 without a clock: the document's audited link issuances as the staff history reads them
+            (GET /api/admin/documents/{id}/history; workflow_events document_link_issued -> kind "access"). Read-only.
+            None when it cannot be read, which fails the case that asked."""
+            s, b, _, _ = call(f"/api/admin/documents/{did}/history", A)
+            entries = b.get("entries") if isinstance(b, dict) else None
+            if s != 200 or not isinstance(entries, list):
+                return None
+            return sum(1 for e in entries if isinstance(e, dict) and e.get("kind") == "access" and e.get("action") == "Download link issued")
+
         def not_found_shape(raw, headers):
             body = json.loads(raw)
             body.get("error", {}).pop("request_id", None)
@@ -326,7 +377,7 @@ def certify():
         # 6 detail
         s, b, raw, _ = v1("T_A", f"/documents/{d['D_STD_C']}")
         text = raw.decode(errors="replace").lower()
-        case(6, "detail", "T_A", "D_STD_C", s, b, raw, s == 200 and (b or {}).get("id") == d["D_STD_C"]
+        case(6, "detail", "T_A", "D_STD_C", s, b, raw, s == 200 and one(b).get("id") == d["D_STD_C"]
              and not any(k in text for k in ("storage_path", "bucket", "\"url\"", "http://", "https://")))
         # 7 indistinguishable 404 (and 8: T_A → D_B)
         shapes = set()
@@ -343,10 +394,15 @@ def certify():
         case(7, "404 body and header set byte-identical", "T_A", "all of the above", 200 if len(shapes) == 1 else 0, {}, b"", len(shapes) == 1, distinct_shapes=len(shapes))
         # 8 cross-org
         for path, label in ((f"/documents/{d['D_STD_C']}", "D_STD_C"), (f"/documents/{d['D_STD_C']}/download-link", "D_STD_C link")):
+            before = links_issued(d["D_STD_C"]) if label.endswith("link") else None
             s, b, raw, _ = v1("T_B", path)
             if s == 200:
                 stop = stop or f"security stop: T_B received 200 for {label}"
             case(8, "cross-org", "T_B", label, s, b, raw, s == 404)
+            if label.endswith("link"):
+                after = links_issued(d["D_STD_C"])
+                case(11, "refused link call not audited", "T_B", label, s, {}, b"", s == 404 and before is not None and after == before,
+                     links_issued_before=before, links_issued_after=after)
         s, b, raw, got, _ = listed("T_B", f"child_id={C1}")
         case(8, "cross-org list", "T_B", "child_id=C1", s, b, raw, s == 200 and not got)
         # 9 locations boundary
@@ -360,20 +416,35 @@ def certify():
         case(9, "in-boundary detail", "T_L", "D_STD_C", s, b, raw, s == 200)
         # 10 + 12 download link, new per call (11 is the census's: these times are its input)
         for i in (1, 2):
+            before = links_issued(d["D_STD_C"])
             sent = now()
-            s, b, raw, _ = v1("T_A", f"/documents/{d['D_STD_C']}/download-link")
+            s, b, raw, hdrs = v1("T_A", f"/documents/{d['D_STD_C']}/download-link")
             got_at = now()
-            url = (b or {}).get("url") or ""
+            after = links_issued(d["D_STD_C"])
+            r = one(b)
+            url = r.get("url") or ""
             if url:
                 _secrets.add(url)
                 links.append(url)
-            exp = (b or {}).get("expires_at")
+            exp = r.get("expires_at")
+            # This host's clock: information only (qar_143a8fbcad49 failed on it: 600.13 / 600.27 s).
             ttl = (datetime.datetime.fromisoformat(exp.replace("Z", "+00:00")) - got_at).total_seconds() if exp else None
+            enforced = token_lifetime(url)
+            declared = declared_lifetime(exp, hdrs.get("date"))
             host = urllib.parse.urlparse(url).hostname or ""
-            case(10, "download link", "T_A", "D_STD_C", s, b, raw, s == 200 and (b or {}).get("document_id") == d["D_STD_C"]
-                 and ttl is not None and 0 < ttl <= 600 and host.endswith(".supabase.co") and "path" not in (b or {}),
+            case(10, "download link", "T_A", "D_STD_C", s, b, raw, s == 200 and r.get("document_id") == d["D_STD_C"]
+                 and enforced is not None and 0 < enforced <= LINK_MAX_S
+                 and declared is not None and 0 < declared <= LINK_MAX_S + DATE_SLACK_S
+                 and host.endswith(".supabase.co") and "path" not in r and "path" not in (b or {}),
                  call_index=i, sent_at=sent.isoformat(), response_at=got_at.isoformat(), url_host=host,
-                 url_sha256=hashlib.sha256(url.encode()).hexdigest(), ttl_seconds=ttl)
+                 url_sha256=hashlib.sha256(url.encode()).hexdigest(), ttl_enforced_s=enforced, ttl_declared_s=declared,
+                 ttl_host_clock_s=ttl)
+            # 11: the audit row is committed and readable by the first request after the response: absent from the
+            # history read that completed before the call was sent, present in the one sent after its response arrived.
+            # Happens-before, not clocks. That the audit precedes the signing inside the request is the route's order,
+            # locked by web/tests/platform/external/documentsResource.test.ts ("no audit record, no link").
+            case(11, "audit visible after link response", "T_A", "D_STD_C", s, {}, b"",
+                 s == 200 and before is not None and after == before + 1, call_index=i, links_issued_before=before, links_issued_after=after)
         case(12, "new link per call", "T_A", "D_STD_C x2", 200 if len(set(links)) == 2 else 0, {}, b"", len(set(links)) == 2)
         # 13 paging
         s, b, raw, got, sync = listed("T_A", f"child_id={C1}&limit=1")
@@ -381,7 +452,7 @@ def certify():
              and sync is not None, pages_ids=len(got))
         # 14 version-current
         s, b, raw, _ = v1("T_A", f"/documents/{d['D_SUP']}")
-        case(14, "version-current", "T_A", "D_SUP", s, b, raw, s == 200 and ((b or {}).get("current_version") or {}).get("number") == 2)
+        case(14, "version-current", "T_A", "D_SUP", s, b, raw, s == 200 and (one(b).get("current_version") or {}).get("number") == 2)
     except RuntimeError as e:
         stop = stop or f"setup stop: {e}"
     finally:
@@ -436,7 +507,8 @@ def cleanup():
         if s1 not in (200, 404) or s2 != 404:
             out["remaining"].append(f"document {key} delete={s1} verify={s2}")
     out["verdict"] = "CLEAN" if not out["remaining"] else "RESIDUE"
-    out["next"] = ["qa_d9_external_fixture_reset", "database.read_census d9-residue-census.sql (all d9_zr_* true)", "environment.qa_run_close"]
+    out["next"] = ["database.read_census d9-link-audit-census.sql (case 11)", "qa_d9_external_fixture_reset", "environment.qa_run_close #1",
+                   "database.read_census d9-residue-census.sql after closed_at (all 15 registered checks)", "environment.qa_run_close #2 naming that census"]
     emit(out, RESET_FILE)
     emit(line=f"cleanup {out['verdict']}: {len(out['installations'])} installations closed, {len(out['documents'])} documents removed; remaining={out['remaining']}")
     return 0 if out["verdict"] == "CLEAN" else 1
