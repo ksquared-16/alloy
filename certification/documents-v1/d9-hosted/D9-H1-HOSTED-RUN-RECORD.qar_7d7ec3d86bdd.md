@@ -44,3 +44,7 @@ only: no D9 write or review testing, no scanner or retrieval traffic.
 Driver `bfed4a96…` (Documents `6376729c8`) reads the envelope and proves case 11's order by history counts, not
 clocks. It does not change this run: its five failures stay failed and case 11 stays timing inconclusive. Re-pin
 request: `HOST-CAPACITY-D9-H1-DRIVER-REPIN.md`; rerun path: `D9-H1-RERUN-PATH.md`.
+
+Rerun `qar_31100f9d04e5` (driver `bfed4a96…`, 2026-11-09) stopped at driver preflight: this run's four revoked
+installations hold `uq_app_installations_app_org`. It produced no case results, so nothing above is superseded:
+`D9-H1-HOSTED-RUN-RECORD.qar_31100f9d04e5.md`.
