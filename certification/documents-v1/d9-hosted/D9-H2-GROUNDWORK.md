@@ -10,10 +10,11 @@ D9-H1 passed on `qar_242c9c123886` (`D9-H1-HOSTED-RUN-RECORD.qar_242c9c123886.md
 |---|---|---|
 | `d9-documents-write-cert` | `gar_4b09e820576d7a` (`tha_7e5c250fd74953`) | **Yes**: `abb37073-5f65-43c1-9ca1-444c55c653b2`, active, alloy_managed, sandbox, private; audit `82b6ef13…`; no installation, no credential |
 | `d9-documents-review-cert` | `gar_22a599230c3281` | **No.** The card reads `complete` and operator-approved (04:37:15Z), but its result is the write-cert result above: same `trusted_host_action_id`, `application_id` and `audit_id` |
+| `d9-documents-review-cert` (refiled) | `gar_c63c05a46dcced`, run `erun2_c623dd5580480299` (`tha_34fd83d08beab5`), approved 04:46:47Z | **Yes**: `12c6e113-d9d1-4914-9ce9-89f1b8e1262a` (≠ write-cert `abb37073…`), `application_key` = slug, active, alloy_managed, sandbox, private; audit `36716651…`; no installation, no credential |
 | `d9-documents-write-scope-cert` | `gar_d25b3589552809` | **No.** Same aliasing (approved 04:38:16Z) |
 
 Cause: trusted-host execution is deduplicated per execution run, and the dedupe ignores the `slug` input, so the
-second and third registrations in one run replayed the first. Each remaining slug has to be filed from its **own**
+second and third registrations in one run replayed the first. The remaining slug (`d9-documents-write-scope-cert`) has to be filed from its **own**
 execution run, and its result checked with `result.application_key == inputs.slug` before it is recorded. Payloads,
 unchanged: `.vacilando-payloads/d9h2-g2-register-d9-documents-review-cert.json` and `d9h2-g3-register-d9-documents-write-scope-cert.json`.
 This is a gateway defect for Host Capacity: an operator approved a card whose execution never ran.
