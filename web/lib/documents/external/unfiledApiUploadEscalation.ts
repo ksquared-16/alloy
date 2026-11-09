@@ -24,6 +24,13 @@
  * Idempotent by construction: the case is keyed by the document (one primary source per (org, kind, id), enforced by
  * `uq_pcs_primary_source_once`); a retry finds it and only repairs a lost annotation; no audit is written for an upload
  * that already has its case.
+ *
+ * Later-wake confirmation (D9-H2 W-ES "a second wake adds nothing"): the FIRST later wake that reaches an escalated,
+ * still-unfiled upload and finds its case stamps `api_upload_escalation.confirmed_by_wake_at` with that wake's own
+ * database clock stamp (`record_scheduled_work_wake`'s return, passed in as `wakeClockAt`). Written once, never moved,
+ * never an audit. It is the only persisted trace that a later wake's escalation step reached the upload and added nothing.
+ * No clock stamp, an unreadable one, a failed write or a case changed since it was read (compare-and-set on updated_at)
+ * leaves it absent (fail closed): nothing is inferred from a wake that merely started, and nothing is overwritten.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -49,10 +56,14 @@ type UploadRow = { id: string; org_id: string; title: string | null; original_fi
 type CaseRow = { id: string; org_id: string; status: string; metadata: Record<string, unknown> | null };
 
 export type EscalationOutcome =
-    | { document_id: string; outcome: "case_opened" | "case_existing" | "annotation_repaired"; processing_case_id: string }
+    | { document_id: string; outcome: "case_opened" | "annotation_repaired"; processing_case_id: string }
+    | { document_id: string; outcome: "case_existing"; processing_case_id: string; confirmation?: LaterWakeConfirmation }
     | { document_id: string; outcome: "held"; reason: "processing_atomic_open_unavailable" }
     | { document_id: string; outcome: "skipped"; reason: "unavailable" | "not_api_upload" | "already_filed" }
     | { document_id: string; outcome: "failed"; reason: "audit_unavailable" | "case_open_failed" | "annotation_failed" | "lookup_failed" };
+
+/** What a later wake did with an already-escalated upload's confirmation stamp. Only "stamped" writes. */
+export type LaterWakeConfirmation = "stamped" | "already_confirmed" | "no_wake_clock" | "conflict" | "failed";
 
 export type EscalationSummary = {
     scanned: number;
@@ -63,6 +74,11 @@ export type EscalationSummary = {
     skipped: number;
     failed: number;
     resolved: number;
+    /** Escalated uploads whose later-wake confirmation this wake stamped (write-once). */
+    confirmed: number;
+    /** Escalated uploads whose confirmation was not written: the write failed or the case changed since it was read
+     *  (left absent; the next wake retries). */
+    confirm_failed: number;
     /** More candidates remained than one wake reads; the next wake continues. */
     truncated: boolean;
     outcomes: EscalationOutcome[];
@@ -75,7 +91,38 @@ export type EscalationDeps = {
     nowMs?: number;
     /** Pages of {@link PAGE} uploads read per wake (newest past the grace period first). */
     maxPages?: number;
+    /** This wake's database clock stamp (`record_scheduled_work_wake`). Absent → no later-wake confirmation is written. */
+    wakeClockAt?: string | null;
 };
+
+/** An ISO-8601 instant with an explicit zone, as Postgres renders a timestamptz; anything else is not a clock stamp. */
+const CLOCK_STAMP = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,6})?(Z|[+-]([01]\d|2[0-3])(:?[0-5]\d)?)$/;
+
+/**
+ * Write-once: the first later wake that finds the case records its own clock stamp; an existing stamp is never moved.
+ *
+ * Compare-and-set on `updated_at` (refreshed by `trg_processing_cases_updated_at` on every UPDATE): the metadata written
+ * is the copy read moments before, so the update applies only if the case has not changed since. A concurrent writer
+ * (a staff action, the filing close, another wake) makes it match no row: nothing is overwritten, and the next wake
+ * re-reads and retries. Never a lost key.
+ */
+async function confirmLaterWake(
+    supabase: SupabaseClient,
+    c: { orgId: string; caseId: string; meta: Record<string, unknown>; updatedAt: string | null; wakeClockAt: string | null | undefined },
+): Promise<LaterWakeConfirmation> {
+    if (typeof c.wakeClockAt !== "string" || !CLOCK_STAMP.test(c.wakeClockAt)) return "no_wake_clock";
+    const esc = asRecord(c.meta[API_UPLOAD_ESCALATION_KEY]);
+    if (typeof esc.confirmed_by_wake_at === "string" && esc.confirmed_by_wake_at) return "already_confirmed";
+    const scoped = supabase
+        .from("processing_cases")
+        .update({ metadata: { ...c.meta, [API_UPLOAD_ESCALATION_KEY]: { ...esc, confirmed_by_wake_at: c.wakeClockAt } } })
+        .eq("org_id", c.orgId)
+        .eq("id", c.caseId);
+    const guarded = c.updatedAt === null ? scoped.is("updated_at", null) : scoped.eq("updated_at", c.updatedAt);
+    const { data, error } = await guarded.select("id");
+    if (error) return "failed";
+    return Array.isArray(data) && data.length === 1 ? "stamped" : "conflict";
+}
 
 const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
@@ -141,11 +188,15 @@ export async function escalateUnfiledApiUploads(deps: EscalationDeps): Promise<E
     const nowMs = deps.nowMs ?? Date.now();
     const cutoffIso = new Date(nowMs - UNFILED_API_UPLOAD_GRACE_MS).toISOString();
     const escalatedAt = new Date(nowMs).toISOString();
-    const sum: EscalationSummary = { scanned: 0, opened: 0, existing: 0, repaired: 0, held: 0, skipped: 0, failed: 0, resolved: 0, truncated: false, outcomes: [] };
+    const sum: EscalationSummary = { scanned: 0, opened: 0, existing: 0, repaired: 0, held: 0, skipped: 0, failed: 0, resolved: 0, confirmed: 0, confirm_failed: 0, truncated: false, outcomes: [] };
     const push = (o: EscalationOutcome) => {
         sum.outcomes.push(o);
         if (o.outcome === "case_opened") sum.opened += 1;
-        else if (o.outcome === "case_existing") sum.existing += 1;
+        else if (o.outcome === "case_existing") {
+            sum.existing += 1;
+            if (o.confirmation === "stamped") sum.confirmed += 1;
+            else if (o.confirmation === "failed" || o.confirmation === "conflict") sum.confirm_failed += 1;
+        }
         else if (o.outcome === "annotation_repaired") sum.repaired += 1;
         else if (o.outcome === "held") sum.held += 1;
         else if (o.outcome === "skipped") sum.skipped += 1;
@@ -163,7 +214,7 @@ export async function escalateUnfiledApiUploads(deps: EscalationDeps): Promise<E
         const fresh = rows.filter((r) => !seen.has(r.id));
         for (const r of fresh) seen.add(r.id);
         sum.scanned += fresh.length;
-        if (fresh.length) await escalatePage(supabase, processing, audit, fresh, escalatedAt, push);
+        if (fresh.length) await escalatePage(supabase, processing, audit, fresh, escalatedAt, push, deps.wakeClockAt);
         if (rows.length < PAGE) break;
         // Keyset on created_at (inclusive, de-duplicated by id). A page of one timestamp cannot advance: stop, report.
         const last = rows[rows.length - 1].created_at;
@@ -186,6 +237,7 @@ async function escalatePage(
     rows: UploadRow[],
     escalatedAt: string,
     push: (o: EscalationOutcome) => void,
+    wakeClockAt?: string | null,
 ): Promise<void> {
     // The cases these uploads already have, in one read.
     const { data: srcs, error } = await supabase
@@ -208,9 +260,13 @@ async function escalatePage(
         const existingCase = caseOf.get(doc.id);
         if (existingCase) {
             // Already escalated. Only a lost annotation is repaired; nothing is audited again.
-            const { data } = await supabase.from("processing_cases").select("metadata").eq("org_id", doc.org_id).eq("id", existingCase).maybeSingle();
-            if (isEscalatedCase(asRecord((data as { metadata?: unknown } | null)?.metadata))) {
-                push({ document_id: doc.id, outcome: "case_existing", processing_case_id: existingCase });
+            const { data } = await supabase.from("processing_cases").select("metadata, updated_at").eq("org_id", doc.org_id).eq("id", existingCase).maybeSingle();
+            const row = data as { metadata?: unknown; updated_at?: unknown } | null;
+            const meta = asRecord(row?.metadata);
+            if (isEscalatedCase(meta)) {
+                const updatedAt = typeof row?.updated_at === "string" ? row.updated_at : null;
+                const confirmation = await confirmLaterWake(supabase, { orgId: doc.org_id, caseId: existingCase, meta, updatedAt, wakeClockAt });
+                push({ document_id: doc.id, outcome: "case_existing", processing_case_id: existingCase, confirmation });
             } else if (await annotateCase(supabase, { orgId: doc.org_id, caseId: existingCase, doc, escalatedAt })) {
                 push({ document_id: doc.id, outcome: "annotation_repaired", processing_case_id: existingCase });
             } else {
