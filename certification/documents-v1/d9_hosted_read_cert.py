@@ -23,7 +23,7 @@ SECRET-BLIND. A client secret, an access token or a signed link url is held in m
 every file written passes through emit(), which stops the run (exit 3) rather than write anything containing one.
 Receipts carry installation id, credential id and token expiry only.
 """
-import datetime, hashlib, json, os, re, subprocess, sys, urllib.error, urllib.parse, urllib.request, uuid
+import base64, datetime, email.utils, hashlib, json, os, re, subprocess, sys, urllib.error, urllib.parse, urllib.request, uuid
 
 STAGING = "https://staging.workwithalloy.com"
 # The driver's own tests point it at a loopback fake. Nothing else is accepted: hosted means staging.
@@ -149,6 +149,38 @@ def one(b):
     empty, so a case built on it fails; it never passes on a shape the product does not serve."""
     d = b.get("data") if isinstance(b, dict) else None
     return d if isinstance(d, dict) else {}
+
+
+# Case 10 link lifetime. signedUrlExpirySeconds("download") is 600. qar_143a8fbcad49 measured expires_at against THIS
+# host's clock and got 600.13 / 600.27 s: the server's clock leads, so a cross-clock bound with no margin fails a correct
+# link. Each lifetime below is read on ONE clock, and this host's is reported but decides nothing.
+LINK_MAX_S = 600
+DATE_SLACK_S = 2  # the HTTP Date header has 1 s resolution, and the edge stamps it after the function stamps expires_at
+
+
+def token_lifetime(url):
+    """exp - iat of the Storage-signed token: the lifetime Storage will enforce, on Storage's clock alone. None if the
+    token is not a readable JWT. Only the two numbers leave this function; the claims name the object path."""
+    tok = (urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("token") or [""])[0]
+    parts = tok.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+    except Exception:
+        return None
+    iat, exp = claims.get("iat"), claims.get("exp")
+    ok = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (iat, exp))
+    return exp - iat if ok else None
+
+
+def declared_lifetime(expires_at, date_header):
+    """expires_at minus the response's own Date header: the lifetime the API declares, on the server side's clock."""
+    try:
+        exp = datetime.datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+        return (exp - email.utils.parsedate_to_datetime(date_header)).total_seconds()
+    except Exception:
+        return None
 
 
 def tiny_pdf(label):
@@ -386,7 +418,7 @@ def certify():
         for i in (1, 2):
             before = links_issued(d["D_STD_C"])
             sent = now()
-            s, b, raw, _ = v1("T_A", f"/documents/{d['D_STD_C']}/download-link")
+            s, b, raw, hdrs = v1("T_A", f"/documents/{d['D_STD_C']}/download-link")
             got_at = now()
             after = links_issued(d["D_STD_C"])
             r = one(b)
@@ -395,12 +427,18 @@ def certify():
                 _secrets.add(url)
                 links.append(url)
             exp = r.get("expires_at")
+            # This host's clock: information only (qar_143a8fbcad49 failed on it: 600.13 / 600.27 s).
             ttl = (datetime.datetime.fromisoformat(exp.replace("Z", "+00:00")) - got_at).total_seconds() if exp else None
+            enforced = token_lifetime(url)
+            declared = declared_lifetime(exp, hdrs.get("date"))
             host = urllib.parse.urlparse(url).hostname or ""
             case(10, "download link", "T_A", "D_STD_C", s, b, raw, s == 200 and r.get("document_id") == d["D_STD_C"]
-                 and ttl is not None and 0 < ttl <= 600 and host.endswith(".supabase.co") and "path" not in r and "path" not in (b or {}),
+                 and enforced is not None and 0 < enforced <= LINK_MAX_S
+                 and declared is not None and 0 < declared <= LINK_MAX_S + DATE_SLACK_S
+                 and host.endswith(".supabase.co") and "path" not in r and "path" not in (b or {}),
                  call_index=i, sent_at=sent.isoformat(), response_at=got_at.isoformat(), url_host=host,
-                 url_sha256=hashlib.sha256(url.encode()).hexdigest(), ttl_seconds=ttl)
+                 url_sha256=hashlib.sha256(url.encode()).hexdigest(), ttl_enforced_s=enforced, ttl_declared_s=declared,
+                 ttl_host_clock_s=ttl)
             # 11: the audit row is committed and readable by the first request after the response: absent from the
             # history read that completed before the call was sent, present in the one sent after its response arrived.
             # Happens-before, not clocks. That the audit precedes the signing inside the request is the route's order,
