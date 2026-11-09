@@ -12,7 +12,7 @@ Sources: the contract `D9-2-3-HOSTED-QA-PLAN.md` (not edited); the D9-H1 order o
 | Rule | Consequence here |
 |---|---|
 | A residue census binds only if it completed **after** `close.closed_at` | Close #1 closes access (`ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED`); a second close naming a post-close census gives `ZERO_RESIDUE` |
-| A `qa_plan` reconciliation needs exactly one OPEN, live hosted run of its plan | Both resets (aged upload, external fixture) run **before** close #1 |
+| A `qa_plan` reconciliation needs exactly one OPEN, live hosted run of its plan | Both resets (write fixture, step 9; external fixture, step 10) run **before** close #1 |
 | Close #1 deletes the run's session directory | Driver cleanup (audited document deletes, revokes) runs before close #1 |
 | `database.read_census` is never reused (`reuseAuthorized: () => false`) | Pre-write and post-close censuses may be filed in one execution run; freshness is a distinct `tha_` and `census_run_at` after `closed_at` |
 | **Other** trusted-host actions ARE deduplicated per execution run, ignoring inputs (measured 2026-11-09: three application registrations in one run replayed the first) | The two reconciliations of one kind (none here) or two registrations must come from different runs. Ensure and reset are different reconciliations, so they do not collide; verify each result names its own `reconciliation_key` and `qa_run_id` |
@@ -41,7 +41,7 @@ Sources: the contract `D9-2-3-HOSTED-QA-PLAN.md` (not edited); the D9-H1 order o
 
 | # | Step | Who | Gate it satisfies |
 |---|---|---|---|
-| 0 | Pins: the plan registered with the 5 applications and 8 installations; write driver sha256 and its tests; this file (revised to final, vendored, sha256); reconciliations `qa_d9_external_fixture_*` (runner `5af9cd7a…`, unchanged) and `qa_d9_aged_upload_*` (§4); residue census `e7e8d3d1`; the Director's plan-bytes approval naming the write driver; `eligible_plans`; release and install | Host Capacity, Director | Plan evidence bound to the registered driver |
+| 0 | Pins: the plan registered with the 5 applications and 8 installations; write driver sha256 and its tests; this file (revised to final, vendored, sha256); reconciliations `qa_d9_external_fixture_*` (runner `5af9cd7a…`, unchanged), `qa_d9_aged_upload_ensure` and `qa_d9_write_fixture_reset` (sibling runner, §4); residue census `e7e8d3d1`; the Director's plan-bytes approval naming the write driver; `eligible_plans`; release and install | Host Capacity, Director | Plan evidence bound to the registered driver |
 | 0a | Applications registered, each verified by `result.application_key == inputs.slug`, each from its own execution run: write-cert `abb37073…` (`gar_4b09e820576d7a`), review-cert `12c6e113…` (`gar_c63c05a46dcced`), write-scope-cert `79ce84ba…` (`gar_256ad4b724781d`). **Done** | Kelly (cards) | Plan §2.1 |
 | 1 | `environment.qa_run_open` with `hosted_qa_authority` declared (plan §6.1). Lease covers steps 2–13, including approval waits and the W-ES wake window | Kelly (DEC-2) | — |
 | 2 | **Pre-write census**: `d9-residue-census.sql` (`e7e8d3d1`), all 15 true. Plus `d9w-clock-reading.sql` (`839e1212…`; `scheduled_work_clock`, last wake within 15 min) to decide whether W-ES can run (§2) | Documents | Plan §6.2 "before writes" |
@@ -82,6 +82,7 @@ The runner must reach staging through a merge before it can be pinned (its sha25
 
 1. ~~Is the staging external scheduler running?~~ **Answered 2026-11-09**: yes, census `gar_4caf1a889368b3` (`d9w-clock-reading.sql` `839e1212…`): 13,940 wakes, last 268 s before the reading; the deployed wake calls `escalateUnfiledApiUploads`. Step 2 re-reads it with `d9w-clock-reading.sql`.
 2. If it is not, a governed wake action (Host Capacity), or W-ES recorded as not run.
-3. The write driver's `install` / `certify` split (§2), and the W-C1 census query.
+3. ~~The write driver's `install` / `certify` split (§2), and the W-C1 census query~~: both built (driver `install` at `4d1c6c3bd`; census `d9w-write-audit-census.sql`, step 7).
 4. ~~Runner change versus sibling runner~~: sibling runner (§4); needs a staging merge before pinning.
-5. The admin delete of a document whose object never existed (the aged upload) is expected to succeed. Storage `remove` of a missing path is not an error. Confirm against the route; if it refuses, step 9's reset removes the row instead (it does in any case).
+5. ~~The admin delete of the aged upload~~: the staff delete answers 409 once its Processing case is completed (step 8), so cleanup lists it as remaining and step 9's reset removes the row (the aged upload has no stored object).
+6. The pinned D9-H1 fixture `qa_d9_external_fixture_reset.sql` says in a comment that the aged upload is `qa_d9_aged_upload_reset`'s. That reset is superseded by `qa_d9_write_fixture_reset`. The comment is left as it is, because editing it would break the D9-H1 pin. The SQL does not depend on it.

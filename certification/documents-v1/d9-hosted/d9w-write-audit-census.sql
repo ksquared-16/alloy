@@ -1,6 +1,6 @@
 -- Documents D9-H2, plan case W-C1 ("every write is in a QA org; every effect has its audit row written first"):
 -- read-only census of the D9.2 / D9.3 write effects and their audit. Plan: D9-2-3-HOSTED-QA-PLAN.md §4 W-C1, §5.
--- Run order: D9-H2-HOSTED-RUN-ORDER.md step 8. A generic database.read_census (alloy_deployed_primary). Not the
+-- Run order: D9-H2-HOSTED-RUN-ORDER.md step 7. A generic database.read_census (alloy_deployed_primary). Not the
 -- registered residue census (d9-residue-census.sql e7e8d3d1…) and never attached to a close.
 --
 -- WHEN: after the driver's `certify` and BEFORE its `cleanup`. The effect rows live on the run's documents
@@ -25,7 +25,7 @@
 -- comparison. For the id-linked effects the id link is the proof; the timestamp is checked as well.
 --
 --   CHECKS (true for every D9 write run; retained history of earlier runs cannot turn them false):
---     d9w_c1_effects_present          at least one write-app upload, filing and review effect exists (step 8 ran
+--     d9w_c1_effects_present          at least one write-app upload, filing and review effect exists (step 7 ran
 --                                     between certify and cleanup)
 --     d9w_c1_effects_in_qa_orgs       every write-app document effect is in qa_shared / qa_secondary
 --     d9w_c1_tagged_documents_in_qa   every qa-d9w document is in a QA org
@@ -165,7 +165,7 @@ from (
     select 'd9w_c1_tagged_documents_in_qa', 'check',
            'documents ~ qa_d9w_tagged_outside_qa_orgs ~ zero ~ '
            || ((select count(*) from public.documents d
-                 where (d.title ilike '%qa-d9w-%' or d.original_filename ilike '%qa-d9w-%')
+                 where (d.title ilike '%qa-d9w-%' or d.original_filename ilike '%qa-d9w-%' or d.storage_path ilike '%qa-d9w-%')
                    and d.org_id not in (select org_id from qa)) = 0)::text,
            '03'
     union all

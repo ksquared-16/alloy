@@ -21,8 +21,9 @@ and cross_org_admin (QA Secondary) sessions, after qa_d9_external_fixture_ensure
   cleanup    idempotent: closes any remaining installation of the four applications, deletes every document this run
              recorded through the audited staff delete, and lists what it could not prove gone.
 
-Run order: not yet written (a separate Documents deliverable). Zero residue is the residue census's verdict, not this
-driver's: e7e8d3d1 already carries d9w_zr_tagged_documents / _objects / _active_installations / _active_credentials /
+Run order: d9-hosted/D9-H2-HOSTED-RUN-ORDER.md §3 — certify (step 6), the W-C1 write census d9w-write-audit-census.sql
+(step 7, which must read the run's documents before cleanup deletes them), cleanup (step 8), qa_d9_write_fixture_reset
+(step 9). Zero residue is the residue census's verdict, not this driver's: e7e8d3d1 already carries d9w_zr_tagged_documents / _objects / _active_installations / _active_credentials /
 _escalation_cases.
 
 SECRET-BLIND, as d9_hosted_read_cert.py: client secrets, access tokens and upload ids are held in memory only; every line
@@ -65,10 +66,10 @@ bytes are not edited.
      late filing is `not_run`. The aged upload has no storage object; a new_document filing copies no bytes.
  11. §5 says "4 installations"; §2.2 lists five tokens (T_A is the read application's). This driver installs all five.
 
-OPEN (recorded, not solved here): the staff delete (/api/admin/pos/documents/{id}) answers 404 for a document the staff
+DOCUMENTS THE STAFF DELETE REFUSES: the staff delete (/api/admin/pos/documents/{id}) answers 404 for a document the staff
 caller cannot read — an unfiled or quarantined API upload, a superseded replacement upload — and 409 for one whose
-Processing case is completed (W-ES). Such documents are listed as `remaining` with the reason; removing them needs a
-registered reset, which the write run order must name.
+Processing case is completed (W-ES). Such documents are listed as `remaining` with the reason (verdict RESIDUE); the
+run order's step 9, qa_d9_write_fixture_reset, removes them with their rows and stored objects.
 """
 import datetime, hashlib, json, os, re, subprocess, sys, time, urllib.error, urllib.parse, urllib.request, uuid
 
@@ -746,8 +747,9 @@ def cleanup():
             out["remaining"].append(f"document {key} ({doc.get('via')}): {why}")
     emit(ids, IDS_FILE)
     out["verdict"] = "CLEAN" if not out["remaining"] else "RESIDUE"
-    out["next"] = ["the D9 write run order (not yet written): registered resets for API uploads and the aged upload",
-                   "database.read_census d9-residue-census.sql after closed_at (all 15 registered checks)"]
+    out["next"] = ["qa_d9_write_fixture_reset (run order step 9): every remaining D9 write document, its rows and objects",
+                   "qa_d9_external_fixture_reset (step 10), then qa_run_close #1 (step 11)",
+                   "database.read_census d9-residue-census.sql after closed_at (step 12, all 15 registered checks)"]
     emit(out, RESET_FILE)
     emit(line=f"cleanup {out['verdict']}: {len(out['installations'])} installations closed, {len(out['documents'])} documents; remaining={out['remaining']}")
     return 0 if out["verdict"] == "CLEAN" else 1
