@@ -222,7 +222,8 @@ export async function fixtureStatus(): Promise<FixtureState> {
             .select("id").eq("slug", item.slug).maybeSingle();
         if (!app) return { ok: false, code: "fixture_absent", detail: `${item.slug} is not registered.`, repairCommand: FIXTURE_REPAIR_COMMAND };
         const { data: inst } = await supabase.from("app_installations")
-            .select("id").eq("application_id", app.id).maybeSingle();
+            // Only the live one: a disconnected predecessor is retained history beside it.
+            .select("id").eq("application_id", app.id).neq("status", "revoked").maybeSingle();
         if (!inst) return { ok: false, code: "fixture_incomplete", detail: `${item.slug} has no installation.`, repairCommand: FIXTURE_REPAIR_COMMAND };
         installations.push({
             key: item.key, slug: item.slug, name: item.name, proves: item.proves,
