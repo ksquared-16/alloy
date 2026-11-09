@@ -47,15 +47,20 @@ P1 (deployed code) is staging `5db26b46`, which contains #1630; the driver's pre
 The driver records contract discrepancies in its docstring (served code decides: collection routes, bare bodies, W-U2/W-U3
 codes split, W-F3 medical = 422, W-L1 200/`related`, W-V1 first change 201, §5 says 4 installations but §2.2 lists 5).
 
-## 3a. Open before a plan request
+## 3a. The four groundwork items (2026-11-09)
 
-1. **Cleanup gap.** The audited staff delete answers 404 / 409 for the quarantined upload, the superseded replacement
-   upload and the aged upload, so driver cleanup will report RESIDUE. A registered reset must remove them (extend the
-   aged-upload reset or add one), or the run cannot close ZERO_RESIDUE.
-2. **Staging wake clock: RESOLVED.** Census `gar_4caf1a889368b3` (`tha_c31aedb82c699c`, `d9w-clock-reading.sql` `839e1212…`, 05:14:29Z): `wake_count` 13,940 since 2026-09-21, last wake 268 s earlier (worker `worker-525e075e`). The deployed wake route (`5db26b46` `web/app/api/scheduled-work/wake/route.ts:88`) calls `escalateUnfiledApiUploads` on every tick. W-ES can run live; no governed wake action is needed. The run order must still allow two wakes (~10–15 min) inside the lease.
-3. **Runner.** The pinned runner `qaDocumentsD9ExternalFixture.mjs` (`5af9cd7a…`) has two fixed modes. The aged-upload
-   modes need a runner change (new sha256, staging merge, re-pin) or a sibling runner.
-4. **W-C1 write census** query not yet written.
+| Item | State | Evidence |
+|---|---|---|
+| 1. Documents the staff delete refuses (quarantined, superseded, aged) | **Built.** `qa_d9_write_fixture_reset.sql` (`48845473…`) removes every D9 write document in the two QA orgs with its versions, links, review events and escalation cases in one transaction and asserts none remain; it replaces the aged-upload reset. `storage.objects` is delete-protected by trigger, so the SQL returns the object list and the runner removes exactly those through the Storage API and re-reads | `c790e6290`; local alloy-cert run inside a rolled-back transaction (shims for columns local lacks) |
+| 2. Staging wake | **Resolved, nothing to build.** Clock running (`gar_4caf1a889368b3`: 13,940 wakes, last 268 s before); deployed wake calls `escalateUnfiledApiUploads` | `a5af9bb6c` |
+| 3. Aged-upload runner | **Built.** Sibling runner `web/scripts/qaDocumentsD9WriteFixture.mjs` (`7f071160…`), modes `aged-ensure` / `write-reset`, npm scripts `dev:qa:documents-d9-aged-upload-ensure` / `dev:qa:documents-d9-write-fixture-reset`; pinned D9-H1 runner `5af9cd7a…` untouched. Ensure now `e3f3ee30…` | `c790e6290`; runner tests 56 green 4/4 |
+| 4. W-C1 write census | **Built.** `d9w-write-audit-census.sql` (`c502b280…`), 11 checks + 2 data rows; placed after certify and before cleanup (run order step 7) | `1e877bd81`; local read-only run with stand-ins for two tables local lacks |
+
+**Product finding (W-C1).** Upload, filing, archive and restore store their authorizing audit id. Review / validity events
+(`document_version_review_events`), context link / unlink (`document_subjects`) and the 24 h escalation case do **not**:
+for those the census proves audit-first by same-database timestamps and matching document / version / subject, not by id.
+It cannot say which audit row authorized which effect when one document has several. Whether W-C1 accepts that, or the
+product adds the audit id, is Kelly's decision.
 
 ## 4. Approvals after that (none requested yet)
 
