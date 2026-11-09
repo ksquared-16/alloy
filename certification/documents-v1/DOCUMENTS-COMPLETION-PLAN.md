@@ -1,7 +1,7 @@
 # Documents V1 — itemized completion plan (D1–D10)
 
 Lane `lane_aa660dc9554d`. Maintained by Documents. Started 2026-11-04 against staging `98fdf5c9b217` (PR #1633; ledger
-head `20261219090000`, 554 migrations, census `gar_c36ad46bf0a7bf`). **Updated 2026-11-06: R2/R5 hosted proven on `qar_b74d93c3d853`.** **Updated 2026-11-05: staging `bce11ed7c1c0` (PR #1634,
+head `20261219090000`, 554 migrations, census `gar_c36ad46bf0a7bf`). **Updated 2026-11-09: D9-H1 hosted PASSED on `qar_242c9c123886` (43/0, ZERO_RESIDUE).** **Updated 2026-11-06: R2/R5 hosted proven on `qar_b74d93c3d853`.** **Updated 2026-11-05: staging `bce11ed7c1c0` (PR #1634,
 D10 activation gates), ledger head `20261220090000`, 555 migrations (census `gar_4f6b6842b0990b`).** Sprint `OPWORK_AA660DC9554D_SPRINT_E514C44C24C0`
 (successor to `…73A9D7625863`, which is VERIFIED and awaiting the Director's Accept/Close).
 
@@ -22,7 +22,7 @@ re-checked by one final hosted regression on the final staging SHA — not rebui
 | D5 filing | yes | 59/59 `qar_c6e20cc02979`; also `qar_4246ac22ece0` | — | Documents | Final regression |
 | D6 requirements | yes | 75/75 `qar_4246ac22ece0`; census `gar_53d6744eb1cf1a` | BP stage readiness not hosted (BP lane); context doc calls residue "open debt" though closed | Documents; BP lane | Correct the context doc; final regression |
 | D7 / D8 review, forms evidence | yes (#1611, #1612) | R1 158/158, D8 59/59, browser 19/19 `qar_8fb0e1ffabcf` (`7d7c8037`); D7 invariant `gar_3c51d48448eba3`; **R2/R5 hosted 65/65, D7 116/116, D8 59/59, D7/D8 browser 17/17 `qar_b74d93c3d853` (`bce11ed7`), ZERO_RESIDUE** | D6 browser walk precondition unscripted (2/6) | Documents | Script the D6 walk setup |
-| D9.1 read API | yes (#1627) | local only | **D9-H1 never run**: no developer application registered, no D9 QA plan | Host Capacity (H2 plan `documents_d9_read_v1`); Kelly (DEC-1, DEC-2) | Register plan and app; hosted QA run |
+| D9.1 read API | yes (#1627) | **hosted PASSED** `qar_242c9c123886` (43/0, ZERO_RESIDUE) | — (superseded 2026-11-09; was: D9-H1 never run) | — | Final hosted regression only (item 4 of the inventory) |
 | D9.2 writes + 24 h handoff | yes (#1630) | certenv `gar_46d2274f98232f`; atomic-open `gar_6bf71cba9a81ce` | **D9-H2** hosted W-* cases | Host Capacity, then Documents | After D9-H1 |
 | D9.3 archive / restore | yes; `20261217090000` applied | `gar_b55de8a1627166` | Hosted W-RV / W-AR; Q2 restore guard (this sprint) | Documents | Q2 below; hosted with D9-H2 |
 | D10-Q1 filing queue / S2 | yes (#1627) | synthetic | — | Documents | Final regression |
@@ -41,7 +41,8 @@ re-checked by one final hosted regression on the final staging SHA — not rebui
 | `…A1EE0FDEF21C` Revision 4 R2/R4/R5 hosted | **Proven 2026-11-06**: R2/R5 65/65 on `qar_b74d93c3d853` (staging `bce11ed7`; open `gar_0a6cebb096f26c`; receipt `hosted_r2r5_regression.qar_b74d93c3d853.json`); R4 35/35 `qar_446cbc230b86`. Closed ZERO_RESIDUE (census `gar_80c1d40f2f1658` 20/20, R5 census `gar_749deee090760c` 6/6, bind `gar_24c310d8901470`) | Record the evidence and close (Director) |
 | `…12706A6E51FA` fixture repair | c1–c3 satisfied; repair shipped #1625 (`530ba383`). **R5 invariant PASSED 5/5 `gar_344131761fa15c`** (isolated certenv at staging `98fdf5c9`; receipt `r5-shared-child-rollback-receipt.gar_344131761fa15c.json`). Re-pin **verified**: toolkit `9b96a0e02283` pins `5942fb82` at `bce11ed7`; first hosted ensure `gar_fc15d0c02f072d` seeded | Close (Director) |
 | `…6A4F60B1555E` preparation | Deliverables exist; superseded by `…AFD07879C606` | Close as superseded |
-| D9-H1 / D9-H2 | Never run (not stale; undone). The race fixture H1 is done (`ifx_3672b4b0fb183df0`); the D9 QA plan / credential path (Host Capacity H2) is open and blocks both | Host Capacity registers the plan; Kelly DEC-1/DEC-2 |
+| D9-H1 | **PASSED 2026-11-09**: `qar_242c9c123886` on staging `5db26b46`, driver `21bfb673`, 43 passed / 0 failed, ZERO_RESIDUE (`gar_65ca85e4aebbd8`); record `d9-hosted/D9-H1-HOSTED-RUN-RECORD.qar_242c9c123886.md`. Earlier runs stand as recorded: `qar_143a8fbcad49` 41/2, `qar_7d7ec3d86bdd` 35/5, `qar_31100f9d04e5` blocked | — |
+| D9-H2 | Never run (not stale; undone). The read plan `documents_d9_read_v1` is registered and proven; the write side still needs the three write applications, a hosted write driver and run order, the `qa_d9_aged_upload_*` reconciliation, and a Host Capacity `documents_d9_write_v1` plan with its plan-bytes approval (inventory item 2) | Documents first, then Host Capacity; Kelly for the application cards, plan approval and DEC-2 |
 
 ## 3. Scanner and inbound-attachment gates (this sprint)
 
