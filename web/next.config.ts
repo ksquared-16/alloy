@@ -1,3 +1,4 @@
+import { allowedDevOriginsFor } from "./lib/http/devOrigins";
 import { localSupabaseRewrite } from "./lib/supabase/browserTransport";
 import { execSync } from "node:child_process";
 import path from "path";
@@ -55,8 +56,13 @@ const nextConfig: NextConfig = {
   /**
    * Next 16 blocks cross-origin `/_next/*` in dev. Operators often open 127.0.0.1 while
    * NEXT_PUBLIC_APP_URL is localhost (or the reverse) — allow both so assets can load.
+   * A lane published on the tailnet also allows that ONE configured host, or its HMR socket
+   * is refused and Next reloads the page every ~40 s. See lib/http/devOrigins.ts.
    */
-  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  allowedDevOrigins: allowedDevOriginsFor({
+    appUrl: process.env.NEXT_PUBLIC_APP_URL,
+    nodeEnv: process.env.NODE_ENV,
+  }),
   /** Build SHA inlined for client + server (see resolveBuildSha) — proves the deployed commit. */
   env: {
     NEXT_PUBLIC_BUILD_SHA: BUILD_SHA,
