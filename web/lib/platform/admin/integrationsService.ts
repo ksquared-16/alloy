@@ -36,6 +36,16 @@ export function installationStateOf(row: {
 }
 
 /**
+ * Whether an installation row still holds its application's one place in the
+ * organization. Mirrors `uq_app_installations_app_org_live` (`status <> 'revoked'`)
+ * and the principal resolvers, which decide on `status`: a suspended installation
+ * can be reactivated, so it still occupies the slot; a revoked one is history.
+ */
+export function occupiesInstallationSlot(status: string | null | undefined): boolean {
+    return String(status ?? "active").toLowerCase() !== "revoked";
+}
+
+/**
  * The scopes a change would INTRODUCE that this Alloy does not define.
  *
  * An unknown scope must never be stored on the strength of a request, because
@@ -334,9 +344,11 @@ export type ApprovedApplication = {
  *
  * Applications are platform identities, not tenant configuration objects, so this
  * is a read for a chooser and nothing more — there is deliberately no tenant CRUD
- * behind it. `alreadyInstalled` exists because the schema allows one installation
- * per application per organization, and an operator should learn that from the
- * chooser rather than from a constraint violation.
+ * behind it. `alreadyInstalled` exists because the schema allows one non-revoked
+ * installation per application per organization, and an operator should learn
+ * that from the chooser rather than from a constraint violation. A disconnected
+ * (revoked) installation is retained history and does not count: the application
+ * can be connected again.
  *
  * NAMING DEBT, RECORDED RATHER THAN PAPERED OVER. "Approved" has no referent:
  * `developer_applications.status` is `active | disabled` and there is no approval
@@ -356,11 +368,17 @@ export async function listApprovedApplications(
             .select("id, name, slug, publisher, status")
             .eq("status", "active")
             .order("name", { ascending: true }),
-        supabase.from("app_installations").select("application_id").eq("org_id", orgId),
+        supabase.from("app_installations").select("application_id, status").eq("org_id", orgId),
     ]);
     if (apps.error) return { ok: false, message: apps.error.message };
+    // Unreadable installations must not read as "none installed".
+    if (installed.error) return { ok: false, message: installed.error.message };
 
-    const have = new Set((installed.data ?? []).map((r) => String((r as { application_id: string }).application_id)));
+    const have = new Set(
+        ((installed.data ?? []) as { application_id: string; status: string | null }[])
+            .filter((r) => occupiesInstallationSlot(r.status))
+            .map((r) => String(r.application_id)),
+    );
     return {
         ok: true,
         applications: (apps.data ?? []).map((a) => {
