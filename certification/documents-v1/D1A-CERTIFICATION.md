@@ -1,6 +1,8 @@
 # Documents V1 / D1a — certification record
 
-Status: **PARTIAL.** Gates A and B are not hosted-proven, and Gate C is blocked on fixture provisioning. See "Outstanding" below.
+**Superseded 2026-11-09: CERTIFIED by `Q1-HOSTED-CERTIFICATION.md`.** That record covers Q1 / D1a: 90/90 on `qar_99a8d9bf95e6` (staging `8bb731ea`), ZERO_RESIDUE, re-run 90/90 on `qar_446cbc230b86` (2026-11-05). The original status below is kept as history.
+
+Original status: **PARTIAL.** Gates A and B are not hosted-proven, and Gate C is blocked on fixture provisioning. See "Outstanding" below.
 Scope: application-level document access containment only. Database grants, RLS, storage policy
 and the canonical schema are Documents V1 / D1b and are **not** certified here. Nothing in this
 record states that the Documents domain is secure.

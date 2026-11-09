@@ -1,5 +1,7 @@
 # Documents V1 — D9 write contract: PROPOSAL for ratification
 
+**Update 2026-11-09:** the D9.2 writes and the D9.3 archive/restore were built after this proposal and merged (#1630; migration `20261217090000` applied); their hosted proof (D9-H2) is still owed (`DOCUMENTS-REMAINING-INVENTORY.md` item 2). The original status below is kept as history.
+
 **Status: PROPOSAL (2026-11-02). Not an approved specification. Nothing here is implemented.**
 - Objective `OPWORK_AA660DC9554D_SPRINT_AFD07879C606`, lane `lane_aa660dc9554d`. Plan row D9-W0 in `D9-D10-COMPLETION-PLAN.md`.
 - The earlier ASSISTANT §8 list (`D9-D10-FIRST-INCREMENT-PROPOSAL.md:22-35`) is a relayed assistant suggestion, "not independently verified as ratified" (same file, :13). It is **not** a specification. This document is what would become the D9 write specification **if Kelly ratifies it**, in whole or with the answers in §6.
