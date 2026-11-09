@@ -52,6 +52,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const owned = await getInstallation(supabase, orgId, id);
     if (!owned.ok) return NextResponse.json({ error: owned.message }, { status: owned.status });
 
+    /*
+     * DISCONNECTING IS TERMINAL. Without this, `state: "active"` set status back to
+     * active with revoked_at still stamped (a live installation the UI calls
+     * disconnected), and `state: "suspended"` cleared revoked_at outright. Since a
+     * disconnected application can be connected again as a new installation,
+     * resurrecting the old row would also collide with that one.
+     */
+    if (changesState && owned.installation.state === "revoked") {
+        return NextResponse.json(
+            { error: "This integration has been disconnected and cannot be changed. Connect the application again instead." },
+            { status: 409 },
+        );
+    }
+
     const update: Record<string, unknown> = {};
     if (body.boundaryMode) {
         update.boundary_mode = body.boundaryMode;
