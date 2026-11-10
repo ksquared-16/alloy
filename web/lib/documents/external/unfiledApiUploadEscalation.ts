@@ -137,7 +137,12 @@ function receivedVia(meta: Record<string, unknown> | null): { installation_id: s
 const isEscalatedCase = (meta: Record<string, unknown> | null) => asRecord(asRecord(meta)[API_UPLOAD_ESCALATION_KEY]).kind === API_UPLOAD_ESCALATION_KIND;
 
 /** A merge: applying it twice changes nothing; a lost annotation is restored by the next wake. */
-async function annotateCase(supabase: SupabaseClient, c: { orgId: string; caseId: string; doc: UploadRow; escalatedAt: string }): Promise<boolean> {
+/**
+ * `auditEventId` (W-C1 option B): the `document_unfiled_upload_escalated` audit row written for THIS opening, stored on
+ * the case as `api_upload_escalation.audit_event_id`, like `resolution_audit_event_id` for the late filing. The repair
+ * of a lost annotation writes no audit, so it passes none and stores none.
+ */
+async function annotateCase(supabase: SupabaseClient, c: { orgId: string; caseId: string; doc: UploadRow; escalatedAt: string; auditEventId?: string }): Promise<boolean> {
     const { data, error: readErr } = await supabase.from("processing_cases").select("metadata").eq("org_id", c.orgId).eq("id", c.caseId).maybeSingle();
     if (readErr) return false;
     const meta = asRecord((data as { metadata?: unknown } | null)?.metadata);
@@ -160,6 +165,7 @@ async function annotateCase(supabase: SupabaseClient, c: { orgId: string; caseId
                     received_at: c.doc.created_at,
                     escalated_at: c.escalatedAt,
                     grace_hours: UNFILED_API_UPLOAD_GRACE_HOURS,
+                    ...(c.auditEventId ? { audit_event_id: c.auditEventId } : {}),
                 },
             },
         })
@@ -320,7 +326,7 @@ async function escalatePage(
             push({ document_id: doc.id, outcome: "failed", reason: "case_open_failed" });
             continue;
         }
-        if (!(await annotateCase(supabase, { orgId: doc.org_id, caseId: opened.processingCaseId, doc, escalatedAt }))) {
+        if (!(await annotateCase(supabase, { orgId: doc.org_id, caseId: opened.processingCaseId, doc, escalatedAt, auditEventId: recorded.eventId }))) {
             // The case exists; the next wake finds it and restores the annotation.
             push({ document_id: doc.id, outcome: "failed", reason: "annotation_failed" });
             continue;

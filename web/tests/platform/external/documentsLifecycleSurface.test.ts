@@ -100,6 +100,8 @@ function seedDoc(id: string, versionId: string, owner: string, over: Record<stri
 }
 
 beforeEach(() => {
+    wc1.auditMigrated = true;
+    wc1.forceMismatch = false;
     db = new InMemorySupabase();
     dbRef.current = db;
     principalRef.current = principal();
@@ -129,21 +131,25 @@ beforeEach(() => {
         const doc = db.rows("documents").find((r) => r.id === a.p_document_id);
         const ver = db.rows("document_versions").find((v) => v.id === a.p_version_id);
         if (fn === "document_review_version") {
+            const bad = auditCheck(a, "document_version_reviewed", { version_id: a.p_version_id }, db.rows("document_version_review_events").map((r) => r.audit_event_id).filter(Boolean));
+            if (bad) return { data: null, error: bad };
             if (!doc) return { data: null, error: { message: "document_review_document_not_found" } };
             if (doc.current_version_id !== a.p_version_id) return { data: null, error: { message: "document_review_not_current_version" } };
             if ((ver!.review_status === "accepted" || ver!.review_status === "rejected") && !a.p_rereview) return { data: null, error: { message: "document_review_already_decided" } };
             const prev = ver!.review_status;
             ver!.review_status = a.p_decision;
-            db.seed("document_version_review_events", [{ id: `ee${db.rows("document_version_review_events").length}`.padEnd(36, "0"), org_id: ORG, document_id: doc.id, version_id: ver!.id, kind: "review", decision: a.p_decision, previous_review_status: prev, reason: a.p_reason, effective_on: null, expires_on: null, actor: a.p_actor, created_at: new Date().toISOString() }]);
+            db.seed("document_version_review_events", [{ id: `ee${db.rows("document_version_review_events").length}`.padEnd(36, "0"), org_id: ORG, document_id: doc.id, version_id: ver!.id, kind: "review", decision: a.p_decision, previous_review_status: prev, reason: a.p_reason, effective_on: null, expires_on: null, actor: a.p_actor, audit_event_id: a.p_audit_event_id ?? null, created_at: new Date().toISOString() }]);
             return { data: { event_id: "e", review_status: a.p_decision, previous_review_status: prev, rereview: false }, error: null };
         }
         if (fn === "document_set_version_validity") {
+            const bad = auditCheck(a, "document_version_validity_set", { version_id: a.p_version_id }, db.rows("document_version_review_events").map((r) => r.audit_event_id).filter(Boolean));
+            if (bad) return { data: null, error: bad };
             if (doc!.current_version_id !== a.p_version_id) return { data: null, error: { message: "document_review_not_current_version" } };
             const changed = ver!.effective_on !== a.p_effective_on || ver!.expires_on !== a.p_expires_on;
             if (changed) {
                 ver!.effective_on = a.p_effective_on;
                 ver!.expires_on = a.p_expires_on;
-                db.seed("document_version_review_events", [{ id: `ef${db.rows("document_version_review_events").length}`.padEnd(36, "0"), org_id: ORG, document_id: doc!.id, version_id: ver!.id, kind: "validity", decision: null, effective_on: a.p_effective_on, expires_on: a.p_expires_on, actor: a.p_actor, created_at: new Date().toISOString() }]);
+                db.seed("document_version_review_events", [{ id: `ef${db.rows("document_version_review_events").length}`.padEnd(36, "0"), org_id: ORG, document_id: doc!.id, version_id: ver!.id, kind: "validity", decision: null, effective_on: a.p_effective_on, expires_on: a.p_expires_on, actor: a.p_actor, audit_event_id: a.p_audit_event_id ?? null, created_at: new Date().toISOString() }]);
             }
             return { data: { changed, effective_on: ver!.effective_on, expires_on: ver!.expires_on }, error: null };
         }
@@ -181,6 +187,26 @@ const get = (path: string) => new NextRequest(`https://alloy.test${path}`, { hea
 const json = async (r: Response) => ({ status: r.status, body: (await r.json()) as Record<string, any> });
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 const audits = (type: string) => emitted.filter((e) => e.event_type === type);
+
+/**
+ * W-C1 (migration 20261222090000): the stand-ins enforce the SQL contract when an audit id is passed: the emitted audit
+ * `evt-<n>` must exist with the expected type, document and facts and contain the actor payload; one audit binds one
+ * effect; a mismatch writes nothing. `auditMigrated = false` answers PGRST202, as staging does before the apply.
+ */
+const wc1 = { auditMigrated: true, forceMismatch: false };
+function auditCheck(a: Record<string, unknown>, eventType: string, facts: Record<string, unknown>, bound: unknown[]): { code?: string; message: string } | null {
+    if (a.p_audit_event_id === undefined && a.p_audit_payload === undefined) return null;
+    if (!wc1.auditMigrated) return { code: "PGRST202", message: "Could not find the function in the schema cache" };
+    if (a.p_audit_event_id == null) return null;
+    const n = Number(String(a.p_audit_event_id).replace(/^evt-/, ""));
+    const e = emitted[n - 1] as { event_type?: string; entity_id?: string; payload?: Record<string, unknown> } | undefined;
+    const must = { ...((a.p_audit_payload as Record<string, unknown>) ?? {}), ...facts };
+    const actorNamed = a.p_audit_payload && ("actor_kind" in (a.p_audit_payload as object) || "actor_user_id" in (a.p_audit_payload as object));
+    const matches = !!e && e.event_type === eventType && e.entity_id === a.p_document_id && Object.entries(must).every(([k, v]) => String(e.payload?.[k]) === String(v));
+    if (wc1.forceMismatch || !actorNamed || !matches) return { message: "audit_event_mismatch" };
+    if (bound.includes(a.p_audit_event_id)) return { message: 'duplicate key value violates unique constraint "uq_document_version_review_events_audit_event"' };
+    return null;
+}
 
 describe("scopes", () => {
     it("review needs documents.review: documents.write alone is 403 before anything is read or recorded", async () => {
@@ -367,3 +393,49 @@ describe("reads", () => {
         expect((await listRequirements(get(`/api/v1/document-requirements`))).status).toBe(400);
     });
 });
+
+describe("W-C1: review and validity bind the exact audit row written for this application (migration 20261222090000)", () => {
+    const actor = { actor_kind: "application", actor_application_id: "app-1", actor_installation_id: "inst-1" };
+    const idOf = (e: Record<string, unknown>) => `evt-${emitted.indexOf(e) + 1}`;
+
+    it("a review passes its own audit id and the acting application + installation; the event row stores it", async () => {
+        const r = await json(await review(post("/api/v1/document-reviews", { document_id: DOC, version_id: V1, decision: "accepted" })));
+        expect(r.status).toBe(201);
+        const [audit] = audits("document_version_reviewed");
+        const row = db.rows("document_version_review_events").find((e) => e.kind === "review")!;
+        expect(row.audit_event_id).toBe(idOf(audit));
+        expect(audit.payload).toMatchObject({ ...actor, version_id: V1 });
+    });
+
+    it("validity binds its audit; a no-op (same dates) writes no row, so its audit stays unbound and can never cover a later change", async () => {
+        await validity(post("/api/v1/document-validity", { document_id: DOC, version_id: V1, effective_on: "2026-11-01", expires_on: "2027-10-31" }));
+        await validity(post("/api/v1/document-validity", { document_id: DOC, version_id: V1, effective_on: "2026-11-01", expires_on: "2027-10-31" }, "lifecycle-key-2"));
+        const third = await json(await validity(post("/api/v1/document-validity", { document_id: DOC, version_id: V1, effective_on: "2026-11-01", expires_on: "2028-10-31" }, "lifecycle-key-3")));
+        expect(third.status).toBe(201);
+        const [first, noop, real] = audits("document_version_validity_set");
+        const rows = db.rows("document_version_review_events").filter((e) => e.kind === "validity");
+        expect(rows.map((x) => x.audit_event_id)).toEqual([idOf(first), idOf(real)]);
+        expect(rows.map((x) => x.audit_event_id)).not.toContain(idOf(noop));
+    });
+
+    it("a mismatch is refused by the database before any write and answered 503 AUDIT_UNAVAILABLE", async () => {
+        wc1.forceMismatch = true;
+        const r = await json(await review(post("/api/v1/document-reviews", { document_id: DOC, version_id: V1, decision: "accepted" })));
+        expect(r).toMatchObject({ status: 503, body: { error: { code: "AUDIT_UNAVAILABLE" } } });
+        expect(db.rows("document_version_review_events")).toHaveLength(0);
+        expect(db.rows("document_versions").find((v) => v.id === V1)!.review_status).not.toBe("accepted");
+        const v = await json(await validity(post("/api/v1/document-validity", { document_id: DOC, version_id: V1, effective_on: "2026-11-01", expires_on: "2027-10-31" }, "lifecycle-key-9")));
+        expect(v).toMatchObject({ status: 503, body: { error: { code: "AUDIT_UNAVAILABLE" } } });
+        expect(db.rows("document_version_review_events")).toHaveLength(0);
+    });
+
+    it("before the migration is applied (PGRST202) the effect runs once with the legacy arguments and binds nothing", async () => {
+        wc1.auditMigrated = false;
+        const r = await json(await review(post("/api/v1/document-reviews", { document_id: DOC, version_id: V1, decision: "accepted" })));
+        expect(r.status).toBe(201);
+        const rows = db.rows("document_version_review_events");
+        expect(rows).toHaveLength(1);
+        expect(rows[0].audit_event_id).toBeNull();
+    });
+});
+
