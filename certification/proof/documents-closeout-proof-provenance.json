@@ -1,0 +1,33 @@
+{
+ "schema": "documents.closeout_proof_provenance.v1",
+ "purpose": "TEST-ONLY proof artifact for database.run_rollback_invariant_test on certenv-9fdf80b942. NOT a product candidate, NOT a claim that any database has the W-C1 schema: the pending migration runs only inside the executor's always-discarded transaction.",
+ "proof_base": "bce11ed7c1c0c72c4fe0ce60ddac68ac82b27f7f",
+ "proof_base_reason": "certenv-9fdf80b942 baseline (555 migrations, manifest 874fa3e4cd2efc35444f2574f8854e773f24d55a564652dfd0ab165446fce0f2); this commit adds NO migration file, so its manifest equals the environment's",
+ "product_candidate": {
+  "sha": "2762acab719f352f5de0aa0a66cb100ca19c22e1",
+  "checkpoint": "ick_a0dcd141d017",
+  "objective": "OPWORK_AA660DC9554D_SPRINT_374565ACB073",
+  "migration_path": "supabase/migrations/20261222090000_documents_w_c1_audit_linkage.sql",
+  "migration_sha256": "08a3a8af2f3c64f174baa8e8f56bdd32d4472c0c046cdcf8ae500e136f91e913"
+ },
+ "w_c1": {
+  "test_path": "certification/invariants/documents-w-c1-audit-linkage-preapply.sql",
+  "sha256": "308efe1cd9ade6f9bb9039292e04ff8aad72639e4d3c052ae8ab026ca3f36c10",
+  "equals_candidate_bytes": true,
+  "embeds": "the candidate's migration bytes TWICE (T10) then certification/invariants/documents-w-c1-audit-linkage.sql",
+  "invariant_sha256": "ef3ae412214491408b52972182391691e6c36f7cb1d28f0ba7fe27934161e361",
+  "binding": "byte prefix check: preapply == migration + migration + banner + invariant (also locked by web/tests/documents/preapplyInvariantParity.test.ts at the candidate)"
+ },
+ "q2": {
+  "test_path": "certification/invariants/documents-q2-verdict-fixture.sql",
+  "sha256": "908600d423388fc3dbe0c50b85d22bc13e45248c0efdf8d2a070ca4a16e489a8",
+  "source_commit": "abb064f675bbc8bd3b879564a9db47344c9adeb6",
+  "binds_fixture_bytes": {
+   "certification/fixtures/qa-documents-q2-verdict-ensure.sql": "414addb2aeb8e301aa0f7ffe00f235afe709ad6e14b936db106b0cb443212d34",
+   "certification/fixtures/qa-documents-q2-verdict-reset.sql": "93d78645e4436e2ea4b5bd29830149dcdd8e086c1e381d75dee4bda56f6c2cce"
+  },
+  "fixture_bytes_equal_at_candidate": true,
+  "binding": "web/tests/certification/qaDocumentsQ2VerdictFixture.test.ts at abb064f675bbc8bd3b879564a9db47344c9adeb6 (5/5): every guard, INSERT, audit INSERT, writer call and DELETE of the fixture appears substituted in the invariant; sha256 parity lock of ensure/reset/invariant",
+  "residue_semantics": "ZERO_RESIDUE = 0 ae000000- documents/versions/subjects/verdicts after the reset; the 4 fixture audit rows are RETAINED history and asserted present; a control document is untouched"
+ }
+}
