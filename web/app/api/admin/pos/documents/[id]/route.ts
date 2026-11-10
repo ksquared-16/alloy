@@ -9,6 +9,7 @@ import { documentStoredObjects } from "@/lib/documents/documentVersions";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { disclosableDocumentIds } from "@/lib/documents/documentMetadataDisclosure";
+import { DOCUMENT_SOURCE_KINDS } from "@/lib/pos/documentFiling/documentFilingModel";
 
 /**
  * EN-FI-01: the Processing source-document authority acts only on a document its holder may READ — documents admission,
@@ -31,8 +32,11 @@ export const dynamic = "force-dynamic";
 
 /** D10 (migration 20261218090000): an inbound message's link to the document an attachment was stored as. */
 const MESSAGE_ATTACHMENTS_TABLE = "communication_message_attachments";
-/** The case-source kinds whose `source_id` is a document id. */
-const DOCUMENT_ID_SOURCE_KINDS = ["document", "email_attachment"];
+/**
+ * The case-source kinds whose `source_id` is a document id: the filing model's own list, so the guard and the case
+ * removal see every case a document can open, including the D9.2 escalation's `upload` and `recreated_document`.
+ */
+const DOCUMENT_ID_SOURCE_KINDS = [...DOCUMENT_SOURCE_KINDS];
 
 /**
  * PATCH /api/admin/pos/documents/[id] — update operator display name (title only).
