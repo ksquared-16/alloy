@@ -23,7 +23,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { recordDocumentAudit, type DocumentAuditInput, type DocumentAuditResult } from "@/lib/documents/documentAudit";
+import { auditActorFacts, recordDocumentAudit, type DocumentAuditInput, type DocumentAuditResult } from "@/lib/documents/documentAudit";
 import { bytesMatchDocumentKind, CANONICAL_DOCUMENT_MIME, type DocumentContentKind } from "@/lib/documents/documentContentSignature";
 import { decideIngestion } from "@/lib/documents/screenedIngestion";
 import { linkDocumentSubject, unlinkDocumentSubject } from "@/lib/documents/documentSubjects";
@@ -305,11 +305,14 @@ export async function changeDocumentSubjectLink(
         detail: { change: op, association: "context", subject_type: p.type, subject_id: p.id, idempotency_key_sha256: createHash("sha256").update(key).digest("hex") },
     });
     if (!recorded.ok) return refuse(503, "AUDIT_UNAVAILABLE", "The change could not be recorded, so it was not performed.");
+    // W-C1: the effect binds exactly this audit row, written for this application and installation.
+    const binding = { eventId: recorded.eventId, actor: auditActorFacts({ actorUserId: null, actorPrincipal: { kind: "application", ...ctx.principal } }) };
     const r =
         op === "link"
-            ? await linkDocumentSubject(supabase, { orgId: ctx.organizationId, documentId: p.documentId, subjectType: p.type, subjectId: p.id, association: "context", actorUserId: null })
-            : await unlinkDocumentSubject(supabase, { orgId: ctx.organizationId, documentId: p.documentId, subjectType: p.type, subjectId: p.id, actorUserId: null });
+            ? await linkDocumentSubject(supabase, { orgId: ctx.organizationId, documentId: p.documentId, subjectType: p.type, subjectId: p.id, association: "context", actorUserId: null, audit: binding })
+            : await unlinkDocumentSubject(supabase, { orgId: ctx.organizationId, documentId: p.documentId, subjectType: p.type, subjectId: p.id, actorUserId: null, audit: binding });
     if (!r.ok) {
+        if (r.code === "AUDIT_EVENT_MISMATCH") return refuse(503, "AUDIT_UNAVAILABLE", "The change could not be recorded, so it was not performed.");
         if (r.code === "NOT_FOUND" || r.code === "SUBJECT_NOT_IN_ORG") return refuse(404, "NOT_FOUND", "Not found.");
         if (r.code === "PRIMARY_REQUIRED") return refuse(409, "primary_subject_immutable", "The document's owner cannot be unlinked through the API.");
         return refuse(503, "link_unavailable", "The link could not be changed.");

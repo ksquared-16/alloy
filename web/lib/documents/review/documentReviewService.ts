@@ -15,6 +15,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isIsoDate } from "@/lib/documents/validity/documentValidity";
+import { isRpcSignatureMissing, withAudit, type AuditBinding } from "@/lib/documents/documentAudit";
 
 /** Re-review authority. Not a new catalog key (W-11): the Documents administrative authority. */
 export const DOCUMENT_REREVIEW_PERMISSION = "processing.documents.manage" as const;
@@ -53,6 +54,8 @@ const REFUSALS: Array<[RegExp, string, number]> = [
     [/document_review_document_not_found/, "NOT_FOUND", 404],
     [/document_review_decision_invalid/, "BAD_REQUEST", 400],
     [/document_validity_range_inverted/, "VALIDITY_RANGE_INVERTED", 400],
+    // W-C1: the audit row passed in does not match this effect (or names no actor). Nothing was written.
+    [/audit_event_mismatch/, "AUDIT_EVENT_MISMATCH", 503],
 ];
 
 function refusal(error: { message?: string } | null | undefined): { ok: false; code: string; status: number } {
@@ -64,9 +67,9 @@ function refusal(error: { message?: string } | null | undefined): { ok: false; c
 export async function reviewDocumentVersion(
     supabase: SupabaseClient,
     /** `actorUserId` is null only for an application principal (D9.3), whose attribution is the audit event. */
-    input: { orgId: string; documentId: string; versionId: string; decision: ReviewDecision; reason: string | null; actorUserId: string | null; rereview: boolean },
+    input: { orgId: string; documentId: string; versionId: string; decision: ReviewDecision; reason: string | null; actorUserId: string | null; rereview: boolean; audit?: AuditBinding },
 ): Promise<ReviewWriteResult<{ event_id: string; review_status: string; previous_review_status: string | null; rereview: boolean }>> {
-    const { data, error } = await supabase.rpc("document_review_version", {
+    const args = {
         p_org_id: input.orgId,
         p_document_id: input.documentId,
         p_version_id: input.versionId,
@@ -74,18 +77,20 @@ export async function reviewDocumentVersion(
         p_reason: input.reason,
         p_actor: input.actorUserId,
         p_rereview: input.rereview,
-    });
+    };
+    let { data, error } = await supabase.rpc("document_review_version", withAudit(args, input.audit));
+    if (error && input.audit && isRpcSignatureMissing(error)) ({ data, error } = await supabase.rpc("document_review_version", args));
     if (error) return refusal(error);
     return { ok: true, value: data as { event_id: string; review_status: string; previous_review_status: string | null; rereview: boolean } };
 }
 
 export async function setDocumentVersionValidity(
     supabase: SupabaseClient,
-    input: { orgId: string; documentId: string; versionId: string; effectiveOn: string | null; expiresOn: string | null; reason: string | null; actorUserId: string | null },
+    input: { orgId: string; documentId: string; versionId: string; effectiveOn: string | null; expiresOn: string | null; reason: string | null; actorUserId: string | null; audit?: AuditBinding },
 ): Promise<ReviewWriteResult<{ changed: boolean; effective_on: string | null; expires_on: string | null }>> {
     if ((input.effectiveOn && !isIsoDate(input.effectiveOn)) || (input.expiresOn && !isIsoDate(input.expiresOn))) return { ok: false, code: "BAD_DATE", status: 400 };
     if (input.effectiveOn && input.expiresOn && input.expiresOn < input.effectiveOn) return { ok: false, code: "VALIDITY_RANGE_INVERTED", status: 400 };
-    const { data, error } = await supabase.rpc("document_set_version_validity", {
+    const args = {
         p_org_id: input.orgId,
         p_document_id: input.documentId,
         p_version_id: input.versionId,
@@ -93,7 +98,9 @@ export async function setDocumentVersionValidity(
         p_expires_on: input.expiresOn,
         p_reason: input.reason,
         p_actor: input.actorUserId,
-    });
+    };
+    let { data, error } = await supabase.rpc("document_set_version_validity", withAudit(args, input.audit));
+    if (error && input.audit && isRpcSignatureMissing(error)) ({ data, error } = await supabase.rpc("document_set_version_validity", args));
     if (error) return refusal(error);
     return { ok: true, value: data as { changed: boolean; effective_on: string | null; expires_on: string | null } };
 }

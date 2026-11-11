@@ -81,6 +81,7 @@ beforeEach(() => {
     principalRef.current = principal();
     sitesRef.current = [SITE];
     emitted.length = 0;
+    wc1.forceMismatch = false;
     db.seed("customers", [{ id: H_IN, org_id: ORG, name: "H" }]);
     db.seed("customer_members", [
         { id: C_IN, org_id: ORG, customer_id: H_IN, first_name: "In", last_name: "H", is_active: true },
@@ -115,11 +116,15 @@ beforeEach(() => {
             return { data: { replay: false, document_id: d.id, version_id: d.current_version_id, doc_type: d.doc_type, sensitivity: "standard", filing: f }, error: null };
         }
         if (fn === "document_link_subject") {
-            db.seed("document_subjects", [{ org_id: ORG, document_id: args.p_document_id, subject_type: args.p_subject_type, subject_id: args.p_subject_id, association: args.p_association, is_primary: false, ended_at: null }]);
+            const bad = linkAuditCheck(args, "link");
+            if (bad) return { data: null, error: bad };
+            db.seed("document_subjects", [{ org_id: ORG, document_id: args.p_document_id, subject_type: args.p_subject_type, subject_id: args.p_subject_id, association: args.p_association, is_primary: false, ended_at: null, link_audit_event_id: args.p_audit_event_id ?? null }]);
             return { data: {}, error: null };
         }
         if (fn === "document_unlink_subject") {
-            for (const s of db.rows("document_subjects")) if (s.document_id === args.p_document_id && s.subject_id === args.p_subject_id && !s.is_primary) s.ended_at = "now";
+            const bad = linkAuditCheck(args, "unlink");
+            if (bad) return { data: null, error: bad };
+            for (const s of db.rows("document_subjects")) if (s.document_id === args.p_document_id && s.subject_id === args.p_subject_id && !s.is_primary && !s.ended_at) Object.assign(s, { ended_at: "now", unlink_audit_event_id: args.p_audit_event_id ?? null });
             return { data: {}, error: null };
         }
         return { data: null, error: { message: `unexpected rpc ${fn}` } };
@@ -143,6 +148,20 @@ async function upload(bytes = PDF, key = KEY) {
     return { create: c, content: s };
 }
 const audits = (type: string) => emitted.filter((e) => e.event_type === type);
+
+/** W-C1 (migration 20261222090000): the link / unlink stand-ins enforce the SQL contract when an audit id is passed. */
+const wc1 = { forceMismatch: false };
+function linkAuditCheck(a: Record<string, unknown>, change: "link" | "unlink"): { message: string } | null {
+    if (a.p_audit_event_id == null) return null;
+    const e = emitted[Number(String(a.p_audit_event_id).replace(/^evt-/, "")) - 1] as { event_type?: string; entity_id?: string; payload?: Record<string, unknown> } | undefined;
+    const must = { ...((a.p_audit_payload as Record<string, unknown>) ?? {}), change, subject_type: a.p_subject_type, subject_id: a.p_subject_id };
+    const actorNamed = a.p_audit_payload && "actor_kind" in (a.p_audit_payload as object);
+    const ok = !!e && e.event_type === "document_subject_changed" && e.entity_id === a.p_document_id && Object.entries(must).every(([k, v]) => String(e.payload?.[k]) === String(v));
+    const col = change === "link" ? "link_audit_event_id" : "unlink_audit_event_id";
+    if (wc1.forceMismatch || !actorNamed || !ok) return { message: "audit_event_mismatch" };
+    if (db.rows("document_subjects").some((r) => r[col] === a.p_audit_event_id)) return { message: `duplicate key value violates unique constraint "uq_document_subjects_${change}_audit_event"` };
+    return null;
+}
 
 describe("scopes: documents.write is its own grant", () => {
     it("without documents.write every write is 403 before anything is read, recorded or stored", async () => {
@@ -382,3 +401,34 @@ describe("the 4 MiB limit is explicit to the partner", () => {
         expect(db.uploadCalls).toEqual([]);
     });
 });
+
+describe("W-C1: link and unlink bind the exact audit row written for this application (migration 20261222090000)", () => {
+    const idOf = (e: Record<string, unknown>) => `evt-${emitted.indexOf(e) + 1}`;
+    async function filedDoc() {
+        const { content } = await upload();
+        const docId = content.body.document_id as string;
+        await fileDoc(post("/api/v1/document-filings", { document_id: docId, type_key: "enrollment_document", primary: { subject_type: "child", subject_id: C_IN } }, { key: "file-key-0001" }));
+        return docId;
+    }
+
+    it("link and unlink each store their own audit id, written for app-1 / inst-1 and this subject", async () => {
+        const docId = await filedDoc();
+        await link(post("/api/v1/document-subjects", { document_id: docId, subject_type: "child", subject_id: C_SIB }, { key: "link-key-0001" }));
+        await unlink(post("/api/v1/document-subjects/unlink", { document_id: docId, subject_type: "child", subject_id: C_SIB }, { key: "unlink-key-01" }));
+        const [la, ua] = audits("document_subject_changed");
+        const row = db.rows("document_subjects").find((r) => r.document_id === docId && r.subject_id === C_SIB)!;
+        expect(row.link_audit_event_id).toBe(idOf(la));
+        expect(row.unlink_audit_event_id).toBe(idOf(ua));
+        expect(la.payload).toMatchObject({ change: "link", subject_id: C_SIB, actor_kind: "application", actor_application_id: "app-1", actor_installation_id: "inst-1" });
+        expect(ua.payload).toMatchObject({ change: "unlink", subject_id: C_SIB });
+    });
+
+    it("a mismatch is refused before the link is written and answered 503 AUDIT_UNAVAILABLE", async () => {
+        const docId = await filedDoc();
+        wc1.forceMismatch = true;
+        const r = await json(await link(post("/api/v1/document-subjects", { document_id: docId, subject_type: "child", subject_id: C_SIB }, { key: "link-key-0002" })));
+        expect(r).toMatchObject({ status: 503, body: { error: { code: "AUDIT_UNAVAILABLE" } } });
+        expect(db.rows("document_subjects").some((x) => x.document_id === docId && x.subject_id === C_SIB)).toBe(false);
+    });
+});
+
