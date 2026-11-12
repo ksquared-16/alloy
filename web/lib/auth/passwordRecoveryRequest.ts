@@ -163,13 +163,26 @@ export interface RecoveryAuthClient {
  */
 export type RecoveryMode = "recovery" | "signed_in";
 
+/**
+ * The ONLY authority the password write may use: the access token of the session established for this form.
+ * Held in memory, never logged, never rendered. It carries no refresh token, so it can never be renewed or
+ * rotated, and it lapses with that access token.
+ */
+export interface RecoveryCredential {
+    accessToken: string;
+    /** Seconds since the epoch, as the provider issued it. */
+    expiresAt: number;
+    userId: string;
+}
+
 export interface RecoverySessionResult {
     state: RecoverySessionState;
     failure: unknown;
     mode: RecoveryMode;
-    /** The account the form was opened for. Bound at establishment; checked again at submit. */
+    /** The account the form was opened for. */
     userId: string | null;
     email: string | null;
+    credential: RecoveryCredential | null;
 }
 
 function sessionUser(session: unknown): { id: string | null; email: string | null } {
@@ -177,11 +190,18 @@ function sessionUser(session: unknown): { id: string | null; email: string | nul
     return { id: typeof user?.id === "string" ? user.id : null, email: typeof user?.email === "string" ? user.email : null };
 }
 
+function sessionCredential(session: unknown, userId: string): RecoveryCredential | null {
+    const s = session as { access_token?: unknown; expires_at?: unknown } | null;
+    if (typeof s?.access_token !== "string" || !s.access_token || typeof s.expires_at !== "number") return null;
+    return { accessToken: s.access_token, expiresAt: s.expires_at, userId };
+}
+
 function result(state: RecoverySessionState, failure: unknown, mode: RecoveryMode, session: unknown = null): RecoverySessionResult {
     // Only a ready answer names an account; a session behind an expired or unavailable answer is not offered.
     const user = state === "ready" ? sessionUser(session) : { id: null, email: null };
-    if (state === "ready" && !user.id) return { state: "expired", failure, mode, userId: null, email: null };
-    return { state, failure, mode, userId: user.id, email: user.email };
+    const credential = state === "ready" && user.id ? sessionCredential(session, user.id) : null;
+    if (state === "ready" && !credential) return { state: "expired", failure, mode, userId: null, email: null, credential: null };
+    return { state, failure, mode, userId: user.id, email: user.email, credential };
 }
 
 export interface RecoveryLocation {
@@ -229,33 +249,120 @@ export async function establishRecoverySession(
     }
 }
 
-export interface PasswordUpdateClient {
-    getSession(): Promise<{ data: { session: unknown } | null; error: unknown }>;
+/**
+ * The refresh token the private writer is seeded with. Not a credential: the provider can never accept it, so
+ * if the library ever tries to refresh (an access token that lapsed mid-write), the attempt fails and A's REAL
+ * refresh token is never sent, used or rotated. `setSession` requires a non-empty value.
+ */
+export const RECOVERY_WRITER_REFRESH_PLACEHOLDER = "alloy-unrefreshable-recovery-writer";
+
+/** The part of an auth client the write needs. */
+export interface PasswordWriteClient {
+    /** Seed the private writer with the credential once; resolves to the account the provider says it is. */
+    seeded(): Promise<{ userId: string | null; error: unknown }>;
     updateUser(attributes: { password: string }): Promise<{ error: unknown }>;
 }
 
-export type BoundPasswordUpdate = { ok: true } | { ok: false; reason: "account_changed" } | { ok: false; reason: "failed"; error: unknown };
+export type BoundPasswordUpdate = { ok: true } | { ok: false; reason: "expired" } | { ok: false; reason: "failed"; error: unknown };
+
+/** The slice of a supabase-js client the private writer uses. */
+export interface RecoveryWriterAuth {
+    setSession(tokens: { access_token: string; refresh_token: string }): Promise<{ data: { user?: { id?: string } | null } | null; error: unknown }>;
+    updateUser(attributes: { password: string }): Promise<{ error: unknown }>;
+}
+/** Builds an ISOLATED client (never the shared one); in the app, supabase-js `createClient`. */
+export type RecoveryWriterClientFactory = (
+    supabaseUrl: string,
+    anonKey: string,
+    options: { auth: { storageKey: string; persistSession: false; autoRefreshToken: false; detectSessionInUrl: false } },
+) => { auth: RecoveryWriterAuth };
 
 /**
- * Change the password of the account the form was opened for — and no other.
+ * One private writer per credential — the page's only route to a password write.
  *
- * **The defect.** The form called `updateUser` on whatever session the auth client held at submit time.
- * Sessions live in shared browser storage: signing in as B in another tab while A's recovery form is open,
- * or a remount that reuses A's cached `ready`, would have changed B's password with no sign that B was the
- * target. The session is read again here and must still belong to the account bound at establishment.
- * (A switch in the instant between this read and the update is not excluded; the window is one round trip.)
+ * `persistSession: false`: the session lives only in this client's memory, the library opens no
+ * BroadcastChannel (the token is never announced to other same-origin pages) and writes nothing to browser
+ * storage. Seeded once with `setSession`; a seed that failed is retried on the next submit. It never refreshes
+ * (`RECOVERY_WRITER_REFRESH_PLACEHOLDER`). NEVER `signOut` it — every scope calls the provider's logout with
+ * the recovering account's live session. Dropping the reference is the teardown.
  */
-export async function updatePasswordForBoundAccount(
-    auth: PasswordUpdateClient,
-    boundUserId: string | null,
+export function recoveryWriterFactory(createIsolatedClient: RecoveryWriterClientFactory, supabaseUrl: string, anonKey: string) {
+    const writers = new WeakMap<RecoveryCredential, PasswordWriteClient>();
+    return (credential: RecoveryCredential): PasswordWriteClient => {
+        const existing = writers.get(credential);
+        if (existing) return existing;
+        const { auth } = createIsolatedClient(supabaseUrl, anonKey, {
+            auth: {
+                storageKey: `alloy-recovery-write-${credential.userId}`,
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false,
+            },
+        });
+        let seeding: Promise<{ userId: string | null; error: unknown }> | null = null;
+        const writer: PasswordWriteClient = {
+            seeded: () =>
+                (seeding ??= auth
+                    .setSession({ access_token: credential.accessToken, refresh_token: RECOVERY_WRITER_REFRESH_PLACEHOLDER })
+                    .then(
+                        ({ data, error }) => {
+                            if (error) seeding = null;
+                            return { userId: data?.user?.id ?? null, error };
+                        },
+                        // A seed that throws (not an AuthError) is a failed seed too: never memoised, never a write.
+                        (thrown: unknown) => {
+                            seeding = null;
+                            return { userId: null, error: thrown };
+                        },
+                    )),
+            updateUser: (attributes) => auth.updateUser(attributes),
+        };
+        writers.set(credential, writer);
+        return writer;
+    };
+}
+
+/** Seconds of validity a credential must still have to be used; matches the library's own expiry margin. */
+const CREDENTIAL_MARGIN_SECONDS = 90;
+
+/** A credential the provider no longer honours: the operator must re-open their link, not retry. */
+function credentialLapsed(error: unknown): boolean {
+    const e = error as { name?: unknown; code?: unknown } | null;
+    if (e?.name === "AuthSessionMissingError") return true;
+    return ["refresh_token_not_found", "session_not_found", "session_expired", "bad_jwt"].includes(String(e?.code ?? ""));
+}
+
+/**
+ * Change the password of the account the form was opened for — through the actual request, not just before it.
+ *
+ * **The defect.** The form called `updateUser` on the shared browser client. supabase-js resolves the session
+ * INSIDE that call, from shared storage, and sends that session's token: a session replaced by another tab
+ * between any earlier check and the request received the write.
+ *
+ * **The binding.** The write runs on a client created for `credential` alone, with `persistSession: false`:
+ * the library keeps that session in the client's own memory, opens no BroadcastChannel (so the token is never
+ * announced to other same-origin pages) and writes nothing to browser storage. It is seeded once with
+ * `setSession`; the provider's answer must name the bound account or nothing is written. It cannot refresh
+ * (`RECOVERY_WRITER_REFRESH_PLACEHOLDER`) and never falls back to the shared client.
+ *
+ * **Never `signOut` it.** Every scope of `signOut` calls the provider's logout with the session's access token
+ * — for this writer, the recovering account's live session. Teardown is dropping the reference.
+ */
+export async function updatePasswordWithCredential(
+    writeClientFor: (credential: RecoveryCredential) => PasswordWriteClient,
+    credential: RecoveryCredential | null,
     password: string,
+    nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<BoundPasswordUpdate> {
-    if (!boundUserId) return { ok: false, reason: "account_changed" };
-    const { data, error: sessionError } = await auth.getSession();
-    if (sessionError != null) return { ok: false, reason: "failed", error: sessionError };
-    if (sessionUser(data?.session ?? null).id !== boundUserId) return { ok: false, reason: "account_changed" };
-    const { error } = await auth.updateUser({ password });
-    return error == null ? { ok: true } : { ok: false, reason: "failed", error };
+    if (!credential || credential.expiresAt - nowSeconds < CREDENTIAL_MARGIN_SECONDS) return { ok: false, reason: "expired" };
+    const writer = writeClientFor(credential);
+    const seed = await writer.seeded();
+    if (seed.error != null) return credentialLapsed(seed.error) ? { ok: false, reason: "expired" } : { ok: false, reason: "failed", error: seed.error };
+    if (seed.userId !== credential.userId) return { ok: false, reason: "expired" };
+    const { error } = await writer.updateUser({ password });
+    if (error == null) return { ok: true };
+    if (credentialLapsed(error)) return { ok: false, reason: "expired" };
+    return { ok: false, reason: "failed", error };
 }
 
 /** `href` without the recovery link: no `code`, no provider error parameters, no fragment. */
@@ -282,9 +389,9 @@ export function withoutRecoveryLink(href: string): string {
  *
  * The first run's link and its pending answer are kept. A later run whose address is that link, or that link
  * with the link removed, gets the SAME promise — it never asks again. A visit with no link is not cached, so
- * an operator who signs in and returns is evaluated afresh. A cached `ready` carries the account it was
- * established for and submit re-checks it (`updatePasswordForBoundAccount`), so reusing it never extends to
- * a session that has since replaced that account.
+ * an operator who signs in and returns is evaluated afresh. A cached `ready` carries the credential it was
+ * established with, and the write uses only that (`updatePasswordWithCredential`), so reusing it never
+ * extends to a session that has since replaced that account.
  */
 export function createRecoverySessionCache(establish: typeof establishRecoverySession = establishRecoverySession) {
     let entry: { originalHref: string; clearedHref: string; result: Promise<RecoverySessionResult> } | null = null;

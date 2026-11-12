@@ -1,14 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { describe, expect, it, vi } from "vitest";
 
 import {
     PASSWORD_RECOVERY_FAILURE_MESSAGES,
     createRecoverySessionCache,
     createSingleFlight,
     establishRecoverySession,
-    updatePasswordForBoundAccount,
-    type PasswordUpdateClient,
+    RECOVERY_WRITER_REFRESH_PLACEHOLDER,
+    recoveryWriterFactory,
+    updatePasswordWithCredential,
+    type RecoveryCredential,
     passwordRecoveryFailureMessage,
     passwordRecoveryRequestOutcome,
     readRecoveryLink,
@@ -106,9 +109,8 @@ describe("F-1 — reset page reads its recovery link truthfully", () => {
         const lib = source("lib/auth/passwordRecoveryRequest.ts");
         expect(reset).toContain("establishRecoverySessionOnce(() => createClient().auth");
         expect(reset).toMatch(/^const establishRecoverySessionOnce = createRecoverySessionCache\(\);$/m);
-        // The link is read only through establishRecoverySessionOnce; getSession appears once, in the bound-update adapter.
-        expect(reset.match(/auth\.getSession\(\)/g)).toHaveLength(1);
-        expect(reset).toContain("getSession: () => supabase.auth.getSession()");
+        // The link is read only through establishRecoverySessionOnce; the page itself never asks the shared client.
+        expect(reset).not.toMatch(/auth\.getSession\(\)/);
         expect(lib).toContain("recoverySessionState({ session, error })");
         expect(lib).toContain("recoverySessionState({ thrown })");
         expect(reset).not.toMatch(/has not been used|was not used|wasn't used/i);
@@ -191,6 +193,12 @@ describe("F-1 — the recovery pages use the shared sign-in shell and the mapped
  *
  * The values below are fixtures, not credentials: nothing here reaches a provider.
  */
+/** A provider session shape with synthetic token values. */
+const sess = (user: { id: string; email?: string }) => ({
+    access_token: `fixture-access-${user.id}`,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user,
+});
 const BASE = "https://alloy.test/reset-password";
 const FRAGMENT = "#access_token=fixture-access&expires_in=3600&refresh_token=fixture-refresh&token_type=bearer&type=recovery";
 
@@ -232,7 +240,7 @@ function fakeAuth(overrides: Partial<{ getSession: RecoveryAuthClient["getSessio
         },
         setSession: async (tokens) => {
             calls.setSession.push(tokens);
-            return overrides.setSession ? overrides.setSession(tokens) : { data: { session: { user: { id: "recovering" } } }, error: null };
+            return overrides.setSession ? overrides.setSession(tokens) : { data: { session: sess({ id: "recovering" }) }, error: null };
         },
     };
     return { client, calls };
@@ -264,7 +272,7 @@ describe("HOTFIX — the reset page reads both recovery link shapes", () => {
         const loc = fakeLocation(BASE + FRAGMENT);
         const { client, calls } = fakeAuth({
             setSession: async () => ({ data: { session: null }, error: Object.assign(new Error("Invalid Refresh Token: Already Used"), { name: "AuthApiError", status: 400 }) }),
-            getSession: async () => ({ data: { session: { user: { id: "someone-else" } } }, error: null }),
+            getSession: async () => ({ data: { session: sess({ id: "someone-else" }) }, error: null }),
         });
         const result = await establishRecoverySession(() => client, loc.location);
         expect(result.state).toBe("expired");
@@ -282,7 +290,7 @@ describe("HOTFIX — the reset page reads both recovery link shapes", () => {
         const { client } = fakeAuth({
             getSession: async () => {
                 loc.consumeCode();
-                return { data: { session: { user: { id: "recovering" } } }, error: null };
+                return { data: { session: sess({ id: "recovering" }) }, error: null };
             },
         });
         expect((await establishRecoverySession(() => client, loc.location)).state).toBe("ready");
@@ -290,7 +298,7 @@ describe("HOTFIX — the reset page reads both recovery link shapes", () => {
 
     it("a PKCE code that was NOT exchanged (another browser, used link) is expired even if a session exists", async () => {
         const loc = fakeLocation(BASE + "?code=abc");
-        const { client } = fakeAuth({ getSession: async () => ({ data: { session: { user: { id: "someone-else" } } }, error: null }) });
+        const { client } = fakeAuth({ getSession: async () => ({ data: { session: sess({ id: "someone-else" }) }, error: null }) });
         const result = await establishRecoverySession(() => client, loc.location);
         expect(result.state).toBe("expired");
         expect(loc.href).toBe(BASE);
@@ -305,7 +313,7 @@ describe("HOTFIX — the reset page reads both recovery link shapes", () => {
 
     it("with no link, a signed-in operator may still change their own password", async () => {
         const loc = fakeLocation(BASE);
-        const { client } = fakeAuth({ getSession: async () => ({ data: { session: { user: { id: "self" } } }, error: null }) });
+        const { client } = fakeAuth({ getSession: async () => ({ data: { session: sess({ id: "self" }) }, error: null }) });
         expect((await establishRecoverySession(() => client, loc.location)).state).toBe("ready");
         const none = fakeAuth();
         expect((await establishRecoverySession(() => none.client, fakeLocation(BASE).location)).state).toBe("expired");
@@ -326,7 +334,7 @@ describe("HOTFIX — the reset page reads both recovery link shapes", () => {
  * run again) or a remount must not re-read the cleared address and adopt a session the browser already held.
  */
 describe("HOTFIX — repeat initialisation never turns an invalid link into a ready unrelated session", () => {
-    const otherUser = async () => ({ data: { session: { user: { id: "someone-else" } } }, error: null });
+    const otherUser = async () => ({ data: { session: sess({ id: "someone-else" }) }, error: null });
 
     /** Effect run 1 starts and is cancelled (its result ignored); run 2 starts at once; run 2's answer is shown. */
     async function strictModeReplay(once: ReturnType<typeof createRecoverySessionCache>, client: RecoveryAuthClient, loc: ReturnType<typeof fakeLocation>) {
@@ -384,7 +392,7 @@ describe("HOTFIX — repeat initialisation never turns an invalid link into a re
         const once = createRecoverySessionCache();
         const signedOut = fakeAuth();
         expect((await once(() => signedOut.client, fakeLocation(BASE).location)).state).toBe("expired");
-        const signedIn = fakeAuth({ getSession: async () => ({ data: { session: { user: { id: "self" } } }, error: null }) });
+        const signedIn = fakeAuth({ getSession: async () => ({ data: { session: sess({ id: "self" }) }, error: null }) });
         expect((await once(() => signedIn.client, fakeLocation(BASE).location)).state).toBe("ready");
     });
 
@@ -394,110 +402,224 @@ describe("HOTFIX — repeat initialisation never turns an invalid link into a re
     });
 });
 
-/*
- * REVIEW — submit must change the account the form was opened for, never whichever session the browser holds
- * at submit time. Sessions live in shared browser storage, so another tab can replace A with B under an open
- * form, and a remount reuses a cached `ready`. Synthetic accounts only; nothing reaches a provider.
- */
-describe("HOTFIX — submit is bound to the account the form was opened for", () => {
-    const A = { id: "account-a", email: "a@example.test" };
-    const B = { id: "account-b", email: "b@example.test" };
 
-    /** Shared browser storage: whoever signed in last is "the session". */
-    function browser(initial: { id: string; email: string } | null) {
-        let held: { id: string; email: string } | null = initial;
-        const updated: Array<{ userId: string | null; password: string }> = [];
-        const client: RecoveryAuthClient & PasswordUpdateClient = {
-            getSession: async () => ({ data: { session: held ? { user: held } : null }, error: null }),
-            setSession: async () => ({ data: { session: (held = A) && { user: A } }, error: null }),
-            updateUser: async ({ password }) => {
-                updated.push({ userId: held?.id ?? null, password });
-                return { error: null };
-            },
+/*
+ * WRITE BOUNDARY — the account is fixed THROUGH the actual password request. These drive the INSTALLED
+ * supabase-js client against a fake fetch, so what is asserted is the token on the real `PUT /auth/v1/user`
+ * request the library sends. Synthetic tokens and passwords only; nothing reaches a provider.
+ */
+describe("HOTFIX — write boundary: the password request carries only the form's credential", () => {
+    const URL_ = "https://project.example.test";
+    const ANON = "synthetic-anon-key";
+    const now = () => Math.floor(Date.now() / 1000);
+    /** A synthetic, unsigned JWT: `setSession` reads `exp` from the token itself. Never a real credential. */
+    const synthJwt = (sub: string, expSeconds = now() + 3600) =>
+        [{ alg: "none", typ: "JWT" }, { sub, aud: "authenticated", exp: expSeconds }].map((o) => Buffer.from(JSON.stringify(o)).toString("base64url")).join(".") + ".c3ludGhldGlj"; // base64url("synthetic")
+    const subOf = (bearer: string | null) => {
+        if (!bearer) return "anonymous";
+        if (bearer.startsWith("fixture-access-")) return bearer.replace("fixture-access-", "");
+        try {
+            return (JSON.parse(Buffer.from(bearer.split(".")[1], "base64url").toString("utf8")) as { sub?: string }).sub ?? "unknown";
+        } catch {
+            return "unknown";
+        }
+    };
+    const credA: RecoveryCredential = { accessToken: synthJwt("account-a"), expiresAt: now() + 3600, userId: "account-a" };
+
+    /** Records every auth request: method, path, bearer, body. Answers like the provider would. */
+    function fakeProvider(opts: { failFirstUserGet?: boolean; answerAs?: string } = {}) {
+        const requests: Array<{ method: string; path: string; bearer: string | null; body: unknown }> = [];
+        let userGets = 0;
+        const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+        const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = new URL(String(input));
+            const headers = new Headers(init?.headers);
+            const bearer = headers.get("Authorization")?.replace(/^Bearer /, "") ?? null;
+            const method = init?.method ?? "GET";
+            requests.push({ method, path: url.pathname, bearer, body: init?.body ? JSON.parse(String(init.body)) : null });
+            // The placeholder refresh token is never a valid grant.
+            if (url.pathname === "/auth/v1/token") return json(400, { code: 400, error_code: "refresh_token_not_found", msg: "Invalid Refresh Token: Refresh Token Not Found" });
+            if (method === "GET" && url.pathname === "/auth/v1/user" && opts.failFirstUserGet && ++userGets === 1) return json(500, { msg: "synthetic outage" });
+            const id = opts.answerAs ?? subOf(bearer);
+            return json(200, { id, aud: "authenticated", email: `${id}@example.test` });
         };
-        return { client, signInAs: (u: typeof held) => (held = u), updated };
+        return { requests, fetch: fetch as typeof globalThis.fetch };
     }
 
-    it("the hazard is real: an unbound update changes whichever account is held", async () => {
-        const b = browser(B);
-        await establishRecoverySession(() => b.client, fakeLocation(BASE + FRAGMENT).location);
-        b.signInAs(B); // another tab signs in as B while A's form is open
-        await b.client.updateUser({ password: "synthetic-password-1" });
-        expect(b.updated).toEqual([{ userId: "account-b", password: "synthetic-password-1" }]);
+    /** The PRODUCT writer (`recoveryWriterFactory`), over the installed supabase-js and the fake provider. */
+    function writeClientOver(provider: ReturnType<typeof fakeProvider>) {
+        return recoveryWriterFactory(
+            (supabaseUrl, anonKey, options) => {
+                const supabase = createSupabaseClient(supabaseUrl, anonKey, { ...options, global: { fetch: provider.fetch } });
+                return { auth: { setSession: (tokens) => supabase.auth.setSession(tokens), updateUser: (attributes) => supabase.auth.updateUser(attributes) } };
+            },
+            URL_,
+            ANON,
+        );
+    }
+    const seededAs = (userId: string) => async () => ({ userId, error: null });
+
+    /** A shared client whose storage another "tab" can replace at any moment. */
+    function sharedClientOver(provider: ReturnType<typeof fakeProvider>) {
+        const items = new Map<string, string>();
+        const key = "sb-shared-auth-token";
+        const hold = (id: string) => items.set(key, JSON.stringify({ access_token: `fixture-access-${id}`, refresh_token: "fixture-refresh", token_type: "bearer", expires_at: now() + 3600, expires_in: 3600, user: { id } }));
+        const supabase = createSupabaseClient(URL_, ANON, {
+            auth: { storage: { getItem: (k) => items.get(k) ?? null, setItem: (k, v) => void items.set(k, v), removeItem: (k) => void items.delete(k) }, storageKey: key, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
+            global: { fetch: provider.fetch },
+        });
+        return { supabase, hold };
+    }
+
+    it("the hazard is real on the installed client: a shared-client write sends whoever is held at request time", async () => {
+        const provider = fakeProvider();
+        const shared = sharedClientOver(provider);
+        shared.hold("account-a");
+        const { data } = await shared.supabase.auth.getSession();
+        expect((data.session?.user as { id: string }).id).toBe("account-a");
+        shared.hold("account-b"); // B replaces the shared session immediately before the request
+        await shared.supabase.auth.updateUser({ password: "synthetic-password-hazard" });
+        expect(provider.requests.filter((r) => r.method === "PUT").map((r) => r.bearer)).toEqual(["fixture-access-account-b"]);
     });
 
-    it("a recovery link binds account A and names it", async () => {
-        const b = browser(B);
-        const r = await establishRecoverySession(() => b.client, fakeLocation(BASE + FRAGMENT).location);
-        expect(r).toMatchObject({ state: "ready", mode: "recovery", userId: "account-a", email: "a@example.test" });
+    it("A captured; the shared session is replaced by B immediately before the request; the write carries only A", async () => {
+        const provider = fakeProvider();
+        const shared = sharedClientOver(provider);
+        shared.hold("account-a");
+        const writeClientFor = writeClientOver(provider);
+        const writer = writeClientFor; // created for A's credential at submit
+        shared.hold("account-b");
+        const outcome = await updatePasswordWithCredential((c) => {
+            shared.hold("account-b"); // and again at the last instant before the library resolves its session
+            return writer(c);
+        }, credA, "synthetic-password-bound");
+        expect(outcome).toEqual({ ok: true });
+        // The seed asks the provider who the credential is (A), then the write carries A.
+        expect(provider.requests.map((r) => [r.method, r.path, subOf(r.bearer)])).toEqual([
+            ["GET", "/auth/v1/user", "account-a"],
+            ["PUT", "/auth/v1/user", "account-a"],
+        ]);
+        expect(provider.requests.find((r) => r.method === "PUT")?.body).toMatchObject({ password: "synthetic-password-bound" });
+        expect(provider.requests.some((r) => r.bearer === "fixture-access-account-b")).toBe(false);
     });
 
-    it("A's form, session switched to B before submit: refused, nothing updated", async () => {
-        const b = browser(null);
-        const r = await establishRecoverySession(() => b.client, fakeLocation(BASE + FRAGMENT).location);
-        b.signInAs(B);
-        expect(await updatePasswordForBoundAccount(b.client, r.userId, "synthetic-password-2")).toEqual({ ok: false, reason: "account_changed" });
-        expect(b.updated).toEqual([]);
+    it("no credential, or one inside the expiry margin, never sends a request", async () => {
+        const provider = fakeProvider();
+        const writeClientFor = writeClientOver(provider);
+        expect(await updatePasswordWithCredential(writeClientFor, null, "synthetic-password-x")).toEqual({ ok: false, reason: "expired" });
+        const lapsing = { ...credA, expiresAt: now() + 30 };
+        expect(await updatePasswordWithCredential(writeClientFor, lapsing, "synthetic-password-y")).toEqual({ ok: false, reason: "expired" });
+        expect(provider.requests).toEqual([]);
     });
 
-    it("A's form, signed out before submit: refused, nothing updated", async () => {
-        const b = browser(null);
-        const r = await establishRecoverySession(() => b.client, fakeLocation(BASE + FRAGMENT).location);
-        b.signInAs(null);
-        expect(await updatePasswordForBoundAccount(b.client, r.userId, "synthetic-password-3")).toEqual({ ok: false, reason: "account_changed" });
-        expect(b.updated).toEqual([]);
+    it("a token that lapses mid-write only ever offers the placeholder refresh token, and reads as expired", async () => {
+        const provider = fakeProvider();
+        const writer = writeClientOver(provider)(credA);
+        expect(await writer.seeded()).toEqual({ userId: "account-a", error: null });
+        vi.useFakeTimers({ toFake: ["Date"] });
+        let outcome;
+        try {
+            vi.setSystemTime(Date.now() + 2 * 3600 * 1000);
+            outcome = await updatePasswordWithCredential(() => writer, { ...credA, expiresAt: now() + 3600 }, "synthetic-password-z");
+        } finally {
+            vi.useRealTimers();
+        }
+        expect(outcome).toEqual({ ok: false, reason: "expired" });
+        const refreshes = provider.requests.filter((x) => x.path === "/auth/v1/token");
+        expect(refreshes.length).toBeGreaterThan(0); // the library did try to refresh — and could only offer the placeholder
+        for (const r of refreshes) expect(r.body).toMatchObject({ refresh_token: RECOVERY_WRITER_REFRESH_PLACEHOLDER });
+        expect(provider.requests.some((r) => r.method === "PUT")).toBe(false);
     });
 
-    it("remount reuses A's cached ready, but with B now held the submit is still refused", async () => {
-        const b = browser(null);
+    it("a seed the provider attributes to another account writes nothing", async () => {
+        const provider = fakeProvider({ answerAs: "account-b" });
+        expect(await updatePasswordWithCredential(writeClientOver(provider), credA, "synthetic-password-m")).toEqual({ ok: false, reason: "expired" });
+        expect(provider.requests.some((r) => r.method === "PUT")).toBe(false);
+    });
+
+    it("a seed that failed is retried on the next submit, still as A", async () => {
+        const provider = fakeProvider({ failFirstUserGet: true });
+        const writeClientFor = writeClientOver(provider); // one writer per credential, as in the page
+        expect(await updatePasswordWithCredential(writeClientFor, credA, "synthetic-password-r")).toMatchObject({ ok: false, reason: "failed" });
+        expect(await updatePasswordWithCredential(writeClientFor, credA, "synthetic-password-r")).toEqual({ ok: true });
+        expect(provider.requests.map((r) => [r.method, subOf(r.bearer)])).toEqual([
+            ["GET", "account-a"],
+            ["GET", "account-a"],
+            ["PUT", "account-a"],
+        ]);
+    });
+
+    it("a seed that throws is not memoised: the next submit seeds again and writes as A", async () => {
+        let calls = 0;
+        const writeClientFor = recoveryWriterFactory(
+            () => ({
+                auth: {
+                    setSession: async () => {
+                        calls += 1;
+                        if (calls === 1) throw new SyntaxError("synthetic malformed payload");
+                        return { data: { user: { id: "account-a" } }, error: null };
+                    },
+                    updateUser: async () => ({ error: null }),
+                },
+            }),
+            URL_,
+            ANON,
+        );
+        expect(await updatePasswordWithCredential(writeClientFor, credA, "synthetic-password-t")).toMatchObject({ ok: false, reason: "failed" });
+        expect(await updatePasswordWithCredential(writeClientFor, credA, "synthetic-password-t")).toEqual({ ok: true });
+        expect(calls).toBe(2);
+    });
+
+    it("the helper maps a lapsed credential to expired and a provider refusal to failure", async () => {
+        const missing = Object.assign(new Error("Auth session missing!"), { name: "AuthSessionMissingError" });
+        expect(await updatePasswordWithCredential(() => ({ seeded: seededAs("account-a"), updateUser: async () => ({ error: missing }) }), credA, "p")).toEqual({ ok: false, reason: "expired" });
+        const same = Object.assign(new Error("New password should be different from the old password."), { name: "AuthApiError", status: 422, code: "same_password" });
+        expect(await updatePasswordWithCredential(() => ({ seeded: seededAs("account-a"), updateUser: async () => ({ error: same }) }), credA, "p")).toMatchObject({ ok: false, reason: "failed" });
+    });
+
+    it("a recovery link captures A's credential; StrictMode/remount reuse keeps A's credential, never a later held session", async () => {
+        const b = fakeAuth({
+            setSession: async () => ({ data: { session: sess({ id: "account-a", email: "a@example.test" }) }, error: null }),
+            getSession: async () => ({ data: { session: sess({ id: "account-b" }) }, error: null }),
+        });
         const once = createRecoverySessionCache();
         const loc = fakeLocation(BASE + FRAGMENT);
-        await once(() => b.client, loc.location);
-        b.signInAs(B);
-        const remounted = await once(() => b.client, loc.location); // cleared address, same page load
-        expect(remounted).toMatchObject({ state: "ready", userId: "account-a" });
-        expect(await updatePasswordForBoundAccount(b.client, remounted.userId, "synthetic-password-4")).toEqual({ ok: false, reason: "account_changed" });
-        expect(b.updated).toEqual([]);
+        const first = await once(() => b.client, loc.location);
+        const remount = await once(() => b.client, loc.location);
+        for (const r of [first, remount]) expect(r).toMatchObject({ state: "ready", mode: "recovery", userId: "account-a", credential: { userId: "account-a", accessToken: "fixture-access-account-a" } });
     });
 
-    it("A's form with A still held: updates A, once", async () => {
-        const b = browser(null);
-        const r = await establishRecoverySession(() => b.client, fakeLocation(BASE + FRAGMENT).location);
-        expect(await updatePasswordForBoundAccount(b.client, r.userId, "synthetic-password-5")).toEqual({ ok: true });
-        expect(b.updated).toEqual([{ userId: "account-a", password: "synthetic-password-5" }]);
-    });
-
-    it("no bound account (expired / unavailable answer) never updates", async () => {
-        const b = browser(B);
-        const r = await establishRecoverySession(() => b.client, fakeLocation(BASE + "#error=access_denied&error_code=otp_expired").location);
-        expect(r).toMatchObject({ state: "expired", userId: null });
-        expect(await updatePasswordForBoundAccount(b.client, r.userId, "synthetic-password-6")).toEqual({ ok: false, reason: "account_changed" });
-        expect(b.updated).toEqual([]);
-    });
-
-    it("a ready session with no user id is not offered", async () => {
-        const { client } = fakeAuth({ getSession: async () => ({ data: { session: { user: {} } }, error: null }) });
+    it("a ready session without an access token or expiry is not offered", async () => {
+        const { client } = fakeAuth({ getSession: async () => ({ data: { session: { user: { id: "self" } } }, error: null }) });
         expect((await establishRecoverySession(() => client, fakeLocation(BASE).location)).state).toBe("expired");
     });
 
-    it("invalid link → URL scrubbed → full reload with B held: the explicitly labelled signed-in change for B, not recovery", async () => {
-        const b = browser(B);
+    it("invalid link → URL scrubbed → full reload with B held: the labelled signed-in change for B, with B's own credential", async () => {
+        const b = fakeAuth({ getSession: async () => ({ data: { session: sess({ id: "account-b", email: "b@example.test" }) }, error: null }) });
         const loc = fakeLocation(BASE + "#error=access_denied&error_code=otp_expired");
-        const first = await createRecoverySessionCache()(() => b.client, loc.location);
-        expect(first).toMatchObject({ state: "expired", mode: "recovery", userId: null });
-        expect(loc.href).toBe(BASE);
-        // A full reload starts a new module scope: a fresh cache, on the scrubbed address.
+        expect(await createRecoverySessionCache()(() => b.client, loc.location)).toMatchObject({ state: "expired", mode: "recovery", credential: null });
         const reloaded = await createRecoverySessionCache()(() => b.client, fakeLocation(loc.href).location);
-        expect(reloaded).toMatchObject({ state: "ready", mode: "signed_in", userId: "account-b", email: "b@example.test" });
+        expect(reloaded).toMatchObject({ state: "ready", mode: "signed_in", userId: "account-b", credential: { userId: "account-b" } });
     });
 
-    it("the page binds submit to the established account and labels which account and why", () => {
+    it("the page writes only through the product writer, never the shared client, and never signs it out", () => {
         const reset = source("app/reset-password/page.tsx");
-        // updateUser is reachable only as the adapter handed to the bound helper, never called directly.
-        const bindingCall = reset.match(/updatePasswordForBoundAccount\(\s*\{[^}]*\},\s*bound\.userId,\s*password,?\s*\)/);
-        expect(bindingCall?.[0]).toContain("updateUser: (attributes) => supabase.auth.updateUser(attributes)");
+        const lib = source("lib/auth/passwordRecoveryRequest.ts");
+        expect(reset).toContain("updatePasswordWithCredential(writeClientFor, credential.current, password)");
+        expect(reset).toContain("recoveryWriterFactory(");
+        // The page's only auth calls are the thin adapter handed to the factory.
         expect(reset.match(/\.updateUser\(/g)).toHaveLength(1);
-        expect(reset).toContain('status === "account_changed"');
+        expect(reset).toContain("updateUser: (attributes) => supabase.auth.updateUser(attributes)");
+        expect(reset).toContain("setSession: (tokens) => supabase.auth.setSession(tokens)");
+        expect(reset).not.toMatch(/createClient\(\)\.auth\.updateUser|auth\.getSession\(\)|persistSession|storage:/);
+        // The isolation itself lives in the product module.
+        expect(lib).toContain("persistSession: false");
+        expect(lib).toContain("autoRefreshToken: false");
+        expect(lib).toContain("refresh_token: RECOVERY_WRITER_REFRESH_PLACEHOLDER");
+        expect(lib).not.toMatch(/boundSessionStorage|persistSession: true/);
+        // Teardown is dropping the reference: signOut would log the recovering account out at the provider.
+        for (const src of [reset, lib]) expect(src).not.toMatch(/\.signOut\(/);
+        expect(reset).not.toMatch(/console\.(log|info|warn|error)/);
         expect(reset).toContain('bound.mode === "signed_in"');
         expect(reset).toContain("data-reset-target");
     });

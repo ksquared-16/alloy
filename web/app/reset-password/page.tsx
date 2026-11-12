@@ -2,7 +2,9 @@
 
 import { useState, FormEvent, useEffect, useRef } from "react";
 import Link from "next/link";
+import { createClient as createIsolatedClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabaseClient";
+import { browserSupabaseUrl } from "@/lib/supabase/browserTransport";
 import CTAButton from "@/components/marketing/CTAButton";
 import PasswordField from "@/components/auth/PasswordField";
 import AuthShell, { AUTH_INPUT_CLASS, AUTH_LABEL_CLASS, AUTH_LINK_CLASS, AuthAlert } from "@/components/auth/AuthShell";
@@ -11,15 +13,43 @@ import { passwordUpdateErrorMessage, signInErrorMessage } from "@/lib/auth/signI
 import {
     createRecoverySessionCache,
     createSingleFlight,
-    updatePasswordForBoundAccount,
+    recoveryWriterFactory,
+    updatePasswordWithCredential,
     withoutRecoveryLink,
+    type PasswordWriteClient,
+    type RecoveryCredential,
     type RecoveryMode,
 } from "@/lib/auth/passwordRecoveryRequest";
 
-type Status = "loading" | "ready" | "success" | "expired" | "unavailable" | "account_changed";
+type Status = "loading" | "ready" | "success" | "expired" | "unavailable";
 
 /** Module scope: survives StrictMode effect replay and remounts within one page load. */
 const establishRecoverySessionOnce = createRecoverySessionCache();
+
+/*
+ * THE WRITE IS BOUND THROUGH THE REQUEST. The shared browser client resolves its session inside `updateUser`,
+ * from storage every tab shares — so whoever is signed in at that instant would receive the write. The password
+ * is written by `recoveryWriterFactory`'s private client for this form's credential alone (no persistence, no
+ * BroadcastChannel, no refresh, never the shared client, never signed out). This adapter is the only place the
+ * page touches it.
+ */
+let recoveryWriter: ((credential: RecoveryCredential) => PasswordWriteClient) | null = null;
+function writeClientFor(credential: RecoveryCredential): PasswordWriteClient {
+    recoveryWriter ??= recoveryWriterFactory(
+        (supabaseUrl, anonKey, options) => {
+            const supabase = createIsolatedClient(supabaseUrl, anonKey, options);
+            return {
+                auth: {
+                    setSession: (tokens) => supabase.auth.setSession(tokens),
+                    updateUser: (attributes) => supabase.auth.updateUser(attributes),
+                },
+            };
+        },
+        browserSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "", window.location.origin),
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "",
+    );
+    return recoveryWriter(credential);
+}
 
 const HEADING_CLASS = "text-2xl font-bold tracking-tight text-alloy-forge outline-none md:text-3xl";
 
@@ -30,12 +60,9 @@ export default function ResetPasswordPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [unavailableMessage, setUnavailableMessage] = useState<string | null>(null);
-    // The account this form was opened for. Submit changes this account's password or nothing.
-    const [bound, setBound] = useState<{ userId: string | null; email: string | null; mode: RecoveryMode }>({
-        userId: null,
-        email: null,
-        mode: "recovery",
-    });
+    // The account this form was opened for, and the credential that alone may change its password.
+    const [bound, setBound] = useState<{ email: string | null; mode: RecoveryMode }>({ email: null, mode: "recovery" });
+    const credential = useRef<RecoveryCredential | null>(null);
     const flight = useRef(createSingleFlight());
     const mounted = useRef(true);
     const heading = useRef<HTMLHeadingElement>(null);
@@ -49,15 +76,16 @@ export default function ResetPasswordPage() {
             // error and a thrown one are classified; neither is passed through.
             // The link is cleared before this settles, so a StrictMode replay or remount must reuse the first
             // answer rather than re-read a cleared address and adopt an unrelated held session.
-            const { state, failure, userId, email, mode } = await establishRecoverySessionOnce(() => createClient().auth, {
+            const established = await establishRecoverySessionOnce(() => createClient().auth, {
                 href: () => window.location.href,
                 clearLink: () =>
                     window.history.replaceState(window.history.state, "", withoutRecoveryLink(window.location.href)),
             });
             if (cancelled) return;
-            if (state === "unavailable") setUnavailableMessage(signInErrorMessage(failure));
-            setBound({ userId, email, mode });
-            setStatus(state);
+            if (established.state === "unavailable") setUnavailableMessage(signInErrorMessage(established.failure));
+            credential.current = established.credential;
+            setBound({ email: established.email, mode: established.mode });
+            setStatus(established.state);
         }
 
         checkSession();
@@ -88,18 +116,13 @@ export default function ResetPasswordPage() {
 
             setIsLoading(true);
             try {
-                // Never whichever session the browser holds NOW: only the account the form was opened for.
-                const supabase = createClient();
-                const outcome = await updatePasswordForBoundAccount(
-                    { getSession: () => supabase.auth.getSession(), updateUser: (attributes) => supabase.auth.updateUser(attributes) },
-                    bound.userId,
-                    password,
-                );
+                // Written with this form's credential only — never through the shared client's current session.
+                const outcome = await updatePasswordWithCredential(writeClientFor, credential.current, password);
                 if (!mounted.current) return;
-                if (!outcome.ok && outcome.reason === "account_changed") {
+                if (!outcome.ok && outcome.reason === "expired") {
                     setPassword("");
                     setConfirm("");
-                    setStatus("account_changed");
+                    setStatus("expired");
                     return;
                 }
                 if (!outcome.ok) {
@@ -147,28 +170,6 @@ export default function ResetPasswordPage() {
                         Back to sign in
                     </Link>
                 </p>
-            </AuthShell>
-        );
-    }
-
-    if (status === "account_changed") {
-        return (
-            <AuthShell>
-                <h1 ref={heading} tabIndex={-1} className={HEADING_CLASS}>
-                    Your password was not changed
-                </h1>
-                <p className="mt-4 text-sm leading-relaxed text-alloy-forge/70">
-                    A different account is now signed in in this browser, so nothing was changed. Open your reset
-                    link again, or sign in as the account you want to update.
-                </p>
-                <div className="mt-8 flex flex-col gap-3">
-                    <CTAButton href="/forgot-password" className="w-full">
-                        Request a new link
-                    </CTAButton>
-                    <CTAButton href="/login" variant="ghost" className="w-full">
-                        Back to sign in
-                    </CTAButton>
-                </div>
             </AuthShell>
         );
     }
