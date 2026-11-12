@@ -2,7 +2,6 @@
 
 import { useState, FormEvent, Suspense, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -12,7 +11,7 @@ import CTAButton from "@/components/marketing/CTAButton";
 import PasswordField from "@/components/auth/PasswordField";
 import { signInErrorMessage } from "@/lib/auth/signInErrorMessage";
 import { authCookieNameFor, browserSupabaseUrl } from "@/lib/supabase/browserTransport";
-import { MARKETING_BRAND } from "@/lib/marketing/artifactPaths";
+import AuthShell, { AUTH_INPUT_CLASS, AuthAlert } from "@/components/auth/AuthShell";
 
 /**
  * Ask the server for its Supabase configuration, and keep it for the stale-bundle repair below.
@@ -212,133 +211,84 @@ function LoginForm() {
     }
   };
 
-  const inputClass =
-    "w-full rounded-lg border border-alloy-forge/15 bg-white px-4 py-3 text-sm text-alloy-forge placeholder:text-alloy-forge/40 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20";
+  const inputClass = AUTH_INPUT_CLASS;
 
   return (
-    <div className="flex min-h-screen">
-      {/* Brand panel */}
-      <div className="relative hidden w-0 flex-1 overflow-hidden bg-alloy-stone lg:block lg:w-1/2">
-        <div className="absolute inset-0 bg-gradient-to-br from-alloy-stone via-white to-alloy-juniper/5" />
-        <div className="relative flex h-full flex-col justify-between p-12 xl:p-16">
-          <Link href="/">
-            <Image
-              src="/marketing/brand/alloy-gradient-wordmark.svg"
-              alt="Alloy"
-              width={160}
-              height={40}
-              className="h-9 w-auto"
-            />
-          </Link>
-          <div className="flex flex-1 items-center justify-center py-12">
-            <div className="relative aspect-[4/3] w-full max-w-md">
-              <Image
-                src={MARKETING_BRAND.brandmark}
-                alt=""
-                fill
-                className="object-contain"
-                aria-hidden
-                priority
-              />
-            </div>
-          </div>
-          <p className="max-w-sm text-sm leading-relaxed text-alloy-midnight-forge/55">
-            Most software stores information. Alloy moves work forward.
-          </p>
-        </div>
-      </div>
+    <AuthShell>
+      <h1 className="text-2xl font-bold tracking-tight text-alloy-forge md:text-3xl">
+        Welcome back to Alloy.
+      </h1>
+      <p className="mt-2 text-sm text-alloy-forge/60">
+        Sign in to your workspace.{" "}
+        <Link href="/" className="font-medium text-alloy-juniper hover:underline">
+          Back to homepage
+        </Link>
+      </p>
 
-      {/* Login form */}
-      <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-12 sm:px-10 lg:w-1/2 lg:px-16 xl:px-24">
-        <div className="mx-auto w-full max-w-md">
-          <div className="mb-8 lg:hidden">
-            <Link href="/">
-              <Image
-                src="/marketing/brand/alloy-gradient-wordmark.svg"
-                alt="Alloy"
-                width={140}
-                height={36}
-                className="h-8 w-auto"
-              />
-            </Link>
-          </div>
+      {(error || initialError) && (
+        <AuthAlert>
+          {error || initialError}
+          {/*
+            Dev only, and only under the credential answer — the one message that is deliberately
+            ambiguous. Accounts are per-project, and an operator running a local server against a
+            hosted project will present a password that is entirely correct somewhere else and be
+            told it is incorrect. That cost a QA gate an afternoon.
 
-          <h1 className="text-2xl font-bold tracking-tight text-alloy-forge md:text-3xl">
-            Welcome back to Alloy.
-          </h1>
-          <p className="mt-2 text-sm text-alloy-forge/60">
-            Sign in to your workspace.{" "}
-            <Link href="/" className="font-medium text-alloy-juniper hover:underline">
-              Back to homepage
-            </Link>
-          </p>
-
-          {(error || initialError) && (
-            <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-              {error || initialError}
-              {/*
-                Dev only, and only under the credential answer — the one message that is deliberately
-                ambiguous. Accounts are per-project, and an operator running a local server against a
-                hosted project will present a password that is entirely correct somewhere else and be
-                told it is incorrect. That cost a QA gate an afternoon.
-
-                It does NOT weaken W-32. This names the environment, never the account: it says the
-                same words for an address that exists here and one that does not, so it is no more an
-                existence oracle than the URL in the address bar. It is the same carve-out the message
-                module already makes for `misconfigured` and `unreachable` — true of every caller,
-                silent about all of them.
-              */}
-              {isDev && error === signInErrorMessage(null) ? (
-                <p className="mt-2 border-t border-red-200 pt-2 text-xs text-red-700/80">
-                  This server signs in against its own non-production database. Accounts are per
-                  environment — one from another environment will not work here.
-                </p>
-              ) : null}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className={inputClass}
-                placeholder="you@example.com"
-                autoComplete="email"
-              />
-            </div>
-
-            {/* W-30 — the show/hide baseline, from the one shared component (`RL-37`). */}
-            <PasswordField
-              id="password"
-              label="Password"
-              value={password}
-              onChange={setPassword}
-              required
-              className={`${inputClass} pr-16`}
-              placeholder="••••••••"
-              autoComplete="current-password"
-            />
-
-            <CTAButton type="submit" disabled={isLoading} className="w-full">
-              {isLoading ? "Signing in…" : "Sign in"}
-            </CTAButton>
-
-            <p className="text-center text-sm text-alloy-forge/60">
-              <Link href="/forgot-password" className="text-alloy-juniper hover:underline">
-                Forgot password?
-              </Link>
+            It does NOT weaken W-32. This names the environment, never the account: it says the
+            same words for an address that exists here and one that does not, so it is no more an
+            existence oracle than the URL in the address bar. It is the same carve-out the message
+            module already makes for `misconfigured` and `unreachable` — true of every caller,
+            silent about all of them.
+          */}
+          {isDev && error === signInErrorMessage(null) ? (
+            <p className="mt-2 border-t border-red-200 pt-2 text-xs text-red-700/80">
+              This server signs in against its own non-production database. Accounts are per
+              environment — one from another environment will not work here.
             </p>
-          </form>
+          ) : null}
+        </AuthAlert>
+      )}
+
+      <form onSubmit={handleSubmit} className="mt-8 space-y-5" aria-busy={isLoading}>
+        <div>
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
+            Email
+          </label>
+          <input
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className={inputClass}
+            placeholder="you@example.com"
+            autoComplete="email"
+          />
         </div>
-      </div>
-    </div>
+
+        {/* W-30 — the show/hide baseline, from the one shared component (`RL-37`). */}
+        <PasswordField
+          id="password"
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          required
+          className={`${inputClass} pr-16`}
+          placeholder="••••••••"
+          autoComplete="current-password"
+        />
+
+        <CTAButton type="submit" disabled={isLoading} className="w-full">
+          {isLoading ? "Signing in…" : "Sign in"}
+        </CTAButton>
+
+        <p className="text-center text-sm text-alloy-forge/60">
+          <Link href="/forgot-password" className="text-alloy-juniper hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+      </form>
+    </AuthShell>
   );
 }
 
