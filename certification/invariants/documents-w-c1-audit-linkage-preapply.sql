@@ -14,6 +14,15 @@
 -- document_link_subject positionally) keep working unchanged. The previous signatures are dropped so no overload
 -- survives. No backfill: rows written before this migration keep NULL. Idempotent (IF NOT EXISTS, DROP IF EXISTS,
 -- CREATE OR REPLACE). Design: certification/documents-v1/finish/W-C1-STORED-AUDIT-LINKAGE-DESIGN.md.
+--
+-- Bounded locks. database.apply_migration runs this file inside its own BEGIN … ledger row … COMMIT, so SET LOCAL holds
+-- until that transaction ends and never reaches a pooled session; a runner that does not wrap the file gets a warning and
+-- no effect, never a session-wide setting. lock_timeout bounds each wait for a lock (while an ALTER TABLE waits, every
+-- reader and writer of that table queues behind it); statement_timeout bounds each statement (mainly the three index
+-- builds). Neither bounds the whole transaction: locks taken early are held until COMMIT. Either firing aborts the
+-- transaction and nothing is applied.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 
 ALTER TABLE public.document_version_review_events ADD COLUMN IF NOT EXISTS audit_event_id uuid;
 ALTER TABLE public.document_subjects
@@ -284,6 +293,15 @@ REVOKE ALL ON FUNCTION
 -- document_link_subject positionally) keep working unchanged. The previous signatures are dropped so no overload
 -- survives. No backfill: rows written before this migration keep NULL. Idempotent (IF NOT EXISTS, DROP IF EXISTS,
 -- CREATE OR REPLACE). Design: certification/documents-v1/finish/W-C1-STORED-AUDIT-LINKAGE-DESIGN.md.
+--
+-- Bounded locks. database.apply_migration runs this file inside its own BEGIN … ledger row … COMMIT, so SET LOCAL holds
+-- until that transaction ends and never reaches a pooled session; a runner that does not wrap the file gets a warning and
+-- no effect, never a session-wide setting. lock_timeout bounds each wait for a lock (while an ALTER TABLE waits, every
+-- reader and writer of that table queues behind it); statement_timeout bounds each statement (mainly the three index
+-- builds). Neither bounds the whole transaction: locks taken early are held until COMMIT. Either firing aborts the
+-- transaction and nothing is applied.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 
 ALTER TABLE public.document_version_review_events ADD COLUMN IF NOT EXISTS audit_event_id uuid;
 ALTER TABLE public.document_subjects
