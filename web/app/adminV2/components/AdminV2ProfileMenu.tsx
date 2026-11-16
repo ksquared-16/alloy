@@ -9,6 +9,9 @@ import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { CANONICAL_ADMIN_CONFIG_LANDING } from "@/lib/admin/canonicalAdminRoutes";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+import { workspaceVisibilityOverrideLoader } from "@/lib/access/useWorkspaceVisibilityOverride";
+import AdminV2WorkspaceVisibilityControls from "@/app/adminV2/components/AdminV2WorkspaceVisibilityControls";
 
 const ORGANIZATION_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
 
@@ -37,6 +40,12 @@ export default function AdminV2ProfileMenu() {
     const menuId = useId();
     const rootRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
+    const [workspacesOpen, setWorkspacesOpen] = useState(false);
+    const auth = useAdminAuthOptional();
+    const hasPrincipal = Boolean(auth?.userId && auth.orgId);
+    useEffect(() => {
+        if (!open) setWorkspacesOpen(false);
+    }, [open]);
     const [email, setEmail] = useState<string | null>(null);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
@@ -87,6 +96,8 @@ export default function AdminV2ProfileMenu() {
     const onSignOut = useCallback(async () => {
         setOpen(false);
         clearVolatileRuntimeSessionState();
+        // The next principal must not see this one's workspace override, even briefly.
+        workspaceVisibilityOverrideLoader.invalidate();
         const supabase = createClient();
         await supabase.auth.signOut();
         router.push("/login");
@@ -159,6 +170,19 @@ export default function AdminV2ProfileMenu() {
                     >
                         Profile
                     </button>
+                    {hasPrincipal ?
+                    <button
+                        type="button"
+                        role="menuitem"
+                        aria-expanded={workspacesOpen}
+                        onClick={() => setWorkspacesOpen((o) => !o)}
+                        className="block w-full px-3 py-2.5 text-left text-sm font-medium hover:bg-alloy-stone/10"
+                        style={{ color: palette.midnightForge }}
+                    >
+                        Workspaces
+                    </button>
+                    : null}
+                    {hasPrincipal && workspacesOpen ? <AdminV2WorkspaceVisibilityControls /> : null}
                     <AdminV2NavLink
                         href={ORGANIZATION_HREF}
                         className="block px-3 py-2.5 text-sm font-medium hover:bg-alloy-stone/10 no-underline"
