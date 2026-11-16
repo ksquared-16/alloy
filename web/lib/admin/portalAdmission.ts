@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PORTAL_ADMISSION_CAPABILITY_KEY } from "@/lib/access/portalAdmissionKey";
 import { logAccessReadFailure } from "@/lib/admin/accessReadFailureLog";
 
 /**
@@ -24,7 +25,8 @@ import { logAccessReadFailure } from "@/lib/admin/accessReadFailureLog";
  * copies of an admission predicate is how that happens. The capability key, the three outcomes, and
  * the fail-closed rule are stated once, here.
  */
-export const PORTAL_ADMISSION_CAPABILITY = "portal.access";
+// The key's spelling lives in a client-safe leaf (`portalAdmissionKey.ts`); the decision stays here.
+export const PORTAL_ADMISSION_CAPABILITY = PORTAL_ADMISSION_CAPABILITY_KEY;
 
 /**
  * Three outcomes, because two of them are denials that mean different things.
@@ -53,7 +55,7 @@ export function isPortalAdmitted(admission: PortalAdmission): boolean {
  */
 export function portalAdmissionFromPermissionKeys(permissionKeys: string[] | null): PortalAdmission {
     if (permissionKeys === null) return "unresolved";
-    return permissionKeys.includes(PORTAL_ADMISSION_CAPABILITY) ? "admitted" : "no-capability";
+    return permissionKeys.includes(PORTAL_ADMISSION_CAPABILITY_KEY) ? "admitted" : "no-capability";
 }
 
 /**

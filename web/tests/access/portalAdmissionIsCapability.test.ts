@@ -493,8 +493,13 @@ describe("the role literal does not come back", () => {
     it("the capability is spelled once, and every consumer reads it from there", () => {
         // A second string literal is a second capability. `portal.login`, `portal.enter` and
         // `admin.portal` were all named as things not to invent; so is a stray copy of this one.
+        // The spelling lives in a client-safe leaf so a client module can name the key without importing
+        // the server admission module; the admission module binds exactly that key, it does not copy it.
         const literal = files.filter((rel) => /["']portal\.access["']/.test(executableSource(rel)));
-        expect(literal).toEqual(["lib/admin/portalAdmission.ts"]);
+        expect(literal).toEqual(["lib/access/portalAdmissionKey.ts"]);
+        expect(executableSource("lib/admin/portalAdmission.ts")).toMatch(
+            /^export const PORTAL_ADMISSION_CAPABILITY = PORTAL_ADMISSION_CAPABILITY_KEY;$/m,
+        );
     });
 
     it("the preservation migration exists and grants exactly the roles the literal admitted", () => {

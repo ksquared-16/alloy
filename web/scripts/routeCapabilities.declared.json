@@ -3616,6 +3616,20 @@
         "status": "pending"
       }
     },
+    "app/api/admin/me/workspace-visibility/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The CALLER'S OWN hide-only workspace visibility override (Access V3 S5), addressed only by the principal requireAdminOrgContextLight resolved; a request naming any other user or organization is refused 403. It is a presentation preference: it can only hide a workspace the caller's roles already show, carries no permission key, and changes no grant, route or command decision. Admission (W-13 portal.access) is required. Reads; writes nothing. With the store absent (held migration) it answers store unavailable."
+      },
+      "PUT": {
+        "status": "none",
+        "reason": "The CALLER'S OWN hide-only workspace visibility override (Access V3 S5), addressed only by the principal requireAdminOrgContextLight resolved; a request naming any other user or organization is refused 403. It is a presentation preference: it can only hide a workspace the caller's roles already show, carries no permission key, and changes no grant, route or command decision. Admission (W-13 portal.access) is required. Writes only that principal's own override, validated against the workspace registry. With the store absent (held migration) it answers 503 saved:false."
+      },
+      "DELETE": {
+        "status": "none",
+        "reason": "The CALLER'S OWN hide-only workspace visibility override (Access V3 S5), addressed only by the principal requireAdminOrgContextLight resolved; a request naming any other user or organization is refused 403. It is a presentation preference: it can only hide a workspace the caller's roles already show, carries no permission key, and changes no grant, route or command decision. Admission (W-13 portal.access) is required. Resets only that principal's own override to role defaults. With the store absent (held migration) it answers 503 saved:false."
+      }
+    },
     "app/api/admin/metrics/kpi-targets/route.ts": {
       "GET": {
         "status": "pending"

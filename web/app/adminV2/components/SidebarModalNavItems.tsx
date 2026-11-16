@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 // Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
 import { Inbox, ListChecks, BarChart3, Layers, Contact, Banknote } from "lucide-react";
 
@@ -11,6 +11,8 @@ import { useProcessingAttentionNavCount } from "@/lib/adminV2/useProcessingAtten
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import { offersFinancialsSurface } from "@/lib/access/financialsSurfaceVisibility";
+import { workspaceSurfaceRendered, type WorkspaceSurfaceKey } from "@/lib/access/workspaceVisibility";
+import { useOwnWorkspaceVisibility } from "@/lib/access/useWorkspaceVisibilityOverride";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmOperationsWorkspace } from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import { dispatchAdminV2OpenFinancialsModal } from "@/lib/adminV2/workspaceModalEvents";
@@ -26,6 +28,17 @@ import {
     dispatchAdminV2OpenProcessingModal,
     dispatchAdminV2OpenOperationsModal,
 } from "@/lib/adminV2/workspaceModalEvents";
+
+/**
+ * Role-default workspace visibility (Access V3 S5) for one rail entry, less the caller's own hide-only
+ * override. Not authorization: the workspace's routes enforce their own capability. Fails closed while
+ * the principal or its grants are unknown, and a result or override for another user or organization
+ * is never applied. With no override store (held migration) the role defaults apply unchanged.
+ */
+function useWorkspaceSurfaceRendered(key: WorkspaceSurfaceKey): boolean {
+    const { principal, visibility } = useOwnWorkspaceVisibility();
+    return workspaceSurfaceRendered(visibility, principal, key);
+}
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
 
@@ -92,6 +105,8 @@ export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
     const { alertCount, open, enabled } = useOperationalTasksNavCounts();
     const activeModal = useActiveAdminV2WorkspaceModal();
 
+    const rendered = useWorkspaceSurfaceRendered("tasks");
+    if (!rendered) return null;
     if (!enabled) return null;
 
     const title =
@@ -142,6 +157,8 @@ export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
 export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
     const { unread } = useInboxUnreadNavCount();
     const activeModal = useActiveAdminV2WorkspaceModal();
+    const rendered = useWorkspaceSurfaceRendered("inbox");
+    if (!rendered) return null;
     const title =
         unread > 0 ? `Inbox — ${unread} unread message${unread === 1 ? "" : "s"}` : "Inbox — conversations";
 
@@ -182,6 +199,8 @@ export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
 
 export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
+    const rendered = useWorkspaceSurfaceRendered("analytics");
+    if (!rendered) return null;
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
@@ -213,6 +232,8 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
     const activeModal = useActiveAdminV2WorkspaceModal();
     // New work: actionable intake no operator has acted on yet (processingCaseAttention).
     const unworked = useProcessingAttentionNavCount();
+    const rendered = useWorkspaceSurfaceRendered("processing");
+    if (!rendered) return null;
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
@@ -262,6 +283,8 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
  */
 export function SidebarOperationsNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
+    const rendered = useWorkspaceSurfaceRendered("operations");
+    if (!rendered) return null;
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
