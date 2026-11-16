@@ -71,4 +71,20 @@ describe("pre-apply invariants", () => {
         expect(banner.startsWith(BANNER)).toBe(true);
         expect(banner.split("\n").every((l) => l === "" || l.startsWith("--"))).toBe(true);
     });
+
+    it("W-C1 audit linkage: the pending migration TWICE (T10 idempotent re-apply), then the banner, then the invariant unchanged", () => {
+        const migration = read("supabase/migrations/20261222090000_documents_w_c1_audit_linkage.sql");
+        const single = read("certification/invariants/documents-w-c1-audit-linkage.sql");
+        const invariant = read("certification/invariants/documents-w-c1-audit-linkage-preapply.sql");
+        expect(invariant.startsWith(migration + migration)).toBe(true);
+        expect(invariant.endsWith(single)).toBe(true);
+        const banner = invariant.slice(2 * migration.length, invariant.length - single.length);
+        expect(banner.startsWith(BANNER)).toBe(true);
+        expect(banner.split("\n").every((l) => l === "" || l.startsWith("--"))).toBe(true);
+        // The rollback executor refuses the bare word EXECUTE as dynamic SQL: grants are GRANT ALL ON FUNCTION.
+        expect(migration).not.toMatch(/GRANT EXECUTE/);
+        const code = single.split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+        expect(code).not.toMatch(/schema_migrations|\bCOMMIT\b|\bROLLBACK\b/i);
+        expect(single).toContain("tests passed=% failed=0");
+    });
 });

@@ -97,6 +97,42 @@ describe("escalation after the 24-hour grace period", () => {
         expect(db.rows("document_subjects")).toEqual([]);
     });
 
+    it("W-C1 (B): the opened case stores the id of the escalation audit written for it", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        expect(await run()).toMatchObject({ opened: 1 });
+        const meta = db.rows("processing_cases")[0].metadata as Record<string, Record<string, unknown>>;
+        expect(audits).toHaveLength(1);
+        expect(meta[API_UPLOAD_ESCALATION_KEY].audit_event_id).toBe("evt-1");
+    });
+
+    it("W-C1 (B): an audit failure binds no case; the repair of a lost annotation writes no audit and stores no audit id", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        auditOk = false;
+        expect(await run()).toMatchObject({ failed: 1, opened: 0 });
+        expect(db.rows("processing_cases")).toEqual([]);
+        auditOk = true;
+        // Open, but lose the annotation write once.
+        const real = db.from.bind(db);
+        let failUpdate = true;
+        (db as unknown as { from: unknown }).from = (t: string) => {
+            const q = real(t);
+            if (t !== "processing_cases" || !failUpdate) return q;
+            const update = q.update.bind(q);
+            (q as unknown as { update: unknown }).update = (patch: Record<string, unknown>) => {
+                update(patch);
+                return { eq: () => ({ eq: async () => ({ data: null, error: { message: "down" } }) }) };
+            };
+            return q;
+        };
+        expect(await run()).toMatchObject({ failed: 1 });
+        failUpdate = false;
+        const audited = audits.length;
+        expect(await run()).toMatchObject({ repaired: 1 });
+        expect(audits.length).toBe(audited);
+        const meta = db.rows("processing_cases")[0].metadata as Record<string, Record<string, unknown>>;
+        expect(meta[API_UPLOAD_ESCALATION_KEY]).not.toHaveProperty("audit_event_id");
+    });
+
     it("is idempotent across retries and concurrent wakes: one case, one audit", async () => {
         db.seed("documents", [apiUpload(D(1))]);
         await Promise.all([run(), run()]);
