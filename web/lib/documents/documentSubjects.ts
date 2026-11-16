@@ -15,6 +15,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { canonicalDocumentEntityType } from "@/lib/documents/documentEntityTypes";
+import { isRpcSignatureMissing, withAudit, type AuditBinding } from "@/lib/documents/documentAudit";
 
 export const DOCUMENT_SUBJECT_TYPES = Object.freeze([
     "household",
@@ -108,7 +109,9 @@ function subjectError(error: { message?: string } | null): SubjectChangeResult {
             ? "PRIMARY_REQUIRED"
             : /document_not_found/.test(message)
               ? "NOT_FOUND"
-              : "SUBJECT_CHANGE_FAILED";
+              : /audit_event_mismatch/.test(message)
+                ? "AUDIT_EVENT_MISMATCH"
+                : "SUBJECT_CHANGE_FAILED";
     return { ok: false, code, error: message };
 }
 
@@ -136,31 +139,37 @@ export async function linkDocumentSubject(
         subjectId: string;
         association: "owner" | "context";
         actorUserId: string | null;
+        /** W-C1: the audit row this link binds, and the actor it was written for. */
+        audit?: AuditBinding;
     },
 ): Promise<SubjectChangeResult> {
-    const { data, error } = await supabase.rpc("document_link_subject", {
+    const args = {
         p_org_id: input.orgId,
         p_document_id: input.documentId,
         p_subject_type: input.subjectType,
         p_subject_id: input.subjectId,
         p_association: input.association,
         p_actor: input.actorUserId,
-    });
+    };
+    let { data, error } = await supabase.rpc("document_link_subject", withAudit(args, input.audit));
+    if (error && input.audit && isRpcSignatureMissing(error)) ({ data, error } = await supabase.rpc("document_link_subject", args));
     if (error) return subjectError(error);
     return { ok: true, result: (data ?? {}) as Record<string, unknown> };
 }
 
 export async function unlinkDocumentSubject(
     supabase: SupabaseClient,
-    input: { orgId: string; documentId: string; subjectType: DocumentSubjectType; subjectId: string; actorUserId: string | null },
+    input: { orgId: string; documentId: string; subjectType: DocumentSubjectType; subjectId: string; actorUserId: string | null; audit?: AuditBinding },
 ): Promise<SubjectChangeResult> {
-    const { data, error } = await supabase.rpc("document_unlink_subject", {
+    const args = {
         p_org_id: input.orgId,
         p_document_id: input.documentId,
         p_subject_type: input.subjectType,
         p_subject_id: input.subjectId,
         p_actor: input.actorUserId,
-    });
+    };
+    let { data, error } = await supabase.rpc("document_unlink_subject", withAudit(args, input.audit));
+    if (error && input.audit && isRpcSignatureMissing(error)) ({ data, error } = await supabase.rpc("document_unlink_subject", args));
     if (error) return subjectError(error);
     return { ok: true, result: (data ?? {}) as Record<string, unknown> };
 }

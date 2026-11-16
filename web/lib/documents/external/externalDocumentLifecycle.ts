@@ -17,7 +17,7 @@
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { recordDocumentAudit, type DocumentAuditInput, type DocumentAuditResult } from "@/lib/documents/documentAudit";
+import { auditActorFacts, recordDocumentAudit, type DocumentAuditInput, type DocumentAuditResult } from "@/lib/documents/documentAudit";
 import { applyPage, EXTERNAL_DOCUMENT_SUBJECT_TYPES, listExternalDocuments, subjectVisibility, type ExternalDocumentSubjectType } from "@/lib/documents/external/externalDocumentAuthority";
 import { externalFilingKey, stableUuid, type WriteContext, type WriteRefusal, type WriteResult } from "@/lib/documents/external/externalDocumentWrites";
 import { resolveEscalatedUploadCase } from "@/lib/documents/external/unfiledApiUploadEscalation";
@@ -102,8 +102,13 @@ export async function submitDocumentReview(
         detail: { version_id: versionId, decision, rereview: false, has_reason: Boolean(reason), idempotency_key_sha256: keyHash(key) },
     });
     if (!recorded.ok) return refuse(503, "AUDIT_UNAVAILABLE", "The review could not be recorded, so it was not performed.");
-    const r = await reviewDocumentVersion(supabase, { orgId: ctx.organizationId, documentId, versionId, decision, reason, actorUserId: null, rereview: false });
+    const r = await reviewDocumentVersion(supabase, {
+        orgId: ctx.organizationId, documentId, versionId, decision, reason, actorUserId: null, rereview: false,
+        audit: { eventId: recorded.eventId, actor: auditActorFacts({ actorUserId: null, actorPrincipal: principalOf(ctx) }) },
+    });
     if (!r.ok) {
+        // W-C1: the database refused to bind this audit row to the effect; nothing was written.
+        if (r.code === "AUDIT_EVENT_MISMATCH") return refuse(503, "AUDIT_UNAVAILABLE", "The review could not be recorded, so it was not performed.");
         // A concurrent decision landed first: the database refused this one as a re-review.
         if (r.code === "REREVIEW_REQUIRED") return refuse(403, "REREVIEW_NOT_AUTHORIZED", "This version has already been reviewed; changing a review is not available through the API.");
         if (r.code === "NOT_CURRENT_VERSION") return refuse(409, "NOT_CURRENT_VERSION", "Only the current version can be reviewed.");
@@ -153,8 +158,12 @@ export async function setDocumentValidity(
     });
     if (!recorded.ok) return refuse(503, "AUDIT_UNAVAILABLE", "The dates could not be recorded, so they were not set.");
     // The function compares with the stored dates: the same dates again are `changed: false` and write no event.
-    const r = await setDocumentVersionValidity(supabase, { orgId: ctx.organizationId, documentId, versionId, effectiveOn, expiresOn, reason: null, actorUserId: null });
+    const r = await setDocumentVersionValidity(supabase, {
+        orgId: ctx.organizationId, documentId, versionId, effectiveOn, expiresOn, reason: null, actorUserId: null,
+        audit: { eventId: recorded.eventId, actor: auditActorFacts({ actorUserId: null, actorPrincipal: principalOf(ctx) }) },
+    });
     if (!r.ok) {
+        if (r.code === "AUDIT_EVENT_MISMATCH") return refuse(503, "AUDIT_UNAVAILABLE", "The dates could not be recorded, so they were not set.");
         if (r.code === "NOT_CURRENT_VERSION") return refuse(409, "NOT_CURRENT_VERSION", "Only the current version's dates can be set.");
         if (r.code === "VALIDITY_RANGE_INVERTED" || r.code === "BAD_DATE") return refuse(400, r.code, "The dates are not valid.");
         if (r.code === "NOT_FOUND" || r.code === "DOCUMENT_UNAVAILABLE") return NOT_FOUND();

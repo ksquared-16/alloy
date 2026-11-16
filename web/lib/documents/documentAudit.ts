@@ -132,6 +132,36 @@ export async function recordDocumentAudit(input: DocumentAuditInput): Promise<Do
     }
 }
 
+/**
+ * W-C1: the actor facts an effect's database function checks against the audit row it binds (`p_audit_payload`). Built
+ * from the same input `recordDocumentAudit` writes, so the two cannot drift. Matching application + installation is the
+ * D9 attribution; the credential stays recorded in the audit but is not required to match. A system process is matched
+ * by name, a staff user by id.
+ */
+export function auditActorFacts(input: Pick<DocumentAuditInput, "actorUserId" | "actorPrincipal">): Record<string, string> {
+    const p = input.actorPrincipal;
+    if (p?.kind === "application") return { actor_kind: "application", actor_application_id: p.applicationId, actor_installation_id: p.installationId };
+    if (p?.kind === "system") return { actor_kind: "system", actor_process: p.process };
+    return input.actorUserId ? { actor_user_id: input.actorUserId } : {};
+}
+
+/** W-C1: the audit row an effect binds, and the actor it must have been written for. */
+export type AuditBinding = { eventId: string; actor: Record<string, string> };
+
+/** W-C1: the audit parameters, only when the caller bound an audit row (staff callers may not). */
+export function withAudit<T extends Record<string, unknown>>(args: T, audit: AuditBinding | undefined): T & { p_audit_event_id?: string; p_audit_payload?: Record<string, string> } {
+    return audit ? { ...args, p_audit_event_id: audit.eventId, p_audit_payload: audit.actor } : args;
+}
+
+/**
+ * W-C1 deploy order: the app ships before migration 20261222090000 is applied. Until then PostgREST does not know the
+ * audit parameters and answers PGRST202 without running anything; the caller then retries once without them, which is
+ * exactly the behaviour before W-C1. Any other error is a real refusal.
+ */
+export function isRpcSignatureMissing(error: { code?: string } | null | undefined): boolean {
+    return error?.code === "PGRST202";
+}
+
 /** The refusal a route returns when its audit record could not be written. */
 export const DOCUMENT_AUDIT_UNAVAILABLE = {
     body: { ok: false, error: "This action could not be recorded, so it was not performed.", code: "AUDIT_UNAVAILABLE" },
