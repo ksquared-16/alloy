@@ -1,0 +1,11 @@
+columns|1604
+fk_constraints|290
+functions|34
+indexes_nonconstraint|386
+other_constraints|281
+policies|362
+rls_enabled|134
+rls_forced|19
+tables|134
+triggers|71
+views|2
