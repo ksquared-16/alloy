@@ -1,0 +1,31 @@
+
+═══ certification/trust-runtime-v1/run.sh ═══
+PASS — 21 assertions
+
+═══ certification/trust-lifecycle-observations/run.sh ═══
+PASS — 14 assertions
+
+═══ certification/trust-metrics/run.sh ═══
+PASS — 9 assertions
+
+═══ certification/trust-provider-telemetry/run.sh ═══
+PASS — 14 assertions
+
+═══ certification/bp-revision-lineage-upgrade/run.sh ═══
+PASS — 16 assertions
+
+═══ certification/enrollment-session-form-version/run.sh ═══
+PASS — 12 assertions
+
+═══ certification/enrollment-process-instance-anchor/run.sh ═══
+PASS — 11 assertions
+
+═══ certification/process-instance-revision-pin/run.sh ═══
+PASS — 24 assertions
+
+═══ certification/placement-invariants/run.sh ═══
+PASS — 11 assertions
+
+═══════════════════════════════════════════
+Trust DB certification: 132 assertions across 9 suites
+ALL TRUST DB CERTIFICATION SUITES PASSED

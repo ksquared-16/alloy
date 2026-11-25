@@ -87,6 +87,8 @@ schema (S18). The two are not the same schema generation.
 
 These need no data decision. They are listed so the owner can see that they are covered.
 
+**Corrected by P4** ([F4](environments-p4-rebuild-and-integration-rehearsal-2026-11-25.md#findings)): `permission_keys` and `permissions` no longer exist, and K4 `metric_placements`, K6 global `entity_layouts` and K7 `customer_person_role_types` are per-org backfills that write nothing on a fresh database. For a rebuilt tenant those three are KEEP-CONFIG.
+
 | ID | Record types | Provisioned by (S16) | Class |
 |---|---|---|---|
 | K1 | Permission catalog: `permission_definitions`, `permission_keys`, `permissions` | migrations (e.g. `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql`) | KEEP-CODE |

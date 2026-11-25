@@ -1,0 +1,12 @@
+ERROR:  document_category_in_use: a category a document type has used is archived, not deleted
+CONTEXT:  PL/pgSQL function document_categories_guard() line 9 at RAISE
+SQL statement "DELETE FROM ONLY "public"."document_categories" WHERE $1 OPERATOR(pg_catalog.=) "org_id""
+BEGIN
+BEGIN
+UPDATE 1
+          slug          | status  
+------------------------+---------
+ _w17_selftest_2a3de3a6 | retired
+(1 row)
+
+ROLLBACK
