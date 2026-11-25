@@ -35,6 +35,13 @@ may not start until the seed binds to a Firefly department with an active enroll
 stages and six queues (§6.2, §6.4; the repo's evidence is that hosted Firefly keeps them under key
 `lead_management`, not `enrollment`), and no write, identity provision or access change has been prepared or made by this worker.
 
+**Re-mapped to `lead_management` (2026-11-25, repository only; §6.5).** The owner directed that the seed and
+the census bind to Firefly's real lifecycle department, keyed `lead_management` (`lifecycle_builder_v1`), with
+its active `enrollment` process, seven stages and seven `lifecycle_wu_<stage>` queues, and never to the
+`enrollment`-keyed department. This is done in the repository and proven on local throwaway databases. **The
+re-mapped census has not run on hosted staging.** The owner runs it (§6.5); the runbook stays held before step 2
+until the owner has reviewed that result.
+
 ## 1. The profile
 
 | | |
@@ -132,17 +139,21 @@ None of these are verified from here. Record each with who set it and when befor
 
 **0. Preconditions.** Owner go-ahead for steps 1–6 recorded; §2 decided; §4 set and recorded.
 
-**1. Read-only tenant census** — sites, program keys, Enrollment department, queue work units, process
-stages, and which managed QA identities already hold Firefly roles:
+**1. Read-only tenant census.** Covers sites, program keys, the `lead_management` lifecycle department, its
+active process, stages and queues, and which managed QA identities already hold Firefly roles. The exact
+invocation and expected output are in §6.5:
 
 ```bash
-psql "$STAGING_DB" -X -v ON_ERROR_STOP=1 -P pager=off -A -F ' | ' \
-  -f supabase/seed/firefly_staging_tenant_census.sql
+cd web
+ALLOY_ENVIRONMENT=staging FIREFLY_STAGING_SEED_DATABASE_URL="$STAGING_DB" \
+  npm run staging:seed:firefly -- census --target staging --confirm-project-ref ikaxilmwmrmbagoidedu
 ```
 
-Stop on any `FAIL` other than `firefly_managed_qa_members` (expected `0` before step 4 on a clean
-tenant; if it is already above 3, go back to §2.3). `WARN` rows mean a seeded child gets a coarser
-binding (fewer than three sites → campuses wrap; a missing program key → that child's program unbound).
+Stop on any `FAIL` other than `firefly_managed_qa_members`. The command applies that rule itself: it exits 1
+and prints `stop rule: STOP — blocking FAIL: …`. The owner kept six managed members (§2.3), so that row reads
+`6` and does not block. `WARN` rows mean a seeded child gets a coarser binding (fewer than three sites →
+campuses wrap; a missing program key → that child's program unbound) or the department's id differs from the
+last observation.
 
 **2. Seed** ([`firefly-staging-seed.md`](firefly-staging-seed.md)):
 
@@ -337,7 +348,7 @@ psql "$STAGING_DB" -X -v ON_ERROR_STOP=1 -P pager=off -A -F ' | ' \
 
 | Census shows | Next step | Hosted writes |
 |---|---|---|
-| `lead_management` holds an active `enrollment` process with the six stages, and active `lifecycle_wu_<stage>` units for them | **A repository-only change.** Re-point the census, seed and verification from `key = 'enrollment'` to "the Firefly department whose active process key is `enrollment`". Also make the seed's `seed_enrollment` gate test for that process, not the key, and correct the scratch `configured` model to `lead_management`. Re-prove locally, then re-run step 1. | **none** beyond the already-approved seed rows of step 2 |
+| `lead_management` holds an active `enrollment` process with the six stages, and active `lifecycle_wu_<stage>` units for them | **Done in the repository, 2026-11-25 (§6.5); awaits the owner's hosted census.** **A repository-only change.** Re-point the census, seed and verification from `key = 'enrollment'` to "the Firefly department whose active process key is `enrollment`". Also make the seed's `seed_enrollment` gate test for that process, not the key, and correct the scratch `configured` model to `lead_management`. Re-prove locally, then re-run step 1. | **none** beyond the already-approved seed rows of step 2 |
 | `lead_management` holds the process but some `lifecycle_wu_<stage>` units are missing or inactive | The repo change above, plus the app's own work-unit repair for that department | `public.work_units`: insert/update `lifecycle_wu_<stage>` rows in that department only; may deactivate its `enrollment_pipeline` (`repairLifecycleWorkUnits`, `builderOwnedLifecycleRuntime.ts:247-407`, via `POST /api/admin/lifecycle-catalog/repair-work-units`) |
 | No Firefly department has an active Enrollment process | Publish through the app into **one** existing Firefly department chosen by the owner. Source: the platform Enrollment template (`buildEnrollmentTemplateStageRecords`; the builder's `apply_enrollment_v2_template` action, `lifecycle-builder/route.ts:973-980`, which needs a process already in the draft), reviewed as a draft diff. Order: `saveDraft`, `validateBusinessProcessForPublish`, then `POST /api/admin/business-process/configuration/publish` (RPC `publish_business_process_revision_v1`, `20260810220000_restore_business_process_publish_guarded_write.sql`). Then run the work-unit repair. | `business_process_drafts`; `business_process_revisions` (one new revision); `workflow_events`; `configuration_publications`; the one `departments.metadata.lifecycle_builder_v1` (guarded write); then `public.work_units` × 6 `lifecycle_wu_<stage>` (plus `work_views_v1` inside the published process, whose `compat_queue_key` must match `lifecycle_<stage>`) |
 
@@ -358,6 +369,113 @@ and the seed doc's ZZ row-count comparison.
   `/api/build-info`). §4 is set and recorded (outbound guard; capture-only SMTP). `ALLOY_ENVIRONMENT=staging`
   is set on both staging runtimes.
 - **The census above has run and is recorded here.**
+
+### 6.5 Bound to `lead_management`: what changed, and the census the owner runs (2026-11-25)
+
+**The exact target.** It is defined once in `web/lib/staging/fireflyStagingSeed/lifecycleTarget.ts` and read
+by the seed's gate, binding and refusal, its verification, the scratch `configured` model, and the census:
+
+| | |
+|---|---|
+| Database | hosted staging, Supabase project `ikaxilmwmrmbagoidedu` (the seed CLI refuses any other project, and production by ref) |
+| Org | Firefly Early Learning `93667019-bd28-49b5-a688-acc9bb1e0a19` |
+| Department | key **`lead_management`**, holding `metadata.lifecycle_builder_v1`; last observed id `3933ac47-077a-4de8-aaac-8aed48d80413` (reported only; the key is the binding) |
+| Active process | key `enrollment` (`lifecycle_builder_v1.active_process_id`) |
+| Stages (7) | `lead, tour, decision, waitlist, offered, enrolling, enrolled` (no closed stages) |
+| Lifecycle work units (7) | `lifecycle_wu_lead`, `_tour`, `_decision`, `_waitlist`, `_offered`, `_enrolling`, `_enrolled` |
+| Never bound | the Firefly department keyed `enrollment` (no active process, step 1); reported as INFO |
+
+Source: the hosted census of 2026-10-23, `certification/business-processes-v2/d2d5/enrollment-decision-config-census.sql.results.json`
+(dd_01_stages, Firefly rows). A test pins the constants to that file.
+
+**What changed (repository only).**
+
+- *Seed* (`renderSql.ts` → `supabase/seed/firefly_staging_seed.sql`). The `seed_enrollment` gate asks for
+  a tenant `lead_management` department, not `enrollment`. On the tenant branch the seed now **refuses**, and
+  rolls back, unless that department's active process is `enrollment` and each open seeded stage (lead, tour,
+  decision, waitlist, enrolling, enrolled) has an active `lifecycle_wu_<stage>`. Before this change it wrote
+  cases with no queue. Cases bind to that department's queues. On a bare local shell the seed authors its own
+  department under the key `lead_management`; its upsert now also converges the key.
+- *Verification* (`verifySql.ts`). Cases are judged against `lead_management`. A new check,
+  `open_case_without_work_unit` = 0, requires every open case to be in a lane.
+- *Scratch model* (`scratchProof.ts`, `configured`). `lead_management` with the seven stages and seven
+  queues, plus a process-less `enrollment` department, as hosted step 1 found.
+- *Census* (`tenantCensusSql.ts` → `supabase/seed/firefly_staging_tenant_census.sql`). It is now generated, so
+  a test fails if the committed file drifts. The `enrollment` section is replaced by `lifecycle`, `process` and
+  `queues` rows bound to `lead_management`. A new `census` mode of the seed CLI runs it in a session forced
+  read-only (`PGOPTIONS=-c default_transaction_read_only=on`, under the script's own `BEGIN READ ONLY … ROLLBACK`)
+  and prints expected against observed.
+
+**Invocation (owner, Mac mini operator shell holding the staging connection string; writes nothing):**
+
+```bash
+cd web
+ALLOY_ENVIRONMENT=staging FIREFLY_STAGING_SEED_DATABASE_URL="$STAGING_DB" \
+  npm run staging:seed:firefly -- census --target staging --confirm-project-ref ikaxilmwmrmbagoidedu \
+  | tee /tmp/firefly-tenant-census.txt
+```
+
+Equivalent with psql alone: `PGOPTIONS='-c default_transaction_read_only=on' psql "$STAGING_DB" -X -v ON_ERROR_STOP=1 -P pager=off -A -F ' | ' -f supabase/seed/firefly_staging_tenant_census.sql`
+(prints the same rows, without the report or the stop-rule line). The output names member emails in
+`firefly_member:` rows, so keep it owner-held as for step 1. Share only the report's verdict lines for the
+non-`qa_identities` sections.
+
+**Output expected if hosted Firefly matches the 2026-10-23 observation** (header, then one line per row:
+`VERDICT key expected: … observed: …`):
+
+| Section | Key | Expected | Notes |
+|---|---|---|---|
+| org | `firefly_org`, `retired_separate_staging_org` | `present`, `absent` | PASS on step 1 |
+| sites, programs | as step 1 | as step 1 | step 1: PASS, plus the two North program WARNs |
+| lifecycle | `lifecycle_department` | `1` | |
+| lifecycle | `lifecycle_department_id` | `3933ac47-…` | WARN, not FAIL, if the id differs |
+| lifecycle | `lifecycle_department_is_active`, `lifecycle_builder_v1` | `true`, `present` | |
+| lifecycle | `active_process_id`, `active_process_key`, `active_process_is_active` | set, `enrollment`, `true` | `<unset>` is_active is WARN |
+| lifecycle | `active_process_stage_count`, `active_process_stage_keys` | `7`, `decision,enrolled,enrolling,lead,offered,tour,waitlist` | exact set |
+| process | `stage_<key>` × 7 | `in active process` | `stage_closed`, `stage_closed_withdrawn`: INFO (seeded closed cases; not Firefly stages) |
+| queues | `lifecycle_wu_<stage>` × 7 | `active` | observed `inactive` or `absent` is FAIL |
+| queues | `active_lifecycle_work_units`, `open_seed_stages_with_queue` | `7`, `6` | the second is the seed's refusal condition |
+| departments | `firefly_department_keys`, `unbound_department:enrollment` | informational | expect `…enrollment…lead_management…` and `present; active_process_id=<none>` |
+| qa_identities | `firefly_managed_qa_members` | `3` | observed `6` (§6.1), FAIL by design, non-blocking |
+| qa_identities | `shared_qa_accounts_in_firefly` | `0` | |
+
+The last two lines read `rows N: … PASS, … WARN, … FAIL, … INFO`, then either
+`stop rule: no blocking FAIL — step 2 may be proposed to the owner` (exit 0) or
+`stop rule: STOP — blocking FAIL: <keys>` (exit 1). A missing fixed row prints `MISSING rows …` and stops.
+
+**Measured locally (2026-11-25; no hosted connection).** The new census ran on a configured scratch clone of
+`alloy-cert` (`firefly_seed_scratch_lm_configured`): 60 rows, 39 PASS / 9 WARN / 1 FAIL / 11 INFO, exit 0.
+Every lifecycle, process and queue row passed. The WARNs are the model's two sites and three program keys
+plus the scratch department id, and the one FAIL is `firefly_managed_qa_members` (0 there). With
+`lifecycle_wu_waitlist` deactivated on that clone, the census exited 1 with
+`STOP — blocking FAIL: lifecycle_wu_waitlist, active_lifecycle_work_units, open_seed_stages_with_queue`, and
+`apply` refused and rolled back. A write in a `PGOPTIONS` read-only session is rejected
+(`cannot execute UPDATE in a read-only transaction`). The seed's scratch proof passed 52/52 in both shapes
+(`firefly-staging-seed.md`). All scratch databases were dropped.
+
+**Uncertainty and gaps (until the owner's run):**
+
+- The seven stages and the `lead_management` key come from a census taken **2026-10-23**. The repo cannot
+  show that hosted Firefly is unchanged since then; that is what this census answers.
+- **The seven `lifecycle_wu_<stage>` queues have never been observed on hosted staging.** The 2026-10-23
+  census read process stages, not work units. Step 1 read work units only in the `enrollment` department. If
+  any of the seven is absent or inactive, §6.4 row 2 applies (the app's work-unit repair, a hosted
+  configuration write needing its own approval).
+- **`offered` has no seeded families.** The dataset has no `offered` scenario, so that lane stays empty of
+  `[Staging seed]` rows. Its stage and queue are still required by the census. Adding offered families is a
+  dataset change, not made here.
+- **Seeded closed cases have no Firefly stage.** 9 closed cases (`closed` ×6, `closed_withdrawn` ×3) carry
+  `stage_key`s that Firefly's process lacks, and no queue. They are `status_key = closed` and in no lane, and
+  verification judges open cases only. Whether the app renders such a case cleanly when opened directly has
+  not been checked on Firefly.
+- **Work-unit metadata is not checked.** The census checks each queue's key and active flag, not that its
+  `metadata.lifecycle_stage_key` or `lifecycle_process_id` matches the active process.
+- **Department id.** The id is reported against `3933ac47-…` as WARN only. If it differs, the key still binds,
+  but the five Firefly migrations that UPDATE that id would not have reached the department.
+- `firefly_managed_qa_members` still expects `3`. The owner's §2.3 decision makes it non-blocking, not
+  satisfied. Which six members exist is in the owner-held output.
+- `supabase/seed/firefly_staging_department_census.sql` (§6.4) is still valid as a supplementary
+  configuration-only listing. The tenant census now carries the rows that decide step 2.
 
 ## 7. Known gaps
 
@@ -381,7 +499,7 @@ and the seed doc's ZZ row-count comparison.
 
 | Finding | Status | Waits on |
 |---|---|---|
-| Run §5 steps 1–6 on hosted staging | step 1 **run by the owner** (read-only, §6.1); **held before step 2** | step 1's FAIL rows: the `enrollment`-keyed department has no process/stages/queues; read-only department census (§6.4), then the owner's choice of row; §4 set and recorded |
+| Run §5 steps 1–6 on hosted staging | step 1 **run by the owner** (read-only, §6.1); seed and census **re-bound to `lead_management` in the repo** (§6.5); **held before step 2** | the owner re-running the step 1 census (§6.5) and reviewing it; then §6.4's row for any queue gap; §4 set and recorded |
 | Make seeded households visibly distinguishable, then confirm in the UI | **done in the dataset** (§7, §6); UI confirmation **not done** | hosted seed (step 2), then step 6 |
 | Resolve the Firefly fence per §2.1 | **(a) chosen**; implemented as the narrowed `sharedQaRegistry.ts` comment and one personas §2 sentence; `FORBIDDEN_QA_ORG_IDS` and every refusal unchanged | — |
 | Firefly is the only staging school/QA target | under (a): the only school; target of the managed identities only | steps 3–5 |

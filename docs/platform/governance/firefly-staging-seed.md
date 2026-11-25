@@ -40,7 +40,7 @@ of its own (rows outside the seed namespace):
 | Gate | The seed authors it only when the org has… | Otherwise the seed… |
 |---|---|---|
 | `seed_campuses` | no active site | places each family at one of the tenant's active sites (in a fixed order: primary first, then location number, label, id — the seed's North / South / West take them in turn, wrapping if there are fewer than three), and each child at the tenant's program category of that key at that site, or none |
-| `seed_enrollment` | no `enrollment` department | puts each family case in the tenant's `lifecycle_wu_<stage>` work unit of that department, or none |
+| `seed_enrollment` | no `lead_management` department (Firefly's lifecycle department, `lib/staging/fireflyStagingSeed/lifecycleTarget.ts`) | puts each family case in that department's active `lifecycle_wu_<stage>` work unit. It **refuses** unless the department's `lifecycle_builder_v1` active process is `enrollment` and every open seeded stage (lead, tour, decision, waitlist, enrolling, enrolled) has an active queue. Closed cases get a queue only if one exists. Firefly's process-less `enrollment`-keyed department is never bound to |
 | `seed_catalog` | no program offering and no charge template | writes no offering, variant, rate or charge template |
 | `seed_role_types` | none of the six household role keys | writes no role type (verification then checks the roles seeded households name exist in the tenant's vocabulary) |
 
@@ -70,7 +70,7 @@ evidence (configuration only, no rows copied):**
   `web/tests/fixtures/commercial/stagingToddlerPreschoolCatalog.json`). School-age rates for 2–4 days
   are interpolated between the census's 1-day and 5-day values.
 - Charge templates `registration_fee` ($75 per child, fixed) and `tuition` (`rate_derived`).
-- Department `enrollment` whose business process is the **platform's own Enrollment template**
+- Department keyed `lead_management` (named Enrollment) whose business process is the **platform's own Enrollment template**
   (`buildEnrollmentTemplateStageRecords`) with fixed stage ids, four family-grain work views and
   declared entry points; it passes `validateBusinessProcessForPublish` (tested). Work units
   `new_leads`, `enrollment_pipeline`, `tours` carry the representative seed's queue definitions verbatim.
@@ -168,8 +168,9 @@ fingerprint 3b1f…
 Checks whose answer depends on a gate (site, room, catalog and work-unit counts, the known fee and room)
 carry an expectation the census evaluates in-database with the seed's own gate expression, e.g. `sites`
 expects `3 if seed_campuses, else 0`. Binding checks hold in either shape: every seeded case is at a
-Firefly site, its work unit is in Firefly's `enrollment` department, a child's program category is at
-that child's site, and every **open** case sits in a stage of the org's active Enrollment process.
+Firefly site, its work unit is in Firefly's `lead_management` department, every **open** case has a work
+unit (`open_case_without_work_unit` = 0), a child's program category is at that child's site, and every
+open case sits in a stage of that department's active Enrollment process.
 
 **Repeatability proof:** `apply` → `verify` → `apply` → `verify`. Every check passes both times and the
 two fingerprints are identical. The fingerprint includes the ids families are bound to, so on a
@@ -186,9 +187,11 @@ and prints one PASS/FAIL line per proof; it exits 1 on any FAIL:
    org count must not move.
 2. Plants the two **ZZ Alloy QA** orgs and their registry sites by their real ids (`lib/qa/sharedQaRegistry.ts`)
    and the **Firefly org by its real id** — what hosted staging already holds — in the chosen shape:
-   - `configured` (hosted staging's shape): the tenant's own two sites with program categories, an
-     `enrollment` department whose published process has the live tenant's stages (lead → enrolled) and
-     `lifecycle_wu_<stage>` units, an offering, a charge template, household roles, and a family case.
+   - `configured` (hosted staging's shape): the tenant's own two sites with program categories; a
+     `lead_management` department whose active `enrollment` process has the hosted tenant's seven stages
+     (lead, tour, decision, waitlist, offered, enrolling, enrolled) and seven `lifecycle_wu_<stage>` units;
+     a process-less `enrollment` department beside it, as hosted step 1 found; an offering, a charge
+     template, household roles, and a family case.
    - `bare` (a fresh local database's shape): the org row only.
 
    It then hashes every ZZ-owned row, and every row of the **tenant's own** in Firefly (outside the seed
@@ -197,7 +200,7 @@ and prints one PASS/FAIL line per proof; it exits 1 on any FAIL:
 4. Counts **every** row in the Firefly org before and after (not only seed ids, so a duplicate cannot
    hide) against the dataset for that shape: on `configured`, +0 configuration rows of every kind.
 5. Relationship checks, each a count of broken links that must be 0: every seeded case at a Firefly site
-   and in Firefly's `enrollment` department, rooms under a seed campus (never a ZZ site),
+   and in Firefly's `lead_management` department, rooms under a seed campus (never a ZZ site),
    guardians/children/cases/contacts/participations all inside one seeded household, no seed row linked
    to the tenant's household, and every seeded household has its case.
 6. Drift: hand-edits a seeded household's name; `verify` must fail with a new fingerprint; `apply` must
@@ -243,6 +246,15 @@ dropped afterwards.
 | fence | held over 355 tables on every apply; the tampered copy rolled back (exit 3) | the same |
 | tenant's own Firefly rows | 185 rows byte-identical | 163 rows byte-identical |
 | ZZ Alloy QA rows | 329 rows across 272 tables byte-identical | the same |
+
+**Re-measured 2026-11-25 after binding to `lead_management`** (ALY-14 E3; seed sha256
+`e08a6e5942976a6c68e7ef765106e2c4e2532361c50615ccb2434bf125235c8d`), fresh `alloy-cert` clones
+`firefly_seed_scratch_lm_{configured,bare}`: **52/52 PASS in both shapes**, 0 FAIL. Fingerprints:
+`5fd5e44e262edcd18d1d8d203e1ba5bc` (configured, that clone) and `894053617add3d633aa24da78d4696e2` (bare;
+it changed because the seeded department's key is part of it). Configured tenant rows 187 byte-identical
+(two more planted than before: the process-less `enrollment` department and the seventh queue); ZZ rows
+329 across 272 tables byte-identical. With `lifecycle_wu_waitlist` then deactivated on the configured clone,
+`apply` refused and rolled back (*no active queue for open seeded stage(s) waitlist*). Both clones dropped.
 
 ## Known gaps
 
