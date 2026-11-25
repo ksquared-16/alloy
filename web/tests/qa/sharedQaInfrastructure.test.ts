@@ -18,6 +18,8 @@ import {
   QA_STRUCTURE,
   RESERVED_ROLE_KEYS,
   SEEDED_ASSIGNABLE_ROLES,
+  isForbiddenQaOrgId,
+  isRegisteredQaOrgId,
 } from "@/lib/qa/sharedQaRegistry";
 import {
   auditQaAuthzFixtureSql,
@@ -148,6 +150,63 @@ describe("shared QA B2 registry — B1 identity parity", () => {
     expect([...SEEDED_ASSIGNABLE_ROLES]).toEqual(["admin", "ops", "school_director"]);
     expect(RESERVED_ROLE_KEYS).toContain("owner");
     expect(RESERVED_ROLE_KEYS).toContain("admin");
+  });
+});
+
+/**
+ * ALY-14 E3 owner decision (a), 2026-11-25: Firefly is the staging org of the three managed slot
+ * identities only. The shared-QA plans keep their ZZ Alloy QA tenant and keep refusing Firefly by id;
+ * only the registry comment and personas §2 changed.
+ */
+describe("shared QA registry — Firefly fence under E3 decision (a)", () => {
+  const MANAGED_SLOT_LOGINS = [
+    "qa-slot1-product@example.com",
+    "qa-slot5-refactor@example.com",
+    "qa-slot12-work-items@example.com",
+  ];
+
+  it("keeps Firefly forbidden and unregistered for every shared-QA plan", () => {
+    expect([...FORBIDDEN_QA_ORG_IDS]).toEqual(["93667019-bd28-49b5-a688-acc9bb1e0a19"]);
+    expect(isForbiddenQaOrgId(FIREFLY)).toBe(true);
+    expect(isRegisteredQaOrgId(FIREFLY)).toBe(false);
+    const refusal = refuseForbiddenOrg(FIREFLY);
+    expect(refusal.ok).toBe(false);
+    expect(refusal.ok ? null : refusal.code).toBe("firefly_refused");
+    expect(Object.values(QA_ORGS).map((o) => o.id)).not.toContain(FIREFLY);
+  });
+
+  it("keeps ZZ Alloy QA as the only shared-QA plan tenant", () => {
+    expect(Object.values(QA_ORGS).map((o) => o.name)).toEqual(["ZZ Alloy QA", "ZZ Alloy QA — Cross-Org"]);
+    for (const org of Object.values(QA_ORGS)) {
+      expect(isRegisteredQaOrgId(org.id)).toBe(true);
+      expect(isForbiddenQaOrgId(org.id)).toBe(false);
+    }
+    const orgKeys = new Set(Object.keys(QA_ORGS));
+    for (const identity of Object.values(QA_IDENTITIES)) expect(orgKeys.has(identity.org)).toBe(true);
+    for (const structure of [...Object.values(QA_STRUCTURE.departments), ...Object.values(QA_STRUCTURE.sites)]) {
+      expect(orgKeys.has(structure.org)).toBe(true);
+    }
+  });
+
+  it("does not register the managed slot logins as shared-QA identities", () => {
+    const emails = Object.values(QA_IDENTITIES).map((i) => i.email);
+    for (const login of MANAGED_SLOT_LOGINS) expect(emails).not.toContain(login);
+  });
+
+  it("narrows only the registry comment, and personas §2 names the slot-identity exception", () => {
+    const registry = readFileSync(join(WEB, "lib/qa/sharedQaRegistry.ts"), "utf8");
+    expect(registry).toContain("never a shared-QA plan target; the managed slot");
+    expect(registry).toContain("identities' staging org");
+    expect(registry).not.toMatch(/Firefly[^\n]*never a QA target\. \*\//);
+    const personas = readFileSync(join(ROOT, "docs/platform/governance/authorization-qa-personas.md"), "utf8");
+    const section2 = personas.slice(personas.indexOf("## 2. Tenancy"), personas.indexOf("## 3."));
+    expect(section2).toContain("**Never a QA target:** Firefly (`93667019-bd28-49b5-a688-acc9bb1e0a19`)");
+    const exception = section2.split("\n").filter((line) => line.includes("Slot-identity exception"));
+    expect(exception).toHaveLength(1);
+    for (const login of ["qa-slot1-product", "qa-slot5-refactor", "qa-slot12-work-items@example.com"]) {
+      expect(exception[0]).toContain(login);
+    }
+    expect(exception[0]).toContain("ZZ Alloy QA");
   });
 });
 

@@ -46,6 +46,7 @@ must pass the hosted QA activation gate. For `authz_q1` that gate covers the run
 - **QA Secondary** (`qa_secondary`, `ad53fee2-2570-460f-9300-f0e106c473b6`, "ZZ Alloy QA — Cross-Org") is only the cross-organization refusal target.
 - Both are permanent, frozen in the toolkit registry, and owned by Vacilando shared QA. Other QA plans (for example `bp_v2`) also use QA Shared. Isolation between plans is by QA-run identity and leases (§5), not by organization.
 - **Never a QA target:** Firefly (`93667019-bd28-49b5-a688-acc9bb1e0a19`), `DEV_QUEUE_ORG_ID` and every other tenant are refused by id.
+- **Slot-identity exception (ALY-14 E3, owner decision (a), 2026-11-25):** Firefly is the staging org of the three managed slot identities only (`qa-slot1-product`, `qa-slot5-refactor`, `qa-slot12-work-items@example.com`, see [`firefly-staging-qa-profile.md`](firefly-staging-qa-profile.md)), and it stays refused by id for every shared-QA plan (`authz_q1`, `bp_v2`), whose tenant remains ZZ Alloy QA.
 - **Permanent QA structure** lives in QA Shared and is never deleted by a run: departments **D1** (`qa_d1`, `0704e72c-…`) and **D2** (`qa_d2`, `609d088b-…`). A scope restriction names their ids. Sites `qa_north` and `qa_south` also exist; Documents uses neither.
 
 ## 3. Persona registry
