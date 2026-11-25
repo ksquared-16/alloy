@@ -2,7 +2,8 @@
  * Firefly staging seed — fixed identifiers (ALY-14 E2).
  *
  * Every row the seed writes carries an id in its own namespace, `f17e0000-0000-4000-8000-…`, so a
- * seeded row is recognisable by id alone and can never collide with a row the platform minted
+ * seeded row is recognisable by id alone — inside the Firefly org, next to the tenant's own rows —
+ * and can never collide with a row the platform minted
  * (`gen_random_uuid()` cannot produce eight leading `f17e0000` hex digits followed by `-0000-4000`
  * by anything but chance on the order of 2^-48). Tests and the verification census rely on these.
  *
@@ -11,13 +12,19 @@
 
 export const SEED_ID_PREFIX = "f17e0000-0000-4000-8000-" as const;
 
-/** The seed's one organization. Never the live Firefly tenant (see LIVE_FIREFLY_ORG_ID). */
-export const SEED_ORG_ID = "f17e0000-0000-4000-8000-000000000001" as const;
-export const SEED_ORG_SLUG = "firefly-early-learning-staging" as const;
-export const SEED_ORG_NAME = "Firefly Early Learning (Staging)" as const;
+/**
+ * The seed's one organization: the existing Firefly Early Learning tenant, the only staging school.
+ * The seed never creates, renames or updates an org — it refuses a database where this org is absent
+ * — and it never updates or deletes a row it did not write (the fence in renderSql.ts proves both).
+ */
+export const FIREFLY_ORG_ID = "93667019-bd28-49b5-a688-acc9bb1e0a19" as const;
 
-/** The certified Firefly operating tenant. The seed refuses to name, read into, or write it. */
-export const LIVE_FIREFLY_ORG_ID = "93667019-bd28-49b5-a688-acc9bb1e0a19" as const;
+/**
+ * The id the first version of this seed gave the separate "Firefly Early Learning (Staging)" org it
+ * created. That org must not exist anywhere (no additional tenants): the preflight refuses a database
+ * that holds it, so a leftover from a local run is reported rather than silently seeded beside.
+ */
+export const RETIRED_SEPARATE_ORG_ID = "f17e0000-0000-4000-8000-000000000001" as const;
 
 /** Marker written on every seeded row that has a free-form source column. */
 export const SEED_SOURCE = "firefly_staging_seed" as const;

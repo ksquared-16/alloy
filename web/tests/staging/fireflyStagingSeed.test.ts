@@ -1,8 +1,10 @@
 /**
- * Firefly staging seed (ALY-14 E2) — repeatable, realistic, known, and fenced to its own org.
+ * Firefly staging seed (ALY-14 E2) — repeatable, realistic, known, and fenced to its own rows inside
+ * the existing Firefly org (the only staging school; the seed creates no org).
  *
  * These run without a database. The in-database half of "no unintended writes" is the fence the
- * seed carries (renderSql.ts); what is proven here is that the script cannot be anything else:
+ * seed carries (renderSql.ts) and `npm run staging:seed:firefly:prove`; what is proven here is that the
+ * script cannot be anything else:
  * byte-identical on every render, committed exactly as rendered, every write inside the write set,
  * every id inside the seed namespace, and every target other than the two designated ones refused.
  */
@@ -28,10 +30,13 @@ import {
     SEED_SITES,
     SEED_VARIANTS,
 } from "@/lib/staging/fireflyStagingSeed/dataset";
-import { LIVE_FIREFLY_ORG_ID, SEED_ID_PREFIX, SEED_ORG_ID, SEED_ORG_NAME, SEED_ORG_SLUG, seedId } from "@/lib/staging/fireflyStagingSeed/ids";
-import { renderFireflyStagingSeedSql } from "@/lib/staging/fireflyStagingSeed/renderSql";
+import { FIREFLY_ORG_ID, RETIRED_SEPARATE_ORG_ID, SEED_ID_PREFIX, seedId } from "@/lib/staging/fireflyStagingSeed/ids";
+import { renderFireflyStagingSeedSql, SEED_GATES } from "@/lib/staging/fireflyStagingSeed/renderSql";
 import {
     driftEditSql,
+    fenceTamperedSeedSql,
+    fireflyTenantSnapshotSql,
+    plantFireflySql,
     plantZzFixturesSql,
     scratchCountChecks,
     scratchProofRefusal,
@@ -84,7 +89,7 @@ describe("repeatable", () => {
 
     it("every id is unique and inside the seed namespace", () => {
         const ids = [...renderFireflyStagingSeedSql().matchAll(/'([0-9a-f-]{36})'::uuid/g)].map((m) => m[1]);
-        const seeded = ids.filter((id) => id !== LIVE_FIREFLY_ORG_ID);
+        const seeded = ids.filter((id) => id !== FIREFLY_ORG_ID);
         expect(seeded.every((id) => id.startsWith(SEED_ID_PREFIX))).toBe(true);
         expect(() => seedId("customer", 0)).toThrow();
         // Each row's own id (the first value of a VALUES tuple) appears as a row id once.
@@ -119,14 +124,24 @@ describe("no unintended writes outside the designated target", () => {
         expect(sql).toContain("n.nspname IN ('public', 'auth', 'storage')");
         expect(sql).toMatch(/age\(xmin\) <= 0/);
         expect(sql).toMatch(/RAISE EXCEPTION 'firefly_staging_seed: FENCE/);
-        expect(sql.indexOf("$fence_open$")).toBeLessThan(sql.indexOf("INSERT INTO public.orgs"));
+        expect(sql.indexOf("$fence_open$")).toBeLessThan(sql.indexOf("INSERT INTO public."));
         expect(sql.lastIndexOf("INSERT INTO public.")).toBeLessThan(sql.indexOf("$fence_close$"));
         expect(sql.indexOf("$fence_close$")).toBeLessThan(sql.indexOf("COMMIT;"));
     });
 
-    it("refuses to run without a seed_target, and refuses a local target that holds live Firefly", () => {
+    it("refuses to run without a seed_target, without the Firefly org, or beside the retired separate org", () => {
         expect(sql).toMatch(/\\if :\{\?seed_target\}\n\\else\nDO \$refuse\$/);
-        expect(sql).toContain(`v_target = 'local' AND EXISTS (SELECT 1 FROM public.orgs WHERE id = '${LIVE_FIREFLY_ORG_ID}'::uuid)`);
+        expect(sql).toContain(`SELECT name INTO v_org_name FROM public.orgs WHERE id = '${FIREFLY_ORG_ID}'::uuid;`);
+        expect(sql).toMatch(/IF v_org_name IS NULL THEN\n\s+RAISE EXCEPTION '[^']*this seed creates no org'/);
+        expect(sql).toContain(`IF EXISTS (SELECT 1 FROM public.orgs WHERE id = '${RETIRED_SEPARATE_ORG_ID}'::uuid) THEN`);
+    });
+
+    it("the fence counts every row that is not a seed row — the tenant's own rows included", () => {
+        // A seed row is a write-set table, org_id = Firefly, id in the seed namespace. Everything else
+        // (other orgs, the tenant's own rows in Firefly, every table outside the write set) is fenced.
+        expect(sql).toContain("WHERE org_id IS DISTINCT FROM $1 OR id::text NOT LIKE $2");
+        expect(sql).toContain(`USING '${FIREFLY_ORG_ID}'::uuid, '${SEED_ID_PREFIX}%'`);
+        expect(sql).not.toContain("'orgs' THEN");
     });
 
     it.each([
@@ -134,7 +149,9 @@ describe("no unintended writes outside the designated target", () => {
         ["an auth write", "INSERT INTO auth.users (id) VALUES ('f17e0000-0000-4000-8000-000000000002'::uuid);"],
         ["a table outside the write set", "INSERT INTO public.user_roles (user_id) VALUES ('f17e0000-0000-4000-8000-000000000002'::uuid);"],
         ["a foreign org id", "SELECT '4acc9386-c485-486f-aa1f-05d83499d142'::uuid;"],
-        ["a second live-Firefly mention", `SELECT '${LIVE_FIREFLY_ORG_ID}'::uuid;`],
+        ["an org insert", `INSERT INTO public.orgs (id, name, slug) VALUES ('${RETIRED_SEPARATE_ORG_ID}'::uuid, 'x', 'x');`],
+        ["an org update", `UPDATE public.orgs SET name = 'x' WHERE id = '${FIREFLY_ORG_ID}'::uuid;`],
+        ["an RBAC seeding call", `SELECT public.seed_default_rbac('${FIREFLY_ORG_ID}'::uuid);`],
         ["the production ref", `-- ${PRODUCTION_PROJECT_REF}`],
         ["a clock value", "SELECT now();"],
         ["a bare UPDATE", "UPDATE public.opportunities SET stage_key = 'lead';"],
@@ -145,10 +162,14 @@ describe("no unintended writes outside the designated target", () => {
         expect(auditFireflyStagingSeedSql(tampered).ok).toBe(false);
     });
 
+    it("the audit refuses a script that drops a configuration gate", () => {
+        expect(auditFireflyStagingSeedSql(sql.replace("\\if :seed_campuses", "\\if true")).failures.join()).toMatch(/gate seed_campuses/);
+    });
+
     it("the audit refuses a write after the fence has closed", () => {
         const tampered = sql.replace(
             "COMMIT;",
-            "INSERT INTO public.orgs (id) VALUES ('f17e0000-0000-4000-8000-000000000001'::uuid) ON CONFLICT DO NOTHING;\nCOMMIT;",
+            "INSERT INTO public.customers (id) VALUES ('f17e0000-0000-4000-8000-100000000999'::uuid) ON CONFLICT DO NOTHING;\nCOMMIT;",
         );
         expect(auditFireflyStagingSeedSql(tampered).failures.join()).toMatch(/order must be/);
     });
@@ -296,8 +317,10 @@ describe("verification census", () => {
         expect(checks.households).toBe(String(counts.customers));
         expect(checks.children).toBe(String(counts.children));
         expect(checks.stage_lead).toBe(String(counts.opportunities_by_stage.lead));
-        expect(checks.seed_ids_outside_seed_org).toBe("0");
-        expect(checks.known_registration_fee_cents).toBe("7500");
+        expect(checks.seed_ids_outside_firefly).toBe("0");
+        expect(checks.orgs_in_seed_namespace).toBe("0");
+        expect(checks.known_registration_fee_cents).toBe("7500 if seed_catalog, else <null>");
+        expect(checks.sites).toBe(`${counts.sites} if seed_campuses, else 0`);
     });
 
     it("parses psql's unaligned output", () => {
@@ -309,8 +332,11 @@ describe("verification census", () => {
         ]);
     });
 
-    it("judges only the seed org", () => {
-        expect(renderFireflyStagingVerifySql()).toContain(`'${SEED_ORG_ID}'::uuid`);
+    it("judges seeded rows in the Firefly org, with gated expectations evaluated in-database", () => {
+        const verify = renderFireflyStagingVerifySql();
+        expect(verify).toContain(`'${FIREFLY_ORG_ID}'::uuid`);
+        expect(verify).toMatch(/\('sites', \(CASE WHEN NOT EXISTS \(SELECT 1 FROM public\.locations l WHERE l\.org_id = /);
+        expect(verify).toContain("'open_case_stage_not_in_process'");
     });
 });
 
@@ -335,17 +361,62 @@ describe("isolation from the ZZ Alloy QA fixtures", () => {
         }
     });
 
-    it("the staging school is a third, distinct org: not a QA org, not the forbidden live tenant", () => {
-        expect(zzIds).not.toContain(SEED_ORG_ID);
-        expect(FORBIDDEN_QA_ORG_IDS).not.toContain(SEED_ORG_ID);
-        expect(Object.values(QA_ORGS).map((o) => o.slug)).not.toContain(SEED_ORG_SLUG);
-        expect(SEED_ORG_NAME).toMatch(/\(Staging\)$/);
+    it("seeds the one staging school — the existing Firefly org — which is no ZZ org and no QA target", () => {
+        expect(zzIds).not.toContain(FIREFLY_ORG_ID);
+        // Firefly stays out of QA (identities are E3); seeding it is not a QA run.
+        expect(FORBIDDEN_QA_ORG_IDS).toContain(FIREFLY_ORG_ID);
         for (const id of zzIds) expect(id.startsWith(SEED_ID_PREFIX)).toBe(false);
     });
 
-    it("the seed creates exactly one org", () => {
-        expect(sql.match(/INSERT INTO public\.orgs\b/g)).toHaveLength(1);
-        expect(sql).toContain(`'${SEED_ORG_ID}'::uuid, '${SEED_ORG_NAME}', '${SEED_ORG_SLUG}'`);
+    it("the seed creates no org, renames none and seeds no RBAC — no additional tenant", () => {
+        expect(sql).not.toMatch(/INSERT INTO public\.orgs\b|UPDATE public\.orgs\b|seed_default_rbac/);
+        expect(SEED_WRITE_SET as readonly string[]).not.toContain("orgs");
+        const orgIds = new Set([...sql.matchAll(/org_id[^\n]*?'([0-9a-f-]{36})'::uuid/g)].map((m) => m[1]));
+        expect([...orgIds]).toEqual([FIREFLY_ORG_ID]);
+    });
+
+    it("every configuration write sits inside its gate; families are written unconditionally", () => {
+        const gated: Record<string, string[]> = {
+            seed_role_types: ["customer_person_role_types"],
+            seed_enrollment: ["departments", "work_units"],
+            seed_campuses: ["locations", "location_program_categories"],
+            seed_catalog: ["program_offerings", "program_offering_variants", "commercial_tuition_rates", "financial_charge_templates"],
+        };
+        expect(Object.keys(gated).sort()).toEqual([...SEED_GATES].sort());
+        for (const [gate, tables] of Object.entries(gated)) {
+            const start = sql.indexOf(`\\if :${gate}`);
+            const otherwise = sql.indexOf("\\else", start);
+            const end = sql.indexOf("\\endif", start);
+            expect(start, gate).toBeGreaterThan(0);
+            for (const t of tables) {
+                const at = sql.search(new RegExp(`INSERT INTO public\\.${t}\\b`));
+                expect(at > start && at < otherwise, `${t} inside ${gate}`).toBe(true);
+            }
+            // The tenant branch only binds; it writes nothing.
+            expect(sql.slice(otherwise, end)).not.toMatch(/INSERT INTO public\./);
+        }
+        for (const t of ["customers", "persons", "customer_members", "opportunities", "opportunity_customer_members"]) {
+            const at = sql.search(new RegExp(`INSERT INTO public\\.${t}\\b`));
+            expect(at).toBeGreaterThan(sql.lastIndexOf("\\endif"));
+        }
+    });
+
+    it("upserts conflict on the seed's own ids only, never on a key the tenant's rows share", () => {
+        const targets = [...sql.matchAll(/ON CONFLICT (\([^)]*\))? ?DO/g)].map((m) => m[1] ?? "(any)");
+        const allowed = new Set(["(id)", "(any)", "(org_id, customer_id, person_id, role_type)", "(opportunity_id, person_id)", "(org_id, opportunity_id, customer_member_id)"]);
+        for (const t of targets) expect(allowed, t).toContain(t);
+        // The three natural-key conflicts all include a seed-id column (customer/person/opportunity).
+        expect(sql).not.toMatch(/ON CONFLICT \((org_id, key|department_id, key)\)/);
+    });
+
+    it("leaves record numbers to the platform's allocator, so the tenant's numbering is undisturbed", () => {
+        const numbered = sql
+            .split("\n")
+            .filter((line) => !line.trimStart().startsWith("--"))
+            .filter((line) => /\b(customer_number|person_number|opportunity_number|location_number)\b/.test(line));
+        // The only mention is a read: ordering the tenant's own sites when binding to them.
+        expect(numbered).toHaveLength(1);
+        expect(numbered[0]).toMatch(/^\s+row_number\(\) OVER \(ORDER BY .*l\.location_number NULLS LAST/);
     });
 });
 
@@ -381,23 +452,61 @@ describe("the in-database proof (npm run staging:seed:firefly:prove)", () => {
         expect(() => zzSnapshotSql(['x"; DROP TABLE orgs; --'])).toThrow();
     });
 
-    it("counts every row in the seed org, against expectations derived from the dataset", () => {
+    it("plants the Firefly org by its real id — what hosted staging already holds — in either shape", () => {
+        expect(plantFireflySql("bare")).toBe(
+            `INSERT INTO public.orgs (id, name, slug) VALUES ('${FIREFLY_ORG_ID}'::uuid, 'Firefly Early Learning', 'firefly-early-learning') ON CONFLICT (id) DO NOTHING;`,
+        );
+        const configured = plantFireflySql("configured");
+        expect(configured).toContain("'enrollment'");
+        expect(configured).toContain("'lifecycle_wu_' || s");
+        expect(configured).toContain("'Tenant Household'");
+        // Planted only when absent, and never in the seed namespace.
+        expect(configured).toMatch(/IF EXISTS \(SELECT 1 FROM public\.departments WHERE org_id = [^)]+\) THEN\n\s+RETURN;/);
+        expect(configured).not.toMatch(/'f17e0000-[0-9a-f-]+'::uuid/);
+    });
+
+    it("counts every row in the Firefly org, against expectations derived from the dataset and the shape", () => {
         const c = expectedSeedCounts();
-        const byName = Object.fromEntries(scratchCountChecks().map((k) => [k.name, k.expected]));
-        expect(byName.customers).toBe(c.customers);
-        expect(byName.customer_members).toBe(c.children);
-        expect(byName.opportunity_customer_members).toBe(c.opportunity_children);
-        for (const [stage, n] of Object.entries(c.opportunities_by_stage)) expect(byName[`opportunities_stage_${stage}`]).toBe(n);
+        const bare = Object.fromEntries(scratchCountChecks("bare").map((k) => [k.name, k.expected]));
+        const configured = Object.fromEntries(scratchCountChecks("configured").map((k) => [k.name, k.expected]));
+        for (const byName of [bare, configured]) {
+            expect(byName.orgs_total).toBe(0);
+            expect(byName.customers).toBe(c.customers);
+            expect(byName.customer_members).toBe(c.children);
+            expect(byName.opportunity_customer_members).toBe(c.opportunity_children);
+            for (const [stage, n] of Object.entries(c.opportunities_by_stage)) expect(byName[`opportunities_stage_${stage}`]).toBe(n);
+        }
+        expect(bare.locations).toBe(c.locations);
+        expect(bare.departments).toBe(1);
+        // On a configured tenant (hosted staging's shape) the seed adds no configuration at all.
+        for (const t of ["departments", "work_units", "locations", "location_program_categories", "program_offerings", "program_offering_variants", "commercial_tuition_rates", "financial_charge_templates", "customer_person_role_types"]) {
+            expect(configured[t], t).toBe(0);
+        }
         // Table counts judge every row in the org, not only seed ids, so a duplicate cannot hide.
-        for (const k of scratchCountChecks().filter((k) => k.name !== "orgs_in_seed_namespace_or_slug")) {
+        for (const k of scratchCountChecks("configured").filter((k) => k.name !== "orgs_in_seed_namespace")) {
             expect(k.sql).not.toContain("id::text LIKE");
         }
         expect(scratchRelationshipChecks().every((k) => k.expected === 0)).toBe(true);
     });
 
+    it("snapshots the tenant's own Firefly rows, excluding only the seed namespace", () => {
+        const snap = fireflyTenantSnapshotSql(["customers"]);
+        expect(snap).toContain(`WHERE x.org_id IN ('${FIREFLY_ORG_ID}'::uuid) AND coalesce(to_jsonb(x)->>'id', '') NOT LIKE '${SEED_ID_PREFIX}%'`);
+        expect(snap).toContain(`FROM public.orgs o WHERE o.id IN ('${FIREFLY_ORG_ID}'::uuid)`);
+    });
+
+    it("the fence-sensitivity proof splices one write to the Firefly org row before the fence closes", () => {
+        const seed = renderFireflyStagingSeedSql();
+        const tampered = fenceTamperedSeedSql(seed);
+        const at = tampered.indexOf(`UPDATE public.orgs SET name = name WHERE id = '${FIREFLY_ORG_ID}'::uuid;`);
+        expect(at).toBeGreaterThan(tampered.lastIndexOf("INSERT INTO public."));
+        expect(at).toBeLessThan(tampered.indexOf("DO $fence_close$"));
+        expect(auditFireflyStagingSeedSql(tampered).ok).toBe(false);
+    });
+
     it("the drift edit only ever touches a seeded row", () => {
         expect(() => driftEditSql(QA_ORGS.qa_shared.id)).toThrow();
-        expect(driftEditSql(seedId("customer", 1))).toContain(`org_id = '${SEED_ORG_ID}'::uuid`);
+        expect(driftEditSql(seedId("customer", 1))).toContain(`org_id = '${FIREFLY_ORG_ID}'::uuid`);
     });
 
     function zzIds(): string[] {

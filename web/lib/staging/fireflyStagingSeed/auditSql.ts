@@ -1,17 +1,19 @@
 /**
  * Firefly staging seed — static audit of the rendered script (ALY-14 E2).
  *
- * The in-database fence (renderSql.ts) is the proof that a run wrote nothing outside the seed org.
+ * The in-database fence (renderSql.ts) is the proof that a run changed no row but its own seed rows.
  * This audit is the cheap, offline half: it refuses a script whose TEXT could not be safe, before
  * anything connects. The CLI runs it before every apply, and the tests run it on every render.
  */
 
 import { PRODUCTION_PROJECT_REF } from "./targets";
-import { LIVE_FIREFLY_ORG_ID, SEED_ID_PREFIX } from "./ids";
+import { FIREFLY_ORG_ID, SEED_ID_PREFIX } from "./ids";
 
-/** The only tables the seed may write. Anything else is a refusal. */
+/**
+ * The only tables the seed may write — never `orgs`: the seed writes into the existing Firefly org and
+ * creates none. Anything else is a refusal.
+ */
 export const SEED_WRITE_SET = Object.freeze([
-    "orgs",
     "customer_person_role_types",
     "departments",
     "work_units",
@@ -53,9 +55,9 @@ export function auditFireflyStagingSeedSql(sql: string): SeedSqlAudit {
             failures.push(`writes ${target}, which is outside the seed's write set`);
         }
     }
-    // The fence's own bookkeeping row goes to a TEMP table referenced unqualified.
+    // The fence's bookkeeping and the gates' bindings go to TEMP tables referenced unqualified.
     for (const m of text.matchAll(/\bINSERT\s+INTO\s+([a-z_]+)\s/gi)) {
-        if (m[1] !== "firefly_seed_fence") failures.push(`unqualified INSERT INTO ${m[1]}`);
+        if (m[1] !== "firefly_seed_fence" && m[1] !== "firefly_seed_binding") failures.push(`unqualified INSERT INTO ${m[1]}`);
     }
 
     for (const [label, re] of [
@@ -70,6 +72,8 @@ export function auditFireflyStagingSeedSql(sql: string): SeedSqlAudit {
         ["psql include", /^\s*\\(i|ir|include|include_relative|copy|!)\b/im],
         ["auth schema write", /\bINSERT\s+INTO\s+auth\./i],
         ["storage schema write", /\bINSERT\s+INTO\s+storage\./i],
+        ["an org write", /\b(INSERT\s+INTO|UPDATE)\s+(public\.)?orgs\b/i],
+        ["an RBAC seeding call", /\bseed_default_rbac\b/i],
         ["clock/random value", /\b(gen_random_uuid|uuid_generate_v4|random|clock_timestamp|statement_timestamp)\s*\(|\bnow\s*\(\)|\bcurrent_date\b|\bcurrent_timestamp\b/i],
     ] as const) {
         if (re.test(text)) failures.push(`contains ${label}`);
@@ -77,18 +81,17 @@ export function auditFireflyStagingSeedSql(sql: string): SeedSqlAudit {
 
     if (sql.toLowerCase().includes(PRODUCTION_PROJECT_REF)) failures.push("names the production project ref");
 
-    // Every uuid literal is a seed id — except the live Firefly org, which may appear only in the
-    // preflight refusal that checks a LOCAL target does not hold it.
+    // Every uuid literal is a seed id, or the Firefly org every seeded row belongs to.
     for (const m of text.matchAll(/'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'::uuid/gi)) {
         const id = m[1].toLowerCase();
-        if (id.startsWith(SEED_ID_PREFIX)) continue;
-        if (id === LIVE_FIREFLY_ORG_ID) continue;
-        failures.push(`uuid ${id} is outside the seed namespace`);
+        if (id.startsWith(SEED_ID_PREFIX) || id === FIREFLY_ORG_ID) continue;
+        failures.push(`uuid ${id} is outside the seed namespace and is not the Firefly org`);
     }
-    const liveMentions = text.split(LIVE_FIREFLY_ORG_ID).length - 1;
-    const liveRefusal = new RegExp(`v_target = 'local' AND EXISTS \\(SELECT 1 FROM public\\.orgs WHERE id = '${LIVE_FIREFLY_ORG_ID}'::uuid\\)`);
-    if (liveMentions !== 1 || !liveRefusal.test(text)) {
-        failures.push(`the live Firefly org must appear exactly once, in the local-target refusal (found ${liveMentions})`);
+    if (!new RegExp(`FROM public\\.orgs WHERE id = '${FIREFLY_ORG_ID}'::uuid`).test(text)) {
+        failures.push("does not refuse a database without the Firefly org");
+    }
+    for (const gate of ["seed_campuses", "seed_enrollment", "seed_catalog", "seed_role_types"]) {
+        if (!text.includes(`\\if :${gate}`)) failures.push(`configuration gate ${gate} is missing`);
     }
 
     const begin = text.search(/\bBEGIN ISOLATION LEVEL REPEATABLE READ;/);

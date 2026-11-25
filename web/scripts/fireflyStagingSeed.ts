@@ -24,7 +24,7 @@ import { resolve } from "path";
 
 import { auditFireflyStagingSeedSql } from "@/lib/staging/fireflyStagingSeed/auditSql";
 import { expectedSeedCounts } from "@/lib/staging/fireflyStagingSeed/dataset";
-import { SEED_ORG_ID, SEED_ORG_NAME } from "@/lib/staging/fireflyStagingSeed/ids";
+import { FIREFLY_ORG_ID } from "@/lib/staging/fireflyStagingSeed/ids";
 import { renderFireflyStagingSeedSql } from "@/lib/staging/fireflyStagingSeed/renderSql";
 import {
     LOCAL_STACK_DB_CONTAINER,
@@ -85,7 +85,9 @@ function runPsql(target: ResolvedSeedTarget, script: string, vars: Record<string
         fail("no host psql — a staging run needs one (the local container fallback is local-only)", 2);
     }
     const res = spawnSync(cmd, args, { input: script, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    if (res.error) fail(`could not start ${cmd}: ${res.error.message} (environment problem)`, 2);
+    // EPIPE: psql stopped reading because the script refused (ON_ERROR_STOP) — its own exit says why.
+    const epipe = (res.error as NodeJS.ErrnoException | undefined)?.code === "EPIPE" && res.status !== null;
+    if (res.error && !epipe) fail(`could not start ${cmd}: ${res.error.message} (environment problem)`, 2);
     return { status: res.status ?? 1, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
 
@@ -104,11 +106,12 @@ function plan(): void {
     const seed = renderFireflyStagingSeedSql();
     const audit = auditFireflyStagingSeedSql(seed);
     const counts = expectedSeedCounts();
-    console.log(`Firefly staging seed — ${SEED_ORG_NAME} (${SEED_ORG_ID})`);
+    console.log(`Firefly staging seed — into the existing Firefly org ${FIREFLY_ORG_ID} (creates no org)`);
     console.log(`  seed sql sha256   ${sha256(seed)}`);
     console.log(`  audit             ${audit.ok ? "pass" : `FAIL: ${audit.failures.join("; ")}`}`);
     console.log(`  write set         ${[...new Set(audit.insertTargets)].join(", ")}`);
     console.log(`  rows              ${JSON.stringify(counts)}`);
+    console.log("                    configuration rows only where the org has none of its own (see the gates)");
     console.log("  no connection was made; apply needs --target");
 }
 
