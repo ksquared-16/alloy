@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -207,6 +207,63 @@ describe("shared QA registry — Firefly fence under E3 decision (a)", () => {
       expect(exception[0]).toContain(login);
     }
     expect(exception[0]).toContain("ZZ Alloy QA");
+  });
+});
+
+/**
+ * ALY-14 E4: ZZ Alloy QA stays the tenant of the existing cross-organization and permission fixtures,
+ * and no fixture introduces another tenant. Every UUID a fixture names is a registered QA org, a
+ * registered QA structure id, a fixture-namespace row id (`xx000000-`) or a listed non-org id.
+ */
+describe("shared QA fixtures — ZZ Alloy QA is the only fixture tenant (E4)", () => {
+  const QA_FIXTURE_FILES = readdirSync(join(ROOT, "certification/fixtures"))
+    .filter((f) => /^qa-.*\.sql$/.test(f))
+    .map((f) => `certification/fixtures/${f}`);
+  const CROSS_ORG_INVARIANTS = [
+    "certification/invariants/documents-d9-hosted-fixture.sql",
+    "certification/invariants/documents-q1-g1-subject-fixtures.sql",
+    "certification/invariants/documents-r5-shared-child-fixture.sql",
+    "certification/invariants/documents-d6-requirements.sql",
+  ];
+  /* Prior Documents form ids the forms-residue reset removes; forms, not organizations. */
+  const NON_ORG_IDS = new Set([
+    "01c4bf36-39ea-4ab8-8966-8fd850e381fe",
+    "6a565dc9-fab7-4220-ada2-3d7b55036f26",
+    "6f2e664b-97a2-464b-b3ac-405c7810bbcb",
+    "7e36208b-5250-407c-bb90-31e80adfc277",
+    "8dd68ff9-fad9-49c1-8bda-e998571faddf",
+  ]);
+  const KNOWN_IDS = new Set<string>([
+    ...Object.values(QA_ORGS).map((o) => o.id),
+    ...Object.values(QA_STRUCTURE.departments).map((d) => d.id),
+    ...Object.values(QA_STRUCTURE.sites).map((s) => s.id),
+  ]);
+  const uuids = (sql: string) =>
+    [...new Set(sql.toLowerCase().match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) ?? [])];
+
+  it("finds the existing permission and cross-org fixtures", () => {
+    expect(QA_FIXTURE_FILES).toEqual(
+      expect.arrayContaining([QA_AUTHZ_FIXTURE_PATHS.ensure, QA_AUTHZ_FIXTURE_PATHS.reset]),
+    );
+    expect(QA_FIXTURE_FILES).toContain("certification/fixtures/qa-authz-subjects-ensure.sql");
+  });
+
+  for (const file of [...QA_FIXTURE_FILES, ...CROSS_ORG_INVARIANTS]) {
+    it(`${file}: names only ZZ Alloy QA ids, never Firefly, and creates no organization`, () => {
+      const sql = readFileSync(join(ROOT, file), "utf8");
+      const ids = uuids(sql);
+      expect(ids).toContain(QA_SHARED);
+      expect(ids).not.toContain(FIREFLY);
+      const unknown = ids.filter((id) => !KNOWN_IDS.has(id) && !NON_ORG_IDS.has(id) && !/^[0-9a-f]{2}000000-/.test(id));
+      expect(unknown).toEqual([]);
+      expect(sql).not.toMatch(/insert\s+into\s+(public\.)?organizations\b/i);
+    });
+  }
+
+  it("the cross-org and permission fixtures target ZZ Alloy QA — Cross-Org as the second tenant", () => {
+    for (const file of [...CROSS_ORG_INVARIANTS, QA_AUTHZ_FIXTURE_PATHS.ensure, "certification/fixtures/qa-authz-subjects-ensure.sql"]) {
+      expect(uuids(readFileSync(join(ROOT, file), "utf8"))).toContain(QA_ORGS.qa_secondary.id);
+    }
   });
 });
 
