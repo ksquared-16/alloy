@@ -1,3 +1,11 @@
+---
+owner: runtime
+status: proposed
+last_reviewed: 2026-11-25
+supersedes: []
+status_note: Evidence record for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 — not doctrine.
+---
+
 # Environments and promotion — P3 staging configuration and test-data classification (2026-11-25)
 
 Objective: Environments and promotion (`WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66`), slice P3. Builds on
