@@ -18,6 +18,12 @@ owner has approved the ALY-14 plan but not, in so many words, the hosted steps 1
 service-role credential (`$STAGING_DB` and `$TRUSTED_ENV` are not set for it). §8 lists each review finding
 and what it now waits on.
 
+**Re-checked at the third review round (2026-11-25): unchanged.** No owner answer to §2.1–§2.3 or go-ahead
+for steps 1–6 is recorded in this branch or reached this worker, and `$STAGING_DB`, `$TRUSTED_ENV` and a
+staging service-role key are still unset here. Nothing was run, edited or loosened. Three owner inputs
+unblock all seven §8 rows: (1) "go" for steps 1–6, (2) `a` or `b` for §2.1, (3) the operator running
+steps 1–6 from a shell holding the staging credential (or handing that credential to the run).
+
 ## 1. The profile
 
 | | |
