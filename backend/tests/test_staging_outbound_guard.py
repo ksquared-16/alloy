@@ -4,7 +4,9 @@ ALY-14 — staging email/SMS reach only test recipients or the owner allowlist.
 Proves the guard at the provider adapters (send_resend_email, send_sms,
 send_sms_with_credentials): a staging refusal happens before any Twilio client or
 Resend request exists, allowed recipients still reach the (faked) provider, a
-dispatcher path inherits the refusal, and production is unchanged. No network:
+dispatcher path inherits the refusal, a missing or unknown ALLOY_ENVIRONMENT
+restricts exactly like staging, and only an explicit, uncontradicted
+ALLOY_ENVIRONMENT=production is unrestricted. No network:
 Twilio's Client and requests.post are always faked.
 """
 from __future__ import annotations
@@ -30,32 +32,60 @@ _SIGNALS = {
     "NEXT_PUBLIC_APP_ENV": "",
     "VERCEL_ENV": "",
     "SUPABASE_URL": "",
+    "NEXT_PUBLIC_SUPABASE_URL": "",
     g.STAGING_EMAIL_ALLOWLIST_ENV: "",
     g.STAGING_SMS_ALLOWLIST_ENV: "",
 }
 
 
 def staging(**extra: str) -> dict:
-    return {**_SIGNALS, "SUPABASE_URL": STAGING_URL, **extra}
+    return {**_SIGNALS, "ALLOY_ENVIRONMENT": "staging", "SUPABASE_URL": STAGING_URL, **extra}
 
 
 def production(**extra: str) -> dict:
+    return {**_SIGNALS, "ALLOY_ENVIRONMENT": "production", "SUPABASE_URL": PRODUCTION_URL, **extra}
+
+
+def unidentified(**extra: str) -> dict:
+    """ALLOY_ENVIRONMENT absent, on what is otherwise a production-shaped runtime."""
     return {**_SIGNALS, "SUPABASE_URL": PRODUCTION_URL, **extra}
 
 
 class TestEnvironmentDetection(unittest.TestCase):
-    def test_staging_project_ref_restricts(self):
-        self.assertTrue(g.is_staging_outbound_runtime(staging()))
+    def test_explicit_staging_restricts(self):
+        self.assertEqual(g.resolve_outbound_environment(staging())[:2], ("staging", True))
+        self.assertEqual(g.resolve_outbound_environment(staging(SUPABASE_URL=PRODUCTION_URL))[:2], ("staging", True))
+        self.assertTrue(g.is_outbound_restricted({**_SIGNALS, "ALLOY_ENVIRONMENT": " Staging "}))
 
-    def test_any_staging_label_restricts_even_on_production_ref(self):
-        self.assertTrue(g.is_staging_outbound_runtime(production(APP_ENV="staging")))
-        self.assertTrue(g.is_staging_outbound_runtime(production(ALLOY_ENVIRONMENT="Staging")))
-        self.assertTrue(g.is_staging_outbound_runtime(production(VERCEL_ENV="preview")))
+    def test_missing_environment_fails_closed(self):
+        mode, restricted, reason = g.resolve_outbound_environment(unidentified())
+        self.assertEqual((mode, restricted), ("unidentified", True))
+        self.assertIn("not set", reason)
+        # Even the old production signals no longer unlock anything without the label.
+        self.assertTrue(g.is_outbound_restricted(unidentified(APP_ENV="production", VERCEL_ENV="production")))
+        self.assertTrue(g.is_outbound_restricted({**_SIGNALS, "SUPABASE_URL": "http://127.0.0.1:54421"}))
 
-    def test_production_and_local_are_not_restricted(self):
-        self.assertFalse(g.is_staging_outbound_runtime(production()))
-        self.assertFalse(g.is_staging_outbound_runtime(production(APP_ENV="production")))
-        self.assertFalse(g.is_staging_outbound_runtime({**_SIGNALS, "SUPABASE_URL": "http://127.0.0.1:54421"}))
+    def test_unknown_environment_fails_closed(self):
+        for label in ("prod", "live", "development", "preview", "productionx", "staging,production"):
+            mode, restricted, _ = g.resolve_outbound_environment(unidentified(ALLOY_ENVIRONMENT=label))
+            self.assertEqual((mode, restricted), ("unidentified", True), label)
+
+    def test_explicit_production_is_live(self):
+        self.assertEqual(g.resolve_outbound_environment(production())[:2], ("live", False))
+        self.assertEqual(g.resolve_outbound_environment(production(ALLOY_ENVIRONMENT="PRODUCTION"))[:2], ("live", False))
+        self.assertFalse(g.is_outbound_restricted(production(VERCEL_ENV="production", APP_ENV="production")))
+
+    def test_production_label_contradicted_by_staging_signal_restricts(self):
+        for extra in (
+            {"SUPABASE_URL": STAGING_URL},
+            {"NEXT_PUBLIC_SUPABASE_URL": STAGING_URL},
+            {"APP_ENV": "staging"},
+            {"NEXT_PUBLIC_APP_ENV": "staging"},
+            {"VERCEL_ENV": "preview"},
+        ):
+            mode, restricted, reason = g.resolve_outbound_environment(production(**extra))
+            self.assertEqual((mode, restricted), ("staging", True), extra)
+            self.assertIn("contradicted", reason)
 
 
 class TestRecipientRules(unittest.TestCase):
@@ -141,6 +171,20 @@ class TestSmsAdapterBoundary(unittest.TestCase):
                 )
         factory.assert_not_called()
 
+    def test_missing_or_unknown_environment_blocks_real_number(self):
+        for env in (unidentified(), unidentified(ALLOY_ENVIRONMENT="prod")):
+            out, factory, client = self._send(env, "+14155550000")
+            self.assertIsInstance(out, g.StagingRecipientRefused)
+            self.assertIn("unidentified", str(out))
+            factory.assert_not_called()
+            client.messages.create.assert_not_called()
+
+    def test_missing_environment_still_allows_test_and_allowlisted_numbers(self):
+        out, _, _ = self._send(unidentified(), "+12125550123")
+        self.assertEqual(out["sid"], "SMfake000001")
+        out, _, _ = self._send(unidentified(**{g.STAGING_SMS_ALLOWLIST_ENV: "+14155551234"}), "+14155551234")
+        self.assertEqual(out["sid"], "SMfake000001")
+
     def test_production_unchanged_for_any_number(self):
         out, _, client = self._send(production(), "+14155550000")
         self.assertEqual(out["sid"], "SMfake000001")
@@ -179,6 +223,17 @@ class TestEmailAdapterBoundary(unittest.TestCase):
         out, post = self._send(staging(**{g.STAGING_EMAIL_ALLOWLIST_ENV: "owner@alloy.dev"}), "owner@alloy.dev")
         self.assertEqual(out["id"], "re_fake")
         post.assert_called_once()
+
+    def test_staging_blocks_unlisted_inbox_beside_an_allowlisted_one(self):
+        out, post = self._send(staging(**{g.STAGING_EMAIL_ALLOWLIST_ENV: "owner@alloy.dev"}), "other@alloy.dev")
+        self.assertIsInstance(out, g.StagingRecipientRefused)
+        post.assert_not_called()
+
+    def test_missing_or_unknown_environment_blocks_real_inbox(self):
+        for env in (unidentified(), unidentified(ALLOY_ENVIRONMENT="development")):
+            out, post = self._send(env, "parent@gmail.com")
+            self.assertIsInstance(out, g.StagingRecipientRefused)
+            post.assert_not_called()
 
     def test_production_unchanged_for_any_inbox(self):
         out, post = self._send(production(), "parent@gmail.com")
@@ -237,6 +292,11 @@ class TestDispatcherInheritsGuard(unittest.TestCase):
         statuses = [(c.kwargs.get("json") or {}).get("status") for c in patch_mock.call_args_list]
         self.assertIn("failed", statuses)
         self.assertNotIn("sent", statuses)
+
+    def test_unidentified_row_fails_closed_without_twilio(self):
+        out, client, _ = self._run(unidentified())
+        self.assertEqual(out["failed"], 1)
+        client.messages.create.assert_not_called()
 
     def test_production_row_still_sends(self):
         out, client, _ = self._run(production())

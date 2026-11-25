@@ -6,8 +6,11 @@ to an explicit owner allowlist. The check lives inside the provider adapters
 (`send_resend_email`, `send_sms`, `send_sms_with_credentials`), so every
 dispatcher path inherits it and none can route around it.
 
-Environment is decided fail-closed toward safety: ANY staging signal restricts.
-Production (no staging signal) is unchanged.
+The environment is declared: ALLOY_ENVIRONMENT=staging|production. Only an
+uncontradicted `production` is unrestricted. Missing, empty or unknown values
+restrict exactly like staging (fail closed), and `production` is overridden by any
+staging signal — the staging project ref in SUPABASE_URL, APP_ENV /
+NEXT_PUBLIC_APP_ENV=staging, or VERCEL_ENV=preview.
 
 Mirrors web/lib/communications/stagingOutboundRecipientGuard.ts — keep in step.
 """
@@ -17,7 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from typing import Iterable, Mapping, Optional
+from typing import Iterable, Mapping, Optional, Tuple
 from urllib.parse import urlparse
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -29,6 +32,10 @@ STAGING_EMAIL_ALLOWLIST_ENV = "COMMUNICATIONS_STAGING_EMAIL_ALLOWLIST"
 STAGING_SMS_ALLOWLIST_ENV = "COMMUNICATIONS_STAGING_SMS_ALLOWLIST"
 
 STAGING_RECIPIENT_REFUSED = "staging_recipient_not_allowlisted"
+
+ALLOY_ENVIRONMENT_ENV = "ALLOY_ENVIRONMENT"
+ALLOY_ENVIRONMENT_STAGING = "staging"
+ALLOY_ENVIRONMENT_PRODUCTION = "production"
 
 # RFC 2606 / 6761 reserved names: never deliverable to a person.
 _RESERVED_EMAIL_DOMAINS = frozenset({"example.com", "example.net", "example.org"})
@@ -63,14 +70,37 @@ def _project_ref(url: Optional[str]) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def is_staging_outbound_runtime(env: Optional[Mapping[str, str]] = None) -> bool:
-    e = _env(env)
-    labels = [(e.get(k) or "").strip().lower() for k in ("APP_ENV", "ALLOY_ENVIRONMENT", "NEXT_PUBLIC_APP_ENV")]
-    if "staging" in labels:
-        return True
+def _staging_signal(e: Mapping[str, str]) -> Optional[str]:
+    for name in ("NEXT_PUBLIC_APP_ENV", "APP_ENV"):
+        if (e.get(name) or "").strip().lower() == "staging":
+            return f"{name}=staging"
     if (e.get("VERCEL_ENV") or "").strip().lower() == "preview":
-        return True
-    return _project_ref(e.get("SUPABASE_URL")) == ALLOY_STAGING_SUPABASE_PROJECT_REF
+        return "VERCEL_ENV=preview"
+    for name in ("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"):
+        if _project_ref(e.get(name)) == ALLOY_STAGING_SUPABASE_PROJECT_REF:
+            return f"{name} is the staging project"
+    return None
+
+
+def resolve_outbound_environment(env: Optional[Mapping[str, str]] = None) -> Tuple[str, bool, str]:
+    """(mode, restricted, reason). mode is live | staging | unidentified; only live is unrestricted."""
+    e = _env(env)
+    label = (e.get(ALLOY_ENVIRONMENT_ENV) or "").strip().lower()
+    if label == ALLOY_ENVIRONMENT_STAGING:
+        return "staging", True, f"{ALLOY_ENVIRONMENT_ENV}=staging"
+    if label == ALLOY_ENVIRONMENT_PRODUCTION:
+        contradiction = _staging_signal(e)
+        if contradiction:
+            return "staging", True, f"{ALLOY_ENVIRONMENT_ENV}=production contradicted by {contradiction}"
+        return "live", False, f"{ALLOY_ENVIRONMENT_ENV}=production"
+    if label:
+        return "unidentified", True, f"{ALLOY_ENVIRONMENT_ENV}={label} is not a known environment"
+    return "unidentified", True, f"{ALLOY_ENVIRONMENT_ENV} is not set"
+
+
+def is_outbound_restricted(env: Optional[Mapping[str, str]] = None) -> bool:
+    """True unless this runtime is explicitly, uncontradictedly production."""
+    return resolve_outbound_environment(env)[1]
 
 
 def normalize_email_address(raw: str) -> str:
@@ -131,13 +161,15 @@ def _mask(channel: str, raw: str) -> str:
 def guard_outbound_recipients(
     channel: str, recipients: Iterable[str], env: Optional[Mapping[str, str]] = None
 ) -> None:
-    """Raise StagingRecipientRefused unless every recipient is permitted. No-op outside staging."""
+    """Raise StagingRecipientRefused unless every recipient is permitted. No-op only in live production."""
     e = _env(env)
-    if not is_staging_outbound_runtime(e):
+    mode, restricted, reason = resolve_outbound_environment(e)
+    if not restricted:
         return
+    scope = f"{mode} {channel} ({reason})"
     items = [str(r or "").strip() for r in recipients]
     if not items or any(not r for r in items):
-        raise StagingRecipientRefused(f"{STAGING_RECIPIENT_REFUSED}: staging {channel}: empty recipient")
+        raise StagingRecipientRefused(f"{STAGING_RECIPIENT_REFUSED}: {scope}: empty recipient")
     for r in items:
         if channel == "email":
             allowed = is_controlled_test_email(r) or is_owner_allowlisted_email(r, e)
@@ -146,6 +178,6 @@ def guard_outbound_recipients(
             allowed = is_controlled_test_phone(r) or is_owner_allowlisted_phone(r, e)
             env_name = STAGING_SMS_ALLOWLIST_ENV
         if not allowed:
-            detail = f"staging {channel}: {_mask(channel, r)} is not a test recipient or on {env_name}"
+            detail = f"{scope}: {_mask(channel, r)} is not a test recipient or on {env_name}"
             logger.warning("STAGING_OUTBOUND_REFUSED %s", detail)
             raise StagingRecipientRefused(f"{STAGING_RECIPIENT_REFUSED}: {detail}")

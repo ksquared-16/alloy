@@ -1,10 +1,13 @@
 /**
  * ALY-14 — staging email/SMS reach only test recipients or the owner allowlist.
  *
- * Proves the recipient rules, that deliverQueuedEmailHtml and the demo-request
- * route refuse in staging BEFORE fetch to Resend, that allowed recipients still
- * reach the (faked) provider, and that production is unchanged. Every Resend
- * call site in web/ is pinned to the guard. fetch is always stubbed.
+ * Proves environment detection (explicit ALLOY_ENVIRONMENT=staging restricts; a
+ * missing or unknown value restricts exactly like staging; only an uncontradicted
+ * ALLOY_ENVIRONMENT=production is unrestricted), the recipient rules, that
+ * deliverQueuedEmailHtml and the demo-request route refuse BEFORE fetch to Resend,
+ * that allowed recipients still reach the (faked) provider, and that production
+ * is unchanged. Every Resend call site in web/ is pinned to the guard. fetch is
+ * always stubbed.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -18,7 +21,8 @@ import {
     guardOutboundRecipients,
     isControlledTestEmail,
     isControlledTestPhone,
-    isStagingOutboundRuntime,
+    isOutboundRestricted,
+    resolveOutboundEnvironment,
 } from "@/lib/communications/stagingOutboundRecipientGuard";
 
 const WEB = join(__dirname, "../..");
@@ -34,10 +38,26 @@ const SIGNALS = [
     "SUPABASE_URL",
     STAGING_EMAIL_ALLOWLIST_ENV,
     STAGING_SMS_ALLOWLIST_ENV,
+    "MARKETING_DEMO_INBOX",
+    "RESEND_API_KEY",
 ] as const;
 const cleared = Object.fromEntries(SIGNALS.map((k) => [k, undefined]));
-const staging = (extra: Record<string, string> = {}) => ({ ...cleared, NEXT_PUBLIC_SUPABASE_URL: STAGING_URL, ...extra });
+const staging = (extra: Record<string, string> = {}) => ({
+    ...cleared,
+    ALLOY_ENVIRONMENT: "staging",
+    VERCEL_ENV: "preview",
+    NEXT_PUBLIC_SUPABASE_URL: STAGING_URL,
+    ...extra,
+});
 const production = (extra: Record<string, string> = {}) => ({
+    ...cleared,
+    ALLOY_ENVIRONMENT: "production",
+    NEXT_PUBLIC_SUPABASE_URL: PRODUCTION_URL,
+    VERCEL_ENV: "production",
+    ...extra,
+});
+/** A production-shaped runtime that never said which environment it is. */
+const unidentified = (extra: Record<string, string> = {}) => ({
     ...cleared,
     NEXT_PUBLIC_SUPABASE_URL: PRODUCTION_URL,
     VERCEL_ENV: "production",
@@ -45,16 +65,50 @@ const production = (extra: Record<string, string> = {}) => ({
 });
 
 describe("environment detection", () => {
-    it("restricts on the staging project ref, a staging label, or a Vercel preview", () => {
-        expect(isStagingOutboundRuntime(staging())).toBe(true);
-        expect(isStagingOutboundRuntime({ ...cleared, SUPABASE_URL: STAGING_URL })).toBe(true);
-        expect(isStagingOutboundRuntime(production({ NEXT_PUBLIC_APP_ENV: "staging" }))).toBe(true);
-        expect(isStagingOutboundRuntime({ ...cleared, VERCEL_ENV: "preview" })).toBe(true);
+    it("explicit ALLOY_ENVIRONMENT=staging restricts, whatever else is set", () => {
+        expect(resolveOutboundEnvironment(staging())).toMatchObject({ mode: "staging", restricted: true });
+        expect(resolveOutboundEnvironment(unidentified({ ALLOY_ENVIRONMENT: " Staging " }))).toMatchObject({
+            mode: "staging",
+            restricted: true,
+        });
     });
 
-    it("does not restrict production or the local certification stack", () => {
-        expect(isStagingOutboundRuntime(production())).toBe(false);
-        expect(isStagingOutboundRuntime({ ...cleared, NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54421" })).toBe(false);
+    it("a missing ALLOY_ENVIRONMENT fails closed, even on production signals", () => {
+        const env = resolveOutboundEnvironment(unidentified());
+        expect(env).toMatchObject({ mode: "unidentified", restricted: true });
+        expect(env.reason).toContain("not set");
+        expect(isOutboundRestricted(unidentified({ NEXT_PUBLIC_APP_ENV: "production", APP_ENV: "production" }))).toBe(true);
+        expect(isOutboundRestricted({ ...cleared, NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54421" })).toBe(true);
+        expect(isOutboundRestricted({ ...cleared })).toBe(true);
+    });
+
+    it("an unknown ALLOY_ENVIRONMENT fails closed", () => {
+        for (const label of ["prod", "live", "development", "preview", "productionx", "staging,production"]) {
+            expect(resolveOutboundEnvironment(unidentified({ ALLOY_ENVIRONMENT: label })), label).toMatchObject({
+                mode: "unidentified",
+                restricted: true,
+            });
+        }
+    });
+
+    it("explicit ALLOY_ENVIRONMENT=production is live and unrestricted", () => {
+        expect(resolveOutboundEnvironment(production())).toMatchObject({ mode: "live", restricted: false });
+        expect(isOutboundRestricted(production({ ALLOY_ENVIRONMENT: "PRODUCTION" }))).toBe(false);
+    });
+
+    it("production contradicted by any staging signal restricts", () => {
+        const contradictions: Record<string, string>[] = [
+            { NEXT_PUBLIC_SUPABASE_URL: STAGING_URL },
+            { SUPABASE_URL: STAGING_URL },
+            { NEXT_PUBLIC_APP_ENV: "staging" },
+            { APP_ENV: "staging" },
+            { VERCEL_ENV: "preview" },
+        ];
+        for (const extra of contradictions) {
+            const env = resolveOutboundEnvironment(production(extra));
+            expect(env, JSON.stringify(extra)).toMatchObject({ mode: "staging", restricted: true });
+            expect(env.reason).toContain("contradicted");
+        }
     });
 });
 
@@ -73,8 +127,16 @@ describe("recipient rules", () => {
     });
 
     it("staging: allows test recipients for email and SMS", () => {
-        expect(guardOutboundRecipients("email", ["parent@example.com"], staging())).toEqual({ ok: true, restricted: true });
-        expect(guardOutboundRecipients("sms", ["+12125550142"], staging())).toEqual({ ok: true, restricted: true });
+        expect(guardOutboundRecipients("email", ["parent@example.com"], staging())).toEqual({
+            ok: true,
+            restricted: true,
+            mode: "staging",
+        });
+        expect(guardOutboundRecipients("sms", ["+12125550142"], staging())).toEqual({
+            ok: true,
+            restricted: true,
+            mode: "staging",
+        });
     });
 
     it("staging: allows exact owner-allowlisted email and phone", () => {
@@ -103,9 +165,33 @@ describe("recipient rules", () => {
         expect(guardOutboundRecipients("email", [], staging()).ok).toBe(false);
     });
 
+    it("missing or unknown environment: blocks real recipients, still admits test and allowlisted ones", () => {
+        for (const env of [unidentified(), unidentified({ ALLOY_ENVIRONMENT: "prod" })]) {
+            const email = guardOutboundRecipients("email", ["parent@gmail.com"], env);
+            expect(email).toEqual(expect.objectContaining({ ok: false, code: STAGING_RECIPIENT_REFUSED }));
+            expect(email.ok ? "" : email.detail).toContain("unidentified");
+            expect(guardOutboundRecipients("sms", ["+14155550000"], env).ok).toBe(false);
+            expect(guardOutboundRecipients("email", ["a@firefly.test"], env).ok).toBe(true);
+        }
+        const listed = unidentified({ [STAGING_EMAIL_ALLOWLIST_ENV]: "owner@alloy.dev" });
+        expect(guardOutboundRecipients("email", ["owner@alloy.dev"], listed)).toEqual({
+            ok: true,
+            restricted: true,
+            mode: "unidentified",
+        });
+    });
+
     it("production: unchanged for any recipient", () => {
-        expect(guardOutboundRecipients("email", ["parent@gmail.com"], production())).toEqual({ ok: true, restricted: false });
-        expect(guardOutboundRecipients("sms", ["+14155550000"], production())).toEqual({ ok: true, restricted: false });
+        expect(guardOutboundRecipients("email", ["parent@gmail.com"], production())).toEqual({
+            ok: true,
+            restricted: false,
+            mode: "live",
+        });
+        expect(guardOutboundRecipients("sms", ["+14155550000"], production())).toEqual({
+            ok: true,
+            restricted: false,
+            mode: "live",
+        });
     });
 });
 
@@ -180,11 +266,91 @@ describe("deliverQueuedEmailHtml — staging guard before Resend", () => {
         expect(sentTo()).toEqual(["owner@alloy.dev"]);
     });
 
+    it("missing ALLOY_ENVIRONMENT: blocks a real inbox and never calls fetch", async () => {
+        const result = await deliver(unidentified(), "parent@gmail.com");
+        expect(result).toEqual({ ok: false, reason: STAGING_RECIPIENT_REFUSED });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it("production: a real inbox still reaches Resend unchanged", async () => {
         const result = await deliver(production(), "parent@gmail.com");
         expect(result.ok).toBe(true);
         expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.resend.com/emails");
         expect(sentTo()).toEqual(["parent@gmail.com"]);
+    });
+});
+
+describe("demo-request — the sales inbox is blocked in staging unless allowlisted", () => {
+    const fetchMock = vi.fn();
+    const DEFAULT_INBOX = "hello@workwithalloy.com";
+
+    async function submit(env: Record<string, string | undefined>) {
+        for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v as string);
+        vi.stubEnv("RESEND_API_KEY", "re_fake");
+        // DEMO_INBOX is read at module load, so each case imports a fresh route.
+        const { POST } = await import("@/app/api/marketing/demo-request/route");
+        const req = new Request("http://localhost/api/marketing/demo-request", {
+            method: "POST",
+            body: JSON.stringify({ name: "Pat", organization: "Northwind", email: "pat@example.com" }),
+            headers: { "content-type": "application/json" },
+        });
+        const res = await POST(req as never);
+        return { status: res.status, body: await res.json() };
+    }
+
+    beforeEach(() => {
+        vi.resetModules();
+        fetchMock.mockReset();
+        fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ id: "re_msg_1" }), text: async () => "" });
+        vi.stubGlobal("fetch", fetchMock);
+        vi.spyOn(console, "info").mockImplementation(() => {});
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+    });
+
+    const sentTo = () => JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).to;
+
+    it("staging: the default hello@workwithalloy.com is NOT mailed (intentional)", async () => {
+        const { status, body } = await submit(staging());
+        expect(status).toBe(200);
+        expect(body).toEqual({ ok: true });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("missing ALLOY_ENVIRONMENT: the default sales inbox is not mailed either", async () => {
+        await submit(unidentified());
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("staging: a different allowlisted address does not unlock the sales inbox", async () => {
+        await submit(staging({ [STAGING_EMAIL_ALLOWLIST_ENV]: "owner@workwithalloy.com" }));
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("staging: the exact sales inbox on the allowlist is mailed", async () => {
+        await submit(staging({ [STAGING_EMAIL_ALLOWLIST_ENV]: `owner@alloy.dev, ${DEFAULT_INBOX}` }));
+        expect(sentTo()).toEqual([DEFAULT_INBOX]);
+    });
+
+    it("staging: MARKETING_DEMO_INBOX is mailed only when that exact address is allowlisted", async () => {
+        await submit(staging({ MARKETING_DEMO_INBOX: "sales-qa@alloy.dev" }));
+        expect(fetchMock).not.toHaveBeenCalled();
+        vi.resetModules();
+        await submit(
+            staging({ MARKETING_DEMO_INBOX: "sales-qa@alloy.dev", [STAGING_EMAIL_ALLOWLIST_ENV]: "sales-qa@alloy.dev" })
+        );
+        expect(sentTo()).toEqual(["sales-qa@alloy.dev"]);
+    });
+
+    it("production: the default sales inbox is mailed unchanged", async () => {
+        await submit(production());
+        expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.resend.com/emails");
+        expect(sentTo()).toEqual([DEFAULT_INBOX]);
     });
 });
 

@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
     console.info("[marketing/demo-request]", payload);
 
     const resendKey = process.env.RESEND_API_KEY;
-    // Staging: the sales inbox must be a test or owner-allowlisted address (ALY-14).
+    // Outside an explicit ALLOY_ENVIRONMENT=production, the sales inbox must be a test or
+    // owner-allowlisted address (ALY-14). INTENTIONAL: the default hello@workwithalloy.com is a
+    // real inbox, so staging does not mail it unless that exact address (or whatever
+    // MARKETING_DEMO_INBOX names) is listed in COMMUNICATIONS_STAGING_EMAIL_ALLOWLIST.
     // Refused like an absent key — the request is logged above, nothing is sent.
     const recipientGate = guardOutboundRecipients("email", [DEMO_INBOX]);
     if (!recipientGate.ok) console.warn("[marketing/demo-request] staging recipient refused", recipientGate.detail);

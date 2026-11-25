@@ -162,24 +162,88 @@ configuration (Vercel environment for the verifying side, Supabase Vault for a
 
 Staging email and SMS reach **only** controlled test recipients or an explicit owner
 allowlist. The guard runs inside every provider call site — web
-`lib/communications/stagingOutboundRecipientGuard.ts` (Resend sends) and backend
+`lib/communications/stagingOutboundRecipientGuard.ts` (Resend sends, and the server
+routes that ask Supabase Auth for mail) and backend
 `app/integrations/staging_outbound_guard.py` (Resend + both Twilio adapters) — so no
 caller can route around it. A refused message fails with
 `staging_recipient_not_allowlisted` and the provider is never called.
 
-- **Staging is detected fail-closed:** the staging project ref in `SUPABASE_URL` /
-  `NEXT_PUBLIC_SUPABASE_URL`, `APP_ENV` / `NEXT_PUBLIC_APP_ENV` / `ALLOY_ENVIRONMENT`
-  = `staging`, or `VERCEL_ENV=preview`. Any one restricts. Production is unchanged.
-- **Test recipients (always allowed in staging):** `example.com|net|org`, any
-  `.test` / `.example` / `.invalid` / `.localhost` domain, Resend's
+#### `ALLOY_ENVIRONMENT` is required, and fail-closed
+
+| `ALLOY_ENVIRONMENT` | Outbound regime |
+|---|---|
+| `staging` | **Restricted** — test recipients + owner allowlist only |
+| `production`, with no staging signal | **Unrestricted** (live) |
+| `production`, but the staging project ref in `SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL`, `APP_ENV` / `NEXT_PUBLIC_APP_ENV=staging`, or `VERCEL_ENV=preview` | **Restricted** — the contradiction is treated as staging |
+| missing, empty, or anything else (`prod`, `development`, a typo) | **Restricted** — exactly like staging |
+
+Required settings (operator-owned; this repository does not set them):
+
+| Runtime | Setting |
+|---|---|
+| Vercel project, **Preview** scope (serves `staging.workwithalloy.com`) | `ALLOY_ENVIRONMENT=staging` |
+| Staging backend service (Python dispatcher) | `ALLOY_ENVIRONMENT=staging` |
+| Vercel project, **Production** scope | `ALLOY_ENVIRONMENT=production` |
+| Production backend service | `ALLOY_ENVIRONMENT=production` |
+
+> **Promotion order:** set `ALLOY_ENVIRONMENT=production` on every production runtime
+> **before** this guard reaches `main`. Without it production is "unidentified" and
+> refuses every real recipient. Local development and CI are unidentified by default
+> and therefore restricted, which is intended.
+
+#### Who may receive in a restricted runtime
+
+- **Test recipients (always allowed):** `example.com|net|org`, any `.test` /
+  `.example` / `.invalid` / `.localhost` domain, Resend's
   `delivered|bounced|complained|suppressed@resend.dev`, and NANP fictional numbers
   `+1 NPA 555-0100…0199`.
 - **Owner allowlist:** `COMMUNICATIONS_STAGING_EMAIL_ALLOWLIST` and
   `COMMUNICATIONS_STAGING_SMS_ALLOWLIST`, comma/semicolon/newline separated, exact
-  addresses and numbers only (no domain wildcards). Set them in **both** the Vercel
-  staging project and the staging backend service.
-- Not covered: Supabase Auth mail (invites, password resets) is sent by Supabase's own
-  mailer, not by Alloy code.
+  addresses and numbers only (no domain wildcards, no `+tag` variants). Set them in
+  **both** the Vercel Preview scope and the staging backend service.
+
+#### Demo-request sales inbox — blocked in staging on purpose
+
+`POST /api/marketing/demo-request` mails `MARKETING_DEMO_INBOX`, defaulting to
+`hello@workwithalloy.com`. That is a real sales inbox, so in staging it is **not**
+mailed: the request is logged and the form still answers `{ ok: true }`. This is
+intentional — staging form submissions must not land in the live sales queue.
+
+To receive staging demo requests, allowlist the **exact** address the route sends to:
+
+- keep the default: `COMMUNICATIONS_STAGING_EMAIL_ALLOWLIST=hello@workwithalloy.com`, or
+- point it at a QA inbox: `MARKETING_DEMO_INBOX=sales-qa@<your-domain>` **and**
+  `COMMUNICATIONS_STAGING_EMAIL_ALLOWLIST=sales-qa@<your-domain>`.
+
+Setting `MARKETING_DEMO_INBOX` alone does not unlock delivery; neither does
+allowlisting a different address on the same domain.
+
+#### Supabase Auth mail (invites, password resets)
+
+Supabase Auth sends these through its **own mailer**, never through Resend-in-Alloy.
+
+| Path | Who calls Supabase Auth | Guarded in code |
+|---|---|---|
+| Admin invite — `POST /api/admin/users` → `auth.admin.inviteUserByEmail` | Alloy server | **Yes** — refused before the invite unless test/allowlisted |
+| Admin-started reset — `POST /api/admin/send-password-reset` → `auth.resetPasswordForEmail` | Alloy server | **Yes** — refused before the reset unless test/allowlisted |
+| Public `/forgot-password` → `auth.resetPasswordForEmail` | the **browser**, with the public anon key | **No** — no Alloy server code is on the path; anyone holding the anon key can call `/auth/v1/recover` directly |
+| Any other Auth mail (signup confirmation, magic link, email change, reauthentication) | Supabase Auth | **No** — same mailer |
+
+So the app guard covers the two server routes, but staging Auth mail as a whole is
+only controlled when the **staging Supabase project's mailer** is. Required setting
+(external, operator-owned, staging project `ikaxilmwmrmbagoidedu` only):
+
+- **Supabase Dashboard → Authentication → Emails → SMTP Settings → Enable custom SMTP**,
+  pointed at a **capture-only** sandbox SMTP (an email-testing inbox that accepts and
+  stores every message and delivers none, e.g. a Mailtrap *Email Testing* sandbox),
+  *not* a delivering provider (Resend, SendGrid, SES). Supabase's built-in mailer is
+  not a substitute: it still delivers, to the project's team-member addresses, and is
+  rate-limited.
+
+Which mailer the staging project uses today is not recorded in this repository. If it
+is a delivering custom SMTP, a staging `/forgot-password` request for a real staging
+user's address is delivered for real. This is an **external configuration
+requirement**; nothing in this repository can close it.
 
 ---
 

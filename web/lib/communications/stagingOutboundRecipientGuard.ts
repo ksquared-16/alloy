@@ -8,8 +8,14 @@
  * the request, so no caller upstream — composer, workflow, scheduled send, legacy
  * adapter — can route around it.
  *
- * Environment is decided fail-closed toward safety: ANY staging signal restricts.
- * Production (no staging signal) is unchanged and this module returns ok.
+ * ── THE ENVIRONMENT IS DECLARED, AND ONLY "production" IS UNRESTRICTED ──
+ *
+ * `ALLOY_ENVIRONMENT` names the runtime: `staging` or `production`. Anything else —
+ * missing, empty, `development`, a typo — restricts exactly like staging, because the
+ * failure we are guarding against is a runtime nobody labelled sending to a parent.
+ * `production` is believed only when nothing else says staging: the staging project
+ * ref, a `staging` app label, or `VERCEL_ENV=preview` (staging is a Vercel preview
+ * build) override it and restrict.
  *
  * The Python dispatcher carries the same contract:
  * backend/app/integrations/staging_outbound_guard.py — keep the two in step.
@@ -23,6 +29,10 @@ export const STAGING_SMS_ALLOWLIST_ENV = "COMMUNICATIONS_STAGING_SMS_ALLOWLIST";
 
 export const STAGING_RECIPIENT_REFUSED = "staging_recipient_not_allowlisted";
 
+export const ALLOY_ENVIRONMENT_ENV = "ALLOY_ENVIRONMENT";
+export const ALLOY_ENVIRONMENT_STAGING = "staging";
+export const ALLOY_ENVIRONMENT_PRODUCTION = "production";
+
 /** RFC 2606 / 6761 reserved names: never deliverable to a person. */
 const RESERVED_EMAIL_DOMAINS = new Set(["example.com", "example.net", "example.org"]);
 const RESERVED_EMAIL_TLDS = [".test", ".example", ".invalid", ".localhost"];
@@ -33,8 +43,17 @@ type Env = Record<string, string | undefined>;
 
 export type OutboundChannel = "email" | "sms";
 
+/**
+ * `live` — explicitly production, no staging signal: unrestricted.
+ * `staging` — explicitly staging, or production contradicted by a staging signal.
+ * `unidentified` — ALLOY_ENVIRONMENT missing or unknown: restricted like staging.
+ */
+export type OutboundEnvironmentMode = "live" | "staging" | "unidentified";
+
+export type OutboundEnvironment = { mode: OutboundEnvironmentMode; restricted: boolean; reason: string };
+
 export type RecipientGuardResult =
-    | { ok: true; restricted: boolean }
+    | { ok: true; restricted: boolean; mode: OutboundEnvironmentMode }
     | { ok: false; code: typeof STAGING_RECIPIENT_REFUSED; detail: string };
 
 function projectRefFromUrl(raw: string | undefined): string | null {
@@ -49,15 +68,44 @@ function projectRefFromUrl(raw: string | undefined): string | null {
     }
 }
 
-/** True when this runtime is staging (or a preview of it). Any one signal suffices. */
-export function isStagingOutboundRuntime(env: Env = process.env): boolean {
-    const labels = [env.NEXT_PUBLIC_APP_ENV, env.APP_ENV, env.ALLOY_ENVIRONMENT].map((v) =>
-        String(v ?? "").trim().toLowerCase()
-    );
-    if (labels.includes("staging")) return true;
-    if (String(env.VERCEL_ENV ?? "").trim().toLowerCase() === "preview") return true;
-    const refs = [projectRefFromUrl(env.NEXT_PUBLIC_SUPABASE_URL), projectRefFromUrl(env.SUPABASE_URL)];
-    return refs.includes(ALLOY_STAGING_SUPABASE_PROJECT_REF);
+function stagingSignal(env: Env): string | null {
+    for (const name of ["NEXT_PUBLIC_APP_ENV", "APP_ENV"] as const) {
+        if (String(env[name] ?? "").trim().toLowerCase() === "staging") return `${name}=staging`;
+    }
+    if (String(env.VERCEL_ENV ?? "").trim().toLowerCase() === "preview") return "VERCEL_ENV=preview";
+    for (const name of ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"] as const) {
+        if (projectRefFromUrl(env[name]) === ALLOY_STAGING_SUPABASE_PROJECT_REF) return `${name} is the staging project`;
+    }
+    return null;
+}
+
+/** Which outbound regime this runtime is in. Fail-closed: only an uncontradicted `production` is live. */
+export function resolveOutboundEnvironment(env: Env = process.env): OutboundEnvironment {
+    const label = String(env[ALLOY_ENVIRONMENT_ENV] ?? "").trim().toLowerCase();
+    if (label === ALLOY_ENVIRONMENT_STAGING) {
+        return { mode: "staging", restricted: true, reason: `${ALLOY_ENVIRONMENT_ENV}=staging` };
+    }
+    if (label === ALLOY_ENVIRONMENT_PRODUCTION) {
+        const contradiction = stagingSignal(env);
+        if (contradiction) {
+            return {
+                mode: "staging",
+                restricted: true,
+                reason: `${ALLOY_ENVIRONMENT_ENV}=production contradicted by ${contradiction}`,
+            };
+        }
+        return { mode: "live", restricted: false, reason: `${ALLOY_ENVIRONMENT_ENV}=production` };
+    }
+    return {
+        mode: "unidentified",
+        restricted: true,
+        reason: label ? `${ALLOY_ENVIRONMENT_ENV}=${label} is not a known environment` : `${ALLOY_ENVIRONMENT_ENV} is not set`,
+    };
+}
+
+/** True unless this runtime is explicitly, uncontradictedly production. */
+export function isOutboundRestricted(env: Env = process.env): boolean {
+    return resolveOutboundEnvironment(env).restricted;
 }
 
 export function normalizeEmailAddress(raw: string): string {
@@ -118,18 +166,21 @@ function maskRecipient(channel: OutboundChannel, raw: string): string {
 }
 
 /**
- * Judge every recipient of one provider call. In staging, all must be controlled
- * test recipients or owner-allowlisted; one stranger refuses the whole send.
+ * Judge every recipient of one provider call. Unless the runtime is explicitly
+ * production, all must be controlled test recipients or owner-allowlisted; one
+ * stranger refuses the whole send.
  */
 export function guardOutboundRecipients(
     channel: OutboundChannel,
     recipients: readonly string[],
     env: Env = process.env
 ): RecipientGuardResult {
-    if (!isStagingOutboundRuntime(env)) return { ok: true, restricted: false };
+    const environment = resolveOutboundEnvironment(env);
+    if (!environment.restricted) return { ok: true, restricted: false, mode: environment.mode };
+    const scope = `${environment.mode} ${channel} (${environment.reason})`;
     const list = recipients.map((r) => String(r ?? "").trim());
     if (list.length === 0 || list.some((r) => !r)) {
-        return { ok: false, code: STAGING_RECIPIENT_REFUSED, detail: `staging ${channel}: empty recipient` };
+        return { ok: false, code: STAGING_RECIPIENT_REFUSED, detail: `${scope}: empty recipient` };
     }
     for (const r of list) {
         const allowed =
@@ -140,11 +191,11 @@ export function guardOutboundRecipients(
             return {
                 ok: false,
                 code: STAGING_RECIPIENT_REFUSED,
-                detail: `staging ${channel}: ${maskRecipient(channel, r)} is not a test recipient or on ${
+                detail: `${scope}: ${maskRecipient(channel, r)} is not a test recipient or on ${
                     channel === "email" ? STAGING_EMAIL_ALLOWLIST_ENV : STAGING_SMS_ALLOWLIST_ENV
                 }`,
             };
         }
     }
-    return { ok: true, restricted: true };
+    return { ok: true, restricted: true, mode: environment.mode };
 }

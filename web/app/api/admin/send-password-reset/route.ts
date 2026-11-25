@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
+import { guardOutboundRecipients } from "@/lib/communications/stagingOutboundRecipientGuard";
 import { refuseQaOrgOutbound } from "@/lib/qa/sharedQaSafety";
 
 /**
@@ -87,6 +88,18 @@ export async function POST(request: NextRequest) {
     const email = authUser?.user?.email ?? "";
     if (!email) {
         return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+
+    /*
+     * Supabase Auth's mailer sends this, not Alloy — so the staging recipient rule (ALY-14) is
+     * applied here, before the provider is asked. Outside an explicit production runtime only a
+     * test inbox or an owner-allowlisted address may receive a reset. The member is already
+     * proven, so an honest refusal reveals nothing the caller could not already see.
+     */
+    const recipientGate = guardOutboundRecipients("email", [email]);
+    if (!recipientGate.ok) {
+        console.warn("[admin/send-password-reset] staging recipient refused", recipientGate.detail);
+        return NextResponse.json({ error: recipientGate.detail, code: recipientGate.code }, { status: 403 });
     }
 
     try {

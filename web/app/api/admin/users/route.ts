@@ -6,6 +6,7 @@ import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/ad
 import { createMembershipWithAccessProfile, createMembershipWithAccessScope } from "@/lib/admin/membershipWithProfile";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { fullNameFromParts } from "@/lib/access/operatorAccountName";
+import { guardOutboundRecipients } from "@/lib/communications/stagingOutboundRecipientGuard";
 import { refuseQaOrgOutbound } from "@/lib/qa/sharedQaSafety";
 
 export type AdminUserRow = {
@@ -150,6 +151,18 @@ export async function POST(request: Request) {
     const role = typeof body.role === "string" ? body.role.trim() : "";
     if (!email) return NextResponse.json({ error: "email is required" }, { status: 400 });
     if (!role) return NextResponse.json({ error: "role is required" }, { status: 400 });
+
+    /*
+     * The invitation email is sent by Supabase Auth's mailer, not Alloy, so the staging recipient
+     * rule (ALY-14) is applied here — before any account, membership or provider call exists.
+     * Outside an explicit production runtime only a test inbox or an owner-allowlisted address
+     * may be invited.
+     */
+    const recipientGate = guardOutboundRecipients("email", [email]);
+    if (!recipientGate.ok) {
+        console.warn("[admin/users] staging recipient refused", recipientGate.detail);
+        return NextResponse.json({ error: recipientGate.detail, code: recipientGate.code }, { status: 403 });
+    }
 
     const supabase = createAdminClient();
 
