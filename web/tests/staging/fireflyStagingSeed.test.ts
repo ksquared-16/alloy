@@ -11,6 +11,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { describe, expect, it } from "vitest";
 
+import { FORBIDDEN_QA_ORG_IDS, QA_IDENTITIES, QA_ORGS, QA_STRUCTURE } from "@/lib/qa/sharedQaRegistry";
 import { validateBusinessProcessForPublish } from "@/lib/businessProcesses/configuration/businessProcessPublishValidation";
 import { isControlledTestEmail, isControlledTestPhone } from "@/lib/communications/stagingOutboundRecipientGuard";
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
@@ -27,8 +28,17 @@ import {
     SEED_SITES,
     SEED_VARIANTS,
 } from "@/lib/staging/fireflyStagingSeed/dataset";
-import { LIVE_FIREFLY_ORG_ID, SEED_ID_PREFIX, SEED_ORG_ID, seedId } from "@/lib/staging/fireflyStagingSeed/ids";
+import { LIVE_FIREFLY_ORG_ID, SEED_ID_PREFIX, SEED_ORG_ID, SEED_ORG_NAME, SEED_ORG_SLUG, seedId } from "@/lib/staging/fireflyStagingSeed/ids";
 import { renderFireflyStagingSeedSql } from "@/lib/staging/fireflyStagingSeed/renderSql";
+import {
+    driftEditSql,
+    plantZzFixturesSql,
+    scratchCountChecks,
+    scratchProofRefusal,
+    scratchRelationshipChecks,
+    ZZ_QA_ORGS,
+    zzSnapshotSql,
+} from "@/lib/staging/fireflyStagingSeed/scratchProof";
 import {
     LOCAL_STACK_DEFAULT_DATABASE_URL,
     PRODUCTION_PROJECT_REF,
@@ -302,4 +312,95 @@ describe("verification census", () => {
     it("judges only the seed org", () => {
         expect(renderFireflyStagingVerifySql()).toContain(`'${SEED_ORG_ID}'::uuid`);
     });
+});
+
+describe("isolation from the ZZ Alloy QA fixtures", () => {
+    const sql = renderFireflyStagingSeedSql();
+    const verify = renderFireflyStagingVerifySql();
+    const zzIds = [
+        ...Object.values(QA_ORGS).map((o) => o.id),
+        ...Object.values(QA_STRUCTURE.departments).map((d) => d.id),
+        ...Object.values(QA_STRUCTURE.sites).map((s) => s.id),
+    ];
+
+    it("the seed and its census name no ZZ org, site, department or QA identity", () => {
+        for (const text of [sql, verify]) {
+            for (const id of zzIds) expect(text).not.toContain(id);
+            for (const o of Object.values(QA_ORGS)) {
+                expect(text).not.toContain(o.slug);
+                expect(text).not.toContain(o.name);
+            }
+            for (const i of Object.values(QA_IDENTITIES)) expect(text).not.toContain(i.email);
+            expect(text).not.toMatch(/\bZZ\b|zz-alloy-qa/i);
+        }
+    });
+
+    it("the staging school is a third, distinct org: not a QA org, not the forbidden live tenant", () => {
+        expect(zzIds).not.toContain(SEED_ORG_ID);
+        expect(FORBIDDEN_QA_ORG_IDS).not.toContain(SEED_ORG_ID);
+        expect(Object.values(QA_ORGS).map((o) => o.slug)).not.toContain(SEED_ORG_SLUG);
+        expect(SEED_ORG_NAME).toMatch(/\(Staging\)$/);
+        for (const id of zzIds) expect(id.startsWith(SEED_ID_PREFIX)).toBe(false);
+    });
+
+    it("the seed creates exactly one org", () => {
+        expect(sql.match(/INSERT INTO public\.orgs\b/g)).toHaveLength(1);
+        expect(sql).toContain(`'${SEED_ORG_ID}'::uuid, '${SEED_ORG_NAME}', '${SEED_ORG_SLUG}'`);
+    });
+});
+
+describe("the in-database proof (npm run staging:seed:firefly:prove)", () => {
+    it.each([
+        ["unset", ""],
+        ["the shared stack's own database", LOCAL_STACK_DEFAULT_DATABASE_URL],
+        ["staging", STAGING_URL],
+        ["a non-loopback host", "postgresql://postgres:postgres@10.0.0.5:5432/firefly_seed_scratch"],
+        ["a differently named local database", "postgresql://postgres:postgres@127.0.0.1:54422/scratch_firefly"],
+        ["not postgres", "mysql://root@127.0.0.1/firefly_seed_scratch"],
+    ])("refuses %s", (_label, url) => {
+        expect(scratchProofRefusal(url)).not.toBeNull();
+    });
+
+    it("accepts a loopback firefly_seed_scratch* database", () => {
+        expect(scratchProofRefusal("postgresql://postgres:postgres@127.0.0.1:54422/firefly_seed_scratch")).toBeNull();
+        expect(scratchProofRefusal("postgresql://postgres:postgres@localhost:54422/firefly_seed_scratch_2")).toBeNull();
+    });
+
+    it("plants the ZZ fixtures by their real registry ids, without overwriting existing ones", () => {
+        const plant = plantZzFixturesSql();
+        expect(ZZ_QA_ORGS.map((o) => o.id)).toEqual([QA_ORGS.qa_shared.id, QA_ORGS.qa_secondary.id]);
+        for (const id of zzIds()) expect(plant).toContain(id);
+        expect(plant.match(/ON CONFLICT \(id\) DO NOTHING/g)).toHaveLength(2);
+        expect(plant).not.toMatch(/\bUPDATE\b|\bDELETE\b/);
+    });
+
+    it("snapshots every given org-scoped table for the ZZ orgs, and refuses an odd table name", () => {
+        const snap = zzSnapshotSql(["customers", "locations"]);
+        expect(snap).toContain('FROM public."customers" x WHERE x.org_id IN');
+        expect(snap).toContain(QA_ORGS.qa_secondary.id);
+        expect(() => zzSnapshotSql(['x"; DROP TABLE orgs; --'])).toThrow();
+    });
+
+    it("counts every row in the seed org, against expectations derived from the dataset", () => {
+        const c = expectedSeedCounts();
+        const byName = Object.fromEntries(scratchCountChecks().map((k) => [k.name, k.expected]));
+        expect(byName.customers).toBe(c.customers);
+        expect(byName.customer_members).toBe(c.children);
+        expect(byName.opportunity_customer_members).toBe(c.opportunity_children);
+        for (const [stage, n] of Object.entries(c.opportunities_by_stage)) expect(byName[`opportunities_stage_${stage}`]).toBe(n);
+        // Table counts judge every row in the org, not only seed ids, so a duplicate cannot hide.
+        for (const k of scratchCountChecks().filter((k) => k.name !== "orgs_in_seed_namespace_or_slug")) {
+            expect(k.sql).not.toContain("id::text LIKE");
+        }
+        expect(scratchRelationshipChecks().every((k) => k.expected === 0)).toBe(true);
+    });
+
+    it("the drift edit only ever touches a seeded row", () => {
+        expect(() => driftEditSql(QA_ORGS.qa_shared.id)).toThrow();
+        expect(driftEditSql(seedId("customer", 1))).toContain(`org_id = '${SEED_ORG_ID}'::uuid`);
+    });
+
+    function zzIds(): string[] {
+        return [...Object.values(QA_ORGS).map((o) => o.id), ...Object.values(QA_STRUCTURE.sites).map((s) => s.id)];
+    }
 });
