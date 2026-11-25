@@ -22,7 +22,9 @@ row but its own seed rows.
 | Tests | `cd web && npx vitest run tests/staging/fireflyStagingSeed.test.ts` (offline) · `npm run staging:seed:firefly:prove` (throwaway database) |
 
 Out of scope by design: **no identities** (no `auth.users`, `user_roles`, access profiles) and
-Firefly is **not** a QA target. Both are E3, after E1 and E2 are accepted.
+Firefly is **not** a QA target. Both are E3 — see [`firefly-staging-qa-profile.md`](firefly-staging-qa-profile.md),
+which also carries the read-only pre-apply census of the tenant's real keys
+(`supabase/seed/firefly_staging_tenant_census.sql`).
 
 **No additional tenants.** The first version of this seed created a separate org, *Firefly Early Learning
 (Staging)* (`f17e0000-0000-4000-8000-000000000001`). On hosted staging, which already holds Firefly, that

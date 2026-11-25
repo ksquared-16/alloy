@@ -274,6 +274,8 @@ Production data segregated by `org_id`. No cross-org test fixtures in shared sta
 Firefly is the only staging school. Its synthetic QA/demo families are seeded into the existing Firefly
 org by one fenced, idempotent command that creates no org, changes no row but its own seed rows, and
 proves it in-database — see [`firefly-staging-seed.md`](firefly-staging-seed.md) (ALY-14 E2).
+Its QA profile — the three managed QA identities, required runtime settings and the hosted runbook — is
+[`firefly-staging-qa-profile.md`](firefly-staging-qa-profile.md) (ALY-14 E3, proposed; not yet run).
 
 ---
 
