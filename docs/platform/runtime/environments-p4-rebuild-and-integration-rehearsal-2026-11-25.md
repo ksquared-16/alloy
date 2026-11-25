@@ -149,7 +149,7 @@ Of staging's 11 workflow files, only `vacilando-tier2.yml` declares a schedule. 
 | Root `npm run test:trust-db-certification` (`scripts/certify-trust-db.sh`) | `git archive` extract of the candidate (`certification`, `supabase`, `scripts`) in `/tmp`. Its suites use their own disposable `postgres:17-alpine`, not the shared stack. | **PASS**: 132 assertions across 9 suites (`candidate/trust-db-certification.log`) |
 | `scripts/local-dev/tests/development-repository-metadata-promotion.test.mjs`, which reads `vacilando-tier2.yml` and asserts the tested-ref and lineage lines | candidate extract | **PASS**: 20/20 |
 | `scripts/local-dev/tests/development-metadata-executor.test.mjs` | candidate extract | **PASS**: 29/29 |
-| `scripts/local-dev/tests/development-registered-action-dispatch-contract.test.mjs` | candidate extract | **4 pass, 7 fail. Environment problem, not the candidate.** Every failure is the fixture's own `git push -q origin main` to a local test remote, refused by this session's injected `url.henry-blocked-push://.pushInsteadOf`. All 28 refusals in the log are that helper. The file is byte-identical on staging. |
+| `scripts/local-dev/tests/development-registered-action-dispatch-contract.test.mjs` | candidate extract | **4 pass, 7 fail. Environment problem, not the candidate.** Every failure is the fixture's own `git push -q origin main` to a local test remote, refused by this session's injected `url.henry-blocked-push://.pushInsteadOf`. All 28 refusals in the log are that helper. The file is byte-identical on staging. Fixed on this branch in `f4f118707` (the fixture now gives its own throwaway repos a git config that leaves the guard in place for everything else). Focused run there: **1/1 pass**, exit 0. The candidate keeps staging's copy, which passes in CI, where no guard is injected. |
 | YAML parse of the candidate's `vacilando-tier2.yml` | `backend/.venv` PyYAML | **PASS**: triggers `[workflow_dispatch]`, job `extended` |
 | `web` lint / typecheck / vitest | not run | The candidate's tree equals staging's except for one YAML file that no web code reads, so a web run would re-test staging. Staging's own CI is the record for those. |
 
@@ -163,16 +163,37 @@ Of staging's 11 workflow files, only `vacilando-tier2.yml` declares a schedule. 
 4. **O4 (F6).** Choose how Firefly's org is re-created on a rebuilt staging, given that the app has no production org-creation path. The options are the
    dev helper under owner supervision, or building a governed path first.
 5. **O5 (F7/H3).** Per environment, set vault `scheduled_work_wake_url` before `scheduled_work_wake_credential`.
-6. **O6 (H1/H2), the promotion itself.** Sequence it as: production database brought to the staging schema (or rebuilt), with
+6. **O6 (H1/H2), the promotion itself.** First, the PR with green CI (see below). Then sequence it as: production database brought to the staging schema (or rebuilt), with
    P2's snapshot as the fallback → decide whether production should run the Vercel Cron → only then fast-forward `main` to
    `ea06c21f3401…`. This is a push to `main` and a production deploy, so it needs Kelly's explicit authorization. It was not
    attempted.
 7. **O7.** Before promoting, re-fetch and re-run `candidate/build-candidate.sh <new staging> <new main>`. A staging that has moved gives a
    new SHA, and the disposition above still holds as long as `main` has not moved.
 
+## Integration through a pull request with green CI — open, gated
+
+The slice's last criterion is a PR from the candidate to `main` with green CI. **It is not met.** There is no PR and no CI
+run. Opening one needs a push, and both CLAUDE.md (§Git / deploy) and this run's push guard forbid that until Kelly authorizes
+it. This record cannot close the criterion. Only an authorized run can.
+
+What an authorized run does:
+
+1. Re-run `candidate/build-candidate.sh <origin/staging> <origin/main>` after a fetch (O7). Confirm `main` still fast-forwards.
+2. Push the candidate to a **non-protected** branch, e.g. `candidate/aly-14-p4-staging-to-main`. This is safe to do on its own:
+   `web/scripts/vercel-ignored-build.sh` skips every ref except `staging`/`main`/`master`, so it starts no Vercel deploy.
+3. Open the PR `candidate/aly-14-p4-staging-to-main` → `main`, marked **do not merge** until O6 is done.
+4. Wait for green. The candidate's `pull_request` workflows are `enrollment-configuration-certification`,
+   `trust-adoption-certification`, `trust-db-certification` and `web-prebuild-gates`, which are unfiltered. The path-filtered ones,
+   which all match because the diff from `main` touches `web/**`, `backend/**`, `docs/**` and `supabase/migrations/**`, are
+   `web-typecheck`, `backend-comms-tests`, `docs-lint`, `operational-expectations-gates`, `surfaces-focus-panel-certification`
+   and `waitlist-ordering-gates`. `vacilando-tier2` is `workflow_dispatch` only and does not run.
+5. **Merging** the PR is the production deploy (H1/H2). It stays behind O6, however green CI is.
+
+A green PR is evidence about the code. It does not clear H1–H3.
+
 ## What was not done
 
-- No push, merge, PR, deploy, fetch or branch switch. The candidate exists only as a local commit object and ref.
+- No push, merge, PR, deploy, fetch or branch switch. The candidate exists only as a local commit object and ref. So the slice's *PR with green CI* criterion is open (see above).
 - No hosted database, credential, external host or live dataset was used. No staging or production row was read.
 - No KEEP-CONFIG item was loaded (see Scope). No migration was written. F3's fix is an owner decision.
 - `web` checks were not run, for the reason given in the table.
