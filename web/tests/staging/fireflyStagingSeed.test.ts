@@ -24,6 +24,7 @@ import {
     buildSeedFamilies,
     expectedSeedCounts,
     SEED_ANCHOR_DATE,
+    SEED_DISPLAY_MARKER,
     SEED_OFFERINGS,
     SEED_PROGRAM_CATEGORIES,
     SEED_ROOMS,
@@ -268,6 +269,18 @@ describe("realistic, known data", () => {
     it("names its known records", () => {
         expect(families[0]).toMatchObject({ surname: "Alder", stage: "lead", status: "open", site: "north" });
         expect(new Set(families.map((f) => f.surname)).size).toBe(families.length);
+    });
+
+    it("marks every household, case and child name the application shows (ALY-14 E3)", () => {
+        const sql = renderFireflyStagingSeedSql();
+        const children = families.flatMap((f) => f.children);
+        for (const f of families) {
+            expect(sql).toContain(`'${f.surname} Family ${SEED_DISPLAY_MARKER}'`);
+            expect(sql).toContain(`'${SEED_DISPLAY_MARKER} ${f.surname} Family — ${f.children.map((c) => c.first_name).join(" & ")}'`);
+        }
+        for (const c of children) expect(sql).toContain(`'${c.first_name} ${c.last_name} ${SEED_DISPLAY_MARKER}'`);
+        // No unmarked household name survives anywhere in the script.
+        expect(sql.match(/'[A-Z][a-z]+ Family'/g)).toBeNull();
     });
 });
 

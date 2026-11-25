@@ -25,6 +25,7 @@ import {
     SEED_CHARGE_TEMPLATES,
     SEED_ROLE_TYPES,
     SEED_ROOMS,
+    seedHouseholdName,
     seedIds,
 } from "./dataset";
 import { FIREFLY_ORG_ID, RETIRED_SEPARATE_ORG_ID, SEED_DEPARTMENT_ID, SEED_ID_PREFIX } from "./ids";
@@ -104,7 +105,7 @@ export function buildVerificationChecks(): Check[] {
         { name: "guardian_email_not_reserved", expected: 0, actualSql: countIn("persons", `email NOT LIKE '%.invalid'`) },
         { name: "guardian_phone_not_fictional", expected: 0, actualSql: countIn("persons", `phone !~ '^\\+1[0-9]{3}55501[0-9]{2}$'`) },
         // Known records a test or a person can name.
-        { name: "known_first_family", expected: `${first.surname} Family/${first.stage}/open`, actualSql: `(SELECT c.name || '/' || o.stage_key || '/' || o.status_key FROM public.opportunities o JOIN public.customers c ON c.id = o.customer_id WHERE o.id = '${seedIds.opportunity(first.n)}'::uuid)` },
+        { name: "known_first_family", expected: `${seedHouseholdName(first)}/${first.stage}/open`, actualSql: `(SELECT c.name || '/' || o.stage_key || '/' || o.status_key FROM public.opportunities o JOIN public.customers c ON c.id = o.customer_id WHERE o.id = '${seedIds.opportunity(first.n)}'::uuid)` },
         { name: "known_sibling_family_children", expected: 2, actualSql: `(SELECT count(*) FROM public.opportunity_customer_members WHERE opportunity_id = '${seedIds.opportunity(siblings.n)}'::uuid)` },
         { name: "known_enrolled_child_stage", expected: "enrolled/enrolled", actualSql: `(SELECT outcome_status_key || '/' || stage_key FROM public.opportunity_customer_members WHERE id = '${seedIds.opportunityChild(enrolled.children[0].n)}'::uuid)` },
         { name: "known_registration_fee_cents", ...gated("seed_catalog", reg.amount_cents ?? 0, "<null>"), actualSql: `(SELECT amount_cents FROM public.financial_charge_templates WHERE id = '${seedIds.chargeTemplate(reg.n)}'::uuid)` },

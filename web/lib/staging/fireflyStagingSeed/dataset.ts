@@ -22,6 +22,11 @@
  * `.invalid` TLD (RFC 2606) and phones the NANP fictional block 555-01XX, both of which the ALY-14
  * staging outbound guard already treats as test recipients. Addresses use "Example" streets.
  *
+ * VISIBLY SYNTHETIC. Every name the application shows on its own — the household, the family case and
+ * each child's display name — carries SEED_DISPLAY_MARKER, so a seeded record reads as synthetic in any
+ * list, lane card or search result without opening it (ALY-14 E3). Guardians are always shown inside
+ * their marked household and keep plain names, so emails stay derived from the surname.
+ *
  * DETERMINISTIC. No clock, no randomness: every date is an offset from SEED_ANCHOR_DATE, and every
  * id comes from ./ids. Rendering this twice produces byte-identical SQL (tested).
  */
@@ -261,6 +266,21 @@ export type SeedFamily = {
     guardians: SeedGuardian[];
     children: SeedChild[];
 };
+
+/** Shown in every seeded household, case and child name. */
+export const SEED_DISPLAY_MARKER = "[Staging seed]";
+
+export function seedHouseholdName(f: Pick<SeedFamily, "surname">): string {
+    return `${f.surname} Family ${SEED_DISPLAY_MARKER}`;
+}
+
+export function seedCaseTitle(f: Pick<SeedFamily, "surname" | "children">): string {
+    return `${SEED_DISPLAY_MARKER} ${f.surname} Family — ${f.children.map((c) => c.first_name).join(" & ")}`;
+}
+
+export function seedChildDisplayName(c: Pick<SeedChild, "first_name" | "last_name">): string {
+    return `${c.first_name} ${c.last_name} ${SEED_DISPLAY_MARKER}`;
+}
 
 export function addDays(isoDate: string, days: number): string {
     const d = new Date(`${isoDate}T00:00:00Z`);

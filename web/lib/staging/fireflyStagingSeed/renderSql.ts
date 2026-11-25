@@ -50,6 +50,9 @@ import {
     SEED_ROOMS,
     SEED_SITES,
     SEED_VARIANTS,
+    seedCaseTitle,
+    seedChildDisplayName,
+    seedHouseholdName,
     seedIds,
     type SeedSite,
 } from "./dataset";
@@ -500,7 +503,7 @@ function households(): string {
     return `${section(`Households (${families.length}), guardians (${guardians.length}), children (${children.length})`)}
 INSERT INTO public.customers (id, org_id, name, customer_type, status_key, external_source, external_id, created_at, metadata)
 VALUES
-${rows(families.map((f) => [uuid(seedIds.customer(f.n)), F(), lit(`${f.surname} Family`), "'residential'", "'active'", lit(SEED_SOURCE), lit(`customer_${f.n}`), ts(f.inquired_at), marker()]))}
+${rows(families.map((f) => [uuid(seedIds.customer(f.n)), F(), lit(seedHouseholdName(f)), "'residential'", "'active'", lit(SEED_SOURCE), lit(`customer_${f.n}`), ts(f.inquired_at), marker()]))}
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name, customer_type = EXCLUDED.customer_type, status_key = EXCLUDED.status_key,
     metadata = EXCLUDED.metadata;
@@ -523,7 +526,7 @@ ON CONFLICT (org_id, customer_id, person_id, role_type) DO NOTHING;
 -- A child IS a customer_members row in this schema.
 INSERT INTO public.customer_members (id, org_id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, external_source, external_id, metadata)
 VALUES
-${rows(children.map(({ f, c }) => [uuid(seedIds.child(c.n)), F(), uuid(seedIds.customer(f.n)), lit(`${c.first_name} ${c.last_name}`), "'child'", lit(c.first_name), lit(c.last_name), date(c.dob), "true", "'active'", lit(SEED_SOURCE), lit(`child_${c.n}`), marker({ program: c.program })]))}
+${rows(children.map(({ f, c }) => [uuid(seedIds.child(c.n)), F(), uuid(seedIds.customer(f.n)), lit(seedChildDisplayName(c)), "'child'", lit(c.first_name), lit(c.last_name), date(c.dob), "true", "'active'", lit(SEED_SOURCE), lit(`child_${c.n}`), marker({ program: c.program })]))}
 ON CONFLICT (id) DO UPDATE SET
     display_name = EXCLUDED.display_name, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name,
     dob = EXCLUDED.dob, is_active = true, status_key = EXCLUDED.status_key, metadata = EXCLUDED.metadata;
@@ -544,7 +547,7 @@ INSERT INTO public.opportunities (
 VALUES
 ${rows(
     families.map((f) => {
-        const title = `${f.surname} Family — ${f.children.map((c) => c.first_name).join(" & ")}`;
+        const title = seedCaseTitle(f);
         const first = f.children[0];
         return [
             uuid(seedIds.opportunity(f.n)), F(), uuid(seedIds.customer(f.n)), uuid(seedIds.person(f.guardians[0].n)),
