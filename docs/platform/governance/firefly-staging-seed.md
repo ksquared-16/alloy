@@ -18,7 +18,7 @@ wrote nothing outside its own organization.
 | Source | `web/lib/staging/fireflyStagingSeed/` (dataset, renderer, fence, audit, targets, verification) |
 | Committed SQL | `supabase/seed/firefly_staging_seed.sql`, `supabase/seed/firefly_staging_verify.sql` (generated; a test fails if hand-edited) |
 | Command | `cd web && npm run staging:seed:firefly -- <plan \| render \| check \| apply \| verify>` |
-| Tests | `cd web && npx vitest run tests/staging/fireflyStagingSeed.test.ts` |
+| Tests | `cd web && npx vitest run tests/staging/fireflyStagingSeed.test.ts` (offline) · `npm run staging:seed:firefly:prove` (throwaway database) |
 
 Out of scope by design: **no identities** (no `auth.users`, `user_roles`, access profiles) and
 Firefly is **not** a QA target. Both are E3, after E1 and E2 are accepted.
@@ -124,10 +124,55 @@ fingerprint 3b1f…
 **Repeatability proof:** `apply` → `verify` → `apply` → `verify`. Every check passes both times and the
 two fingerprints are identical.
 
+## The in-database proof (throwaway database)
+
+`npm run staging:seed:firefly:prove` (`scripts/fireflyStagingSeedProof.ts`,
+`lib/staging/fireflyStagingSeed/scratchProof.ts`) drives the real command against a **throwaway** database
+and prints one PASS/FAIL line per proof; it exits 1 on any FAIL:
+
+1. Plants the two **ZZ Alloy QA** orgs and their registry sites by their real ids (`lib/qa/sharedQaRegistry.ts`)
+   if absent, then hashes every row of every org-scoped `public` table they own.
+2. `apply` twice — both must be clean (fence held, every check PASS) with one fingerprint.
+3. Counts **every** row in the seed org (not only seed ids, so a duplicate cannot hide) against the dataset,
+   per table and per stage.
+4. Relationship checks, each a count of broken links that must be 0: rooms under a seed campus (never a ZZ
+   site), guardians/children/cases/contacts/participations all inside one household in the seed org, and
+   every household has its case.
+5. Drift: hand-edits a seeded household's name; `verify` must fail with a new fingerprint; `apply` must
+   restore the known value and the original fingerprint.
+6. The ZZ hash must be byte-identical after all of it.
+
+It refuses anything but a loopback database named `firefly_seed_scratch*`, because it writes (the ZZ plant
+and the drift edit). It is a command, not a vitest live suite: `web/vitest.config.ts` excludes every live
+suite unless the governed isolated executor admits it (`tests/harness/liveSuiteAuthority.mjs`).
+
+Make the scratch database **inside the shared `alloy-cert` cluster** (no new containers; never
+`supabase start`), cloned from the stack's migrated `postgres` so the fence has real other-org rows to
+protect, and drop it afterwards:
+
+```bash
+docker exec supabase_db_alloy-cert sh -c \
+  'createdb -U supabase_admin firefly_seed_scratch && pg_dump -U supabase_admin postgres | psql -U supabase_admin -q firefly_seed_scratch'
+#   expected noise: pg_cron cannot be created outside `postgres`, and a few FK rows a concurrent writer
+#   changed mid-dump; neither touches the seed's tables.
+
+cd web
+FIREFLY_STAGING_SEED_SCRATCH_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54422/firefly_seed_scratch \
+  npm run staging:seed:firefly:prove
+
+docker exec supabase_db_alloy-cert dropdb -U supabase_admin firefly_seed_scratch
+```
+
+**Measured 2026-11-25** on a scratch clone of `alloy-cert` (133 orgs, many `ZZ …` cert orgs): all 41
+proofs passed — fence held over 355 tables with 0 rows changed outside the seed org on each apply,
+fingerprint `74d954c523fcc1b45ea7736ac6493a6c` on every clean apply (the same on two separate clones), 329 ZZ Alloy QA rows across 272 tables
+byte-identical. A one-field edit to a ZZ row changes the ZZ hash (sensitivity checked by hand).
+
 ## Known gaps
 
-- **Not yet run against a database.** Built and tested offline on 2026-11-25 while the host's Docker
-  daemon was down and no host `psql` exists; the first `apply --target local` is the first execution.
+- **Run against a local throwaway database only.** Not yet applied to hosted staging (an operator step
+  with the staging credential), and not applied to the shared stack's own `postgres` (other sessions'
+  fixtures live there; the proof uses a scratch clone instead).
 - **Fence cost and reach on hosted staging are unmeasured.** It counts every table in `public`, `auth`
   and `storage` twice; if the staging role cannot read a table there, the seed refuses (fails closed)
   rather than skipping it. A trigger that writes a global or other-org row is a breach by design.
@@ -135,8 +180,8 @@ two fingerprints are identical.
   sets and status definitions for the orgs that existed *at migration time*. A new org on a migrated
   database gets only what `orgs_seed_default_rbac` provides. The representative seed replays those
   migrations; this seed cannot — on staging a replay would rewrite every childcare tenant, and the
-  fence would roll it back. Which of those rows the staging school's surfaces need is to be measured on
-  the first local run and closed through an org-scoped provisioning path.
+  fence would roll it back. Which of those rows the staging school's surfaces need is still unmeasured
+  (the local runs proved data, not rendered surfaces); close it through an org-scoped provisioning path.
 - **Business process is the platform template, not Firefly's published revision 59** (7 stages incl.
   `offered`, 8 work views, placeholder tour outcomes). Reproducing rev 59 needs a configuration-only
   export of its payload.
