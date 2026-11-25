@@ -32,7 +32,22 @@ import {
     SEED_VARIANTS,
 } from "@/lib/staging/fireflyStagingSeed/dataset";
 import { FIREFLY_ORG_ID, RETIRED_SEPARATE_ORG_ID, SEED_ID_PREFIX, seedId } from "@/lib/staging/fireflyStagingSeed/ids";
-import { renderFireflyStagingSeedSql, SEED_GATES } from "@/lib/staging/fireflyStagingSeed/renderSql";
+import {
+    FIREFLY_ACTIVE_PROCESS_KEY,
+    FIREFLY_LIFECYCLE_DEPARTMENT_ID_OBSERVED,
+    FIREFLY_LIFECYCLE_DEPARTMENT_KEY,
+    FIREFLY_LIFECYCLE_WORK_UNIT_KEYS,
+    FIREFLY_PROCESS_STAGE_KEYS,
+} from "@/lib/staging/fireflyStagingSeed/lifecycleTarget";
+import { OPEN_FAMILY_STAGES, renderFireflyStagingSeedSql, SEED_GATES } from "@/lib/staging/fireflyStagingSeed/renderSql";
+import {
+    formatTenantCensusReport,
+    parseTenantCensusOutput,
+    renderFireflyStagingTenantCensusSql,
+    requiredCensusKeys,
+    SEED_STAGES_OUTSIDE_PROCESS,
+    summarizeTenantCensus,
+} from "@/lib/staging/fireflyStagingSeed/tenantCensusSql";
 import {
     driftEditSql,
     fenceTamperedSeedSql,
@@ -63,6 +78,8 @@ const REPO = resolve(__dirname, "../../..");
 const COMMITTED_SEED = resolve(REPO, "supabase/seed/firefly_staging_seed.sql");
 const COMMITTED_VERIFY = resolve(REPO, "supabase/seed/firefly_staging_verify.sql");
 const REPRESENTATIVE_SEED = resolve(REPO, "supabase/seed/local_representative_seed.sql");
+const COMMITTED_TENANT_CENSUS = resolve(REPO, "supabase/seed/firefly_staging_tenant_census.sql");
+const HOSTED_STAGE_CENSUS = resolve(REPO, "certification/business-processes-v2/d2d5/enrollment-decision-config-census.sql.results.json");
 
 const STAGING_URL = `postgresql://postgres:secret@db.${STAGING_PROJECT_REF}.supabase.co:5432/postgres`;
 const STAGING_POOLER_URL = `postgresql://postgres.${STAGING_PROJECT_REF}:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres`;
@@ -470,7 +487,7 @@ describe("the in-database proof (npm run staging:seed:firefly:prove)", () => {
             `INSERT INTO public.orgs (id, name, slug) VALUES ('${FIREFLY_ORG_ID}'::uuid, 'Firefly Early Learning', 'firefly-early-learning') ON CONFLICT (id) DO NOTHING;`,
         );
         const configured = plantFireflySql("configured");
-        expect(configured).toContain("'enrollment'");
+        expect(configured).toContain("key = 'lead_management'");
         expect(configured).toContain("'lifecycle_wu_' || s");
         expect(configured).toContain("'Tenant Household'");
         // Planted only when absent, and never in the seed namespace.
@@ -525,4 +542,165 @@ describe("the in-database proof (npm run staging:seed:firefly:prove)", () => {
     function zzIds(): string[] {
         return [...Object.values(QA_ORGS).map((o) => o.id), ...Object.values(QA_STRUCTURE.sites).map((s) => s.id)];
     }
+});
+
+/** psql -A -t -F '|' lines for a tenant that has exactly what the seed binds to. */
+function healthyCensusOutput(overrides: Record<string, [string, string]> = {}): string {
+    const rows: [string, string, string, string, string][] = [
+        ["org", "firefly_org", "present", "present", "PASS"],
+        ["org", "retired_separate_staging_org", "absent", "absent", "PASS"],
+        ["lifecycle", "lifecycle_department", "1", "1", "PASS"],
+        ["lifecycle", "lifecycle_department_id", FIREFLY_LIFECYCLE_DEPARTMENT_ID_OBSERVED, FIREFLY_LIFECYCLE_DEPARTMENT_ID_OBSERVED, "PASS"],
+        ["lifecycle", "lifecycle_department_is_active", "true", "true", "PASS"],
+        ["lifecycle", "lifecycle_builder_v1", "present", "present", "PASS"],
+        ["lifecycle", "active_process_id", "set", "42be9074-x", "PASS"],
+        ["lifecycle", "active_process_key", "enrollment", "enrollment", "PASS"],
+        ["lifecycle", "active_process_is_active", "true", "true", "PASS"],
+        ["lifecycle", "active_process_stage_count", "7", "7", "PASS"],
+        ["lifecycle", "active_process_stage_keys", [...FIREFLY_PROCESS_STAGE_KEYS].sort().join(","), [...FIREFLY_PROCESS_STAGE_KEYS].sort().join(","), "PASS"],
+        ...FIREFLY_PROCESS_STAGE_KEYS.map((st) => ["process", `stage_${st}`, "in active process", "in active process", "PASS"] as [string, string, string, string, string]),
+        ...FIREFLY_LIFECYCLE_WORK_UNIT_KEYS.map((k) => ["queues", k, "active", "active", "PASS"] as [string, string, string, string, string]),
+        ["queues", "active_lifecycle_work_units", "7", "7", "PASS"],
+        ["queues", "open_seed_stages_with_queue", "6", "6", "PASS"],
+        ["departments", "unbound_department:enrollment", "informational (never bound)", "present; active_process_id=<none>", "INFO"],
+        ["qa_identities", "firefly_managed_qa_members", "3", "6", "FAIL"],
+        ["qa_identities", "shared_qa_accounts_in_firefly", "0", "0", "PASS"],
+    ];
+    return rows
+        .map((r) => (overrides[r[1]] ? [r[0], r[1], r[2], ...overrides[r[1]]] : r).join("|"))
+        .join("\n");
+}
+
+describe("bound to Firefly's lifecycle department (lead_management), never to a department keyed enrollment", () => {
+    it("the target is the one the hosted staging census observed for Firefly", () => {
+        const census = JSON.parse(readFileSync(HOSTED_STAGE_CENSUS, "utf8"));
+        expect(census.execution.database_target).toBe("alloy_deployed_primary");
+        const firefly = (census.results.questions.dd_01_stages.rows[0] as Array<Record<string, unknown>>).filter((r) => r.org === "firefly");
+        expect(new Set(firefly.map((r) => r.department_key))).toEqual(new Set([FIREFLY_LIFECYCLE_DEPARTMENT_KEY]));
+        expect(new Set(firefly.map((r) => r.process_key))).toEqual(new Set([FIREFLY_ACTIVE_PROCESS_KEY]));
+        expect(firefly.every((r) => r.process_active === true && r.stage_active === true)).toBe(true);
+        expect(firefly.map((r) => r.stage_key)).toEqual([...FIREFLY_PROCESS_STAGE_KEYS]);
+        expect(FIREFLY_LIFECYCLE_WORK_UNIT_KEYS).toEqual(FIREFLY_PROCESS_STAGE_KEYS.map((st) => `lifecycle_wu_${st}`));
+        expect(FIREFLY_LIFECYCLE_WORK_UNIT_KEYS).toHaveLength(7);
+    });
+
+    it("every open seeded stage is a Firefly process stage; only the closed stages are outside it", () => {
+        for (const stage of OPEN_FAMILY_STAGES) expect(FIREFLY_PROCESS_STAGE_KEYS as readonly string[]).toContain(stage);
+        expect(SEED_STAGES_OUTSIDE_PROCESS.sort()).toEqual(["closed", "closed_withdrawn"]);
+        for (const f of buildSeedFamilies().filter((x) => SEED_STAGES_OUTSIDE_PROCESS.includes(x.stage))) expect(f.status).toBe("closed");
+    });
+
+    it("the seed's gate, binding and own department use the key lead_management, never enrollment", () => {
+        const sql = renderFireflyStagingSeedSql();
+        expect(sql).not.toMatch(/key = 'enrollment'/);
+        expect(sql).toContain("AND d.key = 'lead_management' AND d.id::text NOT LIKE 'f17e0000-0000-4000-8000-%'))::text AS seed_enrollment");
+        expect(sql).toContain("'f17e0000-0000-4000-8000-000000000020'::uuid, '93667019-bd28-49b5-a688-acc9bb1e0a19'::uuid, 'lead_management'");
+        expect(sql).toMatch(/JOIN public\.departments d ON d\.org_id = '[^']+'::uuid AND d\.key = 'lead_management'[^\n]*\nJOIN public\.work_units w ON w\.department_id = d\.id AND w\.key = 'lifecycle_wu_' \|\| s\.stage AND w\.is_active;/);
+        // The observed department id is reported by the census, never written into the seed.
+        expect(sql).not.toContain(FIREFLY_LIFECYCLE_DEPARTMENT_ID_OBSERVED);
+    });
+
+    it("on the tenant's configuration, the seed refuses without the active enrollment process or a queue for an open stage", () => {
+        const sql = renderFireflyStagingSeedSql();
+        const tenantBranch = sql.slice(sql.indexOf("\\else", sql.indexOf("\\if :seed_enrollment")), sql.indexOf("\\endif", sql.indexOf("\\if :seed_enrollment")));
+        expect(tenantBranch).toContain("p->>'key' = 'enrollment'");
+        expect(tenantBranch).toContain("refused — department lead_management has no active enrollment process");
+        expect(tenantBranch).toContain(`FROM (VALUES ${OPEN_FAMILY_STAGES.map((st) => `('${st}')`).join(", ")}) AS s(stage)\n    WHERE NOT EXISTS`);
+        expect(tenantBranch).toContain("refused — department lead_management has no active queue for open seeded stage(s)");
+        // Both refusals come before the binding they protect.
+        expect(tenantBranch.indexOf("END $lifecycle$;")).toBeLessThan(tenantBranch.indexOf("INSERT INTO firefly_seed_binding"));
+    });
+
+    it("verification judges cases against lead_management and requires every open case in a lane", () => {
+        const verify = renderFireflyStagingVerifySql();
+        expect(verify).not.toMatch(/key = 'enrollment'/);
+        const byName = Object.fromEntries(buildVerificationChecks().map((c) => [c.name, c]));
+        for (const name of ["work_unit_outside_firefly_enrollment", "open_case_stage_not_in_process"]) {
+            expect(byName[name].actualSql, name).toContain(`d.org_id = '${FIREFLY_ORG_ID}'::uuid AND d.key = 'lead_management'`);
+        }
+        expect(byName.open_case_without_work_unit.expected).toBe(0);
+        expect(byName.open_case_without_work_unit.actualSql).toContain("o.status_key = 'open' AND o.work_unit_id IS NULL");
+    });
+
+    it("the scratch proof's configured tenant is hosted-shaped: lead_management with seven stages and queues, and a process-less enrollment department", () => {
+        const configured = plantFireflySql("configured");
+        expect(configured).toContain("(ORG_PLACEHOLDER".replace("ORG_PLACEHOLDER", `'${FIREFLY_ORG_ID}'::uuid, 'lead_management', 'Lead Management', true,`));
+        expect(configured).toContain(`'${FIREFLY_ORG_ID}'::uuid, 'enrollment', 'Enrollment', true, '{}'::jsonb`);
+        expect(configured).toContain(`unnest(ARRAY[${FIREFLY_PROCESS_STAGE_KEYS.map((st) => `'${st}'`).join(", ")}])`);
+        expect(configured).toContain('"key":"enrollment"');
+    });
+});
+
+describe("tenant census (read only, before any hosted apply)", () => {
+    const census = renderFireflyStagingTenantCensusSql();
+
+    it("is committed exactly as rendered", () => {
+        expect(readFileSync(COMMITTED_TENANT_CENSUS, "utf8")).toBe(census);
+    });
+
+    it("is read-only and names its exact target", () => {
+        expect(census).toContain("BEGIN READ ONLY;");
+        expect(census.trimEnd().endsWith("ROLLBACK;")).toBe(true);
+        const executable = census.split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+        expect(executable).not.toMatch(/\b(INSERT|UPDATE|DELETE|TRUNCATE|ALTER|DROP|CREATE|GRANT|COMMIT)\b/i);
+        expect(census).toContain(`project ${STAGING_PROJECT_REF}`);
+        expect(census).toContain(FIREFLY_ORG_ID);
+        expect(census.toLowerCase()).not.toContain(PRODUCTION_PROJECT_REF);
+    });
+
+    it("binds to lead_management; enrollment is only ever reported", () => {
+        expect(census).toContain("WHERE d.org_id = f.id AND d.key = 'lead_management' AND d.id::text NOT LIKE");
+        const enrollmentKeyed = census.split("\n").filter((l) => /key = 'enrollment'/.test(l));
+        expect(enrollmentKeyed).toHaveLength(1);
+        expect(enrollmentKeyed[0]).toContain("d.key = 'enrollment' AND d.id::text NOT LIKE");
+        expect(census).toContain("'unbound_department:enrollment', 'informational (never bound)'");
+        expect(census).toContain("'INFO', 69");
+    });
+
+    it("expects the active process, its seven stages and seven lifecycle queues", () => {
+        expect(census).toContain(`process_stage_keys(stage) AS (VALUES ${FIREFLY_PROCESS_STAGE_KEYS.map((st) => `('${st}')`).join(", ")})`);
+        expect(census).toContain("'active_process_key', 'enrollment'");
+        expect(census).toContain("'active_process_stage_count', '7'");
+        expect(census).toContain("'active_process_stage_keys', 'decision,enrolled,enrolling,lead,offered,tour,waitlist'");
+        expect(census).toContain("'active_lifecycle_work_units', '7'");
+        expect(census).toContain(`'open_seed_stages_with_queue', '${OPEN_FAMILY_STAGES.length}'`);
+        expect(census).toContain(`'lifecycle_department_id', '${FIREFLY_LIFECYCLE_DEPARTMENT_ID_OBSERVED}'`);
+    });
+
+    it("a tenant with what the seed binds to passes the stop rule; the six kept QA members do not block", () => {
+        const rows = parseTenantCensusOutput(healthyCensusOutput());
+        expect(rows.find((r) => r.key === "stage_offered")?.verdict).toBe("PASS");
+        const s = summarizeTenantCensus(rows);
+        expect(s.missingKeys).toEqual([]);
+        expect(s.blocking).toEqual([]);
+        expect(s.counts.FAIL).toBe(1);
+        expect(s.seedMayProceed).toBe(true);
+        const report = formatTenantCensusReport(rows, { projectRef: STAGING_PROJECT_REF, host: "db.x" });
+        expect(report).toContain(`project       ${STAGING_PROJECT_REF}`);
+        expect(report).toContain("department    key lead_management (lifecycle_builder_v1)");
+        expect(report).toMatch(/PASS {2}lifecycle_wu_offered +expected: active {2}observed: active/);
+        expect(report).toContain("stop rule: no blocking FAIL");
+    });
+
+    it("step 1's shape — no process, no queues — stops, and names every blocking row", () => {
+        const absent: Record<string, [string, string]> = {
+            active_process_id: ["<none>", "FAIL"],
+            active_process_key: ["<none>", "FAIL"],
+            active_process_stage_count: ["0", "FAIL"],
+            lifecycle_wu_offered: ["absent", "FAIL"],
+        };
+        const s = summarizeTenantCensus(parseTenantCensusOutput(healthyCensusOutput(absent)));
+        expect(s.seedMayProceed).toBe(false);
+        expect(s.blocking.map((r) => r.key).sort()).toEqual(Object.keys(absent).sort());
+        expect(formatTenantCensusReport(parseTenantCensusOutput(healthyCensusOutput(absent)), { projectRef: STAGING_PROJECT_REF, host: "h" }))
+            .toContain("stop rule: STOP — blocking FAIL: active_process_id, active_process_key, active_process_stage_count, lifecycle_wu_offered");
+    });
+
+    it("a truncated or wrong-file output stops on missing rows, and noise lines are ignored", () => {
+        const partial = healthyCensusOutput().split("\n").filter((l) => !l.includes("lifecycle_wu_offered")).join("\n");
+        const s = summarizeTenantCensus(parseTenantCensusOutput(`BEGIN\n${partial}\nROLLBACK\n(41 rows)`));
+        expect(s.missingKeys).toEqual(["lifecycle_wu_offered"]);
+        expect(s.seedMayProceed).toBe(false);
+        expect(summarizeTenantCensus([]).missingKeys).toEqual(requiredCensusKeys());
+    });
 });

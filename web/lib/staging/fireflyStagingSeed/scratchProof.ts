@@ -11,8 +11,10 @@
  * real id, in one of two shapes —
  *   bare        the org alone. Every configuration gate opens; the seed authors campuses, process, catalog.
  *   configured  the org with configuration and a household of its own, shaped like the live tenant
- *               (its own sites, `enrollment` department with `lifecycle_wu_<stage>` units and a published
- *               lead → enrolled process, an offering, a charge template, household roles, a family case).
+ *               (its own sites; a `lead_management` department whose active `enrollment` process has the
+ *               seven hosted stages, with one active `lifecycle_wu_<stage>` unit each; a process-less
+ *               `enrollment` department beside it, as hosted step 1 found; an offering, a charge template,
+ *               household roles, a family case). See lifecycleTarget.ts.
  *               Every gate closes; the seed writes only families, placed in the tenant's configuration.
  * `configured` is the shape of hosted staging; `bare` is the shape of a fresh local database.
  *
@@ -27,6 +29,12 @@ import { QA_ORGS, QA_STRUCTURE } from "@/lib/qa/sharedQaRegistry";
 
 import { expectedSeedCounts } from "./dataset";
 import { FIREFLY_ORG_ID, SEED_ID_PREFIX } from "./ids";
+import {
+    FIREFLY_ACTIVE_PROCESS_KEY,
+    FIREFLY_LIFECYCLE_DEPARTMENT_KEY,
+    FIREFLY_PROCESS_STAGE_KEYS,
+    FIREFLY_UNBOUND_DEPARTMENT_KEY,
+} from "./lifecycleTarget";
 
 export const SCRATCH_DATABASE_PREFIX = "firefly_seed_scratch" as const;
 
@@ -78,8 +86,8 @@ export function plantZzFixturesSql(): string {
     ].join("\n");
 }
 
-/** The live tenant's published Enrollment stages (docs/sprints/active/assets/firefly-config). */
-export const TENANT_PROCESS_STAGES = ["lead", "tour", "decision", "waitlist", "enrolling", "enrolled"] as const;
+/** The live tenant's published Enrollment stages (hosted census 2026-10-23; lifecycleTarget.ts). */
+export const TENANT_PROCESS_STAGES = FIREFLY_PROCESS_STAGE_KEYS;
 
 /**
  * Plant the Firefly org shell by its real id — what hosted staging already holds — and, for
@@ -94,16 +102,17 @@ export function plantFireflySql(shape: TenantShape): string {
             version: 1,
             active_process_id: "tenant-enrollment",
             processes: [{
-                id: "tenant-enrollment", key: "enrollment", name: "Enrollment", is_active: true,
+                id: "tenant-enrollment", key: FIREFLY_ACTIVE_PROCESS_KEY, name: "Enrollment", is_active: true,
                 stages: TENANT_PROCESS_STAGES.map((key, i) => ({ id: `tenant-stage-${key}`, key, label: key, sort_order: i })),
             }],
         },
     };
     const tenant = `id::text NOT LIKE '${SEED_ID_PREFIX}%'`;
+    const dept = q(FIREFLY_LIFECYCLE_DEPARTMENT_KEY);
     return `${shell}
 DO $plant$
 BEGIN
-    IF EXISTS (SELECT 1 FROM public.departments WHERE org_id = ${ORG} AND key = 'enrollment' AND ${tenant}) THEN
+    IF EXISTS (SELECT 1 FROM public.departments WHERE org_id = ${ORG} AND key = ${dept} AND ${tenant}) THEN
         RETURN;
     END IF;
     INSERT INTO public.locations (org_id, label, location_type, is_primary, is_active)
@@ -113,11 +122,12 @@ BEGIN
     FROM public.locations l, (VALUES ('infant', 'Infant', 1), ('toddler', 'Toddler', 2), ('preschool', 'Preschool', 3)) k(key, label, n)
     WHERE l.org_id = ${ORG} AND l.location_type = 'site' AND l.${tenant};
     INSERT INTO public.departments (org_id, key, name, is_active, metadata)
-    VALUES (${ORG}, 'enrollment', 'Enrollment', true, ${q(JSON.stringify(builder))}::jsonb);
+    VALUES (${ORG}, ${dept}, 'Lead Management', true, ${q(JSON.stringify(builder))}::jsonb),
+           (${ORG}, ${q(FIREFLY_UNBOUND_DEPARTMENT_KEY)}, 'Enrollment', true, '{}'::jsonb);
     INSERT INTO public.work_units (org_id, department_id, key, name, is_active)
     SELECT ${ORG}, d.id, 'lifecycle_wu_' || s, initcap(s), true
     FROM public.departments d, unnest(ARRAY[${TENANT_PROCESS_STAGES.map(q).join(", ")}]) s
-    WHERE d.org_id = ${ORG} AND d.key = 'enrollment' AND d.${tenant};
+    WHERE d.org_id = ${ORG} AND d.key = ${dept} AND d.${tenant};
     INSERT INTO public.program_offerings (org_id, program_key, label, attendance_type, is_active, status)
     VALUES (${ORG}, 'infant', 'Infant', 'full_time', true, 'active');
     INSERT INTO public.financial_charge_templates (org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents, effective_start)
@@ -228,7 +238,7 @@ export function scratchRelationshipChecks(): CountCheck[] {
             WHERE o.org_id = ${ORG} AND o.${SEEDED} AND s.id IS NULL`),
         zero("case_work_unit_not_firefly_enrollment", `public.opportunities o
             JOIN public.work_units w ON w.id = o.work_unit_id
-            LEFT JOIN public.departments d ON d.id = w.department_id AND d.org_id = ${ORG} AND d.key = 'enrollment'
+            LEFT JOIN public.departments d ON d.id = w.department_id AND d.org_id = ${ORG} AND d.key = ${q(FIREFLY_LIFECYCLE_DEPARTMENT_KEY)}
             WHERE o.org_id = ${ORG} AND o.${SEEDED} AND d.id IS NULL`),
         zero("guardian_link_cross_org", `public.customer_persons cp
             JOIN public.persons p ON p.id = cp.person_id JOIN public.customers c ON c.id = cp.customer_id

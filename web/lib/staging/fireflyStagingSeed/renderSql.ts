@@ -11,8 +11,11 @@
  * CONFIGURATION IS THE TENANT'S. Each configuration area is gated on what the org already holds:
  *   campuses   the org has no active site of its own → the seed's campuses, rooms and programs;
  *              otherwise families are placed at the tenant's own sites and program categories.
- *   enrollment the org has no `enrollment` department of its own → the seed's department, process
- *              and work units; otherwise each family case joins the tenant's `lifecycle_wu_<stage>`.
+ *   enrollment the org has no `lead_management` department of its own → the seed's department, process
+ *              and work units; otherwise each open family case joins that department's active
+ *              `lifecycle_wu_<stage>`, and the seed refuses unless the department's active process is
+ *              `enrollment` and every open seeded stage has its queue (lifecycleTarget.ts). Firefly's
+ *              process-less `enrollment` department is never bound to.
  *   catalog    the org has no offering and no charge template of its own → the seed's rate card.
  *   roles      the org has none of the household role keys → the seed's vocabulary.
  * On hosted staging every gate is closed and only synthetic families are written; on a bare Firefly
@@ -66,6 +69,7 @@ import {
     SEED_WORK_UNIT_IDS,
 } from "./ids";
 import { SEED_WRITE_SET } from "./auditSql";
+import { FIREFLY_ACTIVE_PROCESS_KEY, FIREFLY_LIFECYCLE_DEPARTMENT_KEY } from "./lifecycleTarget";
 import WORK_UNIT_QUEUE_DEFINITIONS from "./workUnitQueueDefinitions.json";
 
 /** Fixed write timestamp for config rows: the anchor day, 08:00 UTC. */
@@ -283,6 +287,14 @@ END $fence_close$;
 
 /** The family stages, each bound to a work unit in whichever Enrollment department is the org's. */
 const FAMILY_STAGES = [...new Set(buildSeedFamilies().map((f) => f.stage))];
+/** The stages of open seeded cases: each must bind to a tenant queue, or the seed refuses. */
+export const OPEN_FAMILY_STAGES = [...new Set(buildSeedFamilies().filter((f) => f.status === "open").map((f) => f.stage))];
+
+/** Firefly's lifecycle department by key, whoever wrote it (the key is unique per org), on `alias`. */
+export const lifecycleDepartmentKeySql = (alias: string) =>
+    `${alias}.org_id = ${F()} AND ${alias}.key = ${lit(FIREFLY_LIFECYCLE_DEPARTMENT_KEY)}`;
+/** The same department, only when it is the tenant's own (outside the seed namespace). */
+const lifecycleDepartmentSql = (alias: string) => `${lifecycleDepartmentKeySql(alias)} AND ${tenant(alias)}`;
 
 /** The id a gate bound for (kind, key) — the seed's own row or the tenant's; NULL when unbound. */
 const bound = (kind: "site" | "category" | "work_unit", key: string) =>
@@ -294,7 +306,7 @@ const bound = (kind: "site" | "category" | "work_unit", key: string) =>
  */
 export const SEED_GATE_SQL: Readonly<Record<(typeof SEED_GATES)[number], string>> = Object.freeze({
     seed_campuses: `NOT EXISTS (SELECT 1 FROM public.locations l WHERE l.org_id = ${F()} AND l.location_type = 'site' AND l.is_active AND ${tenant("l")})`,
-    seed_enrollment: `NOT EXISTS (SELECT 1 FROM public.departments d WHERE d.org_id = ${F()} AND d.key = 'enrollment' AND ${tenant("d")})`,
+    seed_enrollment: `NOT EXISTS (SELECT 1 FROM public.departments d WHERE ${lifecycleDepartmentSql("d")})`,
     seed_catalog: `(NOT EXISTS (SELECT 1 FROM public.program_offerings o WHERE o.org_id = ${F()} AND ${tenant("o")})
      AND NOT EXISTS (SELECT 1 FROM public.financial_charge_templates t WHERE t.org_id = ${F()} AND ${tenant("t")}))`,
     seed_role_types: `NOT EXISTS (SELECT 1 FROM public.customer_person_role_types r WHERE r.org_id = ${F()} AND ${tenant("r")}
@@ -352,13 +364,13 @@ function enrollment(): string {
 -- (web/lib/staging/fireflyStagingSeed/builder.ts); validated for publish by the seed's tests.
 INSERT INTO public.departments (id, org_id, key, name, description, sort_order, is_active, metadata, updated_at)
 VALUES (
-    ${uuid(SEED_DEPARTMENT_ID)}, ${F()}, 'enrollment', 'Enrollment',
+    ${uuid(SEED_DEPARTMENT_ID)}, ${F()}, ${lit(FIREFLY_LIFECYCLE_DEPARTMENT_KEY)}, 'Enrollment',
     'Lead to enrolled — inquiry, tour, decision, placement.', 0, true,
     ${jsonb({ lifecycle_builder_v1: builder })},
     ${ts(CONFIG_AT)}
 )
 ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name, description = EXCLUDED.description,
+    key = EXCLUDED.key, name = EXCLUDED.name, description = EXCLUDED.description,
     is_active = true, metadata = EXCLUDED.metadata, updated_at = EXCLUDED.updated_at;
 
 -- Queue definitions are the representative seed's, verbatim (workUnitQueueDefinitions.json).
@@ -382,12 +394,36 @@ INSERT INTO firefly_seed_binding (kind, key, id)
 VALUES
 ${rows(FAMILY_STAGES.map((stage) => ["'work_unit'", lit(stage), uuid(seedWorkUnitByStage.get(stage)!)]))};
 \\else
--- The org's own Enrollment department is used untouched: each case joins that department's
--- lifecycle_wu_<stage> unit, or none when the tenant's process has no such stage.
+-- The org's own lifecycle department (key ${FIREFLY_LIFECYCLE_DEPARTMENT_KEY}) is used untouched. It must hold an
+-- active ${FIREFLY_ACTIVE_PROCESS_KEY} process and an active lifecycle_wu_<stage> for every open seeded stage;
+-- otherwise the seed refuses rather than write cases no lane shows. Closed cases bind only if a queue exists.
+DO $lifecycle$
+DECLARE
+    v_builder jsonb;
+    v_missing text;
+BEGIN
+    SELECT d.metadata->'lifecycle_builder_v1' INTO v_builder FROM public.departments d WHERE ${lifecycleDepartmentSql("d")};
+    IF NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(coalesce(v_builder->'processes', '[]'::jsonb)) p
+        WHERE p->>'id' = v_builder->>'active_process_id' AND p->>'key' = ${lit(FIREFLY_ACTIVE_PROCESS_KEY)}
+    ) THEN
+        RAISE EXCEPTION 'firefly_staging_seed: refused — department ${FIREFLY_LIFECYCLE_DEPARTMENT_KEY} has no active ${FIREFLY_ACTIVE_PROCESS_KEY} process in lifecycle_builder_v1';
+    END IF;
+    SELECT string_agg(s.stage, ',' ORDER BY s.stage) INTO v_missing
+    FROM (VALUES ${OPEN_FAMILY_STAGES.map((stage) => `(${lit(stage)})`).join(", ")}) AS s(stage)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM public.departments d
+        JOIN public.work_units w ON w.department_id = d.id AND w.key = 'lifecycle_wu_' || s.stage AND w.is_active
+        WHERE ${lifecycleDepartmentSql("d")}
+    );
+    IF v_missing IS NOT NULL THEN
+        RAISE EXCEPTION 'firefly_staging_seed: refused — department ${FIREFLY_LIFECYCLE_DEPARTMENT_KEY} has no active queue for open seeded stage(s) %', v_missing;
+    END IF;
+END $lifecycle$;
 INSERT INTO firefly_seed_binding (kind, key, id)
 SELECT 'work_unit', s.stage, w.id
 FROM (VALUES ${FAMILY_STAGES.map((stage) => `(${lit(stage)})`).join(", ")}) AS s(stage)
-JOIN public.departments d ON d.org_id = ${F()} AND d.key = 'enrollment' AND ${tenant("d")}
+JOIN public.departments d ON ${lifecycleDepartmentSql("d")}
 JOIN public.work_units w ON w.department_id = d.id AND w.key = 'lifecycle_wu_' || s.stage AND w.is_active;
 \\endif
 `;

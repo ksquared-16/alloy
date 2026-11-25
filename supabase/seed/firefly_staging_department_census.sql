@@ -1,7 +1,9 @@
 -- Firefly staging department census (ALY-14 E3 follow-up) — READ ONLY, configuration only.
 --
--- Step 1 (`firefly_staging_tenant_census.sql`) binds to the Firefly department keyed `enrollment` and
--- found it with no active process, stages or `lifecycle_wu_<stage>` queues. Hosted evidence from
+-- Supplementary. Step 1 as first run (2026-11-25) bound to the Firefly department keyed `enrollment`
+-- and found it with no active process, stages or `lifecycle_wu_<stage>` queues. The tenant census is now
+-- generated and binds to `lead_management` (web/lib/staging/fireflyStagingSeed/lifecycleTarget.ts); this
+-- listing stays useful as an unopinionated view of every Firefly department. Hosted evidence from
 -- 2026-10-23 (`certification/business-processes-v2/d2d5/enrollment-decision-config-census.sql.results.json`,
 -- target `alloy_deployed_primary`) places Firefly's published Enrollment process in department
 -- `3933ac47-…` keyed `lead_management`. This answers which department really holds it, with one row

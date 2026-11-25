@@ -29,7 +29,7 @@ import {
     seedIds,
 } from "./dataset";
 import { FIREFLY_ORG_ID, RETIRED_SEPARATE_ORG_ID, SEED_DEPARTMENT_ID, SEED_ID_PREFIX } from "./ids";
-import { SEED_GATE_SQL } from "./renderSql";
+import { lifecycleDepartmentKeySql, SEED_GATE_SQL } from "./renderSql";
 
 const ORG = `'${FIREFLY_ORG_ID}'::uuid`;
 const SEEDED = `id::text LIKE '${SEED_ID_PREFIX}%'`;
@@ -93,14 +93,16 @@ export function buildVerificationChecks(): Check[] {
             .map(([stage, n]) => ({ name: `stage_${stage}`, expected: n, actualSql: countIn("opportunities", `stage_key = ${q(stage)}`) })),
         // Placed inside the Firefly school, whichever configuration it is.
         { name: "family_cases_at_a_firefly_site", expected: c.opportunities, actualSql: `(SELECT count(*) FROM public.opportunities o JOIN public.locations l ON l.id = o.location_id AND l.org_id = ${ORG} AND l.location_type = 'site' WHERE o.org_id = ${ORG} AND o.${SEEDED})` },
-        { name: "work_unit_outside_firefly_enrollment", expected: 0, actualSql: `(SELECT count(*) FROM public.opportunities o JOIN public.work_units w ON w.id = o.work_unit_id LEFT JOIN public.departments d ON d.id = w.department_id AND d.org_id = ${ORG} AND d.key = 'enrollment' WHERE o.org_id = ${ORG} AND o.${SEEDED} AND d.id IS NULL)` },
+        { name: "work_unit_outside_firefly_enrollment", expected: 0, actualSql: `(SELECT count(*) FROM public.opportunities o JOIN public.work_units w ON w.id = o.work_unit_id LEFT JOIN public.departments d ON d.id = w.department_id AND ${lifecycleDepartmentKeySql("d")} WHERE o.org_id = ${ORG} AND o.${SEEDED} AND d.id IS NULL)` },
+        // Every open case is in a lane: bound to a work unit of that department (seeded or the tenant's).
+        { name: "open_case_without_work_unit", expected: 0, actualSql: `(SELECT count(*) FROM public.opportunities o WHERE o.org_id = ${ORG} AND o.${SEEDED} AND o.status_key = 'open' AND o.work_unit_id IS NULL)` },
         { name: "program_category_outside_firefly", expected: 0, actualSql: `(SELECT count(*) FROM public.opportunity_customer_members m JOIN public.location_program_categories pc ON pc.id = m.program_category_id WHERE m.org_id = ${ORG} AND m.${SEEDED} AND (pc.org_id IS DISTINCT FROM ${ORG} OR pc.location_id IS DISTINCT FROM m.location_id))` },
         // Every open case sits in a stage the org's own Enrollment process has (seeded or the tenant's).
         { name: "open_case_stage_not_in_process", expected: 0, actualSql: `(SELECT count(*) FROM public.opportunities o WHERE o.org_id = ${ORG} AND o.${SEEDED} AND o.status_key = 'open' AND o.stage_key NOT IN (
             SELECT st->>'key' FROM public.departments d
             CROSS JOIN LATERAL jsonb_array_elements(d.metadata->'lifecycle_builder_v1'->'processes') p
             CROSS JOIN LATERAL jsonb_array_elements(p->'stages') st
-            WHERE d.org_id = ${ORG} AND d.key = 'enrollment' AND p->>'id' = d.metadata->'lifecycle_builder_v1'->>'active_process_id'))` },
+            WHERE ${lifecycleDepartmentKeySql("d")} AND p->>'id' = d.metadata->'lifecycle_builder_v1'->>'active_process_id'))` },
         // Synthetic only: every seeded guardian is a reserved test recipient under the ALY-14 guard.
         { name: "guardian_email_not_reserved", expected: 0, actualSql: countIn("persons", `email NOT LIKE '%.invalid'`) },
         { name: "guardian_phone_not_fictional", expected: 0, actualSql: countIn("persons", `phone !~ '^\\+1[0-9]{3}55501[0-9]{2}$'`) },

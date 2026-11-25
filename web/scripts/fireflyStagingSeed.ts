@@ -7,10 +7,13 @@
  *   npm run staging:seed:firefly -- check                        committed SQL == renderer, and audit passes
  *   npm run staging:seed:firefly -- apply  --target local        seed the shared local stack
  *   npm run staging:seed:firefly -- verify --target local        read-only census; exit 1 on any FAIL
+ *   npm run staging:seed:firefly -- census --target local        read-only TENANT census (before any apply):
+ *                                                                expected vs observed; exit 1 on a blocking FAIL
  *
  *   staging (both apply and verify):
  *     ALLOY_ENVIRONMENT=staging FIREFLY_STAGING_SEED_DATABASE_URL=… \
  *       npm run staging:seed:firefly -- apply --target staging --confirm-project-ref ikaxilmwmrmbagoidedu
+ *   census takes the same staging arguments, writes nothing, and runs in a read-only session.
  *
  * Targets and refusals: lib/staging/fireflyStagingSeed/targets.ts. The SQL proves its own write
  * scope in-database (the fence); this command refuses before connecting if the target, the
@@ -32,11 +35,18 @@ import {
     resolveSeedTarget,
     type ResolvedSeedTarget,
 } from "@/lib/staging/fireflyStagingSeed/targets";
+import {
+    formatTenantCensusReport,
+    parseTenantCensusOutput,
+    renderFireflyStagingTenantCensusSql,
+    summarizeTenantCensus,
+} from "@/lib/staging/fireflyStagingSeed/tenantCensusSql";
 import { parseVerificationOutput, renderFireflyStagingVerifySql } from "@/lib/staging/fireflyStagingSeed/verifySql";
 
 const REPO_ROOT = resolve(__dirname, "../..");
 export const SEED_SQL_PATH = resolve(REPO_ROOT, "supabase/seed/firefly_staging_seed.sql");
 export const VERIFY_SQL_PATH = resolve(REPO_ROOT, "supabase/seed/firefly_staging_verify.sql");
+export const TENANT_CENSUS_SQL_PATH = resolve(REPO_ROOT, "supabase/seed/firefly_staging_tenant_census.sql");
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
@@ -51,14 +61,16 @@ function fail(message: string, code = 1): never {
 }
 
 /** The committed files must be exactly what the renderer produces, and must pass the audit. */
-function committedScripts(): { seed: string; verify: string } {
+function committedScripts(): { seed: string; verify: string; census: string } {
     const seed = readFileSync(SEED_SQL_PATH, "utf8");
     const verify = readFileSync(VERIFY_SQL_PATH, "utf8");
+    const census = readFileSync(TENANT_CENSUS_SQL_PATH, "utf8");
     if (seed !== renderFireflyStagingSeedSql()) fail(`${SEED_SQL_PATH} is stale — run: npm run staging:seed:firefly -- render`);
     if (verify !== renderFireflyStagingVerifySql()) fail(`${VERIFY_SQL_PATH} is stale — run: npm run staging:seed:firefly -- render`);
+    if (census !== renderFireflyStagingTenantCensusSql()) fail(`${TENANT_CENSUS_SQL_PATH} is stale — run: npm run staging:seed:firefly -- render`);
     const audit = auditFireflyStagingSeedSql(seed);
     if (!audit.ok) fail(`seed SQL failed its audit:\n  - ${audit.failures.join("\n  - ")}`);
-    return { seed, verify };
+    return { seed, verify, census };
 }
 
 function hostHasPsql(): boolean {
@@ -70,21 +82,33 @@ function hostHasPsql(): boolean {
  * container psql otherwise (the same fallback certification/alloy-certify uses). A staging run
  * never goes through a container.
  */
-function runPsql(target: ResolvedSeedTarget, script: string, vars: Record<string, string>): { status: number; stdout: string; stderr: string } {
+/** Forces every transaction in the session read-only, beneath the script's own BEGIN READ ONLY. */
+const READ_ONLY_PGOPTIONS = "-c default_transaction_read_only=on";
+
+function runPsql(
+    target: ResolvedSeedTarget,
+    script: string,
+    vars: Record<string, string>,
+    opts: { extraArgs?: string[]; readOnly?: boolean } = {},
+): { status: number; stdout: string; stderr: string } {
     const varArgs = Object.entries(vars).flatMap(([k, v]) => ["-v", `${k}=${v}`]);
+    const extra = opts.extraArgs ?? [];
     let cmd: string;
     let args: string[];
+    let env: NodeJS.ProcessEnv = process.env;
     if (hostHasPsql()) {
         cmd = "psql";
-        args = [target.databaseUrl, "-X", "-q", ...varArgs, "-f", "-"];
+        args = [target.databaseUrl, "-X", "-q", ...extra, ...varArgs, "-f", "-"];
+        if (opts.readOnly) env = { ...process.env, PGOPTIONS: READ_ONLY_PGOPTIONS };
     } else if (target.target === "local") {
         const inContainer = target.databaseUrl.replace(/^(postgres(?:ql)?:\/\/[^@]+@)[^/]+(\/.*)$/, "$1127.0.0.1:5432$2");
         cmd = "docker";
-        args = ["exec", "-i", LOCAL_STACK_DB_CONTAINER, "psql", inContainer, "-X", "-q", ...varArgs, "-f", "-"];
+        const envArgs = opts.readOnly ? ["-e", `PGOPTIONS=${READ_ONLY_PGOPTIONS}`] : [];
+        args = ["exec", "-i", ...envArgs, LOCAL_STACK_DB_CONTAINER, "psql", inContainer, "-X", "-q", ...extra, ...varArgs, "-f", "-"];
     } else {
         fail("no host psql — a staging run needs one (the local container fallback is local-only)", 2);
     }
-    const res = spawnSync(cmd, args, { input: script, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const res = spawnSync(cmd, args, { input: script, encoding: "utf8", env, maxBuffer: 64 * 1024 * 1024 });
     // EPIPE: psql stopped reading because the script refused (ON_ERROR_STOP) — its own exit says why.
     const epipe = (res.error as NodeJS.ErrnoException | undefined)?.code === "EPIPE" && res.status !== null;
     if (res.error && !epipe) fail(`could not start ${cmd}: ${res.error.message} (environment problem)`, 2);
@@ -118,7 +142,18 @@ function plan(): void {
 function render(): void {
     writeFileSync(SEED_SQL_PATH, renderFireflyStagingSeedSql());
     writeFileSync(VERIFY_SQL_PATH, renderFireflyStagingVerifySql());
-    console.log(`✓ wrote ${SEED_SQL_PATH}\n✓ wrote ${VERIFY_SQL_PATH}`);
+    writeFileSync(TENANT_CENSUS_SQL_PATH, renderFireflyStagingTenantCensusSql());
+    console.log(`✓ wrote ${SEED_SQL_PATH}\n✓ wrote ${VERIFY_SQL_PATH}\n✓ wrote ${TENANT_CENSUS_SQL_PATH}`);
+}
+
+/** The tenant census, read-only: the committed file, in a read-only session; prints expected vs observed. */
+function census(target: ResolvedSeedTarget, scripts: { census: string }): boolean {
+    const res = runPsql(target, scripts.census, {}, { extraArgs: ["-v", "ON_ERROR_STOP=1", "-A", "-t", "-F", "|"], readOnly: true });
+    if (res.status !== 0) fail(`tenant census failed (nothing was written):\n${res.stderr.trim()}`);
+    const rows = parseTenantCensusOutput(res.stdout);
+    if (rows.length === 0) fail("tenant census printed no rows");
+    console.log(formatTenantCensusReport(rows, target));
+    return summarizeTenantCensus(rows).seedMayProceed;
 }
 
 function check(): void {
@@ -148,11 +183,18 @@ function main(): void {
     if (mode === "plan") return plan();
     if (mode === "render") return render();
     if (mode === "check") return check();
-    if (mode !== "apply" && mode !== "verify") fail(`unknown mode ${mode} (plan | render | check | apply | verify)`);
+    if (mode !== "apply" && mode !== "verify" && mode !== "census") {
+        fail(`unknown mode ${mode} (plan | render | check | census | apply | verify)`);
+    }
 
     const scripts = committedScripts();
     const target = resolveFromArgs();
     console.log(`Firefly staging seed → ${target.target} (${redactDatabaseUrl(target.databaseUrl)})`);
+
+    if (mode === "census") {
+        if (!census(target, scripts)) fail("tenant census: STOP (see the stop rule above)");
+        return;
+    }
 
     if (mode === "apply") {
         const res = runPsql(target, scripts.seed, { seed_target: target.target });
