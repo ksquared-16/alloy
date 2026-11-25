@@ -16,6 +16,7 @@ import {
     type ThreadHeaderHistoryRow,
 } from "@/lib/communications/email/outboundEmailHeaders";
 import { resolveVisibleReplyIdentity } from "@/lib/communications/identity/visibleEmailIdentity";
+import { guardOutboundRecipients } from "@/lib/communications/stagingOutboundRecipientGuard";
 import { refuseQaOrgOutbound } from "@/lib/qa/sharedQaSafety";
 
 type DeliverResult =
@@ -105,6 +106,14 @@ export async function deliverQueuedEmailHtml(params: {
 
     const toEmail = String(row.to_address ?? "").trim();
     if (!toEmail) return { ok: false, reason: "to_address_missing" };
+
+    // Staging may reach only test inboxes or the owner allowlist (ALY-14). Judged on
+    // the exact address handed to Resend below; production returns ok unchanged.
+    const recipientGate = guardOutboundRecipients("email", [toEmail]);
+    if (!recipientGate.ok) {
+        console.warn("[deliverQueuedEmailHtml] staging recipient refused", recipientGate.detail);
+        return { ok: false, reason: recipientGate.code };
+    }
 
     const text = textFromSnapshot(row.rendered_snapshot, String(row.body ?? ""));
 

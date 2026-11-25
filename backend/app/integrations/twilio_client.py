@@ -7,6 +7,7 @@ from typing import Dict, Any
 
 from twilio.rest import Client
 
+from .staging_outbound_guard import guard_outbound_recipients
 from ..settings import (
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
@@ -41,6 +42,8 @@ def send_sms(to_number: str, body: str, *, status_callback: str = None) -> Dict[
         raise ValueError("to_number is required and cannot be empty")
     if not body or not str(body).strip():
         raise ValueError("body is required and cannot be empty")
+    # Staging: test numbers or the owner allowlist only (ALY-14). Before any Twilio client exists.
+    guard_outbound_recipients("sms", [to_number])
 
     sid_val = (TWILIO_ACCOUNT_SID or "").strip()
     token_val = (TWILIO_AUTH_TOKEN or "").strip()
@@ -83,6 +86,8 @@ def send_sms_with_credentials(
         raise ValueError("to_number is required and cannot be empty")
     if not body or not str(body).strip():
         raise ValueError("body is required and cannot be empty")
+    # Staging: test numbers or the owner allowlist only (ALY-14). Before any Twilio client exists.
+    guard_outbound_recipients("sms", [to_number])
     sid_val = (account_sid or "").strip()
     token_val = (auth_token or "").strip()
     messaging_sid = (messaging_service_sid or "").strip()

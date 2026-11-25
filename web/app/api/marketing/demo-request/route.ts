@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { guardOutboundRecipients } from "@/lib/communications/stagingOutboundRecipientGuard";
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEMO_INBOX = process.env.MARKETING_DEMO_INBOX ?? "hello@workwithalloy.com";
 
@@ -41,7 +43,11 @@ export async function POST(request: NextRequest) {
     console.info("[marketing/demo-request]", payload);
 
     const resendKey = process.env.RESEND_API_KEY;
-    if (resendKey) {
+    // Staging: the sales inbox must be a test or owner-allowlisted address (ALY-14).
+    // Refused like an absent key — the request is logged above, nothing is sent.
+    const recipientGate = guardOutboundRecipients("email", [DEMO_INBOX]);
+    if (!recipientGate.ok) console.warn("[marketing/demo-request] staging recipient refused", recipientGate.detail);
+    if (resendKey && recipientGate.ok) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {

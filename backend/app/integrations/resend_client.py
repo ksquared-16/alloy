@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 import requests
 
+from .staging_outbound_guard import guard_outbound_recipients
+
 logger = logging.getLogger("alloy-dispatcher")
 
 
@@ -33,6 +35,8 @@ def send_resend_email(
         raise RuntimeError("Resend from address missing")
     if not to_email.strip():
         raise ValueError("to_email required")
+    # Staging: test inboxes or the owner allowlist only (ALY-14). Before the payload is built.
+    guard_outbound_recipients("email", [to_email])
     payload: Dict[str, Any] = {
         "from": from_email.strip(),
         "to": [to_email.strip()],

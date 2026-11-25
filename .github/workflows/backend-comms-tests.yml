@@ -34,7 +34,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       # C1 set: SMS STOP/START keywords, unsubscribe headers on outbound email, keyword replies not sent,
       # dispatch eligibility (consent / suppression / quiet hours), and the legacy SMS dispatcher's
-      # policy gate. TestBuildInfo is excluded: it needs httpx, which the backend does not declare.
+      # policy gate, and the staging outbound recipient guard (ALY-14). TestBuildInfo is excluded: it needs httpx, which the backend does not declare.
       - name: Run C1 tests
         env:
           SUPABASE_URL: ""
@@ -46,3 +46,4 @@ jobs:
           tests.test_keyword_response_not_sent
           tests.test_dispatch_eligibility
           tests.test_message_sender_qa_refuse.TestMessageSenderQaRefuse
+          tests.test_staging_outbound_guard

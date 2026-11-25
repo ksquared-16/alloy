@@ -158,6 +158,29 @@ configuration (Vercel environment for the verifying side, Supabase Vault for a
 | Provider keys | Twilio, Resend, Stripe — server only |
 | Feature gates | BOS/agent env flags — default safe-off |
 
+### Staging outbound recipients (ALY-14)
+
+Staging email and SMS reach **only** controlled test recipients or an explicit owner
+allowlist. The guard runs inside every provider call site — web
+`lib/communications/stagingOutboundRecipientGuard.ts` (Resend sends) and backend
+`app/integrations/staging_outbound_guard.py` (Resend + both Twilio adapters) — so no
+caller can route around it. A refused message fails with
+`staging_recipient_not_allowlisted` and the provider is never called.
+
+- **Staging is detected fail-closed:** the staging project ref in `SUPABASE_URL` /
+  `NEXT_PUBLIC_SUPABASE_URL`, `APP_ENV` / `NEXT_PUBLIC_APP_ENV` / `ALLOY_ENVIRONMENT`
+  = `staging`, or `VERCEL_ENV=preview`. Any one restricts. Production is unchanged.
+- **Test recipients (always allowed in staging):** `example.com|net|org`, any
+  `.test` / `.example` / `.invalid` / `.localhost` domain, Resend's
+  `delivered|bounced|complained|suppressed@resend.dev`, and NANP fictional numbers
+  `+1 NPA 555-0100…0199`.
+- **Owner allowlist:** `COMMUNICATIONS_STAGING_EMAIL_ALLOWLIST` and
+  `COMMUNICATIONS_STAGING_SMS_ALLOWLIST`, comma/semicolon/newline separated, exact
+  addresses and numbers only (no domain wildcards). Set them in **both** the Vercel
+  staging project and the staging backend service.
+- Not covered: Supabase Auth mail (invites, password resets) is sent by Supabase's own
+  mailer, not by Alloy code.
+
 ---
 
 ## Schema reference regeneration
