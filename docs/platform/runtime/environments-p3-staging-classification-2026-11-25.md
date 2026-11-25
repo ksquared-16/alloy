@@ -113,8 +113,8 @@ configuration, so it falls under R1.
 | **C7** | Program key `stage4_ok3_w9k7sx` (3 category rows) | S6 | **LEAVE** | QA debris from a certification run, named as such in `dataset.ts:17`. | — |
 | **C8** | Catalog and rates: `program_offerings`, variants, `commercial_tuition_rates`, `commercial_products` | 4 fee products (Activity Fee, Annual Supply Fee, Enrollment Fee, Registration Fee), 36 rates, 7 plans (S6, 2026-09-18) | **OWNER**. Recommendation: **KEEP-CONFIG** for the org-default rate card | It looks like Firefly's rate card, and the seed mirrors it. | Whether these are Firefly's *real* prices or demo numbers is not recorded. It is a commercial fact only the owner knows. |
 | **C9** | North-site rate overrides | count not recorded (S11) | **LEAVE** | Named QA debris (`dataset.ts:17`). | Count and ids need STG-CENSUS. |
-| **C10** | Charge templates (`financial_charge_templates`) | 5 keys `registration_fee, late_pickup_fee, materials_fee, field_trip, tuition` (S4, 2026-09-22); **8 templates by 2026-10-09** (S3) | **KEEP-CONFIG** for the 5 named keys. **OWNER** for the other 3 | These are billing configuration. | The 3 added between the two censuses are unidentified. They may be QA-created. |
-| **C11** | Financial policies (`financial_policies`, due-date, proration) | 3 (S4, 2026-09-22) → **10** (S3, 2026-10-09). Labels seen include "QA due date — on invoice" and "QA due date — 10 days after invoice" | **LEAVE** for the `QA …`-labelled policies. **OWNER** for any unlabelled one | They are QA-labelled and were created during financial certification. | The owner says which due-date and proration policy Firefly really uses. That becomes the rebuild's policy, authored fresh. |
+| **C10** | Charge templates (`financial_charge_templates`) | 5 keys `registration_fee, late_pickup_fee, materials_fee, field_trip, tuition` (S4, 2026-09-22); **8 by 2026-10-09** (S3 `o3`), the 5 plus `enrollment_fee_waived` ("Enrollment fee (waived)", inactive), `cert_household_fee` ("Certification household fee", inactive) and `waived_fee_1790630157816` ("Enrollment fee (waived)", active) | **KEEP-CONFIG** for the 5 named keys. **LEAVE** for `cert_household_fee` and `waived_fee_1790630157816`. **OWNER** for `enrollment_fee_waived`. Recommendation: **LEAVE** | The 5 keys are billing configuration. `cert_household_fee` carries the `cert_` prefix and a "Certification" label. `waived_fee_1790630157816` carries an epoch-ms suffix (2026-09-28), a run-unique key of the kind test code generates. Being active does not make it configuration. | `enrollment_fee_waived` has no marker, but it is inactive and shares its label with the timestamped key, so it most likely came from the same waiver testing. If Firefly needs a waived-fee template, the rebuild authors it fresh (owner decision 5). |
+| **C11** | Financial policies (`financial_policies`, `policy_type` `due_date` and `billing_calendar`) | 3 (S4, 2026-09-22) → **10** (S3 `o2`, 2026-10-09), all active. **3 `due_date`**, org-scoped: "QA due date — on invoice" (from 2026-09-18), "QA due date — 10 days after invoice" (from 2026-09-19), "Tuition terms — net 10" (10 days after invoice, from 2026-08-01). **7 `billing_calendar`**: 6 "S1 proof — …" (3 site-scoped at North/West/South Campus, 1 explicit account calendar, 2 account-scoped to the demo households Chen and Okafor) and "S2 proof — configuration B, future-effective" (from 2027-03-01) | **LEAVE** for the 2 `QA …` due-date policies and the 7 `S1 proof`/`S2 proof` billing calendars. **OWNER** for "Tuition terms — net 10" | The `QA …` policies are QA-labelled. The `S<n> proof` calendars are certification residue: their labels name the proof they served, and two are scoped to demo households. | "Tuition terms — net 10" carries no marker and its effective date (2026-08-01) is earlier than the QA policies', so it may be Firefly's real due-date term (owner decision 5). With every billing calendar classed LEAVE, the rebuild's billing calendar is authored fresh. |
 | **C12** | Accounting calendar (`calendar_month`, 2026-01-01 → 2026-12-31, 11 open, 1 closed) | 1 (S3) | **OWNER**. Recommendation: **KEEP-CONFIG** for its shape (monthly) but re-create it **without** its open/closed period state | The calendar shape is configuration. Period closes are transactional history tied to test charges. | — |
 | **C13** | Forms and document templates: `form_definitions`(+versions), `form_packet_definitions`, `document_types`(+versions), `document_requirements` | count not in any committed census. Named debris: `Cert Enrollment/Consent <timestamp>` forms (S11) | **KEEP-CONFIG** for Firefly's enrollment packet and real forms. **LEAVE** for the `Cert …` timestamped forms. Counts **BLOCKED** (STG-CENSUS) | The enrollment packet is product configuration. Timestamped `Cert` forms are certification residue. | S7 shows 175 `generated_form_pdf` documents with `template_key` set, so templates are in use, but their count is unknown. |
 | **C14** | Field definitions, sections, option sets, tenant entity layouts, tenant status definitions (Firefly's "control plane") | not in a committed census | **KEEP-CONFIG**, counts BLOCKED (STG-CENSUS) | The seed doc states that staging uses this control plane as is. The rendered surfaces depend on it. | Only the code defaults (K5–K7) are known. The July 2026 API capture `docs/sprints/active/assets/firefly-config/` is **not** a usable source: it was taken from a local server against an unrecorded database, it is marked "structural only; do not treat as current state" (`docs/handoffs/bp-config-integrity-handoff.md:333`), and the seed builder deliberately does not use it because it carries certified defects (`web/lib/staging/fireflyStagingSeed/builder.ts:7-10`). |
@@ -172,22 +172,28 @@ owner answer.
 | `external_source IN ('alloy_qa_fixture', 'alloy_qa_structure', 'alloy_seed_fixture')` | persons, structure | toolkit and QA fixtures |
 | `metadata.demo_seed_package`, `metadata.is_demo_data`, `metadata.seed_key LIKE 'golden_path%'` | demo rows | demo seeders (S12) |
 | auth email `qa-%@example.com`, `cert-%@example.com`, `%+qa%@%`; any `@example.com` / `.invalid` address; NANP `555-01XX` phones | auth, persons, contacts | QA identities, seeds |
-| keys or labels `stage4_ok3_*`, `QA …`, `Cert … <timestamp>` | program categories, policies, forms | certification runs (S3, S6, S11) |
+| keys or labels `stage4_ok3_*`, `QA …`, `Cert … <timestamp>`, `S<n> proof — …` | program categories, policies, forms | certification runs (S3, S6, S11) |
+| key prefix `cert_` (e.g. `cert_household_fee`) | charge templates, keyed configuration | certification runs (S3) |
+| numeric epoch-ms key suffix, `_<13 digits>` (e.g. `waived_fee_1790630157816`) | charge templates, keyed configuration | test runs generating unique keys (S3) |
 
 **Known limit:** QA runs that created rows through the ordinary UI without a run marker (for example the room in the
 `slice8b2` manifest) carry no marker on the row itself. They can be found only from the committed manifests (S14) or by
-creation time. That is why C5, C10 and C11 stay OWNER until STG-CENSUS lists those rows.
+creation time. That is why C5 stays OWNER until STG-CENSUS lists those rows. C10 and C11 are settled by the S3
+listing: their remaining OWNER items (`enrollment_fee_waived`, "Tuition terms — net 10") are commercial questions, not
+missing evidence.
 
 ## Internal consistency check
 
-- Every item has exactly one class. Items with two parts name both (C5, C10, C11, C13, C15), and each part is classed.
+- Every item has exactly one class. Items with two or more parts name each (C5, C10, C11, C13, C15), and each part is classed.
 - No item is both KEEP and LEAVE for the same rows. The splits are by marker or key (C6/C7, C10, C11, C13).
 - Org totals agree. S9 (2026-09-14) and S7 (2026-10-20) both give 3 orgs: Firefly, Alloy Bend and W-17. The ZZ orgs
   first appear on 2026-10-22 (S8). So staging held 3 orgs through 2026-10-20 and 4–5 after.
 - The QA identity counts agree. S1 lists 7 slot identities, 6 with a Firefly `admin` role, and the owner's
   2026-11-25 census found 6 (S10).
-- These counts **disagree and are explained only as unverified**: locations 20 → 37 (C5), charge templates 5 → 8
-  (C10), financial policies 3 → 10 (C11), Firefly customers 13 (S3) vs 74 households (S1) (L1a).
+- Charge templates 5 → 8 (C10) and financial policies 3 → 10 (C11) are explained: S3 lists every row, and each is
+  classed by key or label.
+- These counts **disagree and are explained only as unverified**: locations 20 → 37 (C5), Firefly customers 13 (S3) vs
+  74 households (S1) (L1a).
 - No production data is classified as KEEP. Every production item is BLOCKED (B-section).
 
 ## Owner decisions this list needs
@@ -200,7 +206,10 @@ Grouped by what they unblock. P4 starts only after the owner confirms the list.
 3. **C1a. Firefly's published Enrollment process or the platform template?** Recommendation: Firefly's, after a reviewed
    diff against the template.
 4. **C8. Are Firefly's staging rates and fees its real prices?**
-5. **C11. Which due-date and proration policy does Firefly really use?**
+5. **C11 and C10. Is "Tuition terms — net 10" (due 10 days after invoice, effective 2026-08-01) Firefly's real
+   due-date policy, and does Firefly need a waived enrollment-fee template (`enrollment_fee_waived`)?**
+   Recommendation: carry "net 10" only if the owner confirms it, authored fresh; leave `enrollment_fee_waived`. The
+   billing calendars on staging are all certification proofs, so the owner also states Firefly's real billing cadence.
 6. **L8a. Which of Firefly's ~7 non-QA user accounts carry into the rebuild?**
 7. **L5a and L11. Does the rebuilt staging host the ZZ Alloy QA tenants and re-run the Firefly seed?**
    Recommendation: yes to both, via their own tooling and after the Firefly configuration exists.
@@ -209,7 +218,7 @@ Grouped by what they unblock. P4 starts only after the owner confirms the list.
 9. **X1a (security, independent of the rebuild).** What to do about the committed `auth.refresh_tokens` and sessions in
    `data.sql`.
 10. **Access, for the BLOCKED items:** P2_DATA (production data snapshot) for B1–B2, P1S (platform tokens) for B3–B5.
-    STG-CENSUS (owner-run) for C2, C4, C5, C9, C10, C13, C14, C16 and L10.
+    STG-CENSUS (owner-run) for C2, C4, C5, C9, C13, C14, C16 and L10.
 
 ## What was not done
 
