@@ -271,7 +271,8 @@ Generated markdown: `docs/schema/*.md`
 
 Production data segregated by `org_id`. No cross-org test fixtures in shared staging without explicit isolation.
 
-The Firefly staging school is seeded by one fenced, idempotent command that writes only its own org and
+Firefly is the only staging school. Its synthetic QA/demo families are seeded into the existing Firefly
+org by one fenced, idempotent command that creates no org, changes no row but its own seed rows, and
 proves it in-database — see [`firefly-staging-seed.md`](firefly-staging-seed.md) (ALY-14 E2).
 
 ---
