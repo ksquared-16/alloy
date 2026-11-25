@@ -362,6 +362,16 @@ grep -q 'ALLOY_DEV_BIND_HOST' "$ROOT/alloy-dev-start" \
   && ok "38. the dev server binds one address, and it is configurable" \
   || bad "38. dev-server bind host is not owned in one place"
 
+# A production preview binds loopback too. The production command used to replace
+# the dev command AFTER `-H` was appended, so `next start` took every interface.
+prod_at="$(grep -n 'server_command="${ALLOY_PROD_COMMAND' "$ROOT/alloy-dev-start" | head -1 | cut -d: -f1)"
+bind_at="$(grep -n 'server_command="${server_command} -- -H ${bind_host}"' "$ROOT/alloy-dev-start" | head -1 | cut -d: -f1)"
+if [[ -n "$prod_at" && -n "$bind_at" && "$prod_at" -lt "$bind_at" ]]; then
+  ok "38b. the production command is chosen before the loopback bind is appended"
+else
+  bad "38b. production start can bind every interface (prod=${prod_at:-?} bind=${bind_at:-?})"
+fi
+
 grep -q 'alloy_refuse_occupied_port "$port" "${mode}-start for $name" loopback' "$ROOT/alloy-dev-start" \
   && ok "39. dev-start asks the loopback question, not the port-global one" \
   || bad "39. dev-start still asks the port-global question"
