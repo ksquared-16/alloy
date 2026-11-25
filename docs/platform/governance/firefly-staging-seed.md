@@ -79,8 +79,10 @@ evidence (configuration only, no rows copied):**
 **Synthetic families (always):** 60 households, 100 guardians, 75 children across every stage — 14 lead,
 8 tour (tours booked in the week after the anchor), 5 decision, 7 waitlist, 5 enrolling, 12 enrolled,
 6 closed (lost), 3 closed/withdrawn. A quarter of households bring siblings; a third have one guardian.
-Every child's date of birth fits their program. Surnames are trees ("Alder Family", "Aspen Family", …),
-emails are `first.surname@firefly-staging.invalid`, phones are the NANP fictional `555-01XX` block —
+Every child's date of birth fits their program. Surnames are trees, and every name the application
+shows carries the visible marker `[Staging seed]` (ALY-14 E3): households read `Alder Family [Staging seed]`,
+cases `[Staging seed] Alder Family — Ada`, children `Ada Alder [Staging seed]`. Guardians keep plain names
+(they are only ever shown inside their marked household). Emails are `first.surname@firefly-staging.invalid`, phones are the NANP fictional `555-01XX` block —
 all of which the ALY-14 outbound guard already treats as test recipients (tested), so nothing seeded
 can reach a real inbox or phone.
 
@@ -159,7 +161,7 @@ are derived from the dataset, never typed — plus a fingerprint of every seeded
 PASS  households            expected 60  actual 60
 PASS  stage_lead            expected 14  actual 14
 PASS  guardian_email_not_reserved  expected 0  actual 0
-PASS  known_first_family    expected Alder Family/lead/open  actual …
+PASS  known_first_family    expected Alder Family [Staging seed]/lead/open  actual …
 fingerprint 3b1f…
 ```
 
@@ -226,16 +228,18 @@ docker exec supabase_db_alloy-cert dropdb -U supabase_admin firefly_seed_scratch
 # … and the same with _bare / --tenant bare
 ```
 
-**Measured 2026-11-25** with the committed seed (sha256 `8788ee18b4c18f9d6246c300ae742a6c8bb925ef6604f63931bc1c873c658ecf`),
+**Measured 2026-11-25, re-measured after the E3 display marker** with the committed seed (sha256
+`0021a4a78db207a81c6a87093b7e62efe5414a18cf4dc63b34ef78d1ad51f9f4`; the pre-marker seed was `8788ee18…`),
 each shape on a fresh scratch clone of `alloy-cert` (133 orgs, none of them Firefly): **52/52 proofs
-passed in both shapes.**
+passed in both shapes**, 0 FAIL, scratch databases `firefly_seed_scratch_e3mark_{configured,bare}`
+dropped afterwards.
 
 | | `configured` (staging's shape) | `bare` |
 |---|---|---|
 | refuses without the Firefly org | PASS (exit 1), orgs 133 → 133 | PASS (exit 1), orgs 133 → 133 |
 | gates | all `false` | all `true` |
 | rows added to Firefly | +60 households, +100 guardians, +75 children, +60 cases, +100 contacts, +75 participations; **+0 configuration** | the same families, plus +1 department, +3 work units, +20 locations, +16 program categories, +8 offerings, +28 variants, +28 rates, +2 charge templates, +6 role types |
-| fingerprint (apply ×2, and after drift heal) | one per database — `250f944b9ab1fca253a150424f9227e7` on this clone; it varies across clones because the planted tenant's ids are random | `6a821fbd8b0d2d6346f082f0b98bc738` — the same on three separate bare clones |
+| fingerprint (apply ×2, and after drift heal) | one per database — `44135fdac203819c62a812f9d7b8ec2b` on this clone; it varies across clones because the planted tenant's ids are random | `ae08a864d7cff5370c5d0733ce56f302` (pre-marker `6a821fbd…`, the same on three bare clones) |
 | fence | held over 355 tables on every apply; the tampered copy rolled back (exit 3) | the same |
 | tenant's own Firefly rows | 185 rows byte-identical | 163 rows byte-identical |
 | ZZ Alloy QA rows | 329 rows across 272 tables byte-identical | the same |
@@ -249,7 +253,8 @@ passed in both shapes.**
   holds) but that family's site, category or work unit is unbound — the binding checks report it.
 - **Seeded families sit beside the tenant's own records.** They are marked (tree surnames, `.invalid`
   emails, `555-01XX` phones, `external_source = firefly_staging_seed`, `metadata.seed`, ids in the seed
-  namespace) but not visually labelled in the UI. Removing them is an explicit, reviewed delete by that
+  namespace) and, since E3, visibly labelled `[Staging seed]` in every household, case and child name
+  — not yet seen in the hosted UI, because the seed has not been applied there. Removing them is an explicit, reviewed delete by that
   namespace; the seed itself never deletes.
 - **Closed families' stages.** The 9 closed cases use the template stage keys `closed` /
   `closed_withdrawn`, which the tenant's published process (lead → enrolled) does not define. They are
