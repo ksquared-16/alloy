@@ -1,0 +1,13 @@
+A-after-chain: [{"id":"8d2dec91-d59f-4c03-9976-6ce0ba901564","status":"retired","name":"_w17_selftest_8d2dec91"}]
+  checkProductionTenantIsolation (release-lib.mjs:429) failures=[]
+  checkStagingTenancy failures=[] warnings=[]
+B1-before-retirement: [{"id":"9fb1e52a-51a1-4164-8785-795029faf923","status":"active","name":"W-17 self-test"}]
+  checkProductionTenantIsolation (release-lib.mjs:429) failures=[]
+  checkStagingTenancy failures=["staging tenancy: org W-17 self-test (9fb1e52a-51a1-4164-8785-795029faf923) is neither Firefly nor a ZZ Alloy QA fixture"] warnings=[]
+B2-after-retirement: [{"id":"9fb1e52a-51a1-4164-8785-795029faf923","status":"retired","name":"_w17_selftest_9fb1e52a"}]
+  checkProductionTenantIsolation (release-lib.mjs:429) failures=[]
+  checkStagingTenancy failures=[] warnings=[]
+B3-after-reapply: [{"id":"9fb1e52a-51a1-4164-8785-795029faf923","status":"retired","name":"_w17_selftest_9fb1e52a"}]
+  checkProductionTenantIsolation (release-lib.mjs:429) failures=[]
+  checkStagingTenancy failures=[] warnings=[]
+RESULT: every post-migration listing passes both checks

@@ -70,7 +70,7 @@ open at T+0:00 is a no-go (step 7).
 | ID | Missing | Why it blocks | Evidence today | Closed when, by whom |
 |---|---|---|---|---|
 | **M1** | **ALY-14 E1–E4 are not on `staging`.** All 19 commits whose message names ALY-14 are on this branch only: E1 `2e2f0acf8`, `d0bccd81d`; E2 from `a092757a1` (with `456fcafff`, `583156942`); E3 from `a31cc8294` to `9d194f40c` (including `2ac3bccd3`, `3376e5618`, `f4d0b3a50`); E4 `4972595ae`. None of the four anchors is an ancestor of `origin/staging` | D1. `ALLOY_ENVIRONMENT` and its fail-closed outbound guard exist only because of E1 | `staging-integration-check.txt` | Step 1: staging `/api/build-info` serves the merge. Developer; the push is an authorized action |
-| **M2** | **No W-17 retirement migration exists.** No committed file sets `_w17_selftest_%` orgs to `retired` | D10. `check-production` fails on an unretired self-test org (`release-lib.mjs:429`); production may only receive migrations staging ran (`release-lib.mjs:149`) | P4 F3; `rebuild/w17-removal-trial.txt` (a plain delete fails on `document_category_in_use`; `status='retired'` works) | Step 1: the migration is merged with E1–E4 and staging's W-17 org reads `retired`. Developer |
+| **M2** | **The W-17 retirement migration is written but not on `staging`.** Slice B1 committed `supabase/migrations/20261223090000_w17_selftest_org_retirement.sql` on this branch, numbered after `origin/staging`'s head `20261222090000`. For every org whose slug starts with `_w17_selftest_` it sets `status` `retired` and `name` to the slug. Rows are kept: the org's 6 role definitions, 158 grants, 10 document categories and 13 document types stay, unchanged, as configuration of an org with no members. The migration fails if the org has any role or access-profile row. It is forward-only and re-runnable, a no-op where no such org exists, and release-lib classifies it `expand`. **Why the name changes too:** release-lib recognises a self-test org by `name` (`ORGS_SQL` lists `id\|status\|name`, `release-lib.mjs:412`, `:429`), but the self-test names it `W-17 self-test`. With that name, staging verification fails it as "neither Firefly nor a ZZ Alloy QA fixture", and `:429` passes it whatever its status | D10. `check-production` must see a retired self-test org (`release-lib.mjs:429`); production may only receive migrations staging ran (`release-lib.mjs:149`) | P4 F3; `rebuild/w17-removal-trial.txt` (a plain delete fails on `document_category_in_use`). B1, on throwaway local Supabase Postgres ([`environments-b1-w17-evidence-2026-11-25/`](environments-b1-w17-evidence-2026-11-25/)): the full 558-file step-1 merge tree applied from nothing exits 0 and leaves the org `retired` (`A-apply.log`, `A-after-chain-census.txt`). Staging's state (chain to `20261222090000`, org `active`) becomes `retired` with every owned row count unchanged (`B1-…`, `B2-…-census.txt`). Re-applying it changes nothing (`B3-reapply.txt`), and neither does a database with no W-17 org (`B4-no-org-trial.txt`). release-lib's two tenancy checks pass on every post-migration listing and fail staging's current one (`release-checks.txt`). Release and migration-ordering suites are green (`test-runs.txt`) | Step 1: the migration is merged with E1–E4, staging's ledger holds `20261223090000`, and staging's W-17 org reads `retired` with name `_w17_selftest_0bbaad43`. Developer |
 | **M3** | **The release tool has no first-promotion mode.** `plan` over an empty ledger is **blocked** (`contract_not_last`, 45 contract files among 557, the first `20260329210000`), and `production.preflight` expects production to serve the old `main` on the project named in `release-config.json` | D9. Without it, `prepare` writes no manifest, so `approve`, `emit-apply`, `record` and the hash-chained audit have nothing to bind | `plan-empty-ledger-p4-candidate.json`; P6 procedure *Limits* | The mode is committed with offline tests (`npm run test:release-procedure`) and rehearsed non-live. Developer, before step 5 |
 | **M4** | **`release-config.json` names the old production project** (`vslwnntzzgpnmrpjipat`) | Every check against production after cutover must expect the new ref (`checkBuildInfo` compares `supabaseProjectRef`) | `scripts/release/release-config.json`; `alloy-release.mjs:73` (`--config` overrides the file for one run) | Step 5: a config copy naming the new ref in the release directory. The committed file follows in the next release |
 | **M5** | **The existing org helper has no reviewed production invocation.** D11 uses the existing helper `web/lib/dev/createOrgAndAssignAdmin.ts`; no new helper is written. It inserts one `orgs` row (industry `childcare`, seeded by `20260430211000`), one `admin` membership through `create_membership_with_access_profile`, and the relationship-field configuration (`field_section_definitions`, `option_sets`, `option_set_items`, `field_definitions`); it needs an existing `auth.users` id. Its current callers are not usable here: `/api/admin/dev/create-org` needs `DEV_TENANT_SPINUP_ENABLED`, which must never be set on production (checklist X row); `web/scripts/ensureSharedQaTenant.ts` creates only the frozen QA orgs (and refuses the production ref it knows); `npm run dev:tenant:childcare` also seeds demo opportunities, which D7 forbids | D11. Step 16 has no approved command without it | P4 F6; the files named | The exact step-16 invocation (a direct call of `createOrgAndAssignAdmin` from `web/`, with the new project's URL and service-role key in the Mac mini session only, never in a file) is written into the step-16 command list and approved by the Development Lead and the Database Engineer at step 6. Developer |
@@ -107,6 +107,13 @@ exactly that reason). The rebuilt candidate's tree then equals staging's, and id
 **Stop condition.** If, at step 2 or step 7, `identify` without `--allow-tree-diff` exits non-zero for any reason, stop.
 Do not add the flag, do not edit `release-config.json`; fix staging and rebuild the candidate (back to step 1). No window
 is booked until step 2 passes; if it fails at step 7, the window is cancelled and the next feasible one is booked (D8).
+
+**On this branch (slice B1).** `.github/workflows/vacilando-tier2.yml` is now byte-identical to `origin/main`'s retired
+copy (no `schedule:`, `workflow_dispatch` kept). The offline step-1 merge (`git merge-tree --write-tree HEAD
+origin/staging`, exit 0) has the same file as `origin/main`, so P4's `build-candidate.sh` override becomes a no-op after
+the merge. The merge tree's migrations are 558, with head `20261223090000`, the W-17 migration
+([`environments-b1-w17-evidence-2026-11-25/test-runs.txt`](environments-b1-w17-evidence-2026-11-25/test-runs.txt)).
+`identify` itself can only be measured at step 2, on the rebuilt candidate.
 
 ## 3. Ordered steps — the single cutover plan
 
@@ -424,7 +431,7 @@ C-CLOCK-1, C-FLAG-1, C-MSG-1, C-O-1 recorded; step 16's command list approved.
 fallback and dual header (`20261002120000:48`, `20261003120000:38-44`); the wake route's two credentials (`route.ts:45-53`);
 the `vercel.json` cron and its absence on `main` (P4 H2); the clock doctrine (`deployment-and-environments.md:107-135`);
 the W-17 org and its delete/retire trial (P4 F3); `check-production`'s acceptance of a `retired` self-test org
-(`release-lib.mjs:429`); the identify gate and its measured failure (§2); the drawer-flag readers, defaults and lack of
+(`release-lib.mjs:429`), which matches on the org's `name`, so the B1 migration gives the org its slug as its name (M2); the identify gate and its measured failure (§2); the drawer-flag readers, defaults and lack of
 runtime callers (§5.5); the planner block on an empty ledger (`plan-empty-ledger-p4-candidate.json`); the org-creation
 paths and what `createOrgAndAssignAdmin` writes (P4 F6; M5); P3's classification of configuration and records.
 
@@ -449,6 +456,11 @@ paths and what `createOrgAndAssignAdmin` writes (P4 F6; M5); P3's classification
   baseline.
 - **Firefly's org id on the new project.** The helper's output names it; the export's rows are bound to it, not to the
   staging id. The import procedure takes it as an input rather than a constant.
+- **Alloy Bend on staging (found by B1, not in M2's scope).** P3 lists a third staging org, Alloy Bend (`7803388d-…`,
+  `retired`, LEAVE L7). `checkStagingTenancy` (`release-lib.mjs:410-418`) fails every org that is not Firefly, a ZZ Alloy
+  QA fixture or a name-prefixed self-test org, whatever its status. So step 7's staging verification fails on Alloy Bend
+  as committed, even once W-17 is retired. It needs a ruling before step 7, for example the release tool (M3) accepting
+  a `retired` org on staging, or `release-config.json` naming it. The W-17 migration does not touch it.
 
 ## 10. Owner actions, and what is still open
 
@@ -468,6 +480,7 @@ presence, in plan order:
 - It authorizes nothing. The P5 owner approval gate is unchanged, and no setting may be changed because this document lists
   it (checklist F).
 - No push, PR, merge, deploy or fetch, and no hosted service of any kind. The rebuilt candidate does not exist yet.
-- No migration was written (M2), and no change was made to the app, the release tool, `release-config.json` or any
-  workflow file (M3, M4, M9). The helper invocation and the export (M5, M8) were not written, and the helper was not run.
+- As first written, no migration was written (M2), and no change was made to the app, the release tool,
+  `release-config.json` or any workflow file (M3, M4, M9). Slice B1 later added the W-17 migration (M2) and main's
+  `vacilando-tier2.yml` (§2) on this branch. The release tool and `release-config.json` are still unchanged. The helper invocation and the export (M5, M8) were not written, and the helper was not run.
 - It fixes no calendar date. The window is booked at step 6b (D8).

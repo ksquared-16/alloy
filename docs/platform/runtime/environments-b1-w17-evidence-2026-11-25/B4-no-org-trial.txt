@@ -1,0 +1,17 @@
+BEGIN
+UPDATE 1
+ w17_orgs_in_trial 
+-------------------
+                 0
+(1 row)
+
+SELECT 1
+psql:/tmp/migrations/20261223090000_w17_selftest_org_retirement.sql:68: NOTICE:  W-17 retirement: 0 self-test org(s) retired now; none has a member.
+DO
+ orgs_changed_by_file 
+----------------------
+                    0
+(1 row)
+
+ROLLBACK
+rc=0
