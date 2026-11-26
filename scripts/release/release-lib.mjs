@@ -172,14 +172,72 @@ export function identifyCandidate({ git, stagingRef, mainRef, candidateRef = sta
 // Migration classification (expand / contract) and the ordered schema plan
 // ---------------------------------------------------------------------------------------------
 
-/** Strip comments, string literals and dollar-quoted bodies: a DELETE inside a trigger body is code, not a migration-time delete. */
+const DOLLAR_QUOTE = /\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$/y;
+const CREATES_ROUTINE = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/;
+
+/**
+ * One left-to-right pass over the SQL. Comments go. A dollar-quoted body that belongs to
+ * CREATE FUNCTION/PROCEDURE is stripped: a DELETE in a trigger body is code, not a migration-time
+ * delete. Any other dollar-quoted body (a DO block) runs at migration time, so it is scanned like
+ * the statement around it — recursively, so a function created inside a DO block is still code.
+ * Inside such a body string literals are kept as their contents, because `execute 'drop table …'`
+ * is how DO blocks drop things; at the top level they are blanked.
+ *
+ * `full` is what the migration does when it runs (destructive checks); `top` also blanks DO bodies,
+ * because a statement inside one is normally behind its own existence guard (idempotency checks).
+ */
+function scanMigrationSql(sql, inBody = false) {
+    let full = "";
+    let top = "";
+    let stmt = "";
+    const emit = (s) => { full += s; top += s; stmt += s; };
+    let i = 0;
+    while (i < sql.length) {
+        const ch = sql[i];
+        if (ch === "-" && sql[i + 1] === "-") {
+            const nl = sql.indexOf("\n", i);
+            i = nl < 0 ? sql.length : nl;
+            emit(" ");
+        } else if (ch === "/" && sql[i + 1] === "*") {
+            const end = sql.indexOf("*/", i + 2);
+            i = end < 0 ? sql.length : end + 2;
+            emit(" ");
+        } else if (ch === "'") {
+            let j = i + 1;
+            let content = "";
+            while (j < sql.length) {
+                if (sql[j] === "'") {
+                    if (sql[j + 1] !== "'") break;
+                    content += "'";
+                    j += 2;
+                } else content += sql[j++];
+            }
+            i = j + 1;
+            emit(inBody ? ` ${content} ` : "''");
+        } else if (ch === "$" && (DOLLAR_QUOTE.lastIndex = i, DOLLAR_QUOTE.test(sql))) {
+            const tag = sql.slice(i, DOLLAR_QUOTE.lastIndex);
+            const end = sql.indexOf(tag, i + tag.length);
+            const body = sql.slice(i + tag.length, end < 0 ? sql.length : end);
+            i = end < 0 ? sql.length : end + tag.length;
+            if (CREATES_ROUTINE.test(stmt.toLowerCase())) {
+                emit(" $$body$$ ");
+            } else {
+                full += ` ${scanMigrationSql(body, true).full} `;
+                top += " $$body$$ ";
+                stmt += " $$body$$ ";
+            }
+        } else {
+            emit(ch);
+            if (ch === ";") stmt = "";
+            i += 1;
+        }
+    }
+    return { full: full.toLowerCase(), top: top.toLowerCase() };
+}
+
+/** What a migration does when it runs: comments, top-level strings and routine bodies stripped; DO-block bodies kept. */
 export function migrationStatementText(sql) {
-    return sql
-        .replace(/\$([A-Za-z_]*)\$[\s\S]*?\$\1\$/g, " $$body$$ ")
-        .replace(/\/\*[\s\S]*?\*\//g, " ")
-        .replace(/--[^\n]*/g, " ")
-        .replace(/'(?:[^']|'')*'/g, "''")
-        .toLowerCase();
+    return scanMigrationSql(sql).full;
 }
 
 const DESTRUCTIVE = [
@@ -187,7 +245,8 @@ const DESTRUCTIVE = [
     ["drop column", /\bdrop\s+column\b/],
     ["drop schema", /\bdrop\s+schema\b/],
     ["drop type", /\bdrop\s+type\b/],
-    ["truncate", /\btruncate\b/],
+    // Not the privilege name: `revoke delete, truncate on …`, `privilege_type in (…, 'TRUNCATE')`.
+    ["truncate", /(?<![,(]\s*)\btruncate\b(?!\s*(?:,|\)|\bon\b))/],
     ["delete rows", /\bdelete\s+from\b/],
     ["rename", /\brename\s+(?:column\s+)?(?:\w+\s+)?to\b/],
     ["column type change", /\balter\s+column\s+\w+\s+(?:set\s+data\s+)?type\b/],
@@ -206,9 +265,9 @@ const NOT_IDEMPOTENT = [
  * scope; a false `expand` would run a destructive change while the old code is still serving.
  */
 export function classifyMigrationSql(sql) {
-    const text = migrationStatementText(sql);
-    const destructive = DESTRUCTIVE.filter(([, re]) => re.test(text)).map(([label]) => label);
-    const idempotency = NOT_IDEMPOTENT.filter(([, re]) => re.test(text)).map(([label]) => label);
+    const { full, top } = scanMigrationSql(sql);
+    const destructive = DESTRUCTIVE.filter(([, re]) => re.test(full)).map(([label]) => label);
+    const idempotency = NOT_IDEMPOTENT.filter(([, re]) => re.test(top)).map(([label]) => label);
     return { class: destructive.length ? "contract" : "expand", destructive, idempotency_warnings: idempotency };
 }
 

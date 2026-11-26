@@ -77,6 +77,43 @@ test("classify: a DELETE inside a function body, a comment or a string is not a 
     assert.equal(classifyMigrationSql(sql).class, "expand");
 });
 
+test("classify: a destructive statement inside a DO block runs at migration time, so it is contract", () => {
+    for (const sql of [
+        "do $$ begin drop table if exists public.old_t; end $$;",
+        "do $$ begin if exists (select 1 from public.x) then delete from public.x where k = 'a'; end if; end $$;",
+        "do $do$ begin alter table public.x alter column y set not null; end $do$;",
+        "do $$ begin truncate public.x; end $$;",
+        "do $$ begin alter table public.x rename column a to b; end $$;",
+        "do $$ begin execute 'drop table public.x'; end $$;",
+        "do $$ begin execute format('alter table %I drop column y', 'x'); end $$;",
+        "do $outer$ begin execute $q$ delete from public.x $q$; end $outer$;",
+        "truncate table public.x, public.y restart identity;",
+    ]) {
+        assert.equal(classifyMigrationSql(sql).class, "contract", sql);
+    }
+});
+
+test("classify: a function created inside a DO block is still code; a guarded DO block adds no idempotency warning", () => {
+    const sql = "do $do$ begin create or replace function public.f() returns void language plpgsql as $fn$ begin delete from public.x; end $fn$; end $do$;\n"
+        + "do $$ begin if not exists (select 1 from pg_constraint where conname = 'c') then alter table public.x add constraint c check (id > 0); end if; end $$;";
+    const c = classifyMigrationSql(sql);
+    assert.equal(c.class, "expand");
+    assert.deepEqual(c.idempotency_warnings, []);
+});
+
+test("classify: TRUNCATE as a privilege name is not a truncate", () => {
+    const sql = "do $$ begin execute format('revoke insert, update, delete, truncate on table public.%I from anon', 'x'); "
+        + "if has_table_privilege('anon', 'public.x', 'SELECT,TRUNCATE,TRIGGER') then raise exception 'x'; end if; end $$;\nrevoke truncate on public.x from anon;";
+    assert.equal(classifyMigrationSql(sql).class, "expand");
+});
+
+test("classify: the repo's DO-block delete migration is contract", () => {
+    const file = "supabase/migrations/20260430216000_childcare_org_delete_cleaning_location_field_definitions.sql";
+    const c = classifyMigrationSql(readFileSync(join(HERE, "../../..", file), "utf8"));
+    assert.equal(c.class, "contract");
+    assert.ok(c.destructive.includes("delete rows"), c.destructive.join(", "));
+});
+
 test("classify: C4 idempotency warnings", () => {
     const c = classifyMigrationSql("create table public.x (id int); create index x_i on public.x(id); alter table public.x add constraint c check (id > 0);");
     assert.equal(c.idempotency_warnings.length, 3);

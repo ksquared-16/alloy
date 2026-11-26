@@ -25,7 +25,7 @@ staging verification, an owner approval bound to the manifest hash, and producti
 deploy, destructive after it. The procedure has a snapshot rollback point, a code rollback, and a hash-chained audit log. The same `prepare`/`execute`
 sequence and the same check functions ran in a **non-live rehearsal**: 17 end-to-end scenarios against a throwaway,
 network-less database, a local bare repository and a loopback build-info server, all passing (`17/17`). A further 24 offline tests cover each
-control and the owner-facing CLI (`24/24`). Run read-only against this repository's real refs, the tool reaches P4's
+control and the owner-facing CLI (`28/28`). Run read-only against this repository's real refs, the tool reaches P4's
 conclusions on its own. Staging does not fast-forward `main` (7 main-only commits). The P4 candidate does. Its schema plan is
 **blocked** because production's ledger is unknown, and, under the hypothesis that production equals main, it is blocked again by 21 named
 reasons: P4's three version collisions, the two migrations edited in place, the three renumbered copies, 12 out-of-order files and one
@@ -60,7 +60,7 @@ production (offline test *approval: every way it can be wrong*). Afterwards no l
 | Staging verification: CI | `staging_ci_red` | `trust-db-certification` red on the candidate → stops at `staging.verify`, no manifest, nothing to approve |
 | Staging verification: ALY-14 | `staging_extra_tenant`, `staging_no_firefly` | A second school on staging fails, and so does staging without Firefly |
 | Candidate identification | offline `identify:` test, and the real-refs run below | Diverged `main`, an extra tree path and a migration edit are each refused |
-| Ordered schema plan | `ledger_orphan`, `contract_not_last`, plus offline plan tests | A production version with no file is refused (C1). A destructive migration before an additive one is refused |
+| Ordered schema plan | `ledger_orphan`, `contract_not_last`, plus offline plan and `classify:` tests | A production version with no file is refused (C1). A destructive migration before an additive one is refused. A destructive statement inside a `DO` block is *contract*, including one run through `execute '…'`, while a function body, even one created inside a `DO` block, stays code |
 | Owner approval | `no_approval`, `expired_approval`, `stale_approval` | Each stops at `owner.approval` **before the snapshot**. Ledger, served build and `main` are unchanged |
 | Approval scope | `contract_without_scope` | The release goes live, and the destructive migration is held (`does not grant schema_contract`) |
 | Ordered apply, transactional | `migration_failure` | A real `division by zero` inside the second file's transaction. The first file stays applied, and the second file's `CREATE INDEX` and ledger row are both rolled back (asserted). The deploy is not attempted, and the old build serves |
@@ -85,7 +85,7 @@ P4 candidate `ea06c21f3401`.
 | `identify --staging origin/staging --main origin/main` | 1 | `main has 7 commit(s) the candidate lacks`. That is P4's seven, so staging cannot be released routinely until it is integrated |
 | `identify … --candidate refs/candidates/aly-14-p4-staging-to-main --allow-tree-diff .github/workflows/vacilando-tier2.yml` | 0 | Fast-forward. The tree differs from staging's only in that file. 557 migrations; the C1 preflight passes |
 | `plan … --production-ledger unknown` | 1 | `production_ledger_unknown` (P2 could not read it) |
-| `plan … --production-ledger baseline` (**hypothesis**: production's ledger = main's versions) | 1 | 332 pending (312 expand, 20 contract). 21 blockers: `baseline_collision` ×3 (`20260630120000`, `…130000`, `20260707120000`), `changed_in_place` ×2 (the two P4 named), `renumbered_duplicate` ×3, `out_of_order` ×12, `contract_not_last` ×1 (`20260702000002_commercial_tuition_rates_v2`). 48 C4 idempotency warnings |
+| `plan … --production-ledger baseline` (**hypothesis**: production's ledger = main's versions) | 1 | 332 pending (300 expand, 32 contract). 21 blockers: `baseline_collision` ×3 (`20260630120000`, `…130000`, `20260707120000`), `changed_in_place` ×2 (the two P4 named), `renumbered_duplicate` ×3, `out_of_order` ×12, `contract_not_last` ×1 (`20260702000002_commercial_tuition_rates_v2`). 48 C4 idempotency warnings |
 
 So the first promotion cannot go through the routine path as it stands, and the tool says exactly why. That work
 (P4 O6, and P5 if that is its scope) has to read production's ledger, bring production to the staging schema, and decide on the
@@ -96,8 +96,10 @@ through this procedure.
 
 | Check | Outcome |
 |---|---|
-| `node --test scripts/release/tests/release-procedure.test.mjs` | **24 pass / 0 fail**, exit 0 (`node-test-release-procedure.log`) |
-| `node scripts/release/alloy-release.mjs rehearse --out-dir …/rehearsal` (`node --test …/release-rehearsal.test.mjs`) | **17 pass / 0 fail**, exit 0, ~29 s (`rehearsal/node-test-release-rehearsal.log`) |
+| `node --test scripts/release/tests/release-procedure.test.mjs` | **28 pass / 0 fail**, exit 0 (`node-test-release-procedure.log`) |
+| Classifier over the repo's 556 migrations, before and after the `DO`-block fix (`real-refs/classifier-do-block-change.txt`) | 32 → 45 *contract*. 13 move from expand to contract, all `DELETE FROM` inside a `DO` block (e.g. `20260430216000_childcare_org_delete_cleaning_location_field_definitions`), and none move back. No idempotency warning changes. The review counted 21. The other 8 matched `TRUNCATE` only as a privilege name (`revoke …, truncate on`, `privilege_type in (…, 'TRUNCATE')`), which the `truncate` pattern now excludes. None of the 8 contains a `TRUNCATE` statement |
+| The new `DO`-block cases run through b8b3926ff's classifier | Each classed *expand*, so the new tests are red on the old code |
+| `node scripts/release/alloy-release.mjs rehearse --out-dir …/rehearsal` (`node --test …/release-rehearsal.test.mjs`) | **17 pass / 0 fail**, exit 0, ~29 s (`rehearsal/node-test-release-rehearsal.log`). Re-run after the `DO`-block fix: 17 / 0 again, and every manifest's migration classes are unchanged, so the recorded rehearsal artifacts stand |
 | Mutation checks (not kept): disabling the expiry check, and the approval gate in `execute` | Each turned a test red (`expired` offline; `no owner approval` rehearsal) |
 | Real-refs `identify` / `plan` | recorded above |
 | `web` lint/typecheck/vitest | not run: no `web/` file changed |

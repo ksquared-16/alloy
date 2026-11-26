@@ -103,7 +103,10 @@ non-loopback URL. Migrations are applied with `wrapMigrationForApply`, the same 
   account on the candidate PR, or a signed tag, is a prerequisite before this is treated as more than a speed bump.
 - `required_checks` holds workflow names from P4. They have to be confirmed against the real check-run names on `staging`
   commits before step 2 can pass live.
-- The expand/contract classification is a text heuristic, biased towards *contract*. It does not prove that the old build is
+- The expand/contract classification is a text heuristic, biased towards *contract*. Only `CREATE FUNCTION`/`PROCEDURE` bodies are
+  treated as code. A `DO` block runs at migration time, so its body is classified, string contents included, because
+  `execute 'drop …'` is how a `DO` block drops things. Dynamic SQL built from fragments can still slip past it, so review the
+  `DO` blocks of every expand migration. The heuristic does not prove that the old build is
   compatible with the expanded schema. That rests on review and on staging having run the two together.
 - The fingerprint covers the `public` schema (columns, policies, function signatures, indexes, RLS). It does not cover
   `auth`, `storage`, extensions or vault secrets (P4 F7: set `scheduled_work_wake_url` before the wake credential).
