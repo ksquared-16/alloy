@@ -66,7 +66,7 @@ closed without the evidence in the last column. Any open row at 09:00 is a no-go
 
 | ID | Missing | Why it blocks | Evidence today | Closed when, by whom |
 |---|---|---|---|---|
-| **M1** | **ALY-14 E1–E4 are not on `staging`.** `2e2f0acf8`, `d0bccd81d` (E1), `a092757a1` (E2), `4972595ae` (E4) are on this branch only | D1. `ALLOY_ENVIRONMENT` and its fail-closed outbound guard exist only because of E1 | `staging-integration-check.txt` | Step 1: staging `/api/build-info` serves the merge. Developer; the push is an authorized action |
+| **M1** | **ALY-14 E1–E4 are not on `staging`.** All 19 commits whose message names ALY-14 are on this branch only: E1 `2e2f0acf8`, `d0bccd81d`; E2 from `a092757a1` (with `456fcafff`, `583156942`); E3 from `a31cc8294` to `9d194f40c` (including `2ac3bccd3`, `3376e5618`, `f4d0b3a50`); E4 `4972595ae`. None of the four anchors is an ancestor of `origin/staging` | D1. `ALLOY_ENVIRONMENT` and its fail-closed outbound guard exist only because of E1 | `staging-integration-check.txt` | Step 1: staging `/api/build-info` serves the merge. Developer; the push is an authorized action |
 | **M2** | **No W-17 retirement migration exists.** No committed file sets `_w17_selftest_%` orgs to `retired` | D10. `check-production` fails on an unretired self-test org (`release-lib.mjs:429`); production may only receive migrations staging ran (`release-lib.mjs:149`) | P4 F3; `rebuild/w17-removal-trial.txt` (a plain delete fails on `document_category_in_use`; `status='retired'` works) | Step 1: the migration is merged with E1–E4 and staging's W-17 org reads `retired`. Developer |
 | **M3** | **The release tool has no first-promotion mode.** `plan` over an empty ledger is **blocked** (`contract_not_last`, 45 contract files among 557, the first `20260329210000`), and `production.preflight` expects production to serve the old `main` on the project named in `release-config.json` | D9. Without it, `prepare` writes no manifest, so `approve`, `emit-apply`, `record` and the hash-chained audit have nothing to bind | `plan-empty-ledger-p4-candidate.json`; P6 procedure *Limits* | The mode is committed with offline tests (`npm run test:release-procedure`) and rehearsed non-live. Developer, before step 5 |
 | **M4** | **`release-config.json` names the old production project** (`vslwnntzzgpnmrpjipat`) | Every check against production after cutover must expect the new ref (`checkBuildInfo` compares `supabaseProjectRef`) | `scripts/release/release-config.json`; `alloy-release.mjs:73` (`--config` overrides the file for one run) | Step 5: a config copy naming the new ref in the release directory. The committed file follows in the next release |
@@ -96,7 +96,9 @@ built this way. This plan does not treat the difference as accepted, and it does
 **Resolution (a prerequisite, not a choice).** Step 1's staging merge also brings main's retired
 `.github/workflows/vacilando-tier2.yml` to staging. Staging then loses only a `schedule:` block that never fired off the
 default branch (`deployment-and-environments.md:128`, `:131-133`; the Vacilando lanes are retired), and keeps
-`workflow_dispatch`. The rebuilt candidate's tree then equals staging's, and identify passes with no allowance. Nothing in
+`workflow_dispatch`. Main's copy is also the only safe one to promote: `main` is the default branch, so staging's copy
+reaching `main` at step 11 would start the nightly schedule there (main's file header says the schedule was removed for
+exactly that reason). The rebuilt candidate's tree then equals staging's, and identify passes with no allowance. Nothing in
 `release-config.json` or `scripts/release/` changes for this.
 
 **Stop condition.** If, at step 2 or step 7, `identify` without `--allow-tree-diff` exits non-zero for any reason, stop.
@@ -109,7 +111,7 @@ Steps 1–6 come before the window; 7–17 are the window. **11:20 is the last k
 
 | # | When (PT) | Step | Done when | Who |
 |---|---|---|---|---|
-| **1** | before 30 Nov | **D1 + D10: integrate into `staging`.** One **merge** of the branch carrying E1–E4 (`2e2f0acf8`, `d0bccd81d`, `a092757a1`, `4972595ae`), the W-17 retirement migration (M2) and main's retired `vacilando-tier2.yml` (§2). This branch merges into `origin/staging` cleanly (`git merge-tree` exit 0); it is 8 commits behind staging, so it is a merge that keeps staging's commits, never a reset (`staging-integration-check.txt`). The migration is applied to staging through staging's normal migration path | Staging `/api/build-info` serves the merge; staging CI green; staging's W-17 org reads `retired`; staging's ledger holds the new migration | Developer; the push is an authorized action (CLAUDE.md *Git / deploy*) |
+| **1** | before 30 Nov | **D1 + D10: integrate into `staging`.** One **merge** of the branch carrying all of E1–E4 (M1), the W-17 retirement migration (M2) and main's retired `vacilando-tier2.yml` (§2). This branch merges into `origin/staging` cleanly (`git merge-tree` exit 0, re-run offline at this revision); it is 8 commits behind staging, so it is a merge that keeps staging's commits, never a reset (`staging-integration-check.txt`). The migration is applied to staging through staging's normal migration path | Staging `/api/build-info` serves the merge; staging CI green; staging's W-17 org reads `retired`; staging's ledger holds the new migration | Developer; the push is an authorized action (CLAUDE.md *Git / deploy*) |
 | **2** | before 30 Nov | **Freeze `staging`, rebuild the candidate, identify it.** No merges to staging until 12:00 on 1 Dec (P4 O7). Re-fetch; P4 `candidate/build-candidate.sh <origin/staging> <origin/main>`; `release identify` **without** `--allow-tree-diff` (§2) | New candidate SHA recorded; `main` fast-forwards to it; identify exit 0. Otherwise the §2 stop condition | Developer |
 | **3** | before 30 Nov | **Recount and recheck the candidate.** P4 `candidate/migration-counts.sh` (557 plus what step 1 adds, including the W-17 migration as the highest-numbered new file it introduces); no `schedule:` in any candidate workflow; `git grep DrawerSummaryStripBoundary` re-run (§5.5) | Count and head version recorded: this is the list step 9 applies | Developer |
 | **4** | before 30 Nov | **Green CI on the candidate (M6).** Push it to a non-deploying branch, open the PR to `main` marked *do not merge* (P4 *Integration through a pull request*); confirm `required_checks` names against real check-runs | Every `required_checks` name has a `success` check-run on the candidate SHA | Developer; authorized push/PR |
@@ -118,7 +120,7 @@ Steps 1–6 come before the window; 7–17 are the window. **11:20 is the last k
 | **7** | 09:00 | **Go/no-go**: M1–M9 closed with evidence. Then **candidate identification** (P6 step 1) after a fetch, no allowance; **staging verification** (P6 step 2): staging serves the head the candidate was built from, on `ikaxilmwmrmbagoidedu`; check-runs green; ledger equals the candidate's migrations; tenancy passes. **Production before**: `/api/build-info` serves `main` on the old project; C-RB-1 and C-RB-2 re-read | All M closed; identify exit 0; staging passes; production unchanged | Owner, Developer |
 | **8** | 09:25 | **Owner approval** (P6 step 4) through the first-promotion mode's manifest (D9) | Approval recorded in the audit chain; P6 TTL (4 h default) covers the window | Owner |
 | **9** | 09:30 | **Schema apply on the new project** (§4), then the census (§4 item 6) | Census passes by 10:30, or hold | Developer through the release tool; owner present |
-| **10** | 10:30 | **Platform settings.** Supabase §5.1; Vercel Production scope §5.2 (with the D6 flags and the drawer-strip pair); Render §5.3, saved without deploying where Render allows (C-REN-2). `NEXT_PUBLIC_*` before step 11's build | §5.1–5.3 rows set and re-read | Owner in the dashboards |
+| **10** | 10:30 | **Platform settings.** Supabase §5.1; Vercel Production scope §5.2 (with the D6 flags and the drawer-strip pair); Render §5.3, saved without deploying. If C-REN-2 shows that saving Render's environment redeploys the service, Render's values move to step 11 and are saved immediately before its Render deploy, so the old backend never runs against the new project. `NEXT_PUBLIC_*` before step 11's build | §5.1–5.3 rows set and re-read | Owner in the dashboards |
 | **11** | 10:45 | **Release** (P6 step 7). `git ls-remote origin main` equals step 2's base; fast-forward `main` to the candidate, never `--force`; poll production `/api/build-info` until it serves the candidate on the **new** ref; then deploy Render on the candidate commit. This first `main` deploy also registers the `web/vercel.json` Vercel Cron (§5.4) | Both services serve the candidate | Developer; owner in Render |
 | **12** | 11:00 | **Vault `scheduled_work_wake_url`** in the new project = the production origin + `/api/scheduled-work/wake` (§5.4). Unconditional | Secret present, names the production origin | Owner in Supabase |
 | **13** | 11:03 | **Vault `scheduled_work_wake_credential`** = production `INTERNAL_CRON_TOKEN`, after step 12 reads back correctly (§5.4). Unconditional | Secret present | Owner in Supabase |
@@ -426,9 +428,10 @@ creation paths (P4 F6); P3's classification of configuration and records.
 
 ## 10. Owner decisions still open
 
-**None of D1–D11.** One question is not answered by them: D11 says the owner does not type commands and that step 16 is
-not an agent run, but it does not name the person at the keyboard of the Mac mini operator session. Step 6 cannot write
-the command list's operator line until that is named. It is the only open item for the owner.
+**None of D1–D11 is re-opened here.** One point falls outside them: D11 fixes *where* step 16 runs (the Mac mini
+operator session), that the owner is present and does not type, that the transcript is recorded and that it is not an
+agent run, but it does not name **who operates the keyboard**. Step 6's command list needs that name on its operator
+line. This is the only owner question left; everything else in §1 is work or evidence, not a choice.
 
 ## 11. What this briefing does not do
 

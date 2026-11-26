@@ -394,8 +394,9 @@ This checklist is an input to the first promotion, not a step that authorizes an
 unchanged:** nothing here grants, satisfies or replaces it, and no setting may be changed on production because this
 document lists it. At cutover, in the order the code needs:
 
-1. Before the first production build: every **R** row in A.2 and the **C** rows for the capabilities going live. The
-   `NEXT_PUBLIC_*` rows must be in place before `next build`.
+1. Before the first production build: every **R** row in A.2, the **C** rows for the capabilities going live, and the
+   **F** rows copied from staging (D6) with the drawer-strip pair always set. The `NEXT_PUBLIC_*` rows must be in place
+   before `next build`.
 2. Before the backend serves production traffic: the **R** and **C** rows in B.2, with the §D pairs matching.
 3. After the schema step: §C.1 extensions and bucket. After the first `main` deploy: Vault `scheduled_work_wake_url`, then
    `scheduled_work_wake_credential` (D4: `pg_cron` + `pg_net`, as on staging; `CRON_SECRET` unset).

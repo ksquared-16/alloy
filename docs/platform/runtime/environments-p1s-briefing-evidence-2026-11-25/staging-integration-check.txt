@@ -35,3 +35,11 @@ $ for each: git merge-base --is-ancestor <c> origin/staging
 d0bccd81d not-on-staging
 a092757a1 not-on-staging
 4972595ae not-on-staging
+
+# re-run 2026-11-25 at HEAD 2fb165afcb4f (git objects only; no fetch; refs unchanged)
+$ git rev-list --count HEAD..origin/staging
+8
+$ git merge-tree --write-tree --name-only origin/staging HEAD >/dev/null; echo exit=$?
+exit=0
+$ git log --format=%h origin/staging..HEAD --grep='ALY-14' | wc -l
+19
