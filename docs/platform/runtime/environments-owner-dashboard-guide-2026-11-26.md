@@ -132,16 +132,16 @@ you type, so a password typed there would stay in your saved queries.
 **3. Build the connection string.** You do this in your secret store, not in any dashboard field.
 
 - **Where:** the same project, the **Connect** button at the top of the dashboard, the **Session pooler** string. It
-  looks like `postgresql://postgres.<ref>:[YOUR-PASSWORD]@<pooler-host>:5432/postgres`. On the new project, the host is
-  in `us-west-2`, for example `aws-0-us-west-2.pooler.supabase.com`. Copy staging's host from staging's own *Connect*
-  panel.
+  starts with `postgresql://postgres.<ref>`, then a colon and the placeholder `[YOUR-PASSWORD]`, then
+  `@<pooler-host>:5432/postgres`. On the new project, the host is in `us-west-2`, for example
+  `aws-0-us-west-2.pooler.supabase.com`. Copy staging's host from staging's own *Connect* panel.
 - **Enter:** copy that string into your secret store. Change the user at the start, `postgres.<ref>`, to
   `alloy_readonly.<ref>`. Replace `[YOUR-PASSWORD]` with the role's password from step 2. Leave the host, port `5432`
   and `/postgres` as they are. Save it as `PRODUCTION_DB_URL_READONLY` (new project) or `STAGING_DB_URL_READONLY`
   (staging).
-- **Check:** the string has the shape
-  `postgresql://alloy_readonly.tjziptdknxdajzauctha:<password>@<pooler-host>:5432/postgres` (or the same with
-  `ikaxilmwmrmbagoidedu` for staging). The host ends in `pooler.supabase.com`, and the port is `5432`.
+- **Check:** the string starts with `postgresql://alloy_readonly.tjziptdknxdajzauctha` (for staging,
+  `postgresql://alloy_readonly.ikaxilmwmrmbagoidedu`), then a colon, the role's password, and
+  `@<pooler-host>:5432/postgres`. The host ends in `pooler.supabase.com`, and the port is `5432`.
 - **If it doesn't work:** do not use port `6543` (the *transaction* pooler: the release tool refuses it). Do not use the
   *Direct connection* `db.<ref>.supabase.co`: it works only over IPv6 unless the IPv4 add-on is bought.
 
@@ -177,7 +177,8 @@ psql "$PRODUCTION_DB_URL_READONLY" -X -At -c "set default_transaction_read_only 
 - the **`anon` key**;
 - the **`service_role` key**;
 - the `postgres` connection, the *Session pooler* string on port 5432 with the database password, as
-  `PRODUCTION_DB_URL`: `postgresql://postgres.tjziptdknxdajzauctha:<password>@<pooler-host>:5432/postgres`;
+  `PRODUCTION_DB_URL`: it starts with `postgresql://postgres.tjziptdknxdajzauctha`, then a colon, the database password,
+  and `@<pooler-host>:5432/postgres`;
 - the read-only role's connection, `PRODUCTION_DB_URL_READONLY`, which you built in the step before.
 
 **Check:** both connections say port 5432, and both name `<new-ref>`, not `vslwnntzzgpnmrpjipat` and not staging's

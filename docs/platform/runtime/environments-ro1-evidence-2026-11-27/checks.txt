@@ -1,0 +1,38 @@
+# RO1 task-8 checks, on the working tree of commit 4 (exit codes read directly, not through a pipe)
+## npm run test:settings-checklist  (exit 0)
+ok 1 - every key the code reads is in the checklist or named as not a setting
+ok 2 - the checklist names no key the code does not read
+ok 3 - each row has a known class, and its cited file reads the key
+ok 4 - the checklist contains no credential-shaped value
+ok 5 - the first-promotion briefing: no credential, every settled decision, no dangling label
+ok 6 - the final cutover plan: no credential, the owner's window, every step and decision point, step 16 on the post-clock baseline
+ok 7 - scanner: each detection rule, on a fixture tree
+# tests 7
+# pass 7
+# fail 0
+## npm run docs:lint  (exit 0)
+docs-lint (report)
+Summary: {}
+## node --test scripts/release/tests/*.test.mjs  (exit 0)
+# tests 81
+# pass 81
+# fail 0
+# cancelled 0
+# skipped 0
+## npm run verify:migration-versions  (exit 0)
+repo: 558 files, 558 unique versions
+preflight OK — migration history is consistent
+## first-promotion-config --new-ref tjziptdknxdajzauctha --out /tmp/ro1-config/release-config.json  (exit 0)
+{
+  "ok": true,
+  "out": "/tmp/ro1-config/release-config.json",
+  "config_sha256": "cec84036f1dde02acef2ec93574f720d2b65f4756df1327bf82736c0791313a1",
+  "production": {
+    "branch": "main",
+    "vercel_env": "production",
+    "supabase_project_ref": "tjziptdknxdajzauctha",
+    "build_info_url": "https://www.workwithalloy.com/api/build-info",
+    "previous_supabase_project_ref": "vslwnntzzgpnmrpjipat"
+  }
+}
+## git diff --stat -- scripts/release/release-config.json (empty = unchanged)
