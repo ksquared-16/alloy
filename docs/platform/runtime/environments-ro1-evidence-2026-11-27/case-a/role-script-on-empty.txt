@@ -1,0 +1,38 @@
+BEGIN
+DO
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+GRANT
+GRANT
+ALTER DEFAULT PRIVILEGES
+CREATE SCHEMA
+GRANT
+GRANT
+ALTER DEFAULT PRIVILEGES
+DO
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+COMMIT
+               check_name                |                                                                                      result                                                                                      
+-----------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ role attributes                         | ok
+ session settings                        | ok
+ member of no role                       | ok
+ public tables readable                  | ok (0 tables and views)
+ no write privilege granted to the role  | ok
+ no CREATE on any schema or the database | ok
+ ledger                                  | ok (no ledger table yet: step 9 creates it, and the default privileges cover it)
+ storage.buckets                         | ok
+ default privileges for future tables    | ok
+ reachable through PUBLIC (note)         | note: Supabase grants these to every role and this script cannot take them away from one role; refused while the session is read-only: writes on no table; temporary tables: yes
+(10 rows)
+
