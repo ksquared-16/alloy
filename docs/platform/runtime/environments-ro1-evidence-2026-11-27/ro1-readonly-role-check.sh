@@ -18,7 +18,9 @@
 # name. The committed script still creates `alloy_readonly`; nothing here creates that role.
 #
 # For each case: every read the release tool and the step-6 export run against a READONLY URL, as `postgres` and as the
-# role, with the outputs compared; then the refusals (writes, read-only turned off then a write, DDL, a writing
+# role. The catalog and ledger reads must be equal; the reads of tenant rows (census, orgs, export) must be refused by
+# row-level security (the role has NOBYPASSRLS and row_security = off), and with row_security turned back on in its own
+# session the role must read no tenant row. Then the refusals (writes, read-only turned off then a write, DDL, a writing
 # SECURITY DEFINER function); then what PUBLIC still reaches. No hosted service, no credential, no supabase CLI.
 # Teardown (also on failure): drop the test roles' grants and default privileges in each case database, drop the case
 # databases and the test roles, show with \du and \ddp that none remains, release the lease.
@@ -36,7 +38,6 @@ HOLDER=ro1-readonly-check-$$
 DBA=ro1_case_a_$$
 DBB=ro1_case_b_$$
 ROLE=ro1_readonly_$$                  # the role script's role, under its test name
-CTL=ro1_control_nobypassrls_$$
 PW=ro1-throwaway        # local-only password for the test role; loopback is `trust` on the stack, and the role is dropped
 REL="node $REPO/scripts/release/alloy-release.mjs"
 T=/tmp/alloy-ro1-$$
@@ -63,15 +64,15 @@ drop_case() {  # <db>...: in each, the test roles' grants and default-privilege 
   local D R
   for D in "$@"; do
     db_exists $D || continue
-    for R in $ROLE $CTL; do role_exists $R && SA $D -qAtX -c "drop owned by $R" >/dev/null; done
+    role_exists $ROLE && SA $D -qAtX -c "drop owned by $ROLE" >/dev/null
     AS_PG postgres -qAtX -c "drop database $D with (force)" >/dev/null
   done
-  for R in $CTL $ROLE; do role_exists $R && SA postgres -qAtX -c "drop role $R" >/dev/null; done
+  role_exists $ROLE && SA postgres -qAtX -c "drop role $ROLE" >/dev/null
 }
 
 cleanup() {
   local rc=$?
-  [ -n "${KEEP:-}" ] && { echo "KEEP set: databases $DBA $DBB and roles $ROLE $CTL left in the shared stack; lease kept"; return; }
+  [ -n "${KEEP:-}" ] && { echo "KEEP set: databases $DBA $DBB and role $ROLE left in the shared stack; lease kept"; return; }
   if [ -n "$C" ]; then
     drop_case $DBA $DBB
     echo "## teardown proof (shared stack $C, database postgres)"
@@ -106,10 +107,10 @@ C=$(ct db); AUTHC=$(ct auth); STORC=$(ct storage)
 MAJOR=$(( $(SA postgres -AtX -c 'show server_version_num') / 10000 ))
 echo "$C: $(docker inspect $C --format '{{.Config.Image}}'); $(SA postgres -AtX -c 'select version()' | cut -d, -f1); major $MAJOR, hosted projects 17: $([ $MAJOR = 17 ] && echo match || echo 'MISMATCH (the results below are from Postgres '$MAJOR', not 17)')"
 echo "  auth $AUTHC ($(docker inspect $AUTHC --format '{{.Config.Image}}')), storage $STORC ($(docker inspect $STORC --format '{{.Config.Image}}'))"
-for R in $ROLE $CTL alloy_readonly; do role_exists $R && die "role $R already exists on the shared stack"; done
+for R in $ROLE alloy_readonly; do role_exists $R && die "role $R already exists on the shared stack"; done
 for D in $DBA $DBB; do db_exists $D && die "database $D already exists on the shared stack"; done
 ROLES_BEFORE=$(roles_state)
-echo "  before: no role $ROLE, $CTL or alloy_readonly; no database $DBA or $DBB; cluster roles $ROLES_BEFORE"
+echo "  before: no role $ROLE or alloy_readonly; no database $DBA or $DBB; cluster roles $ROLES_BEFORE"
 
 # ── the role script, under the test name: the committed file, with only the role's name replaced ──
 ROLE_SQL=$T/role-script.sql
@@ -182,35 +183,54 @@ compare() {  # <db> <dir> <name> <sql> [psql flags...]: the same read as postgre
   [ $v = EQUAL ] && [ $r1 -eq 0 ] && [ $r2 -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 }
 
+RLS_ERR='query would be affected by row-level security policy'
+gated() {  # <db> <dir> <name> <sql> [psql flags...]: a read of tenant rows. postgres reads them; the role is refused by RLS
+  local D=$1 O=$2 N=$3 Q=$4; shift 4
+  AS_PG $D "$@" -f - < "$Q" > "$O/$N.postgres.txt" 2>&1; local r1=$?
+  AS_RO $D -v ON_ERROR_STOP=1 "$@" -f - < "$Q" > "$O/$N.alloy_readonly.txt" 2>&1; local r2=$?
+  local v=READ; grep -q "$RLS_ERR" "$O/$N.alloy_readonly.txt" && v=REFUSED_BY_RLS
+  printf '  %-26s postgres rc=%s lines=%-4s | alloy_readonly rc=%s lines=%-4s | %s: %s\n' "$N" $r1 "$(wc -l < "$O/$N.postgres.txt" | tr -d ' ')" $r2 "$(wc -l < "$O/$N.alloy_readonly.txt" | tr -d ' ')" $v "$(grep -m1 -o "$RLS_ERR.*" "$O/$N.alloy_readonly.txt")"
+  [ $v = REFUSED_BY_RLS ] && [ $r1 -eq 0 ] && [ $r2 -ne 0 ] && [ -s "$O/$N.postgres.txt" ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
+}
+
 reads() {  # <db> <dir>: every READONLY read the release tool and the step-6 export run
   compare $1 $2 ledger "$EV/queries/ledger.sql" -At
   compare $1 $2 ledger-if-present "$EV/queries/ledger-if-present.sql" -At -q
   compare $1 $2 fingerprint "$EV/queries/fingerprint.sql" -At
-  compare $1 $2 census "$EV/queries/census.sql" -At
-  compare $1 $2 orgs "$EV/queries/orgs.sql" -At
-  PGOPT="-c default_transaction_read_only=on" compare $1 $2 tenant-config-export "$EV/queries/tenant-config-export.sql" -q -A -t -v org_id=$ORG
+  gated $1 $2 census "$EV/queries/census.sql" -At
+  gated $1 $2 orgs "$EV/queries/orgs.sql" -At
+  PGOPT="-c default_transaction_read_only=on" gated $1 $2 tenant-config-export "$EV/queries/tenant-config-export.sql" -q -A -t -v org_id=$ORG
 }
 
-control() {  # <db> <dir>: the same orgs read and the export, as a role WITHOUT BYPASSRLS (why the role has it)
-  AS_PG $1 -qAtX -v ON_ERROR_STOP=1 -c "create role $CTL login nobypassrls password '$PW'" \
-    -c "alter role $CTL set default_transaction_read_only = on" \
-    -c "grant usage on schema public to $CTL" -c "grant select on all tables in schema public to $CTL" || die "control role"
-  local CR="docker exec -i -e PGPASSWORD=$PW $C psql -h 127.0.0.1 -U $CTL -d $1 -X"
-  $CR -At -f - < "$EV/queries/orgs.sql" > "$2/control-nobypassrls-orgs.txt" 2>&1
-  $CR -q -A -t -v org_id=$ORG -f - < "$EV/queries/tenant-config-export.sql" > "$2/control-nobypassrls-export.txt" 2>&1
-  echo "  control (same SELECT grants, NOBYPASSRLS): orgs lines=$(grep -c . "$2/control-nobypassrls-orgs.txt") (alloy_readonly $(grep -c . "$2/orgs.alloy_readonly.txt")); export org=$(grep -o '"org" : [^,]*' "$2/control-nobypassrls-export.txt" | head -1) locations=$(grep -o '"locations" : \[[^]]\{0,3\}' "$2/control-nobypassrls-export.txt" | head -1)"
-  AS_PG $1 -qAtX -c "revoke select on all tables in schema public from $CTL" -c "revoke usage on schema public from $CTL" -c "drop role $CTL" || die "drop control role"
+rows_hidden() {  # <db> <dir>: the role turns row_security back on in its own session: RLS then hides every tenant row
+  local D=$1 H=$2/rows-hidden.txt ON=(-c "set row_security = on")
+  {
+    echo "# $ROLE (the role script's role, test name) with row_security = on in its own session; postgres reads orgs=$(AS_PG $D -AtX -c 'select count(*) from public.orgs')"
+    echo "## rolbypassrls"; AS_PG $D -AtX -c "select rolbypassrls from pg_roles where rolname = '$ROLE'" 2>&1
+    echo "## policies naming the role"; AS_PG $D -AtX -c "select count(*) from pg_policies where '$ROLE' = any(roles)" 2>&1
+    echo "## orgs"; AS_RO $D -q -At "${ON[@]}" -f - < "$EV/queries/orgs.sql" 2>&1
+    echo "## count(*) public.orgs, public.locations"; AS_RO $D -q -At "${ON[@]}" -c "select 'orgs ' || count(*) from public.orgs" -c "select 'locations ' || count(*) from public.locations" 2>&1
+    echo "## export"; PGOPT="-c default_transaction_read_only=on" AS_RO $D -q -A -t "${ON[@]}" -v org_id=$ORG -f - < "$EV/queries/tenant-config-export.sql" 2>&1
+  } > "$H"
+  local bypass pol orgs locs; bypass=$(sed -n '/^## rolbypassrls/{n;p;}' "$H"); pol=$(sed -n '/^## policies naming/{n;p;}' "$H")
+  orgs=$(sed -n '/^## orgs$/,/^## count/p' "$H" | grep -vc '^##'); locs=$(grep -o '^locations [0-9]*' "$H")
+  echo "  rows hidden (row_security on, own session): rolbypassrls=$bypass, policies naming the role=$pol; orgs lines=$orgs; $(grep -o '^orgs [0-9]*' "$H"), $locs; export org=$(grep -o '"org" : [^,]*' "$H" | head -1)"
+  [ "$bypass" = f ] && [ "$pol" = 0 ] && [ "$orgs" = 0 ] && grep -qx 'orgs 0' "$H" && [ "$locs" = 'locations 0' ] && grep -q '"org" : null' "$H" && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 }
 
-refuse() {  # <db> <file> <label> <sql> [off]: must fail, as the role, one session each. With `off`, the session first
-  # runs `SET default_transaction_read_only = off` as its own statement (its own transaction: inside one `-c` string
-  # the SET would not reach the transaction already started, and the test would prove nothing).
+refuse() {  # <db> <file> <label> <sql> [off|off-rls]: must fail, as the role, one session each. With `off`, the session
+  # first runs `SET default_transaction_read_only = off` as its own statement (its own transaction: inside one `-c`
+  # string the SET would not reach the transaction already started, and the test would prove nothing). With `off-rls`
+  # it also turns row_security back on, so a write on a table behind RLS meets the privilege check, not the RLS error.
   local pre=(); [ "${5:-}" = off ] && pre=(-c "set default_transaction_read_only = off")
+  [ "${5:-}" = off-rls ] && pre=(-c "set default_transaction_read_only = off" -c "set row_security = on")
   local out; out=$(AS_RO $1 -At -v ON_ERROR_STOP=1 ${pre[@]+"${pre[@]}"} -c "$4" 2>&1); local rc=$?
   local err; err=$(echo "$out" | grep -m1 -E 'ERROR|WARNING' | sed 's/^psql:[^:]*:[0-9]*: //')
   if [ $rc -ne 0 ]; then printf 'REFUSED  %-58s rc=%s  %s\n' "$3" $rc "$err" >> "$2"; PASS=$((PASS+1));
   else printf 'ALLOWED  %-58s rc=%s  %s\n' "$3" $rc "$(echo "$out" | tr '\n' ' ' | cut -c1-120)" >> "$2"; FAIL=$((FAIL+1)); fi
-  printf '         sql: %s%s\n' "$([ "${5:-}" = off ] && echo 'set default_transaction_read_only = off; -- then, as its own statement: ')" "$4" >> "$2"
+  local how=; [ "${5:-}" = off ] && how='set default_transaction_read_only = off; -- then, as its own statement: '
+  [ "${5:-}" = off-rls ] && how='set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: '
+  printf '         sql: %s%s\n' "$how" "$4" >> "$2"
 }
 
 refusals() {  # <db> <dir>
@@ -228,6 +248,11 @@ refusals() {  # <db> <dir>
   refuse $D "$R" "SET read_only off; update public.orgs" "update public.orgs set name = name" off
   refuse $D "$R" "SET read_only off; delete public.locations" "delete from public.locations" off
   refuse $D "$R" "SET read_only off; truncate public.locations" "truncate public.locations" off
+  echo "## read-only off AND row_security back on, then a write (the privilege check, with RLS out of the way)" >> "$R"
+  refuse $D "$R" "read_only off, row_security on; insert public.orgs" "insert into public.orgs (name, slug) values ('ro1', 'ro1')" off-rls
+  refuse $D "$R" "read_only off, row_security on; update public.orgs" "update public.orgs set name = name" off-rls
+  refuse $D "$R" "read_only off, row_security on; delete public.locations" "delete from public.locations" off-rls
+  refuse $D "$R" "read_only off, row_security on; update storage.buckets" "update storage.buckets set public = true" off-rls
   refuse $D "$R" "BEGIN READ WRITE; update public.orgs" "begin read write; update public.orgs set name = name; commit"
   refuse $D "$R" "SET read_only off; delete the ledger" "delete from supabase_migrations.schema_migrations" off
   refuse $D "$R" "SET read_only off; update storage.buckets" "update storage.buckets set public = true" off
@@ -297,7 +322,7 @@ sed -n '/^-- The check table\./,$p' "$ROLE_SQL" | AS_PG $DBA -f - > "$EV/case-a/
 echo "  checks after the chain (the role script's own table, re-read): $(grep -c '| ok' "$EV/case-a/checks-after-chain.txt") of 9 ok"
 seed $DBA
 reads $DBA "$EV/case-a"
-control $DBA "$EV/case-a"
+rows_hidden $DBA "$EV/case-a"
 refusals $DBA "$EV/case-a"
 public_reach $DBA "$EV/case-a"
 # Case B starts as staging does: no such role yet. Case A's database and role go first.
@@ -311,7 +336,7 @@ seed $DBB
 role_script $DBB "$EV/case-b/role-script-on-applied.txt"
 role_script $DBB "$EV/case-b/role-script-second-run.txt"
 reads $DBB "$EV/case-b"
-control $DBB "$EV/case-b"
+rows_hidden $DBB "$EV/case-b"
 refusals $DBB "$EV/case-b"
 public_reach $DBB "$EV/case-b"
 

@@ -1,0 +1,11 @@
+# ro1_readonly_18071 (the role script's role, test name) with row_security = on in its own session; postgres reads orgs=2
+## rolbypassrls
+f
+## policies naming the role
+0
+## orgs
+## count(*) public.orgs, public.locations
+orgs 0
+locations 0
+## export
+{"org" : null, "locations" : [], "role_types" : [], "departments" : [], "work_units" : []}

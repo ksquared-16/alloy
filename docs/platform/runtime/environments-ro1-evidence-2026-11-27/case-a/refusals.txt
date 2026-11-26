@@ -1,27 +1,36 @@
-# as ro1_readonly_67076, the role script's role under its test name
+# as ro1_readonly_18071, the role script's role under its test name
 ## writes, in the role's default read-only session
-REFUSED  insert public.orgs                                         rc=1  ERROR:  cannot execute INSERT in a read-only transaction
+REFUSED  insert public.orgs                                         rc=1  ERROR:  query would be affected by row-level security policy for table "orgs"
          sql: insert into public.orgs (name, slug) values ('ro1', 'ro1')
-REFUSED  update public.orgs                                         rc=1  ERROR:  cannot execute UPDATE in a read-only transaction
+REFUSED  update public.orgs                                         rc=1  ERROR:  query would be affected by row-level security policy for table "orgs"
          sql: update public.orgs set name = name
-REFUSED  delete public.locations                                    rc=1  ERROR:  cannot execute DELETE in a read-only transaction
+REFUSED  delete public.locations                                    rc=1  ERROR:  query would be affected by row-level security policy for table "locations"
          sql: delete from public.locations
 REFUSED  truncate public.locations                                  rc=1  ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
          sql: truncate public.locations
 ## read-only turned off, then a write (refused by privilege, not by the setting)
-REFUSED  SET read_only off; insert public.orgs                      rc=1  ERROR:  permission denied for table orgs
+REFUSED  SET read_only off; insert public.orgs                      rc=1  ERROR:  query would be affected by row-level security policy for table "orgs"
          sql: set default_transaction_read_only = off; -- then, as its own statement: insert into public.orgs (name, slug) values ('ro1', 'ro1')
-REFUSED  SET read_only off; update public.orgs                      rc=1  ERROR:  permission denied for table orgs
+REFUSED  SET read_only off; update public.orgs                      rc=1  ERROR:  query would be affected by row-level security policy for table "orgs"
          sql: set default_transaction_read_only = off; -- then, as its own statement: update public.orgs set name = name
-REFUSED  SET read_only off; delete public.locations                 rc=1  ERROR:  permission denied for table locations
+REFUSED  SET read_only off; delete public.locations                 rc=1  ERROR:  query would be affected by row-level security policy for table "locations"
          sql: set default_transaction_read_only = off; -- then, as its own statement: delete from public.locations
 REFUSED  SET read_only off; truncate public.locations               rc=1  ERROR:  permission denied for table locations
          sql: set default_transaction_read_only = off; -- then, as its own statement: truncate public.locations
-REFUSED  BEGIN READ WRITE; update public.orgs                       rc=1  ERROR:  permission denied for table orgs
+## read-only off AND row_security back on, then a write (the privilege check, with RLS out of the way)
+REFUSED  read_only off, row_security on; insert public.orgs         rc=1  ERROR:  permission denied for table orgs
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: insert into public.orgs (name, slug) values ('ro1', 'ro1')
+REFUSED  read_only off, row_security on; update public.orgs         rc=1  ERROR:  permission denied for table orgs
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: update public.orgs set name = name
+REFUSED  read_only off, row_security on; delete public.locations    rc=1  ERROR:  permission denied for table locations
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: delete from public.locations
+REFUSED  read_only off, row_security on; update storage.buckets     rc=1  ERROR:  permission denied for table buckets
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: update storage.buckets set public = true
+REFUSED  BEGIN READ WRITE; update public.orgs                       rc=1  ERROR:  query would be affected by row-level security policy for table "orgs"
          sql: begin read write; update public.orgs set name = name; commit
 REFUSED  SET read_only off; delete the ledger                       rc=1  ERROR:  permission denied for table schema_migrations
          sql: set default_transaction_read_only = off; -- then, as its own statement: delete from supabase_migrations.schema_migrations
-REFUSED  SET read_only off; update storage.buckets                  rc=1  ERROR:  permission denied for table buckets
+REFUSED  SET read_only off; update storage.buckets                  rc=1  ERROR:  query would be affected by row-level security policy for table "buckets"
          sql: set default_transaction_read_only = off; -- then, as its own statement: update storage.buckets set public = true
 SKIPPED  nextval: public has no sequence on this database
 ## DDL
@@ -29,7 +38,7 @@ REFUSED  create table public.ro1_x                                  rc=1  ERROR:
          sql: create table public.ro1_x (i int)
 REFUSED  SET read_only off; create table public.ro1_x               rc=1  ERROR:  permission denied for schema public
          sql: set default_transaction_read_only = off; -- then, as its own statement: create table public.ro1_x (i int)
-REFUSED  SET read_only off; create schema ro1_x                     rc=1  ERROR:  permission denied for database ro1_case_a_67076
+REFUSED  SET read_only off; create schema ro1_x                     rc=1  ERROR:  permission denied for database ro1_case_a_18071
          sql: set default_transaction_read_only = off; -- then, as its own statement: create schema ro1_x
 REFUSED  SET read_only off; alter table public.orgs add column      rc=1  ERROR:  must be owner of table orgs
          sql: set default_transaction_read_only = off; -- then, as its own statement: alter table public.orgs add column ro1_x int
@@ -46,7 +55,7 @@ REFUSED  owner check 2: SET read_only off; the same                 rc=1  ERROR:
          sql: set default_transaction_read_only = off; -- then, as its own statement: create table supabase_migrations.ro_check (i int)
 ## the role cannot widen itself
 REFUSED  alter role (self) reset read_only                          rc=1  ERROR:  cannot execute ALTER ROLE in a read-only transaction
-         sql: alter role ro1_readonly_67076 reset default_transaction_read_only
+         sql: alter role ro1_readonly_18071 reset default_transaction_read_only
 REFUSED  set role postgres                                          rc=1  ERROR:  permission denied to set role "postgres"
          sql: set role postgres
 ## writing SECURITY DEFINER functions (public; owner postgres)
@@ -69,4 +78,4 @@ REFUSED  insert net.http_request_queue                              rc=1  ERROR:
          sql: insert into net.http_request_queue (method, url, headers, body, timeout_milliseconds) values ('GET', 'http://127.0.0.1:9/ro1', '{}', null, 1000)
 REFUSED  create temp table                                          rc=1  ERROR:  cannot execute CREATE TABLE in a read-only transaction
          sql: create temp table ro1_t (i int)
-## census as postgres before and after the refusals: 7c6961fcad7e7e57 7c6961fcad7e7e57 unchanged
+## census as postgres before and after the refusals: fdbe19262f547771 fdbe19262f547771 unchanged

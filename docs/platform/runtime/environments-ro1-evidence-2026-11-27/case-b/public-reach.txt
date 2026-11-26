@@ -1,7 +1,7 @@
-# ro1_readonly_67076 (the role script's role, test name) with read-only deliberately turned off: what PUBLIC (Supabase's grants to every role) still reaches
+# ro1_readonly_18071 (the role script's role, test name) with read-only deliberately turned off: what PUBLIC (Supabase's grants to every role) still reaches
 ## lo_create
 SET
-large object 1116434
+large object 1234464
 ## net.http_get
 SET
 queued request 1
@@ -23,7 +23,7 @@ SET
 ALTER ROLE
 own default changed
 ## the role script's check row 2, read as postgres
-session settings|WRONG: {default_transaction_read_only=off,statement_timeout=120s,lock_timeout=5s,idle_in_transaction_session_timeout=60s}
+session settings|WRONG: {default_transaction_read_only=off,statement_timeout=120s,lock_timeout=5s,idle_in_transaction_session_timeout=60s,row_security=off}
 ## the role script run again restores it
 session settings|ok
 ## public tables and data, as postgres

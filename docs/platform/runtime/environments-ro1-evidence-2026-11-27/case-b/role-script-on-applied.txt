@@ -5,11 +5,12 @@ ALTER ROLE
 ALTER ROLE
 ALTER ROLE
 ALTER ROLE
+ALTER ROLE
 GRANT
 GRANT
 ALTER DEFAULT PRIVILEGES
 CREATE SCHEMA
-psql:<stdin>:68: NOTICE:  schema "supabase_migrations" already exists, skipping
+psql:<stdin>:77: NOTICE:  schema "supabase_migrations" already exists, skipping
 GRANT
 GRANT
 ALTER DEFAULT PRIVILEGES

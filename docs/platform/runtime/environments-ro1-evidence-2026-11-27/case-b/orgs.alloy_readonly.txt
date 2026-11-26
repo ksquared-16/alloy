@@ -1,2 +1,1 @@
-93667019-bd28-49b5-a688-acc9bb1e0a19|active|Firefly (RO1 local row)
-c1d69d0b-7de0-42fc-ab63-acb2404da449|retired|_w17_selftest_c1d69d0b
+psql:<stdin>:1: ERROR:  query would be affected by row-level security policy for table "orgs"
