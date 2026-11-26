@@ -26,9 +26,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # backend/.python-version pins Render's exact patch (3.10.5). actions/setup-python publishes no build of
+      # that patch for ubuntu-latest (24.04), so asking for the file fails before any test runs. CI takes the
+      # pin's major.minor and the newest patch of it; the pin itself stays Render's and is not changed here.
+      - id: python
+        working-directory: .
+        run: echo "minor=$(cut -d. -f1,2 backend/.python-version | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
         with:
-          python-version-file: "backend/.python-version"
+          python-version: ${{ steps.python.outputs.minor }}
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install -r requirements.txt
