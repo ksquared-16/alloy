@@ -113,6 +113,42 @@ leave them untouched.
 | staging → candidate | **1 file**: `.github/workflows/vacilando-tier2.yml`, +23 −5 (`candidate/staging-to-candidate.diff`) |
 | main → candidate | 22,933 paths: 15,375 added, 5,086 deleted, 2,472 modified (`candidate/main-to-candidate-summary.txt`; full list `main-to-candidate.name-status.gz`, sha256 `19cfe9b4…5ce5b`). This is staging's tree, plus that one file. |
 
+### Migration counts by ref
+
+Added by slice E6R so the relaunch agenda quotes the right number for the right question. Source: `candidate/migration-counts.sh`,
+which reads git objects only, output in `candidate/migration-counts.txt`. **557 is the total on staging. It is not the
+staging-only count, and it is not the number production is behind.**
+
+Provenance of the counts. Every count in this record comes from git objects in this repository: `origin/staging`
+`8321949771f7` and `origin/main` `bbfbec76d779` as last fetched on 2026-11-25 at 10:14 local, not re-fetched, plus the local
+candidate ref. The exceptions are the rebuild's 557-row ledger (`rebuild/ledger-summary.txt`) and hosted staging's 533 rows
+(S7, read by `tha_22182e4b963fce` on 2026-10-20, file `certification/documents-v1/d0-storage-census.sql.results.json` on
+staging). E6R could not re-read the Henry report that accepted this slice. Henry's state is off limits to development
+runs. So this section is checked against the repository, not against that report's text.
+
+| Question | Count | Ref |
+|---|---|---|
+| Migrations on staging (the rebuild chain) | **557** files, 557 distinct versions, head `20261222090000` | `origin/staging` `8321949771f7` |
+| Migrations on main | **229** files but only **225** distinct versions, head `20260709120000`. Main adds none after the merge base `6ac8d3a85`, which has the same 229. | `origin/main` `bbfbec76d779` |
+| In both, same file name | **225** | |
+| Staging-only by file name | **332** | |
+| Main-only by file name | **4** | |
+| Staging-only by content (`git diff -M main staging`) | **328** new files. The other 4 of the 332 are main's 4 files renumbered: 3 byte-identical (R100), 1 renamed and edited (`commercial_tuition_rates`, R058). | |
+| Changed in place, same name | **2**: `20260630150000_update_child_enrollment_status_action_seed`, `20260701200000_bpep_action_catalog_seeds` | |
+| Main-only by content | **0**. Every main file is on staging, under the same name or a renumbered one. | |
+| Candidate vs staging under `supabase/migrations/` | **0** paths differ, so the candidate carries 557 | `ea06c21f3401` |
+| Staging files ≤ hosted staging's ledger head of 2026-10-20 | **533**, matching that ledger's 533 rows (count only, see Results) | P3 S7 |
+
+The 4 main-only names are why main has 229 files but 225 versions. Main has three version collisions: `20260630120000` ×3,
+`20260630130000` ×2, `20260707120000` ×2. A Supabase ledger keys on version, so main's chain cannot record all 229.
+Staging gave 4 of those files new versions (`…120100`, `…121000`, `…131000`, `…707120100`).
+
+**What this does not say about production.** Production's applied set is unknown. P2 could not read
+`supabase_migrations`, so "production is 332 (or 328) migrations behind" is **not established**. That would hold only if
+production's ledger equals main's chain, and main's chain cannot be recorded as-is. Before H1, a ledger read on production
+has to show which of main's colliding versions it holds. Staging's renumbered copies of those files carry new versions, so
+`db push` would treat them as pending and apply them a second time.
+
 A plain `git merge-tree origin/staging origin/main` conflicts on 7 paths (`candidate/merge-tree.out`). It changes no
 other path, so main holds nothing else that staging lacks.
 
@@ -150,6 +186,7 @@ Of staging's 11 workflow files, only `vacilando-tier2.yml` declares a schedule. 
 | `scripts/local-dev/tests/development-repository-metadata-promotion.test.mjs`, which reads `vacilando-tier2.yml` and asserts the tested-ref and lineage lines | candidate extract | **PASS**: 20/20 |
 | `scripts/local-dev/tests/development-metadata-executor.test.mjs` | candidate extract | **PASS**: 29/29 |
 | `scripts/local-dev/tests/development-registered-action-dispatch-contract.test.mjs` | candidate extract | **4 pass, 7 fail. Environment problem, not the candidate.** Every failure is the fixture's own `git push -q origin main` to a local test remote, refused by this session's injected `url.henry-blocked-push://.pushInsteadOf`. All 28 refusals in the log are that helper. The file is byte-identical on staging. Fixed on this branch in `f4f118707`, with the guard left untouched: the fixture seeds its bare origin by fetching into it instead of pushing, then checks without pushing whether the guard is active (`git remote get-url --push origin` differs from the fetch URL). When it is, D1/D1a/R1/R1a run the same real dispatch and check the refused push (`metadata_push_failed`, not `metadata_promote_threw`; origin `main` unmoved) and the built commit (one commit directly on the approved `main`, touching only the workflow file). Unguarded, the original success-path assertions run unchanged. Focused run there (`node <file>`): **11 cases, `# pass 11` / `# fail 0`**, exit 0. (`node --test <file>` wraps the file as one test and prints `# tests 1 / # pass 1`; that is the file, not the case count.) **R1's success-shape check is not measured under the guard**: a successful result needs a real push, so guarded R1 checks only the refusal result's fields and prints that it was not measurable. It stays measured only where no guard is injected. The candidate keeps staging's copy, which passes in CI, where no guard is injected. |
+| Migration counts by ref (`candidate/migration-counts.sh`), added by E6R | git objects only | recorded in [Migration counts by ref](#migration-counts-by-ref) |
 | YAML parse of the candidate's `vacilando-tier2.yml` | `backend/.venv` PyYAML | **PASS**: triggers `[workflow_dispatch]`, job `extended` |
 | `web` lint / typecheck / vitest | not run | The candidate's tree equals staging's except for one YAML file that no web code reads, so a web run would re-test staging. Staging's own CI is the record for those. |
 
