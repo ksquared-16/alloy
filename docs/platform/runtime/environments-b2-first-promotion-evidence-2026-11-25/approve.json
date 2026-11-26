@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "approval_sha256": "fe3e04b4ec0f7e8a882ae484af031d62f11c2bed07a0dbaa98a38d07512dc895",
+  "scope": [
+    "snapshot",
+    "schema_expand",
+    "code_deploy",
+    "code_rollback",
+    "schema_contract"
+  ],
+  "expires_at": "2026-11-26T09:31:04.501Z"
+}

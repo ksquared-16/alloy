@@ -1,0 +1,1 @@
+alloy-release: config: production names vslwnntzzgpnmrpjipat, the manifest's new project is rehearsalnewprojectr; config: previous project (none), the manifest's is vslwnntzzgpnmrpjipat — pass --config <release-dir>/release-config.json

@@ -1,0 +1,18 @@
+{
+  "schema": "alloy.staging-verification/v1",
+  "candidate_sha": "ecc1d912ca2f3753c965ffb2888681cd944fcfa5",
+  "staging_sha": "853e80b82dbc3e41a77ae7731ecae445ea3e9b77",
+  "verified_at": "2026-11-26T05:30:55.259Z",
+  "ok": true,
+  "failures": [],
+  "warnings": [],
+  "observations_sha256": "fdec07a764bed07e166490b112d3a87ade7c656204e38573db53f2bbf3fa1750",
+  "fingerprint": {
+    "columns_md5": "893e13697fac3767a7b18978309800a5",
+    "policies_md5": "0a9cdb9e2d7ca989f55f77583f714c2a",
+    "functions_md5": "cf52fff714d69f679716b607b8a2d7bc",
+    "indexes_md5": "0c8be0f9001dcc89e5ebe0a3eb87d2c9",
+    "tables": "334",
+    "rls_disabled": "0"
+  }
+}

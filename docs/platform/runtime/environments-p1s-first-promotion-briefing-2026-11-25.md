@@ -71,13 +71,13 @@ open at T+0:00 is a no-go (step 7).
 |---|---|---|---|---|
 | **M1** | **ALY-14 E1–E4 are not on `staging`.** All 19 commits whose message names ALY-14 are on this branch only: E1 `2e2f0acf8`, `d0bccd81d`; E2 from `a092757a1` (with `456fcafff`, `583156942`); E3 from `a31cc8294` to `9d194f40c` (including `2ac3bccd3`, `3376e5618`, `f4d0b3a50`); E4 `4972595ae`. None of the four anchors is an ancestor of `origin/staging` | D1. `ALLOY_ENVIRONMENT` and its fail-closed outbound guard exist only because of E1 | `staging-integration-check.txt` | Step 1: staging `/api/build-info` serves the merge. Developer; the push is an authorized action |
 | **M2** | **The W-17 retirement migration is written but not on `staging`.** Slice B1 committed `supabase/migrations/20261223090000_w17_selftest_org_retirement.sql` on this branch, numbered after `origin/staging`'s head `20261222090000`. For every org whose slug starts with `_w17_selftest_` it sets `status` `retired` and `name` to the slug. Rows are kept: the org's 6 role definitions, 158 grants, 10 document categories and 13 document types stay, unchanged, as configuration of an org with no members. The migration fails if the org has any role or access-profile row. It is forward-only and re-runnable, a no-op where no such org exists, and release-lib classifies it `expand`. **Why the name changes too:** release-lib recognises a self-test org by `name` (`ORGS_SQL` lists `id\|status\|name`, `release-lib.mjs:412`, `:429`), but the self-test names it `W-17 self-test`. With that name, staging verification fails it as "neither Firefly nor a ZZ Alloy QA fixture", and `:429` passes it whatever its status | D10. `check-production` must see a retired self-test org (`release-lib.mjs:429`); production may only receive migrations staging ran (`release-lib.mjs:149`) | P4 F3; `rebuild/w17-removal-trial.txt` (a plain delete fails on `document_category_in_use`). B1, on throwaway local Supabase Postgres ([`environments-b1-w17-evidence-2026-11-25/`](environments-b1-w17-evidence-2026-11-25/)): the full 558-file step-1 merge tree applied from nothing exits 0 and leaves the org `retired` (`A-apply.log`, `A-after-chain-census.txt`). Staging's state (chain to `20261222090000`, org `active`) becomes `retired` with every owned row count unchanged (`B1-…`, `B2-…-census.txt`). Re-applying it changes nothing (`B3-reapply.txt`), and neither does a database with no W-17 org (`B4-no-org-trial.txt`). release-lib's two tenancy checks pass on every post-migration listing and fail staging's current one (`release-checks.txt`). Release and migration-ordering suites are green (`test-runs.txt`) | Step 1: the migration is merged with E1–E4, staging's ledger holds `20261223090000`, and staging's W-17 org reads `retired` with name `_w17_selftest_0bbaad43`. Developer |
-| **M3** | **The release tool has no first-promotion mode.** `plan` over an empty ledger is **blocked** (`contract_not_last`, 45 contract files among 557, the first `20260329210000`), and `production.preflight` expects production to serve the old `main` on the project named in `release-config.json` | D9. Without it, `prepare` writes no manifest, so `approve`, `emit-apply`, `record` and the hash-chained audit have nothing to bind | `plan-empty-ledger-p4-candidate.json`; P6 procedure *Limits* | The mode is committed with offline tests (`npm run test:release-procedure`) and rehearsed non-live. Developer, before step 5 |
-| **M4** | **`release-config.json` names the old production project** (`vslwnntzzgpnmrpjipat`) | Every check against production after cutover must expect the new ref (`checkBuildInfo` compares `supabaseProjectRef`) | `scripts/release/release-config.json`; `alloy-release.mjs:73` (`--config` overrides the file for one run) | Step 5: a config copy naming the new ref in the release directory. The committed file follows in the next release |
+| **M3** | **The release tool has no first-promotion mode.** `plan` over an empty ledger is **blocked** (`contract_not_last`, 45 contract files among 557, the first `20260329210000`), and `production.preflight` expects production to serve the old `main` on the project named in `release-config.json` | D9. Without it, `prepare` writes no manifest, so `approve`, `emit-apply`, `record` and the hash-chained audit have nothing to bind | `plan-empty-ledger-p4-candidate.json`; P6 procedure *Limits*. **Built by slice B2** (`f60f1ae66`): `--first-promotion` on `plan`/`prepare` (§4); procedure *First promotion (opt-in mode)*. Offline tests 40/40 and Docker rehearsal suite 26/26 (9 first-promotion scenarios), and the full-chain rehearsal against an empty local ledger: 558/558 applied, census pass, `verify-audit` exit 0 ([`environments-b2-first-promotion-evidence-2026-11-25/`](environments-b2-first-promotion-evidence-2026-11-25/)) | The mode is committed with offline tests (`npm run test:release-procedure`) and rehearsed non-live. Developer, before step 5. **Built and rehearsed on this branch (B2)**; it closes when it reaches `staging` with step 1's merge |
+| **M4** | **`release-config.json` names the old production project** (`vslwnntzzgpnmrpjipat`) | Every check against production after cutover must expect the new ref (`checkBuildInfo` compares `supabaseProjectRef`) | `scripts/release/release-config.json`; `alloy-release.mjs` `loadConfig` (`--config` overrides the file for one run). **B2** added the generator: `release first-promotion-config --new-ref <ref> --out releases/<date>-<sha12>/release-config.json` writes the copy (production on the new ref, `previous_supabase_project_ref` the old one, the committed policy otherwise, `derived_from_sha256`). A first-promotion manifest binds both refs; `approve`, `record`, `check-production` and `runbook` refuse any config naming others, and `prepare --first-promotion` refuses the committed file (rehearsal `refusals/`) | Step 5: a config copy naming the new ref in the release directory, written by that command (§4). The committed file follows in the next release |
 | **M5** | **The existing org helper has no reviewed production invocation.** D11 uses the existing helper `web/lib/dev/createOrgAndAssignAdmin.ts`; no new helper is written. It inserts one `orgs` row (industry `childcare`, seeded by `20260430211000`), one `admin` membership through `create_membership_with_access_profile`, and the relationship-field configuration (`field_section_definitions`, `option_sets`, `option_set_items`, `field_definitions`); it needs an existing `auth.users` id. Its current callers are not usable here: `/api/admin/dev/create-org` needs `DEV_TENANT_SPINUP_ENABLED`, which must never be set on production (checklist X row); `web/scripts/ensureSharedQaTenant.ts` creates only the frozen QA orgs (and refuses the production ref it knows); `npm run dev:tenant:childcare` also seeds demo opportunities, which D7 forbids | D11. Step 16 has no approved command without it | P4 F6; the files named | The exact step-16 invocation (a direct call of `createOrgAndAssignAdmin` from `web/`, with the new project's URL and service-role key in the Mac mini session only, never in a file) is written into the step-16 command list and approved by the Development Lead and the Database Engineer at step 6. Developer |
 | **M6** | **No green CI run on the rebuilt candidate.** P6 step 2 requires each `required_checks` entry to succeed on the candidate SHA; the check names still need confirming against real check-runs (P6 owner action 4) | Staging verification cannot pass without it | P4 *Integration through a pull request*; P6 owner action 4 | Step 4. Developer; the push and PR are authorized actions |
 | **M7** | **No read-only role on any project; the new project's backup/PITR tier is not chosen** (P6 owner actions 5–6) | Observations need a read path that cannot write; after step 16, backups are the new project's only recovery | P6 owner actions 5–6 | Step 5. Owner in Supabase |
 | **M8** | **The configuration-only allowlist export and its import do not exist.** P3 R1 requires re-authoring through the app's write paths from a reviewed configuration-only listing, never a row dump; the repo's only Firefly configuration capture is defective (P3 C14); several Firefly configuration counts were never observed on hosted staging (P3 C2, C13, C14, C16: BLOCKED on STG-CENSUS) | D7, D11. Step 16 has nothing reviewed to import | P3 §C, R1 | The export and the import procedure exist and are approved by the Development Lead and the Database Engineer (step 6) |
-| **M9** | **The candidate fails `release identify` as committed** (§2) | P6 step 1 is a hard gate | `identify-p4-candidate-no-allowance.json` (exit 1) | Step 2: `identify` exits 0 **with no `--allow-tree-diff`** |
+| **M9** | **The candidate fails `release identify` as committed** (§2) | P6 step 1 is a hard gate | `identify-p4-candidate-no-allowance.json` (exit 1). Cause: `.github/workflows/vacilando-tier2.yml` only (§2), fixed on this branch by B1 (`e53a318cb`). **B2 measured it:** a simulated step-1 merge of this branch into `origin/staging`, then P4's `build-candidate.sh`, gives a candidate that `identify` passes with no allowance (exit 0, `tree_diff_from_staging: []`; B2 `identify-no-allowance.json`). No code or config change is needed | Step 2: `identify` exits 0 **with no `--allow-tree-diff`** |
 | **C-…** | Dashboard-only reads: C-FLAG-1, C-CLOCK-1, C-MSG-1, C-O-1, C-RB-1/2/3, C-REN-1/2 (§6) | Each is an input a step needs | Not readable from the repository | Steps 6–7. Owner |
 
 ## 2. The `release identify` gate and the workflow difference (M9)
@@ -113,7 +113,17 @@ copy (no `schedule:`, `workflow_dispatch` kept). The offline step-1 merge (`git 
 origin/staging`, exit 0) has the same file as `origin/main`, so P4's `build-candidate.sh` override becomes a no-op after
 the merge. The merge tree's migrations are 558, with head `20261223090000`, the W-17 migration
 ([`environments-b1-w17-evidence-2026-11-25/test-runs.txt`](environments-b1-w17-evidence-2026-11-25/test-runs.txt)).
-`identify` itself can only be measured at step 2, on the rebuilt candidate.
+`identify` itself can only be measured for real at step 2, on the rebuilt candidate.
+
+**Measured by slice B2, offline.** The cause is that one file and nothing else: the release tool's tree gate is right to
+fail it, and `release-config.json` needs no allowance. B2's rehearsal builds the candidate exactly as steps 1–2 will, from
+git objects only: `git merge-tree --write-tree <this branch> origin/staging`, committed as a merge onto `origin/staging`, then
+P4 `build-candidate.sh <that merge> origin/main`. `release identify` with **no** `--allow-tree-diff` exits 0, fast-forward,
+558 migrations, `tree_diff_from_staging: []`
+([`environments-b2-first-promotion-evidence-2026-11-25/identify-no-allowance.json`](environments-b2-first-promotion-evidence-2026-11-25/identify-no-allowance.json)).
+What steps 1–2 must do to keep it that way: step 1 merges this branch (it carries main's retired workflow file), with
+no other change to `.github/workflows/vacilando-tier2.yml` on staging before or after; step 2 rebuilds with the same two
+commands and runs `identify` as in §4 below. Any non-empty `tree_diff_from_staging` is the stop condition above.
 
 ## 3. Ordered steps — the single cutover plan
 
@@ -161,6 +171,14 @@ ledger row, no edits (P4 *Results*). Step 9 does the same against the new projec
    `--config` copy (M4); and keep everything else as in a normal release: `prepare` writes the manifest, the owner's
    `approve` binds it, `emit-apply` prints each file's `wrapMigrationForApply` text (`release-lib.mjs`), `record` and
    `verify-audit` keep the hash-chained audit. It is tested offline with the rest of `scripts/release/tests/`.
+   **As built (B2, `f60f1ae66`):** `--first-promotion` on `plan` and `prepare`; the manifest then carries
+   `"mode": "first_promotion"`, both refs and `destructive_in_chain`, and every later command follows the manifest. A
+   target ledger with any version refuses the plan (`first_promotion_ledger_not_empty`), and `check-ledger` and `execute`
+   refuse again if it is no longer empty when the chain starts. `contract_not_last` is the only waiver. The 45
+   destructive files run in their place in the chain, so the approval must also grant `schema_contract`.
+   `production.preflight` expects the old `main` on the **previous** ref and `tables|0` on the new project. The census
+   (item 6) is `check-production --stage schema` and gates `code.deploy`. Without the flag nothing changes (a routine
+   plan is byte-identical; rehearsal `refusals/plan-routine-empty-ledger.json` still blocks on `contract_not_last`).
 2. **Platform schemas first.** A hosted Supabase project already has `auth` and `storage`, the precondition P4 F1 found (the
    chain fails on a bare database at `20260912010000` and `20261207181600`). Do **not** run P4's GoTrue and Storage
    migrators against a hosted project.
@@ -184,6 +202,66 @@ ledger row, no edits (P4 *Results*). Step 9 does the same against the new projec
    - the table row counts, kept as the baseline step 16 compares against.
 7. **Stop rule.** If a file fails, stop. It left nothing (single transaction), and nothing user-facing has changed. Hold;
    fix forward with a new candidate (back to step 1), or delete the new project and recreate it.
+
+The census's pass/fail half is the ledger, the fingerprint, `rls_disabled`, the orgs, the six extensions and the bucket.
+`clock_activation_certification` and the row counts are recorded in `census-extras.txt`, not judged.
+
+### 4.1 The exact commands (steps 5, 7–11, 15, 17)
+
+Run from the worktree root of the rebuilt candidate's checkout. The rehearsal ran every one of these against throwaway
+Postgres, with only the database target swapped
+([`environments-b2-first-promotion-evidence-2026-11-25/`](environments-b2-first-promotion-evidence-2026-11-25/)). Connection
+strings live in the owner's session only, never in a file: `$STAGING_DB_URL_READONLY` is staging's read-only role;
+`$PRODUCTION_DB_URL_READONLY` and `$PRODUCTION_DB_URL` are the **new** project's read-only role and `postgres`, both on port
+**5432** (M7).
+
+**Step 5**: the release directory and the config copy (M4).
+
+```bash
+REL="node scripts/release/alloy-release.mjs"
+SHA=<step-2 candidate SHA>; NEW=<the new project's ref>
+DIR=releases/<date>-${SHA:0:12}
+$REL first-promotion-config --new-ref "$NEW" --out "$DIR/release-config.json"   # refuses an existing different file
+C="--config $DIR/release-config.json"
+```
+
+**Step 7**: identify, then the observations `prepare` reads, then the manifest and its runbook.
+
+```bash
+git fetch origin
+$REL identify --candidate "$SHA" > "$DIR/identify.json"            # exit 0; never --allow-tree-diff (§2)
+curl -fsS https://staging.workwithalloy.com/api/build-info > "$DIR/staging-build-info.json"
+gh api "repos/ksquared-16/alloy/commits/$SHA/check-runs" > "$DIR/check-runs.json"
+$REL emit-sql ledger      | psql "$STAGING_DB_URL_READONLY" -At -X -f - > "$DIR/staging-ledger.txt"
+$REL emit-sql fingerprint | psql "$STAGING_DB_URL_READONLY" -At -X -f - > "$DIR/staging-fingerprint.txt"
+$REL emit-sql orgs        | psql "$STAGING_DB_URL_READONLY" -At -X -f - > "$DIR/staging-orgs.txt"
+curl -fsS https://www.workwithalloy.com/api/build-info > "$DIR/production-build-info.json"   # old main, old ref
+$REL emit-sql ledger-if-present | psql "$PRODUCTION_DB_URL_READONLY" -At -X -q -f - > "$DIR/production-ledger.txt"   # empty
+$REL emit-sql fingerprint | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/production-fingerprint.txt"       # tables|0
+$REL plan --first-promotion --candidate "$SHA" --production-ledger "$DIR/production-ledger.txt" > "$DIR/plan.json"
+$REL prepare --first-promotion $C --candidate "$SHA" --out-dir "$DIR" \
+  --staging-build-info "$DIR/staging-build-info.json" --check-runs "$DIR/check-runs.json" \
+  --staging-ledger "$DIR/staging-ledger.txt" --staging-fingerprint "$DIR/staging-fingerprint.txt" --staging-orgs "$DIR/staging-orgs.txt" \
+  --production-build-info "$DIR/production-build-info.json" --production-ledger "$DIR/production-ledger.txt" \
+  --production-fingerprint "$DIR/production-fingerprint.txt"
+$REL runbook --manifest "$DIR/manifest.json" $C > "$DIR/runbook.md"
+```
+
+`prepare` exits 0 and prints `mode: first_promotion`, the new ref, `chain` (558 plus anything step 1 added), the first and
+last versions and `destructive_in_chain`. Any other result is a no-go. From here every command is in `$DIR/runbook.md`,
+which prints them with `<release-dir>` for `$DIR` and with the manifest's confirm code filled in. The steps map as follows:
+
+| Briefing step | Runbook section | What it runs |
+|---|---|---|
+| **8** owner approval | 4 | `$REL approve $C --manifest $DIR/manifest.json --approver Kelly --confirm <12> --ttl-hours 4` at the owner's terminal (refused from an agent session), then `record --step owner.approval` |
+| **9** schema apply | 5, 6 | the `fp_target` guard (refuses port 6543, the old ref, and any URL not naming the new ref); `pg_dump` of the empty project; `check-ledger` (still empty); `emit-sql ledger-table`; then, per version of `apply-order`, `emit-apply … \| psql "$PRODUCTION_DB_URL" --single-transaction …` with the `ON_ERROR_STOP` variable on, and `record --step schema.expand --status applied`, stopping at the first failure; then the census and `check-production --stage schema … --census`, and `record --step schema.expand --status pass` |
+| **10** platform settings | 7 (preamble) | nothing from the tool; §5.1–5.3 before the deploy |
+| **11** release | 7 | `git ls-remote` equals the approved base; `git push origin <candidate>:refs/heads/main` (fast-forward, never `--force`); poll build-info until it serves the candidate **on the new ref**; `record --step code.deploy`. Render is deployed after this, in its dashboard |
+| **15** production verification | 8 | the four observations, `check-production --stage final $C`, `record --step production.verify`. On failure, code rollback as printed, to the old deployment on the untouched old project (§7) |
+| **17** record | 9, 10 | `record --step schema.contract --status skip`, `record --step release.record`, `verify-audit`; commit `$DIR` |
+
+`check-production --stage final` passes only while the one org is the retired self-test org (D3), so it is run at step
+15, before step 16 creates Firefly; it is not re-run after step 16, whose own checks are §5.6.
 
 ## 5. Owner-side steps by platform
 
@@ -482,5 +560,5 @@ presence, in plan order:
 - No push, PR, merge, deploy or fetch, and no hosted service of any kind. The rebuilt candidate does not exist yet.
 - As first written, no migration was written (M2), and no change was made to the app, the release tool,
   `release-config.json` or any workflow file (M3, M4, M9). Slice B1 later added the W-17 migration (M2) and main's
-  `vacilando-tier2.yml` (§2) on this branch. The release tool and `release-config.json` are still unchanged. The helper invocation and the export (M5, M8) were not written, and the helper was not run.
+  `vacilando-tier2.yml` (§2) on this branch. Slice B2 then added the release tool's first-promotion mode and the config-copy generator (M3, M4; `f60f1ae66`) and measured M9 offline (§2); the committed `release-config.json` is still unchanged. The helper invocation and the export (M5, M8) were not written, and the helper was not run.
 - It fixes no calendar date. The window is booked at step 6b (D8).

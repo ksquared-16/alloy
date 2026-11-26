@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "step": "production.preflight",
+  "failures": [
+    "first_promotion_ledger_not_empty: the target records 558 version(s) (head 20261223090000); first-promotion mode runs only against a new project with an empty ledger"
+  ]
+}
