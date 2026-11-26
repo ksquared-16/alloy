@@ -92,10 +92,11 @@ echo "staging stand-in: $(wc -l < "$EV/staging-standin-apply.log" | tr -d ' ') f
 # ── staging and production evidence files, as the owner's read-only commands would produce them ──
 $REL emit-sql ledger | STGDB -At -X -f - > "$D/staging-ledger.txt"
 $REL emit-sql fingerprint | STGDB -At -X -f - > "$D/staging-fingerprint.txt"
-# Staging's real tenancy (Firefly, the two ZZ Alloy QA fixtures) is data, not chain: stand-in rows, plus the
-# stand-in's own retired W-17 org. Staging tenancy is not what this rehearsal exercises.
-{ node -e 'const c=require(process.argv[1]); for (const o of [c.tenancy.staging_school, ...c.tenancy.qa_fixture_orgs]) console.log(`${o.id}|active|${o.name}`)' "$REPO/scripts/release/release-config.json"
+# Staging's real tenancy is data, not chain: stand-in rows for Firefly, the two ZZ Alloy QA fixtures and the
+# reviewed retired org Alloy Bend (briefing §9), plus the stand-in's own retired W-17 org.
+{ node -e 'const c=require(process.argv[1]); for (const o of [c.tenancy.staging_school, ...c.tenancy.qa_fixture_orgs]) console.log(`${o.id}|active|${o.name}`); for (const o of c.tenancy.staging_retired_orgs) console.log(`${o.id}|retired|${o.name}`)' "$REPO/scripts/release/release-config.json"
   $REL emit-sql orgs | STGDB -At -X -f -; } > "$D/staging-orgs.txt"
+sed 's/^\(7803388d-cdee-4afb-89cf-23a137f39423\)|retired|/\1|active|/' "$D/staging-orgs.txt" > /tmp/alloy-b2-fp/staging-orgs-bend-active.txt
 node -e 'const c=require(process.argv[1]); process.stdout.write(JSON.stringify({check_runs: c.required_checks.map((name)=>({name, head_sha: process.argv[2], status:"completed", conclusion:"success"}))}))' "$REPO/scripts/release/release-config.json" "$CAND" > "$D/check-runs.json"   # stub: CI green on the candidate
 printf '{"gitSha":"%s","gitBranch":"staging","vercelEnv":"preview","supabaseProjectRef":"ikaxilmwmrmbagoidedu"}\n' "$STAGING" > "$D/staging-build-info.json"
 printf '{"gitSha":"%s","gitBranch":"main","vercelEnv":"production","supabaseProjectRef":"vslwnntzzgpnmrpjipat"}\n' "$MAIN" > "$D/production-build-info.json"   # old main, old project: untouched
@@ -115,6 +116,9 @@ $REL plan "${REFS[@]}" --first-promotion --production-ledger "$D/production-ledg
 $REL plan "${REFS[@]}" --first-promotion --production-ledger "$D/staging-ledger.txt" > "$EV/refusals/plan-first-promotion-nonempty-ledger.json"; echo "plan --first-promotion over a non-empty ledger rc=$? (expected 1)"
 $REL prepare "${PREP[@]}" --first-promotion --production-ledger "$D/production-ledger.txt" --out-dir "$EV/refusals/committed-config" > "$EV/refusals/prepare-committed-config.json"; echo "prepare --first-promotion with the committed config rc=$? (expected 1)"
 $REL prepare "${PREP[@]}" --first-promotion $C --production-ledger "$D/staging-ledger.txt" --out-dir "$EV/refusals/nonempty" > "$EV/refusals/prepare-nonempty-ledger.json"; echo "prepare --first-promotion over a non-empty ledger rc=$? (expected 1)"
+
+PREP_BEND_ACTIVE=("${PREP[@]/#$D\/staging-orgs.txt//tmp/alloy-b2-fp/staging-orgs-bend-active.txt}")   # the same inputs, Alloy Bend active
+$REL prepare "${PREP_BEND_ACTIVE[@]}" --first-promotion $C --production-ledger "$D/production-ledger.txt" --out-dir "$EV/refusals/bend-active" > "$EV/refusals/prepare-staging-alloy-bend-active.json"; echo "prepare --first-promotion with Alloy Bend active on staging rc=$? (expected 1)"
 
 echo "## prepare (first-promotion mode)"
 $REL prepare "${PREP[@]}" --first-promotion $C --production-ledger "$D/production-ledger.txt" --out-dir "$D" > "$EV/prepare.json"; echo "prepare_rc=$?"

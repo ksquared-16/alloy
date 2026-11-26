@@ -200,6 +200,48 @@ test("staging tenancy: another school, or no Firefly, fails", () => {
     assert.match(checkStagingTenancy(T, [{ ...FIREFLY, status: "retired" }]).failures[0], /retired/);
 });
 
+const ALLOY_BEND_ID = "7803388d-cdee-4afb-89cf-23a137f39423";
+
+test("staging tenancy: the reviewed retired org Alloy Bend passes only while retired", () => {
+    assert.ok(T.staging_retired_orgs.some((o) => o.id === ALLOY_BEND_ID && o.slug === "alloy-bend" && o.status === "retired"));
+    const retired = checkStagingTenancy(T, [FIREFLY, ...ZZ, { id: ALLOY_BEND_ID, status: "retired", name: "Alloy Bend" }]);
+    assert.deepEqual(retired.failures, []);
+    assert.deepEqual(retired.warnings, []);
+    const active = checkStagingTenancy(T, [FIREFLY, ...ZZ, { id: ALLOY_BEND_ID, status: "active", name: "Alloy Bend" }]);
+    assert.equal(active.failures.length, 1);
+    assert.match(active.failures[0], /Alloy Bend .* on the reviewed retired list but is active/);
+});
+
+test("staging tenancy: a retired org not on the reviewed list fails; an active unknown org still fails", () => {
+    const unknownRetired = checkStagingTenancy(T, [FIREFLY, ...ZZ, { id: "0b5e0000-0000-4000-8000-0000000000aa", status: "retired", name: "Old School" }]);
+    assert.equal(unknownRetired.failures.length, 1);
+    assert.match(unknownRetired.failures[0], /Old School .* is neither Firefly nor a ZZ Alloy QA fixture/);
+    // An org named like Alloy Bend under another id is not the reviewed org.
+    const lookalike = checkStagingTenancy(T, [FIREFLY, { id: "0b5e0000-0000-4000-8000-0000000000bb", status: "retired", name: "Alloy Bend" }]);
+    assert.equal(lookalike.failures.length, 1);
+    assert.match(checkStagingTenancy(T, [FIREFLY, { id: "z", status: "active", name: "Other" }]).failures[0], /neither Firefly/);
+});
+
+test("staging tenancy: a reviewed-list entry that does not say retired is refused, and its org is not accepted", () => {
+    const t = { ...T, staging_retired_orgs: [{ id: ALLOY_BEND_ID, slug: "alloy-bend", name: "Alloy Bend", status: "active" }] };
+    const r = checkStagingTenancy(t, [FIREFLY, { id: ALLOY_BEND_ID, status: "active", name: "Alloy Bend" }]);
+    assert.equal(r.failures.length, 2, r.failures.join("\n"));
+    assert.match(r.failures[0], /must name status "retired"/);
+    assert.match(r.failures[1], /neither Firefly/);
+    assert.match(checkStagingTenancy({ ...T, staging_retired_orgs: [{ slug: "x", status: "retired" }] }, [FIREFLY]).failures[0], /has no id/);
+    // Absent list: behaviour as before the list existed.
+    const { staging_retired_orgs: _drop, ...bare } = T;
+    assert.match(checkStagingTenancy(bare, [FIREFLY, { id: ALLOY_BEND_ID, status: "retired", name: "Alloy Bend" }]).failures[0], /neither Firefly/);
+});
+
+test("production: staging's reviewed retired org must be absent; W-17 retired + Firefly is the expected end state", () => {
+    const w17 = { id: "37c56459-5082-44c5-a261-03466b127361", status: "retired", name: "_w17_selftest_37c56459" };
+    assert.deepEqual(checkProductionTenantIsolation(T, [w17, { id: "0b5e0000-0000-4000-8000-000000000001", status: "active", name: "Firefly" }]), []);
+    const bend = checkProductionTenantIsolation(T, [w17, { id: ALLOY_BEND_ID, status: "retired", name: "Alloy Bend" }]);
+    assert.equal(bend.length, 1);
+    assert.match(bend[0], /staging's retired org Alloy Bend .* not migrated/);
+});
+
 test("production isolation: QA orgs, staging-seed namespace and live self-test orgs fail; real schools pass", () => {
     assert.deepEqual(checkProductionTenantIsolation(T, [{ id: "0b5e0000-0000-4000-8000-000000000001", status: "active", name: "A School" }, FIREFLY]), []);
     assert.equal(checkProductionTenantIsolation(T, [ZZ[0]]).length, 1);

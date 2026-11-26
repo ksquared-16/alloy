@@ -466,12 +466,31 @@ function compareLedger(prefix, ledger, expectedVersions) {
     return f;
 }
 
+/**
+ * The reviewed list of retired orgs staging may keep (briefing §9: Alloy Bend). Matched by id, the
+ * only identity the org listing carries; each entry must say `status: "retired"` or it is refused.
+ */
+export function stagingRetiredOrgs(tenancy) {
+    const list = tenancy.staging_retired_orgs ?? [];
+    const failures = [];
+    if (!Array.isArray(list)) return { byId: new Map(), failures: ["release-config: tenancy.staging_retired_orgs is not a list"] };
+    const byId = new Map();
+    for (const e of list) {
+        if (!e || typeof e.id !== "string" || !e.id) failures.push("release-config: a tenancy.staging_retired_orgs entry has no id");
+        else if (e.status !== "retired") failures.push(`release-config: tenancy.staging_retired_orgs entry ${e.slug || e.id} must name status "retired", not ${JSON.stringify(e.status)}`);
+        else byId.set(e.id, e);
+    }
+    return { byId, failures };
+}
+
 /** ALY-14: Firefly is the only staging school; ZZ Alloy QA exists only for the cross-org and permission fixtures. */
 export function checkStagingTenancy(tenancy, orgs) {
     const failures = [];
     const warnings = [];
     if (!Array.isArray(orgs)) return { failures: ["staging tenancy: org listing not observed"], warnings };
     const qa = new Set(tenancy.qa_fixture_orgs.map((o) => o.id));
+    const retired = stagingRetiredOrgs(tenancy);
+    failures.push(...retired.failures);
     const firefly = orgs.find((o) => o.id === tenancy.staging_school.id);
     if (!firefly) failures.push(`staging tenancy: the staging school ${tenancy.staging_school.name} (${tenancy.staging_school.id}) is absent`);
     else if (firefly.status === "retired") failures.push(`staging tenancy: ${tenancy.staging_school.name} is retired`);
@@ -479,6 +498,11 @@ export function checkStagingTenancy(tenancy, orgs) {
         if (o.id === tenancy.staging_school.id || qa.has(o.id)) continue;
         if (o.name.startsWith(tenancy.selftest_org_name_prefix)) {
             if (o.status !== "retired") warnings.push(`staging tenancy: self-test org ${o.name} is ${o.status || "unretired"} (P4 F3, owner decision O3)`);
+            continue;
+        }
+        const listed = retired.byId.get(o.id);
+        if (listed) {
+            if (o.status !== "retired") failures.push(`staging tenancy: org ${o.name} (${o.id}) is on the reviewed retired list but is ${o.status || "unretired"}`);
             continue;
         }
         failures.push(`staging tenancy: org ${o.name} (${o.id}) is neither ${tenancy.staging_school.name} nor a ZZ Alloy QA fixture`);
@@ -491,8 +515,11 @@ export function checkProductionTenantIsolation(tenancy, orgs) {
     const failures = [];
     if (!Array.isArray(orgs)) return ["production tenancy: org listing not observed"];
     const qa = new Map(tenancy.qa_fixture_orgs.map((o) => [o.id, o.name]));
+    const retired = stagingRetiredOrgs(tenancy);
+    failures.push(...retired.failures);
     for (const o of orgs) {
         if (qa.has(o.id)) failures.push(`production tenancy: QA fixture org ${qa.get(o.id)} (${o.id}) is present`);
+        if (retired.byId.has(o.id)) failures.push(`production tenancy: staging's retired org ${retired.byId.get(o.id).name || o.name} (${o.id}) is present; it is not migrated`);
         if (o.id.startsWith(tenancy.staging_seed_id_prefix)) failures.push(`production tenancy: staging-seed namespace org ${o.id} is present`);
         if (o.name.startsWith(tenancy.selftest_org_name_prefix) && o.status !== "retired") failures.push(`production tenancy: self-test org ${o.name} is ${o.status || "unretired"}`);
     }
