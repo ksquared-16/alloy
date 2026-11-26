@@ -19,8 +19,9 @@ the [rebuild rehearsal](environments-p4-rebuild-and-integration-rehearsal-2026-1
 [deployment and environments](../governance/deployment-and-environments.md).
 
 **The final plan.** Slice B4 rehearsed the whole operation locally and ordered this briefing into one timed list for the
-step-6b approval: the [final cutover plan](environments-b4-final-cutover-plan-2026-11-25.md), with its evidence in
-[`environments-b4-dress-rehearsal-evidence-2026-11-25/`](environments-b4-dress-rehearsal-evidence-2026-11-25/). Its one
+step-6b approval: the [final cutover plan](environments-final-cutover-plan-2026-11-26.md) (it replaces the [2026-11-25 plan](environments-b4-final-cutover-plan-2026-11-25.md) and carries the owner's window and other decisions of 2026-11-25), with its evidence in
+[`environments-b4-dress-rehearsal-evidence-2026-11-25/`](environments-b4-dress-rehearsal-evidence-2026-11-25/) and the second run's
+[`environments-b4-dress-rehearsal-evidence-2026-11-26/`](environments-b4-dress-rehearsal-evidence-2026-11-26/). Its one
 correction to this briefing is step 16's census baseline (§5.6.1 16.6 and 16.R, §7).
 
 **How this was written.** From the repository only. No dashboard, service, database, credential or environment dump was

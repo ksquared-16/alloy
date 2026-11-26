@@ -1,3 +1,11 @@
+---
+owner: runtime
+status: proposed
+last_reviewed: 2026-11-26
+supersedes: []
+status_note: Evidence index for slice B2 of objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (the release tool's first-promotion mode, rehearsed non-live). Not doctrine.
+---
+
 # B2 evidence: the release tool's first-promotion mode, rehearsed non-live (M3, M4, M9)
 
 Slice B2 of the ALY-14 first promotion ([briefing](../environments-p1s-first-promotion-briefing-2026-11-25.md) M3, M4, M9,

@@ -1,12 +1,17 @@
 ---
 owner: runtime
-status: proposed
+status: superseded
 last_reviewed: 2026-11-25
 supersedes: []
+superseded_by: docs/platform/runtime/environments-final-cutover-plan-2026-11-26.md
 status_note: Final cutover plan for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (slice B4), for the owner's approval at briefing step 6b. It orders the first-promotion briefing into one timed list and records the local dress rehearsal. Nothing here authorizes a live action, and no calendar date is fixed (D8).
 ---
 
 # Environments and promotion — final cutover plan (2026-11-25)
+
+> **Superseded** by the [final cutover plan of 2026-11-26](environments-final-cutover-plan-2026-11-26.md), which writes in the
+> owner's decisions of 2026-11-25, fixes the CI check names (F6) and records the second dress rehearsal. Kept as the first
+> rehearsal's record.
 
 Objective: Environments and promotion (`WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66`), slice B4. This is the
 [first-promotion briefing](environments-p1s-first-promotion-briefing-2026-11-25.md) turned into **one ordered list** for

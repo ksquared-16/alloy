@@ -1,3 +1,11 @@
+---
+owner: runtime
+status: generated
+last_reviewed: 2026-11-26
+supersedes: []
+status_note: Output of `release runbook` in the B2 rehearsal (first-promotion-rehearsal.sh). Machine-produced; do not hand-edit. Not doctrine.
+---
+
 # First-promotion runbook — 5132907da207 → rehearsal on the new project `rehearsalnewprojectr`
 
 Manifest sha256: `a3181dc2179f27edfac329b92d73593ffd17e331ec753cf26556796291e355f1` (confirm code `a3181dc2179f`)

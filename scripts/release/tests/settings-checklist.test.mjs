@@ -13,7 +13,8 @@ import { REPO_ROOT, scanSettings } from "../settings-inventory.mjs";
 
 const CHECKLIST = "docs/platform/runtime/environments-p1s-settings-checklist-2026-11-25.md";
 const BRIEFING = "docs/platform/runtime/environments-p1s-first-promotion-briefing-2026-11-25.md";
-const FINAL_PLAN = "docs/platform/runtime/environments-b4-final-cutover-plan-2026-11-25.md";
+const FINAL_PLAN = "docs/platform/runtime/environments-final-cutover-plan-2026-11-26.md";
+const RELEASE_CONFIG = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/release/release-config.json"), "utf8"));
 const TIERS = ["web", "backend", "supabase"];
 const CLASSES = new Set(["R", "C", "O", "F", "A", "L", "S", "D", "X", "B", "P"]);
 
@@ -102,12 +103,20 @@ test("the first-promotion briefing: no credential, every settled decision, no da
     assert.doesNotMatch(text, /\b\d{1,2} (Nov|Dec)[a-z]*\b|\b(Nov|Dec)[a-z]* \d{1,2}\b|Tuesday|\b\d{2}:\d{2} (PT|UTC)\b/, "D8: the window is booked at step 6b, not fixed to a date");
 });
 
-test("the final cutover plan: no credential, no fixed date, every step and decision point, step 16 on the post-clock baseline", () => {
+test("the final cutover plan: no credential, the owner's window, every step and decision point, step 16 on the post-clock baseline", () => {
     const text = readFileSync(join(REPO_ROOT, FINAL_PLAN), "utf8");
     for (const [name, re] of CREDENTIAL_SHAPES) assert.doesNotMatch(text, re, name);
-    assert.doesNotMatch(text, /\b\d{1,2} (Nov|Dec)[a-z]*\b|\b(Nov|Dec)[a-z]* \d{1,2}\b|day\b.*\b\d{2}:\d{2} (PT|UTC)\b|\b\d{2}:\d{2} (PT|UTC)\b/, "D8: the window is booked at step 6b, not fixed to a date");
+    assert.doesNotMatch(text, /@[a-z0-9-]+\.[a-z]{2,}/i, "O-ADMIN: the owner's address is typed in the session, never written here");
+    // O-WHEN (owner, 2026-11-25): Tue Dec 1 09:00–12:00 PT if 6b lands by Sun Nov 29, else Tue Dec 8. No other date.
+    for (const d of ["Tue Dec 1", "Tue Dec 8", "Sun Nov 29", "09:00–12:00 PT"]) assert.ok(text.includes(d), d);
+    const days = new Set([...text.matchAll(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]* (Nov|Dec) (\d{1,2})\b/g)].map((m) => `${m[1]} ${m[2]}`));
+    for (const d of days) assert.ok(["Nov 27", "Nov 28", "Nov 29", "Dec 1", "Dec 8"].includes(d), `unexpected date ${d}`);
+    for (const o of ["O-PITR", "O-ADMIN", "O-WHEN", "O-OP", "O-LANES", "O-ROOMS"]) assert.match(text, new RegExp(`^\\| \\*\\*${o}\\*\\* \\|`, "m"), o);
+    assert.ok(text.includes("<STEP16_OPERATOR>"), "O-OP: the operator stays a placeholder until named");
+    for (const g of ["(a) Owner dashboard actions", "(b) Owner-approved repository steps", "(c) Owner answers", "(d) Anything else"]) assert.ok(text.includes(`**${g}**`), g);
+    for (const c of RELEASE_CONFIG.required_checks) assert.ok(text.includes(`\`${c}\``), `step 4 names required check ${c}`);
     const window = text.split("### 2.2 The window")[1]?.split("\n## ")[0] ?? "";
-    for (const step of ["7", "8", "9", "10", "11", "12", "13", "14", "15", "15b", "16", "17"]) {
+    for (const step of ["7", "8", "9", "10", "11", "12", "13", "14", "15", "15b", "16", "16L", "17"]) {
         assert.match(window, new RegExp(`^\\| [0-9:]+[^|]*\\| \\*\\*${step}\\*\\* \\|`, "m"), `window step ${step} has a T+ row`);
     }
     for (const point of ["GO/NO-GO 1", "HOLD point", "KEEP / ROLL BACK", "STOP point"]) assert.ok(window.includes(`**${point}**`), point);
@@ -117,7 +126,7 @@ test("the final cutover plan: no credential, no fixed date, every step and decis
     assert.match(text, /--baseline "\$DIR\/census-before-step16\.txt"/, "16.6 verifies against the post-clock baseline");
     const briefing = readFileSync(join(REPO_ROOT, BRIEFING), "utf8");
     assert.doesNotMatch(briefing, /--baseline "\$DIR\/census-extras\.txt"/, "the briefing no longer verifies step 16 against step 9's census");
-    assert.ok(briefing.includes("environments-b4-final-cutover-plan-2026-11-25.md"), "the briefing names the final plan");
+    assert.ok(briefing.includes("environments-final-cutover-plan-2026-11-26.md"), "the briefing names the final plan");
 });
 
 test("scanner: each detection rule, on a fixture tree", () => {
