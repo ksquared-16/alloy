@@ -1,3 +1,4 @@
+import { formSubmissionReadableById } from "@/lib/forms/formSubmissionScope";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -5,12 +6,14 @@ import { createGeneratedPdfForSubmission } from "@/lib/forms/pdf/createGenerated
 import { emitFormDocumentGeneratedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
 import { dbGetSubmission } from "@/lib/admin/forms/formsAdminDb";
 import { jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/submissions/[submissionId]/generate-document — stub PDF via pdf_mapping_json → documents + junction. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+    if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");
@@ -33,6 +36,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             : null;
 
     const supabase = createAdminClient();
+    // EN-FI-01: the provenance reference must be a document of THIS organization. Nothing reads it back today, but a
+    // stored cross-tenant document id is an integrity defect the next reader would inherit. Same answer as not found.
+    if (generatedFrom) {
+        const { data: source } = await supabase.from("documents").select("id").eq("org_id", ctx.orgId).eq("id", generatedFrom).maybeSingle();
+        if (!source) return jsonError("generated_from_document_id is not a document of this organization", 400);
+    }
+    // R2 (after the EN-FI-01 provenance check): never generate (and so never name or store) a document for a submission outside the caller's scope.
+    if (!(await formSubmissionReadableById(supabase, ctx.orgId, submissionId))) return NextResponse.json({ error: "Not found", code: "SUBMISSION_NOT_FOUND" }, { status: 404 });
     const result = await createGeneratedPdfForSubmission(supabase, {
         orgId: ctx.orgId,
         submissionId,

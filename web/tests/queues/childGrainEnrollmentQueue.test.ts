@@ -89,8 +89,9 @@ describe("childGrainEnrollmentQueue", () => {
                     opportunity_id: oppId,
                     customer_member_id: "cm-a",
                     outcome_status_key: "offer_pending",
-                    desired_program_type: "Infant",
-                    desired_schedule_type: null,
+                    program_category_id: "cat-infant",
+                    location_program_categories: { key: "infant", label: "Infant" },
+                    schedule_type: null,
                     updated_at: "2026-01-01T00:00:00Z",
                     created_at: "2026-01-01T00:00:00Z",
                     opportunities: {
@@ -127,8 +128,9 @@ describe("childGrainEnrollmentQueue", () => {
                     opportunity_id: oppId,
                     customer_member_id: "cm-b",
                     outcome_status_key: "enrolling",
-                    desired_program_type: "Toddler",
-                    desired_schedule_type: null,
+                    program_category_id: "cat-toddler",
+                    location_program_categories: { key: "toddler", label: "Toddler" },
+                    schedule_type: null,
                     updated_at: "2026-01-02T00:00:00Z",
                     created_at: "2026-01-01T00:00:00Z",
                     opportunities: {

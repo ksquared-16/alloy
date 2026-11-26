@@ -1,0 +1,108 @@
+{
+  "missionId": "msn_f904f4970652b86e34",
+  "assignmentId": "asg_e22f196db64054",
+  "dispatchResult": {
+    "ok": true,
+    "assignmentId": "asg_e22f196db64054",
+    "provider": "claude",
+    "workerId": "claude-6",
+    "sessionId": "exs_19972b06e130d134",
+    "lifecycle": "completed"
+  },
+  "assignmentStatus": "complete",
+  "providerLifecycle": "completed",
+  "sessionId": "exs_19972b06e130d134",
+  "sessionStatus": "completed",
+  "completionPackage": {
+    "summary": "Inventoried the person → user → role → scope authority chain across web/, docs/platform/, and supabase/migrations/. Wrote a 443-line file-grounded markdown inventory. Headline structural finding: the person→user leg does not exist — `persons` carries no link to `auth.users`, so principal and subject are disjoint graphs joined only by query-time scope filtering. Executed web/scripts/auditAuthorityPaths.mjs (deferred unrun by the prior phase) and established that its tier-3 census of 507/539 routes is a measurement artifact: 490 routes are credited to modules that resolve permissionKeys without consulting them. Ground-truth enforcement is 17 routes via 8 modules. Enumerated 9 contradictions (C1-C9) and 6 gaps (G1-G6), each cited path:line, including a canonical governance doc whose stated rule, claimed foreign key, and expanded-reference pointer are all contradicted by the codebase. No source files were modified.",
+    "filesModified": [
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md"
+    ],
+    "tests": {
+      "ran": false,
+      "results": "No test suite applies to a documentation deliverable. web/scripts/auditAuthorityPaths.mjs was executed read-only as evidence for C1; its output is quoted verbatim in §3."
+    },
+    "validation": [
+      {
+        "criterion_id": "AC1",
+        "status": "met",
+        "evidence_ref": "Every claim cites path:line against files read in this worktree. Primary sources: web/lib/admin/resolveAdminAccessCore.ts, getAdminAccessContext.ts, adminRouteGate.ts, accessScope.ts, canManageUsersAndRoles.ts, permissionGrid.ts, middleware.ts, operatorSessionGate.ts; web/app/api/admin/rbac/grants/route.ts, users/[userId]/role/route.ts, configuration/programs/route.ts, persons|customers|global-search/route.ts; supabase/migrations/20260329165048_remote_schema.sql, 20260504103000, 20260505120000, 20260505120100, 20260505153000, 20260505164000, 20260523150000, 20260718140000; docs/platform/governance/roles-and-permissions.md, api-contracts.md, glossary.md. §8 gives runnable reproduce commands for every count."
+      },
+      {
+        "criterion_id": "AC2",
+        "status": "met",
+        "evidence_ref": "§3 enumerates contradictions C1-C9; §4 enumerates gaps G1-G6; §5 tabulates enforced-vs-configured across 13 authority concepts; §6 states what this phase confirms and corrects in the prior inventory (docs/platform/planning/access-identity-v2/inventory.md), including two corrections to it; §7 states 7 explicit limits."
+      }
+    ],
+    "risks": [
+      "G1 (handle_new_user defaults every new auth user to `ops`) is unverified against the live database — no CREATE TRIGGER on auth.users exists in migrations or baselines, but absence in version control is not absence in the deployed DB. Verification query supplied in §7.3.",
+      "G2 (routes relying on getAdminAccessContextCached alone, which never checks portalEligible) is a latent hazard, not a confirmed defect. The set-difference over 88 route files was not computed — the required shell forms were declined by the session command policy; three sensitive routes were sampled by hand and all correctly pair it with a portal gate. Exact command in §8.",
+      "Token strength for the 28 tier-0 routes, webhook signature verification, and RLS policy content were not audited — stated as limits, not silently omitted.",
+      "C5 (unsavable Workflows grid row) is derived statically from the seed migrations and the grants-API validation path; it was not reproduced in a browser."
+    ],
+    "followUp": [
+      "Product decision required before a canonical model can be specified: is a `persons` row ever a principal? (§9 Q1)",
+      "Portal admission model: derive portalEligible from a granted permission, or introduce a portal-access permission custom roles can hold (§9 Q2) — resolves C6 and C7 together.",
+      "Make PERMISSION_GRID_ROWS a projection of the enforced key set rather than an independent list (§9 Q3) — makes C5 impossible by construction and turns C4 into a visible gap.",
+      "web/scripts/auditAuthorityPaths.mjs needs a resolves-vs-consults distinction before its census is quotable; left unmodified as out of scope for this deliverable.",
+      "G3 needs a product ruling: a `settings.users_roles` holder can currently set any user's role, including their own, to `admin` — no ceiling and no self-assignment guard."
+    ],
+    "deliverables": [
+      {
+        "id": "D1",
+        "produced": true,
+        "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md"
+      }
+    ],
+    "recommendation": "Accept deliverable"
+  },
+  "evidence": [
+    {
+      "type": "log",
+      "title": "Claude session — Authority Path Inventory",
+      "fileUri": null
+    },
+    {
+      "type": "notes",
+      "title": "Completion notes — Authority Path Inventory",
+      "fileUri": null
+    },
+    {
+      "type": "document",
+      "title": "Changed docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+      "fileUri": "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md"
+    },
+    {
+      "type": "document",
+      "title": "D1: docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+      "fileUri": "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md"
+    }
+  ],
+  "deliverableExists": true,
+  "elapsedSec": 835,
+  "timelineHeadlines": [
+    "Claude is running tests",
+    "Claude is reading architecture",
+    "Claude is inventorying implementation",
+    "Claude is reading architecture",
+    "Claude is running tests",
+    "Claude is reading architecture",
+    "Claude is running tests",
+    "Claude is reading architecture",
+    "Claude is running tests",
+    "Claude is inventorying implementation",
+    "Claude is writing specification",
+    "Claude is running tests",
+    "Evidence submitted",
+    "Claude completed Authority Path Inventory",
+    "Evidence added — Claude session — Authority Path Inventory",
+    "Evidence added — Completion notes — Authority Path Inventory",
+    "Evidence added — Changed docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+    "Evidence added — D1: docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+    "Assignment complete — Authority Path Inventory",
+    "Deliverable accepted"
+  ],
+  "dashboardFocus": [
+    "Monitoring mission state"
+  ]
+}

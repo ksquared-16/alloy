@@ -1,0 +1,553 @@
+/**
+ * K2 — PROVISIONING. Truth acquisition and TERMINATION.
+ *
+ * Governing (landed, in-branch): docs/platform/runtime/alloy-runtime-kernel.md §K2 (:167–228)
+ *   "To obtain the truth a destination requires, in one answer, and to TERMINATE — so that something
+ *    in the runtime can finally say 'this is over.'"
+ *   "The absence of this system is the root defect … the 2.5 s clock existed BECAUSE NOTHING COULD
+ *    SAY A PREPARATION WAS OVER (Spec §4.1)."
+ *   Owned state: "preparations, keyed by (scope, target, lens, principal, tenant), each with a
+ *    lifecycle and exactly one terminal outcome."
+ *   Outputs: "preparation.terminal(key, outcome, snapshot) — an IMMUTABLE snapshot."
+ *   "Provisioning never renders and never commits."
+ *   Failure model: "operational · empty · error. THERE IS NO FOURTH OUTCOME, AND NO NON-OUTCOME."
+ *   The deadline: "single, runtime-owned; its only product is `error`" (Art 4.5).
+ *
+ * SUPERSEDED / CANCELLED ARE NOT OUTCOMES. A superseded or cancelled preparation is DISPOSED — it
+ * never terminates, never reaches K3, and never becomes a stored outcome. Disposal is a reason, not a
+ * state in the terminal vocabulary. We model it exactly that way rather than inventing a second
+ * vocabulary.
+ *
+ * ── THE OUTCOME VOCABULARY GREW BY ONE, DELIBERATELY ──
+ *
+ * The Kernel doc says "no fourth outcome", and a fourth (`contextual`) is now admitted. That is a
+ * correction of the enumeration, NOT of the rule it was protecting. The rule is "no non-outcome": every
+ * preparation must reach exactly one terminal, so that something can say a preparation is over. That
+ * still holds — `contextual` is a terminal like any other, reached once, committed like any other.
+ *
+ * What the three-outcome enumeration got wrong is that it assumed every destination selects a cohort.
+ * `operational` and `empty` both presuppose a chosen Work View (rows, or a cohort observed to hold
+ * none); `error` says the answer failed. None of them can say "the operator named a record, and chose
+ * no cohort" — so that state had to borrow a lens to be expressible at all, which is precisely how
+ * `Kelly → Household` came to show `New` as selected. Widening the enumeration is what lets the
+ * runtime stop lying; keeping it at three would only push the lie one layer down.
+ *
+ * K2 does not decide what is visible. K3 Focus commits on these outcomes in D4;
+ * "Provisioning never asks to be shown."
+ */
+import type { AttentionRef, AttentionMovedEvent, AttentionScope } from "./attention";
+import { ATTENTION_SCOPE, supersedes } from "./attention";
+import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { applyProvisioningSettlement } from "@/lib/runtime/provisioning/provisioningSettlement";
+import { settlementForAnswer } from "./workUnitProvisioningPrefetch";
+
+/**
+ * The terminal outcomes. There is no NON-outcome — see the header note on why this is four, not three.
+ *
+ * `empty` means a SELECTED cohort holds no rows. `contextual` means no cohort was selected at all, so
+ * there is nothing whose emptiness could be reported. Collapsing the two would re-introduce a lens.
+ */
+export type PreparationOutcome = "operational" | "empty" | "error" | "contextual" | "projection";
+
+/** Why a preparation was thrown away. NOT an outcome — it never reaches K3. */
+export type DisposalReason = "superseded" | "cancelled";
+
+/** Lifecycle phase. `idle` is the absence of a preparation, not a stored state. */
+export type PreparationPhase = "preparing" | PreparationOutcome;
+
+/**
+ * preparation.terminal — the immutable handoff to K3.
+ * A snapshot is immutable at commit; change arrives by settlement or reconciliation.
+ */
+export type PreparationTerminal = {
+    key: string;
+    outcome: PreparationOutcome;
+    /** Immutable (frozen). K3 commits on this; nothing mutates it afterwards. */
+    snapshot: Readonly<ProvisioningAnswer>;
+    /** The attention version this preparation answers. Stale versions never reach K3. */
+    attentionVersion: number;
+    durationMs: number;
+};
+
+/**
+ * The one runtime deadline (Authorization :221 — "One runtime deadline, K2-owned. Product: `error`
+ * only. Never `operational`. Never per-surface, per-component, or per-request.").
+ *
+ * The Authorization ratifies the OWNERSHIP and the PRODUCT, not a millisecond value. C-27 fixes the
+ * intent: "affordance escalation for slowness; deadline for NON-TERMINATION; floor only for an
+ * inconsistent runtime." So the deadline must never fire on mere slowness — it sits far above the
+ * cold Operational Commit ceiling (≤1200 ms p95) and exists only to conclude a preparation that will
+ * not conclude itself. It replaces the deleted 2.5 s reveal timer, which committed regardless of truth.
+ *
+ * Floor (60s): Work View lens switches share this deadline. Measured D1 compose on the Enrollment
+ * surface regularly lands in the 7–20s band under ordinary local load (family All / Tours and child
+ * Waitlist). A 10s floor concluded still-in-flight answers as `error`, wiping a held same-target
+ * queue ("preparation did not terminate within 10000 ms") while Settlement pills still showed counts.
+ * 60s matches the provisioning prefetch TTL band and stays a NON-TERMINATION floor, not a latency budget.
+ */
+export const PROVISIONING_DEADLINE_MS = 60_000;
+
+/**
+ * The scope at which coarser-movement SUPERSESSION is normalised: a movement at LENS scope or coarser
+ * supersedes finer preparation within the context it leaves. This constant is that boundary — it is
+ * NOT the preparation identity.
+ *
+ * The D1 answer's Record of Attention IS the Operational Subject (U-P4/U-O3): the committed snapshot
+ * must resolve the subject that Attention names, so the preparation is bounded to (target, lens,
+ * SUBJECT). A subject movement is therefore a distinct preparation whose snapshot resolves that
+ * subject; reuse is per (target, lens, subject) — a revisited subject reuses its OWN completed answer
+ * and never serves one subject's snapshot as if it were another's. (An earlier key omitted `subject`,
+ * which made every in-lens subject click reuse the first subject's frozen snapshot — the committed
+ * queue advanced while the Focus Panel never left the entry record.)
+ */
+const ENTRY_PREPARATION_SCOPE: AttentionScope = ATTENTION_SCOPE.LENS;
+
+/**
+ * The Kernel key: (scope-normalised, target, lens, subject, principal, tenant). Subject is part of the
+ * identity because Record of Attention is the Operational Subject and the committed snapshot must
+ * resolve it. Never keyed from pathname, component instance, DOM identity, request id, Queue Lane, or
+ * Queue Definition.
+ */
+export function provisioningKey(ref: AttentionRef): string {
+    // CANONICAL identity when resolved: key on (workUnitId, workViewId) so a bare default-view entry
+    // (`lens:null`) and its explicit Work-View pill (`lens:new_leads`) — which resolve to the SAME D1
+    // answer — share ONE preparation instead of two. Falls back to the route-derived (target, lens)
+    // only before a destination has been resolved (cold direct URL / history). Subject stays part of
+    // the identity (Record of Attention is the Operational Subject); a subject movement inherits the
+    // destination, so its key is (workUnitId, workViewId, subject).
+    const dest = ref.destination;
+    return JSON.stringify({
+        scope: ENTRY_PREPARATION_SCOPE,
+        workUnit: dest ? dest.workUnitId : ref.target,
+        workView: dest ? dest.workViewId : ref.lens ?? null,
+        subject: ref.subject ?? null,
+        principal: ref.principal,
+        tenant: ref.tenant,
+    });
+}
+
+/** K4 signals. Instrumentation grades K2 independently of any surface. */
+export type ProvisioningInstrumentation = {
+    onStarted?: (key: string, attentionVersion: number) => void;
+    onReused?: (key: string, attentionVersion: number) => void;
+    onDeduplicated?: (key: string, attentionVersion: number) => void;
+    onDisposed?: (key: string, reason: DisposalReason, attentionVersion: number) => void;
+    onCompositionStarted?: (key: string) => void;
+    onCompositionFinished?: (key: string, ms: number) => void;
+    onTerminal?: (t: PreparationTerminal) => void;
+    onStaleDiscarded?: (key: string, attentionVersion: number, currentVersion: number) => void;
+    onDeadline?: (key: string, attentionVersion: number) => void;
+    onInflightCount?: (n: number) => void;
+};
+
+/** The Entry Resource K2 asks for truth. D1's answer, injected — K2 does not know how truth is made. */
+export type EntryResource = (ref: AttentionRef, signal: AbortSignal) => Promise<ProvisioningAnswer>;
+
+type Inflight = {
+    key: string;
+    ref: AttentionRef;
+    promise: Promise<PreparationTerminal | null>;
+    /** Caused by pointer intent. Populates the cache; never reaches K3. */
+    speculative?: boolean;
+    /**
+     * The attention version this work answers for. Starts as `ref.version`; an explicit movement that
+     * joins the work (the dedup branch) takes it over, so every emit — phase 1 and the settlement —
+     * reaches K3 stamped for the attention that is actually waiting.
+     */
+    answersFor: number;
+    controller: AbortController;
+    /** Set the moment a coarser/newer attention supersedes this work. Checked at the emit boundary. */
+    disposed: DisposalReason | null;
+    startedAt: number;
+};
+
+type Completed = {
+    key: string;
+    terminal: PreparationTerminal;
+    tenant: string;
+    principal: string;
+    /** Truth invalidation marks a completed snapshot unusable without deleting reusable siblings. */
+    invalidated: boolean;
+};
+
+export type ProvisioningRuntimeOptions = {
+    entryResource: EntryResource;
+    instrumentation?: ProvisioningInstrumentation;
+    deadlineMs?: number;
+    clock?: () => number;
+};
+
+/**
+ * The canonical K2 lifecycle over the D1 answer.
+ *
+ * Exactly one active preparation per canonical key. Identical concurrent intents consume the same
+ * in-flight work. A superseded preparation can never win.
+ */
+export class ProvisioningRuntime {
+    private inflight = new Map<string, Inflight>();
+    private completed = new Map<string, Completed>();
+    private currentAttention: AttentionRef | null = null;
+    private clock: () => number;
+    private deadlineMs: number;
+    private instr: ProvisioningInstrumentation;
+
+    constructor(private opts: ProvisioningRuntimeOptions) {
+        this.clock = opts.clock ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
+        this.deadlineMs = opts.deadlineMs ?? PROVISIONING_DEADLINE_MS;
+        this.instr = opts.instrumentation ?? {};
+    }
+
+    /** ← K1. "caused by movement; superseded by movement." */
+    onAttentionMoved = (e: AttentionMovedEvent): Promise<PreparationTerminal | null> => {
+        this.currentAttention = e.ref;
+        // Law of Scope Supersession — dispose every pending preparation this movement supersedes.
+        for (const f of this.inflight.values()) {
+            if (!f.disposed && supersedes(e.ref, f.ref)) this.dispose(f, "superseded");
+        }
+        return this.prepare(e.ref);
+    };
+
+    /**
+     * Begin (or share, or reuse) the preparation for this attention.
+     * Resolves `null` when the preparation was disposed — disposal is not an outcome.
+     */
+    /**
+     * WARMING IS NOT NAVIGATING.
+     *
+     * `speculative` says this preparation was caused by POINTER INTENT, not by an operator
+     * navigating. A speculative preparation may do everything a real one does — fetch, dedupe,
+     * populate `completed`, serve the click that follows — except reach K3. It must not, because K3
+     * is where navigation authority is established.
+     *
+     * Hover reached it. `prepareOperationalDestination` builds a LENS ref by spreading the CURRENT
+     * attention, so the terminal carries the committed attention's own version; K3's staleness guard
+     * compares versions, finds them equal, and commits the hovered view's snapshot. The operator sees
+     * the Work View change with no click. Reported from staging as exactly that.
+     *
+     * The fix is not to stop warming and not to undo the reuse redelivery that made return-to-visited
+     * work: it is to let the DATA be shared while the AUTHORITY stays with explicit intent.
+     */
+    prepare(ref: AttentionRef, opts?: { speculative?: boolean }): Promise<PreparationTerminal | null> {
+        const speculative = opts?.speculative === true;
+        const key = provisioningKey(ref);
+
+        // ── REUSE: a completed, still-valid snapshot for this exact key. ──
+        const done = this.completed.get(key);
+        if (done && this.isReusable(done, ref)) {
+            const reused: PreparationTerminal = { ...done.terminal, attentionVersion: ref.version };
+            this.instr.onReused?.(key, ref.version);
+            /*
+             * A REUSED TERMINAL IS STILL A TERMINAL, AND K3 ONLY LEARNS ABOUT TERMINALS ONE WAY.
+             *
+             * This branch returned the terminal and told nobody. `RuntimeKernelContext` feeds Focus
+             * from `onTerminal` and discards what the preparation promise resolves with, so a reused
+             * answer reached the caller and never reached the commit. First visit to a Work View
+             * missed this cache, ran, and emitted through `onTerminal`; every RETURN to a view
+             * visited earlier in the session hit it and committed nothing.
+             *
+             * Measured on deployed d2776af1 with real pills: first visit always took, return never
+             * did, and clicking again never rescued it — because the second click hit the same cache
+             * entry and was silent in the same way. Attention had moved and the pill lit within
+             * ~150ms, so the operator was left reading the previous view's rows under the new view's
+             * name, which is what human QA reported as the view changing by itself.
+             *
+             * Reusing the DATA is right and stays. What was wrong was reusing it so quietly that
+             * navigation authority never moved: visited is not current.
+             *
+             * Emitting here is the same canonical delivery `emit` performs, so the commit goes
+             * through K3's one entry point with K3's staleness rules intact. It cannot resurrect a
+             * superseded movement: `onAttentionMoved` has just set `currentAttention` to this very
+             * ref and disposed everything this movement supersedes, and Focus independently refuses
+             * any terminal whose attention has moved on.
+             */
+            // Explicit navigation redelivers so a revisited view re-commits; a speculative warm
+            // stops here with the cache populated and navigation untouched.
+            if (!speculative) this.instr.onTerminal?.(reused);
+            return Promise.resolve(reused);
+        }
+
+        // ── SHARE / DEDUPLICATE: identical in-flight work is consumed, never duplicated. ──
+        //
+        // The terminal is restamped with the CONSUMING attention's version, exactly as the reuse
+        // branch above does. This is not bookkeeping — K3 rejects a terminal whose version differs
+        // from `desired` when `desired` supersedes it, so an unstamped shared terminal answers for the
+        // movement that STARTED the work rather than the one that consumed it, and can never commit.
+        //
+        // That is not hypothetical. A finer movement issued in the same tick as a coarser one — a
+        // Search click moving SURFACE → SUBJECT → ASPECT — shares this preparation (aspect is not part
+        // of the key, by design). Before this, the surface never committed at all: the work unit
+        // resolved, the answer was operational, and the operator watched a blank canvas forever
+        // because the only terminal that could commit it carried a stale version.
+        //
+        // Supersession is unaffected: `onAttentionMoved` has already disposed every preparation this
+        // movement genuinely supersedes, so anything still in flight here is work the new attention
+        // legitimately wants.
+        //
+        // E2E-22: restamping only the PROMISE was not enough. Focus is fed from `onTerminal` alone
+        // (#1252) and discards the promise, so the terminal K3 received still carried the starting
+        // movement's version and was refused as superseded by the very movement waiting for it —
+        // measured on deployed 50affaee as a warm child-grain selection stuck on "Thinking" forever.
+        // An explicit consumer therefore takes over what the in-flight work answers for, and the one
+        // `emit` delivers it. A speculative consumer changes nothing (warming is not navigating); an
+        // explicit one joining a warm makes it navigation, which is what the operator just did.
+        const existing = this.inflight.get(key);
+        if (existing && !existing.disposed) {
+            this.instr.onDeduplicated?.(key, ref.version);
+            if (!speculative && ref.version > existing.answersFor) {
+                existing.answersFor = ref.version;
+                existing.speculative = false;
+            }
+            return existing.promise.then((t) => (t ? { ...t, attentionVersion: ref.version } : null));
+        }
+
+        const controller = new AbortController();
+        const startedAt = this.clock();
+        const f: Inflight = { key, ref, promise: Promise.resolve(null), controller, disposed: null, startedAt, speculative, answersFor: ref.version };
+        f.promise = this.run(f);
+        this.inflight.set(key, f);
+        this.instr.onStarted?.(key, ref.version);
+        this.instr.onInflightCount?.(this.inflight.size);
+        return f.promise;
+    }
+
+    /**
+     * Await this frame's deferred settlement and re-emit the settled snapshot.
+     *
+     * Never throws and never blocks the first terminal: phase 1 has already been returned to the
+     * caller by the time this runs. A frame that arrived already settled has no settlement to await,
+     * which is why an ABSENT association and a settlement resolving to `null` are kept distinct.
+     */
+    private async settle(
+        f: Inflight,
+        frame: ProvisioningAnswer,
+        emit: (outcome: PreparationOutcome, snapshot: ProvisioningAnswer) => PreparationTerminal | null,
+    ): Promise<void> {
+        try {
+            const pending = settlementForAnswer(frame);
+            if (!pending) return;
+            const patch = await pending;
+            if (!patch) return;
+            if (f.disposed) return;
+            const settled = applyProvisioningSettlement(frame, patch, patch.navigation);
+            // Reference identity IS the duplicate check: the applier returns the same object when the
+            // patch carried nothing this frame did not already know.
+            if (settled === frame) return;
+            emit(settled.terminal, settled);
+        } catch {
+            /* A settlement is an improvement, never a failure mode for a frame that already answered. */
+        }
+    }
+
+    private async run(f: Inflight): Promise<PreparationTerminal | null> {
+        const emit = (outcome: PreparationOutcome, snapshot: ProvisioningAnswer): PreparationTerminal | null => {
+            // ── THE STALE GUARD ──
+            // Checked at the EMIT boundary, not at the request boundary. AbortController is an
+            // optimisation: an underlying request that cannot be physically aborted (or that already
+            // completed) still cannot reach K3, because disposal and attention version are re-checked
+            // here, after the work finished. This is what makes "a superseded response never lands"
+            // true independent of transport.
+            if (f.disposed) {
+                this.instr.onStaleDiscarded?.(f.key, f.ref.version, this.currentAttention?.version ?? -1);
+                return null;
+            }
+            if (this.currentAttention && supersedes(this.currentAttention, f.ref)) {
+                this.dispose(f, "superseded");
+                this.instr.onStaleDiscarded?.(f.key, f.ref.version, this.currentAttention.version);
+                return null;
+            }
+            const terminal: PreparationTerminal = {
+                key: f.key,
+                outcome,
+                snapshot: Object.freeze(snapshot), // immutable at commit
+                attentionVersion: f.answersFor,
+                durationMs: this.clock() - f.startedAt,
+            };
+            this.completed.set(f.key, {
+                key: f.key,
+                terminal,
+                tenant: f.ref.tenant,
+                principal: f.ref.principal,
+                invalidated: false,
+            });
+            // Same law on the miss path: a warm that had to fetch still may not commit.
+            if (!f.speculative) this.instr.onTerminal?.(terminal);
+            return terminal;
+        };
+
+        let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            this.instr.onCompositionStarted?.(f.key);
+            const t = this.clock();
+
+            // THE DEADLINE. Its only product is `error`. It races composition; it can never
+            // manufacture success, because the deadline branch has no snapshot to succeed with.
+            const deadline = new Promise<"deadline">((resolve) => {
+                deadlineTimer = setTimeout(() => resolve("deadline"), this.deadlineMs);
+            });
+            const answer = await Promise.race([this.opts.entryResource(f.ref, f.controller.signal), deadline]);
+            this.instr.onCompositionFinished?.(f.key, this.clock() - t);
+
+            if (answer === "deadline") {
+                this.instr.onDeadline?.(f.key, f.ref.version);
+                return emit("error", {
+                    terminal: "error",
+                    code: "records_unavailable",
+                    message: `preparation did not terminate within ${this.deadlineMs} ms`,
+                    orgId: f.ref.tenant,
+                    workUnit: null,
+                    // Honestly null: preparation never terminated, so no lens set was ever resolved.
+                    // Stated rather than omitted, because the `as ProvisioningAnswer` cast below means
+                    // TypeScript will NOT catch a missing field here — `presentation_ms` was in fact
+                    // already missing from these timings, and is added back on the same grounds.
+                    navigationFrame: null,
+                    timings: {
+                        authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
+                        records_ms: 0, projection_ms: 0, composition_ms: 0,
+                        total_ms: this.clock() - f.startedAt,
+                    },
+                } as ProvisioningAnswer);
+            }
+
+            // D1 terminal maps 1:1. K2 invents nothing and upgrades nothing.
+            const first = emit(answer.terminal, answer);
+            /*
+             * PHASE 2 — THE SAME EMIT PATH, DELIBERATELY (OX Slice 8).
+             *
+             * The settlement is delivered by re-emitting the settled snapshot rather than by mutating
+             * the committed one. That is not a stylistic choice: `emit` carries the stale guard, so a
+             * settlement that arrives after attention has moved is discarded by exactly the same rule
+             * that discards a superseded first answer. A late B cannot repaint C, and it cannot do so
+             * for free rather than because a second guard was remembered here.
+             *
+             * `applyProvisioningSettlement` is the ONE authority for what a settlement changes: it
+             * refuses a patch whose navigation or identity does not match the frame, never lets a
+             * known field regress to unknown, and returns the SAME object when nothing moved — which
+             * is what stops a duplicate delivery from emitting a second terminal.
+             */
+            if (first) void this.settle(f, answer, emit);
+            return first;
+        } catch (err) {
+            return emit("error", {
+                terminal: "error",
+                code: "records_unavailable",
+                message: err instanceof Error ? err.message : String(err),
+                orgId: f.ref.tenant,
+                workUnit: null,
+                // Honestly null — the composition threw; nothing about the lens set is known here.
+                navigationFrame: null,
+                timings: {
+                    authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
+                    records_ms: 0, projection_ms: 0, composition_ms: 0,
+                    total_ms: this.clock() - f.startedAt,
+                },
+            } as ProvisioningAnswer);
+        } finally {
+            if (deadlineTimer) clearTimeout(deadlineTimer);
+            if (this.inflight.get(f.key) === f) this.inflight.delete(f.key);
+            this.instr.onInflightCount?.(this.inflight.size);
+        }
+    }
+
+    /**
+     * Reuse is a property of Provisioning — not a cache subsystem, and never a way to make warm
+     * numbers look better by showing stale truth.
+     */
+    private isReusable(done: Completed, ref: AttentionRef): boolean {
+        if (done.invalidated) return false;
+        // Tenant/principal isolation is absolute — a retained context may never cross a tenant.
+        if (done.tenant !== ref.tenant || done.principal !== ref.principal) return false;
+        // A coarser (SURFACE) movement must never reuse a lens/subject snapshot — it left that context.
+        // Same-key finer movement (an ASPECT change within the same subject) legitimately reuses; a
+        // subject change has a different key and so never lands here.
+        if (ref.scope < ENTRY_PREPARATION_SCOPE) return false;
+        // A projection cohort (BP V2 S2) is a lens answer exactly like these two: reusable under its key.
+        return (
+            done.terminal.outcome === "operational"
+            || done.terminal.outcome === "empty"
+            || done.terminal.outcome === "projection"
+        );
+    }
+
+    private dispose(f: Inflight, reason: DisposalReason) {
+        f.disposed = reason;
+        try {
+            f.controller.abort();
+        } catch {
+            /* physical abort is best-effort; the emit-boundary guard is the real exclusion */
+        }
+        this.instr.onDisposed?.(f.key, reason, f.ref.version);
+    }
+
+    /** Explicit cancellation (e.g. the operator left). Disposal, never an outcome. */
+    cancel(ref: AttentionRef): void {
+        const f = this.inflight.get(provisioningKey(ref));
+        if (f && !f.disposed) this.dispose(f, "cancelled");
+    }
+
+    /** Truth moved — a completed snapshot is no longer reusable. Records own truth movement. */
+    invalidate(key: string): void {
+        const c = this.completed.get(key);
+        if (c) c.invalidated = true;
+    }
+
+    /**
+     * Truth moved for a whole DESTINATION (a lifecycle outcome changes which rows a work view holds) —
+     * every completed snapshot of that work view is unusable, whatever its subject: the lens answer
+     * and every prewarmed neighbour, not just the record the operator acted on.
+     *
+     * Measured on staging (716053f5): after "Offer accepted", the subject re-prepare answered
+     * subject_unavailable and the lens fallback REUSED the lens snapshot from before the outcome — the
+     * accepted child stayed in Offers, still "Offered", with Record outcome live, until a reload.
+     * Speculative warms already in flight for the destination answer for the old truth too, so they are
+     * disposed rather than joined. Explicit (operator) preparations are left alone.
+     */
+    invalidateDestination(ref: AttentionRef): void {
+        const target = JSON.parse(provisioningKey({ ...ref, subject: null })) as Record<string, unknown>;
+        const sameDestination = (key: string) => {
+            try {
+                const k = JSON.parse(key) as Record<string, unknown>;
+                return k.workUnit === target.workUnit && k.workView === target.workView && k.principal === target.principal && k.tenant === target.tenant;
+            } catch {
+                return false;
+            }
+        };
+        for (const [key, c] of this.completed) if (sameDestination(key)) c.invalidated = true;
+        for (const f of this.inflight.values()) if (f.speculative && !f.disposed && sameDestination(f.key)) this.dispose(f, "cancelled");
+    }
+
+    /**
+     * Truth moved for a WORK UNIT — a lifecycle outcome moves a record BETWEEN its work views (New →
+     * Tours → Decision), so every completed snapshot of every work view of that unit is unusable, not
+     * just the one the operator is looking at: a sibling pill opened next must re-prepare, never answer
+     * from before the move. Speculative warms for the unit are disposed; explicit preparations are left.
+     */
+    invalidateWorkUnit(ref: AttentionRef): void {
+        const target = JSON.parse(provisioningKey({ ...ref, subject: null })) as Record<string, unknown>;
+        const sameWorkUnit = (key: string) => {
+            try {
+                const k = JSON.parse(key) as Record<string, unknown>;
+                return k.workUnit === target.workUnit && k.principal === target.principal && k.tenant === target.tenant;
+            } catch {
+                return false;
+            }
+        };
+        for (const [key, c] of this.completed) if (sameWorkUnit(key)) c.invalidated = true;
+        for (const f of this.inflight.values()) if (f.speculative && !f.disposed && sameWorkUnit(f.key)) this.dispose(f, "cancelled");
+    }
+
+    /** Retention boundary: a tenant/principal change FLUSHES. A context never crosses a tenant. */
+    flushForPrincipalChange(): void {
+        for (const f of this.inflight.values()) if (!f.disposed) this.dispose(f, "cancelled");
+        this.completed.clear();
+        this.currentAttention = null;
+    }
+
+    /** Observability for certification only. */
+    get inflightCount(): number {
+        return [...this.inflight.values()].filter((f) => !f.disposed).length;
+    }
+    peekCompleted(key: string): PreparationTerminal | null {
+        const c = this.completed.get(key);
+        return c && !c.invalidated ? c.terminal : null;
+    }
+}

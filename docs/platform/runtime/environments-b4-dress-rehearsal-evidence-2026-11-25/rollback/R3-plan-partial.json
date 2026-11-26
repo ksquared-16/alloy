@@ -1,0 +1,16 @@
+{
+  "mode": "first_promotion",
+  "identify_failures": [],
+  "production_ledger": "/Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-25/rollback/R3-partial-ledger.txt",
+  "status": "blocked",
+  "blockers": [
+    "first_promotion_ledger_not_empty: the target records 40 version(s) (head 20260414100000); first-promotion mode runs only against a new project with an empty ledger"
+  ],
+  "warnings_count": 0,
+  "ledger_head": "20260414100000",
+  "pending_count": 0,
+  "destructive_in_chain": 0,
+  "first_version": null,
+  "last_version": null,
+  "contract_files": []
+}

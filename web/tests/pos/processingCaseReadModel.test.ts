@@ -182,4 +182,17 @@ describe("getProcessingCaseDetail", () => {
         const { reg } = makeFakeRegistry(new Set());
         expect(await getProcessingCaseDetail(deps, reg, { orgId: ORG, id: "nope" })).toBeNull();
     });
+
+    it("surfaces processingIntent from case metadata", async () => {
+        const cases = [
+            {
+                ...caseRow("c-intent", "needs_review", "2026-06-12T03:00:00Z"),
+                metadata: { processing_intent: "generate_form" },
+            },
+        ];
+        const { deps } = makeFakeDeps(cases, []);
+        const { reg } = makeFakeRegistry(new Set());
+        const detail = await getProcessingCaseDetail(deps, reg, { orgId: ORG, id: "c-intent" });
+        expect(detail?.processingIntent).toBe("generate_form");
+    });
 });

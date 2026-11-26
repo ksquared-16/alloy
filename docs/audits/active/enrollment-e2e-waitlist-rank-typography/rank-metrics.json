@@ -1,0 +1,20 @@
+{
+  "text": "1/1",
+  "kids": [
+    {
+      "text": "1",
+      "fontSize": "11px",
+      "transform": "matrix(1, 0, 0, 1, 0, -2.2)"
+    },
+    {
+      "text": "/",
+      "fontSize": "11px",
+      "transform": "matrix(1, 0, 0, 1, 0, -0.22)"
+    },
+    {
+      "text": "1",
+      "fontSize": "11px",
+      "transform": "matrix(1, 0, 0, 1, 0, 2.2)"
+    }
+  ]
+}

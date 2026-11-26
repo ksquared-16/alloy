@@ -10,6 +10,8 @@ export type WorkUnitSlugRouteValue = {
     workUnitKey: string;
     workUnitName: string;
     initialQueueKey: string | null;
+    /** Configured Work View to select initially when the route slug is a work-view slug. */
+    initialWorkViewId: string | null;
     routeRecordId: string | null;
 };
 

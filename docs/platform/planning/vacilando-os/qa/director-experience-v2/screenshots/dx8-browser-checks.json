@@ -1,0 +1,119 @@
+{
+  "at": "2026-08-05T17:04:27.733Z",
+  "base": "http://127.0.0.1:3026",
+  "apiMeta": {
+    "portfolioKind": "director_portfolio",
+    "commandKind": "executive_command_center",
+    "lead": "5 actions ready",
+    "counts": {
+      "needsDecision": 3,
+      "blocked": 1,
+      "readyPromote": 1,
+      "waitingReview": 0,
+      "waitingOthers": 1,
+      "completedRecently": 5,
+      "actionable": 5
+    },
+    "lanes": [
+      {
+        "id": "needs_decision",
+        "label": "Needs Your Decision",
+        "count": 3,
+        "sample": [
+          {
+            "title": "DX7 Fixture — Needs Director",
+            "actionTitle": "Open Decision",
+            "primary": "open_decision"
+          },
+          {
+            "title": "Mission 2 Identity & Access Platform Objective Transform the complete…",
+            "actionTitle": "Continue Discovery",
+            "primary": "reopen_work"
+          }
+        ]
+      },
+      {
+        "id": "blocked",
+        "label": "Blocked",
+        "count": 1,
+        "sample": [
+          {
+            "title": "DX7 Fixture — Blocked Trust",
+            "actionTitle": "Open Mission",
+            "primary": "open_mission"
+          }
+        ]
+      },
+      {
+        "id": "ready_promote",
+        "label": "Ready to Promote",
+        "count": 1,
+        "sample": [
+          {
+            "title": "DX7 Fixture — Ready Promotion",
+            "actionTitle": "Have Director re-check",
+            "primary": "recheck_deliverable"
+          }
+        ]
+      },
+      {
+        "id": "waiting_others",
+        "label": "Waiting on Others",
+        "count": 1,
+        "sample": [
+          {
+            "title": "DX7 Fixture — Waiting Comms",
+            "actionTitle": "Open Mission",
+            "primary": "open_mission"
+          }
+        ]
+      },
+      {
+        "id": "completed_recently",
+        "label": "Recently Completed",
+        "count": 5,
+        "sample": [
+          {
+            "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+            "actionTitle": "Open Mission",
+            "primary": "open_mission"
+          },
+          {
+            "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+            "actionTitle": "Open Mission",
+            "primary": "open_mission"
+          }
+        ]
+      }
+    ],
+    "portfolioCounts": {
+      "active": 6,
+      "needsAttention": 2,
+      "blocked": 1,
+      "waiting": 1,
+      "inProgress": 0,
+      "readyImplementation": 1,
+      "readyClose": 1,
+      "completedRecently": 5
+    }
+  },
+  "checks": {
+    "hasCommandCenter": true,
+    "hasPortfolioCounts": true,
+    "commandCardCount": 11,
+    "portfolioCardCount": 11,
+    "laneCount": 5,
+    "navigatedMissionHref": "missions/msn_22eb2a1ea6e3c65fc4",
+    "missionDetailStillRenders": true,
+    "apiHasCommandCenter": true,
+    "apiHasPortfolio": true,
+    "consistentActionable": true
+  },
+  "shots": {
+    "commandCenter": "dx8-command-center.png",
+    "home": "dx8-home.png",
+    "lane": "dx8-command-lane.png",
+    "card": "dx8-command-card.png",
+    "mission": "dx8-mission-detail-unchanged.png"
+  }
+}

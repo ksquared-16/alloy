@@ -1,0 +1,71 @@
+{
+  "trusted_host_action_id": "tha_c9b7209294518c",
+  "query_hash": "c28622a9f264bb0acaf6df164407044d1d59198065a27a6891b1eab7929b7535",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-25T03:54:21.724Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c9b7209294518c",
+    "query_hash": "c28622a9f264bb0acaf6df164407044d1d59198065a27a6891b1eab7929b7535",
+    "authorization_id": "grnt_b0f4e028fbda4682",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-25T03:54:26.890Z",
+    "question_ids": [
+      "fn_identity",
+      "fn_grants",
+      "ledger"
+    ],
+    "questions": {
+      "fn_identity": {
+        "question_id": "fn_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "functions": [
+              {
+                "name": "financials_account_subject_facts",
+                "args": "p_org_id uuid, p_scan_cap integer, p_enrollment_process_key text",
+                "returns": "jsonb",
+                "security_definer": false,
+                "volatility": "s",
+                "settings": [
+                  "search_path=public, pg_temp"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "fn_grants": {
+        "question_id": "fn_grants",
+        "row_count": null,
+        "rows": [
+          {
+            "acl": [
+              "postgres=X/postgres",
+              "service_role=X/postgres"
+            ]
+          }
+        ]
+      },
+      "ledger": {
+        "question_id": "ledger",
+        "row_count": null,
+        "rows": [
+          {
+            "has_20261026120000": true,
+            "max_version": "20261026120000",
+            "applied_count": 496
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

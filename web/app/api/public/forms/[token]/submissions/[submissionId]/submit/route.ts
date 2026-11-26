@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
+import { normalizeSubmissionForSchema } from "@/lib/forms/submissionSemantics";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
 import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
@@ -16,13 +17,13 @@ import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
-import { applyFormIntakeSafe } from "@/lib/forms/intake/applyFormIntakeSafe";
 import { buildFormIntakeMetaFromPayload } from "@/lib/forms/intake/buildFormIntakeMetaFromPayload";
 import {
     buildLifecycleValidationBlockedMeta,
     validatePublicSubmissionLifecycleRequirements,
 } from "@/lib/forms/lifecycle/validatePublicSubmissionLifecycleRequirements";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
+import { persistSignedEnrollmentArtifact } from "@/lib/forms/pdf/persistSignedEnrollmentArtifact";
 import {
     emitFormPacketCompletedSafe,
     emitFormSignedSafe,
@@ -30,13 +31,39 @@ import {
 } from "@/lib/forms/workflow/formSubmissionEvents";
 import { emitIntakeCaseLifecycleEventsSafe } from "@/lib/forms/workflow/intakeCaseLifecycleEvents";
 import { maybeOpenProcessingCaseFromPacketCompletionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromPacketCompletionSafe";
-import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
+import { ingestPublicFormThroughProcessing } from "@/lib/pos/processingIdentity/sources/formIntakeAdapter";
+import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
 import {
     emitOpportunityEnrollmentPacketCompletedProjectionSafe,
     emitOpportunityEnrollmentPacketOpenedSafe,
     emitOpportunityEnrollmentPacketStepCompletedSafe,
 } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
+import { fetchOrgTimeZoneIana } from "@/lib/admin/orgLocalDayBounds";
+import { realizeEnrollmentFeesForProcessInstance } from "@/lib/enrollment/financial/realizeEnrollmentFeesForProcessInstance";
+import {
+    extractCollectionSubmissionEnvelope,
+    validateCollectionPayloadOrgSecurity,
+} from "@/lib/forms/collection/formsCollectionSubmissionValidation";
+import { takeTourPublicRateLimit } from "@/lib/tours/public/tourPublicRateLimit";
+import { findOfferedTourSlot, resolvePublicTourCalendar } from "@/lib/tours/publicCalendar/publicTourCalendarServer";
+import {
+    buildRequestedTourRecord,
+    parsePublicTourSelection,
+    type RequestedTourRecord,
+} from "@/lib/tours/publicCalendar/requestedTour";
+import { publicLinkOffersMarketingConsent } from "@/lib/tours/publicCalendar/tourCalendarLinkConfig";
+import {
+    buildIntakeMarketingConsentRecord,
+    choiceFitsLanguage,
+    findMarketingConsentField,
+    marketingConsentFieldIds,
+    parsePublicMarketingConsentChoice,
+    resolveMarketingConsentLanguage,
+    type IntakeMarketingConsentRecord,
+    withoutCompetingMarketingConsentFields,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -126,12 +153,63 @@ export async function POST(
         return publicErr("Only draft submissions can be submitted", 409, { code: "NOT_DRAFT" });
     }
 
+    /*
+     * S7 — A REQUESTED TOUR. A time picked on the school's public tour calendar rides with the lead
+     * form as pending intent on the Processing case. The browser sends two instants and nothing
+     * else: org and location come from THIS link, the slot must be one the canonical slot engine
+     * offers right now, and a refusal happens before anything is written — the draft stays a draft,
+     * so the family can pick another time without losing their answers. Nothing here books a seat
+     * or sends a message: acceptance is the administrator's Approve.
+     */
+    let requestedTour: RequestedTourRecord | null = null;
+    if (body.requested_tour !== undefined && body.requested_tour !== null) {
+        const retryAfter = takeTourPublicRateLimit(request, "calendar_request", token);
+        if (retryAfter != null) {
+            return publicErr("Too many requests", 429, { code: "RATE_LIMIT" });
+        }
+        const selection = parsePublicTourSelection(body.requested_tour);
+        if (!selection.ok) return publicErr(selection.message, 400, { code: "TOUR_REQUEST_INVALID" });
+        if (ctx.packet) {
+            return publicErr("This form can't take a tour request.", 400, { code: "TOUR_REQUEST_NOT_ACCEPTED" });
+        }
+        const calendar = await resolvePublicTourCalendar(supabase, token, { embedOrigin: origin });
+        if (!calendar.ok || calendar.value.linkId !== ctx.linkId) {
+            return publicErr("This form can't take a tour request.", 400, { code: "TOUR_REQUEST_NOT_ACCEPTED" });
+        }
+        let offered: Awaited<ReturnType<typeof findOfferedTourSlot>> = null;
+        try {
+            offered = await findOfferedTourSlot(supabase, {
+                orgId: calendar.value.orgId,
+                locationId: calendar.value.locationId,
+                startAt: selection.value.startAt,
+                endAt: selection.value.endAt,
+            });
+        } catch {
+            return publicErr("We couldn't check that time just now. Please try again.", 503, { code: "TOUR_CHECK_UNAVAILABLE" });
+        }
+        if (!offered) {
+            return publicErr("That time is no longer available. Please choose another time.", 409, {
+                code: "TOUR_SLOT_UNAVAILABLE",
+            });
+        }
+        requestedTour = buildRequestedTourRecord({
+            locationId: calendar.value.locationId,
+            startAt: selection.value.startAt,
+            endAt: selection.value.endAt,
+            timezone: offered.timezone,
+            ruleId: offered.ruleId ?? null,
+            formPublicLinkId: ctx.linkId,
+            formSubmissionId: submissionId,
+        });
+    }
+
     const { data: ver } = await supabase
         .from("form_definition_versions")
-        .select("schema_json")
+        .select("schema_json, metadata")
         .eq("id", ctx.formDefinitionVersionId)
         .maybeSingle();
-    const schemaJson = (ver as { schema_json?: unknown } | null)?.schema_json ?? ctx.schemaJson;
+    const versionRow = ver as { schema_json?: unknown; metadata?: unknown } | null;
+    const schemaJson = versionRow?.schema_json ?? ctx.schemaJson;
 
     let schema: FormSchemaV1;
     try {
@@ -142,16 +220,97 @@ export async function POST(
         }
         throw e;
     }
+    /*
+     * S7 × C1 — OPTIONAL MARKETING CONSENT. Only a link that offers the control can carry an answer
+     * (decided by the server from the link and the published schema, never the body). The answer is
+     * evidence on the Processing case, not a preference: Approve commits it for the resolved person
+     * through Communications. An unchecked or missing answer is recorded as "no" — submitting the
+     * form is never consent. When the form's author placed a Marketing consent question, its wording
+     * and channels are the ones recorded; a channel it did not show can never carry a yes.
+     */
+    let marketingConsent: IntakeMarketingConsentRecord | null = null;
+    {
+        const parsed = parsePublicMarketingConsentChoice(body.marketing_consent);
+        if (!parsed.ok) return publicErr(parsed.message, 400, { code: "MARKETING_CONSENT_INVALID" });
+        const offered = publicLinkOffersMarketingConsent(ctx.linkMetadata, { packet: Boolean(ctx.packet), schema });
+        if (parsed.value && !offered) {
+            return publicErr("This form can't take a consent answer.", 400, { code: "MARKETING_CONSENT_NOT_ACCEPTED" });
+        }
+        if (offered) {
+            const language = resolveMarketingConsentLanguage(findMarketingConsentField(schema));
+            if (!choiceFitsLanguage(parsed.value, language)) {
+                return publicErr("Invalid consent answer.", 400, { code: "MARKETING_CONSENT_INVALID" });
+            }
+            marketingConsent = buildIntakeMarketingConsentRecord({
+                choice: parsed.value,
+                formPublicLinkId: ctx.linkId,
+                formSubmissionId: submissionId,
+                language,
+            });
+        }
+    }
+
+    // Where this link offers the marketing-consent control, it is the one consent answer: the form's own
+    // "Email opt-in" / "SMS opt-in" person fields are not shown, not required and not stored (P1-close, D5).
+    // A Marketing consent question never holds a value either — its answer is the record above.
+    const competingConsentFieldIds = new Set<string>(marketingConsentFieldIds(schema));
+    if (marketingConsent) {
+        const before = new Set(collectFieldIds(schema.fields));
+        schema = withoutCompetingMarketingConsentFields(schema);
+        const after = new Set(collectFieldIds(schema.fields));
+        for (const id of before) if (!after.has(id)) competingConsentFieldIds.add(id);
+    }
 
     let payloadToValidate: Record<string, unknown> =
         body.payload !== undefined && typeof body.payload === "object" && !Array.isArray(body.payload)
             ? (body.payload as Record<string, unknown>)
             : (sub.payload as Record<string, unknown>);
 
+    if (competingConsentFieldIds.size) {
+        const values = { ...((payloadToValidate.values ?? {}) as Record<string, unknown>) };
+        for (const id of competingConsentFieldIds) delete values[id];
+        payloadToValidate = { ...payloadToValidate, values };
+    }
+
     if (ctx.packet) {
         payloadToValidate = {
             ...payloadToValidate,
             values: filterPayloadValuesToSchemaFields(schema, (payloadToValidate.values ?? {}) as Record<string, unknown>),
+        };
+    }
+
+    /*
+     * The authored semantics both participant runtimes share: a group's answers are its rows, and a
+     * hidden question has no answer. Applied before derived values and validation so the generic
+     * form and the Enrollment conversation are judged by exactly the same rules.
+     */
+    payloadToValidate = normalizeSubmissionForSchema(schema, payloadToValidate as Parameters<typeof normalizeSubmissionForSchema>[1]);
+
+    /*
+     * Derived destinations are filled HERE — before validation, because this is the moment the
+     * source means.
+     *
+     * "Today's Date" beside a signature is the day the family signed, and that instant does not
+     * exist until now. Filling it after validation would reject the submission for a blank the
+     * platform was about to write itself; filling it earlier would stamp the wrong day. The
+     * organisation's own zone decides which calendar day this is — a 9pm Pacific signature is not
+     * tomorrow.
+     */
+    const derivedValues = resolveFormDerivedValues(
+        schema,
+        (payloadToValidate.values ?? {}) as Record<string, unknown>,
+        {
+            executedAtIso: new Date().toISOString(),
+            timeZone: await fetchOrgTimeZoneIana(supabase, ctx.orgId),
+            // A signature date is the date of THAT signature — so whether it applies depends on
+            // whether the participant actually made it.
+            signatures: (payloadToValidate.signatures ?? null) as Record<string, unknown> | null,
+        },
+    );
+    if (Object.keys(derivedValues).length > 0) {
+        payloadToValidate = {
+            ...payloadToValidate,
+            values: { ...((payloadToValidate.values ?? {}) as Record<string, unknown>), ...derivedValues },
         };
     }
 
@@ -165,6 +324,17 @@ export async function POST(
         return publicErr("Invalid submission payload", 400, { validation_errors: validated.errors });
     }
 
+    const collectionSecurityErrors = await validateCollectionPayloadOrgSecurity(
+        supabase,
+        ctx.orgId,
+        validated.schema,
+        validated.payload,
+        { customer_id: sub.customer_id },
+    );
+    if (collectionSecurityErrors.length > 0) {
+        return publicErr("Invalid collection item reference", 403, { validation_errors: collectionSecurityErrors });
+    }
+
     const guardedValues = applyReadOnlyBaselineToPayload(validated.schema, validated.payload, sub.payload as FormPayload);
 
     const ipHash = hashClientIp(request);
@@ -173,10 +343,23 @@ export async function POST(
         meta: mergePublicSubmissionMeta(guardedValues.meta as Record<string, unknown> | undefined, ipHash),
     };
 
-    let personId = sub.person_id;
-    let customerId = sub.customer_id;
-    let customerMemberId = sub.customer_member_id;
-    let opportunityId = sub.opportunity_id;
+    const collectionEnvelope = extractCollectionSubmissionEnvelope(finalPayload);
+    if (Object.keys(collectionEnvelope).length > 0) {
+        finalPayload = {
+            ...finalPayload,
+            meta: {
+                ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                collection_submission_envelope: collectionEnvelope,
+            },
+        };
+    }
+
+    const personId = sub.person_id;
+    const customerId = sub.customer_id;
+    const customerMemberId = sub.customer_member_id;
+    const opportunityId = sub.opportunity_id;
+    let processingCaseId: string | null = null;
+    let formIntakeMeta: FormIntakeMeta | null = null;
 
     const metaRecord = ctx.linkMetadata as Record<string, unknown> | undefined;
     const launchMode = typeof metaRecord?.form_context_mode === "string" ? metaRecord.form_context_mode.trim() : "";
@@ -191,8 +374,23 @@ export async function POST(
             values: finalPayload.values as Record<string, unknown>,
             linkMetadata: metaRecord,
             submissionId,
+            // Structured collection responses are the PREFERRED intake source: when a form projects
+            // guardians into a collection its flat guardian questions are suppressed, so flat-only
+            // resolution would find nothing and silently open no case.
+            collectionEnvelope: collectionEnvelope as never,
+            schema,
         });
 
+        if (!built.ok && requestedTour) {
+            // No Processing case could be opened, so there is nowhere to hold the request.
+            return publicErr("This form can't take a tour request.", 400, { code: "TOUR_REQUEST_NOT_ACCEPTED" });
+        }
+        if (!built.ok && (marketingConsent?.choices.email || marketingConsent?.choices.sms)) {
+            // Same for a consent: no case means nowhere to hold the evidence — never accept it and drop it.
+            return publicErr("We couldn't record your request just now. Please try again.", 503, {
+                code: "MARKETING_CONSENT_NOT_RECORDED",
+            });
+        }
         if (!built.ok) {
             finalPayload = {
                 ...finalPayload,
@@ -246,34 +444,38 @@ export async function POST(
             }
 
             try {
-                const intakeResult = await applyFormIntakeSafe(supabase, {
+                // D5: Processing is authoritative — no direct CRM identity writes from public submit.
+                const intake = await ingestPublicFormThroughProcessing(supabase, {
                     orgId: ctx.orgId,
-                    linkMetadata: metaRecord,
-                    defaultVerticalId:
-                        typeof metaRecord?.default_vertical_id === "string" ? metaRecord.default_vertical_id : null,
-                    defaultOpportunityStatusKey:
-                        typeof metaRecord?.default_opportunity_status_key === "string"
-                            ? metaRecord.default_opportunity_status_key
-                            : null,
+                    submissionId,
+                    formDefinitionId: ctx.formDefinitionId,
+                    intakeMeta: built.intake,
                     payload: finalPayload,
-                    existingPersonId: personId,
-                    existingCustomerId: customerId,
-                    existingCustomerMemberId: customerMemberId,
-                    existingOpportunityId: opportunityId,
+                    linkMetadata: metaRecord,
+                    requestedTour,
+                    marketingConsent,
                 });
-                personId = intakeResult.person_id;
-                customerId = intakeResult.customer_id;
-                customerMemberId = intakeResult.customer_member_id;
-                opportunityId = intakeResult.opportunity_id;
-                const cleanedMeta = {
-                    ...((finalPayload.meta ?? {}) as Record<string, unknown>),
-                    ...intakeResult.outcomeMeta,
+                if (!intake.ok) {
+                    throw new Error(intake.error);
+                }
+                processingCaseId = intake.processingCaseId;
+                formIntakeMeta = built.intake;
+                finalPayload = {
+                    ...finalPayload,
+                    meta: {
+                        ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                        intake_resolution_path: "processing_authoritative",
+                        processing_case_id: intake.processingCaseId,
+                        intake_needs_review: true,
+                    },
                 };
-                delete cleanedMeta.intake;
-                delete cleanedMeta.intake_error;
-                delete cleanedMeta.intake_skip_reason;
-                finalPayload = { ...finalPayload, meta: cleanedMeta };
             } catch (e) {
+                if (requestedTour || marketingConsent?.choices.email || marketingConsent?.choices.sms) {
+                    // Never tell a family "request received" for a request — or a consent — Processing does not hold.
+                    return publicErr("We couldn't record your request just now. Please try again.", 503, {
+                        code: requestedTour ? "TOUR_REQUEST_NOT_RECORDED" : "MARKETING_CONSENT_NOT_RECORDED",
+                    });
+                }
                 const msg = e instanceof Error ? e.message : "Intake failed";
                 const cleanedMeta = { ...((finalPayload.meta ?? {}) as Record<string, unknown>) };
                 delete cleanedMeta.intake;
@@ -369,12 +571,33 @@ export async function POST(
     const signerIpHash =
         typeof meta?.client_ip_hash === "string" && meta.client_ip_hash.trim() ? meta.client_ip_hash.trim() : ipHash;
 
+    // The adult this link was sent to — the CONTEXT a signer is recorded against, never the signer.
+    const recipientPersonId =
+        typeof metaRecord?.recipient_person_id === "string" && metaRecord.recipient_person_id.trim() ? metaRecord.recipient_person_id.trim() : null;
+    let recipientName: string | null = null;
+    if (recipientPersonId) {
+        const { data: recipient } = await supabase
+            .from("persons")
+            .select("first_name, last_name")
+            .eq("org_id", ctx.orgId)
+            .eq("id", recipientPersonId)
+            .maybeSingle();
+        const r = recipient as { first_name?: string | null; last_name?: string | null } | null;
+        recipientName = [r?.first_name, r?.last_name].filter((x) => typeof x === "string" && x.trim()).join(" ") || null;
+    }
     const sigRes = await persistFormSubmissionSignatures(supabase, {
         orgId: ctx.orgId,
         formSubmissionId: submissionId,
         schema: validated.schema,
         payload: finalPayload,
         signerIpHash,
+        channel: {
+            kind: "public_link",
+            linkId: ctx.linkId,
+            packetSessionId: ctx.packet?.packet_session_id ?? null,
+            recipientPersonId,
+            recipientName,
+        },
     });
     if ("error" in sigRes) {
         return publicErr(sigRes.error, 500, { code: "SIGNATURE_PERSIST" });
@@ -385,26 +608,9 @@ export async function POST(
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
     }
 
-    // POS-FP5: best-effort, marker-gated. A POS-connected SINGLE form submitted through
-    // the public UI opens one Processing Case (the submission as primary source). Packet
-    // steps are excluded (packets open one case on completion below). Never throws.
-    // [POS_FORM_SUBMIT_TRACE] TEMPORARY diagnostic — remove after root-causing the missing case.
-    const posTraceFormDefinitionId = String((submittedRow as { form_definition_id?: string }).form_definition_id ?? "");
-    console.log("[POS_FORM_SUBMIT_TRACE] public submit reached producer gate", {
-        route: "public/forms/[token]/submissions/[submissionId]/submit",
-        submissionId,
-        orgId: ctx.orgId,
-        formDefinitionId: posTraceFormDefinitionId,
-        isPacket: Boolean(ctx.packet),
-        willCallProducer: !ctx.packet,
-    });
-    if (!ctx.packet) {
-        await maybeOpenProcessingCaseFromFormSubmissionSafe(supabase, {
-            orgId: ctx.orgId,
-            submissionId,
-            formDefinitionId: posTraceFormDefinitionId,
-        });
-    }
+    // D5: Processing case is opened during authoritative intake above; no shadow dual-path.
+    void formIntakeMeta;
+    void processingCaseId;
 
     if (linkRequiresLeadCapture(metaRecord)) {
         await emitIntakeCaseLifecycleEventsSafe({
@@ -432,10 +638,32 @@ export async function POST(
         supabase,
         ctx.orgId,
         submissionId,
-        (finalPayload.values ?? {}) as Record<string, unknown>
+        (finalPayload.values ?? {}) as Record<string, unknown>,
+        // Which artifact these values are FROM. Without it a field id is a position, not a fact.
+        { schema: validated.schema, formDefinitionId: ctx.formDefinitionId }
     );
     if (adv.error) {
         console.error("[public submit] packet advance failed:", adv.error.message);
+    }
+
+    /**
+     * The COMPLETED COPY — original document, filled with the submitted values, signed, flattened,
+     * stored against the child's record. Presentation of a fact that already happened: the
+     * canonical submission above is the satisfaction authority, so a failure here is logged and
+     * never fails the participant's submit; the operator generate path can rebuild it by the same
+     * idempotency key.
+     */
+    try {
+        const artifact = await persistSignedEnrollmentArtifact(supabase, {
+            orgId: ctx.orgId,
+            submissionId,
+            nowIso: new Date().toISOString(),
+        });
+        if (!artifact.ok) {
+            console.error("[public submit] signed artifact persistence failed:", artifact.error);
+        }
+    } catch (e) {
+        console.error("[public submit] signed artifact persistence threw:", e);
     }
 
     if (ctx.packet && adv.result) {
@@ -471,6 +699,33 @@ export async function POST(
             orgId: ctx.orgId,
             packetSessionId: ctx.packet.packet_session_id,
         });
+
+        /*
+         * THE CHILD'S PAPERWORK IS DONE: its per-child Enrollment fee becomes a charge now, dated by
+         * this completion. Idempotent and best-effort — a failure is logged, never a failed submit,
+         * and a retry of the same completion resolves to the same charge.
+         */
+        try {
+            const { data: sessionRow } = await supabase
+                .from("form_packet_sessions")
+                .select("process_instance_id")
+                .eq("org_id", ctx.orgId)
+                .eq("id", ctx.packet.packet_session_id)
+                .maybeSingle();
+            const processInstanceId = (sessionRow as { process_instance_id?: string | null } | null)?.process_instance_id ?? null;
+            if (processInstanceId) {
+                const fee = await realizeEnrollmentFeesForProcessInstance(supabase, { orgId: ctx.orgId, processInstanceId });
+                if (fee.status === "realized") {
+                    for (const r of fee.requirements) {
+                        if (!r.result.templateResolved) {
+                            console.error("[public submit] enrollment fee template not found:", r.chargeTemplateKey);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[public submit] enrollment fee realization failed:", e instanceof Error ? e.message : String(e));
+        }
     }
 
     const packetExtras: Record<string, unknown> = {};
@@ -481,5 +736,14 @@ export async function POST(
 
     const { org_id: _o, ...rest } = submittedRow;
     void _o;
-    return publicOk({ ...rest, ...packetExtras });
+    return publicOk({
+        ...rest,
+        ...packetExtras,
+        // Received, not booked: the family's screen says exactly this.
+        ...(requestedTour ? { tour_request: { state: requestedTour.state } } : {}),
+    });
+}
+
+function collectFieldIds(fields: { id: string; fields?: unknown }[]): string[] {
+    return fields.flatMap((f) => [f.id, ...(Array.isArray(f.fields) ? collectFieldIds(f.fields as { id: string; fields?: unknown }[]) : [])]);
 }

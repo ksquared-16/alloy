@@ -1,0 +1,13 @@
+FAIL W1 Processing → Documents → Missing documents lists the run's unmet requirement :: kid2=false kid1(satisfied, absent)=true
+PASS W2 a satisfied requirement is not listed as work :: Kid One absent
+FAIL W1 Processing → Documents → Missing documents reachable :: TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByText('QA D6 Kid Two b74d93c3d853').first()[22m
+
+FAIL W4 Studio → Documents → Requirements lists the run's requirement with its published version :: listed=false
+FAIL W5 Focus Panel readiness reachable :: TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('[role=dialog] button').filter({ hasText: 'QA D6 Kid Two b74d93c3d853' }).first()[22m
+
+PASS W6 the surfaces read only the canonical D6 routes :: ["200 GET /api/admin/documents/requirements/work","200 GET /api/admin/documents/configuration/requirements"]
+SUMMARY {"passed":2,"total":6}

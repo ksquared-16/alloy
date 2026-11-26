@@ -1,0 +1,738 @@
+{
+  "trusted_host_action_id": "tha_321e16e39459cb",
+  "query_hash": "334451545f5a49eb3b459e103f6fd1b4fbc81e08dd4326074a4fc97ddc950702",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T17:40:23.485Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_321e16e39459cb",
+    "query_hash": "334451545f5a49eb3b459e103f6fd1b4fbc81e08dd4326074a4fc97ddc950702",
+    "authorization_id": "grnt_883d12ec2709489a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T17:40:29.603Z",
+    "question_ids": [
+      "field_trip_any",
+      "recent_charges",
+      "recent_responsibility"
+    ],
+    "questions": {
+      "field_trip_any": {
+        "question_id": "field_trip_any",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "charge_id": "a8c9460a-3d32-4259-b100-02ad593e6ea7",
+                "description": "field_trip",
+                "charge_type": "fee",
+                "charge_category": "one_time",
+                "amount_cents": 4000,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000a0001",
+                "service_date": "2026-10-31",
+                "created_at": "2026-10-01 17:24:37.767172+00",
+                "created_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+                "posted_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+                "charge_template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+                "job_id": null,
+                "schedule_id": null,
+                "metadata": {
+                  "source": "charge_template",
+                  "gl_mapping_key": "other_revenue",
+                  "resolution_key": "tpl:field_trip:2026-10-31:fd000000-0000-4000-8000-0000000a0001",
+                  "review_required": false,
+                  "lifecycle_status": "scheduled",
+                  "responsibility_key": null,
+                  "charge_template_key": "field_trip"
+                }
+              },
+              {
+                "charge_id": "d66432ef-07b8-472f-9031-958fff1a4af2",
+                "description": "field_trip",
+                "charge_type": "fee",
+                "charge_category": "one_time",
+                "amount_cents": 4000,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "service_date": "2026-10-09",
+                "created_at": "2026-09-25 23:19:57.371537+00",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "posted_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "charge_template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+                "job_id": null,
+                "schedule_id": null,
+                "metadata": {
+                  "source": "charge_template",
+                  "gl_mapping_key": "other_revenue",
+                  "resolution_key": "tpl:field_trip:2026-10-09:fd000000-0000-4000-8000-0000000c0001",
+                  "review_required": false,
+                  "lifecycle_status": "scheduled",
+                  "responsibility_key": null,
+                  "charge_template_key": "field_trip"
+                }
+              },
+              {
+                "charge_id": "34d1fd8c-bdab-4a82-9fcc-83068c90f711",
+                "description": "field_trip",
+                "charge_type": "fee",
+                "charge_category": "one_time",
+                "amount_cents": 4000,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "6f409c2d-2227-48e7-a365-f2c12fc2d929",
+                "service_date": "2026-09-18",
+                "created_at": "2026-09-18 23:50:45.01874+00",
+                "created_by": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+                "posted_by": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+                "charge_template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+                "job_id": null,
+                "schedule_id": null,
+                "metadata": {
+                  "source": "charge_template",
+                  "gl_mapping_key": "other_revenue",
+                  "resolution_key": "tpl:field_trip:2026-09-18:6f409c2d-2227-48e7-a365-f2c12fc2d929",
+                  "review_required": false,
+                  "lifecycle_status": "scheduled",
+                  "responsibility_key": null,
+                  "charge_template_key": "field_trip"
+                }
+              },
+              {
+                "charge_id": "362146e2-dea9-4573-ae23-da8c1bd2c2ba",
+                "description": "field_trip",
+                "charge_type": "fee",
+                "charge_category": "one_time",
+                "amount_cents": 4000,
+                "status": "draft",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "6f409c2d-2227-48e7-a365-f2c12fc2d929",
+                "service_date": "2026-11-20",
+                "created_at": "2026-08-27 23:05:01.354249+00",
+                "created_by": null,
+                "posted_by": null,
+                "charge_template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+                "job_id": null,
+                "schedule_id": null,
+                "metadata": {
+                  "source": "charge_template",
+                  "gl_mapping_key": "other_revenue",
+                  "resolution_key": "tpl:field_trip:2026-11-20:6f409c2d-2227-48e7-a365-f2c12fc2d929",
+                  "review_required": false,
+                  "lifecycle_status": "scheduled",
+                  "responsibility_key": null,
+                  "charge_template_key": "field_trip"
+                }
+              },
+              {
+                "charge_id": "1bfb2795-58dd-4c84-a04c-212917150ab9",
+                "description": "field_trip",
+                "charge_type": "fee",
+                "charge_category": "one_time",
+                "amount_cents": 4000,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+                "service_date": "2026-09-18",
+                "created_at": "2026-08-26 19:02:58.352701+00",
+                "created_by": null,
+                "posted_by": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+                "charge_template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+                "job_id": null,
+                "schedule_id": null,
+                "metadata": {
+                  "source": "charge_template",
+                  "gl_mapping_key": "other_revenue",
+                  "resolution_key": "tpl:field_trip:2026-09-18:4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+                  "review_required": false,
+                  "lifecycle_status": "scheduled",
+                  "responsibility_key": null,
+                  "charge_template_key": "field_trip"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "recent_charges": {
+        "question_id": "recent_charges",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "charge_id": "a8c9460a-3d32-4259-b100-02ad593e6ea7",
+                "description": "field_trip",
+                "charge_type": "fee",
+                "amount_cents": 4000,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000a0001",
+                "created_at": "2026-10-01 17:24:37.767172+00",
+                "created_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf"
+              },
+              {
+                "charge_id": "01583e68-873c-4020-8f04-3005f6bf4c5e",
+                "description": "materials_fee",
+                "charge_type": "fee",
+                "amount_cents": 1800,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+                "created_at": "2026-09-30 12:10:06.500372+00",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03"
+              },
+              {
+                "charge_id": "92c7aa0e-0c21-410e-a1fa-4fac4947ced3",
+                "description": "late_pickup_fee",
+                "charge_type": "fee",
+                "amount_cents": 2500,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+                "created_at": "2026-09-30 12:09:18.079542+00",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03"
+              },
+              {
+                "charge_id": "1e4ed12b-9882-480e-8142-a5ca7cea78b4",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+                "created_at": "2026-09-30 12:03:40.494108+00",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03"
+              },
+              {
+                "charge_id": "051ebacd-41e2-4677-ad60-9e6ea8d1b490",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+                "created_at": "2026-09-30 11:58:50.823429+00",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03"
+              },
+              {
+                "charge_id": "b6dae979-a4db-4c7c-9656-c4b5cd9fa086",
+                "description": "tuition",
+                "charge_type": "fee",
+                "amount_cents": 19500,
+                "status": "draft",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "a09eceb9-6e8f-41b6-8d7b-8d3f5bce261b",
+                "created_at": "2026-09-29 03:15:04.39028+00",
+                "created_by": null
+              },
+              {
+                "charge_id": "7982fffd-d857-4682-9414-1fe86a5f34a5",
+                "description": "tuition",
+                "charge_type": "fee",
+                "amount_cents": 19500,
+                "status": "draft",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "a09f8a86-edad-4562-a868-9bcaeede0ae0",
+                "created_at": "2026-09-29 03:15:02.746224+00",
+                "created_by": null
+              },
+              {
+                "charge_id": "f19d8fd3-379a-4d01-be65-4fc524a0f2f4",
+                "description": "reversal of charge 0c909f7e-99cb-4b67-b7ec-2809103e795e",
+                "charge_type": "fee",
+                "amount_cents": -1800,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "created_at": "2026-09-28 21:36:24.093904+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "0c909f7e-99cb-4b67-b7ec-2809103e795e",
+                "description": "materials_fee",
+                "charge_type": "fee",
+                "amount_cents": 1800,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "created_at": "2026-09-28 21:36:17.140562+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "5b50916f-6371-4dee-b475-36ada398d857",
+                "description": "reversal of charge 5e364769-f321-49da-a09c-089e670b3d65",
+                "charge_type": "fee",
+                "amount_cents": -1800,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "created_at": "2026-09-28 21:13:23.838751+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "5e364769-f321-49da-a09c-089e670b3d65",
+                "description": "materials_fee",
+                "charge_type": "fee",
+                "amount_cents": 1800,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "created_at": "2026-09-28 21:13:18.293272+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "961753b4-b509-4cc3-9c2c-fda27c7b21e0",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+                "created_at": "2026-09-28 21:12:37.803432+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "d66432ef-07b8-472f-9031-958fff1a4af2",
+                "description": "field_trip",
+                "charge_type": "fee",
+                "amount_cents": 4000,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 23:19:57.371537+00",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03"
+              },
+              {
+                "charge_id": "82618786-c2c8-4d89-9bb8-82d6e7aa4d03",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 23:18:24.581046+00",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03"
+              },
+              {
+                "charge_id": "2e8d786b-dca5-422c-bc73-852021c30ef6",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 21:33:15.30724+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "e1a56382-17c4-4200-be19-981a469a0b7b",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 21:32:25.573294+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "99c3d9d0-3652-4dbf-97c0-a8d7eb944702",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "enrollment_agreement",
+                "billable_source_id": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "created_at": "2026-09-25 20:46:46.978033+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "009c6ddb-394c-4ae5-afbb-1a2669cd1b95",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 20:43:52.106578+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "7c3d9437-bf2c-493f-85c3-74deef61fff3",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 20:43:09.787854+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "b272a14f-466d-4e7e-9033-bd6141d77372",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 20:41:45.779463+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "a45f61fa-1b1c-4848-ab45-5ca583ab3bef",
+                "description": "registration_fee",
+                "charge_type": "fee",
+                "amount_cents": 7500,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 20:34:32.294648+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "4ffe4738-badd-4a00-830a-04ed7bf8b504",
+                "description": "cert_household_fee",
+                "charge_type": "fee",
+                "amount_cents": 20000,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 19:29:08.273183+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "e71bc67b-5547-4a77-8215-a432a8d82c1e",
+                "description": "reversal of charge 94cc53af-2cfd-40d5-a58a-c84952d2788a",
+                "charge_type": "fee",
+                "amount_cents": -20000,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 19:22:22.395269+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "94cc53af-2cfd-40d5-a58a-c84952d2788a",
+                "description": "cert_household_fee",
+                "charge_type": "fee",
+                "amount_cents": 20000,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 19:19:47.482931+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              },
+              {
+                "charge_id": "87f73b2d-4383-41b9-9d71-9f07e57f6e27",
+                "description": "cert_household_fee",
+                "charge_type": "fee",
+                "amount_cents": 20000,
+                "status": "posted",
+                "billable_source_type": "customer",
+                "billable_source_id": "fd000000-0000-4000-8000-0000000c0001",
+                "created_at": "2026-09-25 19:18:42.146285+00",
+                "created_by": "94950d52-1306-4cc1-a171-9d47d42aba45"
+              }
+            ]
+          }
+        ]
+      },
+      "recent_responsibility": {
+        "question_id": "recent_responsibility",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "charge_id": "82618786-c2c8-4d89-9bb8-82d6e7aa4d03",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 6000,
+                "assigned_amount_cents": 4500,
+                "created_at": "2026-09-25 23:18:49.153276+00"
+              },
+              {
+                "charge_id": "82618786-c2c8-4d89-9bb8-82d6e7aa4d03",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 4000,
+                "assigned_amount_cents": 3000,
+                "created_at": "2026-09-25 23:18:49.153276+00"
+              },
+              {
+                "charge_id": "2e8d786b-dca5-422c-bc73-852021c30ef6",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 21:33:28.299981+00"
+              },
+              {
+                "charge_id": "2e8d786b-dca5-422c-bc73-852021c30ef6",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 21:33:28.299981+00"
+              },
+              {
+                "charge_id": "e1a56382-17c4-4200-be19-981a469a0b7b",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 21:32:39.007855+00"
+              },
+              {
+                "charge_id": "e1a56382-17c4-4200-be19-981a469a0b7b",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 21:32:39.007855+00"
+              },
+              {
+                "charge_id": "99c3d9d0-3652-4dbf-97c0-a8d7eb944702",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+                "basis": "percentage",
+                "basis_value": 10000,
+                "assigned_amount_cents": 7500,
+                "created_at": "2026-09-25 20:47:01.627447+00"
+              },
+              {
+                "charge_id": "009c6ddb-394c-4ae5-afbb-1a2669cd1b95",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:44:04.697799+00"
+              },
+              {
+                "charge_id": "009c6ddb-394c-4ae5-afbb-1a2669cd1b95",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:44:04.697799+00"
+              },
+              {
+                "charge_id": "7c3d9437-bf2c-493f-85c3-74deef61fff3",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:43:23.093882+00"
+              },
+              {
+                "charge_id": "7c3d9437-bf2c-493f-85c3-74deef61fff3",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:43:23.093882+00"
+              },
+              {
+                "charge_id": "b272a14f-466d-4e7e-9033-bd6141d77372",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:41:58.878757+00"
+              },
+              {
+                "charge_id": "b272a14f-466d-4e7e-9033-bd6141d77372",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:41:58.878757+00"
+              },
+              {
+                "charge_id": "a45f61fa-1b1c-4848-ab45-5ca583ab3bef",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:34:46.050444+00"
+              },
+              {
+                "charge_id": "a45f61fa-1b1c-4848-ab45-5ca583ab3bef",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 3750,
+                "created_at": "2026-09-25 20:34:46.050444+00"
+              },
+              {
+                "charge_id": "4ffe4738-badd-4a00-830a-04ed7bf8b504",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 4000,
+                "assigned_amount_cents": 8000,
+                "created_at": "2026-09-25 19:29:16.575433+00"
+              },
+              {
+                "charge_id": "4ffe4738-badd-4a00-830a-04ed7bf8b504",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 6000,
+                "assigned_amount_cents": 12000,
+                "created_at": "2026-09-25 19:29:16.575433+00"
+              },
+              {
+                "charge_id": "a53659a6-244e-49b2-b8c5-0840fdb7e475",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+                "basis": "percentage",
+                "basis_value": 10000,
+                "assigned_amount_cents": 1800,
+                "created_at": "2026-09-25 19:28:24.655817+00"
+              },
+              {
+                "charge_id": "94cc53af-2cfd-40d5-a58a-c84952d2788a",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "fixed",
+                "basis_value": 10000,
+                "assigned_amount_cents": 10000,
+                "created_at": "2026-09-25 19:19:56.00543+00"
+              },
+              {
+                "charge_id": "94cc53af-2cfd-40d5-a58a-c84952d2788a",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "fixed",
+                "basis_value": 10000,
+                "assigned_amount_cents": 10000,
+                "created_at": "2026-09-25 19:19:56.00543+00"
+              },
+              {
+                "charge_id": "87f73b2d-4383-41b9-9d71-9f07e57f6e27",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "fixed",
+                "basis_value": 8000,
+                "assigned_amount_cents": 8000,
+                "created_at": "2026-09-25 19:18:49.961813+00"
+              },
+              {
+                "charge_id": "87f73b2d-4383-41b9-9d71-9f07e57f6e27",
+                "state": "active",
+                "is_unassigned": true,
+                "responsible_party_type": null,
+                "responsible_party_id": null,
+                "basis": "unassigned",
+                "basis_value": null,
+                "assigned_amount_cents": 12000,
+                "created_at": "2026-09-25 19:18:49.961813+00"
+              },
+              {
+                "charge_id": "cb364bba-9c10-423b-92d9-183068f4aaea",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0003",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 10000,
+                "created_at": "2026-09-25 19:18:31.796656+00"
+              },
+              {
+                "charge_id": "cb364bba-9c10-423b-92d9-183068f4aaea",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 5000,
+                "assigned_amount_cents": 10000,
+                "created_at": "2026-09-25 19:18:31.796656+00"
+              },
+              {
+                "charge_id": "e6aa2816-e644-413a-9005-b3f805e93f9c",
+                "state": "active",
+                "is_unassigned": false,
+                "responsible_party_type": "person",
+                "responsible_party_id": "fd000000-0000-4000-8000-0000000b0002",
+                "basis": "percentage",
+                "basis_value": 10000,
+                "assigned_amount_cents": 20000,
+                "created_at": "2026-09-25 19:17:57.007145+00"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

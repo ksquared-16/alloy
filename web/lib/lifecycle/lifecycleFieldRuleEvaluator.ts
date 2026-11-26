@@ -188,7 +188,14 @@ function evaluateCustomerMemberProfileRule(
     const profileField = binding?.customer_member_field ?? binding?.field_key;
     if (!binding || !profileField) return [];
 
-    const children = ctx.related?.inquiry_children ?? [];
+    // Unknown is not empty. `inquiry_children` is `undefined` when the surface never carried a
+    // children binding at all, and `[]` when there genuinely are none — collapsing both with `?? []`
+    // made an absent binding read as "this family has no children" and told the operator that
+    // already-captured names and DOBs were missing. Reserve judgment instead, exactly as the
+    // Children card does when the fact is unknowable.
+    const children = ctx.related?.inquiry_children;
+    if (children === undefined) return [];
+
     const violations: RequirementViolation[] = [];
     const blocking_level = blockingLevelForPersistedLevel(level);
     const fieldLabels: Record<string, string> = {
@@ -239,25 +246,36 @@ function evaluateChildRule(
     level: PersistedRequirementLevel
 ): RequirementViolation[] {
     const binding = lifecycleFieldRuleBinding(ruleId);
-    if (!binding?.ocm_field) return [];
-    const children = ctx.related?.inquiry_children ?? [];
+    // Prefer ocm_field; fall back to field_key for PI-overlay assignment proposal facts.
+    const childField = binding?.ocm_field ?? binding?.field_key ?? null;
+    if (!binding || !childField) return [];
+    // Unknown is not empty — see evaluateCustomerMemberProfileRule. An absent children binding must
+    // reserve judgment rather than report captured data as missing.
+    const children = ctx.related?.inquiry_children;
+    if (children === undefined) return [];
+
     const violations: RequirementViolation[] = [];
     const blocking_level = blockingLevelForPersistedLevel(level);
 
     const fieldLabels: Record<string, string> = {
         first_name: "First Name",
         last_name: "Last Name",
-        desired_program_type: "Program Interest",
-        desired_schedule_type: "Desired Schedule",
-        desired_start_date: "Desired Start Date",
-        program_room_cohort_key: "Classroom or Room",
+        program_category_id: "Program",
+        schedule_type: "Proposed schedule",
+        start_date: "Requested Start",
+        program_room_cohort_key: "Room",
+        requested_days_per_week: "Requested days per week",
+        weekdays: "Preferred days",
+        tuition_plan_id: "Tuition plan",
+        quote_accepted: "Quote accepted",
+        location_id: "Site / Location",
     };
 
     if (children.length === 0 && ruleId !== "child:first_name" && ruleId !== "child:last_name") {
         return [
             fieldViolation(ctx, {
                 rule_id: ruleId,
-                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[binding.ocm_field] ?? binding.ocm_field}`,
+                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[childField] ?? childField}`,
                 field_key: "inquiry_children",
                 missing_reason: "Add at least one child before continuing.",
                 blocking_level,
@@ -266,22 +284,33 @@ function evaluateChildRule(
         ];
     }
 
+    // Effective site for location: owned child location OR opportunity/family site
+    // (same authority Children card / Identity display — do not require a duplicate owned write).
+    const opportunityLocationId =
+        trimOrNull(ctx.values.location_id as string | null)
+        ?? trimOrNull(ctx.values._location_id as string | null);
+
     for (const child of children) {
         const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
-        const value = child[binding.ocm_field as keyof InquiryChildCompletionSnapshot];
-        if (!completionValueEmpty(value)) continue;
-        if (binding.ocm_field === "desired_program_type") {
-            const alt = child.program_room_cohort_key;
-            if (!completionValueEmpty(alt)) continue;
+        const value = (child as Record<string, unknown>)[childField];
+        // Preferred weekdays: non-empty array required when configured.
+        if (childField === "weekdays") {
+            if (Array.isArray(value) && value.length > 0) continue;
+        } else if (childField === "quote_accepted") {
+            if (value === true || value === "true" || value === 1) continue;
+        } else if (childField === "location_id") {
+            if (!completionValueEmpty(value) || !completionValueEmpty(opportunityLocationId)) continue;
+        } else if (!completionValueEmpty(value)) {
+            continue;
         }
         violations.push(
             fieldViolation(ctx, {
                 rule_id: ruleId,
-                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[binding.ocm_field] ?? binding.ocm_field}`,
-                field_key: binding.ocm_field,
+                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[childField] ?? childField}`,
+                field_key: childField,
                 entity_type: "inquiry_child",
                 entity_id: childId,
-                missing_reason: `${fieldLabels[binding.ocm_field] ?? "Field"} is required for each child.`,
+                missing_reason: `${fieldLabels[childField] ?? "Field"} is required for each child.`,
                 blocking_level,
                 requirement_level: level,
             })
@@ -407,7 +436,11 @@ export function lifecyclePreflightStagesForAction(
             stages.add("waitlist");
             break;
         case "schedule_tour":
-            stages.add("qualification");
+            if (fromStatus) {
+                const fromStage = canonicalOperatorStageForStatusKey(fromStatus);
+                if (fromStage) stages.add(fromStage);
+            }
+            stages.add("tour");
             break;
         case "approve_enrollment":
             stages.add("enrollment");

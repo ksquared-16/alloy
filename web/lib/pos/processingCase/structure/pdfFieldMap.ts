@@ -159,3 +159,21 @@ export function svgRectToPdfBbox(
     const pdfBottom = round(page.topInPdf - (rect.y + rect.h));
     return [Math.min(x0, x1), Math.min(pdfTop, pdfBottom), Math.max(x0, x1), Math.max(pdfTop, pdfBottom)];
 }
+
+/** Project a PDF bbox into SVG viewBox coordinates for overlay rendering. */
+export function pdfBboxToSvgRect(
+    bbox: [number, number, number, number],
+    page: Pick<PageMap, "originX" | "topInPdf">
+): { x: number; y: number; w: number; h: number } {
+    const [x0, y0, x1, y1] = bbox;
+    const left = Math.min(x0, x1);
+    const right = Math.max(x0, x1);
+    const bottom = Math.min(y0, y1);
+    const top = Math.max(y0, y1);
+    return {
+        x: round(left - page.originX),
+        y: round(page.topInPdf - top),
+        w: round(right - left),
+        h: round(top - bottom),
+    };
+}

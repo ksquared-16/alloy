@@ -9,6 +9,7 @@ import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { buildMetricResultBase } from "@/lib/metrics/resolvers/metricResolveBase";
 import { applyOpportunityScopeToQuery, resolveMetricScopeFilter } from "@/lib/metrics/scopeFilter";
+import { metricUnavailable } from "@/lib/metrics/metricScopeGuard";
 import { applyStatusKeyDimension } from "@/lib/metrics/dimensionsFilter";
 import { createDefaultOpportunityAttentionResolvedConfig } from "@/lib/opportunities/opportunityAttentionConfig";
 import { resolveOpportunityAttention } from "@/lib/opportunities/opportunityAttentionResolver";
@@ -65,12 +66,8 @@ export async function resolveOpsNeedsAttentionCount(ctx: MetricResolveContext): 
     const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
 
     if (filter.impossible) {
-        return {
-            ...base,
-            value: 0,
-            formattedValue: "0",
-            meta: { count: 0, cap: NEEDS_ATTENTION_METRIC_FETCH_CAP, snapshot_semantics: true },
-        };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     const statusDefs = await fetchEffectiveStatusDefinitions(ctx.supabase, ctx.orgId, "opportunities");
@@ -124,12 +121,8 @@ export async function resolveOpsReadinessGapCount(ctx: MetricResolveContext): Pr
     const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
 
     if (filter.impossible) {
-        return {
-            ...base,
-            value: 0,
-            formattedValue: "0",
-            meta: { count: 0, cap: READINESS_GAP_METRIC_FETCH_CAP, snapshot_semantics: true },
-        };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     let q = ctx.supabase

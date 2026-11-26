@@ -7,6 +7,7 @@ import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { buildMetricResultBase } from "@/lib/metrics/resolvers/metricResolveBase";
 import { resolveMetricScopeFilter } from "@/lib/metrics/scopeFilter";
+import { metricUnavailable } from "@/lib/metrics/metricScopeGuard";
 
 export type FormSubmissionMetricRow = {
     id: string;
@@ -57,7 +58,8 @@ export async function resolveFormsCompletionRate(ctx: MetricResolveContext): Pro
     const base = buildMetricResultBase(ctx, def, now);
     const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
     if (filter.impossible) {
-        return { ...base, value: null, formattedValue: "—", meta: { created: 0, submitted: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     const { data, error } = await ctx.supabase
@@ -84,7 +86,8 @@ export async function resolveFormsPacketCompletionTime(ctx: MetricResolveContext
     const base = buildMetricResultBase(ctx, def, now);
     const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
     if (filter.impossible) {
-        return { ...base, value: null, formattedValue: "—", meta: { sample_size: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     const { data, error } = await ctx.supabase

@@ -1,0 +1,43 @@
+{
+  "trusted_host_action_id": "tha_e233bd44e19e37",
+  "query_hash": "96233c0fa808f8ea12d08a43fa83e730dd9fb3faa4ba51800d07a414555eca73",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T22:15:32.790Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e233bd44e19e37",
+    "query_hash": "96233c0fa808f8ea12d08a43fa83e730dd9fb3faa4ba51800d07a414555eca73",
+    "authorization_id": "grnt_38d18b15c1184bfa",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T22:15:39.611Z",
+    "question_ids": [
+      "r00_d3_residue"
+    ],
+    "questions": {
+      "r00_d3_residue": {
+        "question_id": "r00_d3_residue",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T22:15:38.874401+00:00",
+            "tagged_categories": 0,
+            "tagged_types": 0,
+            "tagged_type_versions": 0,
+            "typed_documents": 0,
+            "qa_shared_seeded_types": 13,
+            "qa_shared_seeded_categories": 10,
+            "qa_shared_open_drafts": 0,
+            "qa_shared_non_seeded_configuration": 0
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

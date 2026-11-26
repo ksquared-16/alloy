@@ -90,11 +90,11 @@ export type InquiryChildPlacementPatchValidation = {
 export function validateInquiryChildPlacementPatch(input: {
     location_id?: string | null;
     program_room_cohort_key?: string | null;
-    desired_program_type?: string | null;
+    program_category_id?: string | null;
 }): InquiryChildPlacementPatchValidation {
     const location_id = (input.location_id ?? "").trim() || null;
     const program_room_cohort_key = (input.program_room_cohort_key ?? "").trim() || null;
-    const desired_program_type = (input.desired_program_type ?? "").trim() || null;
+    const program_category_id = (input.program_category_id ?? "").trim() || null;
 
     const issues: Array<{ code: string; message: string }> = [];
     const limitation_notes: string[] = [];
@@ -106,7 +106,7 @@ export function validateInquiryChildPlacementPatch(input: {
     limitation_notes.push(...scope.deferred_checks);
 
     if (inquiryChildPlacementFieldsRequireSite()) {
-        if ((desired_program_type || program_room_cohort_key) && !location_id) {
+        if ((program_category_id || program_room_cohort_key) && !location_id) {
             issues.push({
                 code: "program_without_site",
                 message: "Select a child site before program or room/cohort.",

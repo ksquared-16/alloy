@@ -50,6 +50,13 @@ describe("POST /api/admin/agent/v0/queue-definition", () => {
             userId: "33333333-3333-3333-3333-333333333333",
             role: "admin",
         });
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            orgId: "22222222-2222-2222-2222-222222222222",
+            userId: "33333333-3333-3333-3333-333333333333",
+            permissionKeys: ["work.configure"],
+            roleKeys: ["work_configurer"],
+        });
     });
 
     afterEach(() => {
@@ -184,4 +191,25 @@ describe("POST /api/admin/agent/v0/queue-definition", () => {
         expect(j.error.error_code).toBe("VALIDATION_FAILED");
         expect(rpc).not.toHaveBeenCalled();
     });
+});
+
+/*
+ * THE ACCESS CONTEXT IS PART OF THE GATE NOW.
+ *
+ * This route admitted on the `admin` role title and needed only the admin context. Work Authority
+ * V1 gave it `work.configure`, so a suite that mocks only the admin context gets a 401 from the
+ * unmocked access lookup — which reads as "the route broke" when it means "the test has not said
+ * what this principal may do".
+ */
+const { mockGetAdminAccessContext } = vi.hoisted(() => ({ mockGetAdminAccessContext: vi.fn() }));
+
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
+        "@/lib/admin/getAdminAccessContext"
+    );
+    return {
+        ...actual,
+        getAdminAccessContext: mockGetAdminAccessContext,
+        getAdminAccessContextCached: mockGetAdminAccessContext,
+    };
 });

@@ -1,0 +1,35 @@
+[
+  {
+    "at": 7830,
+    "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "route": "/workspace/work-unit/enrolled-children",
+    "identicalInFlight": 0,
+    "stack": [
+      "at w.fetch (<anonymous>:18:35)",
+      "at https://staging.workwithalloy.com/_next/static/chunks/79b8ea4326639046.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:271575",
+      "at t.requestIdleCallback.timeout (https://staging.workwithalloy.com/_next/static/chunks/79b8ea4326639046.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:280590)"
+    ],
+    "ms": 2448,
+    "status": 200
+  },
+  {
+    "at": 7878,
+    "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "route": "/workspace/work-unit/enrolled-children",
+    "identicalInFlight": 1,
+    "stack": [
+      "at w.fetch (<anonymous>:18:35)",
+      "at https://staging.workwithalloy.com/_next/static/chunks/79b8ea4326639046.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:271575",
+      "at https://staging.workwithalloy.com/_next/static/chunks/79b8ea4326639046.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:280455",
+      "at ih (https://staging.workwithalloy.com/_next/static/chunks/f6d0cb94cbd8179d.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:101238)",
+      "at uf (https://staging.workwithalloy.com/_next/static/chunks/f6d0cb94cbd8179d.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:125088)",
+      "at uc (https://staging.workwithalloy.com/_next/static/chunks/f6d0cb94cbd8179d.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:124750)",
+      "at uf (https://staging.workwithalloy.com/_next/static/chunks/f6d0cb94cbd8179d.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:125068)",
+      "at uc (https://staging.workwithalloy.com/_next/static/chunks/f6d0cb94cbd8179d.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:124750)",
+      "at uf (https://staging.workwithalloy.com/_next/static/chunks/f6d0cb94cbd8179d.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:125133)",
+      "at uc (https://staging.workwithalloy.com/_next/static/chunks/f6d0cb94cbd8179d.js?dpl=dpl_5nC3sqrzhbDzhpThLTghUv3FveHi:1:124750)"
+    ],
+    "ms": 4813,
+    "status": 200
+  }
+]

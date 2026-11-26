@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { OPS_JOBS_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
@@ -371,9 +372,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-  if (ctx.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const denied = requireSchedulingJobsCapability(ctx, OPS_JOBS_WRITE);
+  if (denied) return denied;
 
   let body: Record<string, unknown> = {};
   try {

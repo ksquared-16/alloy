@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 /** POST: set archived_at=now(), archived_by=userId. Scoped by org_id. */
 export async function POST(
@@ -10,6 +14,8 @@ export async function POST(
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
     const { orgId, userId } = ctx;
 
     const { id } = await context.params;

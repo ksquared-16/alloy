@@ -1,0 +1,18 @@
+[
+  {
+    "tag": "D_one_period",
+    "start": "2026-09-22",
+    "cmId": "3c58a611-bb3d-472b-9788-e8521158fa87",
+    "ocmId": "329ca704-4a36-4dbc-93db-04a94af5c758",
+    "agreementId": "a09f8a86-edad-4562-a868-9bcaeede0ae0",
+    "accept": "{\"s\":200,\"j\":{\"ok\":true,\"data\":{\"execution_result\":{\"state\":\"accepted\",\"amount_cents\":19500,\"currency_code\":\"USD\",\"cadence_key\":\"weekly\",\"effective_start\":\"2026-09-22\",\"source_id\":\"424c7a8a-5bd5-4c63-93f6-5591dc0afcd8\",\"config_version\":\"cd09fdc8\",\"idempotent\":false},\"affected_id\":\"4d7ece5a-29ba-40e8-ad72-e9655ef5aabe\"},\"correlation_id\":\"c1cff948-1cc8-472d-a5f9-58d091e3ac13\"}}"
+  },
+  {
+    "tag": "E_two_periods",
+    "start": "2026-09-15",
+    "cmId": "25b9b4d3-d0d9-4ff7-904a-692436db5b3f",
+    "ocmId": "afde2aa1-b4cb-423e-bbb3-0813ddbd8740",
+    "agreementId": "a09eceb9-6e8f-41b6-8d7b-8d3f5bce261b",
+    "accept": "{\"s\":200,\"j\":{\"ok\":true,\"data\":{\"execution_result\":{\"state\":\"accepted\",\"amount_cents\":19500,\"currency_code\":\"USD\",\"cadence_key\":\"weekly\",\"effective_start\":\"2026-09-15\",\"source_id\":\"424c7a8a-5bd5-4c63-93f6-5591dc0afcd8\",\"config_version\":\"cd09fdc8\",\"idempotent\":false},\"affected_id\":\"065a75d8-28e2-4ea7-b8ab-da31b364d033\"},\"correlation_id\":\"d650540e-cae0-4b79-935a-f7c6bd2343c3\"}}"
+  }
+]

@@ -1,0 +1,147 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "at": "2026-10-20T23:45:48.635Z",
+  "scenarios": {
+    "1_current_child": {
+      "subject": {
+        "type": "child",
+        "id": "00000000-0000-4000-8000-000050000021"
+      },
+      "source": {
+        "kind": "schedule_assignment",
+        "id": "065e750f-7141-4bcf-b705-c993ff8b11b4",
+        "count": 53,
+        "statusLabel": "Secondary since Jan 5 · 53 assignments"
+      },
+      "schedule_site": "00000000-0000-4000-8000-000000000010",
+      "resolution": {
+        "status": "assignment",
+        "assignmentId": "065e750f-7141-4bcf-b705-c993ff8b11b4",
+        "bucket": "current"
+      },
+      "assignments_on_card": 53
+    },
+    "2_current_staff": {
+      "subject": {
+        "type": "person",
+        "id": "00000000-0000-4000-8000-000050000010"
+      },
+      "source": {
+        "kind": "schedule_assignment",
+        "id": "00000000-0000-4000-8000-000050000068",
+        "count": 1,
+        "statusLabel": "Secondary since Aug 1"
+      },
+      "schedule_site": "00000000-0000-4000-8000-000000000010",
+      "resolution": {
+        "status": "assignment",
+        "assignmentId": "00000000-0000-4000-8000-000050000068",
+        "bucket": "current"
+      }
+    },
+    "7_multiple": {
+      "subject": {
+        "type": "child",
+        "id": "00000000-0000-4000-8000-000050000021"
+      },
+      "assignments": 53,
+      "probed": 3,
+      "each_resolved_to_itself": true
+    },
+    "3_ending": {
+      "source": {
+        "kind": "schedule_assignment",
+        "id": "dbd64c46-6b97-42dd-8d71-8a4c37f15422",
+        "count": 1,
+        "statusLabel": "Ends Oct 25 · in 5 days"
+      },
+      "end": "2026-10-25",
+      "reason": "Ends Oct 25 · in 5 days",
+      "resolution": {
+        "status": "assignment",
+        "assignmentId": "dbd64c46-6b97-42dd-8d71-8a4c37f15422",
+        "bucket": "current"
+      }
+    },
+    "4_upcoming": {
+      "source": {
+        "kind": "schedule_assignment",
+        "id": "a0bbcf56-55b2-458a-9757-7bac1e2539ed",
+        "count": 1,
+        "statusLabel": "New assignment starts Oct 27"
+      },
+      "start": "2026-10-27",
+      "reason": "New assignment starts Oct 27",
+      "resolution": {
+        "status": "assignment",
+        "assignmentId": "a0bbcf56-55b2-458a-9757-7bac1e2539ed",
+        "bucket": "upcoming"
+      }
+    },
+    "6_proposed": {
+      "source": {
+        "kind": "schedule_assignment",
+        "id": "7a991aac-30c4-4399-89d4-cd590c32850b",
+        "count": 56,
+        "statusLabel": "Proposed assignment awaiting disposition · 55 assignments missing their type"
+      },
+      "reason": "Proposed assignment awaiting disposition · 55 assignments missing their type",
+      "resolution": {
+        "status": "assignment",
+        "assignmentId": "7a991aac-30c4-4399-89d4-cd590c32850b",
+        "bucket": "proposed"
+      }
+    },
+    "5_gap": {
+      "subject": {
+        "type": "child",
+        "id": "00000000-0000-4000-8000-30000000003b"
+      },
+      "source": {
+        "kind": "enrollment_agreement",
+        "id": "a0000000-0000-4000-8000-30000000003b",
+        "count": 1,
+        "statusLabel": "No committed schedule"
+      },
+      "schedule_site": "00000000-0000-4000-8000-000000000011",
+      "schedule_detail": "Not yet assigned",
+      "projection_agreement": "a0000000-0000-4000-8000-30000000003b",
+      "resolution": {
+        "status": "agreement_unscheduled",
+        "agreementId": "a0000000-0000-4000-8000-30000000003b"
+      }
+    },
+    "9_scope": {
+      "gap_site": "f7c011bb-0000-4000-8000-0000000b0001",
+      "in_scope_schedule_site": "f7c011bb-0000-4000-8000-0000000b0001",
+      "out_of_scope_schedule_site": null,
+      "riverside_child_resolves_for_lakeside_actor": false
+    },
+    "19_refused": {
+      "ok": false,
+      "status": "blocked",
+      "fixture_unchanged": true
+    },
+    "17_18_8_command": {
+      "ok": true,
+      "owner": "registered_action",
+      "capability": "assignment.archive",
+      "row_after": {
+        "status": "ended",
+        "end_date": "2026-10-20"
+      },
+      "ending_view_still_lists_it": false,
+      "stale_resolution": {
+        "status": "assignment_gone",
+        "assignmentId": "dbd64c46-6b97-42dd-8d71-8a4c37f15422"
+      }
+    }
+  },
+  "today": "2026-10-20",
+  "fixtures": {
+    "ending": "dbd64c46-6b97-42dd-8d71-8a4c37f15422",
+    "upcoming": "a0bbcf56-55b2-458a-9757-7bac1e2539ed",
+    "proposed": "7a991aac-30c4-4399-89d4-cd590c32850b"
+  },
+  "fixtures_remaining": 0
+}

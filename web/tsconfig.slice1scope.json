@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "tsBuildInfoFile": "./tsconfig.slice1scope.tsbuildinfo"
+  },
+  "include": [
+    "./lib/trust/**/*.ts",
+    "./tests/trust/**/*.ts"
+  ],
+  "files": [
+    "./lib/privacy/redactObject.ts",
+    "./lib/operationalSummary/buildOperationalSummary.ts",
+    "./lib/operationalSummary/operationalSummaryContracts.ts",
+    "./lib/ai/aiPolicy.ts",
+    "./lib/ai/enrichmentContracts.ts",
+    "./next-env.d.ts"
+  ]
+}

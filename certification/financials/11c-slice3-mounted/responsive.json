@@ -1,0 +1,71 @@
+{
+  "family-1280": {
+    "position": {
+      "left": 454,
+      "right": 1186,
+      "clipped": false
+    },
+    "management": {
+      "left": 454,
+      "right": 1186,
+      "clipped": false
+    },
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  },
+  "policies-1280": {
+    "rows": 8,
+    "horizontalOverflow": false
+  },
+  "billing-1280": {
+    "rows": 8,
+    "horizontalOverflow": false,
+    "tableScrolls": true
+  },
+  "family-1440": {
+    "position": {
+      "left": 550,
+      "right": 1346,
+      "clipped": false
+    },
+    "management": {
+      "left": 550,
+      "right": 1346,
+      "clipped": false
+    },
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  },
+  "policies-1440": {
+    "rows": 8,
+    "horizontalOverflow": false
+  },
+  "billing-1440": {
+    "rows": 8,
+    "horizontalOverflow": false,
+    "tableScrolls": true
+  },
+  "family-1680": {
+    "position": {
+      "left": 550,
+      "right": 1586,
+      "clipped": false
+    },
+    "management": {
+      "left": 550,
+      "right": 1586,
+      "clipped": false
+    },
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  },
+  "policies-1680": {
+    "rows": 8,
+    "horizontalOverflow": false
+  },
+  "billing-1680": {
+    "rows": 8,
+    "horizontalOverflow": false,
+    "tableScrolls": true
+  }
+}

@@ -20,7 +20,7 @@ function scheduleTourBlockingRequirements(values: Record<string, string>): strin
     if (!(values.child_first_name ?? "").trim()) missing.push("Child name");
     if (!(values.child_program ?? "").trim()) missing.push("Program interest");
     if (!(values.location_id ?? "").trim()) missing.push("Location");
-    if (!(values.child_desired_start_date ?? "").trim()) missing.push("Desired start date");
+    if (!(values.child_start_date ?? "").trim()) missing.push("Desired start date");
     return missing;
 }
 

@@ -1,0 +1,659 @@
+<title>Operational Planning — Scheduling mockups</title>
+<style>
+  /* ---- Alloy visual language (faithful reproduction; light-only, as the product is) ---- */
+  :root{
+    --page:#EEF2F8; --stone:#F4F6F9; --white:#FFFFFF;
+    --pine:#00A283; --pine-hover:#009276; --pine-soft:rgba(0,162,131,.08);
+    --forge:#273F52; --ink:#18273A; --slate:#45506c; --muted:#59678b;
+    --ember:#BC4300; --gold:#d0ad50; --blue:#00458C;
+    --line:rgba(39,63,82,.14); --line-strong:rgba(39,63,82,.22);
+    --shadow-card:0 2px 8px rgba(24,39,58,.07);
+    --shadow-tile:0 3px 12px rgba(24,39,58,.09);
+    --shadow-modal:0 12px 40px rgba(39,63,82,.10);
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    color-scheme: light;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--page); color:var(--ink); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45;
+  }
+  .tabnum{font-variant-numeric:tabular-nums}
+  h1,h2,h3,h4{margin:0; text-wrap:balance}
+  button{font-family:inherit}
+
+  /* ---- Gallery frame ---- */
+  .gallery{max-width:1200px; margin:0 auto; padding:22px 20px 60px}
+  .gallery-head{display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-bottom:16px}
+  .gallery-title{font-size:19px; font-weight:600; letter-spacing:-.01em; color:var(--forge)}
+  .gallery-sub{font-size:12.5px; color:var(--muted); margin-top:3px; max-width:60ch}
+  .badge-proposed{display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--gold); background:rgba(208,173,80,.12); border:1px solid rgba(208,173,80,.4); padding:4px 9px; border-radius:999px}
+  .screentabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px}
+  .screentab{border:1px solid var(--line-strong); background:var(--white); color:var(--slate); font-size:12.5px; font-weight:500; padding:7px 13px; border-radius:8px; cursor:pointer; transition:all .16s}
+  .screentab:hover{border-color:var(--pine); color:var(--pine)}
+  .screentab[aria-selected="true"]{border-color:var(--pine); background:var(--pine-soft); color:var(--pine); font-weight:600; box-shadow:inset 0 -2px 0 var(--pine)}
+  .screentab:focus-visible{outline:2px solid var(--pine); outline-offset:2px}
+
+  /* ---- Alloy app shell (the modal-on-field look) ---- */
+  .app{display:flex; background:var(--stone); border:1px solid var(--line-strong); border-radius:18px; overflow:hidden; box-shadow:var(--shadow-modal); min-height:660px}
+  .rail{width:60px; flex:0 0 60px; background:var(--forge); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:5px}
+  .rail-logo{width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,var(--pine),#0b7d68); display:grid; place-items:center; color:#fff; font-weight:700; font-size:14px; margin-bottom:10px}
+  .rail-i{width:38px; height:38px; border-radius:10px; display:grid; place-items:center; color:rgba(255,255,255,.62); font-size:16px; position:relative; cursor:default}
+  .rail-i.active{background:rgba(255,255,255,.10); color:#fff}
+  .rail-i.active::before{content:""; position:absolute; left:-11px; top:8px; bottom:8px; width:3px; border-radius:2px; background:var(--pine)}
+  .main{flex:1; display:flex; flex-direction:column; min-width:0}
+  .topbar{height:6px; background:var(--blue)}
+
+  /* workspace chrome */
+  .ws{flex:1; display:flex; flex-direction:column; background:var(--white); min-width:0}
+  .ws-header{display:flex; align-items:center; gap:12px; padding:12px 18px; border-bottom:1px solid var(--line); border-left:3px solid var(--pine)}
+  .ws-icon{width:30px;height:30px;border-radius:9px;background:var(--pine-soft);color:var(--pine);display:grid;place-items:center;font-size:15px;border:1px solid rgba(0,162,131,.18)}
+  .ws-h-title{font-size:15px; font-weight:600; color:var(--ink); letter-spacing:-.01em}
+  .ws-h-sub{font-size:11.5px; color:var(--muted)}
+  .ws-h-spacer{flex:1}
+  .ws-h-act{font-size:12px; font-weight:500; color:var(--slate); border:1px solid var(--line-strong); background:#fff; padding:6px 11px; border-radius:7px}
+  .ws-h-act.primary{background:var(--pine); color:#fff; border-color:var(--pine)}
+  .ws-close{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--muted);border:1px solid var(--line)}
+
+  /* mode nav */
+  .ws-modebar{display:flex; align-items:center; gap:16px; padding:10px 18px 0; border-bottom:1px solid var(--line)}
+  .modeswitch{display:inline-flex; background:var(--stone); border:1px solid var(--line); border-radius:999px; padding:3px}
+  .modepill{font-size:12px; font-weight:600; color:var(--muted); padding:5px 15px; border-radius:999px; cursor:default}
+  .modepill.active{background:#fff; color:var(--pine); border:1px solid rgba(0,162,131,.4); box-shadow:inset 0 -2px 0 var(--pine)}
+  .subtabs{display:flex; gap:2px; margin-left:4px; flex-wrap:wrap}
+  .subtab{font-size:12.5px; font-weight:500; color:var(--muted); padding:9px 11px; border-bottom:2px solid transparent; cursor:default}
+  .subtab.active{color:var(--ink); border-bottom-color:var(--pine); font-weight:600}
+  .healthstrip{margin-left:auto; display:flex; gap:22px; padding-bottom:8px}
+  .metric{display:flex; flex-direction:column; gap:1px}
+  .metric-label{font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:rgba(39,63,82,.5); display:flex; align-items:center; gap:5px}
+  .metric-label::before{content:""; width:6px;height:6px; background:rgba(69,80,108,.5); transform:rotate(45deg); display:inline-block}
+  .metric-val{font-size:18px; font-weight:600; color:var(--ink)}
+  .metric-val.pine{color:var(--pine)} .metric-val.ember{color:var(--ember)} .metric-val.gold{color:var(--gold)}
+  .metric-trend{font-size:10px; color:var(--muted)}
+  .trend-up{color:var(--pine)} .trend-down{color:var(--ember)}
+
+  /* content canvas */
+  .canvas{flex:1; padding:16px; background:var(--white)}
+  .field{background:rgba(244,246,249,.5); border:1px solid rgba(39,63,82,.10); border-radius:14px; padding:16px; min-height:100%}
+
+  /* generic panel (signature pine-left-accent) */
+  .panel{background:#fff; border:1px solid rgba(244,246,249,.9); border-left:3px solid rgba(0,162,131,.75); border-bottom:2px solid rgba(39,63,82,.10); border-radius:11px; box-shadow:var(--shadow-card); overflow:hidden}
+  .panel-head{display:flex; align-items:center; gap:9px; padding:11px 14px; border-bottom:1px solid rgba(39,63,82,.07); background:linear-gradient(90deg,rgba(0,162,131,.06),rgba(0,162,131,.02) 60%,#fff)}
+  .panel-badge{width:24px;height:24px;border-radius:8px;background:var(--pine-soft);color:var(--pine);display:grid;place-items:center;font-size:12px;border:1px solid rgba(0,162,131,.14)}
+  .panel-title{font-size:12.5px; font-weight:600; color:var(--ink)}
+  .panel-note{font-size:11px; color:var(--muted); margin-left:auto}
+  .panel-body{padding:13px 14px}
+  .flat{background:#fff; border:1px solid rgba(39,63,82,.12); border-radius:12px; box-shadow:var(--shadow-card)}
+
+  .eyebrow{font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.09em; color:rgba(39,63,82,.55); margin-bottom:9px}
+  .grid{display:grid; gap:12px}
+  .row{display:flex; gap:12px}
+  .muted{color:var(--muted)} .sec{color:var(--slate)}
+  .big{font-size:24px; font-weight:600; letter-spacing:-.03em; color:var(--ink)}
+
+  /* chips / dots */
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px}
+  .chip.pine{background:var(--pine-soft);color:var(--pine)}
+  .chip.ember{background:rgba(188,67,0,.10);color:var(--ember)}
+  .chip.gold{background:rgba(208,173,80,.14);color:#a9852f}
+  .chip.slate{background:rgba(69,80,108,.10);color:var(--slate)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .dot.pine{background:var(--pine)} .dot.ember{background:var(--ember)} .dot.gold{background:var(--gold)} .dot.slate{background:rgba(39,63,82,.3)}
+
+  /* action cards row */
+  .actioncards{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+  .actioncard{background:#fff;border:1px solid rgba(39,63,82,.12);border-left:3px solid var(--pine);border-radius:11px;padding:13px 14px;box-shadow:var(--shadow-card)}
+  .actioncard h4{font-size:13px;color:var(--ink)}
+  .actioncard p{margin:4px 0 10px;font-size:11.5px;color:var(--muted)}
+  .ac-cta{font-size:11.5px;font-weight:600;color:var(--pine)}
+
+  /* today tiles */
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .tile{background:#fff;border:1px solid rgba(39,63,82,.10);border-radius:11px;padding:12px 13px;box-shadow:0 2px 8px rgba(24,39,58,.06)}
+  .tile .k{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:rgba(39,63,82,.5)}
+  .tile .v{font-size:22px;font-weight:600;color:var(--ink);letter-spacing:-.02em;margin-top:3px}
+  .tile .d{font-size:10.5px;color:var(--muted);margin-top:2px}
+
+  /* list rows */
+  .lrow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(39,63,82,.06)}
+  .lrow:last-child{border-bottom:none}
+  .lrow .who{font-size:12.5px;font-weight:500;color:var(--ink)}
+  .lrow .meta{font-size:11px;color:var(--muted)}
+  .lrow .accent{width:3px;align-self:stretch;border-radius:2px;background:var(--pine)}
+  .lrow.warn .accent{background:var(--ember)}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--pine-soft);color:var(--pine);display:grid;place-items:center;font-size:10.5px;font-weight:600}
+
+  /* ---- Room × Day board ---- */
+  .board-wrap{display:grid;grid-template-columns:1fr 300px;gap:12px}
+  .board{background:#fff;border:1px solid rgba(39,63,82,.12);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-card)}
+  .board table{border-collapse:collapse;width:100%}
+  .board th,.board td{border:1px solid rgba(39,63,82,.08);padding:0;text-align:left}
+  .board thead th{background:var(--stone);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);padding:8px 10px}
+  .board thead th.today{background:rgba(0,162,131,.08);color:var(--pine)}
+  .roomcell{padding:10px;min-width:120px;background:#fff}
+  .roomcell .rn{font-size:12px;font-weight:600;color:var(--ink)}
+  .roomcell .rm{font-size:10px;color:var(--muted)}
+  .cell{padding:8px 9px;min-width:104px;cursor:default;position:relative}
+  .cell:hover{background:rgba(0,162,131,.03)}
+  .cell .occ{font-size:14px;font-weight:600;color:var(--ink)}
+  .cell .cap{font-size:10.5px;color:var(--muted)}
+  .cell .bar{height:4px;border-radius:2px;background:rgba(39,63,82,.10);margin-top:6px;overflow:hidden}
+  .cell .bar>i{display:block;height:100%;background:var(--pine);border-radius:2px}
+  .cell .rr{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:10px;color:var(--muted)}
+  .cell.breach{background:rgba(188,67,0,.06)}
+  .cell.breach .bar>i{background:var(--ember)}
+  .cell.breach .rr{color:var(--ember);font-weight:600}
+  .cell.plan{background:rgba(0,162,131,.09);box-shadow:inset 0 0 0 2px rgba(0,162,131,.45)}
+  .cell.plan::after{content:"PLAN";position:absolute;top:4px;right:5px;font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--pine)}
+  .cell.empty{background:repeating-linear-gradient(45deg,#fff,#fff 6px,rgba(39,63,82,.03) 6px,rgba(39,63,82,.03) 12px)}
+  .cell.empty .occ{color:rgba(39,63,82,.3)}
+
+  /* inspector */
+  .inspector{display:flex;flex-direction:column;gap:12px}
+  .kv{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(39,63,82,.06)}
+  .kv .k{color:var(--muted)} .kv .v{color:var(--ink);font-weight:500}
+  .lifecycle{display:flex;align-items:center;gap:0;margin:2px 0 4px}
+  .ls{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(39,63,82,.4);padding:3px 7px;border:1px solid var(--line);border-right:none}
+  .ls:first-child{border-radius:6px 0 0 6px} .ls:last-child{border-right:1px solid var(--line);border-radius:0 6px 6px 0}
+  .ls.done{background:var(--pine-soft);color:var(--pine);border-color:rgba(0,162,131,.3)}
+  .ls.cur{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .btn-commit{display:block;width:100%;text-align:center;background:var(--pine);color:#fff;font-size:12.5px;font-weight:600;padding:10px;border-radius:9px;border:none;cursor:pointer}
+  .btn-commit:hover{background:var(--pine-hover)}
+  .btn-ghost{display:block;width:100%;text-align:center;background:#fff;color:var(--slate);font-size:12px;font-weight:500;padding:8px;border-radius:9px;border:1px solid var(--line-strong)}
+
+  /* optimization options */
+  .opts{display:grid;gap:11px}
+  .opt{background:#fff;border:1px solid rgba(39,63,82,.12);border-radius:12px;padding:13px 14px;box-shadow:var(--shadow-card);border-left:3px solid rgba(39,63,82,.15)}
+  .opt.best{border-left-color:var(--pine);box-shadow:0 3px 14px rgba(0,162,131,.10)}
+  .opt-top{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .opt-name{font-size:13.5px;font-weight:600;color:var(--ink)}
+  .opt-score{margin-left:auto;font-size:11px;font-weight:600;color:var(--pine);background:var(--pine-soft);padding:3px 9px;border-radius:999px}
+  .impacts{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .impact{background:var(--stone);border-radius:8px;padding:7px 8px}
+  .impact .il{font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(39,63,82,.5)}
+  .impact .iv{font-size:13px;font-weight:600;color:var(--ink);margin-top:2px}
+  .impact .iv.up{color:var(--pine)} .impact .iv.dn{color:var(--ember)} .impact .iv.flat{color:var(--slate)}
+  .opt-rat{font-size:11px;color:var(--muted);margin-top:9px;display:flex;gap:6px;align-items:center}
+
+  /* focus panel */
+  .fp-wrap{display:grid;grid-template-columns:1fr 340px;gap:12px}
+  .fp{background:var(--stone);border:1px solid rgba(39,63,82,.12);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .fp-head{display:flex;align-items:center;gap:10px;padding:2px 4px 8px;border-bottom:1px solid rgba(39,63,82,.08)}
+  .fp-modes{display:flex;gap:4px;margin-left:auto}
+  .fp-mode{font-size:10px;font-weight:600;color:var(--muted);padding:3px 9px;border-radius:999px;background:#fff;border:1px solid var(--line)}
+  .fp-mode.active{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .fpcard{background:#fff;border:1px solid rgba(39,63,82,.10);border-radius:11px;box-shadow:0 1px 5px rgba(24,39,58,.05);overflow:hidden}
+  .fpcard.planning{border-left:3px solid var(--pine)}
+  .fpcard-h{display:flex;align-items:center;gap:8px;padding:10px 12px 6px}
+  .fpcard-q{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:rgba(39,63,82,.5)}
+  .fpcard-insight{font-size:13px;font-weight:600;color:var(--ink);padding:0 12px 6px}
+  .fpcard-body{padding:2px 12px 11px;font-size:11.5px;color:var(--slate)}
+  .fpcard-foot{border-top:1px solid rgba(39,63,82,.06);padding:8px 12px;display:flex;align-items:center;gap:8px}
+  .fpcard-cta{font-size:11.5px;font-weight:600;color:var(--pine)}
+
+  /* studio */
+  .tierstable{width:100%;border-collapse:collapse}
+  .tierstable th,.tierstable td{text-align:left;font-size:12px;padding:8px 10px;border-bottom:1px solid rgba(39,63,82,.08)}
+  .tierstable th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .patternrow{display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid rgba(39,63,82,.06)}
+  .weekdots{display:flex;gap:4px}
+  .wd{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:9px;font-weight:600;color:var(--muted);background:var(--stone);border:1px solid var(--line)}
+  .wd.on{background:var(--pine-soft);color:var(--pine);border-color:rgba(0,162,131,.3)}
+
+  .caption{font-size:11.5px;color:var(--muted);margin-top:12px;padding:10px 13px;background:rgba(0,162,131,.04);border:1px solid rgba(0,162,131,.14);border-radius:10px;border-left:3px solid var(--pine)}
+  .caption b{color:var(--ink);font-weight:600}
+  .screen{display:none}
+  .screen.active{display:block}
+  .footnote{font-size:11px;color:var(--muted);margin-top:22px;text-align:center;line-height:1.6}
+  @media (max-width:820px){
+    .board-wrap,.fp-wrap{grid-template-columns:1fr}
+    .actioncards,.tiles{grid-template-columns:repeat(2,1fr)}
+    .impacts{grid-template-columns:repeat(3,1fr)}
+    .healthstrip{display:none}
+  }
+</style>
+
+<div class="gallery">
+  <div class="gallery-head">
+    <div>
+      <div class="gallery-title">Operational Planning Platform — Scheduling mockups</div>
+      <div class="gallery-sub">The Planning plane made a first-class runtime: <b>propose → simulate → optimize → commit</b>. Screens inherit the frozen Alloy visual language (Bend&nbsp;Pine on River&nbsp;Stone, Work&nbsp;|&nbsp;Studio shell, operational-health strip). Reference implementation — not a shipped product.</div>
+    </div>
+    <span class="badge-proposed"><span class="dot gold"></span>Proposed · discovery artifact</span>
+  </div>
+
+  <div class="screentabs" role="tablist" aria-label="Mockup screens">
+    <button class="screentab" role="tab" aria-selected="true" data-screen="overview">Overview · Work</button>
+    <button class="screentab" role="tab" aria-selected="false" data-screen="board">Planning Board · Room × Day</button>
+    <button class="screentab" role="tab" aria-selected="false" data-screen="optimize">Optimization</button>
+    <button class="screentab" role="tab" aria-selected="false" data-screen="commit">Simulation &amp; Commit</button>
+    <button class="screentab" role="tab" aria-selected="false" data-screen="focus">Focus Panel · planning card</button>
+    <button class="screentab" role="tab" aria-selected="false" data-screen="studio">Studio · design tomorrow</button>
+  </div>
+
+  <div class="app">
+    <nav class="rail" aria-hidden="true">
+      <div class="rail-logo">A</div>
+      <div class="rail-i">◫</div>
+      <div class="rail-i">◷</div>
+      <div class="rail-i active">▦</div>
+      <div class="rail-i">✉</div>
+      <div class="rail-i">◧</div>
+      <div class="rail-i">▤</div>
+    </nav>
+    <div class="main">
+      <div class="topbar"></div>
+      <div class="ws">
+        <!-- header -->
+        <div class="ws-header">
+          <div class="ws-icon">▦</div>
+          <div>
+            <div class="ws-h-title">Scheduling</div>
+            <div class="ws-h-sub" id="ws-sub">Maple Street · week of Jul 20 – 24</div>
+          </div>
+          <div class="ws-h-spacer"></div>
+          <button class="ws-h-act">Compare plans</button>
+          <button class="ws-h-act primary" id="ws-primary">Optimize placement</button>
+          <button class="ws-close" aria-label="Close">✕</button>
+        </div>
+        <!-- mode nav -->
+        <div class="ws-modebar">
+          <div class="modeswitch">
+            <span class="modepill active" id="mp-work">Work</span>
+            <span class="modepill" id="mp-studio">Studio</span>
+          </div>
+          <div class="subtabs" id="subtabs"></div>
+          <div class="healthstrip" id="healthstrip"></div>
+        </div>
+        <!-- canvas -->
+        <div class="canvas">
+          <div class="field">
+
+            <!-- ============ OVERVIEW ============ -->
+            <section class="screen active" id="s-overview">
+              <div class="eyebrow">What needs planning attention right now</div>
+              <div class="actioncards">
+                <div class="actioncard">
+                  <h4>3 children need a plan</h4>
+                  <p>Enrolled, placed, no committed schedule this term. Ava R. is blocked on enrollment.</p>
+                  <span class="ac-cta">Plan these children →</span>
+                </div>
+                <div class="actioncard">
+                  <h4>Ratio cliff · Sunflower, Thu</h4>
+                  <p>Projected 12 children vs 2-staff tier ceiling of 11. Simulation flags one breach.</p>
+                  <span class="ac-cta">Resolve on the board →</span>
+                </div>
+                <div class="actioncard">
+                  <h4>2 plans awaiting commit</h4>
+                  <p>Reviewed, no blocking conflicts. Committing writes effective-dated schedule intent.</p>
+                  <span class="ac-cta">Review &amp; commit →</span>
+                </div>
+              </div>
+
+              <div class="eyebrow" style="margin-top:18px">Today's activity</div>
+              <div class="tiles">
+                <div class="tile"><div class="k">Rooms in ratio</div><div class="v tabnum">7 / 8</div><div class="d">Sunflower over on Thu</div></div>
+                <div class="tile"><div class="k">Projected fill</div><div class="v tabnum">86%</div><div class="d">binding capacity, this week</div></div>
+                <div class="tile"><div class="k">Unplaced enrolled</div><div class="v tabnum">3</div><div class="d">of 142 active agreements</div></div>
+                <div class="tile"><div class="k">Proposed plans</div><div class="v tabnum">5</div><div class="d">2 approved · 0 committed today</div></div>
+              </div>
+
+              <div class="row" style="margin-top:16px;align-items:stretch">
+                <div class="panel" style="flex:1">
+                  <div class="panel-head"><div class="panel-badge">◔</div><div class="panel-title">Children awaiting a plan</div><div class="panel-note">L2 intent → schedule</div></div>
+                  <div class="panel-body" style="padding-top:4px">
+                    <div class="lrow warn"><div class="accent"></div><div class="avatar">AR</div><div><div class="who">Ava Rodriguez</div><div class="meta">Toddler · needs Mon–Thu · <span style="color:var(--ember)">enrollment incomplete</span></div></div><span class="chip ember" style="margin-left:auto">Blocked</span></div>
+                    <div class="lrow"><div class="accent"></div><div class="avatar">NP</div><div><div class="who">Noah Park</div><div class="meta">Preschool · full week · Room Rainbow candidate</div></div><span class="chip slate" style="margin-left:auto">Needs plan</span></div>
+                    <div class="lrow"><div class="accent"></div><div class="avatar">LM</div><div><div class="who">Lila Moore</div><div class="meta">Infant · Tue/Thu · Room Caterpillar candidate</div></div><span class="chip slate" style="margin-left:auto">Needs plan</span></div>
+                  </div>
+                </div>
+                <div class="panel" style="flex:1">
+                  <div class="panel-head"><div class="panel-badge">▲</div><div class="panel-title">Plans awaiting commit</div><div class="panel-note">proposed · reviewed</div></div>
+                  <div class="panel-body" style="padding-top:4px">
+                    <div class="lrow"><div class="accent"></div><div><div class="who">Move Ethan → Sunshine · Mon–Fri</div><div class="meta">clears Sunflower Thu breach · +$0 labor</div></div><span class="chip pine" style="margin-left:auto">Approved</span></div>
+                    <div class="lrow"><div class="accent"></div><div><div class="who">Add drop-in · Rainbow · Wed</div><div class="meta">+1 occupancy · within ratio · +$62 tuition</div></div><span class="chip pine" style="margin-left:auto">Approved</span></div>
+                    <div class="lrow"><div class="accent"></div><div><div class="who">Delay Lila start → Jul 28</div><div class="meta">avoids Caterpillar infant ratio cliff</div></div><span class="chip gold" style="margin-left:auto">Reviewed</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="caption"><b>Overview</b> follows the Family-A pattern: primary action cards → "Today's activity" tiles → information zones. Metrics are section-scoped and operational ("what needs attention"), never inventory counts. Every number here is a read of existing L3 projections (<span class="tabnum">availableNow = binding − committed − offered</span>).</div>
+            </section>
+
+            <!-- ============ BOARD ============ -->
+            <section class="screen" id="s-board">
+              <div class="board-wrap">
+                <div>
+                  <div class="board">
+                    <table>
+                      <thead>
+                        <tr><th>Room</th><th>Mon 20</th><th>Tue 21</th><th>Wed 22</th><th class="today">Thu 23</th><th>Fri 24</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="roomcell"><div class="rn">Sunflower</div><div class="rm">Toddler · cap 11</div></td>
+                          <td class="cell"><div class="occ tabnum">9</div><div class="cap">/ 11</div><div class="bar"><i style="width:82%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">10</div><div class="cap">/ 11</div><div class="bar"><i style="width:91%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">10</div><div class="cap">/ 11</div><div class="bar"><i style="width:91%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell breach"><div class="occ tabnum">12</div><div class="cap">/ 11</div><div class="bar"><i style="width:100%"></i></div><div class="rr"><span class="dot ember"></span>needs 3 staff</div></td>
+                          <td class="cell"><div class="occ tabnum">9</div><div class="cap">/ 11</div><div class="bar"><i style="width:82%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                        </tr>
+                        <tr>
+                          <td class="roomcell"><div class="rn">Sunshine</div><div class="rm">Toddler · cap 11</div></td>
+                          <td class="cell"><div class="occ tabnum">7</div><div class="cap">/ 11</div><div class="bar"><i style="width:64%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">8</div><div class="cap">/ 11</div><div class="bar"><i style="width:73%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">8</div><div class="cap">/ 11</div><div class="bar"><i style="width:73%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell plan"><div class="occ tabnum">9</div><div class="cap">/ 11</div><div class="bar"><i style="width:82%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">8</div><div class="cap">/ 11</div><div class="bar"><i style="width:73%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                        </tr>
+                        <tr>
+                          <td class="roomcell"><div class="rn">Rainbow</div><div class="rm">Preschool · cap 20</div></td>
+                          <td class="cell"><div class="occ tabnum">16</div><div class="cap">/ 20</div><div class="bar"><i style="width:80%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">17</div><div class="cap">/ 20</div><div class="bar"><i style="width:85%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">18</div><div class="cap">/ 20</div><div class="bar"><i style="width:90%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">17</div><div class="cap">/ 20</div><div class="bar"><i style="width:85%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">15</div><div class="cap">/ 20</div><div class="bar"><i style="width:75%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                        </tr>
+                        <tr>
+                          <td class="roomcell"><div class="rn">Caterpillar</div><div class="rm">Infant · cap 8</div></td>
+                          <td class="cell"><div class="occ tabnum">6</div><div class="cap">/ 8</div><div class="bar"><i style="width:75%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">7</div><div class="cap">/ 8</div><div class="bar"><i style="width:88%"></i></div><div class="rr"><span class="dot gold"></span>2 staff · tight</div></td>
+                          <td class="cell"><div class="occ tabnum">6</div><div class="cap">/ 8</div><div class="bar"><i style="width:75%"></i></div><div class="rr"><span class="dot pine"></span>2 staff · ok</div></td>
+                          <td class="cell"><div class="occ tabnum">7</div><div class="cap">/ 8</div><div class="bar"><i style="width:88%"></i></div><div class="rr"><span class="dot gold"></span>2 staff · tight</div></td>
+                          <td class="cell empty"><div class="occ tabnum">—</div><div class="cap">closed</div></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="caption"><b>Room × Day</b> is the projection join key — the grain where children, staffing, occupancy, ratio, and commercial consumption converge. Each cell renders live L3 projections (<span class="tabnum">aggregateExpectedOccupancyByRoomDate</span>, <span class="tabnum">resolveRatio</span>, <span class="tabnum">resolveOperationalCapacity</span>). The ember cell is a <b>Simulation conflict</b>, not a separate module. The pine-outlined cell is a <b>proposed plan</b> — uncommitted, write-free.</div>
+                </div>
+                <aside class="inspector">
+                  <div class="flat" style="padding:13px">
+                    <div class="eyebrow" style="margin-bottom:6px">Proposed plan</div>
+                    <div style="font-size:14px;font-weight:600;color:var(--ink)">Move Ethan → Sunshine</div>
+                    <div class="muted" style="font-size:11.5px;margin:2px 0 10px">Thu 23 · resolves Sunflower breach</div>
+                    <div class="lifecycle">
+                      <span class="ls done">draft</span><span class="ls cur">proposed</span><span class="ls">reviewed</span><span class="ls">approved</span><span class="ls">commit</span>
+                    </div>
+                    <div class="kv"><span class="k">Grain</span><span class="v">Room × Day</span></div>
+                    <div class="kv"><span class="k">Sunflower Thu</span><span class="v" style="color:var(--pine)">12 → 11 · in ratio</span></div>
+                    <div class="kv"><span class="k">Sunshine Thu</span><span class="v tabnum">8 → 9 · ok</span></div>
+                    <div class="kv"><span class="k">Labor delta</span><span class="v tabnum">$0</span></div>
+                    <div class="kv"><span class="k">Tuition delta</span><span class="v tabnum">$0</span></div>
+                    <div class="kv"><span class="k">Conflicts</span><span class="v" style="color:var(--pine)">0 blocking</span></div>
+                  </div>
+                  <button class="btn-commit">Approve &amp; commit plan</button>
+                  <button class="btn-ghost">Compare with 2 other options</button>
+                  <div class="flat" style="padding:11px 13px">
+                    <div class="eyebrow" style="margin-bottom:6px">Why this cell breaches</div>
+                    <div style="font-size:11.5px;color:var(--slate)">Sunflower Thu projects <b>12</b> children. The 2-staff ratio tier ceiling is <b>11</b> (1:6 toddler, stepped). Options: move a child, add a 3rd staff, or reduce Thursday demand.</div>
+                  </div>
+                </aside>
+              </div>
+            </section>
+
+            <!-- ============ OPTIMIZE ============ -->
+            <section class="screen" id="s-optimize">
+              <div class="row" style="align-items:center;margin-bottom:12px">
+                <div class="avatar" style="width:34px;height:34px;font-size:12px">AR</div>
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--ink)">Optimize placement · Ava Rodriguez</div>
+                  <div class="muted" style="font-size:11.5px">Toddler · needs Mon–Thu · ranked candidate plans, each simulated</div>
+                </div>
+                <span class="chip slate" style="margin-left:auto">5 valid options · objective: ratio + fill + continuity</span>
+              </div>
+              <div class="opts">
+                <div class="opt best">
+                  <div class="opt-top"><span class="dot pine"></span><div class="opt-name">Room Sunshine · Mon–Thu</div><span class="chip pine">Recommended</span><span class="opt-score tabnum">score 0.91</span></div>
+                  <div class="impacts">
+                    <div class="impact"><div class="il">Occupancy</div><div class="iv flat tabnum">+4 cells</div></div>
+                    <div class="impact"><div class="il">Ratio</div><div class="iv up">all in tier</div></div>
+                    <div class="impact"><div class="il">Labor</div><div class="iv flat tabnum">$0</div></div>
+                    <div class="impact"><div class="il">Tuition</div><div class="iv up tabnum">+$980/mo</div></div>
+                    <div class="impact"><div class="il">Conflicts</div><div class="iv up tabnum">0</div></div>
+                  </div>
+                  <div class="opt-rat"><span class="dot pine"></span>Fits every day within ratio, no labor change, keeps Ava with her sibling's room cohort.</div>
+                </div>
+                <div class="opt">
+                  <div class="opt-top"><span class="dot pine"></span><div class="opt-name">Room Rainbow · Mon–Thu</div><span class="opt-score tabnum">score 0.78</span></div>
+                  <div class="impacts">
+                    <div class="impact"><div class="il">Occupancy</div><div class="iv flat tabnum">+4 cells</div></div>
+                    <div class="impact"><div class="il">Ratio</div><div class="iv up">all in tier</div></div>
+                    <div class="impact"><div class="il">Labor</div><div class="iv flat tabnum">$0</div></div>
+                    <div class="impact"><div class="il">Tuition</div><div class="iv up tabnum">+$980/mo</div></div>
+                    <div class="impact"><div class="il">Conflicts</div><div class="iv up tabnum">0</div></div>
+                  </div>
+                  <div class="opt-rat"><span class="dot gold"></span>Valid, but preschool room — mixed-age <span class="tabnum">most_restrictive</span> ratio lowers Rainbow's headroom later in the term.</div>
+                </div>
+                <div class="opt">
+                  <div class="opt-top"><span class="dot gold"></span><div class="opt-name">Delay start one day → Tue–Thu</div><span class="opt-score tabnum">score 0.64</span></div>
+                  <div class="impacts">
+                    <div class="impact"><div class="il">Occupancy</div><div class="iv flat tabnum">+3 cells</div></div>
+                    <div class="impact"><div class="il">Ratio</div><div class="iv up">all in tier</div></div>
+                    <div class="impact"><div class="il">Labor</div><div class="iv flat tabnum">$0</div></div>
+                    <div class="impact"><div class="il">Tuition</div><div class="iv dn tabnum">+$740/mo</div></div>
+                    <div class="impact"><div class="il">Conflicts</div><div class="iv up tabnum">0</div></div>
+                  </div>
+                  <div class="opt-rat"><span class="dot gold"></span>Avoids Monday Sunflower pressure but reduces attendance product — lower projected tuition.</div>
+                </div>
+                <div class="opt">
+                  <div class="opt-top"><span class="dot slate"></span><div class="opt-name">Room Sunflower + add float teacher (Thu)</div><span class="opt-score tabnum">score 0.52</span></div>
+                  <div class="impacts">
+                    <div class="impact"><div class="il">Occupancy</div><div class="iv flat tabnum">+4 cells</div></div>
+                    <div class="impact"><div class="il">Ratio</div><div class="iv up">3rd staff Thu</div></div>
+                    <div class="impact"><div class="il">Labor</div><div class="iv dn tabnum">+$180</div></div>
+                    <div class="impact"><div class="il">Tuition</div><div class="iv up tabnum">+$980/mo</div></div>
+                    <div class="impact"><div class="il">Conflicts</div><div class="iv up tabnum">0</div></div>
+                  </div>
+                  <div class="opt-rat"><span class="dot slate"></span>BOS-proposed · needs staffing supply (G3) to commit — surfaced, not yet actionable in MVP.</div>
+                </div>
+              </div>
+              <div class="caption"><b>Optimization emerges from Calculations — it does not replace them.</b> Options are a deterministic search over valid rooms/patterns; scores are a deterministic function of each option's Simulation (ratio headroom, fill, labor, commercial, conflicts). BOS proposes the non-obvious "add a float teacher" candidate — it <b>proposes; the operator commits</b>.</div>
+            </section>
+
+            <!-- ============ COMMIT ============ -->
+            <section class="screen" id="s-commit">
+              <div class="row" style="align-items:stretch">
+                <div class="panel" style="flex:1.3">
+                  <div class="panel-head"><div class="panel-badge">◑</div><div class="panel-title">Projected reality · if committed</div><div class="panel-note">write-free preview</div></div>
+                  <div class="panel-body">
+                    <div class="row" style="gap:16px">
+                      <div style="flex:1">
+                        <div class="eyebrow">Current</div>
+                        <div class="big tabnum" style="color:var(--ember)">12 / 11</div>
+                        <div class="muted" style="font-size:11.5px">Sunflower Thu · over ratio tier</div>
+                      </div>
+                      <div style="display:grid;place-items:center;color:var(--muted);font-size:20px">→</div>
+                      <div style="flex:1">
+                        <div class="eyebrow">Projected</div>
+                        <div class="big tabnum" style="color:var(--pine)">11 / 11</div>
+                        <div class="muted" style="font-size:11.5px">within 2-staff tier · Ethan → Sunshine</div>
+                      </div>
+                    </div>
+                    <div style="height:1px;background:rgba(39,63,82,.08);margin:14px 0"></div>
+                    <div class="eyebrow">Projected calculations (same engine as execution)</div>
+                    <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+                      <div class="tile"><div class="k">Occupancy</div><div class="v tabnum">11</div><div class="d">was 12</div></div>
+                      <div class="tile"><div class="k">Required staff</div><div class="v tabnum">2</div><div class="d">was 3</div></div>
+                      <div class="tile"><div class="k">availableNow</div><div class="v tabnum">0</div><div class="d">binding − committed − offered</div></div>
+                      <div class="tile"><div class="k">Tuition Δ</div><div class="v tabnum">$0</div><div class="d">no commercial change</div></div>
+                    </div>
+                    <div class="eyebrow" style="margin-top:14px">Conflicts</div>
+                    <div class="lrow"><div class="accent" style="background:var(--pine)"></div><div class="who" style="color:var(--pine)">No blocking conflicts</div><span class="meta" style="margin-left:auto">1 advisory: Sunshine Thu now at 82% fill</span></div>
+                  </div>
+                </div>
+                <div class="inspector" style="flex:.85">
+                  <div class="flat" style="padding:13px">
+                    <div class="eyebrow" style="margin-bottom:8px">Operational commit</div>
+                    <div class="lifecycle">
+                      <span class="ls done">draft</span><span class="ls done">proposed</span><span class="ls done">reviewed</span><span class="ls cur">approved</span><span class="ls">commit</span>
+                    </div>
+                    <div class="kv"><span class="k">Writes</span><span class="v">L2 Intent</span></div>
+                    <div class="kv"><span class="k">Target</span><span class="v tabnum">schedule_assignments</span></div>
+                    <div class="kv"><span class="k">Method</span><span class="v">effective-dated supersede</span></div>
+                    <div class="kv"><span class="k">Authority</span><span class="v" style="color:var(--pine)">Site Director ✓</span></div>
+                    <div class="kv"><span class="k">Reversible</span><span class="v">by supersede</span></div>
+                  </div>
+                  <button class="btn-commit">Commit plan → write schedule intent</button>
+                  <div class="caption" style="margin-top:2px"><b>Commit is the seam.</b> Everything before it is disposable and consequence-free; commit is the one-way door into truth. It generalizes the <span class="tabnum">approve_enrollment</span> handoff and runs on the BPR <b>Preview → Commit</b> engine — atomic, previewed, outbox-notified, never overwriting history.</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ============ FOCUS PANEL ============ -->
+            <section class="screen" id="s-focus">
+              <div class="fp-wrap">
+                <div>
+                  <div class="caption" style="margin:0 0 12px"><b>Workspace ↔ Focus Panel symmetry.</b> The workspace plans <b>across</b> subjects (the Room × Day board); the Focus Panel plans <b>one</b> subject. Same loop, one level down. The <b>planning card</b> is a new reusable card type — it follows the read-only <span class="tabnum">billing_preview</span> template, then becomes write-capable when the edit substrate lands.</div>
+                  <div class="board" style="padding:14px">
+                    <div class="eyebrow">Cross-workspace planning · the decision ladder</div>
+                    <div class="lrow"><div class="accent"></div><div><div class="who">1 · Focus Panel card handoff</div><div class="meta">"Enrollment incomplete" → focus the Enrollment card, resolve, return</div></div><span class="chip pine" style="margin-left:auto">default</span></div>
+                    <div class="lrow"><div class="accent"></div><div><div class="who">2 · Embedded work surface</div><div class="meta">resolve enrollment inline in Activity mode — plan intact</div></div></div>
+                    <div class="lrow"><div class="accent"></div><div><div class="who">3 · Cross-workspace navigation</div><div class="meta">full other workspace; Plan preserved as <span class="tabnum">proposed</span></div></div><span class="chip gold" style="margin-left:auto">platform gap</span></div>
+                    <div class="lrow"><div class="accent"></div><div><div class="who">4 · Create operational work</div><div class="meta">block becomes an attention item; plan waits</div></div></div>
+                    <div class="lrow"><div class="accent"></div><div><div class="who">5 · Recommend / launch BOS</div><div class="meta">offer an option that avoids the block entirely</div></div></div>
+                    <div style="margin-top:12px;padding:11px 13px;background:var(--pine-soft);border-radius:10px;font-size:11.5px;color:var(--slate)"><b style="color:var(--ink)">Invariant:</b> a Plan in <span class="tabnum">proposed</span> standing survives every cross-workspace excursion. Planning never dead-ends.</div>
+                  </div>
+                </div>
+                <div class="fp" aria-label="Focus Panel">
+                  <div class="fp-head">
+                    <div class="avatar" style="width:30px;height:30px">AR</div>
+                    <div><div style="font-size:13px;font-weight:600;color:var(--ink)">Ava Rodriguez</div><div class="muted" style="font-size:10.5px">Toddler · Maple Street</div></div>
+                    <div class="fp-modes"><span class="fp-mode">Summary</span><span class="fp-mode active">Work</span><span class="fp-mode">Activity</span></div>
+                  </div>
+                  <div class="fpcard planning">
+                    <div class="fpcard-h"><span class="fpcard-q">What is this child's plan?</span><span class="chip ember" style="margin-left:auto">Conflict</span></div>
+                    <div class="fpcard-insight">Proposed · Sunshine · Mon–Thu · blocked on enrollment</div>
+                    <div class="fpcard-body">
+                      <div class="kv"><span class="k">Room</span><span class="v">Sunshine (toddler)</span></div>
+                      <div class="kv"><span class="k">Pattern</span><span class="v">Mon–Thu</span></div>
+                      <div class="kv"><span class="k">Ratio impact</span><span class="v" style="color:var(--pine)">in tier all days</span></div>
+                      <div class="kv"><span class="k">Commercial</span><span class="v tabnum">+$980/mo</span></div>
+                      <div class="kv"><span class="k">Risk</span><span class="v" style="color:var(--ember)">agreement not executed</span></div>
+                    </div>
+                    <div class="fpcard-foot"><span class="fpcard-cta">Resolve enrollment →</span><span class="muted" style="font-size:10.5px;margin-left:auto">then commit</span></div>
+                  </div>
+                  <div class="fpcard">
+                    <div class="fpcard-h"><span class="fpcard-q">Enrollment</span></div>
+                    <div class="fpcard-insight" style="color:var(--ember)">Agreement awaiting countersignature</div>
+                    <div class="fpcard-body" style="padding-bottom:8px">Placement done; schedule blocked until the agreement is executed.</div>
+                    <div class="fpcard-foot"><span class="fpcard-cta">Send agreement →</span></div>
+                  </div>
+                  <div class="fpcard">
+                    <div class="fpcard-h"><span class="fpcard-q">Billing preview</span></div>
+                    <div class="fpcard-insight tabnum">$980 / mo projected</div>
+                    <div class="fpcard-body" style="padding-bottom:11px">Consumption preview over the plan · no charge posted.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ============ STUDIO ============ -->
+            <section class="screen" id="s-studio">
+              <div class="row" style="align-items:stretch">
+                <div class="panel" style="flex:1">
+                  <div class="panel-head"><div class="panel-badge">≋</div><div class="panel-title">Ratio rules · toddler</div><div class="panel-note">L1 config · stepped tiers</div></div>
+                  <div class="panel-body">
+                    <table class="tierstable">
+                      <thead><tr><th>Max children</th><th>Required staff</th><th>Scope</th></tr></thead>
+                      <tbody>
+                        <tr><td class="tabnum">≤ 5</td><td class="tabnum">1</td><td class="muted">site</td></tr>
+                        <tr><td class="tabnum">≤ 11</td><td class="tabnum">2</td><td class="muted">site</td></tr>
+                        <tr><td class="tabnum">≤ 17</td><td class="tabnum">3</td><td class="muted">site</td></tr>
+                      </tbody>
+                    </table>
+                    <div class="muted" style="font-size:11px;margin-top:8px">Mixed-age policy: <span class="tabnum" style="color:var(--ink)">most_restrictive</span>. Licensing is a binding ceiling overrides may only tighten.</div>
+                  </div>
+                </div>
+                <div class="panel" style="flex:1">
+                  <div class="panel-head"><div class="panel-badge">▦</div><div class="panel-title">Schedule patterns</div><div class="panel-note">the assets Work commits</div></div>
+                  <div class="panel-body" style="padding-top:6px">
+                    <div class="patternrow"><div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">Full week</div><div class="muted" style="font-size:10.5px">5 days</div></div><div class="weekdots" style="margin-left:auto"><span class="wd on">M</span><span class="wd on">T</span><span class="wd on">W</span><span class="wd on">T</span><span class="wd on">F</span></div></div>
+                    <div class="patternrow"><div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">Mon–Thu</div><div class="muted" style="font-size:10.5px">4 days</div></div><div class="weekdots" style="margin-left:auto"><span class="wd on">M</span><span class="wd on">T</span><span class="wd on">W</span><span class="wd on">T</span><span class="wd">F</span></div></div>
+                    <div class="patternrow"><div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">Tue / Thu</div><div class="muted" style="font-size:10.5px">2 days</div></div><div class="weekdots" style="margin-left:auto"><span class="wd">M</span><span class="wd on">T</span><span class="wd">W</span><span class="wd on">T</span><span class="wd">F</span></div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel" style="margin-top:12px">
+                <div class="panel-head"><div class="panel-badge">◎</div><div class="panel-title">Optimization objective</div><div class="panel-note">what "better" means — authored, not hardcoded</div></div>
+                <div class="panel-body">
+                  <div class="tiles" style="grid-template-columns:repeat(5,1fr)">
+                    <div class="tile"><div class="k">Ratio compliance</div><div class="v tabnum">0.30</div><div class="d">weight</div></div>
+                    <div class="tile"><div class="k">Fill to target</div><div class="v tabnum">0.25</div><div class="d">weight</div></div>
+                    <div class="tile"><div class="k">Continuity</div><div class="v tabnum">0.20</div><div class="d">fewer moves</div></div>
+                    <div class="tile"><div class="k">Minimal labor</div><div class="v tabnum">0.15</div><div class="d">weight</div></div>
+                    <div class="tile"><div class="k">Commercial</div><div class="v tabnum">0.10</div><div class="d">weight</div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="caption"><b>Studio answers "how do I design tomorrow?"</b> — the reusable L1 assets Work operates over. Work operates L2 Intent + L3 Projections; Studio authors L1 Configuration. The optimization objective is configuration, so different orgs optimize for different things (fill vs continuity vs labor) on the same engine.</div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    Faithful reproduction of the frozen Alloy visual language · light-only, as the product is · type shown in a Poppins-class geometric stack.<br>
+    Companion to the seven <b>docs/platform/planning/</b> architecture documents · status: proposed · not a shipped product.
+  </div>
+</div>
+
+<script>
+  (function(){
+    var subtabsByScreen = {
+      overview: [["Overview",1],["Planning Board",0],["Optimization",0],["Simulation / Commit",0],["Conflicts",0],["Roster",0]],
+      board:    [["Overview",0],["Planning Board",1],["Optimization",0],["Simulation / Commit",0],["Conflicts",0],["Roster",0]],
+      optimize: [["Overview",0],["Planning Board",0],["Optimization",1],["Simulation / Commit",0],["Conflicts",0],["Roster",0]],
+      commit:   [["Overview",0],["Planning Board",0],["Optimization",0],["Simulation / Commit",1],["Conflicts",0],["Roster",0]],
+      focus:    [["Overview",0],["Planning Board",1],["Optimization",0],["Simulation / Commit",0],["Conflicts",0],["Roster",0]],
+      studio:   [["Patterns",1],["Rules",0],["Operating Windows",0],["Rooms",0],["Objectives",0]]
+    };
+    var health = {
+      overview:[["Rooms in ratio","7 / 8","pine","↑ vs last wk","trend-up"],["Fill","86%","","→ steady",""],["Unplaced","3","ember","↓ from 5","trend-up"]],
+      board:[["In ratio","7 / 8","pine","",""],["Conflicts","1","ember","Thu · Sunflower",""],["Proposed","3","gold","",""]],
+      optimize:[["Valid options","5","pine","",""],["Best score","0.91","pine","",""],["Blocking","0","pine","",""]],
+      commit:[["Awaiting commit","2","gold","",""],["Blocking conflicts","0","pine","",""],["Authority","✓","pine","",""]],
+      focus:[["Plan","1","gold","proposed",""],["Ratio","ok","pine","",""],["Blocked on","1","ember","enrollment",""]],
+      studio:[["Patterns","6","pine","",""],["Ratio rules","4","pine","",""],["Objectives","1","gold","published",""]]
+    };
+    var subEl = document.getElementById('subtabs');
+    var healthEl = document.getElementById('healthstrip');
+    var subEl_render = function(key){
+      subEl.innerHTML = subtabsByScreen[key].map(function(t){
+        return '<span class="subtab'+(t[1]?' active':'')+'">'+t[0]+'</span>';
+      }).join('');
+      healthEl.innerHTML = health[key].map(function(m){
+        return '<div class="metric"><div class="metric-label">'+m[0]+'</div><div class="metric-val '+m[2]+' tabnum">'+m[1]+'</div>'+(m[3]?'<div class="metric-trend '+m[4]+'">'+m[3]+'</div>':'')+'</div>';
+      }).join('');
+    };
+    var subs = {
+      overview:"Maple Street · week of Jul 20 – 24",
+      board:"Maple Street · Room × Day · week of Jul 20 – 24",
+      optimize:"Placing Ava Rodriguez · 5 ranked candidate plans",
+      commit:"Move Ethan → Sunshine · approved plan",
+      focus:"Ava Rodriguez · child subject",
+      studio:"Maple Street · design-time assets"
+    };
+    var primary = {overview:"Optimize placement",board:"Optimize placement",optimize:"Draft plan from best",commit:"Commit plan",focus:"Resolve enrollment",studio:"Publish assets"};
+    var mpWork = document.getElementById('mp-work'), mpStudio = document.getElementById('mp-studio');
+    function select(key){
+      document.querySelectorAll('.screentab').forEach(function(b){ b.setAttribute('aria-selected', b.dataset.screen===key ? 'true':'false'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      var map={overview:'s-overview',board:'s-board',optimize:'s-optimize',commit:'s-commit',focus:'s-focus',studio:'s-studio'};
+      document.getElementById(map[key]).classList.add('active');
+      subEl_render(key);
+      document.getElementById('ws-sub').textContent = subs[key];
+      document.getElementById('ws-primary').textContent = primary[key];
+      var studio = key==='studio';
+      mpStudio.classList.toggle('active', studio);
+      mpWork.classList.toggle('active', !studio);
+    }
+    document.querySelectorAll('.screentab').forEach(function(b){
+      b.addEventListener('click', function(){ select(b.dataset.screen); });
+    });
+    select('overview');
+  })();
+</script>

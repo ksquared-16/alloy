@@ -5,6 +5,11 @@
 import { vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/** The chained query surface the W7-F008 emulation drives. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a chainable fake, typed loosely on purpose
+type FakeChain = any;
+
+
 type Row = Record<string, unknown>;
 
 function clone<T>(v: T): T {
@@ -21,6 +26,8 @@ export type OperationalEnrollmentMockStore = {
     schedule_patterns: Row[];
     schedule_assignments: Row[];
     child_attendance_events: Row[];
+    /** Attempt rows for `apply_participation_operational_change`; created on demand. */
+    participation_change_attempts?: Row[];
     charges: Row[];
     childcare_rate_plans: Row[];
     childcare_rate_rules: Row[];
@@ -35,19 +42,114 @@ export type OperationalEnrollmentMockStore = {
     consumption_event_types: Row[];
     consumption_events: Row[];
     resolved_obligations: Row[];
+    financial_billing_periods: Row[];
     locations: Row[];
     location_program_categories: Row[];
+    persons: Row[];
+    employments: Row[];
     customer_members: Row[];
     opportunities: Row[];
     opportunity_customer_members: Row[];
     org_settings: Row[];
+    // Commercial V1 (Phase 9 — consumption prices tuition from Commercial Execution).
+    program_offerings: Row[];
+    program_offering_variants: Row[];
+    commercial_tuition_rates: Row[];
+    commercial_products: Row[];
+    commercial_revenue_categories: Row[];
+    commercial_policies: Row[];
+    option_sets: Row[];
+    option_set_items: Row[];
+    gl_accounts: Row[];
+    // Money received and its application to an obligation (Thread 8).
+    payments: Row[];
+    payment_allocations: Row[];
+    /*
+     * THE AUTHORITY TABLES, because the financial actions now read them.
+     *
+     * `resolveActorPermissionGrants` resolves `user_roles` -> `role_permission_grants` from the
+     * client the action already holds, and it DENIES on a read it cannot make — a caller with no
+     * membership is unidentified, not merely unprivileged. A store that cannot answer those two
+     * tables makes every financial action refuse for a reason the test never intended to assert,
+     * which is how a suite ends up proving that its own mock is incomplete. {@link financialAuthority}
+     * seeds them.
+     */
+    user_roles: Row[];
+    role_permission_grants: Row[];
 };
+
+/**
+ * THE BILLING CHAIN IS PART OF THE DEFAULT STORE, because since S2 it is part of the CONTRACT.
+ *
+ * Every childcare charge write resolves its own commercial period server-side — subject, household,
+ * the household's calendar, the period — so a double that omits any link makes the binder refuse,
+ * correctly. S2 seeded this per-suite in the four suites its own regression covered, and that
+ * regression did not reach `tests/operationalConsumption`: 64 tests across 17 suites were left red,
+ * and no CI gate caught it because no required check runs the general test suite.
+ *
+ * Defaulting it is the fix that cannot be missed again. A suite that genuinely needs an account with
+ * no agreement still overrides these keys explicitly, which is both possible and visible.
+ */
+function defaultBillingChain(): Partial<OperationalEnrollmentMockStore> {
+    return seedCanonicalBillingChain();
+}
+
+/**
+ * MERGE the canonical billing chain INTO a suite's own fixture, instead of replacing it.
+ *
+ * `seedCanonicalBillingChain()` only helps a suite that seeds none of these keys, because a seeded
+ * key wins. Most operationalConsumption suites DO seed their own agreement — with
+ * `customer_member_id` and no `customer_id` — and their own `financial_policies`, which overrode the
+ * default calendar. Both omissions make the S2 binder refuse, correctly.
+ *
+ * So this keeps every row the suite authored and adds only what the production contract now
+ * requires: a household each seeded agreement can reach, and a billing calendar for it. A suite
+ * that deliberately wants an unreachable household still gets one by passing `customer_members: []`
+ * after this, which is explicit rather than accidental.
+ */
+export function withCanonicalBillingChain(
+    seed: Partial<OperationalEnrollmentMockStore>,
+): Partial<OperationalEnrollmentMockStore> {
+    const chain = seedCanonicalBillingChain();
+    const agreements = seed.child_enrollment_agreements ?? chain.child_enrollment_agreements ?? [];
+
+    /* Every seeded agreement must reach a household — through its own column or through a member. */
+    const members = [...(seed.customer_members ?? chain.customer_members ?? [])];
+    for (const a of agreements) {
+        const memberId = (a as Row).customer_member_id as string | undefined;
+        const hasCustomer = (a as Row).customer_id != null;
+        if (hasCustomer || !memberId) continue;
+        if (!members.some((m) => m.id === memberId)) {
+            members.push({ id: memberId, org_id: ORG_ID, customer_id: BILLING_CUSTOMER_ID, person_id: "person-1" });
+        }
+    }
+
+    /*
+     * A billing calendar must exist. Appended rather than substituted, so a suite's own
+     * `posting_review` policy keeps governing review while the calendar answers the period question.
+     */
+    const policies = [...(seed.financial_policies ?? [])];
+    if (!policies.some((p) => p.policy_type === "billing_calendar")) {
+        policies.push(...((chain.financial_policies ?? []) as Row[]));
+    }
+
+    return {
+        ...seed,
+        child_enrollment_agreements: agreements,
+        customer_members: members,
+        financial_policies: policies,
+        financial_billing_periods: seed.financial_billing_periods ?? [],
+    };
+}
 
 export function createOperationalEnrollmentMockStore(
     seed?: Partial<OperationalEnrollmentMockStore>
 ): OperationalEnrollmentMockStore {
+    const chain = defaultBillingChain();
     return {
-        child_enrollment_agreements: seed?.child_enrollment_agreements ?? [],
+        user_roles: seed?.user_roles ?? [],
+        role_permission_grants: seed?.role_permission_grants ?? [],
+        child_enrollment_agreements: seed?.child_enrollment_agreements ?? chain.child_enrollment_agreements ?? [],
         child_placements: seed?.child_placements ?? [],
         schedule_patterns: seed?.schedule_patterns ?? [],
         schedule_assignments: seed?.schedule_assignments ?? [],
@@ -62,25 +164,409 @@ export function createOperationalEnrollmentMockStore(
         childcare_schedule_rules: seed?.childcare_schedule_rules ?? [],
         financial_services: seed?.financial_services ?? [],
         financial_charge_templates: seed?.financial_charge_templates ?? [],
-        financial_policies: seed?.financial_policies ?? [],
+        financial_policies: seed?.financial_policies ?? chain.financial_policies ?? [],
         consumption_event_types: seed?.consumption_event_types ?? [],
         consumption_events: seed?.consumption_events ?? [],
         resolved_obligations: seed?.resolved_obligations ?? [],
+        financial_billing_periods: seed?.financial_billing_periods ?? [],
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
-        customer_members: seed?.customer_members ?? [],
+        persons: seed?.persons ?? [],
+        employments: seed?.employments ?? [],
+        customer_members: seed?.customer_members ?? chain.customer_members ?? [],
         opportunities: seed?.opportunities ?? [],
         opportunity_customer_members: seed?.opportunity_customer_members ?? [],
         org_settings: seed?.org_settings ?? [],
+        program_offerings: seed?.program_offerings ?? [],
+        program_offering_variants: seed?.program_offering_variants ?? [],
+        commercial_tuition_rates: seed?.commercial_tuition_rates ?? [],
+        commercial_products: seed?.commercial_products ?? [],
+        commercial_revenue_categories: seed?.commercial_revenue_categories ?? [],
+        commercial_policies: seed?.commercial_policies ?? [],
+        option_sets: seed?.option_sets ?? [],
+        option_set_items: seed?.option_set_items ?? [],
+        gl_accounts: seed?.gl_accounts ?? [],
+        payments: seed?.payments ?? [],
+        payment_allocations: seed?.payment_allocations ?? [],
     };
 }
 
-type Filter = { col: string; op: "eq" | "in"; value: unknown };
+/**
+ * Phase 9 test helper — Commercial V1 config that reproduces a set of
+ * scheduleBasis → amount mappings, so consumption prices tuition from Commercial
+ * Execution (frozen V1). Wires the enrollment → program via a placement, and maps
+ * each basis to an offering/variant/rate. Returns a Partial<Store> to spread into
+ * createOperationalEnrollmentMockStore.
+ *
+ * `rates`: one entry per basis, e.g. { basis: "three_day", cadenceKey: "monthly", rateCents: 82000 }.
+ */
+export function commercialTuitionSeed(opts: {
+    orgId: string;
+    agreementId: string;
+    programKey?: string;
+    rates: { basis: string; cadenceKey: string; rateCents: number }[];
+}): Partial<OperationalEnrollmentMockStore> {
+    const programKey = opts.programKey ?? "prog-1";
+    const catId = "cat-1";
+    const offerings: Row[] = [];
+    const variants: Row[] = [];
+    const tuitionRates: Row[] = [];
+    const offeringByAttendance = new Map<string, string>();
+
+    const ensureOffering = (attendanceType: string): string => {
+        const existing = offeringByAttendance.get(attendanceType);
+        if (existing) return existing;
+        const id = `off-${attendanceType}`;
+        offerings.push({ id, org_id: opts.orgId, program_key: programKey, label: attendanceType, attendance_type: attendanceType, status: "active", is_active: true, effective_start: "2026-01-01", effective_end: null, sort_order: offerings.length, metadata: {} });
+        offeringByAttendance.set(attendanceType, id);
+        return id;
+    };
+    const BASIS_DAYS: Record<string, number> = { three_day: 3, four_day: 4, five_day: 5 };
+    const BASIS_ATTENDANCE: Record<string, string> = { full_day: "full_day", half_day: "part_day", drop_in: "drop_in", hourly: "hourly" };
+
+    for (const r of opts.rates) {
+        const days = BASIS_DAYS[r.basis];
+        let variantId: string;
+        if (days != null) {
+            const offeringId = ensureOffering("full_day");
+            variantId = `var-${days}d`;
+            if (!variants.find((v) => v.id === variantId)) variants.push({ id: variantId, org_id: opts.orgId, offering_id: offeringId, label: `${days} days/week`, quantity_type: "days", quantity_value: days, status: "active", is_active: true, sort_order: days, metadata: {} });
+        } else {
+            const attendance = BASIS_ATTENDANCE[r.basis] ?? r.basis;
+            const offeringId = ensureOffering(attendance);
+            variantId = `var-${attendance}-def`;
+            if (!variants.find((v) => v.id === variantId)) variants.push({ id: variantId, org_id: opts.orgId, offering_id: offeringId, label: "Default", quantity_type: null, quantity_value: null, status: "active", is_active: true, sort_order: 0, metadata: {} });
+        }
+        tuitionRates.push({ id: `rate-${r.basis}-${r.cadenceKey}`, org_id: opts.orgId, location_id: null, variant_id: variantId, cadence_key: r.cadenceKey, payer_type: "private_pay", rate_cents: r.rateCents, not_offered: false, is_active: true, effective_start: "2026-01-01", effective_end: null, revenue_category_id: null, metadata: {} });
+    }
+
+    return {
+        child_placements: [{ id: "plc-1", org_id: opts.orgId, enrollment_agreement_id: opts.agreementId, program_category_id: catId, start_date: "2026-01-01", end_date: null, status: "active", metadata: {} }],
+        location_program_categories: [{ id: catId, org_id: opts.orgId, key: programKey, label: "Program", is_active: true, sort_order: 0, metadata: {} }],
+        program_offerings: offerings,
+        program_offering_variants: variants,
+        commercial_tuition_rates: tuitionRates,
+    };
+}
+
+/**
+ * In-memory emulation of the `reconcile_consumption_correction` RPC — kept
+ * SEMANTICALLY IDENTICAL to
+ *   supabase/migrations/20260716000000_consumption_correction_lineage_and_reconcile_rpc.sql
+ * (they are two encodings of ONE contract). It mirrors the SQL step-for-step:
+ *   1. locate + "lock" the prior consumption event by (org, source_entity_id);
+ *   2. upsert the correction event by (org, idempotency_key) with corrects_event_id;
+ *   3. reparent/upsert same-key obligations (create/recalc draft charge);
+ *   4. supersede absent-key orphans (+ superseded_by_event_id, review_status='stale');
+ *   5. retire orphan/planned DRAFT charges in place (draft -> void, metadata.retirement);
+ *   6. retire the prior event.
+ * All-or-nothing: it snapshots the three mutable tables at entry and, on any thrown
+ * (or injected) failure, restores them so a fault-injection test observes ZERO
+ * partial state — exactly what the SQL transaction guarantees.
+ */
+export type ReconcileFault = (phase: "after_event" | "after_reparent" | "after_supersede" | "after_retire") => void;
+
+function emulateReconcileConsumptionCorrection(
+    store: OperationalEnrollmentMockStore,
+    orgId: string,
+    actorUserId: string | null,
+    plan: Record<string, unknown>,
+    counters: Record<string, number>,
+    fault?: ReconcileFault,
+): { data: Record<string, unknown> | null; error: { message: string } | null } {
+    const ce = (plan.correction_event ?? {}) as Record<string, unknown>;
+    const priorFactId = plan.prior_fact_id as string;
+    const sourceFamily = (ce.source_family as string) ?? null;
+    const now = new Date().toISOString();
+
+    // Snapshot for all-or-nothing restore.
+    const snap = {
+        consumption_events: clone(store.consumption_events),
+        resolved_obligations: clone(store.resolved_obligations),
+        charges: clone(store.charges),
+    };
+
+    try {
+        // 1. Locate the prior consumption event by its fact anchor.
+        const priorCandidates = store.consumption_events
+            .filter(
+                (e) =>
+                    e.org_id === orgId &&
+                    e.source_entity_id === priorFactId &&
+                    (sourceFamily == null || e.source_family === sourceFamily),
+            )
+            .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+        const prior = priorCandidates[0];
+        if (!prior) throw new Error("reconcile_consumption:no_prior_event");
+        const priorEventId = prior.id as string;
+
+        // 2. Upsert the correction's OWN consumption event by (org, idempotency_key).
+        let e1: string;
+        const existingEvent = store.consumption_events.find(
+            (e) => e.org_id === orgId && e.idempotency_key === ce.idempotency_key,
+        );
+        if (existingEvent) {
+            existingEvent.status = (ce.status as string) ?? existingEvent.status;
+            existingEvent.context = (ce.context as Record<string, unknown>) ?? existingEvent.context;
+            existingEvent.corrects_event_id = priorEventId;
+            existingEvent.updated_by = actorUserId;
+            e1 = existingEvent.id as string;
+        } else {
+            counters.consumption_events = (counters.consumption_events ?? 0) + 1;
+            const id = `consumption_events-${counters.consumption_events}`;
+            store.consumption_events.push({
+                id,
+                org_id: orgId,
+                location_id: ce.location_id ?? null,
+                event_type_id: ce.event_type_id ?? null,
+                source_family: ce.source_family,
+                event_key: ce.event_key,
+                source_entity_type: ce.source_entity_type,
+                source_entity_id: ce.source_entity_id,
+                subject_type: ce.subject_type ?? null,
+                subject_id: ce.subject_id ?? null,
+                occurs_on: ce.occurs_on,
+                effective_on: ce.effective_on ?? null,
+                status: ce.status ?? "resolved",
+                context: ce.context ?? {},
+                idempotency_key: ce.idempotency_key,
+                corrects_event_id: priorEventId,
+                created_by: actorUserId,
+                created_at: now,
+                updated_at: now,
+            });
+            e1 = id;
+        }
+
+        // 3. Reparent + upsert each new obligation.
+        const reparented: string[] = [];
+        const upserted: string[] = [];
+        const createdChg: string[] = [];
+        const newKeys: string[] = [];
+        for (const rawObl of (plan.new_obligations ?? []) as Record<string, unknown>[]) {
+            const reso = rawObl.resolution_key as string | null;
+            if (reso != null) newKeys.push(reso);
+            const charge = rawObl.charge as Record<string, unknown> | null;
+            const existingObl = store.resolved_obligations.find(
+                (o) => o.org_id === orgId && o.resolution_key === reso,
+            );
+            const prevEvent = existingObl?.consumption_event_id ?? null;
+            // prevCharge is the LOCKED obligation's own draft charge — the create-vs-recalc
+            // anchor (mirrors the RPC's FOR UPDATE read; never a pre-lock plan hint). F1.
+            const prevCharge = (existingObl?.draft_charge_id as string | null) ?? null;
+            let newChargeId: string | null = prevCharge;
+
+            if (charge && typeof charge === "object" && charge.amount_cents != null) {
+                newChargeId = null;
+                // Recalc the obligation's live DRAFT charge in place; else create one.
+                if (prevCharge) {
+                    const c = store.charges.find(
+                        (x) => x.id === prevCharge && x.org_id === orgId && x.status === "draft",
+                    );
+                    if (c) {
+                        c.amount_cents = charge.amount_cents ?? null;
+                        c.occurs_on = charge.occurs_on ?? null;
+                        c.billable_on = charge.billable_on ?? null;
+                        c.service_date = charge.service_date ?? null;
+                        c.metadata = (charge.metadata as Record<string, unknown>) ?? c.metadata;
+                        c.updated_at = now;
+                        newChargeId = prevCharge;
+                    }
+                }
+                if (newChargeId == null) {
+                    counters.charges = (counters.charges ?? 0) + 1;
+                    const cid = `charges-${counters.charges}`;
+                    store.charges.push({
+                        id: cid,
+                        org_id: orgId,
+                        job_id: null,
+                        billable_source_type: (charge.billable_source_type as string) ?? "enrollment_agreement",
+                        billable_source_id: charge.billable_source_id ?? null,
+                        charge_type: charge.charge_type ?? "fee",
+                        charge_category: charge.charge_category ?? null,
+                        status: "draft",
+                        currency_code: charge.currency_code ?? "USD",
+                        amount_cents: charge.amount_cents ?? null,
+                        service_date: charge.service_date ?? null,
+                        occurs_on: charge.occurs_on ?? null,
+                        billable_on: charge.billable_on ?? null,
+                        charge_template_id: charge.charge_template_id ?? null,
+                        service_id: charge.service_id ?? null,
+                        description: charge.description ?? null,
+                        metadata: (charge.metadata as Record<string, unknown>) ?? {},
+                        created_at: now,
+                        updated_at: now,
+                    });
+                    newChargeId = cid;
+                    createdChg.push(cid);
+                }
+            }
+
+            if (existingObl) {
+                existingObl.consumption_event_id = e1;
+                existingObl.charge_template_id = rawObl.charge_template_id ?? null;
+                existingObl.service_id = rawObl.service_id ?? null;
+                existingObl.amount_cents = rawObl.amount_cents ?? null;
+                existingObl.currency_code = rawObl.currency_code ?? "USD";
+                existingObl.responsibility_key = rawObl.responsibility_key ?? null;
+                existingObl.occurs_on = rawObl.occurs_on ?? null;
+                existingObl.billable_on = rawObl.billable_on ?? null;
+                existingObl.period_start = rawObl.period_start ?? null;
+                existingObl.period_end = rawObl.period_end ?? null;
+                existingObl.status = (rawObl.status as string) ?? existingObl.status;
+                existingObl.review_required = rawObl.review_required ?? existingObl.review_required;
+                existingObl.explanation = rawObl.explanation ?? existingObl.explanation;
+                existingObl.obligation_kind = rawObl.obligation_kind ?? null;
+                existingObl.draft_charge_id = newChargeId;
+                existingObl.superseded_by_event_id = null;
+                if (rawObl.review_status_stale === true) existingObl.review_status = "stale";
+                existingObl.updated_by = actorUserId;
+                existingObl.updated_at = now;
+                if (prevEvent !== e1) reparented.push(existingObl.id as string);
+                upserted.push(existingObl.id as string);
+            } else {
+                counters.resolved_obligations = (counters.resolved_obligations ?? 0) + 1;
+                const oid = `resolved_obligations-${counters.resolved_obligations}`;
+                store.resolved_obligations.push({
+                    id: oid,
+                    org_id: orgId,
+                    consumption_event_id: e1,
+                    charge_template_id: rawObl.charge_template_id ?? null,
+                    service_id: rawObl.service_id ?? null,
+                    amount_cents: rawObl.amount_cents ?? null,
+                    currency_code: rawObl.currency_code ?? "USD",
+                    responsibility_key: rawObl.responsibility_key ?? null,
+                    occurs_on: rawObl.occurs_on ?? null,
+                    billable_on: rawObl.billable_on ?? null,
+                    period_start: rawObl.period_start ?? null,
+                    period_end: rawObl.period_end ?? null,
+                    status: rawObl.status ?? "previewed",
+                    review_required: rawObl.review_required ?? false,
+                    explanation: rawObl.explanation ?? {},
+                    draft_charge_id: newChargeId,
+                    resolution_key: reso,
+                    obligation_kind: rawObl.obligation_kind ?? null,
+                    superseded_by_event_id: null,
+                    review_status: rawObl.review_required ? "review_required" : "pending",
+                    created_by: actorUserId,
+                    created_at: now,
+                    updated_at: now,
+                });
+                upserted.push(oid);
+            }
+        }
+        fault?.("after_reparent");
+
+        // 4. Supersede orphans (prior obligations whose key is absent from the new pass).
+        const superseded: string[] = [];
+        const retired: string[] = [];
+        const orphans = store.resolved_obligations.filter(
+            (o) =>
+                o.org_id === orgId &&
+                o.consumption_event_id === priorEventId &&
+                (o.resolution_key == null || !newKeys.includes(o.resolution_key as string)),
+        );
+        for (const orphan of orphans) {
+            orphan.status = "superseded";
+            orphan.superseded_by_event_id = e1;
+            orphan.review_status = "stale";
+            orphan.updated_by = actorUserId;
+            orphan.updated_at = now;
+            superseded.push(orphan.id as string);
+            if (orphan.draft_charge_id) retired.push(orphan.draft_charge_id as string);
+        }
+        for (const rid of (plan.retire_charge_ids ?? []) as string[]) {
+            if (!retired.includes(rid)) retired.push(rid);
+        }
+        fault?.("after_supersede");
+
+        // 5. Retire draft charges in place (draft -> void). Posted/non-draft => no-op.
+        for (const cid of retired) {
+            const c = store.charges.find(
+                (x) =>
+                    x.id === cid &&
+                    x.org_id === orgId &&
+                    x.billable_source_type === "enrollment_agreement" &&
+                    x.status === "draft",
+            );
+            if (c) {
+                c.status = "void";
+                c.voided_at = now;
+                c.metadata = {
+                    ...((c.metadata as Record<string, unknown>) ?? {}),
+                    retirement: {
+                        reason: "obligation_superseded",
+                        actor_user_id: actorUserId,
+                        superseded_by_consumption_event_id: e1,
+                        retired_at: now,
+                    },
+                };
+                c.updated_at = now;
+            }
+        }
+        fault?.("after_retire");
+
+        // 6. Retire the prior event.
+        prior.status = "superseded";
+        prior.updated_by = actorUserId;
+        prior.updated_at = now;
+
+        return {
+            data: {
+                ok: true,
+                consumption_event_id: e1,
+                prior_consumption_event_id: priorEventId,
+                obligation_ids: upserted,
+                reparented_obligation_ids: reparented,
+                superseded_obligation_ids: superseded,
+                retired_charge_ids: retired,
+                created_charge_ids: createdChg,
+            },
+            error: null,
+        };
+    } catch (e) {
+        // All-or-nothing: restore the pre-call snapshot (no partial state persists).
+        store.consumption_events.splice(0, store.consumption_events.length, ...snap.consumption_events);
+        store.resolved_obligations.splice(0, store.resolved_obligations.length, ...snap.resolved_obligations);
+        store.charges.splice(0, store.charges.length, ...snap.charges);
+        return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+    }
+}
+
+type Filter = { col: string; op: "eq" | "neq" | "in" | "is" | "lte" | "gte"; value: unknown };
+
+/**
+ * A filter column as PostgREST reads it: `metadata->>charge_template_key` is the text value of that
+ * key, not a column named with arrows. Without this every JSON-path filter matched nothing.
+ */
+function columnValue(row: Row, col: string): unknown {
+    const arrow = col.indexOf("->>");
+    if (arrow < 0) return row[col];
+    const json = row[col.slice(0, arrow)] as Record<string, unknown> | null | undefined;
+    const v = json && typeof json === "object" ? json[col.slice(arrow + 3)] : undefined;
+    return v === undefined || v === null ? v : String(v);
+}
 
 function applyFilters(rows: Row[], filters: Filter[]): Row[] {
-    return rows.filter((row) => {
+    return rows.filter((rowIn) => {
+        const row = new Proxy(rowIn, { get: (t, k) => (typeof k === "string" ? columnValue(t, k) : undefined) }) as Row;
         for (const f of filters) {
             if (f.op === "eq" && row[f.col] !== f.value) return false;
+            if (f.op === "neq" && row[f.col] === f.value) return false;
+            /*
+             * `.is(col, null)` is NULL-matching, not equality — an absent key and
+             * an explicit null are the same answer to "is this null", and a fixture
+             * that simply omits the column must not be excluded by it.
+             */
+            if (f.op === "is" && f.value === null && row[f.col] != null) return false;
+            if (f.op === "is" && f.value !== null && row[f.col] !== f.value) return false;
+            /*
+             * Date-range containment, which is how a period is found: `starts_on <= d <= ends_on`.
+             * Compared as strings deliberately — every date here is `YYYY-MM-DD`, which sorts
+             * lexicographically, and that is exactly how the real column compares.
+             */
+            if (f.op === "lte" && !(String(row[f.col]) <= String(f.value))) return false;
+            if (f.op === "gte" && !(String(row[f.col]) >= String(f.value))) return false;
             if (f.op === "in") {
                 const set = f.value as unknown[];
                 if (!set.includes(row[f.col])) return false;
@@ -91,7 +577,8 @@ function applyFilters(rows: Row[], filters: Filter[]): Row[] {
 }
 
 export function createOperationalEnrollmentMockSupabase(
-    store: OperationalEnrollmentMockStore
+    store: OperationalEnrollmentMockStore,
+    opts?: { reconcileFault?: ReconcileFault }
 ): SupabaseClient {
     const counters: Record<string, number> = {
         child_enrollment_agreements: 0,
@@ -107,6 +594,14 @@ export function createOperationalEnrollmentMockSupabase(
         const filters: Filter[] = [];
         let orderCol: string | null = null;
         let orderAsc = true;
+        /*
+         * `.range()` — the server's own paging, which the financial readers now use because a single
+         * PostgREST response is capped at 1,000 rows. A mock without it made every paged read throw,
+         * and the caller's own fail-closed handling then reported "no receipts" for a household that
+         * had them.
+         */
+        let rangeFrom: number | null = null;
+        let rangeTo: number | null = null;
         let limitN: number | null = null;
         let pendingInsert: Row | Row[] | null = null;
         let pendingUpdate: Row | null = null;
@@ -177,8 +672,28 @@ export function createOperationalEnrollmentMockSupabase(
             return chain;
         });
 
+        chain.neq = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "neq", value });
+            return chain;
+        });
+
+        chain.is = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "is", value });
+            return chain;
+        });
+
         chain.in = vi.fn((col: string, value: unknown[]) => {
             filters.push({ col, op: "in", value });
+            return chain;
+        });
+
+        chain.lte = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "lte", value });
+            return chain;
+        });
+
+        chain.gte = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "gte", value });
             return chain;
         });
 
@@ -193,7 +708,33 @@ export function createOperationalEnrollmentMockSupabase(
             return chain;
         });
 
+        chain.range = vi.fn((from: number, to: number) => {
+            rangeFrom = from;
+            rangeTo = to;
+            return chain;
+        });
+
         chain.maybeSingle = vi.fn(async () => {
+            /*
+             * `maybeSingle` after a MUTATION returns what the mutation touched — and NULL, not an
+             * error, when the filters matched nothing. That is exactly how PostgREST behaves, and it
+             * is the shape a guarded update relies on: `update(...).eq('status','draft')` matching
+             * zero rows is the signal that someone else already advanced the row, not a failure.
+             * Without this, the mock silently performed no update and answered with the unchanged
+             * row it had merely read.
+             */
+            if (isInsert && pendingInsert) {
+                const inserted = insertRows(pendingInsert);
+                return { data: clone(inserted[0]) ?? null, error: null };
+            }
+            if (isUpdate && pendingUpdate) {
+                const rows = tableRows(table);
+                const idx = rows.findIndex((r) => applyFilters([r], filters).length === 1);
+                if (idx < 0) return { data: null, error: null };
+                const updated = { ...rows[idx], ...pendingUpdate, updated_at: new Date().toISOString() };
+                rows[idx] = updated;
+                return { data: clone(updated), error: null };
+            }
             const rows = applyFilters(tableRows(table), filters);
             let sorted = rows;
             if (orderCol) {
@@ -204,6 +745,7 @@ export function createOperationalEnrollmentMockSupabase(
                 });
             }
             if (limitN != null) sorted = sorted.slice(0, limitN);
+            if (rangeFrom != null) sorted = sorted.slice(rangeFrom, (rangeTo ?? sorted.length) + 1);
             return { data: sorted[0] ?? null, error: null };
         });
 
@@ -273,6 +815,8 @@ export function createOperationalEnrollmentMockSupabase(
                 });
             }
             if (limitN != null) sorted = sorted.slice(0, limitN);
+            // Inclusive bounds, exactly as PostgREST treats a Range header.
+            if (rangeFrom != null) sorted = sorted.slice(rangeFrom, (rangeTo ?? sorted.length) + 1);
             return Promise.resolve(onFulfilled({ data: clone(sorted), error: null }));
         };
 
@@ -281,15 +825,404 @@ export function createOperationalEnrollmentMockSupabase(
 
     const from = vi.fn((table: string) => buildChain(table));
 
-    return { from } as unknown as SupabaseClient;
+    /*
+     * W7-F008: the posting functions, emulated through this mock's own table semantics. No
+     * transaction exists here; the live suite (`w7PostedChargeJournal.live.test.ts`) proves the
+     * all-or-nothing behaviour against Postgres. The journal insert is idempotent on its key, as the
+     * function's ON CONFLICT is.
+     */
+    const insertJournalOnce = async (entry: Record<string, unknown> | null | undefined) => {
+        if (!entry) return;
+        const journal = ((store as Record<string, Row[] | undefined>).financial_journal_entries ?? []) as Row[];
+        const exists = journal.some((j) => j.org_id === entry.org_id && j.idempotency_key === entry.idempotency_key);
+        if (!exists) await (from("financial_journal_entries") as unknown as FakeChain).insert(entry);
+    };
+
+    const rpc = vi.fn(async (fnName: string, params: Record<string, unknown>) => {
+        if (fnName === "post_charge_with_journal") {
+            const posted = await (from("charges") as unknown as FakeChain)
+                .update({
+                    status: "posted",
+                    posted_at: params.p_posted_at,
+                    posted_by: params.p_actor_user_id ?? null,
+                    updated_at: params.p_posted_at,
+                    updated_by: params.p_actor_user_id ?? null,
+                })
+                .eq("org_id", params.p_org_id)
+                .eq("id", params.p_charge_id)
+                .eq("status", "draft")
+                .select("*")
+                .maybeSingle();
+            if (posted.error) return { data: null, error: posted.error };
+            if (!posted.data) return { data: [], error: null };
+            await insertJournalOnce(params.p_entry as Record<string, unknown> | null);
+            return { data: [posted.data], error: null };
+        }
+        if (fnName === "insert_posted_charge_with_journal") {
+            const written = await (from("charges") as unknown as FakeChain).insert(params.p_charge).select("*").single();
+            if (written.error) return { data: null, error: written.error };
+            await insertJournalOnce(params.p_entry as Record<string, unknown>);
+            return { data: [written.data], error: null };
+        }
+        if (fnName === "reconcile_consumption_correction") {
+            return emulateReconcileConsumptionCorrection(
+                store,
+                params.p_org_id as string,
+                (params.p_actor_user_id as string | null) ?? null,
+                params.p_plan as Record<string, unknown>,
+                counters,
+                opts?.reconcileFault,
+            );
+        }
+        if (fnName === "person_is_employed_on") {
+            // Mirrors public.person_is_employed_on: window-based, so an ENDED
+            // employment still covers dates inside its own window.
+            const onDate = String(params.p_on_date);
+            const employed = (store.employments ?? []).some(
+                (e) =>
+                    e.org_id === params.p_org_id &&
+                    e.person_id === params.p_person_id &&
+                    e.employment_status !== "canceled" &&
+                    String(e.start_date) <= onDate &&
+                    (e.end_date == null || String(e.end_date) >= onDate),
+            );
+            return { data: employed, error: null };
+        }
+        /*
+         * Mirrors `record_child_attendance_event` closely enough that the service's
+         * idempotency behaviour is genuinely exercised in unit tests: same key +
+         * same fingerprint returns the FIRST fact and reports `idempotent: true`;
+         * same key + different fingerprint is a conflict. Facts with no key are
+         * never deduped against each other.
+         */
+        if (fnName === "record_child_attendance_event") {
+            const orgId = String(params?.p_org_id ?? "");
+            const fact = (params?.p_fact ?? {}) as Record<string, unknown>;
+            const key = fact.idempotency_key != null ? String(fact.idempotency_key).trim() : "";
+            const fingerprint = fact.payload_fingerprint != null ? String(fact.payload_fingerprint) : null;
+
+            if (key) {
+                const existing = store.child_attendance_events.find(
+                    (e) => String(e.org_id) === orgId && String(e.idempotency_key ?? "") === key,
+                );
+                if (existing) {
+                    if (fingerprint != null && String(existing.payload_fingerprint ?? "") !== fingerprint) {
+                        return { data: null, error: { message: "attendance_idempotency_conflict" } };
+                    }
+                    return { data: { ok: true, idempotent: true, event: existing }, error: null };
+                }
+            }
+
+            const row = {
+                id: `att-${store.child_attendance_events.length + 1}`,
+                created_at: new Date().toISOString(),
+                entry_type: "original",
+                metadata: {},
+                ...fact,
+                org_id: orgId,
+            } as Row;
+            store.child_attendance_events.push(row);
+            return { data: { ok: true, idempotent: false, event: row }, error: null };
+        }
+
+        /*
+         * Mirrors `apply_participation_operational_change` closely enough that the SERVICES are
+         * genuinely exercised rather than stubbed: the idempotency gate is checked before any write, the
+         * expected-current-row preconditions are honoured, the prior row is closed the day before the
+         * successor starts, successor status is derived from the date, and the whole thing is
+         * all-or-nothing.
+         *
+         * A thinner fake would have hidden the regression it exists to prevent. When the services moved
+         * their persistence into this RPC, the old `.from()`-based fakes stopped seeing the writes at
+         * all, so the unit tests reported "unknown rpc" instead of exercising supersession.
+         */
+        if (fnName === "apply_participation_operational_change") {
+            const orgId = String(params?.p_org_id ?? "");
+            const agreementId = String(params?.p_enrollment_agreement_id ?? "");
+            const key = String(params?.p_idempotency_key ?? "").trim();
+            const today = String(params?.p_today ?? "");
+            const actor = params?.p_actor == null ? null : String(params.p_actor);
+            const placement = (params?.p_placement ?? null) as Record<string, unknown> | null;
+            const assignment = (params?.p_assignment ?? null) as Record<string, unknown> | null;
+            const expectedPlacementId =
+                params?.p_expected_placement_id == null ? null : String(params.p_expected_placement_id);
+            const expectedAssignmentId =
+                params?.p_expected_assignment_id == null ? null : String(params.p_expected_assignment_id);
+
+            if (!placement && !assignment) {
+                return { data: null, error: { message: "nothing_to_change: supply p_placement, p_assignment, or both" } };
+            }
+            if (!today) return { data: null, error: { message: "today_required" } };
+
+            store.participation_change_attempts = store.participation_change_attempts ?? [];
+            const attempts = store.participation_change_attempts;
+            const prior = attempts.find(
+                (a) =>
+                    String(a.org_id) === orgId &&
+                    String(a.enrollment_agreement_id) === agreementId &&
+                    String(a.idempotency_key ?? "") === key,
+            );
+            if (prior) {
+                return { data: { ok: true, replayed: true, result: prior.result ?? {} }, error: null };
+            }
+
+            const OPERATIONAL = ["planned", "active", "ending"];
+            const dayBefore = (ymd: string): string => {
+                const d = new Date(`${ymd}T00:00:00Z`);
+                d.setUTCDate(d.getUTCDate() - 1);
+                return d.toISOString().slice(0, 10);
+            };
+            const result: Record<string, unknown> = {};
+
+            // Both halves are validated before either writes, so a failure leaves the store untouched.
+            const plcPrior = placement
+                ? store.child_placements.find(
+                      (r) =>
+                          String(r.org_id) === orgId &&
+                          String(r.enrollment_agreement_id) === agreementId &&
+                          OPERATIONAL.includes(String(r.status)),
+                  )
+                : undefined;
+            if (placement && !plcPrior) {
+                return { data: null, error: { message: "no_operational_placement" } };
+            }
+            if (placement && expectedPlacementId && plcPrior && String(plcPrior.id) !== expectedPlacementId) {
+                return { data: null, error: { message: `stale_placement: caller expected ${expectedPlacementId}` } };
+            }
+            const plcStart = placement ? String(placement.start_date ?? "") : "";
+            if (placement) {
+                if (!plcStart) return { data: null, error: { message: "placement_start_date_required" } };
+                const pStart = String(plcPrior!.start_date);
+                const pEnd = plcPrior!.end_date == null ? null : String(plcPrior!.end_date);
+                if (plcStart <= pStart || (pEnd != null && plcStart <= pEnd)) {
+                    return { data: null, error: { message: "invalid_placement_start" } };
+                }
+            }
+
+            const asgPrior = assignment
+                ? store.schedule_assignments.find(
+                      (r) =>
+                          String(r.org_id) === orgId &&
+                          String(r.enrollment_agreement_id) === agreementId &&
+                          String(r.subject_type ?? "child") === "child" &&
+                          r.is_primary !== false &&
+                          OPERATIONAL.includes(String(r.status)),
+                  )
+                : undefined;
+            if (assignment && !asgPrior) {
+                return { data: null, error: { message: "no_operational_assignment" } };
+            }
+            if (assignment && expectedAssignmentId && asgPrior && String(asgPrior.id) !== expectedAssignmentId) {
+                return { data: null, error: { message: `stale_assignment: caller expected ${expectedAssignmentId}` } };
+            }
+            const asgStart = assignment ? String(assignment.start_date ?? "") : "";
+            if (assignment) {
+                if (!asgStart) return { data: null, error: { message: "assignment_start_date_required" } };
+                const pStart = String(asgPrior!.start_date);
+                const pEnd = asgPrior!.end_date == null ? null : String(asgPrior!.end_date);
+                if (asgStart <= pStart || (pEnd != null && asgStart <= pEnd)) {
+                    return { data: null, error: { message: "invalid_assignment_start" } };
+                }
+            }
+
+            if (placement && plcPrior) {
+                const close = dayBefore(plcStart);
+                plcPrior.status = "superseded";
+                plcPrior.end_date = close;
+                plcPrior.updated_by = actor;
+                counters.child_placements += 1;
+                const named = (k: string) => Object.prototype.hasOwnProperty.call(placement, k);
+                const successor: Row = {
+                    ...plcPrior,
+                    id: nextId("plc-new", counters.child_placements),
+                    start_date: plcStart,
+                    end_date: null,
+                    status: plcStart > today ? "planned" : "active",
+                    // Key presence, not COALESCE: a named null clears, an absent key inherits.
+                    program_category_id: named("program_category_id")
+                        ? (placement.program_category_id as string | null)
+                        : plcPrior.program_category_id,
+                    room_location_id: named("room_location_id")
+                        ? (placement.room_location_id as string | null)
+                        : plcPrior.room_location_id,
+                    reason_key: (placement.reason_key as string | null) ?? "operator_change",
+                    source_key: (placement.source_key as string | null) ?? "operator",
+                    supersedes_placement_id: plcPrior.id,
+                    metadata: (placement.metadata as Record<string, unknown> | undefined) ?? {},
+                    created_by: actor,
+                    updated_by: actor,
+                };
+                store.child_placements.push(successor);
+                result.placement = {
+                    prior_id: plcPrior.id,
+                    prior_end_date: close,
+                    successor_id: successor.id,
+                    successor_status: successor.status,
+                    successor_start: plcStart,
+                };
+            }
+
+            if (assignment && asgPrior) {
+                const close = dayBefore(asgStart);
+                asgPrior.status = "superseded";
+                asgPrior.end_date = close;
+                asgPrior.updated_by = actor;
+                counters.schedule_assignments += 1;
+                const successor: Row = {
+                    // Carries room, site, type, program category and commitment kind forward, which is
+                    // the 20261109120000 repair.
+                    ...asgPrior,
+                    id: nextId("asg-new", counters.schedule_assignments),
+                    start_date: asgStart,
+                    end_date: null,
+                    status: asgStart > today ? "planned" : "active",
+                    schedule_pattern_id:
+                        (assignment.schedule_pattern_id as string | null) ?? asgPrior.schedule_pattern_id,
+                    source_key: (assignment.source_key as string | null) ?? "operator",
+                    supersedes_assignment_id: asgPrior.id,
+                    metadata: (assignment.metadata as Record<string, unknown> | undefined) ?? {},
+                    created_by: actor,
+                    updated_by: actor,
+                };
+                store.schedule_assignments.push(successor);
+                result.assignment = {
+                    prior_id: asgPrior.id,
+                    prior_end_date: close,
+                    successor_id: successor.id,
+                    successor_status: successor.status,
+                    successor_start: asgStart,
+                };
+            }
+
+            attempts.push({
+                id: `pca-${attempts.length + 1}`,
+                org_id: orgId,
+                enrollment_agreement_id: agreementId,
+                idempotency_key: key,
+                result,
+                created_by: actor,
+            } as Row);
+
+            return { data: { ok: true, replayed: false, result }, error: null };
+        }
+
+        return { data: null, error: { message: `unknown rpc: ${fnName}` } };
+    });
+
+    return { from, rpc } as unknown as SupabaseClient;
 }
 
 export const ORG_ID = "org-1";
+
+/**
+ * Seed rows that give one actor a named set of capabilities in {@link ORG_ID}.
+ *
+ * One definition, because two would drift and the laxer one would be the one guarding a write. The
+ * role key is `admin` only so the membership row is realistic; nothing here reads it as a role
+ * literal — `resolveActorPermissionGrants` joins it to the grant rows and returns their union, so
+ * what the actor may do is exactly `permissions` and nothing else.
+ *
+ * Passing `[]` is a meaningful case and NOT the same as omitting the seed: an actor with a
+ * membership and no grants is a configured role that holds nothing, which is what a "view only" or
+ * "no Financials" persona looks like at this layer. Omitting it entirely models a caller the
+ * membership table cannot identify, which denies for a different reason.
+ */
+export function financialAuthority(
+    permissions: readonly string[],
+    actorUserId = "user-1",
+): { user_roles: Row[]; role_permission_grants: Row[] } {
+    return {
+        user_roles: [{ org_id: ORG_ID, user_id: actorUserId, role: "admin" }],
+        role_permission_grants: permissions.map((permission_key) => ({
+            org_id: ORG_ID,
+            role_key: "admin",
+            permission_key,
+            allowed: true,
+        })),
+    };
+}
 export const SITE_ID = "site-1";
 export const UNIT_ID = "unit-1";
 export const MEMBER_ID = "member-1";
 export const PROGRAM_ID = "program-1";
 export const PATTERN_ID = "pattern-1";
+
+export const BILLING_AGREEMENT_ID = "agr-1";
+export const BILLING_CUSTOMER_ID = "cust-1";
+
+/**
+ * THE CANONICAL BILLING CHAIN A CHARGE WRITER NOW WALKS.
+ *
+ * Since S2 every childcare charge resolves its own commercial period server-side:
+ *
+ *   charge subject -> agreement -> household -> the household's billing calendar -> the period
+ *
+ * A double that omits any link makes the binder refuse — correctly, because a charge that reaches no
+ * household genuinely has no commercial period. So this seeds the whole chain rather than letting a
+ * suite stub past it, and the production contract stays the thing under test.
+ *
+ * Spread into a store seed: `createOperationalEnrollmentMockStore({ ...seedCanonicalBillingChain() })`.
+ */
+export function seedCanonicalBillingChain(): Partial<OperationalEnrollmentMockStore> {
+    return {
+        child_enrollment_agreements: [
+            {
+                id: BILLING_AGREEMENT_ID,
+                org_id: ORG_ID,
+                customer_member_id: MEMBER_ID,
+                customer_id: BILLING_CUSTOMER_ID,
+                site_location_id: SITE_ID,
+                status: "active",
+                start_date: "2026-01-01",
+                end_date: null,
+            },
+        ],
+        customer_members: [
+            { id: MEMBER_ID, org_id: ORG_ID, customer_id: BILLING_CUSTOMER_ID, person_id: "person-1" },
+        ],
+        locations: [{ id: SITE_ID, org_id: ORG_ID, label: "Main Campus", location_type: "site" }],
+        /*
+         * TWO SCOPES, because both paths are real. A location default covers an enrolled child's
+         * agreement-grain charge; the ORG floor covers a pre-enrolment household, which has no
+         * agreement and therefore no location to inherit from. Without the floor such a household
+         * resolves `unconfigured` and the writer correctly refuses — which is right in production
+         * and wrong in a fixture meant to exercise the happy path.
+         */
+        financial_policies: [
+            {
+                id: "pol-billing-calendar-org",
+                org_id: ORG_ID,
+                scope_type: "org",
+                location_id: null,
+                service_id: null,
+                rate_plan_id: null,
+                customer_id: null,
+                policy_type: "billing_calendar",
+                value: { cadence: "monthly", anchor_on: null },
+                is_active: true,
+                effective_start: "2026-01-01",
+                effective_end: null,
+                metadata: {},
+            },
+            {
+                id: "pol-billing-calendar",
+                org_id: ORG_ID,
+                scope_type: "location",
+                location_id: SITE_ID,
+                service_id: null,
+                rate_plan_id: null,
+                customer_id: null,
+                policy_type: "billing_calendar",
+                value: { cadence: "monthly", anchor_on: null },
+                is_active: true,
+                effective_start: "2026-01-01",
+                effective_end: null,
+                metadata: {},
+            },
+        ],
+        financial_billing_periods: [],
+    };
+}
 
 export function seedOperationalEnrollmentFixtures(): OperationalEnrollmentMockStore {
     return createOperationalEnrollmentMockStore({

@@ -23,6 +23,9 @@ export type StagePurpose =
     | "closed"
     | "custom";
 
+/** Dual-grain Work View count presentation — family vs child buckets only. */
+export type WorkViewGrainBucket = "family" | "child";
+
 export const GRAIN_LABELS: Record<StageGrain, string> = {
     family: "Family",
     child: "Child",
@@ -74,4 +77,79 @@ export function parseSubjectResolutionStrategy(raw: unknown): StageSubjectResolu
     const valid: StageSubjectResolutionStrategy[] = ["single_anchor", "ask_operator", "all_eligible", "operator_select"];
     if (typeof raw === "string" && (valid as string[]).includes(raw)) return raw as StageSubjectResolutionStrategy;
     return undefined;
+}
+
+// ── Work View grain consistency ───────────────────────────────────────────────
+
+/**
+ * Stage keys a Work View's filters reference (via the `opportunity_stage` predicate). A Work View is
+ * a filter predicate, not a container of stages — so its grain must be derived from ONLY the stages it
+ * actually scopes to, not from every stage in the process. Empty result = the view spans all stages.
+ */
+export function stageKeysReferencedByWorkView(
+    filters: ReadonlyArray<{ field_key?: string; operator?: string; value?: unknown }> | null | undefined
+): string[] {
+    const keys = new Set<string>();
+    for (const f of filters ?? []) {
+        if (f?.field_key !== "opportunity_stage") continue;
+        if (typeof f.value === "string" && f.value.trim()) keys.add(f.value.trim());
+        else if (Array.isArray(f.value)) {
+            for (const v of f.value) if (typeof v === "string" && v.trim()) keys.add(v.trim());
+        }
+    }
+    return [...keys];
+}
+
+/**
+ * Grains of the stages a Work View actually includes. Scopes the mixed-grain check to the view's
+ * filtered stages so a single-grain view (e.g. New Leads → stage `lead`) is not flagged mixed merely
+ * because the process also has child-grain stages.
+ *
+ * When the view references no specific stage, returns `[]` — the view is predicate-scoped at runtime
+ * (e.g. "All Leads" by status) and must not inherit every stage grain in the process. Mixed-grain
+ * is only enforced when the operator explicitly scopes the view to stages with different row types.
+ */
+export function resolveWorkViewStageGrains(
+    filters: ReadonlyArray<{ field_key?: string; operator?: string; value?: unknown }> | null | undefined,
+    stageGrainByKey: Record<string, StageGrain | undefined>
+): (StageGrain | undefined)[] {
+    const keys = stageKeysReferencedByWorkView(filters);
+    if (keys.length === 0) return [];
+    return keys.map((k) => stageGrainByKey[k]);
+}
+
+/**
+ * Validates that all defined stage grains in a flat Work View are identical.
+ * A flat Work View cannot mix grains — each row type produces a different
+ * queue entry shape. Mixed-grain views should be split or use grouped lanes.
+ */
+/** Count-aware grain unit for Work View row breakdowns (`1 Family`, `2 Children`). */
+export function grainCountUnitLabel(grain: WorkViewGrainBucket, count: number): string {
+    const n = Math.max(0, Math.floor(count));
+    if (grain === "family") return n === 1 ? "Family" : "Families";
+    return n === 1 ? "Child" : "Children";
+}
+
+export function validateWorkViewGrainConsistency(
+    stageGrains: (StageGrain | undefined)[],
+    /**
+     * The view's declared Row Type. A view declared FAMILY may span family and child stages: each row
+     * is the family, and its children are grouped under it wherever each one stands (Decision with
+     * one child Offer pending). Any other declaration still needs one grain.
+     */
+    declaredRowGrain?: StageGrain,
+): {
+    valid: boolean;
+    message?: string;
+} {
+    const defined = stageGrains.filter((g): g is StageGrain => g !== undefined);
+    if (defined.length <= 1) return { valid: true };
+    const unique = new Set(defined);
+    if (unique.size === 1) return { valid: true };
+    if (declaredRowGrain === "family" && [...unique].every((g) => g === "family" || g === "child")) return { valid: true };
+    return {
+        valid: false,
+        message:
+            "This Work View includes stages with different row types. A single flat Work View can only render one queue row shape at a time — split into separate Work Views (one per row type), or set the Row Type to Family so each family presents as one row with its children grouped under it.",
+    };
 }

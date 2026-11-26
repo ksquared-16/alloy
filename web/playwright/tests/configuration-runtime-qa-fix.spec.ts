@@ -8,7 +8,7 @@ loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
 const screenshotDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/configuration-runtime-qa-fix",
+    "../../../docs/sprints/archive/06_2026/configuration-runtime-qa-fix",
 );
 
 async function ensureSidebarExpanded(page: import("@playwright/test").Page) {
@@ -30,7 +30,7 @@ test.describe("Configuration Runtime QA fix", () => {
 
         await page.goto("/settings", { waitUntil: "networkidle", timeout: 120_000 });
         await expect(page.getByTestId("settings-configuration-hub")).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByTestId("settings-configuration-tiles")).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByTestId("settings-configuration-sections")).toBeVisible({ timeout: 60_000 });
         await page.screenshot({
             path: path.join(screenshotDir, "01-settings-hub-tiles.png"),
             fullPage: true,

@@ -4,9 +4,7 @@
  */
 
 import {
-    CHILDCARE_PROGRAM_FIELD_MODEL,
     isEnrollmentOperatorFieldVisible,
-    isLegacyChildProgramFieldKey,
     lifecycleRequirementEntityToFieldDefinitionEntity,
 } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
@@ -94,13 +92,6 @@ export function mergeLifecycleFieldPaletteForBuilderStage(
                     is_system: row.is_system,
                     config: row.config ?? null,
                 })
-            ) {
-                continue;
-            }
-            if (isLegacyChildProgramFieldKey(row.field_key)) continue;
-            if (
-                row.field_key === CHILDCARE_PROGRAM_FIELD_MODEL.legacy_alias_field_key &&
-                catalogKeys.has(CHILDCARE_PROGRAM_FIELD_MODEL.canonical_field_key)
             ) {
                 continue;
             }

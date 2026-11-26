@@ -1,0 +1,26 @@
+{
+  "Certa": {
+    "childControlPresent": true,
+    "subjectInSection": "Certa",
+    "subjectMatchesIntent": true,
+    "accepted": "$195.00/weekly",
+    "overridden": "Overridden $185.00 / weekly",
+    "expectedReduction": "$18.50 expected to apply",
+    "addException": true,
+    "activeCertResidue": false,
+    "endedHistoryPresent": true,
+    "text": "ASSIGNMENTS CC Certa Certhouse 4/12/2021 (5y5m) New schedule DAYS M T W T F S S Use a schedule pattern DAILY HOURS 🕒 – 🕒 ROOM Select a room Select Site · Site EFFECTIVE Start End Open-ended Ongoing — no end date; ends later via a change. TUITION Tuition — Certa Certhouse Recommended · $195.00/weekly 1 option did not apply Expand options (1 other) The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity. Overridden $185.00 / weekly · from 2026-09-01 · Family kept the organisation rate agreed at enrolment. Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026 DISCOUNTS discount · $18.50 expected to apply Add exception discount · ended 2026-08-31 — Retired: certification scaffolding, superseded so the walkthrough starts clean Ended Accept tuition Who owes this — set "
+  },
+  "Certb": {
+    "childControlPresent": true,
+    "subjectInSection": "Certb",
+    "subjectMatchesIntent": true,
+    "accepted": "$1,450.00/monthly",
+    "overridden": null,
+    "expectedReduction": "$145.00 expected to apply",
+    "addException": true,
+    "activeCertResidue": false,
+    "endedHistoryPresent": true,
+    "text": "ASSIGNMENTS CC Certb Certhouse 9/30/2022 (3y11m) New schedule DAYS M T W T F S S Use a schedule pattern DAILY HOURS 🕒 – 🕒 ROOM Select a room Select Site · Site EFFECTIVE Start End Open-ended Ongoing — no end date; ends later via a change. TUITION Tuition — Certb Certhouse Recommended · $1,450.00/monthly The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity. Accepted $1,450.00 / monthly · from 2026-09-01 Billing frequency monthly · current period September 2026 · next October 2026 DISCOUNTS discount · $145.00 expected to apply Add exception discount · ended 2026-08-31 — Retired: certification scaffolding dated into a future period Ended Tuition needs review — this assignment has changed since the price was agreed. Choose the recommendation, another option, or override. Accept tuition Who "
+  }
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { FinancialConfigApiResponse } from "./financialConfigTypes";
+import { loadFinancialConfig } from "./financialConfigResource";
 
 type UseFinancialConfigResult = {
     data: FinancialConfigApiResponse | null;
@@ -31,11 +32,7 @@ export function useFinancialConfig(
         setLoading(true);
         setError(null);
 
-        fetch(`/api/admin/financial-config/opportunity/${opportunityId}`)
-            .then((res) => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.json() as Promise<FinancialConfigApiResponse>;
-            })
+        loadFinancialConfig(opportunityId)
             .then((payload) => {
                 if (!cancelled) setData(payload);
             })

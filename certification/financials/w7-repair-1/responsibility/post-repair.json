@@ -1,0 +1,19 @@
+{
+  "before": {
+    "accountRow": "Certfree Family$40.001 charge · account-wide fees$40 collectibleOutstanding",
+    "detail": "FINANCIALS October 2026 CURRENT BALANCE $0.00 DUE $0.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00 No discount Manage payments → Payment Add All 1 Charges 1 Credits & adjustments 0 Funding 0 Payments 0 LEDGER NOVEMBER 2026 Balance $40.00 UPCOMING PAYMENT No payment method on file Take or record payment →"
+  },
+  "preview": {
+    "responsibility": null,
+    "standing": null,
+    "chargeTo": null,
+    "chargeToEditorOpen": false,
+    "body": "ADD Charge Adjustment CHARGE TYPEREQUIRED Field trip ▾ 6 configured types CHARGE APPLIES TOREQUIRED Household AMOUNT $40.00 NOTE DATES SERVICE DATEREQUIRED Today Oct 1, 2026 Tomorrow Oct 2, 2026 Yesterday Sep 30, 2026 In a week Oct 8, 2026 BILLING PERIOD November 2026 DUE Nov 11, 2026 PREVIEW Field trip +$40.00 Current balance $0.00 ON CONFIRM Creates this charge and posts it. BALANCE AFTER POSTING $40.00 Add charge Cancel"
+  },
+  "after": {
+    "error": null,
+    "accountRow": "Certfree Family$40.001 charge · account-wide fees$40 collectibleOutstanding",
+    "detail": "FINANCIALS October 2026 CURRENT BALANCE $0.00 DUE $0.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00 No discount Manage payments → Payment Add All 2 Charges 2 Credits & adjustments 0 Funding 0 Payments 0 LEDGER NOVEMBER 2026 Balance $80.00 UPCOMING PAYMENT No payment method on file Take or record payment →",
+    "notAllocated": false
+  }
+}

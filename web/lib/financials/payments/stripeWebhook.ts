@@ -1,0 +1,827 @@
+/**
+ * SLICE E — THE WEBHOOK BOUNDARY, where provider evidence stops being a claim.
+ *
+ * Everything hostile about webhook delivery is normal: at-least-once, out of order, occasionally
+ * concurrent, and reachable by anyone who can find the URL. This module treats all four as the
+ * contract rather than as edge cases, and it stops deliberately short of money — a converged attempt
+ * is the most it may produce. Thread 8 posting is Slice F.
+ *
+ * ── THE ORDER OF OPERATIONS IS THE SECURITY MODEL ──
+ *
+ *   1. verify the signature            nothing is read as meaningful before this
+ *   2. claim the event id              the database decides duplicates, not a lookup
+ *   3. resolve the connected account   through the merchant binding, never from the payload
+ *   4. resolve the attempt under that org
+ *   5. converge the attempt state      terminal states refuse to regress, in a trigger
+ *
+ * Steps 3 and 4 are why `metadata` is never tenancy. Anyone can put an org id in metadata; only
+ * Stripe can sign a request, and only Alloy's merchant binding says which tenant an account is.
+ */
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { postProviderConfirmedCollection, type AttemptForPosting } from "./canonicalPosting";
+import { mapStripeStatus } from "./collectionAttempt";
+import { resolveOrgForConnectedAccount } from "./providerMerchant";
+import { applyProviderMethodUpdate } from "./paymentMethodService";
+import { applyProviderAccountUpdate, runtimeExpectsLivemode } from "./providerInstallation";
+import { recognizeProviderDispute } from "./providerDispute";
+import { mapStripeRefundStatus, recognizeProviderRefund } from "./refundCollection";
+
+export type WebhookOutcome =
+    | "applied"
+    | "duplicate"
+    | "stale"
+    | "unattributed"
+    | "unsupported"
+    /*
+     * Understood, recorded, and correctly moved no money.
+     *
+     * Thread 8C needed a word the existing six did not have. A dispute that has been raised but has
+     * not withdrawn funds is not `unsupported` — it is modelled precisely — and it is not `applied`,
+     * because nothing happened to a balance. Calling it either would misreport the one thing an
+     * operator investigating a return needs to know.
+     */
+    | "observed"
+    | "rejected";
+
+export type WebhookResult = {
+    /** HTTP status the route should return. A rejection is 400; everything else is 200. */
+    status: number;
+    outcome: WebhookOutcome;
+    detail: string;
+    attemptId?: string;
+    orgId?: string;
+};
+
+/** Five minutes, Stripe's own default. A replayed capture from last week is not a live delivery. */
+const TOLERANCE_SECONDS = 300;
+
+/**
+ * Stripe's signature scheme, verified rather than trusted.
+ *
+ * The header carries a timestamp and one or more v1 HMACs; the signed payload is `${t}.${body}`,
+ * which is why the RAW body must be used — re-serialising parsed JSON changes bytes and every
+ * signature fails. Compared with `timingSafeEqual`, because a byte-by-byte early return leaks how
+ * much of a forged signature was correct.
+ */
+export function verifyStripeSignature(
+    rawBody: string,
+    signatureHeader: string | null,
+    secret: string,
+    nowSeconds: number = Math.floor(Date.now() / 1000),
+): { ok: true } | { ok: false; reason: string } {
+    if (!signatureHeader) return { ok: false, reason: "missing Stripe-Signature header" };
+    if (!secret) return { ok: false, reason: "no webhook signing secret is configured" };
+
+    const parts = new Map<string, string[]>();
+    for (const piece of signatureHeader.split(",")) {
+        const [k, v] = piece.split("=", 2);
+        if (!k || !v) continue;
+        const list = parts.get(k.trim()) ?? [];
+        list.push(v.trim());
+        parts.set(k.trim(), list);
+    }
+
+    const timestamp = parts.get("t")?.[0];
+    const signatures = parts.get("v1") ?? [];
+    if (!timestamp || signatures.length === 0) {
+        return { ok: false, reason: "malformed Stripe-Signature header" };
+    }
+
+    const age = Math.abs(nowSeconds - Number(timestamp));
+    if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) {
+        return { ok: false, reason: "signature timestamp outside tolerance" };
+    }
+
+    const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+    const expectedBuf = Buffer.from(expected, "utf8");
+    for (const candidate of signatures) {
+        const candidateBuf = Buffer.from(candidate, "utf8");
+        if (candidateBuf.length === expectedBuf.length && timingSafeEqual(candidateBuf, expectedBuf)) {
+            return { ok: true };
+        }
+    }
+    return { ok: false, reason: "signature did not match" };
+}
+
+
+/** The platform-account event family W2 models. Kept beside the two helpers that read it. */
+const PLATFORM_METHOD_EVENTS = new Set([
+    "payment_method.automatically_updated",
+    "payment_method.updated",
+    "payment_method.detached",
+    "setup_intent.succeeded",
+    "setup_intent.setup_failed",
+    "mandate.updated",
+]);
+
+/**
+ * WHICH stored method an event is about — the only thing read out of the payload.
+ *
+ * Three shapes: a `payment_method.*` event IS the method, a `setup_intent.*` event NAMES one, and a
+ * mandate names one too. Nothing else in the body is treated as authority; the reference is a
+ * lookup key into Alloy's own table, not a claim about ownership.
+ */
+function platformMethodRef(eventType: string, object: Record<string, unknown>): string | null {
+    if (eventType.startsWith("payment_method.")) {
+        const id = object.id != null ? String(object.id).trim() : "";
+        return id || null;
+    }
+    const pm = object.payment_method;
+    if (typeof pm === "string") return pm.trim() || null;
+    if (pm && typeof pm === "object") {
+        const id = (pm as { id?: unknown }).id;
+        return id != null ? String(id).trim() || null : null;
+    }
+    return null;
+}
+
+/**
+ * What the event means for the two lifecycles — and `null` where it means nothing.
+ *
+ * A card auto-updated by the network changes display only, so both are null and the display patch
+ * does the work. A completed verification is the case that matters most: a bank account that was
+ * `pending` and unusable becomes usable here, without an operator doing anything, which is exactly
+ * what a delayed verification should do.
+ */
+function methodEventIntent(
+    eventType: string,
+    object: Record<string, unknown>,
+): { usability: "usable" | "blocked" | "expired" | "revoked" | null; verification: "unverified" | "pending" | "verified" | "failed" | null } {
+    switch (eventType) {
+        case "setup_intent.succeeded":
+            return { usability: "usable", verification: "verified" };
+        case "setup_intent.setup_failed":
+            return { usability: "blocked", verification: "failed" };
+        case "payment_method.detached":
+            /*
+             * Detached at the provider means it can no longer be charged. If ALLOY detached it, the
+             * row is already revoked and the service leaves it alone; this is for the other case.
+             */
+            return { usability: "blocked", verification: null };
+        case "mandate.updated": {
+            /* An ACH dispute invalidates the mandate, and Stripe says such a mandate cannot be reused. */
+            const status = String((object.status ?? "") as string).trim();
+            return status && status !== "active"
+                ? { usability: "blocked", verification: null }
+                : { usability: null, verification: null };
+        }
+        default:
+            /* `payment_method.updated` / `automatically_updated`: display only. */
+            return { usability: null, verification: null };
+    }
+}
+
+/** The PaymentIntent lifecycle this slice models. Anything else is stored and left alone. */
+const SUPPORTED = new Set([
+    /*
+     * Payments W1. The provider telling us what a merchant can now do — the only event that changes
+     * an organisation's ABILITY to take money rather than the fate of one payment. It fires for
+     * accounts created through either Accounts API, which is why W1 needed no new event family.
+     */
+    "account.updated",
+    /*
+     * Payments W2. These arrive on the PLATFORM account, not on a connected one, because that is
+     * where a payer's stored instrument lives. They are handled before the connected-account gate
+     * below, and their tenancy comes from the canonical method binding instead of the merchant
+     * binding — same principle, different table.
+     */
+    "payment_method.automatically_updated",
+    "payment_method.updated",
+    "payment_method.detached",
+    "setup_intent.succeeded",
+    "setup_intent.setup_failed",
+    "mandate.updated",
+    "payment_intent.created",
+    "payment_intent.requires_action",
+    "payment_intent.processing",
+    "payment_intent.succeeded",
+    "payment_intent.payment_failed",
+    "payment_intent.canceled",
+    // Slice G. `refund.*` carries the refund object itself, which is the only event family that
+    // names a `re_…` directly; `charge.refunded` names a CHARGE and is therefore evidence that a
+    // refund happened rather than evidence of which one, so it stays observed-but-unmodelled.
+    "refund.created",
+    "refund.updated",
+    /*
+     * Thread 8C. One economic reversal, three events — measured on the governed test merchant:
+     * `created` announces it, `funds_withdrawn` is the money actually leaving, `closed` settles the
+     * outcome. All three are kept because all three are evidence; only one of them moves a balance.
+     */
+    "charge.dispute.created",
+    "charge.dispute.funds_withdrawn",
+    "charge.dispute.closed",
+    "charge.dispute.updated",
+]);
+
+/*
+ * TWO KINDS OF "TERMINAL", and conflating them was a money defect.
+ *
+ * `succeeded` and `canceled` are FINAL at the provider: a PaymentIntent in either never changes
+ * again. `failed` is not. Stripe's `payment_intent.payment_failed` leaves the intent in
+ * `requires_payment_method`, and the payer's still-open tab can confirm it with another card. Alloy
+ * treated `failed` as final too, so when that second card succeeded the webhook called the success
+ * "older provider truth" and the money was never posted.
+ *
+ * So `failed` is terminal for REUSE — the collection service never hands a failed attempt out again
+ * — but the provider's own later success still lands on it, and posts. Nothing else moves it: a
+ * late `processing` or `requires_action` from before the decline is stale, and the cancellation of a
+ * superseded declined intent is recorded as evidence without overwriting what happened to it.
+ */
+const FINAL = new Set(["succeeded", "canceled"]);
+
+/** A claim on an event that never finished is abandoned after this long, and may be re-taken. */
+const ABANDONED_CLAIM_MS = 2 * 60 * 1000;
+
+/** The event type's own implied state, for types whose object status lags or is absent. */
+function stateForEvent(eventType: string, objectStatus: string | undefined): string {
+    if (eventType === "payment_intent.payment_failed") return "failed";
+    if (eventType === "payment_intent.canceled") return "canceled";
+    return mapStripeStatus(objectStatus);
+}
+
+/** The provider's reason codes for the last failure on an intent, when there was one. */
+function failureDetail(object: Record<string, unknown>): Record<string, string> {
+    const err = object.last_payment_error as { code?: unknown; decline_code?: unknown } | null | undefined;
+    if (!err || typeof err !== "object") return {};
+    const out: Record<string, string> = {};
+    if (typeof err.code === "string" && err.code) out.failure_code = err.code;
+    if (typeof err.decline_code === "string" && err.decline_code) out.decline_code = err.decline_code;
+    return out;
+}
+
+/**
+ * Re-take an event claim that was abandoned mid-processing, or return null.
+ *
+ * Null means the event either finished (a real duplicate) or is being processed right now by
+ * another delivery. Only a claim still `received` and older than the abandonment window is taken,
+ * and only by the delivery whose compare-and-set lands.
+ */
+async function reclaimAbandonedEvent(supabase: SupabaseClient, eventId: string): Promise<string | null> {
+    const { data } = await supabase
+        .from("payment_provider_events")
+        .select("id, disposition, received_at")
+        .eq("processor", "stripe")
+        .eq("provider_event_id", eventId)
+        .maybeSingle();
+    const row = data as { id: string; disposition: string; received_at: string } | null;
+    if (!row || row.disposition !== "received") return null;
+    const claimedAt = Date.parse(row.received_at);
+    if (!Number.isFinite(claimedAt) || Date.now() - claimedAt < ABANDONED_CLAIM_MS) return null;
+
+    const { data: taken } = await supabase
+        .from("payment_provider_events")
+        .update({ received_at: new Date().toISOString(), disposition_detail: "reclaimed after an unfinished delivery" })
+        .eq("id", row.id)
+        .eq("disposition", "received")
+        .eq("received_at", row.received_at)
+        .select("id");
+    const won = ((taken ?? []) as Array<{ id: string }>).length === 1;
+    return won ? row.id : null;
+}
+
+/** The provider's own name for what the payer still has to do, or null when nothing is pending. */
+function nextAction(object: Record<string, unknown>): string | null {
+    const action = object.next_action as { type?: unknown } | null | undefined;
+    const type = action && typeof action === "object" ? action.type : null;
+    return typeof type === "string" && type ? type : null;
+}
+
+export async function handleStripeWebhook(
+    supabase: SupabaseClient,
+    rawBody: string,
+    signatureHeader: string | null,
+    secret: string,
+): Promise<WebhookResult> {
+    // ── 1. SIGNATURE FIRST. Nothing below runs for an unsigned request. ──────────────────────────
+    const verified = verifyStripeSignature(rawBody, signatureHeader, secret);
+    if (!verified.ok) {
+        return { status: 400, outcome: "rejected", detail: verified.reason };
+    }
+
+    let event: Record<string, unknown>;
+    try {
+        event = JSON.parse(rawBody) as Record<string, unknown>;
+    } catch {
+        return { status: 400, outcome: "rejected", detail: "body is not valid JSON" };
+    }
+
+    const eventId = String(event.id ?? "");
+    const eventType = String(event.type ?? "");
+    if (!eventId || !eventType) {
+        return { status: 400, outcome: "rejected", detail: "event is missing id or type" };
+    }
+
+    // `account` is present on Connect events and names the connected account the event belongs to.
+    const connectedAccountRef = event.account ? String(event.account) : null;
+    const object = ((event.data as Record<string, unknown> | undefined)?.object ?? {}) as Record<string, unknown>;
+    const providerTransactionId = object.id ? String(object.id) : null;
+    const providerCreated = typeof event.created === "number"
+        ? new Date(event.created * 1000).toISOString()
+        : null;
+
+    /*
+     * ── 2. CLAIM THE EVENT ID ────────────────────────────────────────────────────────────────────
+     *
+     * The insert races on purpose. Two concurrent deliveries of one event both arrive here; the
+     * unique index lets exactly one proceed and the other is told it is a duplicate. A
+     * "have I processed this?" SELECT would let both through, which is precisely the failure this
+     * table exists to make impossible.
+     */
+    const { data: claimed, error: claimError } = await supabase
+        .from("payment_provider_events")
+        .insert({
+            processor: "stripe",
+            provider_event_id: eventId,
+            provider_event_type: eventType,
+            connected_account_ref: connectedAccountRef,
+            provider_transaction_id: providerTransactionId,
+            provider_created_at: providerCreated,
+            payload: event,
+            disposition: "received",
+        })
+        .select("id")
+        .single();
+
+    let eventRowId: string;
+    if (claimError) {
+        if (!String(claimError.message).includes("uq_payment_provider_events_processor_event")) {
+            throw new Error(`could not record provider event: ${claimError.message}`);
+        }
+        /*
+         * ── 2a. A CLAIM THAT NEVER FINISHED IS NOT A DUPLICATE ───────────────────────────────────
+         *
+         * The claim is written BEFORE the work. If the work then threw — a transient database
+         * error converging the attempt — the route answered 500, Stripe redelivered, and the
+         * redelivery found the claim and was told "duplicate". The event was lost for good: the
+         * provider had done the right thing and Alloy never acted on it.
+         *
+         * A claim still `received` long after it was taken is abandoned. It is re-taken with a
+         * compare-and-set on its own `received_at`, so of two redeliveries exactly one proceeds.
+         * Everything downstream is idempotent — the attempt's state trigger and the posting anchor —
+         * so re-running an event that had in fact half-finished is harmless.
+         */
+        const reclaimed = await reclaimAbandonedEvent(supabase, eventId);
+        if (!reclaimed) {
+            return {
+                status: 200,
+                outcome: "duplicate",
+                detail: "this event was already recorded; nothing was done a second time",
+            };
+        }
+        eventRowId = reclaimed;
+    } else {
+        eventRowId = (claimed as { id: string }).id;
+    }
+
+    const finish = async (
+        outcome: WebhookOutcome,
+        detail: string,
+        extra: Record<string, unknown> = {},
+    ): Promise<WebhookResult> => {
+        await supabase
+            .from("payment_provider_events")
+            .update({ disposition: outcome, disposition_detail: detail, processed_at: new Date().toISOString(), ...extra })
+            .eq("id", eventRowId);
+        return { status: 200, outcome, detail, ...(extra.org_id ? { orgId: String(extra.org_id) } : {}) };
+    };
+
+    /*
+     * ── 2b. THE TWO WORLDS MUST NOT TOUCH (Payments W1) ──────────────────────────────────────────
+     *
+     * A production Connect endpoint receives BOTH live and test deliveries — Stripe says so, because
+     * a platform performs both under one application. The event states which it is; this runtime
+     * states which it is by the key it collects with. A disagreement is never a thing to reconcile:
+     * a test event must not move live merchant state, and a live event must not move test state.
+     *
+     * THE ISOLATION ITSELF IS THE MERCHANT BINDING: a test account and a live account are different
+     * objects with different ids, and only one of them can be bound to an organisation here. This
+     * check is the second line — it makes a mismatch LOUD rather than merely improbable, and keeps
+     * the evidence, because an event arriving in the wrong world is what somebody will need to see.
+     *
+     * It is deliberately narrow. A delivery that makes NO livemode claim is not a delivery in the
+     * wrong world; it is a synthesised one, which the hermetic suites use to prove ordering and
+     * idempotency without touching Stripe. Real Stripe deliveries always carry the field. And a
+     * runtime with no provider key cannot state its own world, so it makes no claim to compare —
+     * refusing there would fail every hermetic case to defend against nothing the binding does not
+     * already prevent.
+     */
+    const runtimeLivemode = runtimeExpectsLivemode();
+    const claimsLivemode = typeof event.livemode === "boolean";
+    if (claimsLivemode && runtimeLivemode !== null && event.livemode !== runtimeLivemode) {
+        return await finish(
+            "rejected",
+            `event livemode ${String(event.livemode)} does not match this runtime; refusing to cross environments`,
+        );
+    }
+
+    if (!SUPPORTED.has(eventType)) {
+        // Kept, not discarded: an unmodelled type is exactly what someone will need to investigate,
+        // and dropping it would leave no trace that Stripe ever said anything.
+        return await finish("unsupported", `event type ${eventType} is not modelled by this slice`);
+    }
+
+    /*
+     * ── 3·W2. A STORED PAYMENT METHOD CHANGED, ON THE PLATFORM ───────────────────────────────────
+     *
+     * These deliveries carry NO connected account, because the payer's instrument is held by the
+     * platform — that is the whole point of the W2 handle model. So they are answered here, above
+     * the connected-account gate, which would otherwise call every one of them `unattributed`.
+     *
+     * Tenancy is still never guessed. It comes from Alloy's own table: the provider reference is
+     * looked up in `payment_methods`, and a reference nobody has stored fails closed exactly as an
+     * unknown connected account does. Event metadata is not consulted for it.
+     *
+     * And these events may move DISPLAY and USABILITY only. They cannot change whose method it is,
+     * which account may use it, or which rail it is — the service refuses, and the database's
+     * immutability trigger refuses underneath it.
+     */
+    if (PLATFORM_METHOD_EVENTS.has(eventType)) {
+        const methodObject = ((event.data as Record<string, unknown> | undefined)?.object ?? {}) as Record<string, unknown>;
+        const methodRef = platformMethodRef(eventType, methodObject);
+        if (!methodRef) {
+            return await finish("unattributed", "event names no stored payment method; refusing to guess one");
+        }
+
+        const intent = methodEventIntent(eventType, methodObject);
+        const applied = await applyProviderMethodUpdate(supabase, {
+            providerMethodRef: methodRef,
+            processor: "stripe",
+            methodObject: eventType.startsWith("payment_method.") ? methodObject : null,
+            usability: intent.usability,
+            verification: intent.verification,
+        });
+
+        if (!applied.ok) {
+            return await finish(
+                applied.reason === "unbound" ? "unattributed" : "rejected",
+                applied.reason === "unbound"
+                    ? "no stored payment method names that provider reference; failing closed"
+                    : `stored payment method could not be updated: ${applied.message}`,
+            );
+        }
+        const method = applied.method;
+        return await finish(
+            applied.changed ? "applied" : "duplicate",
+            applied.changed
+                ? `stored method is now ${method?.verificationState ?? "?"} / ${method?.usabilityState ?? "?"}`
+                : "stored method already reflected this state",
+            method?.orgId ? { org_id: method.orgId } : {},
+        );
+    }
+
+    // ── 3. TENANCY FROM THE MERCHANT BINDING, NEVER FROM THE PAYLOAD ─────────────────────────────
+    if (!connectedAccountRef) {
+        return await finish("unattributed", "event carries no connected account; refusing to guess a tenant");
+    }
+    const orgId = await resolveOrgForConnectedAccount(supabase, connectedAccountRef, "stripe");
+    if (!orgId) {
+        // FAIL CLOSED. An account Alloy does not know is not an account Alloy may act for, however
+        // convincing the metadata inside the event is.
+        return await finish(
+            "unattributed",
+            "connected account is not bound to any organization; failing closed",
+        );
+    }
+
+    /*
+     * ── 4·W1. THE MERCHANT'S OWN STATE CHANGED ───────────────────────────────────────────────────
+     *
+     * Everything else in this handler is about the fate of one payment. This is about whether the
+     * organisation can take payments AT ALL — onboarding finished, a capability turned on, Stripe
+     * restricted the account.
+     *
+     * The event body is NOT the source. It names the account; the account is then re-read from the
+     * provider and mapped by the one readiness mapper, so a partial or truncated payload cannot set
+     * a merchant `ready`. Tenancy came from the merchant binding above, never from metadata.
+     */
+    if (eventType === "account.updated") {
+        const { data: merchantRow } = await supabase
+            .from("payment_provider_merchants")
+            .select("id, provider_account_ref")
+            .eq("org_id", orgId)
+            .eq("processor", "stripe")
+            .eq("provider_account_ref", connectedAccountRef)
+            .eq("is_active", true)
+            .maybeSingle();
+        const merchant = merchantRow as { id: string; provider_account_ref: string } | null;
+        if (!merchant) {
+            /*
+             * A RACE, not a common case. Tenancy resolution above ALREADY requires an active
+             * merchant, so a withdrawn association is answered `unattributed` before reaching here —
+             * which is the right answer and is what the live suite asserts. This guard exists for the
+             * gap between those two reads: an operator who disconnects while a delivery is in flight
+             * must not have their merchant revived by it.
+             */
+            return await finish(
+                "stale",
+                "connected account is no longer the organization's active merchant; readiness not updated",
+                { org_id: orgId },
+            );
+        }
+        const applied = await applyProviderAccountUpdate(supabase, {
+            merchantId: merchant.id,
+            providerAccountRef: merchant.provider_account_ref,
+        });
+        if (!applied.ok) {
+            return await finish("rejected", `provider readiness could not be read: ${applied.message}`, { org_id: orgId });
+        }
+        return await finish(
+            "applied",
+            `merchant readiness is now ${applied.readiness}, bank ${applied.achReadiness}`,
+            { org_id: orgId },
+        );
+    }
+
+    /*
+     * ── 4a. A DISPUTE EVENT (Thread 8C) ──────────────────────────────────────────────────────────
+     *
+     * An ACH return arrives here, and one day a card chargeback will too — Stripe uses the same
+     * family for both. The dispute object names itself (`du_…`) and the transaction it is about, so
+     * the receipt is found through Alloy's own attempt rather than from anything the payload claims.
+     *
+     * Only `funds_withdrawn` moves money. `created` is the provider saying a dispute exists, and
+     * restoring a family's outstanding on that would tell them they owe money again while the cash
+     * is still sitting in the account.
+     */
+    if (eventType.startsWith("charge.dispute.")) {
+        const disputeId = object.id ? String(object.id) : null;
+        if (!disputeId) {
+            return await finish("unsupported", "dispute event carries no dispute id", { org_id: orgId });
+        }
+        const amountCents = Number(object.amount ?? 0);
+        if (!Number.isFinite(amountCents) || amountCents <= 0) {
+            return await finish("rejected", "dispute event carries no usable amount", { org_id: orgId });
+        }
+        const outcome = await recognizeProviderDispute(supabase, {
+            orgId,
+            processor: "stripe",
+            providerDisputeId: disputeId,
+            providerAccountRef: connectedAccountRef,
+            providerTransactionId: object.payment_intent ? String(object.payment_intent) : null,
+            // The dispute's OWN amount. Never the balance impact, which carries the dispute fee.
+            amountCents,
+            currency: String(object.currency ?? "usd").toUpperCase(),
+            providerReason: object.reason ? String(object.reason) : null,
+            providerState: object.status ? String(object.status) : null,
+            fundsWithdrawn: eventType === "charge.dispute.funds_withdrawn",
+            providerStateAt: providerCreated,
+        });
+
+        if (outcome.recognized) {
+            return await finish(
+                outcome.alreadyRecognized ? "duplicate" : "applied",
+                outcome.alreadyRecognized
+                    ? `dispute ${disputeId} was already reversed canonically`
+                    : `provider-initiated reversal ${outcome.reversalPaymentId} recorded for dispute ${disputeId}`,
+                { org_id: orgId },
+            );
+        }
+        // Everything else is evidence kept and money untouched, which is the correct answer for a
+        // dispute that has not taken funds, or a receipt Alloy has not recognised yet.
+        return await finish("observed", `dispute ${disputeId}: ${outcome.reason}`, { org_id: orgId });
+    }
+
+    /*
+     * ── 4a. A REFUND EVENT (Slice G) ─────────────────────────────────────────────────────────────
+     *
+     * Same discipline as a collection: the refund is resolved through Alloy's own record under the
+     * org the merchant binding produced, never from the payload. A `pending` refund converges the
+     * provider state and stops — a balance is not restored because a refund was requested.
+     */
+    if (eventType.startsWith("refund.")) {
+        if (!providerTransactionId) {
+            return await finish("unsupported", "refund event carries no refund id", { org_id: orgId });
+        }
+        const { data: refundRow } = await supabase
+            .from("payment_provider_refunds")
+            .select("id, provider_state, provider_account_ref, canonical_refund_payment_id")
+            .eq("org_id", orgId)
+            .eq("processor", "stripe")
+            .eq("provider_refund_id", providerTransactionId)
+            .maybeSingle();
+        const refundRecord = refundRow as {
+            id: string; provider_state: string; provider_account_ref: string;
+            canonical_refund_payment_id: string | null;
+        } | null;
+        if (!refundRecord) {
+            return await finish("unattributed", "no refund record in this organization owns that provider refund", { org_id: orgId });
+        }
+        if (refundRecord.provider_account_ref !== connectedAccountRef) {
+            return await finish("rejected", "refund event connected account does not match the refund's merchant", { org_id: orgId });
+        }
+
+        const refundState = mapStripeRefundStatus(object.status ? String(object.status) : undefined);
+        const awaitingRecognition = refundState === "succeeded" && !refundRecord.canonical_refund_payment_id;
+
+        if (refundRecord.provider_state !== refundState) {
+            const { error: refundTransitionError } = await supabase
+                .from("payment_provider_refunds")
+                .update({
+                    provider_state: refundState,
+                    provider_state_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", refundRecord.id);
+            if (refundTransitionError && !String(refundTransitionError.message).includes("is terminal at")) {
+                throw new Error(`could not converge the provider refund: ${refundTransitionError.message}`);
+            }
+            if (refundTransitionError) {
+                return await finish("stale", "another delivery reached a terminal refund state first", { org_id: orgId });
+            }
+        } else if (!awaitingRecognition) {
+            return await finish("duplicate", `provider refund is already ${refundState}`, { org_id: orgId });
+        }
+
+        if (refundState !== "succeeded") {
+            return await finish("applied", `provider refund converged to ${refundState}; no money has moved back`, { org_id: orgId });
+        }
+
+        // THE REVERSAL BOUNDARY. Thread 8 performs it; nothing here restores a balance.
+        const recognized = await recognizeProviderRefund(supabase, refundRecord.id);
+        const refundDetail = recognized.recognized
+            ? `provider refund succeeded and canonical refund ${recognized.canonicalRefundId} was recorded`
+            : `provider refund succeeded; canonical recognition did not occur: ${recognized.reason} — ${recognized.detail}`;
+        return await finish("applied", refundDetail, { org_id: orgId });
+    }
+
+    // ── 4. THE ATTEMPT, UNDER THAT ORG ───────────────────────────────────────────────────────────
+    if (!providerTransactionId) {
+        return await finish("unsupported", "event object carries no provider transaction id", { org_id: orgId });
+    }
+    const { data: attemptRow } = await supabase
+        .from("payment_collection_attempts")
+        .select(
+            "id, org_id, processor_state, provider_account_ref, charge_id, currency, "
+            + "requested_amount_cents, payer_person_id, provider_transaction_id, canonical_payment_id, rail, "
+            + "billable_source_type, billable_source_id",
+        )
+        .eq("org_id", orgId)
+        .eq("processor", "stripe")
+        .eq("provider_transaction_id", providerTransactionId)
+        .maybeSingle();
+
+    const attempt = attemptRow as (AttemptForPosting & { provider_account_ref: string }) | null;
+    if (!attempt) {
+        return await finish(
+            "unattributed",
+            "no collection attempt in this organization owns that provider transaction",
+            { org_id: orgId },
+        );
+    }
+
+    // The event's account and the attempt's account must agree. They cannot disagree while the
+    // account→org binding is unique, but asserting it means a future non-unique binding cannot
+    // quietly let one merchant's event converge another merchant's attempt.
+    if (attempt.provider_account_ref !== connectedAccountRef) {
+        return await finish(
+            "rejected",
+            "event connected account does not match the attempt's merchant",
+            { org_id: orgId, collection_attempt_id: attempt.id },
+        );
+    }
+
+    /*
+     * ── 5. CONVERGE, WITHOUT REGRESSING ──────────────────────────────────────────────────────────
+     *
+     * A terminal attempt stays terminal. Re-asserting the same terminal state is what a duplicate
+     * looks like and is harmless; an older `processing` arriving after `succeeded` is stale and is
+     * recorded as such rather than applied. The database enforces this too — the service check here
+     * exists to produce a truthful disposition, not to be the guarantee.
+     */
+    const nextState = stateForEvent(eventType, object.status ? String(object.status) : undefined);
+
+    /*
+     * Already at this state. Normally a duplicate and nothing to do — EXCEPT for a success that has
+     * not yet been recognised as money.
+     *
+     * Certification caught this: an attempt can sit at `succeeded` with no canonical receipt because
+     * the first posting was refused (an amount disagreement) or failed transiently. Returning
+     * "duplicate" here would make that permanent — the provider's money would be stranded, with a
+     * later correct delivery unable to recover it. So a succeeded-but-unposted attempt falls through
+     * to the posting boundary, where the idempotency anchor makes a redundant attempt harmless.
+     */
+    const awaitingPosting = nextState === "succeeded" && !attempt.canonical_payment_id;
+    if (attempt.processor_state === nextState && !awaitingPosting) {
+        return await finish("duplicate", `attempt is already ${nextState}`, {
+            org_id: orgId,
+            collection_attempt_id: attempt.id,
+        });
+    }
+
+    /*
+     * A DIFFERENT terminal state arriving is a regression and is refused. The SAME one arriving
+     * again, for a success Alloy has not yet recognised, is the recovery path above — not stale.
+     *
+     * The one exception is the provider's success on a DECLINED attempt: the intent was retried
+     * with another method and the money arrived. That is newer provider truth, not older, and it
+     * must post. (`awaitingPosting` is exactly that case when the attempt is `failed`.)
+     */
+    if (FINAL.has(attempt.processor_state) && !awaitingPosting) {
+        return await finish(
+            "stale",
+            `attempt is terminal at ${attempt.processor_state}; ${nextState} is older provider truth and was not applied`,
+            { org_id: orgId, collection_attempt_id: attempt.id },
+        );
+    }
+    if (attempt.processor_state === "failed" && nextState !== "succeeded") {
+        return await finish(
+            "stale",
+            `attempt is terminal at ${attempt.processor_state}; ${nextState} is older provider truth and was not applied`,
+            { org_id: orgId, collection_attempt_id: attempt.id },
+        );
+    }
+
+    const { error: transitionError } = attempt.processor_state === nextState
+        ? { error: null }
+        : await supabase
+        .from("payment_collection_attempts")
+        .update({
+            processor_state: nextState,
+            processor_state_at: new Date().toISOString(),
+            /*
+             * WHAT THE PAYER HAS LEFT TO DO, captured here and not only at creation.
+             *
+             * At creation there is no `next_action` — no payment method has been attached yet — so
+             * this column was always null in practice, and the lifecycle could not tell a card
+             * challenge from a bank microdeposit verification. Both are "requires_action", and an
+             * operator told a bank debit was awaiting a card challenge would send the family looking
+             * for a code that is never coming. The provider says which one it is on the event that
+             * moves the attempt into that state, so that is where it is recorded.
+             *
+             * Cleared when the attempt moves on: an action that is no longer required is not a fact
+             * about the collection any more.
+             */
+            provider_action_type: nextAction(object),
+            last_provider_detail: {
+                event_id: eventId,
+                event_type: eventType,
+                status: object.status ?? null,
+                /*
+                 * WHY it failed, when it did — the difference between "Declined" (the payer can
+                 * try another card) and "Failed". The provider's codes only; never card data.
+                 */
+                ...failureDetail(object),
+            },
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", attempt.id);
+
+    if (transitionError) {
+        // The trigger refused it — another delivery reached terminal first. That is convergence, not
+        // an error, and the event is recorded as stale rather than failed.
+        if (String(transitionError.message).includes("is terminal at")) {
+            return await finish("stale", "another delivery reached a terminal state first", {
+                org_id: orgId,
+                collection_attempt_id: attempt.id,
+            });
+        }
+        throw new Error(`could not converge the collection attempt: ${transitionError.message}`);
+    }
+
+    /*
+     * ── THE AUTHORITY BOUNDARY (Slice F) ─────────────────────────────────────────────────────────
+     *
+     * Only a provider-CONFIRMED success crosses it, and it crosses through Thread 8's canonical
+     * entry rather than by writing anything financial here. Everything else this handler does stops
+     * at evidence, exactly as Slice E established.
+     *
+     * A refusal to post is not a webhook failure: the provider really did collect, and telling
+     * Stripe otherwise would earn redelivery of an event that is already correctly recorded. The
+     * disposition carries what happened so it can be found and retried.
+     */
+    if (nextState !== "succeeded") {
+        const applied = await finish("applied", `attempt converged to ${nextState}`, {
+            org_id: orgId,
+            collection_attempt_id: attempt.id,
+        });
+        return { ...applied, attemptId: attempt.id, orgId };
+    }
+
+    const posting = await postProviderConfirmedCollection(
+        supabase,
+        { ...attempt, processor_state: "succeeded" },
+        {
+            amountCents: typeof object.amount_received === "number"
+                ? (object.amount_received as number)
+                : typeof object.amount === "number"
+                    ? (object.amount as number)
+                    : null,
+            currency: object.currency ? String(object.currency) : null,
+        },
+    );
+
+    const detail = posting.posted
+        ? `attempt converged to succeeded and posted canonical payment ${posting.paymentId}`
+        : posting.reason === "already_posted"
+            ? `attempt converged to succeeded; canonical payment ${posting.paymentId} already existed`
+            : `attempt converged to succeeded but canonical posting did not occur: ${posting.reason} — ${posting.detail}`;
+
+    const applied = await finish("applied", detail, {
+        org_id: orgId,
+        collection_attempt_id: attempt.id,
+    });
+    return { ...applied, attemptId: attempt.id, orgId };
+}

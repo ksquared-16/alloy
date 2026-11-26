@@ -1,0 +1,94 @@
+{
+  "trusted_host_action_id": "tha_ac9b34c28143da",
+  "query_hash": "c1b6468eca7e2473b5136e5fd8edf882172f05b94ea6c0e1bccbbf918ad52399",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T22:44:20.400Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ac9b34c28143da",
+    "query_hash": "c1b6468eca7e2473b5136e5fd8edf882172f05b94ea6c0e1bccbbf918ad52399",
+    "authorization_id": "grnt_1ddd9c1a35614621",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T22:44:23.897Z",
+    "question_ids": [
+      "catalog",
+      "grants",
+      "scale",
+      "role_keys"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "ai.enrichment.use ~ active=true",
+          "ai.provider.config.manage ~ active=true",
+          "ai.telemetry.review ~ active=true",
+          "config_assist.apply ~ active=true",
+          "config_assist.generate ~ active=true",
+          "config_assist.review ~ active=true",
+          "fields.manage ~ active=true",
+          "layouts.manage ~ active=true",
+          "ops.workflows.read ~ active=true",
+          "ops.workflows.write ~ active=true"
+        ]
+      },
+      "grants": {
+        "question_id": "grants",
+        "row_count": null,
+        "rows": [
+          "ai.enrichment.use ~ role=admin ~ allowed=true ~ orgs=3",
+          "ai.enrichment.use ~ role=ops ~ allowed=true ~ orgs=1",
+          "ai.provider.config.manage ~ role=admin ~ allowed=true ~ orgs=1",
+          "ai.provider.config.manage ~ role=ops ~ allowed=true ~ orgs=1",
+          "ai.telemetry.review ~ role=admin ~ allowed=true ~ orgs=1",
+          "ai.telemetry.review ~ role=ops ~ allowed=true ~ orgs=1",
+          "config_assist.apply ~ role=admin ~ allowed=true ~ orgs=3",
+          "config_assist.apply ~ role=ops ~ allowed=true ~ orgs=1",
+          "config_assist.generate ~ role=admin ~ allowed=true ~ orgs=3",
+          "config_assist.generate ~ role=ops ~ allowed=true ~ orgs=1",
+          "config_assist.review ~ role=admin ~ allowed=true ~ orgs=3",
+          "config_assist.review ~ role=ops ~ allowed=true ~ orgs=1",
+          "fields.manage ~ role=admin ~ allowed=true ~ orgs=3",
+          "fields.manage ~ role=ops ~ allowed=true ~ orgs=1",
+          "layouts.manage ~ role=admin ~ allowed=true ~ orgs=3",
+          "layouts.manage ~ role=ops ~ allowed=true ~ orgs=1",
+          "ops.workflows.read ~ role=admin ~ allowed=true ~ orgs=3",
+          "ops.workflows.read ~ role=director ~ allowed=true ~ orgs=1",
+          "ops.workflows.read ~ role=ops ~ allowed=true ~ orgs=2",
+          "ops.workflows.write ~ role=admin ~ allowed=true ~ orgs=3",
+          "ops.workflows.write ~ role=ops ~ allowed=true ~ orgs=2"
+        ]
+      },
+      "scale": {
+        "question_id": "scale",
+        "row_count": null,
+        "rows": [
+          3,
+          16
+        ]
+      },
+      "role_keys": {
+        "question_id": "role_keys",
+        "row_count": null,
+        "rows": [
+          "_w17_a ~ orgs=1",
+          "_w17_b ~ orgs=1",
+          "admin ~ orgs=3",
+          "assistant_director ~ orgs=1",
+          "director ~ orgs=1",
+          "ops ~ orgs=3",
+          "regional_lead ~ orgs=3",
+          "school_director ~ orgs=3"
+        ]
+      }
+    },
+    "row_count": 41
+  }
+}

@@ -1,8 +1,12 @@
-import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type {
@@ -37,6 +41,7 @@ export type OpportunityDrawerFirstPaintDependencyKey =
     | "tasks_preview"
     | "scheduled_sends"
     | "inquiry_children"
+    | "scheduling_projection"
     | "attention_bundle";
 
 export type OpportunityDrawerFirstPaintDependencyState =
@@ -51,7 +56,8 @@ export type OpportunityDrawerFirstPaintContract = DrawerFirstPaintContract<
 export type DrawerViewModelBackgroundRefreshKind =
     | "task_status"
     | "scheduled_send_status"
-    | "readiness_values";
+    | "readiness_values"
+    | "stage_work";
 
 export type StatusOptionVm = {
     status_key: string;
@@ -112,6 +118,20 @@ export type AttentionSummaryVm = {
     reason_count: number;
 };
 
+/**
+ * Load state for the deferred stage-work projection (Current Work region).
+ *
+ * `stage_work_runtime` is heavy (two `operational_tasks` reads) and does not feed the above-fold
+ * render model, so the Tier-1 compose returns it `pending` and a thin canonical resource resolves
+ * it after first paint. The Current Work region MUST distinguish `pending` (neutral loading, never
+ * "No active work") from `empty` (authoritatively no active work). `error` retains any prior value.
+ */
+export type StageWorkLoadState =
+    | { status: "pending" }
+    | { status: "ready"; value: StageWorkRuntimeProjection }
+    | { status: "empty" }
+    | { status: "error"; retained?: StageWorkRuntimeProjection };
+
 export type OpportunityDrawerViewModel = {
     generation: string;
     structureSettled: true;
@@ -129,6 +149,8 @@ export type OpportunityDrawerViewModel = {
         lifecycle_rail: {
             stages: Array<{ key: string; label: string }>;
             current_stage_key: string | null;
+            /** The configured process's own name — the Business Process card's title. */
+            process_name?: string | null;
         } | null;
         /** Operating plan purpose for the current builder stage — read-only context. */
         stage_context: {
@@ -140,6 +162,21 @@ export type OpportunityDrawerViewModel = {
         work_intent_runtime: WorkIntentRuntimeProjection | null;
         /** Full stage work runtime — primary + additional configured work items. */
         stage_work_runtime: StageWorkRuntimeProjection | null;
+        /** Published builder stage config for Current Work (operating plan + catalog + field rules). */
+        published_stage_inputs?: PublishedStageInputsForCurrentWork | null;
+        /**
+         * The server's operational projection for this subject, settled frame.
+         *
+         * The same contract the provisioning answer carries at commit, produced by the same server
+         * chokepoint — so the browser switching transport frames cannot change projection authority.
+         */
+        operational_projection?: FocusPanelOperationalProjection | null;
+        /**
+         * Deferred-load state for the Current Work region. When absent (legacy / full compose that
+         * resolved inline) consumers fall back to `stage_work_runtime` presence. When `pending` the
+         * Current Work region shows a neutral loading treatment, NOT the empty state.
+         */
+        stage_work?: StageWorkLoadState;
     };
     first_paint: OpportunityDrawerFirstPaintContract;
     header: {
@@ -157,12 +194,17 @@ export type OpportunityDrawerViewModel = {
         header_menu: ResolvedActionForClient[];
         /** Subject-local Manage menu — mirrors header_menu (registry-backed). */
         manage_menu: ResolvedActionForClient[];
+        /** Full record_header slots — Current Work supporting actions source. */
+        record_header: ResolvedActionsBySlot | null;
     };
     layout: {
         mode: "workflow_v1";
         tabs: DrawerTabKey[];
         default_tab: DrawerTabKey;
         shell: DrawerShellContract;
+    };
+    activity: {
+        communicationsPreviewVm: FamilyCommunicationWorkspacePreviewVM | null;
     };
     above_fold: {
         render_model: DrawerAboveFoldRenderModel;
@@ -172,7 +214,17 @@ export type OpportunityDrawerViewModel = {
     summaries: {
         tasks: InquirySummaryTaskPreviewPayload;
         /** Active tour_bookings rows from first-paint compose (tour block + lifecycle bar). */
-        active_tour_bookings: TourBookingRow[];
+            active_tour_bookings: TourBookingRow[];
+            /**
+             * The single booking the Tour concept speaks for, terminal states INCLUDED.
+             *
+             * `active_tour_bookings` deliberately excludes `canceled` / `completed` / `no_show`,
+             * which is right for "may the family still attend this" and wrong for "what is the
+             * Tour state" — a finished tour presented as though none had happened. Selected by
+             * `resolveOperatorRelevantTourBooking`, which prefers a standing appointment over
+             * history and never a superseded pre-reschedule row.
+             */
+            operator_relevant_tour_booking: TourBookingRow | null;
         reminders: RemindersSummaryVm;
         bos: BosSummaryVm | null;
         attention: AttentionSummaryVm | null;
@@ -203,7 +255,23 @@ export type OpportunityDrawerViewModelSkipped = {
 };
 
 export type OpportunityDrawerViewModelResult =
-    | { ok: true; viewModel: OpportunityDrawerViewModel }
+    | {
+          ok: true;
+          viewModel: OpportunityDrawerViewModel;
+          /**
+           * The operational context the projection was built from, handed to the CALLER.
+           *
+           * The settled frame's card producers need it, and they need `buildAttendanceCardVM`, which
+           * is `server-only`. The composer cannot import them: a client component reaches it through
+           * the `lib/layout/runtime` barrel, so that edge puts a `server-only` module in the browser
+           * graph and the production build fails. Passing the context out instead lets the App Route
+           * — which no client component can import — run the producers from the SAME context, so the
+           * two frames still cannot disagree about the subject.
+           *
+           * A type, not an edge: `OperationalContext` is already browser-importable.
+           */
+          operationalContext?: OperationalContext | null;
+      }
     | { ok: false; skipped: OpportunityDrawerViewModelSkipped };
 
 /** Canonical operational subject VM result alias (Phase C). */

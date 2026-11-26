@@ -34,6 +34,7 @@ type RelationshipModalState = {
     anchorRecord: ProofRuntimeRecord | null;
     loading: boolean;
     error: string | null;
+    initialProposal?: Partial<import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionExecutionRequest>;
 };
 
 type Params = {
@@ -99,6 +100,7 @@ export function useWorkUnitRegistryModals(params: Params): {
             actionKey: RelationshipActionKey;
             opportunityId: string;
             sourceSurface?: RelationshipActionSourceSurface;
+            initialProposal?: Partial<import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionExecutionRequest>;
         }) => {
             const oid = input.opportunityId.trim();
             if (!oid) {
@@ -112,6 +114,7 @@ export function useWorkUnitRegistryModals(params: Params): {
                 anchorRecord: null,
                 loading: true,
                 error: null,
+                initialProposal: input.initialProposal,
             });
             try {
                 const bootstrap = await fetchOpportunityDrawerOperationalBootstrap(
@@ -148,6 +151,7 @@ export function useWorkUnitRegistryModals(params: Params): {
             actionKey: RelationshipActionKey;
             opportunityId: string;
             sourceSurface?: RelationshipActionSourceSurface;
+            initialProposal?: Partial<import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionExecutionRequest>;
         }) => {
             await loadRelationshipModal(input);
         },
@@ -184,6 +188,7 @@ export function useWorkUnitRegistryModals(params: Params): {
                 actionKey: detail.action_key,
                 opportunityId: detail.opportunity_id,
                 sourceSurface: detail.source_surface,
+                initialProposal: detail.initial_proposal,
             });
         };
         const onEnrollment = (ev: Event) => {
@@ -236,6 +241,7 @@ export function useWorkUnitRegistryModals(params: Params): {
                 actionKey={relationshipState.actionKey}
                 context={relationshipContext}
                 anchorRecord={relationshipState.anchorRecord}
+                initialProposal={relationshipState.initialProposal}
                 onClose={() => setRelationshipState(null)}
                 onSuccess={() => {
                     onInvalidate?.({

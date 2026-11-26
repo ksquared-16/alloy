@@ -53,11 +53,6 @@ describe("OpportunityOperationalCompactStrip PR2", () => {
         expect(card).toContain("OperationalWorkAssigneeSelect");
     });
 
-    it("drawer strip uses operational work gate not Task Assist gate", () => {
-        const src = readFileSync(drawer, "utf8");
-        expect(src).toMatch(/OpportunityOperationalCompactStrip[\s\S]*isOperationalWorkV1Enabled\(\)/);
-    });
-
     it("My Tasks and nav badge use operational work gate", () => {
         expect(readFileSync(myTasksPanel, "utf8")).toContain("isOperationalWorkV1Enabled");
         expect(readFileSync(navBadge, "utf8")).toContain("isOperationalWorkV1Enabled");

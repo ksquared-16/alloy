@@ -2,15 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { SEARCH_MIN_Q_LEN, type SearchResult } from "@/lib/search/searchContracts";
+import type { SearchSelection } from "@/lib/search/searchSelectionAdapter";
 import {
-    formatGlobalSearchHitPrimaryName,
-    formatGlobalSearchHitSecondaryLine,
-} from "@/lib/admin/globalSearch/globalRecordSearchResultPresentation";
-import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
-import { GLOBAL_RECORD_SEARCH_MIN_Q_LEN } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
-import {
-    filterLayoutBuilderPreviewSearchHits,
-    layoutBuilderPreviewSelectionFromHit,
+    filterLayoutBuilderPreviewSelections,
+    layoutBuilderPreviewSelectionFrom,
 } from "@/lib/layout/layoutBuilderPreviewRecordSearch";
 import type { LayoutBuilderPreviewRecordState } from "@/lib/layout/layoutBuilderPreviewRecordState";
 
@@ -27,7 +23,7 @@ export default function LayoutBuilderPreviewRecordSelector({ state }: Props) {
 
     const [open, setOpen] = useState(false);
     const [q, setQ] = useState("");
-    const [hits, setHits] = useState<GlobalRecordSearchHit[]>([]);
+    const [hits, setHits] = useState<SearchSelection[]>([]);
     const [busy, setBusy] = useState(false);
     const [searchErr, setSearchErr] = useState<string | null>(null);
 
@@ -41,7 +37,7 @@ export default function LayoutBuilderPreviewRecordSelector({ state }: Props) {
 
     useEffect(() => {
         const trimmed = q.trim();
-        if (!open || trimmed.length < GLOBAL_RECORD_SEARCH_MIN_Q_LEN) {
+        if (!open || trimmed.length < SEARCH_MIN_Q_LEN) {
             setHits([]);
             setSearchErr(null);
             setBusy(false);
@@ -60,7 +56,7 @@ export default function LayoutBuilderPreviewRecordSelector({ state }: Props) {
                     });
                     const body = (await res.json().catch(() => ({}))) as {
                         ok?: boolean;
-                        results?: GlobalRecordSearchHit[];
+                        results?: SearchResult[];
                         message?: string;
                         error?: string;
                     };
@@ -69,7 +65,7 @@ export default function LayoutBuilderPreviewRecordSelector({ state }: Props) {
                         throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`);
                     }
                     const results = Array.isArray(body.results) ? body.results : [];
-                    setHits(filterLayoutBuilderPreviewSearchHits(results));
+                    setHits(filterLayoutBuilderPreviewSelections(results));
                 } catch (e) {
                     if (seq !== searchSeq.current) return;
                     setHits([]);
@@ -84,8 +80,8 @@ export default function LayoutBuilderPreviewRecordSelector({ state }: Props) {
     }, [open, q]);
 
     const pickHit = useCallback(
-        (hit: GlobalRecordSearchHit) => {
-            const next = layoutBuilderPreviewSelectionFromHit(hit);
+        (hit: SearchSelection) => {
+            const next = layoutBuilderPreviewSelectionFrom(hit);
             if (!next) return;
             selectOpportunity(next);
             setOpen(false);
@@ -145,7 +141,7 @@ export default function LayoutBuilderPreviewRecordSelector({ state }: Props) {
                         className="w-full rounded-md border border-alloy-forge/15 py-1.5 pl-7 pr-2 text-xs"
                         data-testid="layout-builder-preview-record-search"
                     />
-                    {open && (busy || hits.length > 0 || searchErr || q.trim().length >= GLOBAL_RECORD_SEARCH_MIN_Q_LEN) ?
+                    {open && (busy || hits.length > 0 || searchErr || q.trim().length >= SEARCH_MIN_Q_LEN) ?
                         <div
                             className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-lg border border-alloy-forge/12 bg-white py-1 shadow-lg"
                             data-testid="layout-builder-preview-record-results"
@@ -164,11 +160,11 @@ export default function LayoutBuilderPreviewRecordSelector({ state }: Props) {
                                         onClick={() => pickHit(hit)}
                                     >
                                         <span className="text-xs font-medium text-alloy-midnight">
-                                            {formatGlobalSearchHitPrimaryName(hit)}
+                                            {hit.name}
                                         </span>
-                                        {formatGlobalSearchHitSecondaryLine(hit, { inCluster: false }) ?
+                                        {layoutBuilderPreviewSelectionFrom(hit)?.secondary ?
                                             <span className="text-[10px] text-alloy-midnight/50">
-                                                {formatGlobalSearchHitSecondaryLine(hit, { inCluster: false })}
+                                                {layoutBuilderPreviewSelectionFrom(hit)?.secondary}
                                             </span>
                                         :   null}
                                     </button>

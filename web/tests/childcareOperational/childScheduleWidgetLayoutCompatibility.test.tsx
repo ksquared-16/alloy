@@ -109,7 +109,7 @@ describe("child schedule_attendance published layout compatibility", () => {
                         items: col.items.map((item) => ({
                             ...item,
                             refKey: "unknown_future_widget",
-                            widget: { displayMode: "summary" },
+                            widget: { widgetKey: "child.schedule_attendance", displayMode: "summary" },
                         })),
                     })),
                 })),

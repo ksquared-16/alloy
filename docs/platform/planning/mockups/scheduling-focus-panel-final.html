@@ -1,0 +1,181 @@
+<title>Scheduling — Focus Panel</title>
+<style>
+  :root{
+    --pine:#00A283;--pine-hover:#009276;--forge:#273F52;--ink:#18273A;--slate:#4b5563;--muted:#59678b;
+    --stone:#F4F6F9;--gold:#DBC078;--gold-dark:#d0ad50;--ember:#BC4300;--blue:#00458C;--page:#EEF2F8;--border:#e5e9ef;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-45:rgba(39,63,82,.45);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);--mid-70:rgba(39,63,82,.70);
+    color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3{margin:0} button{font-family:inherit;cursor:pointer;border:none;background:none}
+  .frame{max-width:920px;margin:0 auto;padding:22px 18px 48px}
+  .switch{display:flex;gap:6px;margin-bottom:14px;justify-content:center;flex-wrap:wrap}
+  .sw{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:11.5px;font-weight:500;padding:6px 12px;border-radius:999px;transition:all .15s}
+  .sw:hover{border-color:var(--pine);color:var(--pine)} .sw[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600}
+  .sw:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media (max-width:680px){.grid2{grid-template-columns:1fr}}
+  /* focus panel */
+  .fp{border-radius:14px;background:#fff;border:1px solid var(--mid-25);box-shadow:0 10px 34px rgba(39,63,82,.10);overflow:hidden}
+  .fp-top{height:6px;background:var(--blue)}
+  .fp-hd{display:flex;align-items:center;gap:10px;padding:11px 15px;border-bottom:1px solid var(--border)}
+  .fp-av{width:32px;height:32px;border-radius:999px;background:rgba(0,162,131,.10);color:var(--pine);display:grid;place-items:center;font-size:12px;font-weight:700}
+  .fp-nm{font-size:13.5px;font-weight:600;color:var(--forge)} .fp-sb{font-size:10.5px;color:var(--muted)}
+  .fp-mis{margin-left:auto;font-size:10px;color:var(--muted);background:var(--stone);border:1px solid var(--border);padding:3px 9px;border-radius:999px}
+  .fp-modes{display:flex;gap:4px;padding:7px 15px 0} .fpm{font-size:10.5px;font-weight:600;color:var(--mid-45);padding:4px 10px} .fpm.on{color:var(--pine);border-bottom:2px solid var(--pine)}
+  .fp-body{padding:11px;display:flex;flex-direction:column;gap:9px;background:var(--stone)}
+  /* IDENTITY card */
+  .idc{background:#fff;border:1px solid var(--border);border-left:3px solid var(--pine);border-radius:12px;overflow:hidden}
+  .idc.ended{border-left-color:var(--mid-25)}
+  .idc-hd{display:flex;align-items:baseline;gap:8px;padding:11px 14px 2px} .idc-q{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--slate)}
+  .idc-status{margin-left:auto;font-size:11px;font-weight:600;color:var(--forge)} .idc-status.need{color:var(--gold-dark)} .idc-status.temp{color:var(--blue)} .idc-status.end{color:var(--muted)}
+  .idc-room{padding:2px 14px 0;font-size:15px;font-weight:600;color:var(--forge)}
+  .idc-pat{padding:1px 14px 0;font-size:13px;color:var(--forge)}
+  .idc-eff{padding:2px 14px 0;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .idc-eff .cal{color:var(--mid-40)}
+  .idc-eff.temp{color:var(--blue);font-weight:500} .idc-eff.future{color:var(--gold-dark);font-weight:500}
+  .idc-ft{padding:9px 14px 11px} .idc-view{font-size:12px;font-weight:600;color:var(--pine)}
+  /* WORK card (distinct) */
+  .wkc{background:#fff;border:1px solid var(--border);border-left:3px solid var(--ember);border-radius:12px;overflow:hidden}
+  .wkc.info{border-left-color:var(--gold-dark)}
+  .wkc-hd{display:flex;align-items:center;gap:8px;padding:10px 14px 3px} .wkc-q{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ember)} .wkc.info .wkc-q{color:var(--gold-dark)}
+  .wkc-t{padding:1px 14px 0;font-size:14px;font-weight:600;color:var(--forge)}
+  .wkc-s{padding:2px 14px 0;font-size:12px;color:var(--slate)}
+  .wkc-ft{display:flex;align-items:center;gap:8px;padding:10px 14px 12px}
+  .bp{display:inline-flex;align-items:center;gap:6px;border-radius:7px;background:var(--pine);padding:7px 13px;font-size:12px;font-weight:600;color:#fff} .bp:hover{background:var(--pine-hover)} .bp.block{background:var(--mid-25);cursor:not-allowed}
+  .bs{display:inline-flex;align-items:center;gap:6px;border-radius:7px;border:1px solid var(--mid-25);background:#fff;padding:7px 12px;font-size:12px;font-weight:500;color:var(--mid-70)}
+  .cst{margin-left:auto;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em} .cst.rec{color:var(--pine)} .cst.block{color:var(--ember)}
+  /* context mini cards */
+  .mc{background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 13px} .mc.en{border-left:3px solid var(--blue)} .mc.at{border-left:3px solid var(--slate)} .mc.bl{border-left:3px solid var(--gold-dark)}
+  .mc-q{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mid-40)} .mc-v{font-size:12px;font-weight:600;color:var(--forge);margin-top:2px} .mc-s{font-size:11px;color:var(--slate);margin-top:1px}
+  /* detail groups + household */
+  .grp{padding:9px 14px;border-top:1px solid #f1f3f6} .eyebrow{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mid-40);margin-bottom:4px}
+  .val{font-size:13.5px;font-weight:600;color:var(--forge)} .sub{font-size:11.5px;color:var(--slate);margin-top:1px} .stmt{font-size:12.5px;color:var(--forge);line-height:1.5}
+  .hh{display:flex;flex-direction:column} .hrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f4f6f9;cursor:pointer} .hrow:last-child{border-bottom:none} .hrow:hover{background:rgba(0,162,131,.03);border-radius:6px}
+  .hav{width:24px;height:24px;border-radius:999px;background:var(--stone);color:var(--forge);display:grid;place-items:center;font-size:9.5px;font-weight:600} .hnm{font-size:12.5px;font-weight:500;color:var(--forge)} .hs{font-size:11px;color:var(--muted)} .hopen{margin-left:auto;font-size:11px;font-weight:600;color:var(--pine)} .hneed{margin-left:auto;font-size:10.5px;color:var(--gold-dark);font-weight:600}
+  /* command surface */
+  .cmd{background:#fff;border:1px solid var(--mid-25);border-radius:12px;box-shadow:0 8px 26px rgba(39,63,82,.12);overflow:hidden}
+  .cmd-hd{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)} .cmd-t{font-size:13px;font-weight:600;color:var(--forge)} .cmd-x{margin-left:auto;color:var(--mid-40)}
+  .cmd-step{padding:10px 14px;border-bottom:1px solid #f1f3f6} .cmd-l{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40);margin-bottom:6px}
+  .rl{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:12.5px} .rr{width:14px;height:14px;border-radius:50%;border:2px solid var(--mid-25);position:relative} .rl.on .rr{border-color:var(--pine)} .rl.on .rr::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--pine)} .rl .rt{font-weight:600;color:var(--forge)} .rl .rd{color:var(--muted);font-size:11px}
+  .shapes{display:flex;gap:6px;flex-wrap:wrap} .shp{font-size:11px;font-weight:500;color:var(--slate);border:1px solid var(--mid-25);border-radius:8px;padding:5px 10px} .shp.on{border-color:var(--pine);color:var(--pine);background:rgba(0,162,131,.06);font-weight:600}
+  .field{display:flex;align-items:center;gap:8px;border:1px solid var(--mid-25);border-radius:8px;padding:8px 11px;font-size:12.5px;color:var(--forge)} .field .fx{margin-left:auto;color:var(--mid-40);font-size:11px}
+  .cmp{display:grid;grid-template-columns:1fr 20px 1fr;gap:8px;align-items:stretch} .cc{border-radius:9px;padding:8px 10px;border:1px solid var(--border)} .cc.a{background:var(--stone)} .cc.b{background:rgba(0,162,131,.05);border-color:rgba(0,162,131,.28)} .ce{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40)} .cv{font-size:13px;font-weight:600;color:var(--forge);margin-top:2px} .cd{font-size:10.5px;color:var(--muted);margin-top:1px} .carr{display:grid;place-items:center;color:var(--muted)}
+  .cmd-ft{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--stone)} .cmd-note{font-size:10.5px;color:var(--muted)}
+  .warnrow{font-size:11px;color:var(--ember);background:rgba(188,67,0,.06);border:1px solid rgba(188,67,0,.25);border-radius:8px;padding:7px 10px}
+  .screen{display:none}.screen.on{display:block} .lab{font-size:11px;color:var(--muted);text-align:center;margin:6px 0 12px}
+</style>
+
+<div class="frame">
+  <div class="switch" role="tablist" aria-label="Screens">
+    <button class="sw" role="tab" aria-selected="true" data-s="identity">Identity only</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="work">Identity + work</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="household">Household</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="contexts">Opened from…</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="commands">Commands</button>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<script>
+(function(){
+  function panel(av,nm,sub,mis,body){
+    return '<div class="fp"><div class="fp-top"></div><div class="fp-hd"><div class="fp-av">'+av+'</div><div><div class="fp-nm">'+nm+'</div><div class="fp-sb">'+sub+'</div></div><div class="fp-mis">'+mis+'</div></div><div class="fp-modes"><span class="fpm on">Work</span><span class="fpm">Activity</span></div><div class="fp-body">'+body+'</div></div>';
+  }
+  function idc(cls,status,statuscls,room,pat,eff,effcls){
+    return '<div class="idc '+cls+'"><div class="idc-hd"><span class="idc-q">Schedule</span><span class="idc-status '+statuscls+'">'+status+'</span></div>'
+      +'<div class="idc-room">'+room+'</div><div class="idc-pat">'+pat+'</div><div class="idc-eff '+(effcls||'')+'"><span class="cal">◔</span>'+eff+'</div>'
+      +'<div class="idc-ft"><span class="idc-view">View schedule →</span></div></div>';
+  }
+  function wkc(cls,q,title,sit,action,state){
+    return '<div class="wkc '+cls+'"><div class="wkc-hd"><span class="wkc-q">'+q+'</span></div><div class="wkc-t">'+title+'</div><div class="wkc-s">'+sit+'</div>'
+      +'<div class="wkc-ft"><button class="bp">'+action+'</button>'+(state?'<span class="cst '+state[1]+'">'+state[0]+'</span>':'')+'</div></div>';
+  }
+
+  var IDENTITY='<div class="lab">Identity only — durable truth. No ratio, no health, no recommendation, no action but View. A healthy child needs nothing more.</div><div class="grid2">'
+    +idc('','Scheduled','','Sunshine · Toddler','Monday–Friday','Starts Jul 28 · open-ended','')
+    +idc('','Change scheduled','need','Sunshine · Toddler','Monday–Friday','Moves to Rainbow on Aug 4','future')
+    +idc('','Temporary','temp','Sunshine · Toddler','Monday–Friday','Rainbow on Thursdays · Jul 24–Aug 15','temp')
+    +idc('','Starts Aug 4','need','Sunshine · Toddler','Monday–Friday','Begins Aug 4','future')
+    +idc('','Needs a room','need','Toddler · full week','Monday–Friday','Starts Jul 28','')
+    +idc('ended','Ended','end','was Sunshine · Toddler','Monday–Friday','Ended Jun 30','')
+    +'</div>';
+
+  var WORK='<div class="lab">Identity leads; the reason you\'re here today is a separate Work card underneath — that\'s where the situation and the numbers live.</div><div class="grid2">'
+    +panel('ER','Ethan Rivera','Toddler · Maple Street','Fix conflict',
+       idc('','Scheduled','','Sunflower · Toddler','Monday–Friday','Starts Jul 28 · open-ended','')
+       +wkc('','Needs attention','Over ratio · Thursday','Ava starts Thursday — 12 of 11. Two fixes need no extra staff.','Fix Thursday',['Recommended','rec']))
+    +panel('ER','Ethan Rivera','Toddler · Maple Street','Place child',
+       idc('','Needs a room','need','Toddler · full week','Monday–Friday','Starts Monday Jul 28','')
+       +wkc('','Needs attention','Needs a room · starts Monday','Two rooms fit. Sunshine keeps his cohort — no new staff.','Place Ethan',['Recommended','rec']))
+    +panel('ER','Ethan Rivera','Toddler · Maple Street','Review change',
+       idc('','Scheduled','','Sunflower · Toddler','Monday–Friday','Starts Jul 28 · open-ended','')
+       +wkc('info','Current work','Proposed change · pending review','Sunflower → Sunshine. Preview: 9 of 11, in ratio.','Review change',null))
+    +panel('SL','Sofia Lang','Toddler · Maple Street','Place child',
+       idc('','Needs a room','need','Toddler · full week','Monday–Friday','Starts Monday','')
+       +wkc('','Needs attention','No room fits her full week','Every toddler room is full on one or more of her days.','See options',null))
+    +'</div>';
+
+  var HOUSEHOLD=panel('ER','Ethan Rivera','Toddler · Maple Street','Review schedule',
+    '<div class="idc"><div class="idc-hd"><span class="idc-q">Schedule</span><span class="idc-status">Scheduled</span></div>'
+    +'<div class="grp" style="border-top:none"><div class="eyebrow">Placement</div><div class="val">Sunshine</div><div class="sub">Toddler · Maple Street</div></div>'
+    +'<div class="grp"><div class="eyebrow">Schedule</div><div class="val">Monday–Friday</div><div class="sub">Starts Jul 28 · open-ended</div></div>'
+    +'<div class="grp"><div class="eyebrow">Expected attendance</div><div class="stmt">Mon · Tue · Wed · Thu · Fri</div></div>'
+    +'<div class="grp"><div class="eyebrow">Tuition</div><div class="stmt">$980 / month</div></div>'
+    +'<div class="grp"><div class="eyebrow">Household</div><div class="hh">'
+    +'<div class="hrow"><span class="hav">AV</span><div><div class="hnm">Ava</div><div class="hs">Rainbow · Tue/Thu</div></div><span class="hopen">Open →</span></div>'
+    +'<div class="hrow"><span class="hav">NO</span><div><div class="hnm">Noah</div><div class="hs">Sunshine · Mon–Fri</div></div><span class="hopen">Open →</span></div>'
+    +'<div class="hrow"><span class="hav">MI</span><div><div class="hnm">Mia</div><div class="hs">Oak Ave</div></div><span class="hneed">Needs a room</span></div>'
+    +'</div></div>'
+    +'<div class="idc-ft"><button class="bs">Change schedule</button> <button class="bs">Change room</button> <button class="bs">End schedule</button></div>'
+    +'</div>')
+    +'<div class="lab">Household is context, not scheduling work. Ethan stays primary; a row opens that child\'s card and Back returns.</div>';
+
+  var CONTEXTS='<div class="grid2">'
+    +panel('ER','Ethan Rivera','Toddler · Maple Street','From roster · Sunflower Thu',
+       idc('','Scheduled','','Sunflower · Toddler','Monday–Friday','Starts Jul 28 · open-ended','')
+       +wkc('','Needs attention','Over ratio · Thursday','You opened this from Thursday\'s flagged cell. 12 of 11.','Fix Thursday',['Recommended','rec']))
+    +panel('ER','Ethan Rivera','Toddler · from Enrollment','From enrollment',
+       idc('','Needs a room','need','Toddler · full week','Monday–Friday','Starts Jul 28','')
+       +'<div class="mc en"><div class="mc-q">Enrollment</div><div class="mc-v">Agreement executed</div><div class="mc-s">ready to schedule</div></div>'
+       +wkc('','Needs attention','Needs a room · starts Monday','Two rooms fit. Sunshine keeps his cohort.','Place Ethan',['Recommended','rec']))
+    +'</div>'
+    +'<div class="lab">Same subject, different mission. Identity is constant; the mission and the work card reflect where you came from.</div>';
+
+  var COMMANDS='<div class="grid2">'
+    +'<div class="cmd"><div class="cmd-hd"><span class="cmd-t">Change schedule · Ethan</span><span class="cmd-x">✕</span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">New pattern</div><div class="rl on"><span class="rr"></span><span class="rt">Mon–Thu</span><span class="rd">drops Friday</span></div><div class="rl"><span class="rr"></span><span class="rt">Tue/Thu</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Effective from</div><div class="field">Aug 4<span class="fx">change ▾</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">What changes</div><div class="cmp"><div class="cc a"><div class="ce">Now</div><div class="cv tab">9 of 11</div><div class="cd">Fri included</div></div><div class="carr">→</div><div class="cc b"><div class="ce">From Aug 4</div><div class="cv tab">7 of 11</div><div class="cd">Fri freed · in ratio</div></div></div></div>'
+    +'<div class="cmd-ft"><span class="cmd-note">Takes effect Aug 4. This week is unchanged; history is kept.</span><button class="bp" style="margin-left:auto">Commit change</button></div></div>'
+
+    +'<div class="cmd"><div class="cmd-hd"><span class="cmd-t">Change room · Ethan</span><span class="cmd-x">✕</span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Move to</div><div class="rl on"><span class="rr"></span><span class="rt">Rainbow</span><span class="rd">healthy · no new staff</span></div><div class="rl"><span class="rr"></span><span class="rt">Butterfly</span><span class="rd">eligible</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Effective from</div><div class="field">Jul 28<span class="fx">change ▾</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">What changes</div><div class="cmp"><div class="cc a"><div class="ce">Sunshine</div><div class="cv tab">9 of 11</div></div><div class="carr">→</div><div class="cc b"><div class="ce">Rainbow</div><div class="cv tab">18 of 20</div><div class="cd">in ratio</div></div></div></div>'
+    +'<div class="cmd-ft"><span class="cmd-note">Continuity: leaves his current cohort.</span><button class="bp" style="margin-left:auto">Commit change</button></div></div>'
+
+    +'<div class="cmd"><div class="cmd-hd"><span class="cmd-t">End schedule · Ethan</span><span class="cmd-x">✕</span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">This is</div><div class="rl on"><span class="rr"></span><span class="rt">Ending</span><span class="rd">planned last day — keeps history</span></div><div class="rl"><span class="rr"></span><span class="rt">Cancelling</span><span class="rd">never started</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Last day</div><div class="field">Aug 30<span class="fx">change ▾</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Downstream</div><div class="stmt" style="font-size:11.5px">Attendance stops Aug 30 · tuition prorated · room frees a seat.</div></div>'
+    +'<div class="cmd-ft"><span class="cmd-note">History is kept.</span><button class="bp" style="margin-left:auto">End schedule</button></div></div>'
+
+    +'<div class="cmd"><div class="cmd-hd"><span class="cmd-t">Temporary move · Ethan</span><span class="cmd-x">✕</span></div>'
+    +'<div class="cmd-step"><div class="cmd-l">How long</div><div class="shapes"><span class="shp">One day</span><span class="shp on">Weekdays</span><span class="shp">Date range</span><span class="shp">Permanent</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Move Thursdays to</div><div class="rl on"><span class="rr"></span><span class="rt">Rainbow</span><span class="rd">Thursdays only · returns to Sunshine</span></div></div>'
+    +'<div class="cmd-step"><div class="cmd-l">Through</div><div class="field">Aug 15<span class="fx">change ▾</span></div><div class="warnrow" style="margin-top:8px">Changes his room, teachers and cohort on Thursdays. Family notification is required for your organization.</div></div>'
+    +'<div class="cmd-ft"><span class="cmd-note">Never preselected. Policy-gated.</span><button class="bp" style="margin-left:auto">Commit temporary move</button></div></div>'
+    +'</div>'
+    +'<div class="lab">Commands launch from Work/Detail actions into the Command Surface. The card never becomes a form. Move shapes are explicit and policy-gated.</div>';
+
+  var S={identity:IDENTITY,work:WORK,household:HOUSEHOLD,contexts:CONTEXTS,commands:COMMANDS};
+  var stage=document.getElementById('stage');
+  document.querySelectorAll('.sw').forEach(function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('.sw').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+    stage.innerHTML=S[b.dataset.s];
+  });});
+  stage.innerHTML=S.identity;
+})();
+</script>

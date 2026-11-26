@@ -7,7 +7,7 @@
  * snapshot into {@link CommandSurfaceInput}; they perform no mutation and add no
  * command-specific UI branching.
  *
- * @see docs/sprints/06_2026/command_surface_v1.md
+ * @see docs/sprints/archive/06_2026/command_surface_v1.md
  */
 
 import { intentsForCapability } from "@/lib/platform/commands/operationalIntent";

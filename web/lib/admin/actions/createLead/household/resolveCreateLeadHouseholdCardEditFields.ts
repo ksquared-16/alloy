@@ -1,4 +1,4 @@
-import { actionIntakeFieldToGatherField } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
+import { actionIntakeFieldToGatherField, createLeadDisplayFieldLabel } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { CreateLeadCommitEntityType } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import {
@@ -32,6 +32,12 @@ const HOUSEHOLD_CARD_SKIP_PAYLOAD_KEYS = new Set([
     "child_location_id",
 ]);
 
+/** Code-owned contact keys — always visible in the required parent card block. */
+const PARENT_CODE_OWNED_CONTACT_KEYS = ["email", "phone"] as const;
+
+/** Row-required child identity — visible once a child row exists. */
+const CHILD_ROW_REQUIRED_KEYS = ["child_first_name", "child_last_name"] as const;
+
 function entityForCard(entityType: CreateLeadCommitEntityType): ActionIntakeFieldSpec["entity"] {
     return entityType === "parent" ? "person" : "child";
 }
@@ -55,7 +61,7 @@ function toDescriptor(field: ActionIntakeFieldSpec, tier: "required" | "optional
         return {
             payload_key: field.payload_key,
             rule_id: field.rule_id,
-            field_label: field.field_label,
+            field_label: createLeadDisplayFieldLabel(field.payload_key, field.field_label),
             tier,
             value_kind: "text",
             derived: true,
@@ -66,7 +72,7 @@ function toDescriptor(field: ActionIntakeFieldSpec, tier: "required" | "optional
     return {
         payload_key: field.payload_key,
         rule_id: field.rule_id,
-        field_label: field.field_label,
+        field_label: createLeadDisplayFieldLabel(field.payload_key, field.field_label),
         tier,
         value_kind: gather.value_kind,
         option_set_key: gather.option_set_key,
@@ -103,7 +109,7 @@ function appendDerivedAgeIfNeeded(
         {
             payload_key: "child_age",
             rule_id: "derived:child_age",
-            field_label: "Child Age",
+            field_label: "Age",
             tier: "optional",
             value_kind: "text",
             derived: true,
@@ -126,27 +132,70 @@ export function resolveCreateLeadHouseholdCardEditFields(input: {
     const spec = intakeSpecOrPlatformFallback(input.intakeSpec);
     const requiredKeys = new Set(spec.required.map((field) => field.payload_key));
 
-    const required: CreateLeadHouseholdCardEditField[] = [];
-    const additional: CreateLeadHouseholdCardEditField[] = [];
-
-    for (const field of spec.required) {
-        if (field.entity !== entityForCard(input.entityType)) continue;
-        if (!canMapToCommitRecord(input.entityType, field.payload_key)) continue;
-        const descriptor = toDescriptor(field, "required");
-        if (descriptor) required.push(descriptor);
+    // Code-owned / row-owned keys must appear in the required block even when intake
+    // marks them optional (email|phone floor; child name once a child row exists).
+    if (input.entityType === "parent") {
+        for (const key of PARENT_CODE_OWNED_CONTACT_KEYS) requiredKeys.add(key);
+    } else {
+        for (const key of CHILD_ROW_REQUIRED_KEYS) requiredKeys.add(key);
     }
 
-    for (const field of [...spec.recommended, ...spec.optional]) {
-        if (field.entity !== entityForCard(input.entityType)) continue;
-        if (requiredKeys.has(field.payload_key)) continue;
+    const required: CreateLeadHouseholdCardEditField[] = [];
+    const additional: CreateLeadHouseholdCardEditField[] = [];
+    const entityFields = specFieldsForEntity(spec, input.entityType);
+
+    for (const field of entityFields) {
         if (!canMapToCommitRecord(input.entityType, field.payload_key)) continue;
-        const descriptor = toDescriptor(field, "optional");
-        if (descriptor) additional.push(descriptor);
+        const forceRequired = requiredKeys.has(field.payload_key);
+        const descriptor = toDescriptor(field, forceRequired ? "required" : "optional");
+        if (!descriptor) continue;
+        if (forceRequired) required.push(descriptor);
+        else additional.push(descriptor);
+    }
+
+    // Ensure code-owned contact / child name controls exist even if absent from palette.
+    if (input.entityType === "parent") {
+        for (const key of PARENT_CODE_OWNED_CONTACT_KEYS) {
+            if (required.some((f) => f.payload_key === key)) continue;
+            const fromCatalog = entityFields.find((f) => f.payload_key === key);
+            if (fromCatalog) {
+                const descriptor = toDescriptor(fromCatalog, "required");
+                if (descriptor) required.push(descriptor);
+            } else {
+                required.push({
+                    payload_key: key,
+                    rule_id: `person:${key}`,
+                    field_label: key === "email" ? "Email" : "Phone",
+                    tier: "required",
+                    value_kind: key === "email" ? "email" : "phone",
+                });
+            }
+        }
+    } else {
+        for (const key of CHILD_ROW_REQUIRED_KEYS) {
+            if (required.some((f) => f.payload_key === key)) continue;
+            const fromCatalog = entityFields.find((f) => f.payload_key === key);
+            if (fromCatalog) {
+                const descriptor = toDescriptor(fromCatalog, "required");
+                if (descriptor) required.push(descriptor);
+            } else {
+                required.push({
+                    payload_key: key,
+                    rule_id: `child:${key.replace(/^child_/, "")}`,
+                    field_label: key === "child_first_name" ? "First Name" : "Last Name",
+                    tier: "required",
+                    value_kind: "text",
+                });
+            }
+        }
     }
 
     const orderedRequired = dedupeDescriptors(required);
     const orderedAdditional = dedupeDescriptors(
-        appendDerivedAgeIfNeeded(additional, input.entityType),
+        appendDerivedAgeIfNeeded(
+            additional.filter((f) => !orderedRequired.some((r) => r.payload_key === f.payload_key)),
+            input.entityType,
+        ),
     );
 
     return {

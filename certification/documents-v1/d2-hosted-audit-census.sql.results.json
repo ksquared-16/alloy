@@ -1,0 +1,430 @@
+{
+  "trusted_host_action_id": "tha_186277fa0eb109",
+  "query_hash": "121cb74c76d46cbd87d0b6d02ba14fcf8e7d19dd54f082ad22ece91bcc6172e2",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T19:47:09.114Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_186277fa0eb109",
+    "query_hash": "121cb74c76d46cbd87d0b6d02ba14fcf8e7d19dd54f082ad22ece91bcc6172e2",
+    "authorization_id": "grnt_20af1ed8adca4e36",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T19:47:17.937Z",
+    "question_ids": [
+      "a00_run_documents",
+      "a01_document",
+      "a02_physical_files",
+      "a03_audit_count",
+      "a04_audit_d2_detail"
+    ],
+    "questions": {
+      "a00_run_documents": {
+        "question_id": "a00_run_documents",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T19:47:17.168593+00:00",
+            "documents": 8,
+            "with_current_version": 8,
+            "current_matches_file": 8,
+            "with_checksum": 8,
+            "outside_qa_orgs_documents_created_since_open": 0
+          }
+        ]
+      },
+      "a01_document": {
+        "question_id": "a01_document",
+        "row_count": null,
+        "rows": [
+          {
+            "document_id": "05d2bcef-c27c-446b-a691-296e5226b61e",
+            "sensitivity": "standard",
+            "legacy_entity_type": "opportunity",
+            "legacy_entity_id": "aa000000-0000-4000-8000-000000000112",
+            "versions": 1,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": [
+              {
+                "type": "opportunity",
+                "subject_id": "aa000000-0000-4000-8000-000000000112",
+                "association": "owner",
+                "primary": true
+              }
+            ],
+            "ended_associations": 0,
+            "primary_equals_legacy": true
+          },
+          {
+            "document_id": "0c8de4c6-ccb4-4f79-acfb-a63c27a9c240",
+            "sensitivity": "restricted",
+            "legacy_entity_type": "opportunity",
+            "legacy_entity_id": "aa000000-0000-4000-8000-000000000111",
+            "versions": 2,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": false
+              },
+              {
+                "n": 2,
+                "source": "replacement",
+                "supersedes_set": true,
+                "reason_set": true,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": [
+              {
+                "type": "opportunity",
+                "subject_id": "aa000000-0000-4000-8000-000000000111",
+                "association": "owner",
+                "primary": true
+              }
+            ],
+            "ended_associations": 2,
+            "primary_equals_legacy": true
+          },
+          {
+            "document_id": "597ee4f2-f490-4b0c-8407-55f52d420d4a",
+            "sensitivity": "medical",
+            "legacy_entity_type": "opportunity",
+            "legacy_entity_id": "aa000000-0000-4000-8000-000000000111",
+            "versions": 1,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": [
+              {
+                "type": "opportunity",
+                "subject_id": "aa000000-0000-4000-8000-000000000111",
+                "association": "owner",
+                "primary": true
+              }
+            ],
+            "ended_associations": 0,
+            "primary_equals_legacy": true
+          },
+          {
+            "document_id": "6e7694fd-6160-4b81-9f89-2d80c0efaa72",
+            "sensitivity": "standard",
+            "legacy_entity_type": "opportunity",
+            "legacy_entity_id": "aa000000-0000-4000-8000-000000000111",
+            "versions": 1,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": [
+              {
+                "type": "opportunity",
+                "subject_id": "aa000000-0000-4000-8000-000000000111",
+                "association": "owner",
+                "primary": true
+              }
+            ],
+            "ended_associations": 0,
+            "primary_equals_legacy": true
+          },
+          {
+            "document_id": "92d28cab-c8ff-4f80-b63a-c7c9dd0d590b",
+            "sensitivity": "standard",
+            "legacy_entity_type": "opportunity",
+            "legacy_entity_id": "aa000000-0000-4000-8000-000000000112",
+            "versions": 1,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": [
+              {
+                "type": "opportunity",
+                "subject_id": "aa000000-0000-4000-8000-000000000112",
+                "association": "owner",
+                "primary": true
+              },
+              {
+                "type": "opportunity",
+                "subject_id": "aa000000-0000-4000-8000-000000000111",
+                "association": "context",
+                "primary": false
+              }
+            ],
+            "ended_associations": 0,
+            "primary_equals_legacy": true
+          },
+          {
+            "document_id": "98b7adfa-d6ca-4b9b-82d5-745868f7e698",
+            "sensitivity": "standard",
+            "legacy_entity_type": "opportunity",
+            "legacy_entity_id": "aa000000-0000-4000-8000-000000000211",
+            "versions": 1,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": [
+              {
+                "type": "opportunity",
+                "subject_id": "aa000000-0000-4000-8000-000000000211",
+                "association": "owner",
+                "primary": true
+              }
+            ],
+            "ended_associations": 0,
+            "primary_equals_legacy": true
+          },
+          {
+            "document_id": "a26f13c4-d715-4412-83db-97a7ddf09e5a",
+            "sensitivity": "standard",
+            "legacy_entity_type": "vendor",
+            "legacy_entity_id": "aa000000-0000-4000-8000-000000000001",
+            "versions": 1,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": [
+              {
+                "type": "vendor",
+                "subject_id": "aa000000-0000-4000-8000-000000000001",
+                "association": "owner",
+                "primary": true
+              }
+            ],
+            "ended_associations": 0,
+            "primary_equals_legacy": true
+          },
+          {
+            "document_id": "ccc66b80-85b2-45a9-b08d-0d1fa0888917",
+            "sensitivity": "standard",
+            "legacy_entity_type": null,
+            "legacy_entity_id": null,
+            "versions": 1,
+            "version_sources": [
+              {
+                "n": 1,
+                "source": "document_insert",
+                "supersedes_set": false,
+                "reason_set": false,
+                "checksum_set": true,
+                "current": true
+              }
+            ],
+            "active_associations": null,
+            "ended_associations": 0,
+            "primary_equals_legacy": false
+          }
+        ]
+      },
+      "a02_physical_files": {
+        "question_id": "a02_physical_files",
+        "row_count": null,
+        "rows": [
+          {
+            "version_objects": 9,
+            "distinct_version_objects": 9,
+            "objects_shared_with_other_versions": 0,
+            "version_objects_present": 9,
+            "qa_tagged_objects_in_storage": 9
+          }
+        ]
+      },
+      "a03_audit_count": {
+        "question_id": "a03_audit_count",
+        "row_count": null,
+        "rows": [
+          {
+            "event": "document_link_issued",
+            "route": "admin/documents/signed-url",
+            "events": 22,
+            "with_version_id": 2
+          },
+          {
+            "event": "document_link_issued",
+            "route": "admin/vendors/documents/signed-url",
+            "events": 1,
+            "with_version_id": 0
+          },
+          {
+            "event": "document_sensitivity_raised",
+            "route": "admin/documents/sensitivity",
+            "events": 1,
+            "with_version_id": 0
+          },
+          {
+            "event": "document_subject_changed",
+            "route": "admin/documents/subjects",
+            "events": 6,
+            "with_version_id": 0
+          },
+          {
+            "event": "document_uploaded",
+            "route": null,
+            "events": 8,
+            "with_version_id": 0
+          },
+          {
+            "event": "document_version_added",
+            "route": "admin/documents/versions",
+            "events": 1,
+            "with_version_id": 0
+          }
+        ]
+      },
+      "a04_audit_d2_detail": {
+        "question_id": "a04_audit_d2_detail",
+        "row_count": null,
+        "rows": [
+          {
+            "event": "document_sensitivity_raised",
+            "document_id": "0c8de4c6-ccb4-4f79-acfb-a63c27a9c240",
+            "action": null,
+            "subject_type": null,
+            "from": "standard",
+            "to": "restricted",
+            "reason_present": true,
+            "checksum_present": false,
+            "actor_present": true,
+            "at": "2026-10-23T19:40:20.798351+00:00"
+          },
+          {
+            "event": "document_subject_changed",
+            "document_id": "0c8de4c6-ccb4-4f79-acfb-a63c27a9c240",
+            "action": "set_primary",
+            "subject_type": "opportunity",
+            "from": null,
+            "to": null,
+            "reason_present": false,
+            "checksum_present": false,
+            "actor_present": true,
+            "at": "2026-10-23T19:40:10.857894+00:00"
+          },
+          {
+            "event": "document_subject_changed",
+            "document_id": "0c8de4c6-ccb4-4f79-acfb-a63c27a9c240",
+            "action": "set_primary",
+            "subject_type": "opportunity",
+            "from": null,
+            "to": null,
+            "reason_present": false,
+            "checksum_present": false,
+            "actor_present": true,
+            "at": "2026-10-23T19:40:13.872907+00:00"
+          },
+          {
+            "event": "document_subject_changed",
+            "document_id": "0c8de4c6-ccb4-4f79-acfb-a63c27a9c240",
+            "action": "set_primary",
+            "subject_type": "opportunity",
+            "from": null,
+            "to": null,
+            "reason_present": false,
+            "checksum_present": false,
+            "actor_present": true,
+            "at": "2026-10-23T19:40:16.617376+00:00"
+          },
+          {
+            "event": "document_subject_changed",
+            "document_id": "92d28cab-c8ff-4f80-b63a-c7c9dd0d590b",
+            "action": "link",
+            "subject_type": "opportunity",
+            "from": null,
+            "to": null,
+            "reason_present": false,
+            "checksum_present": false,
+            "actor_present": true,
+            "at": "2026-10-23T19:40:03.960327+00:00"
+          },
+          {
+            "event": "document_subject_changed",
+            "document_id": "92d28cab-c8ff-4f80-b63a-c7c9dd0d590b",
+            "action": "link",
+            "subject_type": "opportunity",
+            "from": null,
+            "to": null,
+            "reason_present": false,
+            "checksum_present": false,
+            "actor_present": true,
+            "at": "2026-10-23T19:40:05.398453+00:00"
+          },
+          {
+            "event": "document_subject_changed",
+            "document_id": "92d28cab-c8ff-4f80-b63a-c7c9dd0d590b",
+            "action": "unlink",
+            "subject_type": "opportunity",
+            "from": null,
+            "to": null,
+            "reason_present": false,
+            "checksum_present": false,
+            "actor_present": true,
+            "at": "2026-10-23T19:40:09.326933+00:00"
+          },
+          {
+            "event": "document_version_added",
+            "document_id": "0c8de4c6-ccb4-4f79-acfb-a63c27a9c240",
+            "action": null,
+            "subject_type": null,
+            "from": null,
+            "to": null,
+            "reason_present": true,
+            "checksum_present": true,
+            "actor_present": true,
+            "at": "2026-10-23T19:39:48.595062+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 24
+  }
+}

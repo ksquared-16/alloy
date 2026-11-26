@@ -1,0 +1,21 @@
+{
+  "seen": [
+    "POST /api/admin/actions/execute",
+    "GET /api/admin/financials/card",
+    "GET /api/admin/financials/responsibility-positions ?customer"
+  ],
+  "executes": [
+    {
+      "action": "charge.add",
+      "mode": "execute",
+      "keys": [
+        "action_key",
+        "entity_type",
+        "entity_id",
+        "mode",
+        "confirmation",
+        "payload"
+      ]
+    }
+  ]
+}

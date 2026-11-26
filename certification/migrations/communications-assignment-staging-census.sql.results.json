@@ -1,0 +1,49 @@
+{
+  "trusted_host_action_id": "tha_646fe4e927ac17",
+  "query_hash": "ef14991d0810ece26ae9b69d542c037dea9150cc1c9575f321c6e8a2004fa4a0",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T20:23:05.970Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_646fe4e927ac17",
+    "query_hash": "ef14991d0810ece26ae9b69d542c037dea9150cc1c9575f321c6e8a2004fa4a0",
+    "authorization_id": "grnt_94611696a4274910",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T20:23:07.611Z",
+    "question_ids": [
+      "catalog",
+      "system_role_total",
+      "holders_total"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "communications.assign"
+        ]
+      },
+      "system_role_total": {
+        "question_id": "system_role_total",
+        "row_count": null,
+        "rows": [
+          6
+        ]
+      },
+      "holders_total": {
+        "question_id": "holders_total",
+        "row_count": null,
+        "rows": [
+          6
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

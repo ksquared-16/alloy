@@ -1,6 +1,13 @@
 /**
  * Reference implementation (Phase 3): Update Status.
  *
+ * INTERNAL RUNTIME MECHANISM — NOT operator-selectable. This is the generic executable
+ * status-write handler that domain verbs (Close Lead, Waitlist Child, Enroll Child) and
+ * outcome execution route through. It is intentionally absent from every operator-facing
+ * catalog (ACTION_BUTTON_LIBRARY, CANONICAL_ACTION_REGISTRY, LIFECYCLE_BASE_ACTIONS) —
+ * operators pick domain verbs, never a raw "Update Status". Keep it registered so the
+ * runtime can execute; do NOT add it to any Settings/lifecycle picker.
+ *
  * Generic case-grain status change for opportunities. Enrollment is the first
  * consumer but the contract is not enrollment-specific.
  *
@@ -13,6 +20,9 @@ import { randomUUID } from "crypto";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateOpportunityStatusTransitionForAction } from "@/lib/admin/actions/entryLifecycleActions";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
+import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
+import { ENROLLMENT_DECIDE } from "@/lib/access/enrollmentAuthority";
 import { emitEvent } from "@/lib/emitEvent";
 import {
     eligible,
@@ -160,6 +170,36 @@ export const updateStatusAction: RegisteredAction = {
             };
         }
 
+        /*
+         * ENROLLMENT DECISION AUTHORITY — this is the second door to the same business truth.
+         *
+         * Changing an opportunity's `status_key` is an enrollment outcome, and the canonical door
+         * (`/api/admin/enrollment-status-transition/execute`) has required `enrollment.decide`
+         * since Enrollment Record Authority V1. This action reaches the same mutation through the
+         * generic Action executor, whose route gate is PORTAL ADMISSION — so without this check the
+         * capability was bypassable by anyone who could reach the portal.
+         *
+         * THE CHECK LIVES HERE, NOT IN `updateOpportunityStatusWithEvent`, and that placement is
+         * deliberate. The write helper has four callers, and two of them —
+         * `emitDomainLifecycleStatusChangedEvent` and `stageOutcomeRuleTargetExecutor` — are
+         * SYSTEM paths executing configured rules with no operator to authorize. Gating the shared
+         * helper would demand an operator capability from automation that has none. This action is
+         * the narrowest layer that is always an operator decision.
+         *
+         * `resolveActorPermissionGrants` returns `null` when the actor is unidentified or the grant
+         * read FAILED. That is denial, never "no grants needed" — an empty list is a real answer, a
+         * failed read is not. Resolved BEFORE the transition is validated and long before any write.
+         */
+        const grants = await resolveActorPermissionGrants(supabase, ctx.orgId, ctx.userId);
+        if (!grants.permissionKeys?.includes(ENROLLMENT_DECIDE)) {
+            return {
+                ok: false,
+                correlationId,
+                status: 403,
+                error: "Changing enrollment status requires the enrollment decision permission.",
+            };
+        }
+
         const transition = await validateOpportunityStatusTransitionForAction(
             supabase,
             { orgId: ctx.orgId, userId: ctx.userId ?? undefined, accessScope: ctx.accessScope },
@@ -186,6 +226,23 @@ export const updateStatusAction: RegisteredAction = {
                 status: 400,
                 error: allowed.message,
                 blockers: [{ code: "invalid_transition", message: allowed.message, field: "status_key" }],
+            };
+        }
+
+        // A family case cannot close out from under its children (E2E-09): the same rule every other
+        // close path asks. Closing the children first is the governed family close's job.
+        const refusal = await familyCloseRefusal(supabase, {
+            orgId: ctx.orgId,
+            opportunityId: entityId,
+            targetStatusKey: target,
+        });
+        if (refusal) {
+            return {
+                ok: false,
+                correlationId,
+                status: 409,
+                error: refusal.error,
+                blockers: [{ code: "family_close_blocked", message: refusal.error, field: "status_key" }],
             };
         }
 

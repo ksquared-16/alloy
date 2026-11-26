@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formSubmissionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
@@ -7,12 +8,14 @@ import { jsonData, jsonError, jsonValidationErrors, parseUuidParam } from "@/lib
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
 import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/submissions/[submissionId]/submit — draft → submitted (admin only). */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+    if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");
@@ -46,6 +49,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: sub, error: sErr } = await dbGetSubmission(supabase, ctx.orgId, submissionId);
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
     if (!sub) return jsonError("Not found", 404);
+    // R2: the same 404 for a submission outside the caller's department/site scope as for one that does not exist.
+    if (!(await formSubmissionReadableById(supabase, ctx.orgId, submissionId))) return jsonError("Not found", 404);
 
     const subRow = sub as { status: string; form_definition_version_id: string; payload: Record<string, unknown> };
     if (subRow.status !== "draft") {
@@ -92,6 +97,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         schema: validated.schema,
         payload: validated.payload as FormPayload,
         signerIpHash: null,
+        channel: { kind: "operator", userId: ctx.userId ?? null },
     });
     if ("error" in sigRes) {
         return NextResponse.json({ error: sigRes.error, code: "SIGNATURE_PERSIST" }, { status: 500 });

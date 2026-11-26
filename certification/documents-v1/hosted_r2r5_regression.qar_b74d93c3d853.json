@@ -1,0 +1,44 @@
+{
+  "schema": "documents.hosted_r2r5_regression.v1",
+  "qa_run_id": "qar_b74d93c3d853",
+  "plan_key": "authz_q1",
+  "target": "alloy_staging_web",
+  "staging": { "web_git_sha": "bce11ed7c1c0c72c4fe0ce60ddac68ac82b27f7f", "verified": "2026-11-06 /api/build-info" },
+  "toolkit": "9b96a0e02283",
+  "open": { "request": "gar_0a6cebb096f26c", "operator_approved_at": "2026-11-06T17:03:26.454Z", "approval_basis": "per-action (objective_authorization_no_match, no authorization_basis)", "lease_expires_at": "2026-11-06T21:03:26.816Z" },
+  "registered_fixture_ensures": {
+    "qa_authz_fixture_ensure": "gar_87fde7e37dadc4",
+    "qa_authz_subject_fixture_ensure": "gar_1de3116cf0a216",
+    "qa_authz_subject_fixture_ensure_secondary": "gar_c1a7b54119406e",
+    "qa_documents_shared_child_ensure": "gar_fc15d0c02f072d (Revision 4, 5942fb82; first hosted run; seeded household ac…0501, children …0521/…0522, leads …0541/…0542, 3 participations)"
+  },
+  "suites": {
+    "R2/R5 (r4_hosted_restricted_personas_cert certify_r2r5)": "65/65 — R2-packet 14, R2-writes 19, R2-authoring 18, R2-links 6, R5-shared 8; no case carries a not-proven note; contract beb34123 (Revision 4)",
+    "D7 (d7_hosted_lifecycle_cert)": "116/116 (attempt 2; attempt 1 failed on requirement_duplicate because D6's run requirement was still active — sequencing, see attempt1 log)",
+    "D8/FI-10 (d8_fi10_hosted_cert, QA_KEY_ATTEMPT=a3_)": "59/59 (attempt 3; attempt 1 requirement_duplicate as D7; attempt 2 409 on archived attempt-1 form keys)",
+    "D6 (d6_hosted_requirements_cert)": "75/75",
+    "D7/D8 browser walk": "17/17 (screenshots d7d8-browser-qa/qar_b74d93c3d853/)",
+    "D6 browser walk": "2/6 — precondition (a published, required requirement with an unmet child) is not scripted; qar_af1c638fd52a set it by hand. Not a product finding."
+  },
+  "product_finding": "D4 / CRM lead deletion still orphans the add_parent_guardian adult linked only through customer_persons (bce11ed7): D4 reset preview parents 1; sweep lead link 200, preview parents 2, delete 200 (d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json). Owner: CRM lead deletion. Deletion graph unchanged since 3f174f1ad.",
+  "not_run": {
+    "Q2 unsafe release / unsafe restore / archived restore": "no infected/suspicious/awaiting verdict can exist without the scanner writer (O2, unapproved), and archive is only /api/v1/document-archives (D9 developer credentials). Excluded by the card.",
+    "D1a-D5 API suites": "not re-run: staging unchanged since qar_446cbc230b86 628/628 on the same SHA",
+    "D9": "QA Secondary site absent; no D9 plan, app or credential"
+  },
+  "registered_resets": {
+    "qa_documents_forms_residue_reset": "gar_92223a46c845c1 (forms 5, versions 5, public links 10, packets 2, packet items 2, sessions 3, session items 3)",
+    "qa_documents_shared_child_reset": "gar_9e93fcf49e3cef (residue 0; work_units 1)",
+    "qa_authz_subject_fixture_reset": "gar_020977f5d9c8d7",
+    "qa_authz_subject_fixture_reset_secondary": "gar_b21a20a38d4719",
+    "qa_authz_fixture_reset": "gar_85eccb4987253f"
+  },
+  "close": {
+    "phase1": "gar_a39933779c754a: access_clean true, sessions_removed true, every pool identity remaining_roles 0 / remaining_profiles 0, 11 sessions signed out",
+    "census": "gar_80c1d40f2f1658 (7957a51a, 2026-11-06T20:26:56Z): 20/20 true; retained by design: mutation_events 637, workflow_events 1305, ended health facts 9",
+    "r5_census": "gar_749deee090760c (87d96cdd): 6/6 r5sc_* true",
+    "bind": "gar_24c310d8901470: verdict ZERO_RESIDUE",
+    "r5_attach": "gar_0a42089e51a8e4: fixture_censuses.documents_r5_shared_child attached, ZERO_RESIDUE"
+  },
+  "excluded_and_not_done": ["Q2 unsafe paths", "D9 tests", "QA Secondary site", "developer application", "credentials", "roles", "scanner, retrieval or provider traffic"]
+}

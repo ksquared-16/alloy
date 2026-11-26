@@ -1,0 +1,129 @@
+{
+  "captured_at": "2026-08-19 (immediately before the Vertical A publish)",
+  "form_definition_id": "ee75732b-036d-4b3d-8f33-a87c21b78105",
+  "version_id": "8c37ef5d-6127-4569-a548-03f5cde6bd02",
+  "version_number": 1,
+  "status": "published",
+  "published_at": "2026-07-25T17:31:41.613+00:00",
+  "pdf_mapping_json": null,
+  "schema_json": {
+    "title": "Firefly Enrollment (Stage A certified)",
+    "fields": [
+      {
+        "id": "field_1",
+        "type": "text",
+        "label": "Child Full Name",
+        "required": false,
+        "read_only": false,
+        "description": "Needs destination configuration"
+      },
+      {
+        "id": "field_2",
+        "type": "date",
+        "label": "Child Dob",
+        "required": false,
+        "read_only": false,
+        "field_source": {
+          "field_key": "child_date_of_birth",
+          "entity_type": "child",
+          "shared_value_key": "child_date_of_birth"
+        }
+      },
+      {
+        "id": "field_3",
+        "type": "text",
+        "label": "Allergies",
+        "required": false,
+        "read_only": false,
+        "field_source": {
+          "field_key": "allergies",
+          "entity_type": "customer_member"
+        }
+      },
+      {
+        "id": "disp_text_1",
+        "type": "text_block",
+        "label": "Page 2",
+        "content": "Handbook Intro",
+        "required": false,
+        "read_only": false
+      },
+      {
+        "id": "disp_text_2",
+        "type": "text_block",
+        "label": "Page 3",
+        "content": "Handbook Ack",
+        "required": false,
+        "read_only": false
+      },
+      {
+        "id": "disp_ack_3",
+        "type": "boolean",
+        "label": "I acknowledge the above",
+        "required": true,
+        "read_only": false
+      },
+      {
+        "id": "disp_text_4",
+        "type": "text_block",
+        "label": "Page 4",
+        "content": "Parent Signature",
+        "required": false,
+        "read_only": false
+      },
+      {
+        "id": "field_6",
+        "type": "text",
+        "label": "Parent Signature",
+        "required": false,
+        "read_only": false
+      },
+      {
+        "id": "disp_sig_5",
+        "type": "signature",
+        "label": "Page 4",
+        "required": true,
+        "read_only": false,
+        "signature": {
+          "require_acknowledgment": true
+        }
+      }
+    ],
+    "sections": [
+      {
+        "id": "section_1",
+        "title": "Page 1",
+        "field_ids": [
+          "field_1",
+          "field_2",
+          "field_3"
+        ]
+      },
+      {
+        "id": "section_2",
+        "title": "Page 2",
+        "field_ids": [
+          "disp_text_1"
+        ]
+      },
+      {
+        "id": "section_3",
+        "title": "Page 3",
+        "field_ids": [
+          "disp_text_2",
+          "disp_ack_3"
+        ]
+      },
+      {
+        "id": "section_4",
+        "title": "Page 4",
+        "field_ids": [
+          "disp_text_4",
+          "field_6",
+          "disp_sig_5"
+        ]
+      }
+    ],
+    "schema_version": 1
+  }
+}

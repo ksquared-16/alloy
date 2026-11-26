@@ -1,10 +1,17 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Experience Builder doctrine
 
 **Status:** Canonical (June 2026 — Lead/Opportunity drawer reference implementation).
 
 Visual layout authoring for record surfaces — drawers, queue row previews, and future workspace panels.
 
-**Unifying umbrella:** This doctrine is the reference implementation of the broader **Presentation Runtime** — see [`presentation-runtime-doctrine.md`](./presentation-runtime-doctrine.md) for the Design Surface product language, renderer-first model, three-axis framing (Perspective vs Viewpoint), Analytics-as-Dashboard, and ownership/lifecycle that this builder authors.
+**Unifying umbrella:** This doctrine is the reference implementation of the broader **Presentation Runtime** — see [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) for the Design Surface product language, renderer-first model, three-axis framing (Perspective vs Viewpoint), Analytics-as-Dashboard, and ownership/lifecycle that this builder authors.
 
 ---
 
@@ -108,7 +115,7 @@ History, Billing History …) — distinct from Expanded. See
 | **Relationship-based contacts** | Contact blocks resolve persons from household/opportunity relationships (`resolveLayoutEditorContactBlockPerson`). Not hardcoded “secondary contact” scalars. Primary is excluded from additional-contact blocks. |
 | **KPI tiles are peer blocks** | Widget strip / KPI sections use tone styling and peer card width — not a separate widget runtime. |
 | **Related lists are repeaters** | `related_list` items with row templates (`childRowGroups`, `layoutEditorRelatedListConfig`). Columns carry the same metadata shape as field items. |
-| **Age is computed** | `child.dob_age` / age display is derived from DOB via `formatLayoutRuntimeAgeDisplay` — not stored age migration. |
+| **Age is computed** | `child.dob_age` / age display is derived from DOB via `formatLayoutRuntimeAgeDisplay` — not stored age migration. Default compact form is years+months with no spaces (`2y2m`, `6m`). DOB fields show `M/D/YYYY (age)` (e.g. `1/1/2026 (7m)`). |
 
 ---
 

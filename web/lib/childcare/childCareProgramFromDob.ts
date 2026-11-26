@@ -61,3 +61,14 @@ export function programLabelAndAgeGroupFromAgeMonths(ageMonths: number): { progr
     }
     return { program_label, age_group: "" };
 }
+
+/**
+ * Compact queue group headers: show program name only (drop trailing " — age span").
+ * Storage / cohort labels may still carry the full form.
+ */
+export function programLabelWithoutAgeRange(label: string | null | undefined): string | null {
+    const raw = typeof label === "string" ? label.trim() : "";
+    if (!raw) return null;
+    const stripped = raw.replace(/\s+[—–-]\s+.+$/u, "").trim();
+    return stripped || raw;
+}

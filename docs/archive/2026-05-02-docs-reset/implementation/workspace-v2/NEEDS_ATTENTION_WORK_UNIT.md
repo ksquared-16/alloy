@@ -1,6 +1,6 @@
 # Needs Attention work unit (implementation)
 
-**Doctrine:** [Exception work unit](../../../architecture/workspace-work-unit-scope-doctrine.md) · [glossary — Exception type](../../../architecture/glossary.md)
+**Doctrine:** [Exception work unit](../../architecture/workspace-work-unit-scope-doctrine.md) · [glossary — Exception type](../../architecture/glossary.md)
 
 ## Definition
 

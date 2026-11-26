@@ -92,9 +92,9 @@ describe("buildOperatorLifecycleLandingCards", () => {
         expect(cards[0]?.stageCount).toBe(6);
         expect(cards[0]?.activeRecordCount).toBeNull();
         expect(cards[0]?.needsAttentionCount).toBeNull();
-        // Phase 2 route canonicalization: every work-view nav entry resolves to a canonical operator
-        // slug (`/workspace/work-unit/:slug`) — never a dept/uuid (`/dept/…`) or `/adminV2/…` route that
-        // forces a redirect chain / duplicate RSC load. Default entry maps the lead lane to `new-leads`.
+        // Presentation Runtime V2 routing: every configured Work View routes to ITS OWN
+        // work-view slug (`/workspace/work-unit/:viewSlug` = view id, underscores→dashes) —
+        // never the bound compat lane's slug and never a `?work_view=` query route.
         expect(cards[0]?.workQueues.map((q) => q.label)).toEqual([
             "New Leads",
             "Tours",
@@ -104,8 +104,8 @@ describe("buildOperatorLifecycleLandingCards", () => {
         expect(cards[0]?.workQueues.map((q) => q.href)).toEqual([
             "/workspace/work-unit/new-leads",
             "/workspace/work-unit/tours",
-            "/workspace/work-unit/enrollment-offers",
-            "/workspace/work-unit/communications-followup",
+            "/workspace/work-unit/ready-to-enroll",
+            "/workspace/work-unit/follow-ups",
         ]);
         for (const q of cards[0]?.workQueues ?? []) {
             expect(q.href.startsWith("/workspace/work-unit/")).toBe(true);
@@ -213,15 +213,15 @@ describe("buildOperatorLifecycleLandingCards", () => {
         ]);
     });
 
-    it("gives each Work View a stable per-view route (`?work_view=<id>`) on the host work unit", () => {
+    it("gives each Work View its own path route (`/workspace/work-unit/:viewSlug`, no query routing)", () => {
         const card = enrollmentCardWithWorkViews(SIX_WORK_VIEWS);
         expect(card?.workQueues.map((q) => q.href)).toEqual([
-            "/workspace/work-unit/enrollment-pipeline?work_view=new_leads",
-            "/workspace/work-unit/enrollment-pipeline?work_view=active_pipeline",
-            "/workspace/work-unit/enrollment-pipeline?work_view=registration",
-            "/workspace/work-unit/enrollment-pipeline?work_view=waitlist",
-            "/workspace/work-unit/enrollment-pipeline?work_view=tours",
-            "/workspace/work-unit/enrollment-pipeline?work_view=all_leads",
+            "/workspace/work-unit/new-leads",
+            "/workspace/work-unit/active-pipeline",
+            "/workspace/work-unit/registration",
+            "/workspace/work-unit/waitlist",
+            "/workspace/work-unit/tours",
+            "/workspace/work-unit/all-leads",
         ]);
         // Stable platformKey per view (drives active-state matching) + canonical operator route.
         expect(card?.workQueues.map((q) => q.platformKey)).toEqual([
@@ -235,6 +235,8 @@ describe("buildOperatorLifecycleLandingCards", () => {
         for (const q of card?.workQueues ?? []) {
             expect(q.href.startsWith("/workspace/work-unit/")).toBe(true);
             expect(q.href).not.toContain("/dept/");
+            expect(q.href).not.toContain("?");
+            expect(q.href).not.toContain("work_view=");
         }
     });
 
@@ -256,16 +258,16 @@ describe("buildOperatorLifecycleLandingCards", () => {
         expect(card?.workQueues.map((q) => q.label)).toEqual(["New Leads", "Waitlist", "All Leads"]);
     });
 
-    it("mixes lane-bound and predicate-only Work Views — both materialize", () => {
+    it("mixes lane-bound and predicate-only Work Views — both route via their view slug", () => {
         const card = enrollmentCardWithWorkViews([
-            // Bound to a real pipeline lane → keeps canonical lane-slug route.
+            // Bound to a real pipeline lane → still routes via the VIEW's slug (not the lane's).
             { id: "new_leads", label: "New Leads", compat_queue_key: "new_leads", display_order: 1 },
-            // No bound lane → materializes via ?work_view= instead of being dropped.
+            // No bound lane → its own view-slug route (never dropped, never query-routed).
             { id: "all_leads", label: "All Leads", display_order: 2 },
         ]);
         expect(card?.workQueues.map((q) => q.href)).toEqual([
             "/workspace/work-unit/new-leads",
-            "/workspace/work-unit/enrollment-pipeline?work_view=all_leads",
+            "/workspace/work-unit/all-leads",
         ]);
     });
 

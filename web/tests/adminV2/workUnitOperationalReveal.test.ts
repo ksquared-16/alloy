@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { shouldDeferOpportunityDrawerOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 const webRoot = join(process.cwd());
 
@@ -21,8 +20,7 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
         expect(overlay).toContain("Preparing ${recordLabel}…");
     });
 
-    it("runtime-on work unit bypasses deferred coordinator open (no centered overlay gate)", () => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
+    it("work unit bypasses deferred coordinator open (no centered overlay gate)", () => {
         expect(shouldDeferOpportunityDrawerOpen(WORK_UNIT_PATH, "opp-1")).toBe(false);
     });
 
@@ -35,43 +33,6 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
         if (!deferred) {
             expect(coordinator).toContain("adminV2DrawerBootstrapEnabled");
         }
-    });
-
-    it("OpportunityDrawerVmRuntime suppresses centered overlay when Focus Panel split is active", () => {
-        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("!focusPanelActive");
-        expect(runtime).toContain("showRuntimeOpeningOverlay");
-        expect(runtime).toContain("focusPanelShellOpen");
-        expect(runtime).toContain("focusPanelPayloadPending");
-        expect(runtime).toContain('data-alloy-os-focus-panel-pending="true"');
-        expect(runtime).toMatch(/isOpen=\{drawerShellIsOpen\}/);
-    });
-
-    it("Focus Panel shell mounts on subject selection independent of isOpportunityDrawerOpening (no legacy title fallback)", () => {
-        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        // The shell-open predicate must not gate on the opening flag or the lagging render target,
-        // otherwise a row→row switch drops the seed header for a frame and Drawer falls back to the
-        // stale legacy `title` block from the prior subject.
-        const shellDef = runtime.slice(
-            runtime.indexOf("const focusPanelShellOpen ="),
-            runtime.indexOf("const focusPanelShellOpen =") + 160,
-        );
-        expect(shellDef).toContain("focusPanelActive");
-        expect(shellDef).toContain('drawer.type === "opportunities"');
-        expect(shellDef).toContain("Boolean(drawer.id)");
-        expect(shellDef).not.toContain("isOpportunityDrawerOpening");
-        expect(shellDef).not.toContain("drawerVmRender");
-        // Composed (payload) header only renders once the displayed subject matches the selection.
-        expect(runtime).toContain("focusPanelSubjectResolved");
-        // Drawer swaps the legacy title block out whenever a composed sticky header is present.
-        const drawer = readSrc("components/admin/Drawer.tsx");
-        expect(drawer).toContain("const headerBlock = composedStickyHeader ?");
-    });
-
-    it("QueueBlock keeps rows clickable once a subject drawer id is selected", () => {
-        const queue = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        expect(queue).toContain("!openDrawerOpportunityId");
-        expect(queue).toContain("OperationalModeQueuePreparePanel");
     });
 
     it("manual selection blocks default auto-open overwrite", () => {
@@ -98,15 +59,9 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
         expect(outsideClick).toContain("alloyOsSplitActive");
     });
 
-    it("no overlapping prep: in-queue prep hidden when drawer subject is opening", () => {
-        const queue = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        expect(queue).toMatch(
-            /operationalModePreparing[\s\S]*!openDrawerOpportunityId/,
-        );
-    });
 });
 
-const WORK_UNIT_PAGE = "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx";
+const WORK_UNIT_PAGE = "app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx";
 
 describe("Phase 3 — single queue source (bootstrap-inline hydrate)", () => {
     it("paints bootstrap-inlined rows with no loading shell and a single deferred refresh", () => {
@@ -156,9 +111,4 @@ describe("Addendum B — WUC KPI snapshot rule", () => {
         );
     });
 
-    it("suppresses the shimmer placeholder under runtime when a snapshot surface exists", () => {
-        const page = readSrc(WORK_UNIT_PAGE);
-        expect(page).toContain("workUnitKpiHasSnapshotSurface");
-        expect(page).toMatch(/ALLOY_OS_RUNTIME_ENABLED && workUnitKpiHasSnapshotSurface\s*\n?\s*\?\s*false/);
-    });
 });

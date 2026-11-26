@@ -6,10 +6,8 @@ import {
     defaultSubjectTypeForStage,
     statusEntityTypeForStage,
 } from "@/lib/lifecycle/stageStatusRollup";
-import {
-    filterCatalogGroupsForLeadQueueFieldGroup,
-    filterCatalogGroupsForScope,
-} from "@/lib/layout/queueRecordScopeCatalog";
+import { filterCatalogGroupsForScope } from "@/lib/layout/queueRecordScopeCatalog";
+import type { LayoutCatalogField, LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import {
     buildLeadLayoutPickerGroups,
     CURATED_FIELDS,
@@ -37,7 +35,7 @@ function leadPickerFromCuratedFallback() {
 
 describe("Configuration QA fix pass", () => {
     it("hides child placement fields from Lead default fields", () => {
-        for (const key of ["program_type", "schedule_type", "desired_program_type", "desired_schedule_type"]) {
+        for (const key of ["program_type", "schedule_type"]) {
             expect(isChildcareLegacyOrSystemField("opportunity", key)).toBe(true);
         }
     });
@@ -67,8 +65,18 @@ describe("Configuration QA fix pass", () => {
 
     it("lead queue field_group picker includes lead, person, and child context fields", () => {
         const lead = leadPickerFromCuratedFallback();
-        const scoped = filterCatalogGroupsForLeadQueueFieldGroup(lead);
-        const refKeys = scoped.flatMap((g) => g.fields.map((f) => f.refKey));
+        // filterCatalogGroupsForLeadQueueFieldGroup removed — child context uses repeated_related scope.
+        const mainScoped = filterCatalogGroupsForScope(lead, { type: "main_record" });
+        const personScoped = filterCatalogGroupsForScope(lead, {
+            type: "primary_related",
+            relationshipKey: "primary_contact",
+        });
+        const childScoped = filterCatalogGroupsForScope(lead, {
+            type: "repeated_related",
+            relationshipKey: "children",
+        });
+        const groups: LayoutCatalogGroup[] = [...mainScoped, ...personScoped, ...childScoped];
+        const refKeys = groups.flatMap((g) => g.fields.map((f: LayoutCatalogField) => f.refKey));
         expect(refKeys.some((k) => k.startsWith("opportunity."))).toBe(true);
         expect(refKeys.some((k) => k.startsWith("customer."))).toBe(true);
         expect(refKeys.some((k) => k.startsWith("person."))).toBe(true);

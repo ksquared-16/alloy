@@ -1,0 +1,228 @@
+{
+  "schema": "financials.reusable_qa_setup_contract_handoff.v1",
+  "status": "product_candidate_local_uncertified_not_promoted",
+  "from": {
+    "repository": "ksquared-16/alloy",
+    "base": "470f8594968d7686a32e6a2390eeebc466f6fdca",
+    "code_commit": "f20480fc3ea15794e0548776d9989d962081be80",
+    "adopted": {
+      "run": "erun2_fdffa034ea98f6e0",
+      "lane": "lane_b77b3cbb5840",
+      "objective": "OPWORK_B77B3CBB5840_SPRINT_386D603E60C7",
+      "manifest_sha256": "74edcf215fd092aa8cc4987e9558d3e2400c56f260255c4e7a336b2ef2279a1e",
+      "files_verified": 13
+    },
+    "owner": "direct Claude Code repair session 61862597 (user-authorized, not Walden-dispatched)"
+  },
+  "candidate": {
+    "candidate_sha": "THE COMMIT THAT ADDS THIS FILE (documentation-only child of code_commit). Every pinned artifact is byte-identical at both. The program_pins digest is recomputed with that sha; any later product commit is a new candidate.",
+    "program_pins": {
+      "financials_isolated_tests": {
+        "variant": "program",
+        "script_sha256": "78453bfcd3d60c0757d800c64f42577265fc27ff458d48e03cc610b818f1c169",
+        "artifacts": [
+          {
+            "role": "entry",
+            "path": "web/scripts/qa/financialsIsolatedTests.mjs",
+            "sha256": "aa3069f6c3907aad842654c0465f6b66866392eabb43b5ed0a81090613e4c3bd"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/financialsFixtureAuthority.mjs",
+            "sha256": "db4fe4c20f9e4f3052811f6458100461244aefefa025084f6a25a9c10c02dfad"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs",
+            "sha256": "e25649c240871e5fb8f771c75e201b80d51b7d86db35a5f8c08e3e58b3b27fab"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsIsolatedBinding.mjs",
+            "sha256": "d31b44c12f2473feb9dc0f5181097ddf9c669cf70dc0f39f78d2f1ab365d2600"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsIsolatedProof.mjs",
+            "sha256": "b3c5b7399a94ad4d2ef1bce52b47b930087b319ed19fab536631d89d6c8a61aa"
+          },
+          {
+            "role": "program",
+            "path": "web/tests/financials/live/catalogAddCharge.live.test.ts",
+            "sha256": "80cab109e891874eb45b983b09649fc506238ce3582669c12e5baa60c3e44a18"
+          },
+          {
+            "role": "program",
+            "path": "web/tests/financials/live/certEnvironment.ts",
+            "sha256": "af354b4780c730354e6002e518fe42b52f96e930030a2b41c5e496d289bb73ec"
+          },
+          {
+            "role": "program",
+            "path": "web/tests/harness/liveSuiteAuthority.mjs",
+            "sha256": "f29d9f0e392087d409d5a6fb56c8ec9a122c12843bc994f6b403c5b7cd7f603a"
+          },
+          {
+            "role": "program",
+            "path": "web/vitest.config.ts",
+            "sha256": "f367f1154a9d88a6ffa04fecd375d37c3173fb33934e832200c89b6b058cd140"
+          }
+        ],
+        "script_body": "node scripts/qa/financialsIsolatedTests.mjs",
+        "operations": [
+          "run"
+        ]
+      },
+      "financials_historical_draft": {
+        "variant": "program",
+        "script_sha256": "07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8",
+        "artifacts": [
+          {
+            "role": "entry",
+            "path": "web/scripts/qa/financialsHistoricalDraftFixture.ts",
+            "sha256": "c6b06ccbc46c5038e4421ad6a0f73bd31f8fe4ae3abc2bd421c60d50d7377e1d"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/financialsFixtureAuthority.mjs",
+            "sha256": "db4fe4c20f9e4f3052811f6458100461244aefefa025084f6a25a9c10c02dfad"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs",
+            "sha256": "e25649c240871e5fb8f771c75e201b80d51b7d86db35a5f8c08e3e58b3b27fab"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsHistoricalDraftFixtureCore.ts",
+            "sha256": "9ffbf279d69691b65b2d9afa7ffadb2b15cdef9c8fadc73296d7ba2a99d6b1a7"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsIsolatedBinding.mjs",
+            "sha256": "d31b44c12f2473feb9dc0f5181097ddf9c669cf70dc0f39f78d2f1ab365d2600"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/qaWorkflowVerifier.mjs",
+            "sha256": "f2a09521c66298bfd69e69e55cb4f6cc25be009570995da6c19ef3af90b402f0"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/qaWorkflowVerifierPlaywright.mjs",
+            "sha256": "a5e6bd80a2e0a60f99abae991cc42b8a9e23430cb1198b5b169f769154ce8178"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsHistoricalDraftUi.ts",
+            "sha256": "2aa6ad2177be304d90563730f528b2fdb642cd657015c677f1c718e73ce09f82"
+          }
+        ],
+        "script_body": "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",
+        "operations": [
+          "ensure",
+          "verify",
+          "reset",
+          "count",
+          "ui-verify"
+        ]
+      }
+    }
+  },
+  "shared": {
+    "workflow_verifier": {
+      "path": "web/scripts/qa/qaWorkflowVerifier.mjs",
+      "sha256": "f2a09521c66298bfd69e69e55cb4f6cc25be009570995da6c19ef3af90b402f0",
+      "driver": {
+        "path": "web/scripts/qa/qaWorkflowVerifierPlaywright.mjs",
+        "sha256": "a5e6bd80a2e0a60f99abae991cc42b8a9e23430cb1198b5b169f769154ce8178"
+      },
+      "lane_neutral": true,
+      "adapter_contract": "{ key, routes[1..8] fixed relative, capture[], reveal?[], assert() } \u2014 no other field; the caller names no route"
+    },
+    "setup_contract": {
+      "path": "web/scripts/qa/qaWorkflowSetupContract.mjs",
+      "sha256": "1ee9fcaaec8516f6d7b1c0d4d30949d218c836dddd08fa0640b07b15d810d5bc",
+      "schema": "alloy.qa_workflow_setup.v1",
+      "vectors": {
+        "path": "web/tests/qa/fixtures/qa-workflow-setup.vectors.json",
+        "sha256": "f34b7124aae32c98e0fc369ac1f1bf8ecf2b57792952a22f1fc6bde89f5328e7",
+        "accept": 2,
+        "refuse": 16,
+        "every_refusal_code_reached": true
+      }
+    },
+    "authority_vectors": {
+      "path": "web/tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json",
+      "sha256": "5f7a6c9d683546fdf18635b63befdd2424d29f4936d6fcf320c86e710fe25b28"
+    }
+  },
+  "financials_workflow": {
+    "fixture": "financials_historical_draft",
+    "rule": "a historical charge-template draft stays the template draft (7500) and never becomes the same-name Catalog item (9900)",
+    "ui_adapter": {
+      "path": "web/scripts/qa/financialsHistoricalDraftUi.ts",
+      "sha256": "2aa6ad2177be304d90563730f528b2fdb642cd657015c677f1c718e73ce09f82",
+      "route": "durableRecordHref(child, IDS.member, financials)",
+      "checks": [
+        "draft row rendered once",
+        "template price",
+        "still a draft",
+        "Catalog price not a charge"
+      ]
+    },
+    "isolated_suite": {
+      "fixture": "financials_isolated_tests",
+      "proof_schema": "financials.catalog_live_proof.v2",
+      "retained": {
+        "posted_charges": 3,
+        "journal_entries": 3,
+        "billing_periods": {
+          "min": 2,
+          "max": 4,
+          "status": "open",
+          "never_deleted": true
+        }
+      },
+      "removed": [
+        "drafts",
+        "commercial_products",
+        "financial_charge_templates"
+      ]
+    }
+  },
+  "requests_to_the_platform": [
+    {
+      "id": "REG-UI-VERIFY",
+      "what": "register operation ui-verify: { args: [\"--ui-verify\"], mutating: false } on financials_historical_draft"
+    },
+    {
+      "id": "ENV-IDENTITY-EMAIL",
+      "what": "pass ALLOY_QA_IDENTITY_EMAIL (the bound session persona identity email) to the fixture child when a session is bound"
+    },
+    {
+      "id": "REPIN",
+      "what": "re-pin both Financials entries to candidate_sha (above) from committed bytes; historical pins now name 8 artifacts (adds qaWorkflowVerifier, its driver, the adapter)"
+    },
+    {
+      "id": "SETUP-MINIMAL",
+      "what": "plan open that satisfies judgeQaSetupRecord: declared personas only, auth_user_probe session verification, zero page renders and sends (today bp_v2 open is refused by vector 1)",
+      "status": "not implemented by the platform; decision/slice for the platform owner"
+    }
+  ],
+  "validation_local": {
+    "fake_driver_only": true,
+    "commands": [
+      "web/: vitest run tests/financials tests/qa on f20480fc's tree before the registration fix \u2192 279 files, 3995 tests, 1 red (qaFixtureAuthority: program now declares ui-verify)",
+      "after aligning that assertion: tests/financials/qaFixtureAuthority.test.ts 45/45; qaIsolatedFinancialsFixtures 139/139; new verifier/setup/adapter suites green",
+      "eslint on the 15 touched files: 11 pre-existing no-explicit-any errors (identical at 470f8594), 0 new"
+    ],
+    "plants": 7,
+    "not_claimed": [
+      "rendered browser proof",
+      "live certenv run",
+      "live data",
+      "provider",
+      "release"
+    ]
+  }
+}

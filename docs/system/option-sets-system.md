@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Option Sets System
 
 **Status:** Active — Phase 1 (June 2026).  

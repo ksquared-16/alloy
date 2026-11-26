@@ -1,0 +1,343 @@
+/**
+ * Resolve the unique participant information needs for one Enrollment objective.
+ *
+ * The chain, reusing the owner of each link:
+ *
+ * ```
+ *   resolveEnrollmentParticipantProgress   (Slice 2.3: pinned revision -> effective requirements)
+ *     -> only SATISFIABLE realized form requirements
+ *     -> each occurrence's D-94 resolved_form_definition_version_id
+ *     -> THAT version's schema_json                      (never the definition's latest)
+ *     -> projectEnrollmentInformationNeeds               (the ask-once collapse)
+ *     -> shared_values + session metadata confirmations   (D-99)
+ * ```
+ *
+ * READ ONLY, like the progress resolver it builds on.
+ *
+ * ## Only effective requirements contribute
+ *
+ * The requirement set comes from Slice 2.3, which reads the PINNED revision. A Form that exists in
+ * configuration but is not an effective requirement of this objective adds no question to the
+ * parent's list, and republishing the Business Process cannot change the list for a running journey.
+ *
+ * ## An unrealized requirement fabricates nothing
+ *
+ * Slice 2.3 reports a BP-required Form the packet does not contain as `unrealized`, and that is the
+ * truthful place for it. There is no pinned version and no schema, so there is nothing to derive
+ * needs from — inventing questions for a Form that does not exist in the participant's packet would
+ * be worse than the gap it papers over. Requirement-level progress keeps reporting it.
+ */
+
+import { hiddenFieldKeysForAnswers } from "@/lib/enrollment/informationNeeds/projectEnrollmentInformationNeeds";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
+
+import { safeParseFormSchema } from "@/lib/forms/schema";
+import {
+    resolveEnrollmentParticipantProgress,
+    type EnrollmentParticipantProgressResult,
+} from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
+import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
+import { readEnrollmentNeedDeclines } from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
+import { readEnrollmentValueProvenance } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
+import { readEnrollmentNeedConfirmations } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
+import {
+    projectEnrollmentInformationNeeds,
+    type PinnedRequirementForm,
+} from "@/lib/enrollment/informationNeeds/projectEnrollmentInformationNeeds";
+import {
+    summarizeEnrollmentInformationNeeds,
+    type EnrollmentInformationNeeds,
+} from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
+
+export type EnrollmentInformationNeedsRefusal =
+    | { readonly code: "process_instance_not_found"; readonly detail: string }
+    | { readonly code: "read_failed"; readonly detail: string };
+
+export type EnrollmentInformationNeedsResult =
+    | { readonly ok: true; readonly value: EnrollmentInformationNeeds }
+    | { readonly ok: false; readonly refusal: EnrollmentInformationNeedsRefusal };
+
+type SessionRow = {
+    id: string;
+    subject_id?: string | null;
+    shared_values: Record<string, unknown> | null;
+    metadata: Record<string, unknown> | null;
+};
+
+type SessionItemRow = {
+    id: string;
+    packet_item_id: string;
+    resolved_form_definition_version_id: string | null;
+};
+
+/**
+ * Everything the needs projection derives from, loaded ONCE per request.
+ *
+ * The split exists for the participant turn's write path: after the runtime writes the session's
+ * shared values / D-99 evidence, every OTHER input here is unchanged within the request — the
+ * pinned schemas, the requirement set, the subject. Re-fetching them to recompute the objective
+ * was pure duplicate latency (measured: each objective resolution is ~8 serial query waves, and a
+ * turn used to run three of them). With the context in hand, the post-write recompute is pure
+ * computation — zero queries.
+ */
+export type EnrollmentNeedsContext = {
+    readonly prog: EnrollmentParticipantProgress;
+    readonly session: SessionRow | null;
+    readonly subjectId: string | null;
+    readonly forms: readonly PinnedRequirementForm[];
+    /** The tenant's canonical person roles, for recognising party-slot destinations. */
+    readonly partyRoles?: readonly string[];
+};
+
+/** Assemble the needs value from a loaded context — PURE, reusable against a post-write session. */
+export function assembleEnrollmentInformationNeeds(
+    context: EnrollmentNeedsContext,
+    input: {
+        requiresConfirmation?: ReadonlySet<string>;
+        canonicalValues?: Readonly<Record<string, unknown>>;
+    },
+): EnrollmentInformationNeeds {
+    const { prog, session, subjectId, forms } = context;
+    if (!session || forms.length === 0) {
+        return {
+            process_instance_id: prog.process_instance_id,
+            session_id: session?.id ?? prog.session_id,
+            business_process_revision_id: prog.business_process_revision_id,
+            stage_key: prog.stage_key,
+            subject_id: subjectId,
+            total_needs: 0,
+            needs_requiring_action: 0,
+            needs: [],
+        };
+    }
+    const sharedValues = (session.shared_values ?? {}) as Record<string, unknown>;
+    const needs = projectEnrollmentInformationNeeds({
+        forms: [...forms],
+        subjectId,
+        sharedValues,
+        canonicalValues: input.canonicalValues,
+        confirmations: readEnrollmentNeedConfirmations(session.metadata),
+        declines: readEnrollmentNeedDeclines(session.metadata),
+        provenance: readEnrollmentValueProvenance(session.metadata),
+        partyRoles: context.partyRoles,
+        requiresConfirmation: input.requiresConfirmation,
+    });
+    return {
+        process_instance_id: prog.process_instance_id,
+        session_id: session.id,
+        business_process_revision_id: prog.business_process_revision_id,
+        stage_key: prog.stage_key,
+        subject_id: subjectId,
+        ...summarizeEnrollmentInformationNeeds(needs),
+        needs,
+        hidden_field_keys: [...hiddenFieldKeysForAnswers({ forms, subjectId, sharedValues, canonicalValues: input.canonicalValues })],
+    };
+}
+
+export async function resolveEnrollmentInformationNeeds(
+    supabase: SupabaseClient,
+    input: {
+        orgId: string;
+        processInstanceId: string;
+        /**
+         * Canonical keys this objective requires the participant to CONFIRM rather than silently
+         * accept. Explicit and narrow: no repository-wide assurance framework exists, and the caller
+         * naming its policy is honest where inventing one would not be.
+         */
+        requiresConfirmation?: ReadonlySet<string>;
+        /** Canonical record prefill by shared key. Lower precedence than session shared values. */
+        canonicalValues?: Readonly<Record<string, unknown>>;
+        /**
+         * An already-resolved progress projection.
+         *
+         * The objective resolver computes progress and needs "in parallel", but needs BEGINS by
+         * computing progress itself — so every participant turn resolved the pinned revision, the
+         * session and its items twice, and the second copy was pure duplicate latency. Passing the
+         * first one in removes it. Optional, so every other caller is unchanged.
+         */
+        progress?: EnrollmentParticipantProgressResult;
+        /**
+         * Receives the loaded context so the caller can recompute PURELY after a session write.
+         * Called exactly once, on the success path, with whatever was loaded — including the
+         * no-session and no-forms shapes, which recompute just as purely.
+         */
+        captureContext?: (context: EnrollmentNeedsContext) => void;
+        /**
+         * Rows the progress resolver already loaded this request — the session (with
+         * shared_values + metadata), its items and the realized form identities. Providing them
+         * removes the four duplicate reads this resolver otherwise repeats; only the pinned
+         * version schemas remain to fetch.
+         */
+        preloaded?: {
+            readonly session: { id: string; shared_values?: unknown; metadata?: unknown } | null;
+            readonly items: readonly SessionItemRow[];
+            readonly formBySessionItem: ReadonlyMap<string, string>;
+            readonly subjectId: string | null;
+        };
+    },
+): Promise<EnrollmentInformationNeedsResult> {
+    const progress =
+        input.progress ??
+        (await resolveEnrollmentParticipantProgress(supabase, {
+            orgId: input.orgId,
+            processInstanceId: input.processInstanceId,
+        }));
+    if (!progress.ok) return { ok: false, refusal: progress.refusal };
+
+    const { value: prog } = progress;
+    if (!prog.session_id) {
+        // No participant objective launched yet. Requirements still project at the progress level;
+        // there is simply nothing realized to derive needs from.
+        const context: EnrollmentNeedsContext = { prog, session: null, subjectId: null, forms: [] };
+        input.captureContext?.(context);
+        return { ok: true, value: assembleEnrollmentInformationNeeds(context, input) };
+    }
+
+    let session: SessionRow | null;
+    let subjectId: string | null;
+    if (input.preloaded) {
+        session = (input.preloaded.session ?? null) as SessionRow | null;
+        subjectId = input.preloaded.subjectId;
+    } else {
+        const [{ data: sessionData, error: sessionError }, { data: instanceData }] = await Promise.all([
+            supabase
+                .from("form_packet_sessions")
+                .select("id, shared_values, metadata")
+                .eq("id", prog.session_id)
+                .eq("org_id", input.orgId)
+                .maybeSingle(),
+            supabase
+                .from("process_instances")
+                .select("subject_id")
+                .eq("id", prog.process_instance_id)
+                .eq("org_id", input.orgId)
+                .maybeSingle(),
+        ]);
+        if (sessionError) {
+            return { ok: false, refusal: { code: "read_failed", detail: sessionError.message } };
+        }
+        session = (sessionData ?? null) as SessionRow | null;
+        subjectId =
+            String((instanceData as { subject_id?: string | null } | null)?.subject_id ?? "").trim() || null;
+    }
+
+    // Only requirements the participant can actually act on. `unrealized` has no pinned version and
+    // no schema; `unsupported` is a non-form kind. Neither can produce a field need.
+    const actionable = prog.requirements.filter(
+        (r: EnrollmentParticipantProgress["requirements"][number]) =>
+            r.kind === "form" && (r.status === "outstanding" || r.status === "satisfied"),
+    );
+    if (actionable.length === 0 || !session) {
+        const context: EnrollmentNeedsContext = { prog, session, subjectId, forms: [] };
+        input.captureContext?.(context);
+        return { ok: true, value: assembleEnrollmentInformationNeeds(context, input) };
+    }
+
+    let items: SessionItemRow[];
+    if (input.preloaded) {
+        items = [...input.preloaded.items];
+    } else {
+        const { data: itemRows } = await supabase
+            .from("form_packet_session_items")
+            .select("id, packet_item_id, resolved_form_definition_version_id")
+            .eq("packet_session_id", session.id)
+            .order("sequence_index", { ascending: true });
+        items = (itemRows ?? []) as SessionItemRow[];
+    }
+
+    // The D-94 pin is the ONLY version consulted. A newer published version of the same form does
+    // not reach an in-flight session, and asking this query for "latest" would silently undo that.
+    const versionIds = [
+        ...new Set(items.map((i) => i.resolved_form_definition_version_id).filter(Boolean)),
+    ] as string[];
+    const packetItemIds = [...new Set(items.map((i) => i.packet_item_id).filter(Boolean))];
+
+    const [versionsResult, packetItemsResult] = await Promise.all([
+        versionIds.length
+            ? // D-94 pinned versions are IMMUTABLE (trigger-certified), so reading one by id is a
+              // cacheable fact — the same owner and TTL the pinned revision payload already uses.
+              cachedConfigRead(`needs:versions:v2:${input.orgId}:${[...versionIds].sort().join(",")}`, async () => {
+                  const res = await supabase
+                      .from("form_definition_versions")
+                      // `pdf_mapping_json` names which widget each control was imported from, which
+                      // is how a question is told apart from the source PDF's own name for a box.
+                      .select("id, form_definition_id, schema_json, pdf_mapping_json")
+                      .eq("org_id", input.orgId)
+                      .in("id", versionIds);
+                  if (res.error) throw new Error(res.error.message);
+                  return { data: res.data, error: null };
+              })
+            : Promise.resolve({ data: [], error: null }),
+        packetItemIds.length && !input.preloaded
+            ? supabase
+                  .from("form_packet_items")
+                  .select("id, form_definition_id")
+                  .eq("org_id", input.orgId)
+                  .in("id", packetItemIds)
+            : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const versionById = new Map<
+        string,
+        { form_definition_id: string; schema_json: unknown; pdf_mapping_json: unknown }
+    >();
+    for (const row of (versionsResult.data ?? []) as {
+        id: string;
+        form_definition_id: string;
+        schema_json: unknown;
+        pdf_mapping_json?: unknown;
+    }[]) {
+        versionById.set(String(row.id), {
+            form_definition_id: String(row.form_definition_id),
+            schema_json: row.schema_json,
+            pdf_mapping_json: row.pdf_mapping_json ?? null,
+        });
+    }
+    const formByPacketItem = new Map<string, string>();
+    for (const row of (packetItemsResult.data ?? []) as { id: string; form_definition_id: string }[]) {
+        formByPacketItem.set(String(row.id), String(row.form_definition_id));
+    }
+
+    const requirementByForm = new Map<string, string>();
+    for (const requirement of actionable) requirementByForm.set(requirement.artifact.id, requirement.requirement_id);
+
+    const forms: PinnedRequirementForm[] = [];
+    for (const item of items) {
+        const versionId = item.resolved_form_definition_version_id;
+        // A session item predating D-94 has no recoverable version. Its bindings cannot be read
+        // truthfully, and reading the latest version instead would be exactly the drift D-94 removed.
+        if (!versionId) continue;
+        const version = versionById.get(versionId);
+        if (!version) continue;
+
+        const formDefinitionId =
+            input.preloaded?.formBySessionItem.get(item.id) ??
+            formByPacketItem.get(item.packet_item_id) ??
+            version.form_definition_id;
+        const requirementId = requirementByForm.get(formDefinitionId);
+        // Realized but not required by the governing revision: it adds no question to this objective.
+        if (!requirementId) continue;
+
+        // Lenient parse: an unreadable schema yields no needs rather than failing the whole
+        // objective. A participant blocked from seeing ANY of their remaining work because one form
+        // is malformed is a worse failure than a short list.
+        const parsed = safeParseFormSchema(version.schema_json);
+        if (!parsed.success) continue;
+        const schema = parsed.data;
+
+        forms.push({
+            requirement_id: requirementId,
+            form_definition_id: formDefinitionId,
+            form_definition_version_id: versionId,
+            session_item_id: item.id,
+            schema,
+            pdfMapping: version.pdf_mapping_json,
+        });
+    }
+
+    const context: EnrollmentNeedsContext = { prog, session, subjectId, forms };
+    input.captureContext?.(context);
+    return { ok: true, value: assembleEnrollmentInformationNeeds(context, input) };
+}

@@ -57,11 +57,11 @@ describe("Universal Card Lifecycle + Capability Matrix", () => {
             supportsExpanded: true,
             supportsProfileImage: false,
         });
-        // Current Work: summary + expanded, no focus/edit, no workspace yet.
+        // Current Work: summary + focus (work-owning), no expanded overlay.
         expect(cardCapabilities("current_work")).toMatchObject({
-            supportsFocus: false,
+            supportsFocus: true,
             supportsInlineEdit: false,
-            supportsExpanded: true,
+            supportsExpanded: false,
             supportsWorkspace: false,
         });
     });

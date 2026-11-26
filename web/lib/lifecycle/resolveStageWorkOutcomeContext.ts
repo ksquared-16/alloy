@@ -12,6 +12,9 @@ import {
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import { childParticipationIdentityFromWire } from "@/lib/lifecycle/childParticipationIdentity";
+import { childJourneyOfStageWork, childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
+import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 
 export type StageWorkOutcomeContext = {
     requires_outcome_picker: boolean;
@@ -45,24 +48,57 @@ function departmentIdFromTaskMetadata(task: OperationalTaskRow): string | null {
 /** Resolve enrollment department for an opportunity when task metadata lacks department_id. */
 export async function resolveEnrollmentDepartmentForOpportunity(params: {
     supabase: SupabaseClient;
+    /**
+     * The acquisition Opportunity, when there is one. CONTEXT-FREE Enrollment has none, and
+     * passing null/"" is a legitimate call rather than a caller bug.
+     */
+    opportunityId: string | null | undefined;
     orgId: string;
-    opportunityId: string;
 }): Promise<string | null> {
-    const { data: opp, error } = await params.supabase
-        .from("opportunities")
-        .select("metadata")
-        .eq("id", params.opportunityId)
-        .eq("org_id", params.orgId)
-        .maybeSingle();
-    if (error || !opp) return null;
-
-    const md =
-        (opp as { metadata?: Record<string, unknown> }).metadata != null &&
-        typeof (opp as { metadata?: unknown }).metadata === "object"
-            ? ((opp as { metadata: Record<string, unknown> }).metadata as Record<string, unknown>)
-            : {};
-    const fromMd = trimOrNull(md.enrollment_department_id) ?? trimOrNull(md.department_id);
-    if (fromMd) return fromMd;
+    /*
+     * THE OPPORTUNITY IS A HINT, NOT A PREREQUISITE.
+     *
+     * This resolver has always had two sources: the Opportunity's own
+     * `enrollment_department_id`, and a scan for the org's active `enrollment` process. The
+     * second is the general answer — it is what makes the first optional — and it was
+     * UNREACHABLE whenever the first read failed, because the function returned null on
+     * `error || !opp` before ever getting there.
+     *
+     * Context-free Enrollment (Path A) has no Opportunity, so callers pass "". Postgres
+     * rejects that as a uuid, the read returns an error, and the early return fired — so
+     * `departmentId` came back null, `loadConfiguredStageInventory` was called with an empty
+     * id, it matched no department, and the Configured Stage Referential Integrity guard
+     * refused Complete Enrollment with `Stage "enrolled" is not part of the configured
+     * Business Process. Configured stages: (none)`.
+     *
+     * That message reads as a TENANT CONFIGURATION FAULT and is not one. Firefly's published
+     * revision 22 declares six stages including `enrolled`; the runtime had simply looked in
+     * no department at all. Diagnosing it as configuration is exactly the wrong turn this
+     * program has already taken more than once, so the empty case is now handled where it
+     * belongs rather than being reported as absent configuration.
+     *
+     * A blank id therefore SKIPS the hint and uses the general source. A real Opportunity that
+     * cannot be read does the same, rather than failing closed on a lookup that was only ever
+     * an optimisation.
+     */
+    const opportunityId = trimOrNull(params.opportunityId);
+    if (opportunityId) {
+        const { data: opp, error } = await params.supabase
+            .from("opportunities")
+            .select("metadata")
+            .eq("id", opportunityId)
+            .eq("org_id", params.orgId)
+            .maybeSingle();
+        if (!error && opp) {
+            const md =
+                (opp as { metadata?: Record<string, unknown> }).metadata != null &&
+                typeof (opp as { metadata?: unknown }).metadata === "object"
+                    ? ((opp as { metadata: Record<string, unknown> }).metadata as Record<string, unknown>)
+                    : {};
+            const fromMd = trimOrNull(md.enrollment_department_id) ?? trimOrNull(md.department_id);
+            if (fromMd) return fromMd;
+        }
+    }
 
     const { data: depts } = await params.supabase
         .from("departments")
@@ -128,15 +164,31 @@ export async function resolveStageWorkOutcomeContext(params: {
     }).plan;
     if (!plan?.outcomes.length) return null;
 
-    const journeySegment = plan.journey_segment ?? "family";
+    // Reconciled across the plan and the stage, not read from the plan alone — a stage configured
+    // child-grain whose plan still says family must not hand back a family subject to execute.
+    const segment = resolveJourneySegment({
+        planSegment: plan.journey_segment,
+        stageGrain: stageRecord?.grain,
+    });
+    if (!segment.ok) return null;
+    const journeySegment = segment.segment;
     const subject: StageOutcomeExecutionSubject = {
         journey_segment: journeySegment,
         opportunity_id: task.entity_id,
     };
 
     if (journeySegment === "child") {
-        const ocmId = trimOrNull(task.metadata?.opportunity_customer_member_id);
-        if (ocmId) subject.opportunity_customer_member_id = ocmId;
+        // THIS task's own metadata — not a scrape across the family. The task IS the work being
+        // acted on, so the child it names is the child the operator chose.
+        // Stage work created for a child records it under the work's own child keys
+        // (`bp_subject_*`, stageWorkChildSubject.ts); older work carried the wire names.
+        const identity = childParticipationIdentityFromWire(task.metadata ?? {});
+        const childId = identity.subjectId ?? childOfStageWork(task.metadata);
+        const journeyId = identity.participationId ?? childJourneyOfStageWork(task.metadata);
+        if (childId) subject.customer_member_id = childId;
+        if (journeyId) subject.process_instance_id = journeyId;
+        // Legacy OCM id kept for the executor's temporary fallback when the above are absent.
+        if (identity.legacyOcmId) subject.opportunity_customer_member_id = identity.legacyOcmId;
     }
 
     return {

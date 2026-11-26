@@ -63,10 +63,10 @@ type ChildRow = {
     person_id?: string | null;
     first_name?: string;
     last_name?: string;
-    desired_program_type?: string | null;
+    program_category_id?: string | null;
     program_room_cohort_key?: string | null;
-    desired_schedule_type?: string | null;
-    desired_start_date?: string | null;
+    schedule_type?: string | null;
+    start_date?: string | null;
     location_id?: string | null;
 };
 
@@ -123,7 +123,7 @@ function buildSupabaseForRuntimePreflight(input: {
                                         customer_id: "cust-1",
                                         primary_person_id: "parent-1",
                                         location_id: "loc-1",
-                                        desired_program_type: "infant",
+                                        program_type: "infant",
                                         metadata: input.existingMetadata ?? {},
                                         work_unit_id: "wu-1",
                                     },
@@ -144,10 +144,10 @@ function buildSupabaseForRuntimePreflight(input: {
                                     id: c.id,
                                     customer_member_id: c.customer_member_id,
                                     location_id: c.location_id ?? "loc-1",
-                                    desired_program_type: c.desired_program_type ?? "infant",
+                                    program_category_id: c.program_category_id ?? "cat-infant",
                                     program_room_cohort_key: c.program_room_cohort_key ?? null,
-                                    desired_schedule_type: c.desired_schedule_type ?? null,
-                                    desired_start_date: c.desired_start_date ?? null,
+                                    schedule_type: c.schedule_type ?? null,
+                                    start_date: c.start_date ?? null,
                                     outcome_status_key: null,
                                 })),
                                 error: null,
@@ -179,6 +179,40 @@ function buildSupabaseForRuntimePreflight(input: {
                     }),
                 };
             }
+            if (table === "departments") {
+                return {
+                    select: vi.fn().mockReturnValue({
+                        eq: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                maybeSingle: vi.fn().mockResolvedValue({
+                                    data: { metadata: {} },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "persons") {
+                return {
+                    select: vi.fn().mockReturnValue({
+                        eq: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                maybeSingle: vi.fn().mockResolvedValue({
+                                    data: {
+                                        id: "parent-1",
+                                        first_name: "Pat",
+                                        last_name: "Parent",
+                                        email: "pat@example.com",
+                                        phone: "555-0100",
+                                    },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            }
             return { select: vi.fn() };
         }),
         updatedRow,
@@ -199,8 +233,8 @@ describe("approve_enrollment runtime preflight (real evaluator)", () => {
                     customer_member_id: "cm-1",
                     person_id: "person-1",
                     program_room_cohort_key: "",
-                    desired_schedule_type: "",
-                    desired_start_date: "2026-06-15",
+                    schedule_type: "",
+                    start_date: "2026-06-15",
                 },
             ],
         });
@@ -223,13 +257,13 @@ describe("approve_enrollment runtime preflight (real evaluator)", () => {
         const classroom = result.completion_requirements?.blocking.find(
             (v) => v.field_key === "program_room_cohort_key"
         );
-        expect(classroom?.label).toBe("Classroom");
+        expect(classroom?.label).toBe("Child · Classroom or Room");
         expect(classroom?.missing_reason).toContain("Classroom");
 
         const schedule = result.completion_requirements?.blocking.find(
-            (v) => v.field_key === "desired_schedule_type"
+            (v) => v.field_key === "schedule_type"
         );
-        expect(schedule?.label).toBe("Schedule");
+        expect(schedule?.label).toBe("Child · Desired Schedule");
         expect(schedule?.missing_reason).toContain("Schedule");
 
         expect(emitStatusChangedEvent).not.toHaveBeenCalled();
@@ -253,7 +287,7 @@ describe("approve_enrollment runtime preflight (real evaluator)", () => {
         expect(
             result.completion_requirements?.blocking.some((v) => v.field_key === "inquiry_children")
         ).toBe(true);
-        expect(result.completion_requirements?.blocking.some((v) => v.label === "Child")).toBe(true);
+        expect(result.completion_requirements?.blocking.some((v) => v.label === "At least one child")).toBe(true);
         expect(emitStatusChangedEvent).not.toHaveBeenCalled();
         expect(emitEvent).not.toHaveBeenCalled();
         expect(supabase.oppUpdateFn).not.toHaveBeenCalled();
@@ -267,8 +301,8 @@ describe("approve_enrollment runtime preflight (real evaluator)", () => {
                     customer_member_id: "cm-1",
                     person_id: "person-1",
                     program_room_cohort_key: "room-a",
-                    desired_schedule_type: "full_day",
-                    desired_start_date: "",
+                    schedule_type: "full_day",
+                    start_date: "",
                 },
             ],
         });
@@ -283,9 +317,9 @@ describe("approve_enrollment runtime preflight (real evaluator)", () => {
         );
         expect(result.ok).toBe(false);
         if (result.ok) return;
-        const start = result.completion_requirements?.blocking.find((v) => v.field_key === "desired_start_date");
-        expect(start?.label).toBe("Enrollment Start Date");
-        expect(start?.missing_reason).toContain("Start date");
+        const start = result.completion_requirements?.blocking.find((v) => v.field_key === "start_date");
+        expect(start?.label).toBe("Child · Desired Start Date");
+        expect(start?.missing_reason).toContain("Desired Start Date");
         expect(emitEvent).not.toHaveBeenCalled();
     });
 
@@ -297,8 +331,8 @@ describe("approve_enrollment runtime preflight (real evaluator)", () => {
                     customer_member_id: "cm-1",
                     person_id: "person-1",
                     program_room_cohort_key: "room-a",
-                    desired_schedule_type: "full_day",
-                    desired_start_date: "2026-06-15",
+                    schedule_type: "full_day",
+                    start_date: "2026-06-15",
                 },
             ],
         });

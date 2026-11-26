@@ -8,12 +8,13 @@ export type AddInquiryChildSubmitPayload = {
     first_name: string;
     last_name: string;
     date_of_birth?: string | null;
-    program?: string | null;
+    /** Program category FK (`location_program_categories.id`) — the stored OCM value. */
+    program_category_id?: string | null;
     location_id?: string | null;
     program_room_cohort_key?: string | null;
     age_group?: string | null;
-    desired_schedule_type?: string | null;
-    desired_start_date?: string | null;
+    schedule_type?: string | null;
+    start_date?: string | null;
 };
 
 export type InquiryChildRowForDuplicateCheck = {
@@ -36,7 +37,7 @@ export function validateAddInquiryChildSubmitPayload(payload: AddInquiryChildSub
     if (dob && !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
         return "Date of birth must be YYYY-MM-DD.";
     }
-    const start = payload.desired_start_date?.trim() ?? "";
+    const start = payload.start_date?.trim() ?? "";
     if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
         return "Desired start date must be YYYY-MM-DD.";
     }
@@ -99,7 +100,7 @@ export async function submitAddInquiryChildFromDrawer(
     const last = input.payload.last_name.trim();
     const display_name = [first, last].filter(Boolean).join(" ").trim();
     const dob = input.payload.date_of_birth?.trim() || null;
-    const program = input.payload.program?.trim() || null;
+    const programCategoryId = input.payload.program_category_id?.trim() || null;
     const ageGroup = input.payload.age_group?.trim() || null;
 
     const cmRes = await fetchImpl("/api/admin/customer-members", {
@@ -155,16 +156,16 @@ export async function submitAddInquiryChildFromDrawer(
     });
 
     const ocmPatch: InquiryChildOcmPatch = {};
-    if (program) ocmPatch.desired_program_type = program;
+    if (programCategoryId) ocmPatch.program_category_id = programCategoryId;
     const locationId =
         input.payload.location_id?.trim() || input.opportunityLocationId?.trim() || "";
     if (locationId) ocmPatch.location_id = locationId;
     const roomKey = input.payload.program_room_cohort_key?.trim();
     if (roomKey) ocmPatch.program_room_cohort_key = roomKey;
-    const schedule = input.payload.desired_schedule_type?.trim();
-    if (schedule) ocmPatch.desired_schedule_type = schedule;
-    const start = input.payload.desired_start_date?.trim();
-    if (start) ocmPatch.desired_start_date = start;
+    const schedule = input.payload.schedule_type?.trim();
+    if (schedule) ocmPatch.schedule_type = schedule;
+    const start = input.payload.start_date?.trim();
+    if (start) ocmPatch.start_date = start;
 
     if (Object.keys(ocmPatch).length > 0) {
         await patchOpportunityCustomerMemberFromInquiryChild(ocmId, ocmPatch);

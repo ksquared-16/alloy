@@ -1,0 +1,110 @@
+{
+ "monthly 2026-09": {
+  "status": 200,
+  "counts": {
+   "generated": 0,
+   "unchanged": 0,
+   "alreadyPosted": 1,
+   "notDue": 7,
+   "refused": 0,
+   "errors": 0
+  },
+  "to_bill": [],
+  "already": [
+   "Certb Certhouse · Certhouse Family 2026-09"
+  ]
+ },
+ "monthly 2026-10": {
+  "status": 200,
+  "counts": {
+   "generated": 0,
+   "unchanged": 1,
+   "alreadyPosted": 0,
+   "notDue": 7,
+   "refused": 0,
+   "errors": 0
+  },
+  "to_bill": [],
+  "already": [
+   "Certb Certhouse · Certhouse Family 2026-10"
+  ]
+ },
+ "weekly 2026-09": {
+  "status": 200,
+  "counts": {
+   "generated": 0,
+   "unchanged": 19,
+   "alreadyPosted": 0,
+   "notDue": 21,
+   "refused": 0,
+   "errors": 0
+  },
+  "to_bill": [],
+  "already": [
+   "Pbchild Automation · Automation Family 2026-09-22~2026-09-28",
+   "Pbchild Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbfour Automation · Automation Family 2026-09-22~2026-09-28",
+   "Pbfour Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbtwo Automation · Automation Family 2026-09-15~2026-09-21",
+   "Pbtwo Automation · Automation Family 2026-09-22~2026-09-28",
+   "Pbtwo Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbfive Automation · Automation Family 2026-09-15~2026-09-21",
+   "Pbfive Automation · Automation Family 2026-09-22~2026-09-28",
+   "Pbfive Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbthree Automation · Automation Family 2026-09-08~2026-09-14",
+   "Pbthree Automation · Automation Family 2026-09-15~2026-09-21",
+   "Pbthree Automation · Automation Family 2026-09-22~2026-09-28",
+   "Pbthree Automation · Automation Family 2026-09-29~2026-10-05",
+   "Certa Certhouse · Certhouse Family 2026-09-01~2026-09-07",
+   "Certa Certhouse · Certhouse Family 2026-09-08~2026-09-14",
+   "Certa Certhouse · Certhouse Family 2026-09-15~2026-09-21",
+   "Certa Certhouse · Certhouse Family 2026-09-22~2026-09-28",
+   "Certa Certhouse · Certhouse Family 2026-09-29~2026-10-05"
+  ]
+ },
+ "weekly 2026-10": {
+  "status": 200,
+  "counts": {
+   "generated": 18,
+   "unchanged": 6,
+   "alreadyPosted": 6,
+   "notDue": 10,
+   "refused": 0,
+   "errors": 0
+  },
+  "to_bill": [
+   "Pbchild Automation · Automation Family 2026-10-13~2026-10-19 $195.00",
+   "Pbchild Automation · Automation Family 2026-10-20~2026-10-26 $195.00",
+   "Pbchild Automation · Automation Family 2026-10-27~2026-11-02 $195.00",
+   "Pbfour Automation · Automation Family 2026-10-13~2026-10-19 $195.00",
+   "Pbfour Automation · Automation Family 2026-10-20~2026-10-26 $195.00",
+   "Pbfour Automation · Automation Family 2026-10-27~2026-11-02 $195.00",
+   "Pbtwo Automation · Automation Family 2026-10-13~2026-10-19 $195.00",
+   "Pbtwo Automation · Automation Family 2026-10-20~2026-10-26 $195.00",
+   "Pbtwo Automation · Automation Family 2026-10-27~2026-11-02 $195.00",
+   "Pbfive Automation · Automation Family 2026-10-13~2026-10-19 $195.00",
+   "Pbfive Automation · Automation Family 2026-10-20~2026-10-26 $195.00",
+   "Pbfive Automation · Automation Family 2026-10-27~2026-11-02 $195.00",
+   "Pbthree Automation · Automation Family 2026-10-13~2026-10-19 $195.00",
+   "Pbthree Automation · Automation Family 2026-10-20~2026-10-26 $195.00",
+   "Pbthree Automation · Automation Family 2026-10-27~2026-11-02 $195.00",
+   "Certa Certhouse · Certhouse Family 2026-10-13~2026-10-19 $185.00",
+   "Certa Certhouse · Certhouse Family 2026-10-20~2026-10-26 $185.00",
+   "Certa Certhouse · Certhouse Family 2026-10-27~2026-11-02 $185.00"
+  ],
+  "already": [
+   "Pbchild Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbfour Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbtwo Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbfive Automation · Automation Family 2026-09-29~2026-10-05",
+   "Pbthree Automation · Automation Family 2026-09-29~2026-10-05",
+   "Certa Certhouse · Certhouse Family 2026-09-29~2026-10-05",
+   "Pbchild Automation · Automation Family 2026-10-06~2026-10-12",
+   "Pbfour Automation · Automation Family 2026-10-06~2026-10-12",
+   "Pbtwo Automation · Automation Family 2026-10-06~2026-10-12",
+   "Pbfive Automation · Automation Family 2026-10-06~2026-10-12",
+   "Pbthree Automation · Automation Family 2026-10-06~2026-10-12",
+   "Certa Certhouse · Certhouse Family 2026-10-06~2026-10-12"
+  ]
+ }
+}

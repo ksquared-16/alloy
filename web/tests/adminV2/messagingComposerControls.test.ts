@@ -51,11 +51,12 @@ describe("Messaging composer shared controls", () => {
         expect(toggle).not.toContain("bg-alloy-midnight text-white");
     });
 
-    it("Send later and BOS Assist are active entry points", () => {
+    it("Send later and BOS are active entry points", () => {
         const actions = read("components/adminV2/messaging/ComposerReplyActionCluster.tsx");
         expect(actions).toContain("Send later");
-        expect(actions).toContain("BOS Assist");
+        expect(actions).toContain('label="BOS"');
         expect(actions).toContain('data-adminv2-composer-bos-assist="true"');
+        expect(actions).not.toContain("BOS Assist");
         expect(actions).not.toContain("BOS Enhance");
     });
 
@@ -68,10 +69,11 @@ describe("Messaging composer shared controls", () => {
         expect(modal).toContain("combineLocalDateAndTime");
     });
 
-    it("BOS Assist modal exposes intent choices and coming-next gap", () => {
+    it("BOS modal exposes intent choices and coming-next gap", () => {
         const modal = read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx");
         const intents = read("lib/adminV2/messaging/messagingComposerBosEnhance.ts");
-        expect(modal).toContain("BOS Assist");
+        expect(modal).toContain('title="BOS"');
+        expect(modal).not.toContain("BOS Assist");
         expect(modal).not.toContain("BOS Enhance");
         expect(modal).toContain("MESSAGING_BOS_ENHANCE_INTENTS");
         expect(intents).toContain("Make clearer");

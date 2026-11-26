@@ -1,0 +1,77 @@
+{
+ "build": "162e8503095ce5cf0b91d70f3a6430f5d22bb4e7",
+ "monthlyBefore": "DUE NOW $0.00 BALANCE · OCTOBER 2026 $31.00 $31.00 charged · $0.00 paid SCHEDULED $18.00 activates with its period",
+ "adjust": {
+  "options": [
+   "Correct the amount — lower this charge",
+   "Correct the amount — raise this charge",
+   "Give a goodwill credit"
+  ],
+  "selected": "Correct the amount — lower this charge\n▾",
+  "discountNote": "A discount is a policy, not a one-off adjustment — set it from Manage discounts.",
+  "effectiveDate": "",
+  "confirmEnabledWithoutPreview": true,
+  "preview": "Reduces what the family owes by $5.00\nCorrects: materials_fee of $18.00 from Oct 16, 2026\nThat charge belongs to October 2026\nRecorded in October 2026 (October 2026)\nEffective Oct 20, 2026\nOwed by Mara Monthly 100%, by the standing arrangement.\nAccounted under 4030 · Supply Fees — the corrected charge's own account\nReason: W7-F036 certification: Materials billed $5 over the agreed price\nTakes effect by itself in its billing period — after review where your organization requires one.",
+  "notice": null
+ },
+ "monthlyAfter": "DUE NOW $0.00 BALANCE · OCTOBER 2026 $26.00 $26.00 charged · $0.00 paid SCHEDULED $18.00 activates with its period",
+ "creditsRows": [
+  "— | Adjustment | Milo Monthly | 4030 · Supply Fees | -$5.00 | Posted | Not allocated | One-time · W7-F036 certification: Materials billed $5 over the agreed price",
+  "— | Credit | Milo Monthly | 4060 · Discounts & Credits | -$5.00 | Posted | Not allocated | One-time · Skipping 1 of 5"
+ ],
+ "split": {
+  "strip": "DUE NOW $0.00 BALANCE · OCTOBER 2026 $75.00 $75.00 charged · $0.00 paid",
+  "payerRow": "Rosa Split | $18.75 | No payment method on file | Dana Split | $56.25 | No payment method on file | No discount | Manage responsibility → | Manage payments →",
+  "ledger": [
+   "Oct 20, 2026 | Fee | Sasha Split | 4010 · Registration Fees | $75.00 | Posted | Split | Registration fee"
+  ],
+  "editorDate": "",
+  "summary": "2 responsible parties for the account from Oct 20, 2026\n\n75% · Dana Split\n\n25% · Rosa Split",
+  "saveLabel": "Save responsibility",
+  "saveEnabled": true,
+  "funding": "Dana Split | Expected funding · None | Manage funding | Rosa Split | Expected funding · None | Manage funding",
+  "shareInputs": [
+   "INPUT:percentage",
+   "INPUT:percentage"
+  ],
+  "balanceAfterTyping70": [
+   "70",
+   "30"
+  ],
+  "balanceAfterTyping45InSecond": [
+   "55",
+   "45"
+  ],
+  "summaryAfterEdit": "2 responsible parties for the account from Oct 20, 2026\n\n55% · Dana Split\n\n45% · Rosa Split",
+  "addLabel": "+ Add Gale Split",
+  "afterAdd": {
+   "blocker": [],
+   "saveEnabled": true,
+   "values": [
+    "55",
+    "45",
+    ""
+   ]
+  },
+  "afterAddOver": {
+   "blocker": [],
+   "saveEnabled": true
+  },
+  "afterAddUnder": {
+   "blocker": [],
+   "saveEnabled": true
+  },
+  "chargeDetailFunding": [
+   "Expected funding · None | Manage funding",
+   "Expected funding · None | Manage funding"
+  ]
+ },
+ "focus": {
+  "manageResponsibility": 1,
+  "strip": "DUE NOW $2,005.00 $2,005.00 past due BALANCE · OCTOBER 2026 $2,081.00 $2,121.00 charged · $40.00 paid SCHEDULED $2,440.00 activates with its period"
+ },
+ "writes": [
+  "billing.adjust_account:preview",
+  "billing.adjust_account:execute"
+ ]
+}

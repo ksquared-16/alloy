@@ -1,0 +1,21 @@
+{
+  "leafOwners": [
+    {
+      "tag": "BUTTON",
+      "cls": "alloy-os-financials__action",
+      "text": "Record payment →",
+      "visible": true,
+      "z": "auto",
+      "opacity": "1",
+      "box": "135x25@550,3051",
+      "ownerCardKey": "financials_detail"
+    }
+  ],
+  "elevated": 1,
+  "scrims": [
+    {
+      "cls": "alloy-os-fp-depth-scrim",
+      "vis": true
+    }
+  ]
+}

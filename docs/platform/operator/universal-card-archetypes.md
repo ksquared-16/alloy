@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — System 5A — Universal Card Archetypes
 
 **Revision:** 1  
@@ -173,6 +180,8 @@ No blockers
 **Purpose:** Explain history.
 
 **Characteristics:** Chronological · timeline is the content · CTA de-emphasized or absent.
+
+**Current Work preview:** The inline “View recent activity” preview on the Current Work card consumes the same canonical activity projection as this Timeline archetype (`resolveLeadActivityPreview` → operational context truth). A thin adapter applies Current Work prioritization and row limits; it does not maintain a separate activity store.
 
 **Example:**
 

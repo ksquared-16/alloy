@@ -129,22 +129,20 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
         customer_member_id: pickEntityId(mirror?.customer_member_id, vmRecord.customer_member_id) ?? "",
         "child.customer_member_id": pickEntityId(mirror?.customer_member_id, vmRecord.customer_member_id) ?? "",
         ocm_id: pickEntityId(mirror?.id, vmRecord.ocm_id) ?? "",
-        "inquiry_child.desired_program_type": pickDisplay(
-            vmRecord.desired_program_type,
-            vmRecord.program_type,
-            mirror?.program_label,
-            vmRecord["inquiry_child.desired_program_type"],
+        "inquiry_child.program_category_id": pickEntityId(
+            vmRecord.program_category_id,
+            vmRecord["inquiry_child.program_category_id"],
         ) ?? "",
-        "inquiry_child.desired_schedule_type": pickDisplay(
-            vmRecord.desired_schedule_type,
+        "inquiry_child.schedule_type": pickDisplay(
             vmRecord.schedule_type,
-            vmRecord["inquiry_child.desired_schedule_type"],
+            vmRecord.schedule_type,
+            vmRecord["inquiry_child.schedule_type"],
         ) ?? "",
         "child.program": pickDisplay(mirror?.program_label, vmRecord.program_label, vmRecord["child.program"], vmRecord["inquiry_child.program"]) ?? "",
         "inquiry_child.program": pickDisplay(mirror?.program_label, vmRecord.program_label, vmRecord["inquiry_child.program"], vmRecord["child.program"]) ?? "",
-        "inquiry_child.desired_start_date": pickDisplay(
-            vmRecord.desired_start_date,
-            vmRecord["inquiry_child.desired_start_date"],
+        "inquiry_child.start_date": pickDisplay(
+            vmRecord.start_date,
+            vmRecord["inquiry_child.start_date"],
         ) ?? "",
         "inquiry_child.location_id": pickDisplay(mirror?.location_label, vmRecord.location_label, vmRecord["inquiry_child.location_id"]) ?? "",
         "inquiry_child.program_room_cohort_key": pickDisplay(

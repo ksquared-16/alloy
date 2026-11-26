@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ApplyRegistryResolvedActionHost } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
@@ -11,7 +12,10 @@ import {
     resolveOpportunityRegistryActionSuccessMessage,
 } from "@/lib/admin/actions/resolveOpportunityRegistryActionFeedbackMessage";
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import {
+    dispatchOpenCurrentWorkAction,
+    isCurrentWorkHostedRecordAction,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
 
 function resolveScheduleTourFormKey(action: ResolvedActionForClient): string {
     const fromPayload =
@@ -46,7 +50,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
     actionHost: OpportunityDrawerVmHeaderActionHost;
 }) {
     const router = useRouter();
-    const { openDrawer } = useAdminDrawer();
+    const focusRecord = useOperatorRecordFocus();
     const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
     const { showSuccess, showError, clearPreflight, applyPreflightBlocked } = params.actionHost;
 
@@ -65,10 +69,21 @@ export function useOpportunityDrawerVmHeaderActions(params: {
             clearPreflight();
             try {
                 if (
-                    (actionKey === "create_task" || intent === "create_task") &&
-                    host?.openCreateWork
+                    (actionKey === "create_task"
+                        || actionKey === "create_work_item"
+                        || intent === "create_task"
+                        || intent === "create_work_item")
+                    && host?.openCreateWork
                 ) {
                     host.openCreateWork({ opportunity_id: id });
+                    return;
+                }
+
+                // E2E-03: a relationship capability the registry hosts in the Current Work workspace
+                // (Add Child) opens there from Manage too — the same command the process card runs,
+                // never the legacy relationship wizard. See openCurrentWorkAction.ts.
+                if (isCurrentWorkHostedRecordAction(action)) {
+                    dispatchOpenCurrentWorkAction({ opportunity_id: id, action });
                     return;
                 }
 
@@ -80,7 +95,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
 
                 const result = await applyRegistryResolvedActionClient(action, {
                     router,
-                    openDrawer,
+                    focusRecord: (r) => void focusRecord(r),
                     entityId: id,
                     departmentId: params.departmentId ?? null,
                     workUnitId: params.workUnitId ?? null,
@@ -126,9 +141,18 @@ export function useOpportunityDrawerVmHeaderActions(params: {
                         resolvedIntent === "send_form" ||
                         resolvedIntent === "send_enrollment_packet" ||
                         resolvedIntent === "create_task" ||
+                        resolvedIntent === "create_work_item" ||
                         resolvedIntent === "quick_message" ||
                         actionKey === "quick_message" ||
-                        actionKey === "review_enrollment_packet"
+                        actionKey === "review_enrollment_packet" ||
+                        // Owns its own per-channel result copy ("Email queued ·
+                        // SMS not sent — suppressed"). A generic "completed" toast
+                        // on top would contradict it and re-introduce the very
+                        // claim the success contract forbids.
+                        resolvedIntent === "send_tour_invitation" ||
+                        actionKey === "send_tour_invitation" ||
+                        // Opens ChangeLeadLocationModal — success belongs to the modal save path.
+                        actionKey === "change_lead_location"
                     ) {
                         return;
                     }
@@ -154,7 +178,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
             params.workUnitId,
             applyPreflightBlocked,
             clearPreflight,
-            openDrawer,
+            focusRecord,
             router,
             showError,
             showSuccess,

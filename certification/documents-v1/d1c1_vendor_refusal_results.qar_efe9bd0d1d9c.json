@@ -1,0 +1,17 @@
+{
+  "summary": {
+    "passed": 1,
+    "total": 1,
+    "qa_run_id": "qar_efe9bd0d1d9c",
+    "at": "2026-10-23T14:41:08Z"
+  },
+  "results": [
+    {
+      "case": "public vendor application: corrupt files refused before anything is written",
+      "persona": null,
+      "pass": true,
+      "status": 415,
+      "code": "SCREENING_REFUSED"
+    }
+  ]
+}

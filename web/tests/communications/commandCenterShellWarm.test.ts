@@ -14,22 +14,26 @@ describe("CommandCenterShell warm hydration", () => {
         const cache = read("lib/communications/v2/commandCenterPrefetchCache.ts");
         expect(cache).toContain("getCommandCenterFirstConversationWarm");
         expect(cache).toContain("warmFirstConversationWorkspace");
+        expect(cache).toContain("prefetchDrawerFamilyWorkspace");
         expect(cache).toContain("runWhenAdminV2PrimarySurfaceReady");
-        expect(shell).toContain("initialWorkspaceFromWarm");
-        expect(shell).toContain("initialHydratingWorkspace");
+        expect(shell).toContain("useFamilyCommunicationRuntime");
+        expect(shell).toContain('surfaceVariant: "workspace_inbox"');
         expect(shell).toContain("getCommandCenterWarmSelectedConversationId");
         expect(shell).toContain("CommsQueueListReserve");
         expect(shell).toContain("CommsWorkspacePanelReserve");
+        expect(shell).not.toContain("loadLive");
+        expect(shell).not.toContain("runFamilySend");
         expect(shell).not.toContain("data-cc-loading-overlay");
     });
 
-    it("openConversation reuses warm workspace before network", () => {
+    it("Workspace runtime owns family workspace loading instead of CommandCenterShell", () => {
         const shell = read("app/adminV2/communications/CommandCenterShell.tsx");
-        expect(shell).toMatch(/getCommandCenterFirstConversationWarm\(\)[\s\S]*?conversationId === id/);
+        expect(shell).toContain("initialThreadId: selectedId");
+        expect(shell).toContain("runtime.send");
+        expect(shell).not.toContain("/api/admin/communications/family-workspace?");
     });
 
     it("shell and sidebar schedule command center warm after primary surface", () => {
-        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain("scheduleCommunicationsWorkspaceWarm");
         expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain("warmCommunicationsWorkspaceModal");
         expect(read("app/adminV2/components/TopNavBar.tsx")).toContain("warmCommunicationsWorkspaceModal");
     });

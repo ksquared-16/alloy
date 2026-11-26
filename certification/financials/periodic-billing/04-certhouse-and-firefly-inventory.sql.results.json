@@ -1,0 +1,298 @@
+{
+  "trusted_host_action_id": "tha_db59264dbd29dc",
+  "query_hash": "267c3c0a1bb2590278d78e3f2a4d374a5d98d273886b93b9f7108a644fda52a2",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T00:39:52.873Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_db59264dbd29dc",
+    "query_hash": "267c3c0a1bb2590278d78e3f2a4d374a5d98d273886b93b9f7108a644fda52a2",
+    "authorization_id": "grnt_1a0b37260d2045b7",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T00:39:54.644Z",
+    "question_ids": [
+      "certhouse_convergence",
+      "firefly_agreements",
+      "firefly_children",
+      "firefly_rate_plans"
+    ],
+    "questions": {
+      "certhouse_convergence": {
+        "question_id": "certhouse_convergence",
+        "row_count": null,
+        "rows": [
+          {
+            "certa": {
+              "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+              "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+              "charges": [
+                {
+                  "id": "aa0f6855-7ba8-4c8b-a48d-505103357f72",
+                  "service_date": "2026-09-01",
+                  "status": "draft",
+                  "amount_cents": 18500,
+                  "created_at": "2026-09-19 02:29:35.092911+00"
+                },
+                {
+                  "id": "37bb5395-bcd6-4030-b70a-d5c380fa8da1",
+                  "service_date": "2026-09-08",
+                  "status": "draft",
+                  "amount_cents": 18500,
+                  "created_at": "2026-09-19 02:29:36.29446+00"
+                },
+                {
+                  "id": "ee2ae873-0836-4c9e-921a-bc231de87def",
+                  "service_date": "2026-09-15",
+                  "status": "draft",
+                  "amount_cents": 18500,
+                  "created_at": "2026-09-19 02:29:37.508185+00"
+                },
+                {
+                  "id": "ef44f450-277d-478d-9ef5-be6fd10c7d90",
+                  "service_date": "2026-09-22",
+                  "status": "draft",
+                  "amount_cents": 18500,
+                  "created_at": "2026-09-19 02:29:38.745738+00"
+                },
+                {
+                  "id": "c40a88bc-3158-4602-9a0f-cd4f1e5b4885",
+                  "service_date": "2026-09-29",
+                  "status": "draft",
+                  "amount_cents": 18500,
+                  "created_at": "2026-09-19 02:29:40.024384+00"
+                }
+              ]
+            },
+            "certb": {
+              "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+              "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+              "charges": [
+                {
+                  "id": "18e860f9-8ce5-4645-9283-ca3ebcb9a4a9",
+                  "service_date": "2026-09-01",
+                  "status": "posted",
+                  "amount_cents": 145000,
+                  "created_at": "2026-09-19 02:27:57.75725+00"
+                },
+                {
+                  "id": "bf9d0458-433e-4fe8-9ec1-0b16b55738af",
+                  "service_date": "2026-10-01",
+                  "status": "draft",
+                  "amount_cents": 145000,
+                  "created_at": "2026-09-20 20:55:08.905848+00"
+                }
+              ]
+            },
+            "today_utc": "2026-09-22"
+          }
+        ]
+      },
+      "firefly_agreements": {
+        "question_id": "firefly_agreements",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "agreement_id": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+                "ocm": null,
+                "status": "active",
+                "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+                "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "start_date": "2026-08-26",
+                "live_tuition_term": false,
+                "tuition_charges": 1
+              },
+              {
+                "agreement_id": "6f409c2d-2227-48e7-a365-f2c12fc2d929",
+                "ocm": null,
+                "status": "active",
+                "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+                "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "start_date": "2026-08-26",
+                "live_tuition_term": false,
+                "tuition_charges": 0
+              },
+              {
+                "agreement_id": "fd000000-0000-4000-8000-0000000a0001",
+                "ocm": null,
+                "status": "active",
+                "customer_member_id": "fd000000-0000-4000-8000-0000000d0001",
+                "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "start_date": "2026-05-17",
+                "live_tuition_term": false,
+                "tuition_charges": 0
+              },
+              {
+                "agreement_id": "fd000000-0000-4000-8000-0000000a0004",
+                "ocm": null,
+                "status": "active",
+                "customer_member_id": "fd000000-0000-4000-8000-0000000d0004",
+                "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+                "start_date": "2026-05-17",
+                "live_tuition_term": false,
+                "tuition_charges": 0
+              },
+              {
+                "agreement_id": "fd000000-0000-4000-8000-0000000a0002",
+                "ocm": null,
+                "status": "active",
+                "customer_member_id": "fd000000-0000-4000-8000-0000000d0002",
+                "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+                "start_date": "2026-05-17",
+                "live_tuition_term": false,
+                "tuition_charges": 0
+              },
+              {
+                "agreement_id": "fd000000-0000-4000-8000-0000000a0003",
+                "ocm": null,
+                "status": "active",
+                "customer_member_id": "fd000000-0000-4000-8000-0000000d0003",
+                "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "start_date": "2026-05-17",
+                "live_tuition_term": false,
+                "tuition_charges": 0
+              },
+              {
+                "agreement_id": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                "status": "active",
+                "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+                "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "start_date": "2026-09-01",
+                "live_tuition_term": true,
+                "tuition_charges": 5
+              },
+              {
+                "agreement_id": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                "status": "active",
+                "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+                "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "start_date": "2026-09-01",
+                "live_tuition_term": true,
+                "tuition_charges": 2
+              }
+            ]
+          }
+        ]
+      },
+      "firefly_children": {
+        "question_id": "firefly_children",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "ocm": "8132b6e1-2f38-4c0b-8676-44d5af06cd17",
+                "customer_member_id": "b247b8a3-7df7-4919-9309-698796b59c3b",
+                "customer_id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+                "opportunity_id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+                "child_name": "Lennon Kurzman"
+              },
+              {
+                "ocm": "8f3b9ac3-9847-4d3e-a159-f82637d3230d",
+                "customer_member_id": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+                "customer_id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+                "opportunity_id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+                "child_name": "Wrigley Kurzman"
+              },
+              {
+                "ocm": "4453621b-b99f-4d4f-a893-00c4570562ef",
+                "customer_member_id": "9c6ba9a5-62ac-4ff0-99ab-bc985eca9a04",
+                "customer_id": "610a1496-7b96-4d1a-bf49-5cf193b31a6d",
+                "opportunity_id": "8baf8418-654d-41dc-9779-1c8c44198e41",
+                "child_name": "Touree Disposable0913"
+              },
+              {
+                "ocm": "aede816e-cf82-4905-87c1-3ca63e11eb9c",
+                "customer_member_id": "66998f6a-3d49-42c2-bedd-33f0b3d87475",
+                "customer_id": "84ad457f-d129-4b50-95d7-0efb194c1830",
+                "opportunity_id": "eb5394c7-5810-49ae-a1d0-074a29dc0390",
+                "child_name": "Toureeb Tourb0913"
+              },
+              {
+                "ocm": "3ce7389c-4391-4518-ab61-b8f0aefe5108",
+                "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+                "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+                "opportunity_id": "1a132b7f-4737-42af-897b-b942ccf5546e",
+                "child_name": "Specee Specq0913"
+              },
+              {
+                "ocm": "536c7263-f3b7-4f52-b8f5-dfb192c68325",
+                "customer_member_id": "05df9925-7617-48ac-b7b4-9a22f642edd3",
+                "customer_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+                "opportunity_id": null,
+                "child_name": "Patha Certfree"
+              },
+              {
+                "ocm": "e9965c7c-608e-4f68-a15b-2475374e2ecf",
+                "customer_member_id": "7ebf342f-b43d-4547-9c8a-43c0a96391ae",
+                "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+                "opportunity_id": "ebe6cb44-957b-48f0-9a6d-603670443ec2",
+                "child_name": "Pathb Certopp"
+              },
+              {
+                "ocm": "c3a7cb00-f782-4c00-a340-99a72287f40a",
+                "customer_member_id": "05df9925-7617-48ac-b7b4-9a22f642edd3",
+                "customer_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+                "opportunity_id": "8a0d0fb4-24f8-4716-bcb0-baf07b436471",
+                "child_name": "Patha Certfree"
+              },
+              {
+                "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+                "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+                "opportunity_id": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+                "child_name": "Certa Certhouse"
+              },
+              {
+                "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+                "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+                "opportunity_id": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+                "child_name": "Certb Certhouse"
+              }
+            ]
+          }
+        ]
+      },
+      "firefly_rate_plans": {
+        "question_id": "firefly_rate_plans",
+        "row_count": null,
+        "rows": [
+          {
+            "tuition_template": [
+              {
+                "id": "9a4d0578-822b-4aee-af2d-e9bef48bf8d0",
+                "key": "tuition"
+              }
+            ],
+            "policies": [
+              {
+                "type": "due_date",
+                "effective_start": "2026-09-18"
+              },
+              {
+                "type": "due_date",
+                "effective_start": "2026-09-19"
+              },
+              {
+                "type": "due_date",
+                "effective_start": "2026-08-01"
+              }
+            ],
+            "observed_at": "2026-09-22 00:39:54.567844+00"
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

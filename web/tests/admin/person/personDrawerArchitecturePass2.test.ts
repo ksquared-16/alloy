@@ -10,19 +10,6 @@ function read(rel: string): string {
 }
 
 describe("person drawer architecture pass 2", () => {
-    it("wires PersonDrawerContextPanel above overview for existing persons", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerContextPanel");
-        expect(drawer).toMatch(/PersonDrawerContextPanel[\s\S]*EntityDrawerOverview/);
-    });
-
-    it("uses unified enrollment_activity section instead of legacy enrollment keys", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerEnrollmentActivity");
-        expect(drawer).toContain('key: "enrollment_activity"');
-        expect(drawer).not.toContain("PersonDrawerEnrollmentMirror");
-        expect(drawer).not.toContain("PersonDrawerEnrollmentOpportunitiesMirror");
-    });
 
     it("filters legacy enrollment section keys from presentation profile output", () => {
         const sections = [
@@ -45,9 +32,4 @@ describe("person drawer architecture pass 2", () => {
         expect(emphasis).toContain("record_drawer_layouts.config_json.presentation_emphasis");
     });
 
-    it("relationships overview returns null instead of empty placeholder copy", () => {
-        const rel = read("components/admin/entity/PersonDrawerVisibilitySections.tsx");
-        expect(rel).toContain("return null");
-        expect(rel).not.toContain("No family relationships on file");
-    });
 });

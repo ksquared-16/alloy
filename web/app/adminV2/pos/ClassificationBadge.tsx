@@ -15,7 +15,7 @@ import {
 } from "@/lib/pos/processingCase/classification/classificationBadge";
 
 const STATUS_PILL: Record<string, string> = {
-    classified: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    classified: "border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine",
     unknown: "border-amber-200 bg-amber-50 text-amber-800",
     unsupported: "border-stone-200 bg-stone-100 text-stone-600",
 };

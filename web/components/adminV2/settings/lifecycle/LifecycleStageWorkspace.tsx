@@ -1,5 +1,6 @@
 "use client";
 
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import Link from "next/link";
 import {
     useEffect,
@@ -57,12 +58,14 @@ function countFieldRules(rules: LifecycleStageFieldRules | undefined): number {
 function SaveBar({
     effectiveSaveState,
     saveError,
+    saveNotice,
     saveDisabled,
     onSaveStage,
     previewHref,
 }: {
     effectiveSaveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice: string | null;
     saveDisabled: boolean;
     onSaveStage: () => void | Promise<void>;
     previewHref: string | null;
@@ -78,12 +81,21 @@ function SaveBar({
                 </span>
             :   null}
             {effectiveSaveState === "saved" ?
-                <span
-                    className="text-[10px] font-medium text-alloy-pine"
-                    data-testid="lifecycle-stage-save-saved"
-                >
-                    Saved
-                </span>
+                saveNotice ?
+                    // Saved, but not publishable yet. The count is the whole point of the message.
+                    <span
+                        className="max-w-[20rem] text-right text-[10px] font-medium text-amber-800"
+                        data-testid="lifecycle-stage-save-remaining-issues"
+                        role="status"
+                    >
+                        {saveNotice}
+                    </span>
+                :   <span
+                        className="text-[10px] font-medium text-alloy-pine"
+                        data-testid="lifecycle-stage-save-saved"
+                    >
+                        Saved
+                    </span>
             :   null}
             {effectiveSaveState === "error" && saveError ?
                 <span className="max-w-[14rem] text-right text-[10px] text-red-700" role="alert">
@@ -120,7 +132,9 @@ export type LifecycleStageWorkspaceHandle = {
     isQueueMembershipDirty: () => boolean;
     getStatusRollupDraft: () => StatusRollupV1 | null;
     isStatusRollupDirty: () => boolean;
-    getStageOperatingPlanDraft: () => import("@/lib/lifecycle/stageOperatingPlanV1").StageOperatingPlanV1 | null;
+    getStageOperatingPlanDraft: () =>
+        | import("@/lib/lifecycle/stageOperatingPlanDraftDelta").StageOperatingPlanDraftSave
+        | null;
     isStageOperatingPlanDirty: () => boolean;
 };
 
@@ -137,6 +151,7 @@ export default function LifecycleStageWorkspace({
     onStatusRollupChange,
     saveState,
     saveError,
+    saveNotice,
     onSaveStage,
     onDirtyChange,
     workspaceRef,
@@ -155,6 +170,7 @@ export default function LifecycleStageWorkspace({
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
     workspaceRef?: React.RefObject<LifecycleStageWorkspaceHandle | null>;
@@ -214,9 +230,7 @@ export default function LifecycleStageWorkspace({
     }, [bootstrap?.status_rollup_v1, stageKey]);
 
     const previewHref =
-        departmentId.trim() && bootstrap?.pipeline?.id ?
-            `/adminV2/workspace/dept/${departmentId}/work-unit/${bootstrap.pipeline.id}`
-        :   null;
+        bootstrap?.pipeline?.key?.trim() ? operatorWorkUnitHrefFromKey(bootstrap.pipeline.key) : null;
 
     if (bootstrapLoading && !bootstrap) {
         return (
@@ -243,6 +257,7 @@ export default function LifecycleStageWorkspace({
                 <SaveBar
                     effectiveSaveState={effectiveSaveState}
                     saveError={saveError}
+                    saveNotice={saveNotice ?? null}
                     saveDisabled={saveDisabled}
                     onSaveStage={onSaveStage}
                     previewHref={previewHref}
@@ -334,6 +349,28 @@ export default function LifecycleStageWorkspace({
                             stageLabel={stageLabel}
                             savedPlan={bootstrap?.stage_operating_plan ?? null}
                             onDirtyChange={setOperatingPlanDirty}
+                            configuredActions={bootstrap?.actions ?? []}
+                            processStages={
+                                // `configured_stages` — NOT `pipeline.queues`. Queues are work unit
+                                // definitions and carry no journey grain, which left the editor's
+                                // grain resolver blind to a stage whose configured metadata
+                                // disagrees with the canonical vocabulary.
+                                bootstrap?.configured_stages?.map((stage) => ({
+                                    key: stage.key,
+                                    label: stage.label,
+                                    ...(typeof stage.grain === "string" ? { grain: stage.grain } : {}),
+                                })) ??
+                                bootstrap?.pipeline?.queues?.map((lane) => ({
+                                    key: lane.key,
+                                    label: lane.label,
+                                })) ??
+                                []
+                            }
+                            configuredStatuses={
+                                // The record-status catalog, not the queue picker. The picker
+                                // drops case-layer rows, which is exactly what a transition writes.
+                                bootstrap?.record_status_vocabulary ?? []
+                            }
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </ConfigurationRuntimeUniversalCard>

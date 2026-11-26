@@ -1,0 +1,49 @@
+{
+  "trusted_host_action_id": "tha_5ca7054bfe1eae",
+  "query_hash": "4a7933fce26fb177a8b47ff58ace839b01613e719064b47098787c27819528c6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T18:52:21.091Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5ca7054bfe1eae",
+    "query_hash": "4a7933fce26fb177a8b47ff58ace839b01613e719064b47098787c27819528c6",
+    "authorization_id": "grnt_ea9d0c0ba5d74122",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T18:52:23.181Z",
+    "question_ids": [
+      "clockact"
+    ],
+    "questions": {
+      "clockact": {
+        "question_id": "clockact",
+        "row_count": null,
+        "rows": [
+          {
+            "pg_cron_installed": true,
+            "pg_net_installed": true,
+            "cron_job_present": true,
+            "cron_schedule": "*/5 * * * *",
+            "cron_active": true,
+            "cron_cmd_has_literal_bearer": false,
+            "cron_cmd_reads_vault": true,
+            "credential_in_vault": false,
+            "probe_present": true,
+            "probe_due_now": true,
+            "probe_handler": "financials.periodic_billing.evaluate",
+            "clock_wake_count": 0,
+            "clock_last_wake_at": null,
+            "cron_runs_recorded": 0,
+            "observed_at": "2026-09-21 18:52:23.086266+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

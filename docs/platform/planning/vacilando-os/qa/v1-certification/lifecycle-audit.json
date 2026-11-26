@@ -1,0 +1,280 @@
+[
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:16:44.270Z",
+    "actor": "operator",
+    "command": "sprint.finish",
+    "input": {
+      "slot": 2,
+      "acknowledge_uncommitted": true
+    },
+    "target": {
+      "kind": "worker",
+      "label": "slot 2 \u2014 Wt2 Vacilando Cert Fixture",
+      "ref": {
+        "slot": 2,
+        "worktree": "wt2-vacilando-cert-fixture"
+      }
+    },
+    "preview_summary": "End work on slot 2 (Wt2 Vacilando Cert Fixture) \u2014 close the session, keep the worktree.",
+    "confirmed": true,
+    "outcome": "failed",
+    "exit": 1,
+    "error": "error: worktree path missing: /Users/Kelly/Code/alloy-worktrees/wt2-vacilando-cert-fixture\n",
+    "sources_refreshed": [
+      "snapshot"
+    ],
+    "id": "evt_d7f80e3172446a7aa27e"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:15:30.813Z",
+    "actor": "operator",
+    "command": "worktree.delete",
+    "input": {
+      "slot": 2,
+      "confirm_text": null
+    },
+    "target": {
+      "kind": "repository",
+      "label": "delete wt2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Delete the worktree for slot 2 (wt2-vacilando-cert-fixture).",
+    "confirmed": true,
+    "outcome": "succeeded",
+    "exit": 0,
+    "error": null,
+    "sources_refreshed": [
+      "snapshot"
+    ],
+    "id": "evt_60e2a10109c76a4160ab"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:14:41.228Z",
+    "actor": "operator",
+    "command": "worktree.delete",
+    "input": {
+      "slot": 2,
+      "confirm_text": null
+    },
+    "target": {
+      "kind": "repository",
+      "label": "delete wt2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Delete the worktree for slot 2 (wt2-vacilando-cert-fixture).",
+    "confirmed": false,
+    "outcome": "refused",
+    "exit": null,
+    "error": "typed_confirmation_required",
+    "sources_refreshed": [],
+    "id": "evt_f35c3dad7fbf2cd4481a"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:14:24.397Z",
+    "actor": "operator",
+    "command": "worktree.delete",
+    "input": {
+      "slot": 2,
+      "confirm_text": "delete 2"
+    },
+    "target": {
+      "kind": "repository",
+      "label": "delete wt2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Delete the worktree for slot 2 (wt2-vacilando-cert-fixture).",
+    "confirmed": false,
+    "outcome": "refused",
+    "exit": null,
+    "error": "typed_confirmation_required",
+    "sources_refreshed": [],
+    "id": "evt_b3c069147834b3d8e4df"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:14:17.358Z",
+    "actor": "operator",
+    "command": "worktree.delete",
+    "input": {
+      "slot": 2,
+      "confirm_text": "delete 2"
+    },
+    "target": {
+      "kind": "repository",
+      "label": "delete wt2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Delete the worktree for slot 2 (wt2-vacilando-cert-fixture).",
+    "confirmed": false,
+    "outcome": "refused",
+    "exit": null,
+    "error": "typed_confirmation_required",
+    "sources_refreshed": [],
+    "id": "evt_bac92a05785f6f6cac85"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:14:17.327Z",
+    "actor": "operator",
+    "command": "worktree.delete",
+    "input": {
+      "slot": 2,
+      "confirm_text": "delete"
+    },
+    "target": {
+      "kind": "repository",
+      "label": "delete wt2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Delete the worktree for slot 2 (wt2-vacilando-cert-fixture).",
+    "confirmed": false,
+    "outcome": "refused",
+    "exit": null,
+    "error": "typed_confirmation_required",
+    "sources_refreshed": [],
+    "id": "evt_3bc4bf923f3ca338428d"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:13:44.799Z",
+    "actor": "operator",
+    "command": "promotion.close_pr",
+    "input": {
+      "slot": 2
+    },
+    "target": {
+      "kind": "repository",
+      "label": "close PR for agent/claude/2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Close the PR for agent/claude/2-vacilando-cert-fixture WITHOUT merging.",
+    "confirmed": true,
+    "outcome": "succeeded",
+    "exit": 0,
+    "error": null,
+    "sources_refreshed": [
+      "snapshot"
+    ],
+    "id": "evt_00799b3a849da84b61a8"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:12:27.324Z",
+    "actor": "operator",
+    "command": "promotion.open_pr",
+    "input": {
+      "slot": 2,
+      "title": "[CERT-FIXTURE] Vacilando certification \u2014 DO NOT MERGE"
+    },
+    "target": {
+      "kind": "repository",
+      "label": "PR for agent/claude/2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Open a DRAFT PR: agent/claude/2-vacilando-cert-fixture \u2192 staging.",
+    "confirmed": true,
+    "outcome": "succeeded",
+    "exit": 0,
+    "error": null,
+    "sources_refreshed": [
+      "snapshot"
+    ],
+    "id": "evt_9820904de6eccc6bb894"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:10:31.309Z",
+    "actor": "operator",
+    "command": "promotion.open_pr",
+    "input": {
+      "slot": 2,
+      "title": "[CERT-FIXTURE] Vacilando certification \u2014 DO NOT MERGE"
+    },
+    "target": {
+      "kind": "repository",
+      "label": "PR for agent/claude/2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Open a DRAFT PR: agent/claude/2-vacilando-cert-fixture \u2192 staging.",
+    "confirmed": true,
+    "outcome": "failed",
+    "exit": 1,
+    "error": "unknown shorthand flag: 'C' in -C\n\nUsage:  gh pr create [flags]\n\nFlags:\n  -a, --assignee login       Assign people by their login. Use \"@me\" to self-assign.\n  -B, --base branch          The branch into which you want your code merged\n  -b, --body string          Body for the pull request\n  -F, --body-file file       Read body text from file (use \"-\" to read from standard input)\n  -d, --draft                Mark pull request as a draft\n      --dry-run              Print details instead of creating the PR. May still push git changes.\n  -e, --editor               Skip prompts and open the text editor to write the title and body in. The first line is the title and the remaining text is the body.\n  -f, --fill                 Use commit info for title and body\n      --fill-first           Use first commit info for title and body\n      --fill-verbose         Use commits msg+body for description\n  -H, --head branch          The branch that contains commits for your pull request (default [current branch])\n  -l, --label name           Add labels by name\n  -m, --milestone name       Add the pull request to a milestone by name\n      --no-maintainer-edit   Disable maintainer's ability to modify pull request\n  -p, --project title        Add the pull request to projects by title\n      --recover string       Recover input from a failed run of create\n  -r, --reviewer handle      Request reviews from people or teams by their handle\n  -T, --template file        Template file to use as starting body text\n  -t, --title string         Title for the pull request\n  -w, --web                  Open the web browser to create a pull request\n  \n",
+    "sources_refreshed": [
+      "snapshot"
+    ],
+    "id": "evt_55b374d41900159a0643"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:07:31.768Z",
+    "actor": "operator",
+    "command": "repository.push",
+    "input": {
+      "slot": 2
+    },
+    "target": {
+      "kind": "repository",
+      "label": "push agent/claude/2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Push agent/claude/2-vacilando-cert-fixture to origin.",
+    "confirmed": true,
+    "outcome": "succeeded",
+    "exit": 0,
+    "error": null,
+    "sources_refreshed": [
+      "snapshot"
+    ],
+    "id": "evt_b1b3287b810f7a009aa8"
+  },
+  {
+    "schema_version": "vacilando.audit.v1",
+    "occurred_at": "2026-07-22T17:06:42.389Z",
+    "actor": "operator",
+    "command": "repository.commit",
+    "input": {
+      "slot": 2,
+      "message": "cert: fixture certification commit",
+      "allow_empty": true
+    },
+    "target": {
+      "kind": "repository",
+      "label": "commit on agent/claude/2-vacilando-cert-fixture",
+      "ref": {
+        "slot": 2
+      }
+    },
+    "preview_summary": "Create a commit on agent/claude/2-vacilando-cert-fixture.",
+    "confirmed": true,
+    "outcome": "succeeded",
+    "exit": 0,
+    "error": null,
+    "sources_refreshed": [
+      "snapshot"
+    ],
+    "id": "evt_5ed41e42acab9c661006"
+  }
+]

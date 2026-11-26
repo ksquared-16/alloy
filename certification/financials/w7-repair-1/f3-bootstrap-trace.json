@@ -1,0 +1,78 @@
+[
+  {
+    "pass": 1,
+    "verdict": "REQUEST ISSUED",
+    "cardRequests": 1,
+    "dom": {
+      "mounted": true,
+      "skeleton": false,
+      "empty": "absent",
+      "subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "reserved": null,
+      "nav": true
+    },
+    "drawer": [
+      {
+        "url": "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+        "parse": "Error: response.json: Protocol error (Network.getResponseBod"
+      }
+    ]
+  },
+  {
+    "pass": 2,
+    "verdict": "MOUNTED, NO REQUEST",
+    "cardRequests": 0,
+    "dom": {
+      "mounted": true,
+      "skeleton": true,
+      "empty": "loading",
+      "subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "reserved": "true",
+      "nav": false
+    },
+    "drawer": [
+      {
+        "url": "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+        "parse": "Error: response.json: Protocol error (Network.getResponseBod"
+      }
+    ]
+  },
+  {
+    "pass": 3,
+    "verdict": "MOUNTED, NO REQUEST",
+    "cardRequests": 0,
+    "dom": {
+      "mounted": true,
+      "skeleton": true,
+      "empty": "loading",
+      "subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "reserved": "true",
+      "nav": false
+    },
+    "drawer": [
+      {
+        "url": "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+        "parse": "Error: response.json: Protocol error (Network.getResponseBod"
+      }
+    ]
+  },
+  {
+    "pass": 4,
+    "verdict": "MOUNTED, NO REQUEST",
+    "cardRequests": 0,
+    "dom": {
+      "mounted": true,
+      "skeleton": true,
+      "empty": "loading",
+      "subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "reserved": "true",
+      "nav": false
+    },
+    "drawer": [
+      {
+        "url": "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+        "parse": "Error: response.json: Protocol error (Network.getResponseBod"
+      }
+    ]
+  }
+]

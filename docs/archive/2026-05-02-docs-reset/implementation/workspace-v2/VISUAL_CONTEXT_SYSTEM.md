@@ -1,6 +1,6 @@
 # Visual context system (implementation)
 
-**Doctrine:** Visual identity follows **operational context**, not entity type alone — see [overview-layout-doctrine.md](../../../architecture/overview-layout-doctrine.md) (rule 4) and [glossary.md](../../../architecture/glossary.md) (**Visual context**, **Operational context**).
+**Doctrine:** Visual identity follows **operational context**, not entity type alone — see [overview-layout-doctrine.md](../../architecture/overview-layout-doctrine.md) (rule 4) and [glossary.md](../../architecture/glossary.md) (**Visual context**, **Operational context**).
 
 ## Code locations
 

@@ -1,0 +1,46 @@
+{
+  "slot": 5,
+  "port": 3015,
+  "subject": "Lennon Kurzman (waitlist)",
+  "capturedAt": "2026-08-12T20:05:00Z",
+  "A_sendTourInvitation": {
+    "result": "PASS",
+    "canonicalNewMessage": true,
+    "recipient": "Kelly Kurzman",
+    "subject": "Come visit North Campus — pick a time that works",
+    "bodyHadFreshLinkBeforeOperatorEdit": true,
+    "link": "http://localhost:3015/a/9QPqrCgA",
+    "insertClickRequired": false,
+    "autoSent": false,
+    "screenshot": "A-send-tour-invitation-seeded.png"
+  },
+  "B_genericMessage": {
+    "result": "PASS",
+    "blankBodyOnOpen": true,
+    "autoInsertedTourUrl": false,
+    "insertControlVisible": true,
+    "insertMenuItem": "Tour Invitation Link",
+    "afterInsert": {
+      "link": "http://localhost:3015/a/KZM23F2k",
+      "stillInComposer": true,
+      "didNotSend": true
+    },
+    "screenshots": ["B-send-message-blank.png", "B-insert-tour-invitation-link.png"]
+  },
+  "C_freshLinkAgain": {
+    "result": "PASS (observed)",
+    "note": "Path A link 9QPqrCgA and Path B insert link KZM23F2k differ — fresh provision each invocation"
+  },
+  "D_activityReply": {
+    "result": "PASS",
+    "topicsVisible": true,
+    "forcedNewMessageHost": false,
+    "hasReply": true,
+    "screenshot": "D-activity-history.png"
+  },
+  "notBrowserVerifiedThisPass": [
+    "explicit confirm-send of edited body delivery",
+    "SMS channel prefilled Tour body in UI (unit-covered)",
+    "expired prior invitation blocking (unit/API covered earlier)"
+  ]
+}

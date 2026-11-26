@@ -2,6 +2,8 @@
  * Unified Lifecycle catalog — legacy processes (shared dept) + builder-owned departments.
  */
 
+import type { ProcessModelV1 } from "@/lib/lifecycle/processModelV1";
+
 export type LifecycleCatalogSource = "legacy" | "builder_owned";
 
 export type LifecycleWorkspaceRuntimeStatus =
@@ -21,6 +23,11 @@ export type LifecycleCatalogEntry = {
     department_name: string;
     process_id: string;
     process_key: string;
+    /**
+     * How the process executes (BP V2 S1), resolved from its published configuration. Absent on rows
+     * built before the field existed, which reads as staged lifecycle (`resolveProcessModel`).
+     */
+    process_model?: ProcessModelV1;
     lifecycle_name: string;
     source: LifecycleCatalogSource;
     stage_count: number;

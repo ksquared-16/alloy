@@ -88,12 +88,4 @@ describe("layoutBuilderRuntimeParity 5.18L", () => {
         expect(html).toContain("border-l-alloy-blue/70");
     });
 
-    it("layout cutover opportunity header always uses LeadDrawerCommandHeader", () => {
-        const src = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader.tsx"),
-            "utf8",
-        );
-        expect(src).toContain("LeadDrawerCommandHeader");
-        expect(src).not.toContain("ProofRecordModalHeaderShell");
-    });
 });

@@ -1,97 +1,215 @@
 "use client";
 
 /**
- * Processing → Work mode → Incoming — the command-center, left-to-right:
- *   Column 1: incoming queue (existing ProcessingQueueList)
- *   Column 2: what came in (the selected item: submitted content / preview)
- *   Column 3: what Alloy found + what to do next (recommendation → approve)
- * The sticky BOS rail lives OUTSIDE this content (owned by the modal shell).
- *
- * Canonical chrome: white canvas + kit primitives (WorkspaceSectionHeader,
- * WorkspaceEmptyState). Reuses the queue list, the shared case hook, and
- * ReviewDecideCard. The approve path is unchanged.
+ * Work — active operational information requiring attention.
+ * Folder rail + queue lanes + source-document-first review.
  */
 
-import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
+import { useCallback, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
+import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
+import { WS_ACTION_SECONDARY, WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
+import ProcessingImportAction from "./ProcessingImportAction";
 import { usePosCase } from "./usePosCase";
 import PosCaseWorkColumn from "./PosCaseWorkColumn";
-import PosCaseDecisionColumn from "./PosCaseDecisionColumn";
+import PosCaseDecisionColumn, { type QueueNavigation } from "./PosCaseDecisionColumn";
 import PosTemplateSetupColumn from "./PosTemplateSetupColumn";
-import ProcessingKpiStrip from "./ProcessingKpiStrip";
+import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
+import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
+import ProcessingImportIntentModal from "./ProcessingImportIntentModal";
+import { getProcessingQueueWarmSnapshot, warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 
 export default function PosProcessingWorkspace({
     selectedCaseId,
     onSelectCase,
-    onGoToSources,
     onOpenForm,
-    title = "Incoming",
-    subtitle,
+    onLeaveProcessing,
 }: {
     selectedCaseId: string | null;
-    onSelectCase: (caseId: string) => void;
-    onGoToSources?: () => void;
-    onOpenForm?: (formId: string) => void;
-    title?: string;
-    subtitle?: string;
+    onSelectCase: (caseId: string | null) => void;
+    onOpenForm?: (formId: string, formName?: string) => void;
+    /** Leave Processing (close the modal) — when the operator opens a committed record. */
+    onLeaveProcessing?: () => void;
 }) {
     const state = usePosCase(selectedCaseId);
+    const [dropActive, setDropActive] = useState(false);
 
-    // Case purpose splits the work/decision surface:
-    //   • Document → Form (primary source is an uploaded document): guided TEMPLATE SETUP,
-    //     not record commit — recreate the document as a reusable form.
-    //   • Record / intake case: the existing review → recommendation → commit flow.
+    // NO AUTO-ADVANCE. A concluded case stays in front of the operator — the lead they just created
+    // is one click away — until THEY choose Next Item or Return to Queue. (It used to jump to the next
+    // open row 3.2 s after approval, which took the operator away from the record before they could
+    // open it.) Next Item reads the queue at the moment of the click.
+    const queue: QueueNavigation = {
+        onNextItem: () => {
+            const rows = getProcessingQueueWarmSnapshot().data?.rows ?? [];
+            const next = rows.find(
+                (r) => r.id !== selectedCaseId && r.status !== "completed" && r.status !== "archived",
+            );
+            if (!next) return false;
+            onSelectCase(next.id);
+            return true;
+        },
+        onReturnToQueue: () => onSelectCase(null),
+        onLeaveProcessing,
+    };
+    const [uploading, setUploading] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
+    const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+    const [importErr, setImportErr] = useState<string | null>(null);
+
     const primary = state.detail?.sources.find((s) => s.role === "primary") ?? state.detail?.sources[0] ?? null;
-    const isDocumentCase = primary?.kind === "document";
+    const isDocumentCase =
+        primary?.kind === "document" || primary?.kind === "upload" || primary?.kind === "recreated_document";
     const detailLoading = !!selectedCaseId && state.loading && !state.detail;
 
+    const uploadDocument = useCallback(
+        async (payload: {
+            file: File;
+            intent: import("@/lib/pos/processingImportIntent").ProcessingImportIntent;
+            displayName: string;
+        }) => {
+            setUploading(true);
+            setImportErr(null);
+            try {
+                const body = await uploadProcessingDocument({
+                    file: payload.file,
+                    intent: payload.intent,
+                    displayName: payload.displayName,
+                });
+                void warmProcessingQueueCache({ force: true });
+                setImportOpen(false);
+                setPendingImportFile(null);
+                if (body.processing_case_id) onSelectCase(body.processing_case_id);
+                else throw new Error("Import succeeded but no review case was created.");
+            } catch (e) {
+                setImportErr(e instanceof Error ? e.message : "Upload failed");
+            } finally {
+                setUploading(false);
+                setDropActive(false);
+            }
+        },
+        [onSelectCase]
+    );
+
     return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WorkspaceSectionHeader title={title} subtitle={subtitle} />
-
-            <ProcessingKpiStrip />
-
-            <div className="flex min-h-0 flex-1 overflow-x-auto">
-                {/* Column 1 — queue (always) */}
-                <div className="flex w-[16rem] shrink-0 flex-col overflow-y-auto border-r border-alloy-stone/12 bg-white">
-                    <ProcessingQueueList
-                        selectedCaseId={selectedCaseId}
-                        onSelectCase={onSelectCase}
-                        onGoToSources={onGoToSources}
-                        showFolders
-                    />
-                </div>
-
-                {!selectedCaseId ? (
-                    <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-white">
-                        <WorkspaceEmptyState
-                            title="Pick something that came in"
-                            body="Submissions open for your approval. Uploaded documents open so Alloy can turn them into a reusable form."
+        <div
+            className={`flex min-h-0 flex-1 flex-col overflow-hidden ${dropActive ? "ring-2 ring-inset ring-alloy-bend-pine/40" : ""}`}
+            onDragOver={(e) => {
+                e.preventDefault();
+                setDropActive(true);
+            }}
+            onDragLeave={() => setDropActive(false)}
+            onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer.files?.[0];
+                if (file) {
+                    const format = detectProcessingSourceFormat(file.name, file.type || "");
+                    if (capabilitiesForFormat(format).store) {
+                        setPendingImportFile(file);
+                        setImportOpen(true);
+                    } else setDropActive(false);
+                } else setDropActive(false);
+            }}
+        >
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+                <WorkspaceZonePanel
+                    title="Queue"
+                    className={`w-[24%] min-w-[12rem] max-w-[16.5rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
+                >
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        <ProcessingQueueList
+                            selectedCaseId={selectedCaseId}
+                            onSelectCase={onSelectCase}
+                            showFolders
+                            panelMode
+                            headerAction={<ProcessingImportAction compact onImported={onSelectCase} />}
+                            onCaseRemoved={(caseId) => {
+                                if (selectedCaseId === caseId) onSelectCase(null);
+                            }}
                         />
                     </div>
+                </WorkspaceZonePanel>
+
+                {!selectedCaseId ? (
+                    <div className={`flex min-w-[20rem] flex-1 flex-col overflow-hidden p-5 ${WS_CANVAS}`}>
+                        <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center">
+                            <div className="text-center">
+                                <WorkspaceEmptyState
+                                    title="Select an import"
+                                    body="Choose a document from the work queue."
+                                />
+                                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPendingImportFile(null);
+                                            setImportOpen(true);
+                                        }}
+                                        className={WS_ACTION_SECONDARY}
+                                    >
+                                        Import document
+                                    </button>
+                                </div>
+                                {dropActive ? (
+                                    <p className="mt-4 text-[12px] font-semibold text-alloy-bend-pine">Drop a document to import</p>
+                                ) : uploading ? (
+                                    <p className="mt-4 text-[12px] text-alloy-midnight/50">Importing…</p>
+                                ) : null}
+                            </div>
+                        </div>
+                    </div>
                 ) : detailLoading ? (
-                    <div className="flex min-w-[20rem] flex-1 flex-col gap-3 overflow-hidden bg-white p-3" aria-busy="true">
-                        <div className="h-16 animate-pulse rounded-lg bg-stone-100" />
-                        <div className="h-24 animate-pulse rounded-lg bg-stone-100" />
+                    <div className={`flex min-w-[28rem] flex-1 flex-col overflow-hidden ${WS_CANVAS}`} aria-busy="true">
+                        <div className="shrink-0 border-b border-alloy-stone/12 px-4 py-3">
+                            <div className="h-5 w-48 animate-pulse rounded bg-alloy-stone/10" />
+                            <div className="mt-2 h-3 w-72 animate-pulse rounded bg-alloy-stone/10" />
+                        </div>
+                        <div className="flex min-h-0 flex-1">
+                            <div className="flex min-w-0 flex-[55] flex-col border-r border-alloy-stone/12 p-2">
+                                <div className="h-3 w-28 animate-pulse rounded bg-alloy-stone/10" />
+                                <div className="mt-2 min-h-[20rem] flex-1 animate-pulse rounded bg-alloy-stone/10" />
+                            </div>
+                            <div className="flex min-w-0 flex-[23] p-2">
+                                <div className="h-4 w-40 animate-pulse rounded bg-alloy-stone/10" />
+                                <div className="mt-3 space-y-2">
+                                    <div className="h-12 animate-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-12 animate-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-12 animate-pulse rounded bg-alloy-stone/10" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 ) : isDocumentCase ? (
-                    /* Document → Form: one focused template-setup surface (work + decision together) */
-                    <div className="flex min-w-[24rem] flex-1 flex-col overflow-hidden bg-white">
+                    <div className={`flex min-w-[28rem] flex-1 flex-col overflow-hidden ${WS_CANVAS}`}>
                         <PosTemplateSetupColumn state={state} onOpenForm={onOpenForm} />
                     </div>
                 ) : (
-                    /* Record / intake case: the existing two-column review + commit flow */
                     <>
-                        <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden border-r border-alloy-stone/12 bg-white">
+                        {/* Case detail sits on a soft canvas, not a full-height white card: the panels
+                            inside are already white surfaces, so a white column made a short case read
+                            as one card stretched down the page with dead white space beneath it. */}
+                        <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-alloy-midnight/[0.045]">
                             <PosCaseWorkColumn state={state} />
                         </div>
-                        <div className="flex w-[19rem] shrink-0 flex-col overflow-hidden bg-white">
-                            <PosCaseDecisionColumn state={state} />
+                        <div className={`flex w-[19rem] shrink-0 flex-col overflow-hidden ${WS_INSPECTOR}`}>
+                            <PosCaseDecisionColumn state={state} queue={queue} />
                         </div>
                     </>
                 )}
             </div>
+            <ProcessingImportIntentModal
+                open={importOpen}
+                onClose={() => {
+                    if (!uploading) {
+                        setImportOpen(false);
+                        setPendingImportFile(null);
+                    }
+                }}
+                onSubmit={uploadDocument}
+                submitting={uploading}
+                error={importErr}
+                initialFile={pendingImportFile}
+            />
         </div>
     );
 }

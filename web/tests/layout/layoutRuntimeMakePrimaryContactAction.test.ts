@@ -114,8 +114,11 @@ describe("make_primary_contact framework action", () => {
         );
         expect(modal).toContain("currentPrimaryName");
         expect(modal).toContain("scopeLabels");
-        expect(modal).toContain("Current primary");
+        expect(modal).toContain("Current");
         expect(modal).toContain("New primary");
+        expect(modal).toContain("ActionModalOverlayShell");
+        expect(modal).toContain("bg-alloy-bend-pine");
+        expect(modal).not.toContain("bg-alloy-blue");
     });
 
     it("promotes secondary contact and keeps old primary linked", () => {

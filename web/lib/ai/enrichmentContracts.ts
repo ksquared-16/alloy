@@ -1,7 +1,7 @@
 /**
  * Structured overlays for future AI enrichment (Phase 1 — Card 4).
  * Deterministic `AttentionSuggestionV1` remains authoritative for operational truth.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
@@ -9,6 +9,20 @@ import type { AiProviderKey, AiProviderExecutionMode } from "@/lib/ai/providerTy
 import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
 
 export const NEEDS_ATTENTION_SUGGESTION_ENRICHMENT_AGENT_KEY = "needs_attention_suggestion_enrichment" as const;
+
+/**
+ * Telemetry feature key for needs-attention draft enrichment.
+ *
+ * Lives here as of Phase 2.8 Gate D. It used to be declared by the ungoverned
+ * enrichment envelope, which has been deleted — and an identifier that outlives
+ * the module it was declared in belongs with the contracts rather than with
+ * whichever implementation happened to define it first.
+ *
+ * The VALUE is deliberately unchanged, so operator telemetry stays continuous
+ * across the migration: a query written before Phase 2.8 still finds every
+ * enrichment request after it.
+ */
+export const NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE = "needs_attention_draft_enrichment" as const;
 
 /**
  * Optional overlay on {@link AttentionSuggestionV1} — wording / drafts / notes only.
@@ -30,49 +44,41 @@ export type AttentionSuggestionAiEnrichmentV1 = {
     };
 };
 
-/** Resolver-only aggregate vs optional stub-touched overlay (still no live model). */
-export type OperationalSummarySourceKind = "deterministic_aggregate" | "deterministic_aggregate_stub_overlay";
-
-/** How the headline/bullets were produced — deterministic baseline may gain a stub note only. */
-export type OperationalSummaryGenerationMode = "deterministic" | "deterministic_plus_stub_overlay";
-
-/** Compact urgency for UI rails — maps from attention severity / SLA (derived, not model output). */
-export type OperationalSummaryRiskHint = "low" | "medium" | "high";
-
-/** Queue / list preview — headline + urgency only (no bullets). */
-export type OperationalSummaryQueuePreviewV1 = {
-    headline: string;
-    risk_urgency_hint: OperationalSummaryRiskHint;
+/**
+ * The MODEL-OWNED half of {@link AttentionSuggestionAiEnrichmentV1} (D-80 / D-82).
+ *
+ * A provider is asked for reasoning, and reasoning is wording. It is never asked
+ * for `version`, `agent_key`, `generated_at_iso` or `provider_report`: Alloy
+ * already knows all four, and a value the platform knows must not be sourced
+ * from the thing being governed. The retired ungoverned provider did ask for
+ * them — its system prompt literally dictated
+ * `provider_report: { provider_key: "openai", execution_mode: "live" }` — which
+ * let the model state its own identity. Splitting the contract is what makes
+ * that class of spoof unrepresentable rather than merely discouraged.
+ *
+ * This type is the whole of what a provider may contribute. Everything absent
+ * from it is assembled by {@link assembleAttentionSuggestionAiEnrichment}.
+ */
+export type AttentionSuggestionAiEnrichmentProviderContentV1 = {
+    reasoning_summary_overlay?: string | null;
+    suggested_draft_body_overlay?: string | null;
+    tone_variant?: string | null;
+    confidence_notes?: string | null;
 };
 
 /**
- * Derived, read-only operational narrative — never authoritative vs resolver / suggestion contracts.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md (Phase 2)
+ * Operational Summary contracts now live with the operational layer — see
+ * `lib/operationalSummary/operationalSummaryContracts.ts`. Re-exported here so
+ * existing consumers are unaffected.
  */
-export type OperationalSummaryV1 = {
-    version: 1;
-    headline: string;
-    /** At most three short lines for drawer density; avoid raw comms bodies. */
-    bullets: readonly string[];
-    risk_urgency_hint: OperationalSummaryRiskHint;
-    generated_at_iso: string;
-    generation_mode: OperationalSummaryGenerationMode;
-    source: {
-        kind: OperationalSummarySourceKind;
-        resolver_version?: number | null;
-        attention_primary_code?: string | null;
-        suggestion_present: boolean;
-    };
-    /** Present when stub overlay ran {@link redactObjectForAi} on template fields. */
-    redaction?: {
-        steps_total: number;
-        kinds: readonly string[];
-    } | null;
-};
-
-export function operationalSummaryV1ToJson(value: OperationalSummaryV1): Record<string, unknown> {
-    return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-}
+export type {
+    OperationalSummarySourceKind,
+    OperationalSummaryGenerationMode,
+    OperationalSummaryRiskHint,
+    OperationalSummaryQueuePreviewV1,
+    OperationalSummaryV1,
+} from "@/lib/operationalSummary/operationalSummaryContracts";
+export { operationalSummaryV1ToJson } from "@/lib/operationalSummary/operationalSummaryContracts";
 
 /**
  * Bundles deterministic suggestion with optional enrichment for API responses.

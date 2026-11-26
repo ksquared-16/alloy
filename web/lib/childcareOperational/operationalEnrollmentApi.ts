@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatInTimeZone } from "date-fns-tz";
 import { fetchOrgTimeZoneIana } from "@/lib/admin/orgLocalDayBounds";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { billingPeriodBindingHttpAnswer } from "@/lib/financials/billingPeriods/billingPeriodBindingHttp";
 
 export type OperationalEnrollmentApiErrorBody = {
     error: string;
@@ -17,6 +18,22 @@ export type OperationalEnrollmentApiErrorBody = {
 export function operationalEnrollmentErrorResponse(
     error: unknown
 ): NextResponse<OperationalEnrollmentApiErrorBody> {
+    /*
+     * A BILLING-PERIOD REFUSAL IS A CONFIGURATION CONFLICT, NOT AN INTERNAL ERROR.
+     *
+     * This branch is first because the fall-through at the bottom of this function is what used to
+     * answer it: `{ code: "internal_error" }, 500`, carrying the error's own message. For a
+     * household that merely needs a billing calendar chosen, that told the operator nothing was
+     * actionable. The single mapping lives in `billingPeriodBindingHttp` so every boundary that
+     * can see this error answers it the same way.
+     */
+    const binding = billingPeriodBindingHttpAnswer(error);
+    if (binding) {
+        return NextResponse.json(
+            { error: binding.message, code: binding.code, details: binding.detail },
+            { status: binding.status }
+        );
+    }
     if (error instanceof OperationalEnrollmentServiceError) {
         const status =
             error.code === "not_found"

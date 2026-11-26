@@ -9,6 +9,12 @@ vi.mock("@/lib/workflowRun", () => ({
     executeWorkflowRun: vi.fn().mockResolvedValue({ ok: true, status: "completed", workflow_run_id: "run-1" }),
 }));
 
+const loadStateMock = vi.fn();
+vi.mock("@/lib/tours/comms/tourCommsEligibility", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/lib/tours/comms/tourCommsEligibility")>();
+    return { ...actual, loadTourCommsAuthoritativeState: (...a: unknown[]) => loadStateMock(...a) };
+});
+
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
@@ -17,6 +23,12 @@ describe("emitTourBookingLifecycleEvent", () => {
     beforeEach(() => {
         vi.mocked(emitEvent).mockClear();
         vi.mocked(executeWorkflowRun).mockClear();
+        loadStateMock.mockReset();
+        loadStateMock.mockResolvedValue({
+            booking: { status_key: "confirmed", start_at: "2099-01-01T00:00:00.000Z" },
+            opportunityAccepted: true,
+            row: null,
+        });
     });
 
     const sampleRow = (): TourBookingRow => ({
@@ -96,5 +108,80 @@ describe("emitTourBookingLifecycleEvent", () => {
             expect.objectContaining({ event_type: "tour_canceled", entity_type: "tour_bookings" }),
             expect.objectContaining({ event_id: "workflow-event-id-1", org_id: "org-1" })
         );
+    });
+
+    // S1-F. A workflow keyed on a tour event may still log, assign and open work — but it may
+    // only MESSAGE when the booking, as it is in the database now, may be talked about.
+    describe("workflow outbound messaging is gated on the booking's current state", () => {
+        const withWorkflows = () =>
+            ({
+                from: vi.fn(() => ({
+                    select: vi.fn().mockReturnThis(),
+                    eq: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockResolvedValue({ data: [{ id: "wf-1" }], error: null }),
+                })),
+            }) as never;
+        const refusalPassed = () =>
+            (vi.mocked(executeWorkflowRun).mock.calls[0]![3] as { outboundMessagingRefusedReason?: string | null })
+                .outboundMessagingRefusedReason;
+
+        it("tour_booking_pending on a pending booking: the workflow runs, its messaging is refused", async () => {
+            loadStateMock.mockResolvedValue({
+                booking: { status_key: "pending_approval", start_at: "2099-01-01T00:00:00.000Z" },
+                opportunityAccepted: true,
+                row: null,
+            });
+            await emitTourBookingLifecycleEvent(withWorkflows(), "tour_booking_pending", { ...sampleRow(), status_key: "pending_approval" });
+            expect(executeWorkflowRun).toHaveBeenCalledTimes(1);
+            expect(refusalPassed()).toBe("tour_comms_ineligible:awaiting_approval");
+        });
+
+        it("tour_rescheduled on a still-pending booking is refused too — the event name grants nothing", async () => {
+            loadStateMock.mockResolvedValue({
+                booking: { status_key: "pending_approval", start_at: "2099-01-01T00:00:00.000Z" },
+                opportunityAccepted: true,
+                row: null,
+            });
+            await emitTourBookingLifecycleEvent(withWorkflows(), "tour_rescheduled", { ...sampleRow(), status_key: "pending_approval" });
+            expect(refusalPassed()).toBe("tour_comms_ineligible:awaiting_approval");
+        });
+
+        it("tour_confirmed on a confirmed booking: messaging is allowed", async () => {
+            await emitTourBookingLifecycleEvent(withWorkflows(), "tour_confirmed", sampleRow());
+            expect(refusalPassed()).toBeNull();
+        });
+
+        it("tour_canceled after a confirmed tour is allowed; after a never-confirmed request it is not", async () => {
+            loadStateMock.mockResolvedValue({
+                booking: { status_key: "canceled", start_at: "2099-01-01T00:00:00.000Z" },
+                opportunityAccepted: true,
+                row: null,
+            });
+            await emitTourBookingLifecycleEvent(withWorkflows(), "tour_canceled", sampleRow(), { previous_status_key: "confirmed" });
+            expect(refusalPassed()).toBeNull();
+            vi.mocked(executeWorkflowRun).mockClear();
+            await emitTourBookingLifecycleEvent(withWorkflows(), "tour_canceled", sampleRow(), {
+                previous_status_key: "pending_approval",
+            });
+            expect(refusalPassed()).toBe("tour_comms_ineligible:never_confirmed");
+        });
+
+        it("fails closed when the booking cannot be read", async () => {
+            loadStateMock.mockRejectedValue(new Error("db down"));
+            await emitTourBookingLifecycleEvent(withWorkflows(), "tour_confirmed", sampleRow());
+            expect(refusalPassed()).toBe("tour_comms_ineligible:eligibility_unavailable");
+        });
+
+        it("reads nothing when no workflow listens", async () => {
+            const supabase = {
+                from: vi.fn(() => ({
+                    select: vi.fn().mockReturnThis(),
+                    eq: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockResolvedValue({ data: [], error: null }),
+                })),
+            } as never;
+            await emitTourBookingLifecycleEvent(supabase, "tour_booking_pending", sampleRow());
+            expect(loadStateMock).not.toHaveBeenCalled();
+        });
     });
 });

@@ -1,0 +1,617 @@
+{
+ "compact": {
+  "account": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+  "detailsControlPresent": true,
+  "detailOverlayOpen": false
+ },
+ "afterDetails": {
+  "overlay": "detail",
+  "ledgerLines": 0
+ },
+ "accounts": [
+  {
+   "id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+   "outstanding": "$342.82",
+   "state": "outstanding"
+  },
+  {
+   "id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+   "outstanding": "$75.00",
+   "state": "outstanding"
+  },
+  {
+   "id": "fd000000-0000-4000-8000-0000000c0001",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "fd000000-0000-4000-8000-0000000c0002",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "fd000000-0000-4000-8000-0000000c0003",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "610a1496-7b96-4d1a-bf49-5cf193b31a6d",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "fd000000-0000-4000-8000-0000000c0004",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  },
+  {
+   "id": "84ad457f-d129-4b50-95d7-0efb194c1830",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  }
+ ],
+ "specimens": {
+  "healthy": {
+   "id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+   "outstanding": "$342.82",
+   "state": "outstanding"
+  },
+  "zero": {
+   "id": "fd000000-0000-4000-8000-0000000c0001",
+   "outstanding": "$0.00",
+   "state": "no_activity"
+  }
+ },
+ "legs": [
+  {
+   "leg": "navigate -> compact Financials useful",
+   "leg_ms": 5566,
+   "outcome": {
+    "appeared_ms": 4455
+   },
+   "requests": [
+    "/api/admin/entity-labels 274ms",
+    "/api/admin/work-units 356ms",
+    "/api/admin/workspace/site-filter 390ms",
+    "/api/admin/ai/workflow-assist/capabilities 558ms",
+    "/api/admin/communications/unread-count 590ms",
+    "/api/admin/lifecycle-catalog 594ms",
+    "/api/admin/ai/config-layout-assist/capabilities 733ms",
+    "/api/admin/operational-tasks?scope=workspace&summary=true 764ms",
+    "/api/admin/departments 800ms",
+    "/api/admin/status-options?entity_type=opportunities 607ms",
+    "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5 2583ms",
+    "/workspace/work-unit/waitlist 5504ms",
+    "/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html 32ms"
+   ],
+   "slowest_ms": 5504,
+   "slowest_path": "/workspace/work-unit/waitlist"
+  },
+  {
+   "leg": "Details click -> detail overlay frame",
+   "leg_ms": 120,
+   "outcome": {
+    "appeared_ms": 3
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "Details -> hydrated",
+   "leg_ms": 60003,
+   "outcome": {
+    "failed": "page.waitForSelector: Timeout 60000ms exceeded."
+   },
+   "requests": [
+    "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9?attention_subject_id=9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8 5611ms",
+    "/api/admin/location-program-categories?include_inactive=true 340ms",
+    "/api/admin/option-sets/childcare_program_type 701ms",
+    "/api/admin/locations?hierarchy=1 861ms",
+    "/api/admin/financials/card?customer_id=0658832a-48d6-4b80-beae-0b12d573fdf2 2453ms",
+    "/api/admin/operational-tasks?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9 3165ms",
+    "/api/admin/option-sets/person_gender 3351ms",
+    "/api/admin/communications/conversations 3369ms",
+    "/api/admin/activity?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9&limit=100 3300ms",
+    "/api/admin/communications/family-workspace?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_channel=email&thread_id=6e75a85c-1d6f-4fab-a0cf-6e6 1808ms",
+    "/api/admin/layout-runtime/opportunity-drawer-body?opportunityId=d097e1a8-c3c0-4c51-a113-2275b009b9a9&departmentId=3933ac47-077a-4de8-aaac-8aed48d80413&workUnit 7674ms",
+    "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9 14533ms"
+   ],
+   "slowest_ms": 14533,
+   "slowest_path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+   "leg": "open Financials -> shell present",
+   "leg_ms": 62,
+   "outcome": {
+    "appeared_ms": 6
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "shell -> Overview useful",
+   "leg_ms": 0,
+   "outcome": {
+    "already_present": true
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "Accounts click -> queue useful",
+   "leg_ms": 2017,
+   "outcome": {
+    "appeared_ms": 1853
+   },
+   "requests": [
+    "/api/admin/workspace/site-filter 413ms",
+    "/api/admin/financials/work-queue 1109ms",
+    "/api/admin/financials/activity 1172ms",
+    "/api/admin/financials/subjects 1321ms",
+    "/api/admin/financials/position 1502ms"
+   ],
+   "slowest_ms": 1502,
+   "slowest_path": "/api/admin/financials/position"
+  },
+  {
+   "leg": "A healthy: select -> detail frame",
+   "leg_ms": 134,
+   "outcome": {
+    "already_present": true
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "A healthy: -> detail hydrated",
+   "leg_ms": 0,
+   "outcome": {
+    "already_present": true
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "A healthy: -> ledger present",
+   "leg_ms": 4313,
+   "outcome": {
+    "appeared_ms": 4313
+   },
+   "requests": [
+    "/api/admin/financials/overview-metrics 5213ms",
+    "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573 4411ms",
+    "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573 4471ms"
+   ],
+   "slowest_ms": 5213,
+   "slowest_path": "/api/admin/financials/overview-metrics"
+  },
+  {
+   "leg": "B zero-activity: select -> detail frame",
+   "leg_ms": 37,
+   "outcome": {
+    "already_present": true
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "B zero-activity: -> detail hydrated",
+   "leg_ms": 0,
+   "outcome": {
+    "already_present": true
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "B zero-activity: -> ledger present",
+   "leg_ms": 0,
+   "outcome": {
+    "already_present": true
+   },
+   "requests": [],
+   "slowest_ms": null,
+   "slowest_path": null
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "leg_ms": 6110,
+   "outcome": {
+    "ok": true
+   },
+   "requests": [
+    "/api/admin/financials/card?customer_id=fd000000-0000-4000-8000-0000000c0001 1290ms",
+    "/api/admin/financials/card?customer_id=fd000000-0000-4000-8000-0000000c0001 1520ms",
+    "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573 4205ms",
+    "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573 4383ms"
+   ],
+   "slowest_ms": 4383,
+   "slowest_path": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+  }
+ ],
+ "card_endpoint_calls": [
+  {
+   "leg": "Details -> hydrated",
+   "search": "?customer_id=0658832a-48d6-4b80-beae-0b12d573fdf2",
+   "ms": 2453
+  },
+  {
+   "leg": "A healthy: -> ledger present",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4411
+  },
+  {
+   "leg": "A healthy: -> ledger present",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4471
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "search": "?customer_id=fd000000-0000-4000-8000-0000000c0001",
+   "ms": 1290
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "search": "?customer_id=fd000000-0000-4000-8000-0000000c0001",
+   "ms": 1520
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4205
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4383
+  }
+ ],
+ "all_requests": [
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/entity-labels",
+   "search": "",
+   "ms": 274
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/work-units",
+   "search": "",
+   "ms": 356
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/workspace/site-filter",
+   "search": "",
+   "ms": 390
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/ai/workflow-assist/capabilities",
+   "search": "",
+   "ms": 558
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/unread-count",
+   "search": "",
+   "ms": 590
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/lifecycle-catalog",
+   "search": "",
+   "ms": 594
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/ai/config-layout-assist/capabilities",
+   "search": "",
+   "ms": 733
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/operational-tasks",
+   "search": "?scope=workspace&summary=true",
+   "ms": 764
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/departments",
+   "search": "",
+   "ms": 800
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/status-options",
+   "search": "?entity_type=opportunities",
+   "ms": 607
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries",
+   "search": "?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5",
+   "ms": 2583
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/workspace/work-unit/waitlist",
+   "search": "",
+   "ms": 5504
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html",
+   "search": "",
+   "ms": 32
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/inner.html",
+   "search": "",
+   "ms": 63
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/verticals",
+   "search": "",
+   "ms": 359
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-8aed48d80413-42be9074-443f-4047-bece-d68cd1d22788",
+   "search": "?processKey=enrollment",
+   "ms": 554
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/queues/stage-membership-ack",
+   "search": "?keys=93667019-bd28-49b5-a688-acc9bb1e0a19%3Aa92a0f18-6efb-40d0-b74f-52708e96fb03%3Achild%3Abf7bb266-31b3-4cb3",
+   "ms": 583
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/actions/right-rail-bundle",
+   "search": "?department_id=3933ac47-077a-4de8-aaac-8aed48d80413&work_unit_id=99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+   "ms": 594
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/entity-layouts/focus-panel-summary",
+   "search": "?workViewId=new_work_view_4&stageKey=waitlist",
+   "ms": 890
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/lifecycle-builder",
+   "search": "",
+   "ms": 884
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/bindings",
+   "search": "",
+   "ms": 1572
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/threads",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9&limit=40",
+   "ms": 1573
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/metrics/resolve",
+   "search": "?keys=enrollment.lead_count%2Cops.needs_attention_count%2Cops.work_overdue_count&window=rolling_30d&work_unit_",
+   "ms": 1930
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/family-workspace",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9&composer_channel=email",
+   "ms": 2097
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/threads/addb497f-10c1-4d92-ad03-268fd9ce19e4/messages",
+   "search": "?limit=36&include_viewer_read=1",
+   "ms": 550
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/threads/7bd232bf-35fe-4fcd-8223-a34b08a46a11/messages",
+   "search": "?limit=36&include_viewer_read=1",
+   "ms": 693
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/queue-view-totals",
+   "search": "",
+   "ms": 2432
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/threads/b98d8f65-023e-41e6-b8fc-296bab311df3/messages",
+   "search": "?limit=36&include_viewer_read=1",
+   "ms": 728
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/drawer-recipients",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "ms": 993
+  },
+  {
+   "leg": "navigate -> compact Financials useful",
+   "path": "/api/admin/communications/family-workspace",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9&composer_channel=email&thread_id=b98",
+   "ms": 1814
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "search": "?attention_subject_id=9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "ms": 5611
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/location-program-categories",
+   "search": "?include_inactive=true",
+   "ms": 340
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/option-sets/childcare_program_type",
+   "search": "",
+   "ms": 701
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/locations",
+   "search": "?hierarchy=1",
+   "ms": 861
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/financials/card",
+   "search": "?customer_id=0658832a-48d6-4b80-beae-0b12d573fdf2",
+   "ms": 2453
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/operational-tasks",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "ms": 3165
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/option-sets/person_gender",
+   "search": "",
+   "ms": 3351
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/communications/conversations",
+   "search": "",
+   "ms": 3369
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/activity",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-2275b009b9a9&limit=100",
+   "ms": 3300
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/communications/family-workspace",
+   "search": "?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_channel=email&thread_id=6e75a85c-1d6f-4fab-a0cf-6e6",
+   "ms": 1808
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+   "search": "?opportunityId=d097e1a8-c3c0-4c51-a113-2275b009b9a9&departmentId=3933ac47-077a-4de8-aaac-8aed48d80413&workUnit",
+   "ms": 7674
+  },
+  {
+   "leg": "Details -> hydrated",
+   "path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "search": "",
+   "ms": 14533
+  },
+  {
+   "leg": "Accounts click -> queue useful",
+   "path": "/api/admin/workspace/site-filter",
+   "search": "",
+   "ms": 413
+  },
+  {
+   "leg": "Accounts click -> queue useful",
+   "path": "/api/admin/financials/work-queue",
+   "search": "",
+   "ms": 1109
+  },
+  {
+   "leg": "Accounts click -> queue useful",
+   "path": "/api/admin/financials/activity",
+   "search": "",
+   "ms": 1172
+  },
+  {
+   "leg": "Accounts click -> queue useful",
+   "path": "/api/admin/financials/subjects",
+   "search": "",
+   "ms": 1321
+  },
+  {
+   "leg": "Accounts click -> queue useful",
+   "path": "/api/admin/financials/position",
+   "search": "",
+   "ms": 1502
+  },
+  {
+   "leg": "A healthy: -> ledger present",
+   "path": "/api/admin/financials/overview-metrics",
+   "search": "",
+   "ms": 5213
+  },
+  {
+   "leg": "A healthy: -> ledger present",
+   "path": "/api/admin/financials/card",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4411
+  },
+  {
+   "leg": "A healthy: -> ledger present",
+   "path": "/api/admin/financials/card",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4471
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "path": "/api/admin/financials/card",
+   "search": "?customer_id=fd000000-0000-4000-8000-0000000c0001",
+   "ms": 1290
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "path": "/api/admin/financials/card",
+   "search": "?customer_id=fd000000-0000-4000-8000-0000000c0001",
+   "ms": 1520
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "path": "/api/admin/financials/card",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4205
+  },
+  {
+   "leg": "re-select the SAME account (reuse?)",
+   "path": "/api/admin/financials/card",
+   "search": "?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+   "ms": 4383
+  }
+ ]
+}

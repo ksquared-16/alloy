@@ -1,0 +1,26 @@
+{
+  "assignment": {
+    "fullText": "ASSIGNMENTS CC Certa Certhouse 4/12/2021 (5y5m) New schedule DAYS M T W T F S S Use a schedule pattern DAILY HOURS 🕒 – 🕒 ROOM Select a room Select Site · Site EFFECTIVE Start End Open-ended Ongoing — no end date; ends later via a change. TUITION Tuition — Certa Certhouse Recommended · $195.00/weekly 1 option did not apply Expand options (1 other) The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity. Overridden $185.00 / weekly · from 2026-09-01 · Family kept the organisation rate agreed at enrolment. Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026 DISCOUNTS Excluded for this assignment discount · ended 2026-09-19 — §12 — governed this period, and already ended Ended Accept tuition Who owes this — set responsibility Create Assignment — configure the minimum. Cancel Create Assignment",
+    "hasBillingFrequencyLine": true,
+    "billingFrequencyText": "Billing frequency weekly · current period Sep 15–21, 2026 · ",
+    "acceptedTermShown": true,
+    "discountBlock": "DISCOUNTS Excluded for this assignment discount · ended 2026-09-19 — §12 — governed this period, and already ended Ended Accept tuition Who owes this — set responsibility Create Assignment — configure the minimum. Cancel Create A"
+  },
+  "responsibilityPath": {
+    "sidebarPresent": true,
+    "accessibleName": "Financials — the financial work waiting on an operator, and the accounts it belongs to",
+    "plainClickWorked": true,
+    "accountsTabVisible": true,
+    "afterAccounts": {
+      "accountRows": 11,
+      "gearPresent": true,
+      "responsibleWordVisible": true
+    },
+    "afterOpeningAccount": {
+      "gearPresent": true,
+      "responsibleWordVisible": true,
+      "prepaidWordVisible": false,
+      "availableVisible": true
+    }
+  }
+}

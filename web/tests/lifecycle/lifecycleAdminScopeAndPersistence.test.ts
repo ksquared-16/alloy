@@ -6,11 +6,7 @@ import {
     isLifecycleBuilderOwnedDepartmentMetadata,
     mergeLifecycleBuilderOwnedIntoMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderOwned";
-import {
-    effectiveDepartmentScopeDimensions,
-    portalAdminBypassesDepartmentScope,
-    scopeDimensionsFromAccess,
-} from "@/lib/admin/accessScope";
+import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 
 const root = resolve(__dirname, "../..");
@@ -45,7 +41,13 @@ describe("lifecycleBuilderOwned metadata", () => {
     });
 });
 
-describe("portal admin department scope bypass", () => {
+/**
+ * W-8 (I-20, closes C8) — no role widens a scope dimension.
+ *
+ * This block previously asserted the opposite: that `admin` bypassed a restricted profile. It is
+ * inverted rather than deleted so the regression it locks is the exact behaviour that shipped.
+ */
+describe("W-8 — no role widens department scope", () => {
     const restrictedAccess: AdminAccessContextSuccess = {
         ok: true,
         userId: "u1",
@@ -58,31 +60,42 @@ describe("portal admin department scope bypass", () => {
         allowedSiteLocationIds: [],
     };
 
-    it("admin role bypasses restricted profile scope for list APIs", () => {
-        expect(portalAdminBypassesDepartmentScope(["admin"])).toBe(true);
-        const dim = effectiveDepartmentScopeDimensions(
-            scopeDimensionsFromAccess(restrictedAccess),
-            restrictedAccess.roleKeys
-        );
-        expect(dim.departmentScope).toBe("all");
+    it.each([["admin"], ["ops"], ["admin", "ops"], ["enrollment_coordinator"]])(
+        "keeps the stored restricted scope for roleKeys %j",
+        (...roleKeys: string[]) => {
+            const dim = scopeDimensionsFromAccess({ ...restrictedAccess, roleKeys });
+            expect(dim.departmentScope).toBe("restricted");
+            expect(dim.allowedDepartmentIds).toEqual(["dept-a"]);
+            expect(departmentIdAllowed(dim, "dept-a")).toBe(true);
+            expect(departmentIdAllowed(dim, "dept-b")).toBe(false);
+        }
+    );
+
+    it("accessScope.ts contains no role literal in an enforcement branch", () => {
+        // The exit criterion for W-8. Role governs admission, never the scope a route enforces.
+        // The W-8 comment block names the deleted symbols on purpose, so assert on executable
+        // lines only — otherwise the explanation of the fix would read as the fix being absent.
+        const executable = read("lib/admin/accessScope.ts")
+            .split("\n")
+            .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l))
+            .join("\n");
+        expect(executable).not.toContain("portalAdminBypassesDepartmentScope");
+        expect(executable).not.toContain("effectiveDepartmentScopeDimensions");
+        expect(executable).not.toContain("PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES");
+        expect(executable).not.toMatch(/["']admin["']/);
+        expect(executable).not.toMatch(/["']ops["']/);
     });
 
-    it("custom role without admin/ops keeps restricted scope", () => {
-        const dim = effectiveDepartmentScopeDimensions(
-            scopeDimensionsFromAccess({
-                ...restrictedAccess,
-                roleKeys: ["enrollment_coordinator"],
-            }),
-            ["enrollment_coordinator"]
-        );
-        expect(dim.departmentScope).toBe("restricted");
-        expect(dim.allowedDepartmentIds).toEqual(["dept-a"]);
+    it("the self-provisioning write that the bypass kept latent is gone", () => {
+        const src = read("lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts");
+        expect(src).not.toContain('.from("user_department_access").insert');
+        expect(src).toContain("SELF_DEPARTMENT_PROVISIONING_MESSAGE");
     });
 });
 
 describe("lifecycle admin scope and persistence wiring", () => {
-    it("departments GET uses effective scope via admin route gate", () => {
-        expect(read("lib/admin/adminRouteGate.ts")).toContain("effectiveDepartmentScopeDimensions");
+    it("departments GET uses stored scope via admin route gate", () => {
+        expect(read("lib/admin/adminRouteGate.ts")).toContain("scopeDimensionsFromAccess");
         expect(read("app/api/admin/departments/route.ts")).toContain('departmentScope === "restricted"');
     });
 

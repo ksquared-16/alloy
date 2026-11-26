@@ -1,0 +1,17 @@
+[
+  {
+    "url": "/api/admin/layout-runtime/opportunity-drawer-body?opportunityId=b13ecce9-74d4-442d-9891-7c88f587bc23&departmentId=3933ac47-077a-4de8-aaac-8aed48d80413&workUnitId=587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+    "method": "GET",
+    "at": 31263
+  },
+  {
+    "url": "/api/admin/work-units/new-leads/provisioning-answer?subject_id=df771481-841f-4329-b7bb-c0a03d9fb621",
+    "method": "GET",
+    "at": 31360
+  },
+  {
+    "url": "/api/admin/work-units/new-leads/provisioning-answer?subject_id=c78a8e14-4e4f-4a17-acd4-0ad3245cc81a",
+    "method": "GET",
+    "at": 31408
+  }
+]

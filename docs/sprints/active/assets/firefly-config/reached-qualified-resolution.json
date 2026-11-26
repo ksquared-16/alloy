@@ -1,0 +1,14 @@
+{
+  "outcomes": [
+    {
+      "target": "update_family_case_status"
+    },
+    {
+      "target": "move_to_stage",
+      "movesTo": "qualification"
+    },
+    {
+      "target": "mark_stage_work_complete"
+    }
+  ]
+}

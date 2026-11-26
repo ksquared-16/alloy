@@ -1,0 +1,518 @@
+{
+  "initial": {
+    "grid": {
+      "x": 481,
+      "y": 313,
+      "w": 957,
+      "h": 1984
+    },
+    "gridRows": "124.938px 124.938px 76px 76px 76px 76px 76px 207.547px 207.562px 230.297px 230.297px 179.25px 179.25px",
+    "areas": [
+      {
+        "card": "business_process",
+        "row": "1/2",
+        "x": 481,
+        "y": 313,
+        "w": 474,
+        "h": 260
+      },
+      {
+        "card": "children",
+        "row": "1/4",
+        "x": 965,
+        "y": 313,
+        "w": 474,
+        "h": 432
+      },
+      {
+        "card": "readiness_kpi",
+        "row": "3/3",
+        "x": 481,
+        "y": 583,
+        "w": 312,
+        "h": 248
+      },
+      {
+        "card": "billing_preview",
+        "row": "6/2",
+        "x": 481,
+        "y": 841,
+        "w": 474,
+        "h": 162
+      },
+      {
+        "card": "household",
+        "row": "5/4",
+        "x": 965,
+        "y": 755,
+        "w": 474,
+        "h": 466
+      },
+      {
+        "card": "attendance",
+        "row": "8/2",
+        "x": 481,
+        "y": 1013,
+        "w": 474,
+        "h": 425
+      },
+      {
+        "card": "financials",
+        "row": "10/2",
+        "x": 481,
+        "y": 1448,
+        "w": 635,
+        "h": 471
+      },
+      {
+        "card": "health_safety",
+        "row": "12/2",
+        "x": 481,
+        "y": 1929,
+        "w": 474,
+        "h": 369
+      }
+    ],
+    "ghost": null
+  },
+  "afterWidths": {
+    "grid": {
+      "x": 481,
+      "y": 532,
+      "w": 957,
+      "h": 1765
+    },
+    "gridRows": "114.609px 114.609px 88.9219px 88.9219px 88.9219px 88.9375px 76px 207.547px 207.547px 105.281px 105.297px 179.25px 179.25px",
+    "areas": [
+      {
+        "card": "business_process",
+        "row": "1/2",
+        "x": 481,
+        "y": 532,
+        "w": 635,
+        "h": 239
+      },
+      {
+        "card": "readiness_kpi",
+        "row": "3/3",
+        "x": 481,
+        "y": 781,
+        "w": 312,
+        "h": 287
+      },
+      {
+        "card": "children",
+        "row": "3/4",
+        "x": 965,
+        "y": 781,
+        "w": 474,
+        "h": 386
+      },
+      {
+        "card": "billing_preview",
+        "row": "6/2",
+        "x": 481,
+        "y": 1078,
+        "w": 474,
+        "h": 175
+      },
+      {
+        "card": "household",
+        "row": "7/4",
+        "x": 965,
+        "y": 1177,
+        "w": 474,
+        "h": 626
+      },
+      {
+        "card": "attendance",
+        "row": "8/2",
+        "x": 481,
+        "y": 1263,
+        "w": 474,
+        "h": 425
+      },
+      {
+        "card": "financials",
+        "row": "10/2",
+        "x": 481,
+        "y": 1698,
+        "w": 312,
+        "h": 221
+      },
+      {
+        "card": "health_safety",
+        "row": "12/2",
+        "x": 481,
+        "y": 1929,
+        "w": 474,
+        "h": 369
+      }
+    ],
+    "ghost": null
+  },
+  "financials": {
+    "during": {
+      "grid": {
+        "x": 481,
+        "y": 532,
+        "w": 957,
+        "h": 1765
+      },
+      "gridRows": "114.609px 114.609px 88.9219px 88.9219px 88.9219px 88.9375px 76px 207.547px 207.547px 105.281px 105.297px 179.25px 179.25px",
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 532,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "3/3",
+          "x": 481,
+          "y": 781,
+          "w": 312,
+          "h": 287
+        },
+        {
+          "card": "children",
+          "row": "3/4",
+          "x": 965,
+          "y": 781,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1078,
+          "w": 474,
+          "h": 175
+        },
+        {
+          "card": "household",
+          "row": "7/4",
+          "x": 965,
+          "y": 1177,
+          "w": 474,
+          "h": 626
+        },
+        {
+          "card": "attendance",
+          "row": "8/2",
+          "x": 481,
+          "y": 1263,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "financials",
+          "row": "10/2",
+          "x": 481,
+          "y": 1698,
+          "w": 312,
+          "h": 221
+        },
+        {
+          "card": "health_safety",
+          "row": "12/2",
+          "x": 481,
+          "y": 1929,
+          "w": 474,
+          "h": 369
+        }
+      ],
+      "ghost": {
+        "x": 1126,
+        "y": 532,
+        "w": 312,
+        "h": 239
+      }
+    },
+    "after": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 1535
+      },
+      "gridRows": "114.609px 114.609px 88.9219px 88.9219px 88.9219px 88.9375px 76px 207.547px 207.547px 179.25px 179.25px",
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "3/3",
+          "x": 481,
+          "y": 851,
+          "w": 312,
+          "h": 287
+        },
+        {
+          "card": "children",
+          "row": "3/4",
+          "x": 965,
+          "y": 851,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1148,
+          "w": 474,
+          "h": 175
+        },
+        {
+          "card": "household",
+          "row": "7/4",
+          "x": 965,
+          "y": 1247,
+          "w": 474,
+          "h": 700
+        },
+        {
+          "card": "attendance",
+          "row": "8/2",
+          "x": 481,
+          "y": 1333,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "health_safety",
+          "row": "10/2",
+          "x": 481,
+          "y": 1768,
+          "w": 474,
+          "h": 369
+        },
+        {
+          "card": "financials",
+          "row": "1/2",
+          "x": 1126,
+          "y": 602,
+          "w": 312,
+          "h": 239
+        }
+      ],
+      "ghost": null
+    }
+  },
+  "topRow": {
+    "process": {
+      "card": "business_process",
+      "row": "1/2",
+      "x": 481,
+      "y": 602,
+      "w": 635,
+      "h": 239
+    },
+    "financials": {
+      "card": "financials",
+      "row": "1/2",
+      "x": 1126,
+      "y": 602,
+      "w": 312,
+      "h": 239
+    }
+  },
+  "topGap": 0,
+  "trailingGap": 0,
+  "verticalBands": [
+    10
+  ],
+  "reloaded": {
+    "grid": {
+      "x": 481,
+      "y": 602,
+      "w": 957,
+      "h": 1984
+    },
+    "gridRows": "124.938px 124.938px 76px 76px 76px 76px 76px 207.547px 207.562px 230.297px 230.297px 179.25px 179.25px",
+    "areas": [
+      {
+        "card": "business_process",
+        "row": "1/2",
+        "x": 481,
+        "y": 602,
+        "w": 474,
+        "h": 260
+      },
+      {
+        "card": "children",
+        "row": "1/4",
+        "x": 965,
+        "y": 602,
+        "w": 474,
+        "h": 432
+      },
+      {
+        "card": "readiness_kpi",
+        "row": "3/3",
+        "x": 481,
+        "y": 872,
+        "w": 312,
+        "h": 248
+      },
+      {
+        "card": "billing_preview",
+        "row": "6/2",
+        "x": 481,
+        "y": 1130,
+        "w": 474,
+        "h": 162
+      },
+      {
+        "card": "household",
+        "row": "5/4",
+        "x": 965,
+        "y": 1044,
+        "w": 474,
+        "h": 466
+      },
+      {
+        "card": "attendance",
+        "row": "8/2",
+        "x": 481,
+        "y": 1302,
+        "w": 474,
+        "h": 425
+      },
+      {
+        "card": "financials",
+        "row": "10/2",
+        "x": 481,
+        "y": 1737,
+        "w": 635,
+        "h": 471
+      },
+      {
+        "card": "health_safety",
+        "row": "12/2",
+        "x": 481,
+        "y": 2218,
+        "w": 474,
+        "h": 369
+      }
+    ],
+    "ghost": null
+  },
+  "activationFailures": [],
+  "perCard": {
+    "business_process": {
+      "ghostDrawn": true,
+      "ghost": {
+        "x": 481,
+        "y": 602,
+        "w": 474,
+        "h": 260
+      },
+      "landedAt": {
+        "card": "business_process",
+        "row": "1/2",
+        "x": 481,
+        "y": 602,
+        "w": 474,
+        "h": 260
+      }
+    },
+    "financials": {
+      "ghostDrawn": true,
+      "ghost": {
+        "x": 643,
+        "y": 1737,
+        "w": 635,
+        "h": 471
+      },
+      "landedAt": {
+        "card": "financials",
+        "row": "10/2",
+        "x": 643,
+        "y": 1737,
+        "w": 635,
+        "h": 471
+      }
+    },
+    "children": {
+      "ghostDrawn": true,
+      "ghost": {
+        "x": 965,
+        "y": 602,
+        "w": 474,
+        "h": 432
+      },
+      "landedAt": {
+        "card": "children",
+        "row": "1/4",
+        "x": 965,
+        "y": 602,
+        "w": 474,
+        "h": 432
+      }
+    },
+    "attendance": {
+      "ghostDrawn": true,
+      "ghost": {
+        "x": 481,
+        "y": 1302,
+        "w": 474,
+        "h": 425
+      },
+      "landedAt": {
+        "card": "attendance",
+        "row": "8/2",
+        "x": 481,
+        "y": 1302,
+        "w": 474,
+        "h": 425
+      }
+    },
+    "health_safety": {
+      "ghostDrawn": true,
+      "ghost": {
+        "x": 643,
+        "y": 2032,
+        "w": 474,
+        "h": 369
+      },
+      "landedAt": {
+        "card": "health_safety",
+        "row": "12/2",
+        "x": 643,
+        "y": 2032,
+        "w": 474,
+        "h": 369
+      }
+    },
+    "household": {
+      "ghostDrawn": true,
+      "ghost": {
+        "x": 965,
+        "y": 858,
+        "w": 474,
+        "h": 466
+      },
+      "landedAt": {
+        "card": "household",
+        "row": "5/4",
+        "x": 965,
+        "y": 858,
+        "w": 474,
+        "h": 466
+      }
+    }
+  },
+  "pageErrors": []
+}

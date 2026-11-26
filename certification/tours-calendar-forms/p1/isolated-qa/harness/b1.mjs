@@ -1,0 +1,18 @@
+import { open, ORIGIN, OUT } from "./lib.mjs";
+const { browser, page, errors } = await open();
+await page.goto(`${ORIGIN}/organization/locations`, { waitUntil: "networkidle", timeout: 90000 });
+await page.getByText("Northwind — Riverside Campus").first().click();
+await page.waitForTimeout(2500);
+const tabs = await page.getByRole("tab").allInnerTexts();
+console.log("entity tabs:", JSON.stringify(tabs));
+const toursTab = page.getByRole("tab", { name: /^Tours$/ }).first();
+if (await toursTab.count()) await toursTab.click(); else await page.getByText(/^Tours$/).first().click();
+await page.waitForTimeout(4000);
+console.log("url", page.url());
+const main = page.locator("main").first();
+const txt = (await main.innerText()).replace(/\n{2,}/g, "\n");
+const i = txt.indexOf("Availability");
+console.log(txt.slice(Math.max(0, i - 200), i + 2500));
+await page.screenshot({ path: `${OUT}b-riverside-tours.png`, fullPage: true });
+console.log("errors", JSON.stringify(errors.slice(0, 5)));
+await browser.close();

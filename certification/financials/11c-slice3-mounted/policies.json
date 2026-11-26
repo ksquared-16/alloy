@@ -1,0 +1,137 @@
+{
+  "rows": [
+    {
+      "testid": "policy-5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+      "text": "Sibling discount (QA specimen) Pricing · Discount 10% off everything · Active · Whole organization · from 2026-01-01",
+      "selected": "false"
+    },
+    {
+      "testid": "policy-0-editor",
+      "text": "Due date · Org default Current Sep 19, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days Superseded Sep 18, 2026 → ongoing Due: On the invoice date · Offset: 0 days Superseded Aug 1, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days Create future version Retire",
+      "selected": null
+    },
+    {
+      "testid": "policy-0-timeline",
+      "text": "Current Sep 19, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days Superseded Sep 18, 2026 → ongoing Due: On the invoice date · Offset: 0 days Superseded Aug 1, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days",
+      "selected": null
+    },
+    {
+      "testid": "policy-0-version-71d6b7ed-7e05-4833-876a-8ea06ccdf1ca",
+      "text": "Current Sep 19, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days",
+      "selected": null
+    },
+    {
+      "testid": "policy-0-version-99f9511b-487d-431f-bce3-01e71d359b6e",
+      "text": "Superseded Sep 18, 2026 → ongoing Due: On the invoice date · Offset: 0 days",
+      "selected": null
+    },
+    {
+      "testid": "policy-0-version-9fd72758-8ba6-4bee-983e-1a7396a83b2d",
+      "text": "Superseded Aug 1, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days",
+      "selected": null
+    },
+    {
+      "testid": "policy-0-new-version",
+      "text": "Create future version",
+      "selected": null
+    },
+    {
+      "testid": "policy-0-retire",
+      "text": "Retire",
+      "selected": null
+    }
+  ],
+  "visual": {
+    "blueElements": [
+      {
+        "tag": "A",
+        "role": null,
+        "text": "Organization",
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(39, 63, 82)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "adminv2-nav-link adminv2-nav-link--active font-medium text-alloy-pine hover:unde"
+      },
+      {
+        "tag": "INPUT",
+        "role": null,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(24, 39, 58)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "programs-collection-controls__search"
+      },
+      {
+        "tag": "BUTTON",
+        "role": "option",
+        "text": "Sibling discount (QA specimen) Pricing · Dis",
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(24, 39, 58)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "alloy-os-queue-row-card motion-control relative block w-full overflow-visible ro"
+      },
+      {
+        "tag": "BUTTON",
+        "role": null,
+        "text": "Here are some ways I can help ▾",
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(24, 39, 58)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "flex min-w-0 flex-1 items-center gap-1.5 text-left"
+      },
+      {
+        "tag": "BUTTON",
+        "role": null,
+        "text": "Explain this configuration Summarize the act",
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(24, 39, 58)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "bos-rail-starter-card group flex items-center gap-2.5 rounded-lg border px-2.5 p"
+      },
+      {
+        "tag": "BUTTON",
+        "role": null,
+        "text": "Review configuration attention Identify setu",
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(24, 39, 58)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "bos-rail-starter-card group flex items-center gap-2.5 rounded-lg border px-2.5 p"
+      },
+      {
+        "tag": "BUTTON",
+        "role": null,
+        "text": "Review unpublished changes Explain what rema",
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(24, 39, 58)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "bos-rail-starter-card group flex items-center gap-2.5 rounded-lg border px-2.5 p"
+      },
+      {
+        "tag": "BUTTON",
+        "role": null,
+        "text": "",
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(24, 39, 58)",
+        "classification": "SEMANTIC_OR_TEXT",
+        "className": "absolute bottom-1 right-1 z-[2] h-4 w-4 cursor-nwse-resize border-0 bg-transpare"
+      }
+    ],
+    "actionChrome": 0,
+    "bendPineElements": 12,
+    "nativeSelects": 0
+  },
+  "rowCount": 8,
+  "afterSelect": {
+    "selectedTestid": "policy-5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+    "selectedText": "Sibling discount (QA specimen) Pricing · Discount 10% off everything · Active · ",
+    "detailPresent": true,
+    "detailHead": "Organization financials Financials How operational events affect financial execution. Tuition Catalog Policies Payments Accounting Simulator Funding Policies ar",
+    "competingEditors": 0
+  },
+  "tabReachedPrimary": true,
+  "primaryAction": {
+    "focused": "New Policy",
+    "background": "rgb(0, 162, 131)",
+    "outlineOrRing": "none rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0"
+  }
+}

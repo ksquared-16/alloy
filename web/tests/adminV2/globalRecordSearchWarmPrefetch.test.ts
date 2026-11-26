@@ -16,7 +16,10 @@ describe("globalRecordSearchWarmPrefetch", () => {
         expect(warm).toContain("prefetchOpportunityDrawerOnRowIntent");
         expect(warm).toContain("prefetchPersonDrawerSnapshot");
         expect(warm).toContain("prepareDrawerViewModelDeduped");
+        // Search V2 warms from an already-resolved destination rather than from a
+        // hit it must re-resolve; the warmed drawer behaviour is unchanged.
+        expect(warm).toContain("warmSearchDestinationDrawerIntent");
         const box = read("app/adminV2/components/GlobalSearchBox.tsx");
-        expect(box).toContain("warmGlobalSearchHitDrawerIntent");
+        expect(box).toContain("warmSearchDestinationDrawerIntent");
     });
 });

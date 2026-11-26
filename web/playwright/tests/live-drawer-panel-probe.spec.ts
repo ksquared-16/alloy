@@ -75,7 +75,7 @@ async function resolveProbeRecordId(page: import("@playwright/test").Page): Prom
         `No drawable opportunity found. Requested record ${REQUESTED_RECORD_ID} returned HTTP ${requestedStatus}.`
     );
 }
-const outDir = path.join(__dirname, "../../../docs/sprints/06_2026/assets/live-drawer-panel-probe");
+const outDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/assets/live-drawer-panel-probe");
 
 type ProbeBundle = {
     audit: unknown;

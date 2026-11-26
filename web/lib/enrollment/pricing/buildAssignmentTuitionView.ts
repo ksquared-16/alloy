@@ -1,0 +1,309 @@
+/**
+ * THE ONE PLACE AN ASSIGNMENT'S TUITION IS COMPOSED FOR AN OPERATOR SURFACE.
+ *
+ * Both routes that answer "what does this child's tuition look like" call this, so neither can grow
+ * a second matching algorithm. That is not a stylistic preference: the surfaces drifted apart once
+ * already, and the drift was invisible because each had its own green unit tests over rows it
+ * invented itself.
+ *
+ * Resolution is NOT performed here. It is performed by Commercial Execution
+ * (`resolveAssignmentPricingOptions`) over facts read from their owners
+ * (`readAssignmentPricingFacts`). This module only assembles what a surface needs to render:
+ * the state, the recommendation, the alternatives, the explanation, and whatever has been accepted.
+ *
+ * ── STALENESS IS A COMPARISON, NOT A FLAG ──
+ *
+ * An accepted term recorded the resolution key it was accepted under. Re-resolving today produces a
+ * key from today's facts. When they differ, the assignment has moved since the price was agreed —
+ * and the surface says so rather than presenting an old number as current. The accepted term itself
+ * is untouched: history is not wrong, it is just no longer the answer to today's question.
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { composeCommercialExport } from "@/lib/commercial/execution/export/composeCommercialExport";
+import type { CommercialExport } from "@/lib/commercial/execution/commercialExport";
+import {
+    listLocationTuitionOptions,
+    resolveAssignmentPricingOptions,
+    type ApplicableOption,
+    type AssignmentPricingFacts,
+} from "@/lib/commercial/execution/evaluate/resolveOptions";
+import { readAssignmentPricingFacts } from "@/lib/enrollment/pricing/assignmentPricingFacts";
+import {
+    readAcceptedPricingTerms,
+    type AcceptedPricingTerm,
+} from "@/lib/enrollment/pricing/enrollmentPricingTermsService";
+
+/** One option as an operator surface renders it. */
+export type TuitionOptionView = {
+    sourceId: string;
+    offeringId: string;
+    /** The offering's configured name — with the variant, the rate's identity (rates carry no name). */
+    offeringLabel: string;
+    variantId: string;
+    variantLabel: string;
+    programKey: string;
+    attendanceType: string;
+    cadenceKey: string;
+    amountCents: number;
+    currencyCode: string;
+    /** "$1,200.00/monthly" — formatted once, so two surfaces cannot format it differently. */
+    amountLabel: string;
+    scope: "location" | "org_default";
+    effectiveStart: string | null;
+    effectiveEnd: string | null;
+    /** Why it applies, in operator-readable fragments. */
+    matched: string[];
+};
+
+export type AssignmentTuitionView = {
+    opportunityCustomerMemberId: string;
+    customerMemberId: string;
+    childLabel: string;
+    enrollmentAgreementId: string | null;
+    facts: AssignmentPricingFacts;
+    /** Which owner supplied each fact — the answer to "why five days". */
+    factSources: Record<string, string>;
+    /** The resolution's own identity, carried so a commit can prove what it was looking at. */
+    resolutionKey: string;
+    configVersion: string;
+    state: "recommended" | "ambiguous" | "no_match";
+    /** Present only when the resolution is deterministic. */
+    recommended: TuitionOptionView | null;
+    /** The equally-surviving candidates when the configuration has not said which applies. */
+    tied: TuitionOptionView[];
+    /** Every option that applies, recommendation included. */
+    applicable: TuitionOptionView[];
+    /**
+     * Every other rate this site offers (any program or schedule) — the operator's "additional
+     * rates". Choosing one is an override. Excludes everything already in `applicable`.
+     */
+    additional: TuitionOptionView[];
+    /**
+     * True when this view was resolved against the editor's UNSAVED choices (`draftFacts`): the
+     * room's program, the selected days, the schedule type, the start date. A draft view is for
+     * display; Save writes the same facts and the commit re-reads and re-resolves them.
+     */
+    draft: boolean;
+    /** Why the others did not, told apart by reason. */
+    rejected: Array<{ sourceId: string; reason: string; detail: string }>;
+    /** Why nothing applies, when nothing does. */
+    noMatchReason: string | null;
+    /** What has actually been agreed, if anything. */
+    accepted: AcceptedPricingTerm | null;
+    /** True when the accepted term was agreed against facts that have since changed. */
+    acceptedIsStale: boolean;
+};
+
+function money(cents: number, currency: string): string {
+    return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
+}
+
+function toOptionView(o: ApplicableOption): TuitionOptionView {
+    return {
+        sourceId: o.source.id,
+        offeringId: o.offeringId,
+        offeringLabel: o.offeringLabel,
+        variantId: o.variantId,
+        variantLabel: o.variantLabel,
+        programKey: o.programKey,
+        attendanceType: o.attendanceType,
+        cadenceKey: o.cadenceKey,
+        amountCents: o.amount.amountCents,
+        currencyCode: o.amount.currency,
+        amountLabel: `${money(o.amount.amountCents, o.amount.currency)}/${o.cadenceKey}`,
+        scope: o.scope,
+        effectiveStart: o.effective.start,
+        effectiveEnd: o.effective.end,
+        matched: o.matched,
+    };
+}
+
+/**
+ * Compose the tuition view for ONE assignment.
+ *
+ * @param exported pass a shared `CommercialExport` when composing several assignments at once — the
+ *   catalog is the same for all of them, and reading it per child would make the config version vary
+ *   across a single answer.
+ */
+/**
+ * The Assignment editor's UNSAVED choices, in pricing-fact terms. Each present field replaces the
+ * saved fact; an absent one keeps it. Every field is something the editor's Save writes, so the
+ * saved assignment resolves to the same facts — and the same rates — once saved.
+ */
+export type AssignmentDraftFacts = {
+    programKey?: string | null;
+    attendanceType?: string | null;
+    daysPerWeek?: number | null;
+    asOf?: string | null;
+    locationId?: string | null;
+};
+
+/** Pure: the saved facts with the editor's unsaved choices applied. */
+export function applyDraftFacts(saved: AssignmentPricingFacts, draft: AssignmentDraftFacts | null): AssignmentPricingFacts {
+    if (!draft) return saved;
+    const next = { ...saved };
+    if (draft.programKey !== undefined && draft.programKey) next.programKey = draft.programKey;
+    if (draft.attendanceType !== undefined && draft.attendanceType) next.attendanceType = draft.attendanceType;
+    if (draft.daysPerWeek !== undefined && draft.daysPerWeek != null && draft.daysPerWeek > 0) next.daysPerWeek = draft.daysPerWeek;
+    if (draft.asOf !== undefined && draft.asOf && /^\d{4}-\d{2}-\d{2}$/.test(draft.asOf)) next.asOf = draft.asOf;
+    if (draft.locationId !== undefined && draft.locationId) next.locationId = draft.locationId;
+    return next;
+}
+
+export async function buildAssignmentTuitionView(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        opportunityCustomerMemberId: string;
+        childLabel?: string | null;
+        cadenceKey?: string | null;
+        asOf?: string | null;
+        exported?: CommercialExport;
+        /** Resolve against the editor's unsaved choices instead of the saved ones (display only). */
+        draftFacts?: AssignmentDraftFacts | null;
+    },
+): Promise<AssignmentTuitionView | null> {
+    const read = await readAssignmentPricingFacts(supabase, {
+        orgId: args.orgId,
+        opportunityCustomerMemberId: args.opportunityCustomerMemberId,
+        asOf: args.asOf ?? null,
+        cadenceKey: args.cadenceKey ?? null,
+    });
+    if (!read.ok) {
+        /*
+         * A DATABASE FAILURE IS NOT "THIS CHILD HAS NO ASSIGNMENT".
+         *
+         * Returning null for every failure collapsed two unrelated answers into one, and the
+         * callers then collapsed them again: `buildOpportunityTuitionViews` drops a null view, so
+         * an opportunity whose assignments all failed to read answered 200 with `assignments: []`,
+         * and `/enrollment/assignment-quote` answered 404 `no_assignment_for_child` — the same
+         * words it uses for a child who genuinely has none.
+         *
+         * Measured: two assignments created through the registered route, found by that route's own
+         * (org, opportunity, child) filter on a second call, and still reported as absent by every
+         * pricing surface. Nothing in the product said why.
+         *
+         * `assignment_not_found` stays null — that is a real business answer. A `db_error` throws
+         * and carries the database's own message.
+         */
+        if (read.code === "db_error") {
+            throw new Error(`buildAssignmentTuitionView: reading assignment facts failed — ${read.message}`);
+        }
+        return null;
+    }
+
+    const exported =
+        args.exported
+        ?? (await composeCommercialExport({ supabase, orgId: args.orgId, asOf: read.facts.asOf })).export;
+    const facts = applyDraftFacts(read.facts, args.draftFacts ?? null);
+    const draft = JSON.stringify(facts) !== JSON.stringify(read.facts);
+    const resolution = resolveAssignmentPricingOptions(exported, facts);
+
+    const accepted = (
+        await readAcceptedPricingTerms(supabase, {
+            orgId: args.orgId,
+            opportunityCustomerMemberId: args.opportunityCustomerMemberId,
+        })
+    )[0] ?? null;
+
+    const applicable = resolution.kind === "no_match" ? [] : resolution.applicable.map(toOptionView);
+    const applicableIds = new Set(applicable.map((o) => o.sourceId));
+    const additional = listLocationTuitionOptions(exported, facts)
+        .filter((o) => !applicableIds.has(o.source.id))
+        .map(toOptionView);
+
+    return {
+        opportunityCustomerMemberId: read.subject.opportunityCustomerMemberId,
+        customerMemberId: read.subject.customerMemberId,
+        childLabel: (args.childLabel ?? "").trim() || "Child",
+        enrollmentAgreementId: read.subject.enrollmentAgreementId,
+        facts,
+        factSources: read.sources as unknown as Record<string, string>,
+        resolutionKey: resolution.resolutionKey,
+        configVersion: resolution.configVersion.version,
+        state: resolution.kind === "recommended" ? "recommended" : resolution.kind,
+        recommended: resolution.kind === "recommended" ? toOptionView(resolution.recommended) : null,
+        tied: resolution.kind === "ambiguous" ? resolution.tied.map(toOptionView) : [],
+        applicable,
+        additional,
+        draft,
+        rejected: resolution.rejected.map((r) => ({
+            sourceId: r.source.id,
+            reason: r.reason,
+            detail: r.detail,
+        })),
+        noMatchReason: resolution.kind === "no_match" ? resolution.reason : null,
+        accepted,
+        // Compared against the CURRENT resolution, so a change to the assignment or a republished
+        // catalog both surface as staleness — which they both are.
+        acceptedIsStale: Boolean(accepted && accepted.resolutionKey !== resolution.resolutionKey),
+    };
+}
+
+/** Compose the tuition view for every assignment on an opportunity, over one shared catalog read. */
+export async function buildOpportunityTuitionViews(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        opportunityId: string;
+        asOf?: string | null;
+        /** The editor's unsaved choices for ONE child: resolve that child's view against them. */
+        draft?: { customerMemberId: string; facts: AssignmentDraftFacts } | null;
+    },
+): Promise<AssignmentTuitionView[]> {
+    /*
+     * THE ERROR IS NOT DISCARDED, AND THAT IS THE POINT.
+     *
+     * This read `const { data } = await …` and then returned `[]` for `data ?? []`, so a FAILED
+     * query and an opportunity with no assignments were the same answer from outside: the route
+     * replied 200 with `{"enrollments": [], "assignments": []}` either way, and the card rendered
+     * "No assignment on this record to price." A fixture whose assignment rows demonstrably existed
+     * — the Children card was listing them by id — read as a family with no children enrolled, and
+     * there was no way to tell the two apart without changing this line.
+     *
+     * A read that failed is not an empty result. It throws, the route answers 500, and the card
+     * shows its load error, which is the truth.
+     */
+    const { data: ocmRows, error: ocmError } = await supabase
+        .from("opportunity_customer_members")
+        .select("id, customer_member_id, customer_members(first_name, last_name)")
+        .eq("org_id", args.orgId)
+        .eq("opportunity_id", args.opportunityId);
+    if (ocmError) {
+        throw new Error(`buildOpportunityTuitionViews: reading assignments failed — ${ocmError.message}`);
+    }
+
+    const rows = (ocmRows ?? []) as Array<Record<string, unknown>>;
+    if (rows.length === 0) return [];
+
+    // ONE catalog read for the whole answer: a config version that varied between two children of
+    // the same family would make their prices incomparable.
+    const exported = (
+        await composeCommercialExport({
+            supabase,
+            orgId: args.orgId,
+            asOf: (args.asOf ?? "").trim() || new Date().toISOString().slice(0, 10),
+        })
+    ).export;
+
+    const views: AssignmentTuitionView[] = [];
+    for (const row of rows) {
+        const member = row.customer_members as { first_name?: string | null; last_name?: string | null } | null;
+        const childLabel = [member?.first_name, member?.last_name].filter(Boolean).join(" ").trim();
+        const view = await buildAssignmentTuitionView(supabase, {
+            orgId: args.orgId,
+            opportunityCustomerMemberId: String(row.id),
+            childLabel,
+            asOf: args.asOf ?? null,
+            exported,
+            draftFacts:
+                args.draft && String(row.customer_member_id) === args.draft.customerMemberId
+                    ? args.draft.facts
+                    : null,
+        });
+        if (view) views.push(view);
+    }
+    return views;
+}

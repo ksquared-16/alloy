@@ -1,0 +1,350 @@
+/**
+ * Forms source adapter — map form submission collection envelope to canonical related-record proposals (read-only).
+ */
+
+import { interpretRelationshipMemberFields } from "@/lib/fields/relationship/relationshipNestedFields";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { groupMemberState } from "@/lib/forms/validateSubmission";
+import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
+import {
+    findCanonicalCollectionProvider,
+    classifyCollectionProvider,
+} from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
+import { relationshipDefinitionForRef } from "@/lib/fields/relationship/relationshipDefinitions";
+import { healthFactKindForFormProvider, readHealthFactRow } from "@/lib/health/healthFactFormMembers";
+import {
+    collectionBindingAuthoringEnabledForProvider,
+} from "@/lib/fields/formsRelationshipOperationalSupport";
+import type { FormPayload } from "@/lib/forms/validateSubmission";
+import { extractFormCollectionEnvelope } from "@/lib/forms/processing/extractFormCollectionEnvelope";
+import type { FormCollectionEnvelopeRow } from "@/lib/forms/processing/types";
+import type {
+    ProposalDiagnostic,
+    RelatedRecordFieldProposal,
+    RelatedRecordInstanceProposal,
+    RelatedRecordProposalBundle,
+    RelatedRecordCollectionProposal,
+    RelatedRecordHealthFactIntent,
+    RelatedRecordProposalOrigin,
+    RelatedRecordProposalStatus,
+    RelatedRecordRelationshipIntent,
+} from "@/lib/intake/proposals/types";
+import {
+    stableRelatedRecordProposalId,
+    worstRelatedRecordProposalStatus,
+} from "@/lib/intake/proposals/normalize";
+
+export type AdaptFormSubmissionProposalsContext = {
+    formSubmissionId: string;
+    formDefinitionVersionId: string | null;
+    packetSessionId?: string | null;
+    /** Pre-verified existing item ids in org (optional read-time security). */
+    accessibleExistingItemIds?: ReadonlySet<string>;
+};
+
+const SOURCE_KIND = "form_submission";
+
+function mapFormOrigin(origin: FormCollectionEnvelopeRow["origin"]): RelatedRecordProposalOrigin {
+    return origin === "existing" ? "existing_record" : "proposed_new_record";
+}
+
+function nestedFieldsForGroup(field: FormField & { type: "group" }): FormField[] {
+    return field.fields.filter((f) => f.type !== "group");
+}
+
+function buildFieldProposals(
+    nestedFields: FormField[],
+    values: Record<string, unknown>,
+): RelatedRecordFieldProposal[] {
+    const out: RelatedRecordFieldProposal[] = [];
+    for (const nested of nestedFields) {
+        if (!Object.prototype.hasOwnProperty.call(values, nested.id)) continue;
+        const submitted = values[nested.id];
+        const entityType = nested.field_source?.entity_type ?? null;
+        const fieldKey = nested.field_source?.field_key ?? null;
+        const providerRef = entityType && fieldKey ? `${entityType}.${fieldKey}` : nested.id;
+        out.push({
+            provider_ref: providerRef,
+            submitted_value: submitted,
+            source_fact_ref: nested.id,
+            label: nested.label,
+        });
+    }
+    return out;
+}
+
+/** Person facts for a relationship row, from bound members and uniquely interpretable unbound ones. */
+function relationshipPersonFacts(
+    def: NonNullable<ReturnType<typeof relationshipDefinitionForRef>>,
+    nestedFields: FormField[],
+    values: Record<string, unknown>,
+): Pick<RelatedRecordRelationshipIntent, "proposed_person_facts" | "unresolved_member_field_ids"> {
+    const { interpreted, unresolved } = interpretRelationshipMemberFields(def, nestedFields);
+    const has = (id: string) => Object.prototype.hasOwnProperty.call(values, id);
+    return {
+        proposed_person_facts: nestedFields
+            .filter((n) => interpreted.has(n.id) && has(n.id))
+            .map((n) => {
+                const i = interpreted.get(n.id)!;
+                return { entity_type: i.field_source.entity_type, field_key: i.field_source.field_key, value: values[n.id], source_field_id: n.id, basis: i.basis };
+            }),
+        unresolved_member_field_ids: unresolved.filter(has),
+    };
+}
+
+function buildInstanceProposal(args: {
+    ctx: AdaptFormSubmissionProposalsContext;
+    groupId: string;
+    schemaBindingProvider: string;
+    schemaIterationEntity: string;
+    nestedFields: FormField[];
+    row: FormCollectionEnvelopeRow;
+    rowIndex: number;
+}): RelatedRecordInstanceProposal {
+    const { ctx, groupId, schemaBindingProvider, schemaIterationEntity, nestedFields, row, rowIndex } = args;
+    const diagnostics: ProposalDiagnostic[] = [];
+    let status: RelatedRecordProposalStatus = "valid";
+
+    if (!row.instance_key?.trim()) {
+        diagnostics.push({ code: "missing_instance_key", message: "Collection instance is missing instance_key.", path: `groups.${groupId}.${rowIndex}` });
+        status = "invalid";
+    }
+
+    if (row.provider_ref !== schemaBindingProvider) {
+        diagnostics.push({
+            code: "collection_mismatch",
+            message: "Envelope provider does not match schema collection binding.",
+            path: `groups.${groupId}.${rowIndex}.provider_ref`,
+        });
+        status = "invalid";
+    }
+
+    if (row.iteration_entity_type !== schemaIterationEntity) {
+        diagnostics.push({
+            code: "unsupported_item_entity",
+            message: "Iteration entity does not match schema binding.",
+            path: `groups.${groupId}.${rowIndex}.iteration_entity_type`,
+        });
+        status = "invalid";
+    }
+
+    const providerDef = findCanonicalCollectionProvider(row.provider_ref);
+    if (!providerDef) {
+        diagnostics.push({ code: "unknown_provider", message: `Unknown collection provider "${row.provider_ref}".`, path: `groups.${groupId}` });
+        status = "unsupported";
+    } else if (!collectionBindingAuthoringEnabledForProvider(row.provider_ref)) {
+        diagnostics.push({ code: "unsupported_item_entity", message: `Collection provider "${row.provider_ref}" is not enabled for Processing evidence.`, path: `groups.${groupId}` });
+        status = "unsupported";
+    }
+
+    if (row.origin === "existing" && !row.item_id) {
+        diagnostics.push({ code: "invalid_existing_record_id", message: "Existing instance requires item_id.", path: `groups.${groupId}.${rowIndex}.item_id` });
+        status = "invalid";
+    }
+    if (row.origin === "respondent_added" && row.item_id) {
+        diagnostics.push({ code: "invalid_existing_record_id", message: "Respondent-added instance must not declare item_id.", path: `groups.${groupId}.${rowIndex}.item_id` });
+        status = "invalid";
+    }
+
+    if (row.origin === "existing" && row.item_id && ctx.accessibleExistingItemIds && !ctx.accessibleExistingItemIds.has(row.item_id)) {
+        diagnostics.push({ code: "org_boundary", message: "Existing collection item is not accessible in this organization.", path: `groups.${groupId}.${rowIndex}.item_id` });
+        status = "invalid";
+    }
+
+    const fieldProposals = buildFieldProposals(nestedFields, row.values);
+    if (fieldProposals.length === 0 && Object.keys(row.values).length > 0) {
+        diagnostics.push({ code: "missing_field_binding", message: "Submitted nested values do not match schema field bindings.", path: `groups.${groupId}.${rowIndex}.values` });
+        status = status === "valid" ? "incomplete" : status;
+    }
+
+    const proposalId = stableRelatedRecordProposalId({
+        source_kind: SOURCE_KIND,
+        source_record_id: ctx.formSubmissionId,
+        collection_provider_ref: row.provider_ref,
+        instance_key: row.instance_key,
+    });
+
+    // ── server-derived execution intent ────────────────────────────────────────────────────────
+    // The payload carries only provider_ref. Role, command, scope and write destination are resolved
+    // HERE from the canonical Relationship Definition, so nothing the client submits can assert them.
+    const executionKind = classifyCollectionProvider(row.provider_ref);
+    const relationshipDef = relationshipDefinitionForRef(row.provider_ref);
+    const relationshipIntent: RelatedRecordRelationshipIntent | undefined = relationshipDef
+        ? {
+              definition_key: relationshipDef.definition_key,
+              operational_role_key: relationshipDef.operational_role_key,
+              apply_command_key: relationshipDef.apply_command_key,
+              relationship_scope: relationshipDef.relationship_scope,
+              default_scope: relationshipDef.scopes[0] ?? "this_child",
+              supported_scopes: relationshipDef.scopes,
+              identity_action: row.origin === "existing" ? "link_existing_person" : "create_proposed_person",
+              ...(row.item_id ? { existing_person_id: row.item_id } : {}),
+              // A member's own binding first; otherwise the definition's declared member it uniquely
+              // matches (relationshipNestedFields). Values are submitted as-is; provenance travels.
+              ...relationshipPersonFacts(relationshipDef, nestedFields, row.values),
+          }
+        : undefined;
+
+    // ── health facts: read in Health's own words; nothing the client sends names the kind ─────────
+    const healthKind = healthFactKindForFormProvider(row.provider_ref);
+    let healthFactIntent: RelatedRecordHealthFactIntent | undefined;
+    if (healthKind) {
+        const reading = readHealthFactRow(healthKind, nestedFields, row.values);
+        healthFactIntent = {
+            fact_kind: reading.fact_kind,
+            payload: reading.payload,
+            missing_required: [...reading.missing_required],
+            unresolved_member_field_ids: [...reading.unresolved_member_field_ids],
+            unrecognized_severity: reading.unrecognized_severity,
+        };
+        if (reading.missing_required.length > 0) {
+            diagnostics.push({
+                code: "missing_field_binding",
+                message: `This ${healthKind} has no ${reading.missing_required.join(", ")} — it cannot be recorded until one is given.`,
+                path: `groups.${groupId}.${rowIndex}.values`,
+            });
+            status = status === "valid" ? "incomplete" : status;
+        }
+        if (reading.unrecognized_severity) {
+            diagnostics.push({
+                code: "missing_field_binding",
+                message: `Severity "${reading.unrecognized_severity}" is not one Alloy records; it was left out rather than guessed.`,
+                path: `groups.${groupId}.${rowIndex}.values`,
+            });
+        }
+    }
+
+    return {
+        proposal_id: proposalId,
+        collection_provider_ref: row.provider_ref,
+        item_entity_type: row.iteration_entity_type,
+        instance_key: row.instance_key,
+        origin: mapFormOrigin(row.origin),
+        existing_record_id: row.item_id ?? undefined,
+        field_proposals: fieldProposals,
+        execution_kind: executionKind,
+        ...(relationshipIntent ? { relationship_intent: relationshipIntent } : {}),
+        ...(healthFactIntent ? { health_fact_intent: healthFactIntent } : {}),
+        source_lineage: {
+            source_kind: SOURCE_KIND,
+            source_record_id: ctx.formSubmissionId,
+            source_path: `groups.${groupId}[${row.instance_key}]`,
+            source_metadata: {
+                schema_group_id: groupId,
+                form_definition_version_id: ctx.formDefinitionVersionId ?? "",
+                ...(ctx.packetSessionId ? { packet_session_id: ctx.packetSessionId } : {}),
+            },
+        },
+        diagnostics,
+        status,
+    };
+}
+
+export function adaptFormSubmissionToRelatedRecordProposals(
+    schema: FormSchemaV1 | null,
+    payload: FormPayload | null | undefined,
+    ctx: AdaptFormSubmissionProposalsContext,
+): RelatedRecordProposalBundle {
+    const envelope = extractFormCollectionEnvelope(payload);
+    const diagnostics: ProposalDiagnostic[] = [...envelope.diagnostics];
+
+    if (!schema) {
+        diagnostics.push({ code: "missing_source_context", message: "Form schema unavailable — collection proposals cannot be resolved." });
+        return { collections: [], diagnostics };
+    }
+
+    if (envelope.source === "none") {
+        return { collections: [], diagnostics };
+    }
+
+    const collections: RelatedRecordCollectionProposal[] = [];
+
+    for (const field of schema.fields) {
+        if (field.type !== "group" || !groupFieldHasCollectionBinding(field)) continue;
+        const binding = field.collection_binding!;
+        const rows = envelope.byGroup[field.id];
+        if (!rows?.length) continue;
+
+        const groupDiagnostics: ProposalDiagnostic[] = [];
+        const seenKeys = new Set<string>();
+        const instances: RelatedRecordInstanceProposal[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i]!;
+            const duplicate = seenKeys.has(row.instance_key);
+            if (duplicate) {
+                groupDiagnostics.push({
+                    code: "duplicate_instance_key",
+                    message: `Duplicate instance_key "${row.instance_key}".`,
+                    path: `groups.${field.id}`,
+                });
+            }
+            seenKeys.add(row.instance_key);
+            /*
+             * A row the form seeded and nobody filled in is not a person to propose. Only a CLEAN
+             * blank row is dropped: one that links an existing record (the record is the answer), or
+             * that carries a wrong provider or a duplicate key (an anomaly the operator must see), is
+             * kept and adapted as before.
+             */
+            const cleanBlank =
+                row.origin !== "existing"
+                && !duplicate
+                && row.provider_ref === binding.collection_provider_ref
+                && row.iteration_entity_type === binding.iteration_entity_type
+                && groupMemberState(field, { values: row.values ?? {} }, schema).state === "blank";
+            if (cleanBlank) continue;
+
+            instances.push(
+                buildInstanceProposal({
+                    ctx,
+                    groupId: field.id,
+                    schemaBindingProvider: binding.collection_provider_ref,
+                    schemaIterationEntity: binding.iteration_entity_type,
+                    nestedFields: nestedFieldsForGroup(field),
+                    row,
+                    rowIndex: i,
+                }),
+            );
+        }
+
+        collections.push({
+            collection_key: field.id,
+            collection_provider_ref: binding.collection_provider_ref,
+            instances,
+            status: worstRelatedRecordProposalStatus(instances.map((x) => x.status)),
+            diagnostics: groupDiagnostics,
+        });
+    }
+
+    for (const [groupId, rows] of Object.entries(envelope.byGroup)) {
+        const schemaGroup = schema.fields.find((f) => f.id === groupId && f.type === "group");
+        if (!schemaGroup || !groupFieldHasCollectionBinding(schemaGroup)) {
+            diagnostics.push({
+                code: "collection_mismatch",
+                message: `Envelope group "${groupId}" does not match a collection-bound schema group.`,
+                path: `groups.${groupId}`,
+            });
+            if (rows.length > 0) {
+                collections.push({
+                    collection_key: groupId,
+                    collection_provider_ref: rows[0]!.provider_ref,
+                    instances: rows.map((row, i) =>
+                        buildInstanceProposal({
+                            ctx,
+                            groupId,
+                            schemaBindingProvider: row.provider_ref,
+                            schemaIterationEntity: row.iteration_entity_type,
+                            nestedFields: [],
+                            row,
+                            rowIndex: i,
+                        }),
+                    ),
+                    status: "invalid",
+                    diagnostics: [{ code: "collection_mismatch", message: "Schema group missing for envelope rows.", path: `groups.${groupId}` }],
+                });
+            }
+        }
+    }
+
+    return { collections, diagnostics };
+}

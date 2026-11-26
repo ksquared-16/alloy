@@ -8,6 +8,7 @@ import { findCustomerMemberIdOnOpportunity } from "@/lib/forms/intake/intakeOppo
 import {
     buildOcmInsertFromIntakeChildFields,
     resolveIntakeChildOcmFields,
+    type ResolvedIntakeChildOcmFields,
 } from "@/lib/forms/intake/resolveIntakeChildOcmFields";
 
 export type ApplyIntakeChildToOpportunityParams = {
@@ -24,7 +25,7 @@ export type ApplyIntakeChildToOpportunityParams = {
 
 export type ApplyIntakeChildToOpportunityResult = {
     customer_member_id: string;
-    ocm_fields: ReturnType<typeof resolveIntakeChildOcmFields>;
+    ocm_fields: ResolvedIntakeChildOcmFields;
     member_created: boolean;
     ocm_created: boolean;
 };
@@ -39,7 +40,8 @@ export async function applyIntakeChildToOpportunity(
         (typeof ch.first_name === "string" && ch.first_name.trim());
     if (!hasChild) return null;
 
-    const ocmFields = resolveIntakeChildOcmFields({
+    const ocmFields = await resolveIntakeChildOcmFields(supabase, {
+        orgId: params.orgId,
         child: ch,
         opportunityLocationId: params.opportunityLocationId,
         linkDefaultLocationId: params.linkDefaultLocationId,

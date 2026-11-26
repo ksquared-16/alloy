@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Admin / Configuration API
 
 **Domain size:** ~73 route handlers. Full list: [`api-index.md` → Admin / Configuration](api-index.md#admin--configuration).

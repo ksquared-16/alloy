@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Household Handoff — Alloy</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+  <script>if(!location.search.includes('screenshot'))location.search='?screenshot=1';</script>
+</head>
+<body>
+  <nav class="nav-bar"><a href="02-current-work-focus.html">← Current Work</a></nav>
+  <div class="os-frame">
+    <aside class="sidebar"><div class="sidebar-icon active">⊞</div></aside>
+    <div class="os-main">
+      <div class="wu-header"><div class="wu-breadcrumb"><strong>Enrollment</strong></div></div>
+      <div class="os-split">
+        <div class="queue-panel"></div>
+        <div class="fp-panel" style="position:relative">
+          <div class="fp-scroll" style="filter:blur(2px);opacity:0.3;pointer-events:none;padding:14px">
+            <div class="card-grid-ws">
+              <div class="card-support handoff-target"><div class="card-label">Household</div><h3>Rob Digan</h3></div>
+              <div class="card-support"><div class="card-label">Children</div></div>
+            </div>
+          </div>
+          <div class="focus-scrim" style="display:flex">
+            <div class="focus-card">
+              <div class="focus-card-header">
+                <button class="focus-back" onclick="location.href='02-current-work-focus.html'">← Back</button>
+                <span class="focus-card-label">Household</span>
+              </div>
+              <div class="focus-card-body">
+                <div style="display:flex;gap:14px;margin-bottom:16px">
+                  <div class="fp-avatar" style="width:48px;height:48px;font-size:18px">RD</div>
+                  <div>
+                    <div style="font-size:18px;font-weight:700">Rob Digan</div>
+                    <div style="font-size:13px;color:var(--muted)">Primary contact · Prefers email</div>
+                  </div>
+                </div>
+                <div style="background:var(--stone);border-radius:8px;padding:12px;font-size:13px;margin-bottom:12px">
+                  <div style="color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;margin-bottom:4px">Phone</div>
+                  (555) 234-8901
+                </div>
+                <div style="background:var(--stone);border-radius:8px;padding:12px;font-size:13px">
+                  <div style="color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;margin-bottom:4px">Email</div>
+                  rob.digan@email.com
+                </div>
+                <p style="font-size:11px;color:var(--juniper);margin-top:16px;font-weight:600">↑ Handoff from Current Work checklist — same Focus grammar as Household always used</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="bos-rail"><div class="bos-rail-btn">BOS</div></aside>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -27,13 +27,90 @@ import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentSta
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import {
+    parseStageRequirementsV1,
+    serializeStageRequirementsV1,
+    type StageRequirementsV1,
+} from "@/lib/lifecycle/stageRequirementsV1";
+import {
+    emptyProcessCommandSetV1,
+    parseProcessCommandSetV1OrNull,
+    type BusinessProcessCommandSetV1,
+} from "@/lib/lifecycle/processCommandSetV1";
+import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+import { parseParticipationConfigV1, type ParticipationConfigV1 } from "@/lib/process/participationConfig";
+import type { ProcessEntryIntentV1 } from "@/lib/lifecycle/processEntryPointsV1";
+import {
+    parseProcessEntryPointsV1,
+    serializeProcessEntryPointsV1,
+    type ProcessEntryPointsV1,
+} from "@/lib/lifecycle/processEntryPointsV1";
+import {
     parseStageGrain,
     parseSubjectResolutionStrategy,
     type StageGrain,
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
+import { journeySegmentForStageGrain } from "@/lib/lifecycle/grainVocabulary";
+import {
+    isDomainProjectionModel,
+    parseProcessModelV1,
+    type ProcessModelV1,
+} from "@/lib/lifecycle/processModelV1";
+
+import {
+    captureUnknownFields,
+    serializeWithUnknownFields,
+    withUnknownFields,
+} from "@/lib/config/preserveUnknownFields";
 
 export const LIFECYCLE_BUILDER_METADATA_KEY = "lifecycle_builder_v1" as const;
+
+/**
+ * Keys each level of the builder owns. Anything else was authored by a newer writer and must
+ * survive the round trip untouched (Law 1/Law 7 — see configuration-integrity-laws.md).
+ */
+const BUILDER_OWNED_KEYS = ["version", "active_process_id", "processes"] as const;
+
+const PROCESS_OWNED_KEYS = [
+    "id",
+    "key",
+    "name",
+    "description",
+    "primary_entity",
+    "sort_order",
+    "is_active",
+    "command_set_v1",
+    "tracks_v1",
+    "manual_status_transition_policy_v1",
+    "work_views_v1",
+    "participation_v1",
+    "entry_points_v1",
+    "process_model_v1",
+    "stages",
+] as const;
+
+const STAGE_OWNED_KEYS = [
+    "id",
+    "key",
+    "label",
+    "description",
+    "sort_order",
+    "is_active",
+    "track_key",
+    "queue_membership_v1",
+    "status_rollup_v1",
+    "stage_operating_plan_v1",
+    "perspectives_v1",
+    "action_catalog_v1",
+    "requirements_v1",
+    "grain",
+    "purpose",
+    "parent_stage_key",
+    "allow_skipping",
+    "operator_guidance",
+    "subject_resolution_strategy",
+    "stage_annotations_v1",
+] as const;
 
 export type LifecycleBuilderStageRecord = {
     id: string;
@@ -55,6 +132,25 @@ export type LifecycleBuilderStageRecord = {
     perspectives_v1?: PerspectiveConfigV1Stored[];
     /** Configured candidate actions and recommendation levels for this stage (BPEP Builder). */
     action_catalog_v1?: StageActionCatalogV1;
+    /**
+     * Canonical requirements of this stage (D-88).
+     *
+     * Presence is authority. An authored section — even an EMPTY one — means Business
+     * Process has spoken for this stage, and the legacy `departments.metadata`
+     * compatibility projection must not answer (D-90). Absence means requirements were
+     * never authored canonically, and only then may legacy answer.
+     */
+    requirements_v1?: StageRequirementsV1;
+    /**
+     * The stage's two bounded annotation slots — which canonical PROJECTIONS fill them.
+     *
+     * Configuration selects from the platform's registry
+     * (`STAGE_ANNOTATION_PROJECTIONS`); it never names a record path and never authors a
+     * display string. The cap of two lives with the platform, so a process cannot grow a
+     * third slot by authoring one. Absent means this stage says nothing beneath its label,
+     * which is a normal state rather than a gap to fill.
+     */
+    stage_annotations_v1?: { slots: string[] };
     /** V2 Builder — grain determines the queue row subject entity. */
     grain?: StageGrain;
     /** V2 Builder — freeform operator-authored stage purpose. */
@@ -75,15 +171,51 @@ export type LifecycleBuilderProcessRecord = {
     name: string;
     /** Shown on /workspace department tile when synced to departments.description. */
     description?: string;
-    primary_entity: LifecyclePrimaryEntityKey;
+    /**
+     * The record a STAGED lifecycle moves through its stages. Absent on a domain projection
+     * (`process_model_v1.kind === "domain_projection"`): that process reads another domain's records
+     * and has no lifecycle record of its own, so claiming "Opportunity / Lead" would be false.
+     */
+    primary_entity?: LifecyclePrimaryEntityKey;
+    /** How this process executes (BP V2 Slice 1). Absent → staged lifecycle. @see processModelV1.ts */
+    process_model_v1?: ProcessModelV1;
     sort_order: number;
     is_active: boolean;
+    /**
+     * Sole target process-wide Command selection authority (P6.S1).
+     * When absent, resolveBusinessProcessCommandSelection uses legacy compatibility.
+     * Stage action_catalog_v1 remains recommendation/evaluation only.
+     */
+    command_set_v1?: BusinessProcessCommandSetV1;
     /** Tracks and split rules — template-defined, stored as generic metadata. */
     tracks_v1?: ProcessTracksV1;
     /** Manual Change Enrollment Status transition policy. */
     manual_status_transition_policy_v1?: EnrollmentManualTransitionPolicyV1;
     /** Process-level operational Work Views (Configuration Runtime). */
     work_views_v1?: WorkViewConfigV1Stored[];
+    /** Operator-authored Participation definition — the engine reads its contract (Process Builder). */
+    participation_v1?: ParticipationConfigV1;
+    /**
+     * Where a journey begins, per initiation INTENT — declared, never inferred (D-103).
+     *
+     * Business Process configuration owns this. Nothing else in the model answers the question:
+     * `sort_order` is presentation order, `tracks_v1` orders tracks, and the transition graph cannot
+     * answer either — in Firefly's own published revision three active stages have no incoming edge
+     * (`lead`, `waitlist`, `enrolling`), because a stage reachable only by a split rule or by an
+     * operator movement looks exactly like a starting stage from the graph.
+     *
+     * Keyed by intent rather than a single scalar because one process has more than one legitimate
+     * initiation: Create Lead begins an acquisition episode, Start Enrollment begins paperwork for a
+     * child who already exists. The initiating action supplies the intent; this says where it starts.
+     *
+     * Absent means UNAUTHORED, which is not a default — consumers refuse rather than guess, the same
+     * posture `requirements_v1` takes for D-90. Publication validates every mapped intent, and a
+     * published revision is immutable, so a running journey's entry stage cannot move underneath it.
+     *
+     * @see lib/lifecycle/processEntryPointsV1.ts — the vocabulary and parser
+     * @see lib/lifecycle/processEntryStage.ts — the one resolver
+     */
+    entry_points_v1?: ProcessEntryPointsV1;
     stages: LifecycleBuilderStageRecord[];
 };
 
@@ -158,8 +290,22 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const operatingPlan = parseStageOperatingPlanV1(sr.stage_operating_plan_v1);
             const perspectives = parsePerspectivesV1(sr.perspectives_v1);
             const actionCatalog = parseStageActionCatalogV1(sr.action_catalog_v1);
+            // `null` (absent/unreadable) and an empty section are NOT interchangeable
+            // here — see D-90. The assignment below is therefore conditioned on `!== null`
+            // rather than on truthiness or on `requirements.length`.
+            const requirements = parseStageRequirementsV1(sr.requirements_v1);
             const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
-            stages.push({
+            const annotationSlots = Array.isArray(
+                (sr.stage_annotations_v1 as { slots?: unknown } | undefined)?.slots,
+            )
+                ? ((sr.stage_annotations_v1 as { slots: unknown[] }).slots
+                      .map((v) => (typeof v === "string" ? v.trim() : ""))
+                      .filter(Boolean)
+                      // Capped HERE, at the parse boundary, so an over-authored config is bounded
+                      // before it reaches anything that renders it.
+                      .slice(0, 2))
+                : null;
+            stages.push(withUnknownFields({
                 id: sid,
                 key: skey,
                 label,
@@ -172,42 +318,128 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
                 ...(perspectives ? { perspectives_v1: perspectives } : {}),
                 ...(actionCatalog ? { action_catalog_v1: actionCatalog } : {}),
+                ...(requirements !== null ? { requirements_v1: requirements } : {}),
+                ...(annotationSlots?.length ? { stage_annotations_v1: { slots: annotationSlots } } : {}),
                 ...(parseStageGrain(sr.grain) ? { grain: parseStageGrain(sr.grain) } : {}),
                 ...(typeof sr.purpose === "string" && sr.purpose.trim() ? { purpose: sr.purpose.trim() } : {}),
                 ...(typeof sr.parent_stage_key === "string" && sr.parent_stage_key ? { parent_stage_key: sr.parent_stage_key } : {}),
                 ...(typeof sr.allow_skipping === "boolean" ? { allow_skipping: sr.allow_skipping } : {}),
                 ...(typeof sr.operator_guidance === "string" && sr.operator_guidance ? { operator_guidance: sr.operator_guidance } : {}),
                 ...(parseSubjectResolutionStrategy(sr.subject_resolution_strategy) ? { subject_resolution_strategy: parseSubjectResolutionStrategy(sr.subject_resolution_strategy) } : {}),
-            });
+            }, captureUnknownFields(sr, STAGE_OWNED_KEYS)));
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
         const tracks_v1 = parseProcessTracksV1(row.tracks_v1) ?? undefined;
+        const command_set_v1 = parseProcessCommandSetV1OrNull(row.command_set_v1) ?? undefined;
         const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
         const workViews = parseWorkViewsV1(row.work_views_v1);
-        processes.push({
+        const participation = parseParticipationConfigV1(row.participation_v1) ?? undefined;
+        // Read as authored. Whether a mapped key names a real active stage is a PUBLISH question,
+        // not a parse one: silently dropping an unresolvable mapping here would turn a configuration
+        // error into "no entry point authored", a different and much quieter failure.
+        const entry_points_v1 = parseProcessEntryPointsV1(row.entry_points_v1) ?? undefined;
+        const process_model_v1 = parseProcessModelV1(row.process_model_v1) ?? undefined;
+        // An authored model this branch cannot type is NOT defaulted and NOT dropped: it rides the
+        // residue so the next save writes it back verbatim, and publication refuses it by name.
+        // Dropping it would silently turn a mistyped domain projection into a staged lifecycle.
+        const processResidue = captureUnknownFields(row, PROCESS_OWNED_KEYS);
+        const unreadableModel =
+            row.process_model_v1 != null && !process_model_v1
+                ? { process_model_v1: row.process_model_v1 }
+                : undefined;
+        processes.push(withUnknownFields({
             id,
             key,
             name,
-            primary_entity: row.primary_entity === "opportunity" ? "opportunity" : "opportunity",
+            // Read for the same reason a stage's description is read: it is an OWNED key, so the
+            // unknown-field residue deliberately excludes it. A key that is owned and never parsed
+            // is owned by nobody — it was writable through `updateProcessDescription` and deleted by
+            // the next save through any canonical path, which is every save, because every one of
+            // them round-trips the payload through this parser.
+            ...(typeof row.description === "string" && row.description.trim()
+                ? { description: row.description.trim() }
+                : {}),
+            ...(isDomainProjectionModel(process_model_v1)
+                ? {}
+                : { primary_entity: "opportunity" as const }),
+            ...(process_model_v1 ? { process_model_v1 } : {}),
             sort_order: typeof row.sort_order === "number" ? row.sort_order : processes.length,
             is_active: row.is_active !== false,
+            ...(command_set_v1 ? { command_set_v1 } : {}),
             ...(tracks_v1 ? { tracks_v1 } : {}),
             ...(manualPolicy ? { manual_status_transition_policy_v1: manualPolicy } : {}),
             ...(workViews ? { work_views_v1: workViews } : {}),
+            ...(participation ? { participation_v1: participation } : {}),
+            ...(entry_points_v1 ? { entry_points_v1 } : {}),
             stages,
-        });
+        }, unreadableModel ? { ...processResidue, ...unreadableModel } : processResidue));
     }
+
+    const builderResidue = captureUnknownFields(o, BUILDER_OWNED_KEYS);
 
     if (!processes.length) {
         const activeRaw = typeof o.active_process_id === "string" ? o.active_process_id.trim() : "";
-        return { version: 1, active_process_id: activeRaw || null, processes: [] };
+        // Annotated: without it TS widens the `version: 1` literal to `number` and the object
+        // stops matching LifecycleBuilderV1.
+        const empty: LifecycleBuilderV1 = {
+            version: 1,
+            active_process_id: activeRaw || null,
+            processes: [],
+        };
+        return withUnknownFields(empty, builderResidue);
     }
 
     const activeRaw = typeof o.active_process_id === "string" ? o.active_process_id.trim() : "";
     const active_process_id =
         activeRaw && processes.some((p) => p.id === activeRaw) ? activeRaw : processes[0]!.id;
 
-    return { version: 1, active_process_id, processes };
+    const parsed: LifecycleBuilderV1 = { version: 1, active_process_id, processes };
+    return withUnknownFields(parsed, builderResidue);
+}
+
+/**
+ * Serialize the builder back to storable JSON, splicing every level's unowned residue back in.
+ * This is the write-side half of Law 7 — without it, parsing is lossless in memory but the
+ * database still receives an allowlist-shaped blob.
+ */
+export function serializeLifecycleBuilderV1(config: LifecycleBuilderV1): Record<string, unknown> {
+    const processes = config.processes.map((process) => {
+        const stages = process.stages.map((stage) => {
+            const out = serializeWithUnknownFields(stage);
+            // `requirements_v1` is the one stage section whose in-memory shape differs
+            // from its wire shape: parsing lifts the reference into a discriminated
+            // `ref`, so passing the parsed object straight through would emit rows the
+            // parser cannot read back. Serializing explicitly keeps the round trip
+            // lossless. The check is `!== undefined`, never truthiness, so an authored-
+            // EMPTY section survives — losing it would silently revert a stage from
+            // canonical authority back to the legacy projection (D-90).
+            if (stage.requirements_v1 !== undefined) {
+                out.requirements_v1 = serializeStageRequirementsV1(stage.requirements_v1);
+            }
+            return out;
+        });
+        const serialized: Record<string, unknown> = { ...serializeWithUnknownFields(process), stages };
+        // Serialized explicitly for the same reason `requirements_v1` is: the parsed section is a
+        // narrowed reconstruction, so emitting it verbatim would eventually put something on the
+        // wire the parser cannot read back. `!== undefined` so an authored-but-empty map survives.
+        if (process.entry_points_v1 !== undefined) {
+            serialized.entry_points_v1 = serializeProcessEntryPointsV1(process.entry_points_v1);
+        }
+        // Work views carry their own residue and are nested one level deeper than the walk above.
+        if (process.work_views_v1) {
+            serialized.work_views_v1 = process.work_views_v1.map((view) =>
+                serializeWithUnknownFields(view),
+            );
+        }
+        // Participation is the same shape of problem: its parser is an allowlist reconstruction,
+        // so its residue rides a carrier one level deeper than this walk reaches. Omitting it
+        // meant a participation save silently deleted every field this branch could not name.
+        if (process.participation_v1) {
+            serialized.participation_v1 = serializeWithUnknownFields(process.participation_v1);
+        }
+        return serialized;
+    });
+    return { ...serializeWithUnknownFields(config), processes };
 }
 
 export function lifecycleBuilderFromDepartmentMetadata(metadata: unknown): LifecycleBuilderV1 {
@@ -222,7 +454,9 @@ export function mergeLifecycleBuilderIntoMetadata(
     metadata: Record<string, unknown>,
     config: LifecycleBuilderV1
 ): Record<string, unknown> {
-    return { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: config };
+    // Serialize rather than embedding the typed record directly: the typed record carries unowned
+    // residue on a symbol, which JSON.stringify would silently drop on the way to the database.
+    return { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: serializeLifecycleBuilderV1(config) };
 }
 
 export function activeLifecycleProcess(config: LifecycleBuilderV1): LifecycleBuilderProcessRecord | null {
@@ -250,7 +484,12 @@ export function asOperatorStageKey(key: string): LifecycleOperatorStage | null {
 export function createLifecycleProcess(
     name: string,
     config: LifecycleBuilderV1,
-    opts?: { primary_entity?: LifecyclePrimaryEntityKey; description?: string }
+    opts?: {
+        primary_entity?: LifecyclePrimaryEntityKey;
+        description?: string;
+        /** Absent → staged lifecycle. A domain projection carries no primary entity and no stages. */
+        process_model?: ProcessModelV1;
+    }
 ): LifecycleBuilderV1 {
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Lifecycle name is required");
@@ -269,7 +508,12 @@ export function createLifecycleProcess(
         key: uniqueKey,
         name: trimmed,
         description,
-        primary_entity: opts?.primary_entity ?? "opportunity",
+        ...(isDomainProjectionModel(opts?.process_model)
+            ? { process_model_v1: opts.process_model }
+            : {
+                  primary_entity: opts?.primary_entity ?? "opportunity",
+                  ...(opts?.process_model ? { process_model_v1: opts.process_model } : {}),
+              }),
         sort_order: config.processes.length,
         is_active: true,
         stages: [],
@@ -300,6 +544,76 @@ export function updateProcessDescription(
         ...config,
         processes: config.processes.map((p) =>
             p.id === processId ? { ...p, description: trimmed || undefined } : p
+        ),
+    };
+}
+
+/**
+ * Map one entry INTENT to one stage (D-103).
+ *
+ * Merges into `by_intent` rather than replacing it: the two intents are independent statements, and
+ * authoring one must never silently retract the other.
+ *
+ * Pure. Validation — that the intent is known and the stage is an active stage of this process —
+ * belongs to the caller, which is where a bad value can be reported as a bad request rather than
+ * disappearing into a no-op.
+ */
+export function setProcessEntryPoint(
+    config: LifecycleBuilderV1,
+    processId: string,
+    intent: ProcessEntryIntentV1,
+    stageKey: string
+): LifecycleBuilderV1 {
+    return {
+        ...config,
+        processes: config.processes.map((p) =>
+            p.id === processId
+                ? {
+                      ...p,
+                      entry_points_v1: {
+                          version: 1,
+                          by_intent: { ...(p.entry_points_v1?.by_intent ?? {}), [intent]: stageKey },
+                      },
+                  }
+                : p
+        ),
+    };
+}
+
+/**
+ * Replace the authored requirements section of exactly ONE stage.
+ *
+ * Replace, never merge: `requirements_v1` is a whole authored statement, and row-merging would make
+ * a removal impossible to express — the operator would have no way to say "this stage requires
+ * nothing" that the next save could distinguish from "nothing was authored".
+ *
+ * That distinction is the reason the section is set unconditionally rather than only when non-empty.
+ * Presence IS authority (D-90): an authored `[]` means canonical has spoken and requires nothing,
+ * while absence means canonical is silent and the legacy projection still answers. Materializing an
+ * empty section where one was never authored would silently switch a stage's authority; dropping an
+ * authored empty one would silently switch it back.
+ *
+ * Pure. Nothing here validates a requirement — `parseStageRequirementsV1` and
+ * `isAuthorableRequirementKind` already own that, and a second copy would be the parallel requirement
+ * engine the doctrine forbids.
+ */
+export function setStageRequirements(
+    config: LifecycleBuilderV1,
+    processId: string,
+    stageKey: string,
+    requirements: StageRequirementsV1
+): LifecycleBuilderV1 {
+    return {
+        ...config,
+        processes: config.processes.map((p) =>
+            p.id === processId
+                ? {
+                      ...p,
+                      stages: p.stages.map((s) =>
+                          s.key === stageKey ? { ...s, requirements_v1: requirements } : s
+                      ),
+                  }
+                : p
         ),
     };
 }
@@ -480,4 +794,299 @@ export function configuredStageKeysForMetadata(metadata: unknown): string[] {
 
 export function isConfiguredStageKey(metadata: unknown, stageKey: string): boolean {
     return configuredStageKeysForMetadata(metadata).includes(stageKey);
+}
+
+/**
+ * Set a stage's configured journey grain.
+ *
+ * `grain` was persisted authored configuration with NO authoring path: the enrollment template
+ * seeded it from `track_key`, `add_stage` wrote it once, and nothing in the product could correct
+ * it afterwards. That is how Firefly's Decision stage came to declare `child` while its own
+ * operating plan and the canonical vocabulary both say `family` — a disagreement an operator could
+ * see (once the editor surfaced it) but not fix.
+ *
+ * Idempotent by construction: requesting the grain a stage already has returns the SAME config
+ * object, so a no-op save cannot produce an unrelated diff.
+ */
+/**
+ * Set a stage's annotation slots — WHICH canonical projections it may show beneath its label.
+ *
+ * Configuration selects; it never authors a display string and never names a record path. The
+ * platform owns the registry those keys index into, and the cap of two, so this only ever stores a
+ * short list of keys. An empty list clears the stage's annotations, which is a real choice — a
+ * process may decide a stage should say nothing.
+ */
+export function updateStageAnnotations(
+    config: LifecycleBuilderV1,
+    processId: string,
+    stageId: string,
+    slots: readonly string[]
+): LifecycleBuilderV1 {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const stage = process.stages.find((s) => s.id === stageId);
+    if (!stage) throw new Error("Stage not found");
+
+    // TWO SLOTS. The cap is the platform's, applied on the way in so nothing downstream has to
+    // defend against a third.
+    const next = slots.map((v) => v.trim()).filter(Boolean).slice(0, 2);
+    const current = stage.stage_annotations_v1?.slots ?? [];
+    if (current.length === next.length && current.every((v, i) => v === next[i])) return config;
+
+    return {
+        ...config,
+        processes: config.processes.map((p) => {
+            if (p.id !== processId) return p;
+            return {
+                ...p,
+                stages: p.stages.map((st) => {
+                    if (st.id !== stageId) return st;
+                    if (next.length === 0) {
+                        const { stage_annotations_v1: _cleared, ...rest } = st;
+                        return rest;
+                    }
+                    return { ...st, stage_annotations_v1: { slots: next } };
+                }),
+            };
+        }),
+    };
+}
+
+export function updateStageGrain(
+    config: LifecycleBuilderV1,
+    processId: string,
+    stageId: string,
+    grain: StageGrain
+): LifecycleBuilderV1 {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const stage = process.stages.find((s) => s.id === stageId);
+    if (!stage) throw new Error("Stage not found");
+    const planSegment = stage.stage_operating_plan_v1?.journey_segment;
+    const alreadyAligned = stage.grain === grain && (planSegment == null || planSegment === grain);
+    if (alreadyAligned) return config;
+
+    return {
+        ...config,
+        processes: config.processes.map((p) => {
+            if (p.id !== processId) return p;
+            return {
+                ...p,
+                stages: p.stages.map((s) => {
+                    if (s.id !== stageId) return s;
+                    // ONE governed save keeps both declarations of the same fact in step. The
+                    // product must expose one concept; leaving `journey_segment` authorable while
+                    // `grain` was immutable is what let them drift apart in the first place.
+                    //
+                    // The two vocabularies are NOT the same size, though: `StageGrain` has five
+                    // values and `journey_segment` has two. Assigning the grain straight across
+                    // could write `person`, `account` or `work_item` into a field whose parser
+                    // rejects them — the plan would then fail to parse on the next read and the
+                    // stage would silently lose its operating plan. The canonical translator
+                    // answers whether the grain HAS a journey segment at all; when it does not,
+                    // the grain is still saved and the plan's segment is left exactly as authored
+                    // rather than overwritten with a value that cannot exist.
+                    const plan = s.stage_operating_plan_v1;
+                    const segment = journeySegmentForStageGrain(grain);
+                    return {
+                        ...s,
+                        grain,
+                        ...(plan && segment.ok ?
+                            { stage_operating_plan_v1: { ...plan, journey_segment: segment.segment } }
+                        :   {}),
+                    };
+                }),
+            };
+        }),
+    };
+}
+
+export type EnsureStageTransitionResult = {
+    config: LifecycleBuilderV1;
+    transition_ref: string;
+    target_stage_key: string;
+    created: boolean;
+};
+
+/**
+ * Ensure a stage has an outgoing transition to a destination, creating it only if absent.
+ *
+ * Transitions were authorable from the stage editor's draft but had no lifecycle-builder ACTION,
+ * so a plan whose rules referenced a transition that was never persisted could not be repaired
+ * through the canonical save path — which is exactly how Firefly's Lead stage came to reference
+ * `lead_to_tour` with `outgoing_transitions: null`.
+ *
+ * Find-before-create, matching the editor: an existing path to the same destination is reused
+ * rather than duplicated. A requested ref is honoured when free; a ref already pointing somewhere
+ * else is a collision and throws rather than being silently repointed.
+ */
+export function ensureStageTransitionInConfig(
+    config: LifecycleBuilderV1,
+    processId: string,
+    sourceStageKey: string,
+    targetStageKey: string,
+    requestedRef?: string
+): EnsureStageTransitionResult {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const source = process.stages.find((s) => s.key === sourceStageKey);
+    if (!source) throw new Error("Source stage not found");
+    const target = process.stages.find((s) => s.key === targetStageKey);
+    if (!target) throw new Error("Target stage not found");
+    if (source.key === target.key) throw new Error("A stage cannot transition to itself");
+
+    const plan = source.stage_operating_plan_v1;
+    const existing = plan?.outgoing_transitions ?? [];
+    const ref = requestedRef?.trim() || "";
+
+    // A ref that already exists and points elsewhere is a collision, not a repoint.
+    const refHolder = ref ? existing.find((t) => t.transition_ref === ref) : undefined;
+    if (refHolder && refHolder.target_stage_key !== target.key) {
+        throw new Error(
+            `Transition "${ref}" already moves to "${refHolder.target_stage_key}" — ` +
+                `it cannot be reused for "${target.key}".`
+        );
+    }
+
+    const reusable = refHolder ?? existing.find((t) => t.target_stage_key === target.key);
+    if (reusable) {
+        return {
+            config,
+            transition_ref: reusable.transition_ref,
+            target_stage_key: reusable.target_stage_key,
+            created: false,
+        };
+    }
+
+    const transition_ref = ref || `${source.key}_transition_${existing.length + 1}`;
+    const created = {
+        transition_ref,
+        source_stage_key: source.key,
+        target_stage_key: target.key,
+        label: `Move to ${target.label || target.key}`,
+        available: true,
+    };
+    const nextPlan = {
+        ...(plan ?? {
+            version: 1 as const,
+            lifecycle_key: process.key,
+            stage_key: source.key,
+            work_templates: [],
+            outcomes: [],
+            outcome_rules: [],
+            attention_rules: [],
+        }),
+        outgoing_transitions: [...existing, created],
+    } as NonNullable<typeof plan>;
+
+    return {
+        config: {
+            ...config,
+            processes: config.processes.map((p) => {
+                if (p.id !== processId) return p;
+                return {
+                    ...p,
+                    stages: p.stages.map((s) =>
+                        s.id === source.id ? { ...s, stage_operating_plan_v1: nextPlan } : s
+                    ),
+                };
+            }),
+        },
+        transition_ref,
+        target_stage_key: target.key,
+        created: true,
+    };
+}
+
+export type UpdateProcessCommandSetResult = {
+    config: LifecycleBuilderV1;
+    commandSet: BusinessProcessCommandSetV1;
+    added: string[];
+    removed: string[];
+    /** Requested keys the canonical registry could not vouch for — nothing was written for these. */
+    rejected: Array<{ requested: string; reason: "unregistered" }>;
+};
+
+/**
+ * Add or remove capabilities in a process's command set.
+ *
+ * `command_set_v1` was authored configuration with no authoring path: only
+ * `ensureBuilderCommandSetsOnSave` ever wrote it, deriving membership automatically from stage
+ * action catalogs. A Work Template could therefore reference a capability the process had not
+ * selected, publication would refuse it, and no operator surface could resolve the disagreement.
+ *
+ * Every ADDED key must resolve through `tryResolvePlatformCapability`, and the CANONICAL key is
+ * what gets persisted — an alias in, its canonical form stored. A key the registry does not know is
+ * rejected with a structured reason rather than written through raw-key fallback, which is exactly
+ * how an unimplemented command would otherwise be authorized by accident.
+ *
+ * Removal is not symmetric: it takes the requested key as given and drops any entry whose canonical
+ * form matches, so a capability that has since been de-registered can still be cleaned up.
+ */
+export function updateProcessCommandSet(
+    config: LifecycleBuilderV1,
+    processId: string,
+    input: { addCapabilityKeys?: readonly string[]; removeCapabilityKeys?: readonly string[] }
+): UpdateProcessCommandSetResult {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+
+    const current = process.command_set_v1 ?? emptyProcessCommandSetV1();
+    const commands = [...current.commands];
+    const canonicalOf = (key: string): string | null => {
+        const resolved = tryResolvePlatformCapability(key);
+        return resolved.status === "known" ? resolved.capability.canonicalCommandKey : null;
+    };
+    const entryCanonical = (key: string) => canonicalOf(key) ?? key.trim();
+
+    const rejected: Array<{ requested: string; reason: "unregistered" }> = [];
+    const added: string[] = [];
+    const removed: string[] = [];
+
+    for (const requested of input.addCapabilityKeys ?? []) {
+        const key = requested.trim();
+        if (!key) continue;
+        const canonical = canonicalOf(key);
+        if (!canonical) {
+            rejected.push({ requested: key, reason: "unregistered" });
+            continue;
+        }
+        const existing = commands.find((c) => entryCanonical(c.capability_key) === canonical);
+        if (existing) {
+            // Idempotent. An explicitly disabled command is NOT silently re-enabled here — that is
+            // a different operator intent than "this process uses this capability".
+            continue;
+        }
+        // Appended, so existing ordering is untouched and the result is deterministic.
+        commands.push({ capability_key: canonical, enabled: true });
+        added.push(canonical);
+    }
+
+    for (const requested of input.removeCapabilityKeys ?? []) {
+        const key = requested.trim();
+        if (!key) continue;
+        const target = canonicalOf(key) ?? key;
+        const index = commands.findIndex((c) => entryCanonical(c.capability_key) === target);
+        if (index < 0) continue; // idempotent no-op
+        removed.push(commands[index]!.capability_key);
+        commands.splice(index, 1);
+    }
+
+    if (!added.length && !removed.length) {
+        return { config, commandSet: current, added, removed, rejected };
+    }
+
+    const commandSet: BusinessProcessCommandSetV1 = { ...current, version: 1, commands };
+    return {
+        config: {
+            ...config,
+            processes: config.processes.map((p) =>
+                p.id === processId ? { ...p, command_set_v1: commandSet } : p
+            ),
+        },
+        commandSet,
+        added,
+        removed,
+        rejected,
+    };
 }

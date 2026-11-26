@@ -34,10 +34,7 @@ describe("resolveEffectiveStageOperatingPlan", () => {
             builderStageKey: "lead",
         });
         expect(result.source).toBe("enrollment_default");
-        expect(result.plan?.work_templates.map((t) => t.template_key)).toEqual([
-            "review_lead",
-            "contact_family",
-        ]);
+        expect(result.plan?.work_templates.map((t) => t.template_key)).toEqual(["contact_family"]);
     });
 
     it("spawn and projection resolve the same primary work intent for lead", () => {
@@ -57,14 +54,14 @@ describe("resolveEffectiveStageOperatingPlan", () => {
             completedRows: [],
         });
 
-        expect(spawnIntent?.template_key).toBe("review_lead");
-        expect(runtime?.primary?.template_key).toBe("review_lead");
+        expect(spawnIntent?.template_key).toBe("contact_family");
+        expect(runtime?.primary?.template_key).toBe("contact_family");
         expect(spawnIntent?.template_key).toBe(runtime?.primary?.template_key);
     });
 });
 
 describe("projectStageWorkRuntimeSync planned state", () => {
-    it("projects all configured work items including planned secondaries", () => {
+    it("projects configured primary Contact Family work as open", () => {
         const departmentMetadata = enrollmentDepartmentMetadata();
         const runtime = projectStageWorkRuntimeSync({
             orgId: "org-1",
@@ -75,13 +72,13 @@ describe("projectStageWorkRuntimeSync planned state", () => {
             openRows: [
                 {
                     id: "work-primary",
-                    title: "Review Lead",
+                    title: "Contact Family",
                     due_at: new Date().toISOString(),
                     status: "open",
                     source: "manual",
                     metadata: {
-                        work_intent_key: "review_lead",
-                        operating_plan_template_key: "review_lead",
+                        work_intent_key: "contact_family",
+                        operating_plan_template_key: "contact_family",
                         lifecycle_stage_key: "lead",
                         lifecycle_provenance: "lifecycle_template",
                     },
@@ -92,9 +89,8 @@ describe("projectStageWorkRuntimeSync planned state", () => {
         });
 
         expect(runtime?.primary?.state).toBe("open");
-        expect(runtime?.additional).toHaveLength(1);
-        expect(runtime?.additional[0]?.template_key).toBe("contact_family");
-        expect(runtime?.additional[0]?.state).toBe("planned");
+        expect(runtime?.primary?.template_key).toBe("contact_family");
+        expect(runtime?.additional ?? []).toHaveLength(0);
     });
 
     it("never returns empty configured stage work", () => {

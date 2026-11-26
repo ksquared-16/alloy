@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { cancelScheduledAnnouncement } from "@/lib/communications/v2/scheduleAnnouncementSendout";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * Communications V2 — cancel a scheduled announcement (Phase 1 / B7).
@@ -14,8 +17,8 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 /** POST …/announcements/[id]/cancel */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

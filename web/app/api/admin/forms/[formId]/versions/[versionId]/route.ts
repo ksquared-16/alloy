@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { validateFormSchema } from "@/lib/forms/schema";
 import { dbGetVersion, dbUpdateVersionDraft } from "@/lib/admin/forms/formsAdminDb";
 import { catchSchemaValidation, jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** GET /api/admin/forms/[formId]/versions/[versionId] — full version row including schema_json (admin). */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ formId: string; versionId: string }> }) {
@@ -33,7 +34,8 @@ export async function PATCH(
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { formId: rawForm, versionId: rawVer } = await params;
     const formId = parseUuidParam(rawForm, "formId");

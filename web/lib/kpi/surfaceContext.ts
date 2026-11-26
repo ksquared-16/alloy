@@ -1,4 +1,4 @@
-import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
+import type { WorkspaceRootMetrics } from "@/lib/workspace/workspaceRootMetrics";
 import type { WorkspaceGrowthDeptSnapshot } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import type { DeptWorkUnitRow } from "@/lib/kpi/baseline";
 import type { WuQueueItemsForKpi, WuQueueSummaryForKpi } from "@/lib/kpi/contextKpiMetrics";

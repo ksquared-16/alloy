@@ -1,5 +1,6 @@
-import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormField, FormGroupCollectionBinding, FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload, FormPayloadGroupRow, FormPayloadSignature } from "@/lib/forms/validateSubmission";
+import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
 
 export function emptyPayload(): FormPayload {
     return { values: {}, meta: {} };
@@ -21,19 +22,46 @@ function seedNestedGroupsOnRow(parent: FormField & { type: "group" }): Record<st
     return Object.keys(nested).length ? nested : undefined;
 }
 
+function newGroupRow(field: FormField & { type: "group" }): FormPayloadGroupRow {
+    const row: FormPayloadGroupRow = {
+        instance_key: randomInstanceKey(),
+        values: {},
+        groups: seedNestedGroupsOnRow(field),
+        signatures: {},
+    };
+    if (groupFieldHasCollectionBinding(field)) {
+        const binding = field.collection_binding!;
+        row.collection = {
+            provider_ref: binding.collection_provider_ref,
+            origin: "respondent_added",
+            iteration_entity_type: binding.iteration_entity_type,
+        };
+    }
+    return row;
+}
+
 function buildMinimumRowsForGroupField(field: FormField & { type: "group" }): FormPayloadGroupRow[] {
     const rep = field.repeat ?? { min: 0, max: undefined };
     const effectiveMin = Math.max(rep.min, field.required ? 1 : 0);
     const rows: FormPayloadGroupRow[] = [];
     for (let i = 0; i < effectiveMin; i++) {
-        rows.push({
-            instance_key: randomInstanceKey(),
-            values: {},
-            groups: seedNestedGroupsOnRow(field),
-            signatures: {},
-        });
+        rows.push(newGroupRow(field));
     }
     return rows;
+}
+
+export function newRespondentAddedCollectionRow(binding: FormGroupCollectionBinding): FormPayloadGroupRow {
+    return {
+        instance_key: randomInstanceKey(),
+        values: {},
+        groups: {},
+        signatures: {},
+        collection: {
+            provider_ref: binding.collection_provider_ref,
+            origin: "respondent_added",
+            iteration_entity_type: binding.iteration_entity_type,
+        },
+    };
 }
 
 /**

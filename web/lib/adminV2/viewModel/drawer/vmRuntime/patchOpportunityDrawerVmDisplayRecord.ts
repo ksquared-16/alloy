@@ -92,6 +92,10 @@ export function patchOpportunityDrawerVmDisplayRecord(
         summaries: {
             ...vm.summaries,
             active_tour_bookings: activeTourBookings,
+            // A patch that only reshapes ACTIVE rows cannot decide the Tour concept; keep what
+            // the loader resolved from the full set rather than narrowing it here.
+            operator_relevant_tour_booking:
+                vm.summaries.operator_relevant_tour_booking ?? null,
         },
     };
 }

@@ -12,16 +12,17 @@ values (
     true,
     '{}'::jsonb
 )
-on conflict (key) do update
+on conflict (key) where org_id is null do update
   set label         = excluded.label,
       action_type   = excluded.action_type,
       entity_type   = excluded.entity_type,
       payload_schema = excluded.payload_schema,
       is_active     = excluded.is_active;
 
--- Platform placement: record detail section / primary slot on child enrollment rows
-insert into action_placements (action_definition_id, surface, slot, sort_order, is_active, metadata)
-select ad.id, 'record_section', 'primary', 10, true, '{}'::jsonb
+-- Platform placement: record detail section / primary slot on child enrollment rows.
+-- action_placements has no metadata column and orders by order_index (not sort_order).
+insert into action_placements (action_definition_id, surface, slot, order_index, is_active)
+select ad.id, 'record_section', 'primary', 10, true
 from action_definitions ad
-where ad.key = 'update_child_enrollment_status'
+where ad.key = 'update_child_enrollment_status' and ad.org_id is null
 on conflict do nothing;

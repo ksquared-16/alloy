@@ -61,6 +61,12 @@ function projectionVm(overrides: Partial<QueueRowPlacementWaitlistCandidateVm> =
         siblingCohorts: [],
         siblingContextLines: [],
         siblingContextDiagnostics: null,
+        enrolledSiblings: [],
+        waitlistedSiblingCount: 0,
+        hasWaitlistedSibling: false,
+        hasEnrolledSibling: false,
+        householdOtherChildCount: 0,
+        householdOtherChildNames: null,
         ...overrides,
     };
 }
@@ -70,7 +76,7 @@ describe("placementCandidateVmToCardVm (adapter)", () => {
         const vm = placementCandidateVmToCardVm(projectionVm(), {
             householdId: "cust-1",
             childId: "person-1",
-            desiredStartDate: "Aug 2026",
+            startDate: "Aug 2026",
             status: "waitlisted",
             household: { phone: "(555) 010-2244", email: "j@example.com", locationName: "North Campus" },
             child: { ageLabel: "3y" },
@@ -83,7 +89,7 @@ describe("placementCandidateVmToCardVm (adapter)", () => {
         expect(vm.overrides.pinned).toBe(true);
         expect(vm.overrides.manuallyAdjusted).toBe(true);
         expect(vm.household.phone).toBe("(555) 010-2244");
-        expect(vm.child.desiredStartDate).toBe("Aug 2026");
+        expect(vm.child.startDate).toBe("Aug 2026");
         expect(vm.waitlist.status).toBe("waitlisted");
     });
 
@@ -93,7 +99,7 @@ describe("placementCandidateVmToCardVm (adapter)", () => {
         expect(vm.household.phone).toBeUndefined();
         expect(vm.household.email).toBeUndefined();
         expect(vm.household.locationName).toBeUndefined();
-        expect(vm.child.desiredStartDate).toBeUndefined();
+        expect(vm.child.startDate).toBeUndefined();
         // capability flags default to enabled (simulated) in proof
         expect(vm.actions.canOpen).toBe(true);
     });

@@ -29,6 +29,27 @@ describe("normalizeQueueRecordLayoutConfig", () => {
         });
     });
 
+    it("strips reserved variant rule conditions on normalize", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const withReservedConditions = {
+            ...base,
+            variants: [
+                {
+                    id: "waitlist",
+                    label: "Waitlist",
+                    priority: 10,
+                    appliesWhen: {
+                        stage_key: ["waitlist"],
+                        conditions: [{ type: "exists" as const, path: "sibling.names" }],
+                    },
+                    columns: base.columns,
+                },
+            ],
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(withReservedConditions);
+        expect(normalized.variants?.[0]?.appliesWhen).toEqual({ stage_key: ["waitlist"] });
+    });
+
     it("defaults repeated block maxItems to 5 when missing", () => {
         const base = defaultLeadQueueLayoutV3();
         const childCol = base.columns.find((c) => c.scope.type === "repeated_related");
@@ -191,7 +212,7 @@ describe("normalizeQueueRecordLayoutConfig", () => {
 });
 
 describe("queue record date field formatting", () => {
-    it("formats child.date_of_birth as compact display date even when display is muted", () => {
+    it("formats child.date_of_birth as numeric DOB + age even when display is muted", () => {
         const field = {
             id: "dob",
             fieldKey: "child.date_of_birth",
@@ -201,7 +222,9 @@ describe("queue record date field formatting", () => {
         const resolved = resolveQueueRecordField(field, {
             "child.date_of_birth": "2024-03-15",
         } as never);
-        expect(resolved.display).toBe("Mar 15, 2024");
+        expect(resolved.display).toMatch(/^3\/15\/2024 \(/);
+        expect(resolved.display).not.toBe("2024-03-15");
+        expect(resolved.display).not.toContain("Mar ");
     });
 
     it("formats child.date_of_birth with year even when date is in the current year", () => {
@@ -214,7 +237,8 @@ describe("queue record date field formatting", () => {
         const resolved = resolveQueueRecordField(field, {
             "child.date_of_birth": "2026-01-01",
         } as never);
-        expect(resolved.display).toBe("Jan 1, 2026");
+        expect(resolved.display).toMatch(/^1\/1\/2026 \(/);
         expect(resolved.display).not.toBe("Jan 1");
+        expect(resolved.display).not.toBe("2026-01-01");
     });
 });

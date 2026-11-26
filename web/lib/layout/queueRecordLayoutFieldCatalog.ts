@@ -222,10 +222,10 @@ export const QUEUE_RECORD_FIELD_CATALOG: QueueRecordFieldCatalogEntry[] = [
         label: "Desired Start Date",
         category: "Events / Dates",
         type: "date",
-        fieldPath: "child.desired_start_date",
+        fieldPath: "child.start_date",
         display: "text",
         widgetType: "date",
-        widgetFieldPaths: ["child.desired_start_date"],
+        widgetFieldPaths: ["child.start_date"],
     },
     {
         id: "record-id",

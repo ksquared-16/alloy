@@ -1,0 +1,26 @@
+{
+  "states": {
+    "financials": {
+      "mounted": true,
+      "empty": "loading"
+    },
+    "attendance": {
+      "mounted": true,
+      "empty": "loading",
+      "reserved": "true"
+    },
+    "health": {
+      "mounted": true,
+      "text": "HEALTH & SAFETY Loading health information…"
+    },
+    "cardKeys": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ]
+  },
+  "requests": []
+}

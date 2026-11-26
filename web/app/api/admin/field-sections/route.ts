@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { parseFieldSectionConfig } from "@/lib/fields/sectionManagement";
 import { FIELD_DEFINITION_ENTITY_TYPES, isFieldDefinitionEntityType } from "@/lib/fields/inquiryChildFieldRegistry";
+import { SECTIONS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 const ALLOWED_ENTITY_TYPES = FIELD_DEFINITION_ENTITY_TYPES;
 const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -49,9 +50,8 @@ export async function POST(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, SECTIONS_MANAGE);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

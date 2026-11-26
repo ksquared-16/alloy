@@ -1,0 +1,21 @@
+{
+  "monthly": {
+    "child": "Certb Certhouse",
+    "acceptedText": "Accepted $1,450.00 / monthly · from 2026-09-01",
+    "frequency": "monthly",
+    "current": "2026-09",
+    "next": "2026-10",
+    "text": "Billing frequency monthly · current period September 2026 · next October 2026"
+  },
+  "parity": {
+    "probeReachedServer": true,
+    "rendered": {
+      "child": "Certb Certhouse",
+      "acceptedText": "Accepted $1,450.00 / monthly · from 2026-09-01",
+      "frequency": "monthly",
+      "current": "2026-09",
+      "next": "2026-10",
+      "text": "Billing frequency monthly · current period September 2026 · next October 2026"
+    }
+  }
+}

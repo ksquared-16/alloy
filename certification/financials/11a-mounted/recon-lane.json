@@ -1,0 +1,108 @@
+{
+  "title": "Where Work Happens",
+  "url": "/workspace/work-unit/enrolled-children",
+  "textLength": 2068,
+  "text": "9+\n6\n⌘K\nAll locations\n▾\nQS\nEnrollment\n\nPipeline\n\n0\nNeeds attention\n6\nOverdue work\n20\nPipeline Children\nActions (2)\n▶\nNew\n3\nActive Pipeline\n0\nRegistration\n3\nWaitlist\n16\nTours\n0\nAll\n7\nEnrolled children\n2\nFilters\nC\nCertb Certhouse\nEnrolled\nCertb (3y11m)\n3w\n1 child\nC\nCerta Certhouse\nEnrolled\nCerta (5y5m)\n3w\n1 child\nCC\nCertb Certhouse\nEnrolled\nManage\n▾\nWork\nActivity\nENROLLMENT\n\nLead\n\nAug 26\n\nTour\n\nDecision\n\nAug 27\n\nWaitlist\n\nEnrolling\n\nEnrolled\n\nAug 27\n\nCC\nCerta\nCC\nCertb\n\nLEAD\n\nNo current work configured · Post-enrollment follow-up.\n\nRecent activity\n4\n▾\nCHILDREN\nNeeds info\n\n2 children · 2 enrolled\n\n2 children need program & schedule\n\nCC\nCerta Certhouse\nEnrolled\n—\nProgram\n—\nDate of birth\nApr 12, 2021\nGender\n—\nM-F (Mon, Tue, Wed, Thu, Fri)\n→\nNeeds program\nCC\nCertb Certhouse\nEnrolled\n—\nProgram\n—\nDate of birth\nSep 30, 2022\nGender\n—\nM-F (Mon, Tue, Wed, Thu, Fri)\n→\nNeeds program\nView children →\nFINANCIALS\nResponsibility\n-$55.13\nCurrent balance\n-$55.13\nPayment\nAdd\nDetails\nHOUSEHOLD\nNeeds contact\n\nCerthouse household\n\nUpdated Aug 27, 2026\n\nCC\nCert Certhouse\nPrimary\nguardian@operational-cards-cert.alloy.invalid\n(555) 555-0100\n2\nChildren\n0\nEmergency contacts\n0\nAuthorized pickups\nAdd emergency contact →\nView household →\nHEALTH & SAFETY\n\nHEALTH\n\nMild intermittent asthma\nMay need a rest break during sustained outdoor play.\n\nREQUIRED INFORMATION\n\nPhysical / health assessment\nMissing\n\nImmunization record\nMissing\n\nHealth care plan\nMissing\n\nMedication authorization\nMissing\n\nView health details →\nATTENDANCE — TODAY\nNot arrived\n\nNo attendance recorded today\n\nExpected in Monkeys. Nothing recorded yet.\n\nCheck in\nMark absent\nDetails →\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\n\nHelping with\n\nBusiness Process: Enrollment\nSubject: Certhouse Family\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nSummarize this lead\nGet a quick overview of details and history\nIdentify missing information\nSee what's needed to move forward\nDraft follow-up\nCreate a personalized follow-up message\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy.",
+  "financialsCards": 1,
+  "overlay": null,
+  "testids": [
+    "work-unit-queue-record-filter-bar",
+    "wu-record-filter-search",
+    "wu-record-filter-more-toggle"
+  ],
+  "billing": [
+    {
+      "tag": "div",
+      "cls": "alloy-os-billing__lines alloy-os-billing__lines--compact",
+      "testid": null,
+      "text": "Responsibility\n-$55.13\nCurrent balance\n-$55.13"
+    },
+    {
+      "tag": "div",
+      "cls": "alloy-os-billing__line",
+      "testid": null,
+      "text": "Responsibility\n-$55.13"
+    },
+    {
+      "tag": "span",
+      "cls": "alloy-os-billing__line-label",
+      "testid": null,
+      "text": "Responsibility"
+    },
+    {
+      "tag": "span",
+      "cls": "alloy-os-billing__line-value",
+      "testid": null,
+      "text": "-$55.13"
+    },
+    {
+      "tag": "div",
+      "cls": "alloy-os-billing__line",
+      "testid": null,
+      "text": "Current balance\n-$55.13"
+    },
+    {
+      "tag": "span",
+      "cls": "alloy-os-billing__line-label",
+      "testid": null,
+      "text": "Current balance"
+    },
+    {
+      "tag": "span",
+      "cls": "alloy-os-billing__line-value",
+      "testid": null,
+      "text": "-$55.13"
+    },
+    {
+      "tag": "div",
+      "cls": "alloy-os-billing__footer alloy-os-billing__footer--commands",
+      "testid": null,
+      "text": "Payment\nAdd\nDetails"
+    },
+    {
+      "tag": "span",
+      "cls": "alloy-os-billing__footer-commands",
+      "testid": null,
+      "text": "Payment\nAdd"
+    }
+  ],
+  "fdetail": [],
+  "selects": [],
+  "buttons": [
+    "9+",
+    "6",
+    "All locations\n▾",
+    "QS",
+    "Actions (2)\n▶",
+    "New\n3",
+    "Active Pipeline\n0",
+    "Registration\n3",
+    "Waitlist\n16",
+    "Tours\n0",
+    "All\n7",
+    "Enrolled children\n2",
+    "Filters",
+    "Manage\n▾",
+    "Work",
+    "Activity",
+    "Recent activity\n4\n▾",
+    "Certa Certhouse",
+    "M-F (Mon, Tue, Wed, Thu, Fri)\n→",
+    "Certb Certhouse",
+    "M-F (Mon, Tue, Wed, Thu, Fri)\n→",
+    "View children →",
+    "Payment",
+    "Add",
+    "Details",
+    "Cert Certhouse",
+    "2\nChildren",
+    "0\nEmergency contacts",
+    "0\nAuthorized pickups",
+    "Add emergency contact →",
+    "View household →",
+    "View health details →",
+    "Check in",
+    "Mark absent",
+    "Details →"
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "artifact": "wave1-reverification-evidence",
+  "plan": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "wave": 1,
+  "workstreams_reverified": ["W-1", "W-2", "W-3"],
+  "workstreams_out_of_scope": ["W-4"],
+  "mission": "msn_f74ed02c126c88d7ff",
+  "assignment": "asg_e9308076173af6",
+  "context_version": "v1",
+  "content_hash": "3c36b58117e46b2363ef602b385409e7",
+  "protocol": "vacilando.worker.protocol.v1",
+  "worktree": "wt6-vacilando-os-product-def",
+  "branch": "hotfix/vacilando-ui-freshness-flash",
+  "commit": "9e19c8736",
+  "executed_utc": "2026-08-04T17:13:22Z",
+
+  "posture": {
+    "rule_applied": "Plan §4 — the counts are a snapshot and every consumer re-runs rather than cites. Mission 2 re-issued three workstreams already recorded as DONE; they were re-executed rather than re-asserted, and each lock's SUBJECT was re-enumerated, not just its assertions re-run.",
+    "prior_execution": {
+      "mission": "msn_2d054741a54698fa4c",
+      "assignment": "asg_d77353d7377647",
+      "commit": "41610954cdf1",
+      "executed_utc": "2026-07-31T17:52:37Z",
+      "evidence": "wave1-execution-evidence.json"
+    }
+  },
+
+  "base_drift_since_prior_execution": {
+    "staging_merge": "5118940f7",
+    "migrations": { "before": 289, "after": 302 },
+    "api_route_files": { "before": 539, "after": 559 },
+    "note": "The prior run's figures were taken before this worktree merged origin/staging. Both locks' subjects were therefore re-enumerated rather than assumed stable."
+  },
+
+  "branch_anomaly": {
+    "observed": "hotfix/vacilando-ui-freshness-flash",
+    "slot_nominal": "agent/claude/6-vacilando-os-product-def",
+    "assessment": "All W-1..W-3 artifacts (canReadAnalytics.ts, selfAuthorityMutation.ts, and the three suites) are present on this branch. Recorded, not changed — switching branches would disturb in-flight work and is not this assignment's scope."
+  },
+
+  "results": {
+    "suites_green": 55,
+    "suites_green_before_this_assignment": 50,
+    "matches_prior_record": true,
+    "suites": [
+      {
+        "path": "web/tests/access/analyticsRouteGates.test.ts",
+        "workstream": "W-1",
+        "lock": "RL-1",
+        "tests_before": 31,
+        "tests_after": 36,
+        "status": "green, extended by this assignment"
+      },
+      {
+        "path": "web/tests/access/selfAuthorityMutation.test.ts",
+        "workstream": "W-2",
+        "lock": "RL-11",
+        "tests": 14,
+        "status": "green, unchanged"
+      },
+      {
+        "path": "web/tests/admin/permissionGrid.test.ts",
+        "workstream": "W-3",
+        "lock": "RL-2",
+        "tests": 5,
+        "status": "green, unchanged"
+      }
+    ]
+  },
+
+  "subject_reenumeration": {
+    "W-1": {
+      "claim": "RL-1 holds; no new G2-class exposure in the families W-1 owns.",
+      "family_dirs": [
+        "web/app/api/admin/analytics",
+        "web/app/api/admin/metrics",
+        "web/app/api/admin/intelligence"
+      ],
+      "route_files_found": 26,
+      "routes_without_a_portal_enforcing_gate": 0,
+      "six_named_routes_still_gated": true,
+      "new_route_examined": {
+        "route": "web/app/api/admin/metrics/snapshots/write/route.ts",
+        "raw_resolution_at": [47, 89],
+        "sufficient_gate_at": 45,
+        "gate": "requireAdminOrOps()",
+        "why_sufficient": "resolves getAdminOrgContextLightCached, which returns null unless bundle.portalEligible (web/lib/adminAuth.ts:43-45)",
+        "verdict": "not an exposure — the two-access-resolutions shape W-1 documented"
+      }
+    },
+    "W-2": {
+      "claim": "RL-11 holds; the membership-writer set did not grow.",
+      "routes_touching_user_roles_or_user_access_profiles": 6,
+      "writers_guarded": [
+        "web/app/api/admin/users/route.ts",
+        "web/app/api/admin/users/[userId]/role/route.ts",
+        "web/app/api/admin/users/[userId]/remove/route.ts",
+        "web/app/api/admin/users/[userId]/access-scope/route.ts"
+      ],
+      "readers": [
+        "web/app/api/admin/settings/users-roles/members/route.ts",
+        "web/app/api/admin/access-scope-debug/route.ts"
+      ],
+      "new_file_examined": {
+        "route": "web/app/api/admin/access-scope-debug/route.ts",
+        "method": "GET",
+        "gate": "loadAdminRouteGate",
+        "scope": "self only — eq(user_id, gate.userId) at :22-23",
+        "verdict": "read-only, not a membership writer; needs no self-authority guard"
+      }
+    },
+    "W-3": {
+      "claim": "RL-2 green and the exit criterion is met, but W-3's recorded REASONING is now false.",
+      "exit_criterion_status": "met — vacuously, because the row is removed",
+      "superseding_migration": "supabase/migrations/20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql",
+      "vendored_at": "555fa056a",
+      "ordering": "vendored AFTER W-3 shipped at 41610954c, on the same day",
+      "source_track": "docs/platform/planning/vacilando-os/qa/vertical-slice-v1/access-roles-v2-proposal.md §3.1",
+      "applied_to_deployed_target": true,
+      "dead_premises": [
+        {
+          "claim": "ops.workflows.* exist only in permission_keys, not in permission_definitions",
+          "status": "FALSE",
+          "refutation": "migration :106-113 INSERTs both keys into public.permission_definitions with is_active = true"
+        },
+        {
+          "claim": "a grant would violate role_permission_grants_permissions_fkey",
+          "status": "FALSE",
+          "refutation": "migration :134 DROPs that constraint; :137 adds role_permission_grants_permission_definitions_fkey"
+        }
+      ],
+      "surviving_premise": {
+        "claim": "no route enforces workflows.*, so the row grants nothing and its removal costs no authority",
+        "status": "TRUE — never depended on the catalog"
+      },
+      "cross_track_conflict": {
+        "migration_header_asserts": "The grid now writes ops.workflows.* (:16)",
+        "migration_also": "grants ops.workflows.* to every org's admin role (:116-122)",
+        "repo_state": "the grid row is deleted",
+        "impact": "no functional break — nothing enforces workflows.* — but the two tracks closed C5 by opposite remedies and neither is aware of the other",
+        "adjudicated_by_RL2": false,
+        "why_not": "RL-2 parses permission_definitions INSERTs; ops.workflows.* now parses as seeded, so the lock passes under either remedy"
+      },
+      "action_taken": "permissionGrid.ts comment corrected in place — ratified decision (row removed) stands, dead justifications marked dead, surviving reason stated. Restoring/repointing the row raised as an operator decision, not absorbed."
+    }
+  },
+
+  "changes_made_by_this_assignment": [
+    {
+      "path": "web/tests/access/analyticsRouteGates.test.ts",
+      "change": "Added RL-1 family-coverage block: walks the three analytics-family directories and asserts every route references a gate that enforces portal eligibility, with an empty reviewed exception list in W-4's ratchet idiom.",
+      "tests_added": 5,
+      "non_vacuity_proofs": [
+        "the predicate rejects a synthetic G2-shaped source (raw getAdminAccessContextCached + bare .ok check)",
+        "an empty gate list flags all 26 real route files, so a silently-empty scan (wrong root, bad glob) fails rather than passing"
+      ],
+      "stated_limit": "Proves a gate is REFERENCED, never that its result is honoured. This is NOT RL-1's tier-A half, which remains W-14's 559-route declared capability table. W-1's own two-access-resolutions finding is exactly the error this cannot catch."
+    },
+    {
+      "path": "web/lib/admin/permissionGrid.ts",
+      "change": "Corrected the W-3 comment: two justifications marked false with citations, surviving reason stated, cross-track conflict noted. No behaviour change — the row stays removed."
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+      "change": "Added the Wave 1 re-verification record to §5, the header status line, and limit §14.3.10 (a second planning track is closing the same defects)."
+    }
+  ],
+
+  "not_verified": {
+    "typecheck": {
+      "status": "NOT RUN",
+      "reason": "npm run typecheck, the governed command-budget runner, and a direct tsc -p tsconfig.build.json were each blocked behind a command-approval wall in this session.",
+      "consequence": "The prior record's rc=0 was NOT reproduced. The change is confined to one test file using only node:fs, node:path and vitest, and it executes green — but green vitest is not a typecheck and this record does not claim one."
+    },
+    "tier_d_browser": {
+      "status": "NOT RUN",
+      "reason": "By design, per plan §14.3.7 — W-1..W-3 are not lockout-class (L1-L4), so §10.4 does not require browser evidence. Unchanged from the prior record."
+    },
+    "live_database": {
+      "status": "NOT QUERIED",
+      "reason": "This re-verification is static and test-level. All catalog claims above are verified against supabase/migrations in the repo, not against the deployed target. Migration 20260729120000 is recorded as applied to the target on the authority of the W-0 re-run record, not re-probed here."
+    }
+  },
+
+  "environment_note": {
+    "observed": "Two vitest installs: the worktree root has 4.1.10 without the '@/' path alias; web/ has 4.1.2 with it.",
+    "symptom": "Running vitest from the worktree root fails all suites at import with \"Cannot find package '@/lib/...'\" — which reads as a broken test tree rather than a wrong cwd.",
+    "mitigation": "Always run vitest from web/."
+  }
+}

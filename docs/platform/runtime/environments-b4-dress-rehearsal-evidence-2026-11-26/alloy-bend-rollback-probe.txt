@@ -1,0 +1,4 @@
+1 old project listing holding Alloy Bend -> checkProductionTenantIsolation: ["production tenancy: staging's retired org Alloy Bend (7803388d-cdee-4afb-89cf-23a137f39423) is present; it is not migrated"]
+2 the same, Alloy Bend retired: ["production tenancy: staging's retired org Alloy Bend (7803388d-cdee-4afb-89cf-23a137f39423) is present; it is not migrated"]
+3 step-7 production-before (old main on the old ref; reads build-info only, no orgs): {"ok":true,"failures":[]}
+4 first-promotion-config --new-ref <old ref>: "refused: first promotion: the config's production project is the previous project, not a new one"

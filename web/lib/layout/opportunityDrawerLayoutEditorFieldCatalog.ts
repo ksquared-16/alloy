@@ -8,6 +8,7 @@ import {
     isChildcareCatalogRefKey,
     organizeChildcarePickerGroups,
 } from "@/lib/layout/childcareLayoutFieldCatalog";
+import { resolveDrawerCanonicalFieldLabel } from "@/lib/layout/drawerLayoutFieldAdapter";
 import { resolveFieldPickerLabel } from "@/lib/layout/fieldPickerContextCatalog";
 import {
     finalizeCatalogGroupsForPicker,
@@ -52,8 +53,11 @@ function humanizeToken(token: string): string {
 }
 
 /** Operator-facing label for a layout field refKey — never returns raw dotted keys when manifest exists. */
-export function resolveLayoutEditorFieldRefLabel(refKey: string): string {
-    return resolveFieldPickerLabel(refKey);
+export function resolveLayoutEditorFieldRefLabel(
+    refKey: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): string {
+    return resolveDrawerCanonicalFieldLabel(refKey, tenantFieldDefinitions);
 }
 
 /** Operator-facing label for any top-level layout item in the visual editor field list. */

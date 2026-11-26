@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateSpaceUsesConfiguration } from "@/lib/location/validateSpaceUses";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { canonicalUnitRoleFromStorage } from "@/lib/location/canonicalLocationModel";
+import { assertTopologyMutationSafe } from "@/lib/location/topologyMutationAuthority";
+import { topologyRefusalResponse } from "@/lib/location/topologyRefusalResponse";
 import {
     enrichHierarchyUnitsWithProgramCategories,
     UNIT_PROGRAM_CATEGORY_FIELD_KEYS,
@@ -40,6 +44,14 @@ export async function GET(request: NextRequest) {
     if (!includeInactive) {
         q = q.or("is_active.is.null,is_active.eq.true");
     }
+
+    /*
+     * Archived locations are never part of a configuration list, and unlike
+     * inactive ones there is no opt-in: `includeInactive` means "show me the
+     * paused ones too", which is a different question from "show me the ones I
+     * retired". Historical labels resolve by id elsewhere.
+     */
+    q = q.is("archived_at", null);
 
     if (locationTypes.length === 1) {
         q = q.eq("location_type", locationTypes[0]);
@@ -86,6 +98,22 @@ export async function GET(request: NextRequest) {
             parent_location_id: hierarchy
                 ? ((r.parent_location_id as string | null | undefined) ?? null)
                 : undefined,
+            // The canonical topology role, on the same `hierarchy` gate as the
+            // structural parent it belongs with — a role only means something
+            // alongside the tree, and a flat dropdown has no use for it.
+            //
+            // EFFECTIVE, not raw storage. `canonicalUnitRoleFromStorage` is the
+            // single owner of the NULL-compatibility rule, so a historical unit
+            // answers `operational_group` here exactly as it does in the DB
+            // (`location_unit_role()`), in the provider, and in every predicate.
+            // Handing the surface a raw NULL would make every component that
+            // touches a room rediscover that rule, and they would drift.
+            // A site or an address answers null: they are not role-bearing.
+            //
+            // The PUBLIC API (`/api/v1/locations`) deliberately keeps exposing the
+            // RAW nullable column — an external partner reads storage, not our
+            // compatibility reading of it. These two contracts differ on purpose.
+            unit_role: hierarchy ? canonicalUnitRoleFromStorage(r.location_type, r.unit_role) : undefined,
             metadata: hierarchy
                 ? (r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                     ? r.metadata
@@ -199,6 +227,34 @@ export async function POST(request: NextRequest) {
         if (locTypeInput) location_type = locTypeInput;
     }
 
+    const parent_location_id =
+        typeof body.parent_location_id === "string" && body.parent_location_id.trim()
+            ? body.parent_location_id.trim()
+            : null;
+    const unit_role =
+        typeof body.unit_role === "string" && body.unit_role.trim() ? body.unit_role.trim() : null;
+
+    // Topology legality is NOT this route's to own. The canonical authority
+    // answers for create and for update alike, so the two verbs cannot drift —
+    // and the DB trigger still backstops whatever races past this preflight.
+    const topology = await assertTopologyMutationSafe(supabase, ctx.orgId, {
+        candidate: {
+            id: null,
+            locationType: location_type,
+            unitRole: unit_role,
+            parentLocationId: parent_location_id,
+        },
+    });
+    if (!topology.ok) return topologyRefusalResponse(topology);
+    if (body.metadata != null && typeof body.metadata === "object") {
+        const uses = await validateSpaceUsesConfiguration(supabase, ctx.orgId, {
+            locationType: location_type,
+            unitRole: unit_role,
+            metadata: body.metadata as Record<string, unknown>,
+        });
+        if (!uses.ok) return NextResponse.json({ error: uses.message, code: "space_uses_invalid" }, { status: 400 });
+    }
+
     const is_primary = customer_id ? !!body.is_primary : false;
     const is_active = body.is_active !== false;
     const address1 = typeof body.address1 === "string" ? (body.address1 as string).trim() || null : null;
@@ -260,6 +316,8 @@ export async function POST(request: NextRequest) {
         label,
         location_type,
         location_type_id: location_type_id ?? null,
+        parent_location_id,
+        unit_role,
         is_primary,
         is_active,
         address1,

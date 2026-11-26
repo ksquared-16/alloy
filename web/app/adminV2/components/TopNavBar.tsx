@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
-import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
 import {
-    ADMIN_FORMS_HREF,
-    isCanonicalFormsPath,
     isCanonicalWorkspacePath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
@@ -20,13 +17,20 @@ import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
 import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
 import ProcessingModal from "@/app/adminV2/processing/ProcessingModal";
+import OperationsModal from "@/app/adminV2/components/OperationsModal";
+import FinancialsModal from "@/app/adminV2/components/FinancialsModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
+import RecordMessageComposerModal, {
+  canHostRecordMessageInFamilyComposer,
+} from "@/app/adminV2/communications/RecordMessageComposerModal";
 import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
     type QuickMessageLaunchSeed,
 } from "@/lib/adminV2/quickMessageLaunch";
+import type { OpenProcessingModalDetail, ProcessingModalIntent } from "@/lib/adminV2/workspaceModalEvents";
 import {
     closeWorkspaceModal,
     openWorkspaceModal,
@@ -34,16 +38,17 @@ import {
     getAdminV2WorkspaceModalSnapshot,
 } from "@/lib/adminV2/workspaceModalCoordinator";
 import {
-    parseWorkspaceModalIntent,
-    WORKSPACE_MODAL_INTENT_PARAM,
+  parseWorkspaceModalIntent,
+  WORKSPACE_MODAL_INTENT_PARAM,
 } from "@/lib/adminV2/workspaceModalIntent";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 
 function normalizeAdminPath(pathname: string): string {
   return normalizeToCanonicalAdminPath(pathname);
 }
 
 function isWorkspaceOperatorPath(normalizedPath: string): boolean {
-  return isCanonicalWorkspacePath(normalizedPath) || isCanonicalFormsPath(normalizedPath);
+  return isCanonicalWorkspacePath(normalizedPath);
 }
 
 /** Fixed-width reserve so location chrome does not jump when bootstrap revalidates. */
@@ -53,7 +58,7 @@ function WorkspaceSiteFilterLocationReserve() {
       className="flex shrink-0 items-center min-w-[min(280px,34vw)] max-w-[min(280px,34vw)] h-[2.375rem]"
       aria-hidden
     >
-      <div className="h-[2.375rem] w-full rounded-md opacity-40" style={{ backgroundColor: derived.searchBgOnPrimary }} />
+      <div className="h-[2.375rem] w-full rounded-md border border-alloy-stone/30 bg-white opacity-70" />
     </div>
   );
 }
@@ -81,30 +86,25 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
   const { selectedSiteId, setSelectedSiteId } = wf;
 
   if (bootstrap.show_dropdown && bootstrap.sites.length > 1) {
+    const siteOptions = bootstrap.sites.map((s) => ({
+      value: s.id,
+      label: s.label?.trim() || s.id,
+    }));
     return (
-      <div className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(280px,34vw)]">
-        <label htmlFor="adminv2-workspace-site-filter" className="sr-only">
-          Site filter
-        </label>
-        <select
+      <div
+        className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(280px,34vw)]"
+        data-adminv2-site-filter="true"
+        title="View filter — narrows workspace data to one campus within your allowed sites. Selection persists across workspace navigation."
+      >
+        <AlloySelect
           id="adminv2-workspace-site-filter"
+          aria-label="Site filter"
           value={selectedSiteId ?? ""}
-          onChange={(e) => setSelectedSiteId(e.target.value === "" ? null : e.target.value)}
-          className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-[15px] font-medium outline-none focus:ring-1 focus:ring-white/35"
-          style={{
-            backgroundColor: derived.searchBgOnPrimary,
-            borderColor: derived.topBarDivider,
-            color: neutral.surface,
-          }}
-          title="View filter — narrows workspace data to one campus within your allowed sites. Selection persists across workspace navigation."
-        >
-          <option value="">All locations</option>
-          {bootstrap.sites.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
+          onChange={(next) => setSelectedSiteId(next === "" ? null : next)}
+          options={siteOptions}
+          placeholder="All locations"
+          className="min-w-0 flex-1"
+        />
       </div>
     );
   }
@@ -112,7 +112,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
   if (bootstrap.single_site_label) {
     return (
       <span
-        className="shrink-0 truncate max-w-[min(240px,32vw)] text-[15px] font-medium opacity-90"
+        className="shrink-0 truncate max-w-[min(240px,32vw)] rounded-md border border-alloy-stone/30 bg-white px-3 py-2 text-[15px] font-medium text-alloy-bend-pine"
         title="Your access is scoped to this site."
       >
         {bootstrap.single_site_label}
@@ -126,6 +126,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
 export default function TopNavBar() {
   const pathname = usePathname();
   const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
+  const [processingIntent, setProcessingIntent] = useState<ProcessingModalIntent | null>(null);
   const activeWorkspaceModal = useSyncExternalStore(
     subscribeAdminV2WorkspaceModal,
     () => getAdminV2WorkspaceModalSnapshot().active,
@@ -136,6 +137,8 @@ export default function TopNavBar() {
   const quickMessageOpen = activeWorkspaceModal === "quick_message";
   const analyticsModalOpen = activeWorkspaceModal === "analytics";
   const processingModalOpen = activeWorkspaceModal === "processing";
+  const operationsModalOpen = activeWorkspaceModal === "operations";
+  const financialsModalOpen = activeWorkspaceModal === "financials";
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -152,6 +155,9 @@ export default function TopNavBar() {
         phone: detail.phone,
         recordScoped: detail.recordScoped ?? Boolean(opportunityId),
         defaultChannel: detail.defaultChannel,
+        draftSubject: detail.draftSubject ?? null,
+        draftBody: detail.draftBody ?? null,
+        tourInvitationId: detail.tourInvitationId ?? null,
       });
       openWorkspaceModal("quick_message");
     };
@@ -174,13 +180,21 @@ export default function TopNavBar() {
     const onOpenAnalytics = () => {
       openWorkspaceModal("analytics");
     };
+    const onOpenProcessing = (ev: Event) => {
+      const detail = (ev as CustomEvent<OpenProcessingModalDetail>).detail;
+      setProcessingIntent(detail?.intent ?? null);
+      void warmProcessingQueueCache();
+      openWorkspaceModal("processing");
+    };
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
     window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
     window.addEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
+    window.addEventListener("adminv2:open-processing-modal", onOpenProcessing);
     return () => {
       window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
       window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
       window.removeEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
+      window.removeEventListener("adminv2:open-processing-modal", onOpenProcessing);
     };
   }, []);
 
@@ -199,16 +213,18 @@ export default function TopNavBar() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isOperationalWorkV1Enabled()) return;
-    const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
-      () => prefetchWorkspaceOperationalTasks("open"),
-      "operational_tasks_topnav_prefetch"
-    );
-    return cancelDefer;
-  }, []);
+  // The open operational-tasks LIST is a detail resource forbidden as /workspace boot work, and it
+  // is already warmed on real intent — the Tasks nav badge hover/focus, the sidebar Work Items click,
+  // and the `adminv2:open-tasks-panel` handler above. The speculative mount-time prefetch was an
+  // extra boot request with no interaction behind it, so it is removed. The nav badge COUNT
+  // (useOperationalTasksNavCounts → summary) still loads — that is an allowed badge count.
 
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
+
+  const closeQuickMessage = useCallback(() => {
+    closeWorkspaceModal("quick_message");
+    setQuickMessageSeed(null);
+  }, []);
 
   return (
     <header
@@ -229,18 +245,43 @@ export default function TopNavBar() {
         <AdminV2ProfileMenu />
       </div>
 
-      <QuickMessageModal
-        open={quickMessageOpen}
-        seed={quickMessageSeed}
-        onClose={() => {
-          closeWorkspaceModal("quick_message");
-          setQuickMessageSeed(null);
-        }}
-      />
+      {/* A record-scoped launch (Manage → Send Message, Email, SMS, Tour Invitation) opens the
+          SAME composer and family-send lifecycle as Current Work. Compose New without a record
+          (person search) is a different surface and keeps QuickMessageModal. */}
+      {canHostRecordMessageInFamilyComposer(quickMessageSeed) && quickMessageSeed?.opportunityId ? (
+        <RecordMessageComposerModal
+          open={quickMessageOpen}
+          seed={{
+            opportunityId: quickMessageSeed.opportunityId,
+            personId: quickMessageSeed.personId ?? null,
+            recordDisplayName: quickMessageSeed.recordDisplayName ?? null,
+            defaultChannel: quickMessageSeed.defaultChannel,
+            draftSubject: quickMessageSeed.draftSubject ?? null,
+            draftBody: quickMessageSeed.draftBody ?? null,
+            tourInvitationId: quickMessageSeed.tourInvitationId ?? null,
+          }}
+          onClose={closeQuickMessage}
+        />
+      ) : (
+        <QuickMessageModal
+          open={quickMessageOpen}
+          seed={quickMessageSeed}
+          onClose={closeQuickMessage}
+        />
+      )}
       <MyTasksModal open={tasksModalOpen} onClose={() => closeWorkspaceModal("tasks")} />
       <InboxModal open={inboxModalOpen} onClose={() => closeWorkspaceModal("inbox")} />
       <AnalyticsModal open={analyticsModalOpen} onClose={() => closeWorkspaceModal("analytics")} />
-      <ProcessingModal open={processingModalOpen} onClose={() => closeWorkspaceModal("processing")} />
+      <ProcessingModal
+        open={processingModalOpen}
+        intent={processingIntent}
+        onClose={() => {
+          closeWorkspaceModal("processing");
+          setProcessingIntent(null);
+        }}
+      />
+      <OperationsModal open={operationsModalOpen} onClose={() => closeWorkspaceModal("operations")} />
+      <FinancialsModal open={financialsModalOpen} onClose={() => closeWorkspaceModal("financials")} />
     </header>
   );
 }

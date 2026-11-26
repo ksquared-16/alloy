@@ -9,6 +9,8 @@ import { evaluatePlatformMetricHealth } from "@/lib/metrics/platform/metricHealt
 import { formatPlatformMetricValue } from "@/lib/metrics/platform/metricFormatters";
 import { resolveOipMetricKeyFromSource, validateSourceAggregation } from "@/lib/metrics/platform/metricSourceRegistry";
 import { resolveSingleMetric } from "@/lib/metrics/metricEngine";
+import { metricUnavailable } from "@/lib/metrics/metricScopeGuard";
+import { assertMetricSiteAccess, assertMetricWorkUnitAccess } from "@/lib/metrics/resolveMetricSiteAccess";
 import type { MetricDimensions } from "@/lib/metrics/types";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 
@@ -16,7 +18,12 @@ export type EvaluateMetricParams = {
     supabase: SupabaseClient;
     definition: MetricDefinitionRow;
     ctx: MetricEvaluationContext;
-    accessScope?: AdminAccessScopeDimensions;
+    /**
+     * WS0-A — REQUIRED. This defaulted to unrestricted, so any caller that forgot it (and the BOS
+     * read did) evaluated with everyone's records. A request-time caller passes its own scope;
+     * a materialisation passes `CANONICAL_MATERIALIZATION_SCOPE` and says so at the call site.
+     */
+    accessScope: AdminAccessScopeDimensions;
     orgMetadata?: unknown;
 };
 
@@ -56,27 +63,35 @@ export async function evaluateMetricDefinition(params: EvaluateMetricParams): Pr
         (definition.filter_config?.filters?.work_unit_id as string | undefined) ??
         null;
 
-    const scope = accessScope ?? {
-        departmentScope: "all",
-        allowedDepartmentIds: null,
-        siteScope: "all",
-        allowedSiteLocationIds: null,
-    };
+    const scope = accessScope;
 
-    const resolved = await resolveSingleMetric(
-        {
-            supabase,
-            orgId: ctx.orgId,
-            scope,
-            window,
-            siteLocationId,
-            workUnitId,
-            dimensions: buildMetricDimensions(definition, ctx),
-            now: ctx.now,
-            mode: "live",
-        },
-        oipKey
-    );
+    /*
+     * WS0-A — a site or work unit may come from the request OR from the stored definition's
+     * filter_config. Either way it is admitted against the caller's scope before evaluation, the
+     * same check the resolve route applies; a refused narrowing evaluates to UNAVAILABLE.
+     */
+    const [siteAllowed, workUnitAllowed] = await Promise.all([
+        assertMetricSiteAccess({ supabase, orgId: ctx.orgId, scope, siteId: siteLocationId }),
+        assertMetricWorkUnitAccess({ supabase, orgId: ctx.orgId, scope, workUnitId }),
+    ]);
+
+    const resolved =
+        siteAllowed && workUnitAllowed
+            ? await resolveSingleMetric(
+                  {
+                      supabase,
+                      orgId: ctx.orgId,
+                      scope,
+                      window,
+                      siteLocationId,
+                      workUnitId,
+                      dimensions: buildMetricDimensions(definition, ctx),
+                      now: ctx.now,
+                      mode: "live",
+                  },
+                  oipKey
+              )
+            : metricUnavailable({ window, mode: "live", now: ctx.now }, oipKey, "scope_impossible");
 
     const meta = resolved.meta ?? {};
     const numeratorValue =
@@ -121,7 +136,7 @@ export async function evaluateMetricDefinitionsBatch(params: {
     supabase: SupabaseClient;
     definitions: MetricDefinitionRow[];
     ctx: MetricEvaluationContext;
-    accessScope?: AdminAccessScopeDimensions;
+    accessScope: AdminAccessScopeDimensions;
     orgMetadata?: unknown;
 }): Promise<MetricEvaluationResult[]> {
     const results: MetricEvaluationResult[] = [];

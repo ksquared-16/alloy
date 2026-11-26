@@ -7,6 +7,7 @@ import {
     saveHeaderSurfaceDoc,
 } from "@/lib/metrics/platform/headerSurfacePersistence";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sur
 
 /** PUT — publish the header SurfaceDoc back to real metric_placements; returns the reloaded doc. */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ surface: string }> }) {
+    /*
+     * ANALYTICS TRUTH — persists an analytics surface document.
+     *
+     * This was reachable through ORG CONTEXT ALONE: no capability, no role, only portal
+     * admission. `reports.write` is the established owner of this family — the promoted
+     * Operational Intelligence model already declares its sibling routes under it — so no
+     * vocabulary is invented here.
+     */
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const surface = normalize((await params).surface);
     if (!isHeaderSurface(surface)) return NextResponse.json({ error: "Unknown surface" }, { status: 404 });
 

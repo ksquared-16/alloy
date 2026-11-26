@@ -1,7 +1,7 @@
 /**
  * POS Packet — canonical field dedupe plan (Sprint 2).
  *
- * Strategic model (see docs/sprints/06_2026/pos_packet_parent_submission_foundation.md):
+ * Strategic model (see docs/sprints/archive/06_2026/pos_packet_parent_submission_foundation.md):
  * a POS Packet is generated from one or more *Alloy form templates* — NOT from a PDF.
  * When several templates ask for the same underlying datum (e.g. Child's Name), the
  * parent should be asked **once**. This module is the pure planner that computes that
@@ -22,6 +22,7 @@
  *   `buildFieldKeyProposedValues`).
  */
 
+import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
 /** The discriminant of the FormField union (schema.ts does not export this directly). */
@@ -92,7 +93,7 @@ export interface PacketFieldPlan {
     warnings: string[];
 }
 
-function canonicalKeyFor(field: FormField): { key: string; basis: PacketFieldDedupeBasis; entity_type: string | null; field_key: string | null; shared_value_key?: string } {
+export function canonicalKeyFor(field: FormField): { key: string; basis: PacketFieldDedupeBasis; entity_type: string | null; field_key: string | null; shared_value_key?: string } {
     const source = field.field_source;
     const sharedAlias = source?.shared_value_key?.trim();
     const entityType = source?.entity_type?.trim() || null;
@@ -125,6 +126,11 @@ export function buildPacketFieldPlan(forms: PacketSourceForm[]): PacketFieldPlan
     for (const form of forms) {
         for (const field of form.schema.fields) {
             if (field.type === "group") continue;
+            // DISPLAY fields carry no participant information. A `text_block` is printed prose —
+            // "Handbook Intro", "Page 3" — and asking a parent to supply it is meaningless. They
+            // were reaching the plan, becoming artifact-specific needs, and appearing in the
+            // participant's remaining work as "Page 2" and "Page 4".
+            if (!formFieldCollectsValue(field)) continue;
             totalConsumerFields += 1;
 
             const resolved = canonicalKeyFor(field);

@@ -1,0 +1,132 @@
+{
+  "schema_version": "vacilando.runtime_v1_artifact_manifest.v1",
+  "created_at": "2026-07-30T22:48:21.040Z",
+  "purpose": "Vacilando Runtime V1 closeout — Access & Identity artifact classification",
+  "active_missions_after_closeout": 0,
+  "archived_missions_visible": 16,
+  "improvements_preserved": 11,
+  "entries": [
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md",
+      "final_path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "classification": "authoritative_product_source",
+      "reason": "Accepted planning deliverable promoted to canonical Access & Identity planning location (copy; QA original retained as certification evidence)",
+      "content_hash": "b7161eea3d3d7e3e284ddc9bcb0e154f91acc15dccff7c017dbf6fe1bf0c5c31",
+      "superseded_by": null,
+      "action": "copied"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md",
+      "final_path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "classification": "authoritative_product_source",
+      "reason": "Accepted planning deliverable promoted to canonical Access & Identity planning location (copy; QA original retained as certification evidence)",
+      "content_hash": "a5c55bb37e795d476361cd9524371b4b1db267ea7e5da31dccbda59c68024d04",
+      "superseded_by": null,
+      "action": "copied"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+      "final_path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "classification": "authoritative_product_source",
+      "reason": "Accepted planning deliverable promoted to canonical Access & Identity planning location (copy; QA original retained as certification evidence)",
+      "content_hash": "cda42839cfeefb0010f0a7d1a105347ab24b16755ddc9ba452b34d254b47a92c",
+      "superseded_by": null,
+      "action": "copied"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+      "final_path": "docs/platform/planning/access-identity-v2/authority-path-inventory.md",
+      "classification": "authoritative_product_source",
+      "reason": "Accepted planning deliverable promoted to canonical Access & Identity planning location (copy; QA original retained as certification evidence)",
+      "content_hash": "cd8f04776312fc878e639fb15dcdb474aaf34d4e3f68b8d15d5de2b7f22e2a09",
+      "superseded_by": null,
+      "action": "copied"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md",
+      "classification": "runtime_certification_evidence",
+      "reason": "Retained under Vacilando QA path as Claude live-run deliverable evidence",
+      "content_hash": "b7161eea3d3d7e3e284ddc9bcb0e154f91acc15dccff7c017dbf6fe1bf0c5c31",
+      "superseded_by": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "action": "retained_in_place"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md",
+      "classification": "runtime_certification_evidence",
+      "reason": "Retained under Vacilando QA path as Claude live-run deliverable evidence",
+      "content_hash": "a5c55bb37e795d476361cd9524371b4b1db267ea7e5da31dccbda59c68024d04",
+      "superseded_by": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "action": "retained_in_place"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+      "classification": "runtime_certification_evidence",
+      "reason": "Retained under Vacilando QA path as Claude live-run deliverable evidence",
+      "content_hash": "cda42839cfeefb0010f0a7d1a105347ab24b16755ddc9ba452b34d254b47a92c",
+      "superseded_by": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "action": "retained_in_place"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+      "classification": "runtime_certification_evidence",
+      "reason": "Retained under Vacilando QA path as Claude live-run deliverable evidence",
+      "content_hash": "cd8f04776312fc878e639fb15dcdb474aaf34d4e3f68b8d15d5de2b7f22e2a09",
+      "superseded_by": "docs/platform/planning/access-identity-v2/authority-path-inventory.md",
+      "action": "retained_in_place"
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/claude-provider-v1-live-run.json",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/claude-provider-v1-live-run.json",
+      "classification": "runtime_certification_evidence",
+      "reason": "Claude Provider V1 live-run report",
+      "content_hash": "8d0b5f6d28999704dd13f67d68c79097d6b4fb04d197ae0d5f100acdddf79a94",
+      "superseded_by": null,
+      "action": "retained_in_place",
+      "bytes": 7043
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/operational-closeout-report.json",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/operational-closeout-report.json",
+      "classification": "runtime_certification_evidence",
+      "reason": "Operational closeout session/deliverable report",
+      "content_hash": "ff5bbdd45ed8b7c656ba10c98830fb09b6c61409f883841cf8e11c8f153d3ad8",
+      "superseded_by": null,
+      "action": "retained_in_place",
+      "bytes": 3833
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/archive/draft-inventory-pre-acceptance.md",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/archive/draft-inventory-pre-acceptance.md",
+      "classification": "superseded",
+      "reason": "Pre-acceptance draft inventory",
+      "content_hash": "54f7678c82c64c9aeb25869b5f39f3b995728daeef81aaaf146fe1fc51deb949",
+      "superseded_by": "docs/platform/planning/access-identity-v2/authority-path-inventory.md",
+      "action": "retained_in_place",
+      "bytes": 18326
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/archive/README.md",
+      "final_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/archive/README.md",
+      "classification": "runtime_certification_evidence",
+      "reason": "Archive folder index for superseded drafts",
+      "content_hash": "25e819cc0a722fa41936e34d174b6f5edb44de6b0c7ddfd3fef1a441a6f49715",
+      "superseded_by": null,
+      "action": "retained_in_place",
+      "bytes": 269
+    },
+    {
+      "original_path": "docs/platform/planning/vacilando-os/qa/director-execution-v2/access-identity-v2-cert-report.json",
+      "final_path": "docs/platform/planning/vacilando-os/qa/director-execution-v2/access-identity-v2-cert-report.json",
+      "classification": "runtime_certification_evidence",
+      "reason": "Earlier Director execution cert report",
+      "content_hash": "9a708c037266288cbcaa86946318b5310e516f201a6253ce59982ab64db85704",
+      "superseded_by": null,
+      "action": "retained_in_place",
+      "bytes": 21642
+    }
+  ]
+}

@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Focus Panel Runtime Cutover — Migration Report
 
 **Status:** Cutover ledger (June 2026). The canonical record of every remaining drawer dependency blocking complete drawer removal, classified for action.

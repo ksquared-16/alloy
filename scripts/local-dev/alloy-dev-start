@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# Start the assigned Next dev server for an Alloy agent worktree.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-start [--production] <worktree-name>
+
+Starts a toolkit-owned Next server:
+  1) loads sanitized web/.env.local.agent (agent-visible)
+  2) injects trusted server vars from ALLOY_SERVER_ENV_SOURCE into the
+     owned process only (never written to the worktree)
+
+  (default)     development server  ($ALLOY_DEV_COMMAND)
+  --production  production server   ($ALLOY_PROD_COMMAND), requires an
+                existing production build in the worktree
+
+Do not run npm run dev / npm run start directly — that bypasses trusted injection.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  # ONE ENVIRONMENT OWNER, TWO SERVER MODES.
+  #
+  # Production previously had no managed path at all: `alloy-dev-start` always ran the dev command,
+  # and a hand-run `next start` inherits only the agent-safe file, so server-side auth cannot resolve
+  # a session and every route 307s to /login. Rather than grow a second trusted-env owner, this flag
+  # swaps ONLY the command. Registry resolution, slot/port ownership, the agent-safe load, the
+  # trusted overlay, the PID lifecycle and capacity accounting are the same lines for both modes.
+  local mode="dev"
+  local -a positional=()
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --production) mode="production" ;;
+      --*) usage >&2; exit 2 ;;
+      *) positional+=("$arg") ;;
+    esac
+  done
+  [[ ${#positional[@]} -eq 1 ]] || { usage >&2; exit 2; }
+
+  local name="${positional[0]}"
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local port="$PORT"
+  local url="${NEXT_PUBLIC_APP_URL:-http://localhost:${port}}"
+  local web_dir pid_path log_path existing_pid
+  web_dir="$(alloy_web_dir_for "$path")"
+  pid_path="$(alloy_pid_path "$name")"
+  log_path="$(alloy_log_path "$name")"
+
+  [[ -d "$path" ]] || alloy_die "worktree path missing: $path"
+  [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
+
+  # Dependencies, before anything is launched. Without this the start "succeeds"
+  # — a pid file is written, the guard counts a running server — and the process
+  # dies with `sh: next: command not found` in a log file, which is how slot 3
+  # sat in the fleet for a day as a server-capable worktree that could not serve.
+  # Registering a worktree does not install its dependencies; only
+  # alloy-sprint-start does that, and adoption is the other way in.
+  local readiness
+  if ! readiness="$(alloy_server_readiness_for_path "$path")"; then
+    alloy_die "$(printf 'cannot start dev server for %s: %s — %s' \
+      "$name" "$readiness" "$(alloy_server_readiness_remedy "$readiness" "$name")")"
+  fi
+
+  # BUILD AND START ARE SEPARATE, AUDITABLE OPERATIONS. This refuses a missing artifact by name
+  # rather than silently building one: a start command that quietly builds would hide which commit
+  # is actually being served, which is precisely what a performance certification must never guess.
+  # It deliberately does NOT bypass the type gate — that is the build's business, not the server's.
+  # `${var^}` is bash 4; macOS ships bash 3.2, so the label is set explicitly rather than expanded.
+  local mode_label="Dev"
+  local server_command="$ALLOY_DEV_COMMAND"
+  # ONE OWNER PER ADDRESS.
+  #
+  # Next bound every interface, and Tailscale Serve publishes the same lane port
+  # on the tailnet addresses and proxies it to 127.0.0.1. Both therefore wanted
+  # 100.71.206.63:<port>. While a dev server is up the two coexist, but once it
+  # dies tailscaled still holds the tailnet addresses and the wildcard bind can
+  # never be retaken: MEASURED on 3016, where 0.0.0.0, :: and 100.71.206.63 all
+  # returned EADDRINUSE while 127.0.0.1 bound cleanly, and Surfaces could not be
+  # restarted at all.
+  #
+  # Loopback is the only address the dev server actually needs, because Serve
+  # proxies to 127.0.0.1. Giving it loopback and leaving the tailnet addresses
+  # to Tailscale means neither can collide with the other, in any order, and the
+  # Director-facing HTTPS origin is unchanged. Next 16 takes this as a CLI flag
+  # only — it reads no HOSTNAME env var — so it has to be appended to the
+  # command rather than exported beside it.
+  #
+  # The production command is chosen FIRST so the bind applies to it too: it used
+  # to replace the command after `-H` was appended, so `next start` bound every
+  # interface — the exact collision above — and a production preview could die
+  # after its Serve route was published, leaving the tailnet port answering 502.
+  if [[ "$mode" == "production" ]]; then
+    mode_label="Production"
+    server_command="${ALLOY_PROD_COMMAND:-npm run start}"
+    [[ -d "${web_dir}/.next" ]] || alloy_die "production build missing: ${web_dir}/.next — build first (production start never builds implicitly)"
+  fi
+  local bind_host="${ALLOY_DEV_BIND_HOST:-127.0.0.1}"
+  if [[ -n "$bind_host" && "$server_command" != *" -H "* && "$server_command" != *"--hostname"* ]]; then
+    case "$server_command" in
+      npm\ run\ *) server_command="${server_command} -- -H ${bind_host}" ;;
+      *next\ dev*|*next\ start*) server_command="${server_command} -H ${bind_host}" ;;
+    esac
+  fi
+
+  if [[ -f "$pid_path" ]]; then
+    existing_pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${existing_pid:-}" ]] && alloy_pid_alive "$existing_pid"; then
+      if alloy_pid_belongs_to_worktree "$existing_pid" "$path"; then
+        alloy_die "server already running for $name (PID $existing_pid). Refusing duplicate start."
+      fi
+      alloy_die "PID file exists for live PID $existing_pid that does not belong to $path. Inspect: $pid_path"
+    fi
+    alloy_remove_dead_pid_file "$name" || true
+  fi
+
+  # Loopback scope: the dev server binds 127.0.0.1, so Tailscale Serve's
+  # permanent tailnet-address listeners are not a reason to refuse the start.
+  alloy_refuse_occupied_port "$port" "${mode}-start for $name" loopback
+  alloy_sprint_ops_defaults
+  alloy_guard_server_start "$name"
+
+  alloy_export_node_defaults
+  export PORT="$port"
+  export NEXT_PUBLIC_APP_URL="$url"
+
+  # Two-tier environment: agent-safe file + trusted server injection (process only).
+  # shellcheck source=lib/verify.sh
+  source "${SCRIPT_DIR}/lib/verify.sh"
+
+  # Fail before Next starts when trusted source / required names are absent.
+  alloy_trusted_server_env_preflight
+
+  if [[ -f "$(alloy_agent_web_env_path "$path")" ]]; then
+    if ! alloy_agent_env_lacks_privileged "$path"; then
+      alloy_die "web/.env.local.agent contains privileged variable names — re-run alloy-agent-prepare (never copy service-role into the worktree)"
+    fi
+    alloy_load_agent_env_exports "$path" || true
+  else
+    alloy_warn "web/.env.local.agent missing — starting with trusted server env only (run alloy-agent-prepare for agent-safe public vars)"
+  fi
+
+  # Trusted overlay into this process tree only — never persisted to worktree/metadata.
+  alloy_load_trusted_server_env_exports
+  local trusted_count="${ALLOY_TRUSTED_ENV_LOADED_COUNT:-0}"
+  local trusted_source
+  trusted_source="$(alloy_server_env_source_path)"
+
+  # Pin the dev server to NATIVE arm64 on Apple Silicon so a universal node can't run under
+  # Rosetta/x64 and fail to load the arm64 native modules (lightningcss/next-swc mismatch →
+  # spurious CSS build error). No-op on Intel/Linux. When wrapping we launch the SYSTEM
+  # /bin/bash (universal): the PATH `bash` may be an x86_64-only Homebrew build.
+  local arch_prefix launch_sh="bash"
+  arch_prefix="$(alloy_native_arch_prefix)"
+  [[ -n "$arch_prefix" ]] && launch_sh="/bin/bash"
+  alloy_warn_node_modules_arch "$web_dir"
+  alloy_info "Starting ${arch_prefix}${server_command} in ${web_dir} on port ${port} (${mode})..."
+  (
+    cd "$web_dir"
+    export PORT="$port"
+    export NEXT_PUBLIC_APP_URL="$url"
+    export NODE_OPTIONS
+    # Inherited env includes agent-safe + trusted server vars (not on argv).
+    nohup ${arch_prefix}${launch_sh} -c "$server_command" >>"$log_path" 2>&1 &
+    echo $! >"$pid_path"
+  )
+
+  local pid
+  pid="$(alloy_read_pid_file "$pid_path")"
+  sleep 1
+  if ! alloy_pid_alive "$pid"; then
+    rm -f "$pid_path"
+    alloy_record_server_lifecycle "start" "$name" "failed" "process did not stay alive" "" "$pid"
+    alloy_die "${mode} server failed to stay alive. Inspect log: $log_path"
+  fi
+  alloy_ensure_director_route "$port"
+  alloy_record_server_lifecycle "start" "$name" "ok" "${ALLOY_SERVER_AUDIT_REASON:-start requested}" "" "$pid"
+
+  cat <<EOF
+${mode_label} server started (toolkit-owned)
+  worktree: ${name}
+  mode:     ${mode}
+  url:      ${url}
+  port:     ${port}
+  PID:      ${pid}
+  log:      ${log_path}
+  path:     ${path}
+
+Environment (two-tier):
+  agent-safe:     web/.env.local.agent (public/safe only)
+  trusted source: ${trusted_source}
+  trusted vars:   ${trusted_count} names injected into owned process only
+  not persisted:  privileged values are never written to the worktree
+
+Do not run npm run dev / npm run start directly — use alloy-dev-start / devup.
+EOF
+}
+
+main "$@"

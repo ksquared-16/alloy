@@ -3,7 +3,17 @@ import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsRe
 import { dbListFormDefinitions } from "@/lib/admin/forms/formsAdminDb";
 import { parseLifecycleProgressionRequirementsOverride } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { asOperatorStageKey, lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    activeLifecycleProcess,
+    activeStagesForProcess,
+    asOperatorStageKey,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    configuredStageInventoryFromMetadata,
+    isStageInConfiguredInventory,
+} from "@/lib/lifecycle/configuredStageInventory";
+import { CURRENT_ENROLLMENT_TEMPLATE_STAGE_KEYS } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import {
     configuredStageKeysForMetadata,
@@ -24,17 +34,21 @@ import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecyc
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import { loadQueueMembershipStatusOptions } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
 import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
-import { enrollmentQueueMembershipLegacyFallback } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 import { loadBusinessProcessStatusCategoryCatalog } from "@/lib/lifecycle/loadStatusCategoryCatalog";
 import { resolveStatusRollupForStage } from "@/lib/lifecycle/statusCategoryCatalog";
 import { queueMembershipSubjectForStatusOptions } from "@/lib/lifecycle/stageStatusRollup";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import {
     coercePerspectivesV1ForLanes,
     resolvePerspectivesForStage,
 } from "@/lib/lifecycle/perspectiveConfigV1";
 import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    loadBusinessProcessEditorState,
+    summarizeBusinessProcessEditorState,
+} from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { loadRecordStatusVocabulary } from "@/lib/lifecycle/loadRecordStatusVocabulary";
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
     return rows.map((r) => ({
@@ -60,6 +74,8 @@ export async function buildLifecycleStageBootstrap(params: {
     departmentId: string;
     builderStageKey: string;
     primaryRecordLabel?: string;
+    /** Recorded as the draft's creator when this load materializes it for the first time. */
+    actorUserId?: string | null;
 }): Promise<LifecycleStageBootstrapPayload> {
     const { supabase, orgId, departmentId, builderStageKey } = params;
     const primaryRecordLabel = params.primaryRecordLabel?.trim() || "Lead";
@@ -79,10 +95,30 @@ export async function buildLifecycleStageBootstrap(params: {
             ? (dept.metadata as Record<string, unknown>)
             : {};
 
+    /**
+     * THE READ PRECEDENCE (Law 4, editor slice 2).
+     *
+     * Everything publication-owned is read from the DRAFT, not from `departments.metadata`. Slice 1
+     * made the save write a draft; reading the projection back here is what made an operator's
+     * saved change appear to vanish on reload.
+     *
+     * `metadata` is still the source for the top-level SIBLING keys — field rules, progression
+     * requirements, activation. Those are category F: not publication-owned, and they must keep
+     * working exactly as before.
+     */
+    const editorState = await loadBusinessProcessEditorState(supabase, {
+        orgId,
+        departmentId,
+        actorUserId: params.actorUserId ?? null,
+    });
+    const builderMetadata: Record<string, unknown> = editorState
+        ? { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: editorState.draft_payload }
+        : metadata;
+
     const statusRows = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", {
         activeOnly: true,
     });
-    const stageKeys = await stageKeysForDepartment(supabase, orgId, metadata);
+    const stageKeys = await stageKeysForDepartment(supabase, orgId, builderMetadata);
     const statuses = buildEnrollmentStatusStagesPayload(mapStatusRows(statusRows), stageKeys);
 
     const pipeline = await loadStageWorkUnitSnapshotForDepartment(
@@ -93,7 +129,7 @@ export async function buildLifecycleStageBootstrap(params: {
     );
 
     let field_requirements: LifecycleStageBootstrapPayload["field_requirements"] = null;
-    if (isValidBootstrapBuilderStage(metadata, builderStageKey)) {
+    if (isValidBootstrapBuilderStage(builderMetadata, builderStageKey)) {
         const override = parseLifecycleProgressionRequirementsOverride(metadata);
         const orgFieldDefs = await loadOrgFieldDefinitionsForLifecycle(supabase, orgId);
         const entry = buildLifecycleRequirementsStageEntry(builderStageKey, metadata, orgFieldDefs, override);
@@ -213,12 +249,16 @@ export async function buildLifecycleStageBootstrap(params: {
         activation?.primary_record_label ?? primaryRecordLabel
     );
 
-    const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
+    const builder = lifecycleBuilderFromDepartmentMetadata(builderMetadata);
     const process = builder?.processes.find((p) => p.is_active) ?? null;
     const stageRecord = process?.stages.find((s) => s.key === builderStageKey && s.is_active) ?? null;
-    const queue_membership =
-        resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey) ??
-        enrollmentQueueMembershipLegacyFallback(builderStageKey, process?.key ?? "");
+    /**
+     * No code-default fallback once a process exists (decision D1). The legacy fallbacks that used
+     * to sit here made an unconfigured stage LOOK configured in the editor, and a save then wrote
+     * that appearance back as authored configuration. A stage with no membership must read as
+     * having no membership — that is the truth the operator needs in order to fix it.
+     */
+    const queue_membership = resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey);
     const subjectForOptions = queueMembershipSubjectForStatusOptions({
         stageKey: builderStageKey,
         trackKey: stageRecord?.track_key ?? null,
@@ -242,11 +282,11 @@ export async function buildLifecycleStageBootstrap(params: {
         subjectForOptions,
         builderStageKey,
     );
-    const stage_operating_plan =
-        resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey) ??
-        (process?.key === "enrollment"
-            ? defaultStageOperatingPlanForEnrollmentStage(builderStageKey)
-            : null);
+    // The vocabulary a TRANSITION may write — the case layer, which the queue-membership picker
+    // above deliberately excludes. Conflating the two made every canonical transition status
+    // unselectable and unvalidatable. See loadRecordStatusVocabulary.
+    const record_status_vocabulary = await loadRecordStatusVocabulary(supabase, orgId);
+    const stage_operating_plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey);
     const savedPerspectives = resolvePerspectivesForStage(stageRecord ?? {});
     const perspectiveLaneKeys = derivePerspectiveLanesFromPipeline(pipeline).map((lane) => lane.queueKey);
     const perspectives_v1 =
@@ -254,9 +294,33 @@ export async function buildLifecycleStageBootstrap(params: {
             ? coercePerspectivesV1ForLanes(savedPerspectives, perspectiveLaneKeys)
             : savedPerspectives;
 
+    /**
+     * Configured stages WITH their declared grain — carried, never normalised.
+     *
+     * The editor previously derived its destination list from `pipeline.queues`, which are work
+     * unit queue definitions and carry no journey grain. That left the editor's grain resolver
+     * with only the canonical vocabulary to consult, so a stage whose configured metadata
+     * DISAGREES with canon — Firefly's Decision — resolved cleanly in the editor while runtime
+     * correctly refused it. Same contract, different evidence, opposite answers.
+     *
+     * `grain` is passed through exactly as configured, including when it is absent or malformed.
+     * `resolveStageGrain` is the only thing allowed to judge it; coercing here would erase the
+     * disagreement this payload exists to reveal.
+     */
+    const configured_stages = activeStagesForProcess(
+        activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata)) ?? {
+            stages: [],
+        } as never,
+    ).map((stage) => ({
+        key: stage.key,
+        label: stage.label ?? stage.key,
+        grain: (stage as { grain?: unknown }).grain ?? null,
+    }));
+
     return {
         department_id: departmentId,
         builder_stage_key: builderStageKey,
+        configured_stages,
         stage_track_key: stageRecord?.track_key ?? null,
         operator_stage: operatorStage,
         statuses,
@@ -269,17 +333,36 @@ export async function buildLifecycleStageBootstrap(params: {
         base_actions,
         queue_membership,
         queue_membership_status_options,
+        record_status_vocabulary,
         status_category_catalog,
         status_rollup_v1,
         stage_operating_plan,
         perspectives_v1: perspectives_v1?.length ? perspectives_v1 : null,
+        configuration_state: editorState ? summarizeBusinessProcessEditorState(editorState) : null,
     };
 }
 
+/**
+ * A stage is valid for bootstrap ONLY when it is part of the department's configured Business
+ * Process. Built-in lists (LIFECYCLE_STAGE_ORDER, ENROLLMENT_TEMPLATE_STAGE_KEYS) no longer
+ * grant runtime validity — that is exactly the defect that let a removed `qualification` stage
+ * be served (see docs/sprints/active/qualification-provenance-investigation.md).
+ *
+ * The single sanctioned built-in use remains: when a department has NO configured process yet
+ * (first-time setup), the enrollment template stage set is allowed so the builder can bootstrap
+ * an initial configuration. Once any process is configured, only its stages are valid.
+ */
 export function isValidBootstrapBuilderStage(
     metadata: Record<string, unknown> | null,
     builderStageKey: string
 ): boolean {
-    if ((LIFECYCLE_STAGE_ORDER as readonly string[]).includes(builderStageKey)) return true;
-    return isConfiguredStageKey(metadata, builderStageKey);
+    const inventory = configuredStageInventoryFromMetadata(metadata);
+    if (inventory.hasConfiguredProcess) {
+        // Configured process is authoritative — no built-in fallback.
+        return isStageInConfiguredInventory(inventory, builderStageKey);
+    }
+    // No process configured yet: allow ONLY the current enrollment template stages, purely to
+    // seed first-time configuration. This set excludes `qualification` (Part 9). The stale
+    // operator-stage list (LIFECYCLE_STAGE_ORDER) is presentation-only and never grants validity.
+    return CURRENT_ENROLLMENT_TEMPLATE_STAGE_KEYS.has(builderStageKey);
 }

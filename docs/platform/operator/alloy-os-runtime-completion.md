@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — Runtime Completion & Freeze
 
 **Status:** ✅ **RUNTIME COMPLETE — FROZEN (June 2026).**
@@ -16,7 +23,7 @@
 | [`interaction-grammar.md`](./interaction-grammar.md) | Laws (ownership + movement) |
 | [`universal-card-system.md`](./universal-card-system.md) | System 4 card design freeze |
 | [`runtime-perspective-compatibility-layer.md`](./runtime-perspective-compatibility-layer.md) | Interim perspective derivation |
-| [`../../sprints/06_2026/alloy_os_operational_workflow_validation.md`](../../sprints/06_2026/alloy_os_operational_workflow_validation.md) | Final design pressure test |
+| `../../sprints/archive/06_2026/alloy_os_operational_workflow_validation.md` (historical: `../../sprints/archive/06_2026/alloy_os_operational_workflow_validation.md`) | Final design pressure test |
 
 ---
 
@@ -295,3 +302,9 @@ Everything after this freeze moves into:
 3. **Frontend implementation/polish** (Deliverable 5).
 
 **Do not continue runtime redesign. Do not add runtime primitives without explicit approval. Stop.**
+
+---
+
+## Presentation Runtime carry-forward (July 2026)
+
+The /surfaces **authoring** work (PRs #61/#63/#64/#68) is complete: the composition model is frozen and the builders author real, persisted configuration (stacked queue rows, grain/conditions, custom fields by namespace, nested surface editing). The **next runtime work** is *adoption* — making the live runtime consume that config without redesigning the model. The authoritative plan, deferral list, and "do not redesign" boundary live in [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md). This does not reopen the runtime freeze — it is bounded consumption of already-frozen authoring.

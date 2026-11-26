@@ -4,10 +4,19 @@
 export const FAMILY_WORKSPACE_RESOLVER_VERSION = "5a" as const;
 
 export type ConsentState = "opted_in" | "opted_out" | "unset";
+/**
+ * Every category the evaluator consults, so the operator surface can be complete.
+ *
+ * `*_operational` was always evaluated on every send and was absent from this profile,
+ * which is why the one category that actually stops routine communication was invisible
+ * to the people expected to manage it.
+ */
 export type PersonPreferenceProfile = {
     email_transactional: ConsentState;
-    sms_transactional: ConsentState;
+    email_operational: ConsentState;
     email_marketing: ConsentState;
+    sms_transactional: ConsentState;
+    sms_operational: ConsentState;
     sms_marketing: ConsentState;
 };
 export type ComposerChannel = "email" | "sms" | "note";
@@ -100,6 +109,11 @@ export type TimelineEventVM = {
     repliedAt: string | null;
     sentAt: string | null;
     status: string | null; // derived: received | failed | replied | opened | delivered | sent | queued | null
+    /** Outbound target person when present in message metadata. */
+    recipientPersonId?: string | null;
+    /** Operator auth user id when present in message metadata. */
+    senderUserId?: string | null;
+    senderDisplayName?: string | null;
 };
 
 export type HealthSummary = {
@@ -116,6 +130,17 @@ export type ConsentSummary = {
     household: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
     /** Primary-contact granular preference profile for edit UI. */
     preferenceProfile: PersonPreferenceProfile;
+    /**
+     * The granular profile for EACH contact, keyed by person id.
+     *
+     * Preferences are Person-owned: two adults in one household may differ, and
+     * one of them saying STOP says nothing about the other. `preferenceProfile`
+     * above collapses the household to its primary contact, which is right for a
+     * one-line summary and wrong for anything an operator acts on — showing the
+     * primary's answer beside a different recipient's name is a plain untruth
+     * about who agreed to what.
+     */
+    preferenceProfilesByContact: Record<string, PersonPreferenceProfile>;
     displayFlags: { email: boolean; sms: boolean; marketing: boolean };
 };
 
@@ -153,4 +178,34 @@ export type FamilyCommunicationWorkspaceVM = {
     healthSummary: HealthSummary;     // 5C
     /** Open operational tasks for the focused opportunity (when resolvable). */
     relatedTasks: RelatedTaskBrief[];
+};
+
+/**
+ * Path C — lightweight Activity communications FIRST-PAINT VM.
+ *
+ * Loads with the selected Focus Panel record (row-select), so Activity can render the real
+ * workspace (channels, recipients, recent thread, composer defaults) with NO blank shell.
+ * Deliberately excludes the heavy tail the full VM adds later (consent/preferences bundle,
+ * related tasks, full timeline health) — those revalidate in the background after mount.
+ *
+ * SMS enable/disable + eligibility come from the SAME assembler rules as the full VM
+ * (projected, never recomputed) — this VM does not change eligibility, provider, or send logic.
+ */
+export const FAMILY_WORKSPACE_PREVIEW_VERSION = "preview-1" as const;
+
+export type FamilyCommunicationWorkspacePreviewVM = {
+    version: typeof FAMILY_WORKSPACE_PREVIEW_VERSION;
+    family: FamilyRef;
+    children: ChildRef[];
+    recipientGroups: RecipientGroup[];
+    eligibleRecipients: RecipientVM[];
+    disabledRecipients: RecipientVM[];
+    selectedRecipients: string[];
+    /** Provider channel availability + SMS/email disabled reasons + default recipients. */
+    composerDraft: ComposerDraftVM;
+    scope: WorkspaceScope;
+    /** Recent threads (capped) needed for first paint. */
+    recentThreads: ThreadVM[];
+    /** Latest messages across the family (capped, chronological asc) for first paint. */
+    recentTimelineEvents: TimelineEventVM[];
 };

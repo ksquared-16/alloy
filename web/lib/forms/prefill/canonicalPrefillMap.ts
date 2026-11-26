@@ -48,6 +48,10 @@ const COLUMN_ALIASES: Record<PrefillRoot, Record<string, string>> = {
         display_name: "display_name",
         first_name: "first_name",
         last_name: "last_name",
+        // Registered system-field keys (systemFieldRegistry) — without these the split name fields
+        // fall through to a `child_first_name` column that does not exist and silently never prefill.
+        child_first_name: "first_name",
+        child_last_name: "last_name",
         dob: "dob",
         date_of_birth: "dob",
         birthdate: "dob",
@@ -59,10 +63,39 @@ const COLUMN_ALIASES: Record<PrefillRoot, Record<string, string>> = {
         parent_name: "full_name",
         first_name: "first_name",
         last_name: "last_name",
+        // Registered system-field keys for a guardian / emergency contact.
+        guardian_first_name: "first_name",
+        guardian_last_name: "last_name",
         email: "email",
         parent_email: "email",
         phone: "phone",
         parent_phone: "phone",
+        // The registered guardian keys were missing, so they fell through to `person.guardian_email`
+        // / `person.guardian_phone` — columns that do not exist (FI-07 census).
+        guardian_email: "email",
+        guardian_phone: "phone",
+        // A mobile / cell number IS the adult's primary `phone`. Home and work numbers are NOT: they
+        // are their own facts and are never folded into it (FI-07).
+        mobile_phone: "phone",
+        cell_phone: "phone",
+        guardian_mobile_phone: "phone",
+        guardian_cell_phone: "phone",
+        // Work and contact facts on the adult (person field values — `personContactFacts`).
+        home_phone: "home_phone",
+        guardian_home_phone: "home_phone",
+        work_phone: "work_phone",
+        guardian_work_phone: "work_phone",
+        employer: "employer",
+        guardian_employer: "employer",
+        work_hours: "work_hours",
+        guardian_work_hours: "work_hours",
+        work_address: "work_address",
+        employer_address: "work_address",
+        guardian_work_address: "work_address",
+        guardian_employer_address: "work_address",
+        communication_preference: "communication_preference",
+        preferred_contact_method: "communication_preference",
+        guardian_preferred_contact_method: "communication_preference",
     },
     customer: { household_name: "family_notes", family_notes: "family_notes" },
     opportunity: { status: "status_key", status_key: "status_key" },
@@ -85,11 +118,28 @@ export function canonicalPrefillPathForField(field: FormField): string | null {
 
     const entity = src.entity_type?.trim().toLowerCase() ?? "";
     const fieldKey = src.field_key?.trim().toLowerCase() ?? "";
-    const root = ENTITY_TO_ROOT[entity];
-    if (!root || !fieldKey) return null;
+    return canonicalPrefillPathForBinding(entity, fieldKey);
+}
 
-    const col = COLUMN_ALIASES[root][fieldKey] ?? fieldKey;
-    return `${root}.${col}`;
+/**
+ * The same answer, for a binding that is not yet a field.
+ *
+ * Realization needs to know whether a canonical owner can actually fill a destination BEFORE the
+ * field exists — a required box bound to a path nothing resolves is a blank box with a confident
+ * label on it. Asking the prefill map itself keeps one owner for that answer.
+ *
+ * `aliasOnly` is the stricter question: is this key one the map genuinely KNOWS, rather than one it
+ * would pass through unchanged? A pass-through means "there might be a column of that name", which
+ * is not evidence that a value will arrive.
+ */
+export function canonicalPrefillPathForBinding(entityType: string, fieldKey: string, opts?: { aliasOnly?: boolean }): string | null {
+    const entity = entityType.trim().toLowerCase();
+    const key = fieldKey.trim().toLowerCase();
+    const root = ENTITY_TO_ROOT[entity];
+    if (!root || !key) return null;
+    const alias = COLUMN_ALIASES[root][key];
+    if (opts?.aliasOnly && !alias) return null;
+    return `${root}.${alias ?? key}`;
 }
 
 /** Build a prefill_field_map (fieldId → "root.col") from every scalar field's field_source. */

@@ -1,0 +1,23 @@
+{
+  "present": true,
+  "box": {
+    "top": 245,
+    "left": 416,
+    "width": 608,
+    "height": 410,
+    "bottom": 655
+  },
+  "insideViewport": true,
+  "text": "DISCOUNTS CC Certa Certhouse Sibling discount (QA specimen) · 10% Expected $18.50 · 10% of $185.00 Waive discount → Add discount → CC Certb Certhouse Sibling discount (QA specimen) · 10% Expected $145.00 · 10% of $1,450.00 Waive discount → Add discount → Close",
+  "nativeDates": 0,
+  "alloyDates": 0,
+  "buttons": [
+    "Waive discount →",
+    "Add discount →",
+    "Waive discount →",
+    "Add discount →",
+    "Close"
+  ],
+  "avatars": 2,
+  "horizontalOverflow": false
+}

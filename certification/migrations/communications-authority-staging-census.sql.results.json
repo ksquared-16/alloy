@@ -1,0 +1,51 @@
+{
+  "trusted_host_action_id": "tha_01724952a95ed8",
+  "query_hash": "5a12de03c19db986c93c653bec5cb135023813f9e6abf37ee443b0b5dbb415ef",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T19:49:12.494Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_01724952a95ed8",
+    "query_hash": "5a12de03c19db986c93c653bec5cb135023813f9e6abf37ee443b0b5dbb415ef",
+    "authorization_id": "grnt_c3d6cc8489d042d7",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T19:49:17.511Z",
+    "question_ids": [
+      "catalog",
+      "admin_role_total",
+      "ops_read_send_total"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "communications.bulk.send",
+          "communications.provider.configure",
+          "communications.templates.manage"
+        ]
+      },
+      "admin_role_total": {
+        "question_id": "admin_role_total",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "ops_read_send_total": {
+        "question_id": "ops_read_send_total",
+        "row_count": null,
+        "rows": [
+          1
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

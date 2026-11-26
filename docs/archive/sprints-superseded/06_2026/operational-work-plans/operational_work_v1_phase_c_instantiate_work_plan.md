@@ -1,6 +1,6 @@
 # Operational Work V1 Phase C — `instantiate_work` Workflow Action Plan
 
-**Path:** `docs/sprints/06_2026/operational_work_v1_phase_c_instantiate_work_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_work_v1_phase_c_instantiate_work_plan.md`  
 **Date:** 2026-06-03  
 **Status:** **Planning complete — no code, no migrations**  
 **Scope:** Design the workflow action that instantiates Operational Work from Work Definitions via the existing workflow engine.
@@ -81,7 +81,7 @@ Server mutation or emit helper
 | Editor vocabulary | `web/lib/workflowVocab.ts` (partial catalog; may lag runtime event keys) |
 | Manual run API | `POST /api/admin/workflows/[id]/run` (no `event_id` by design) |
 
-Audit references: `docs/system/actions-and-workflows.md`, `docs/audits/workflow-execution-consistency-audit.md`.
+Audit references: `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/audits/workflow-execution-consistency-audit.md`.
 
 ### 1.3 Registered workflow action types (today)
 
@@ -642,7 +642,7 @@ flowchart LR
 
 ## Appendix B — Related docs
 
-- `docs/sprints/06_2026/operational_work_creation_model_discovery.md` — §6 instantiate_work behavior
-- `docs/sprints/06_2026/operational_work_v1_phase_b_implementation_plan.md` — Phase C pointer
-- `docs/system/actions-and-workflows.md` — engine spine
+- `docs/sprints/archive/06_2026/operational_work_creation_model_discovery.md` — §6 instantiate_work behavior
+- `docs/sprints/archive/06_2026/operational_work_v1_phase_b_implementation_plan.md` — Phase C pointer
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md` — engine spine
 - `docs/audits/workflow-execution-consistency-audit.md` — fan-out patterns

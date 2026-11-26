@@ -1,0 +1,104 @@
+{
+  "candidate": "98e1367f8",
+  "panel": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition"
+    ],
+    "tuition": "TUITION\n\n2 of 2 agreed\n\nCertb Certhouse\nProgram · preschool\nAttendance · full_time\nSchedule · — days a week\nEffective · 2026-09-01\n\n$1,450.00/monthly accepted, effective 2026-09-01\n\nRecommended\n\n$1,450.00/monthly\nProgram · Preschool\nAttendance · full_time\nSchedule · any\nBilled · monthly\nOrganisation default\nEffective 2026-07-01\nAccept tuition\nCerta Certhouse\nProgram · school_age\nAttendance · custom\nSchedule · — days a week\nEffective · 2026-09-01\n\n$185.00/weekly accepted, effective 2026-09-01\n\nRecommended\n\n$185.00/weekly\nProgram · Before & After\nAttendance · custom\nSchedule · any\nBilled · weekly\nOrganisation default\nEffective 2026-09-01\nAccept tuition\nDetails →",
+    "accepted": [
+      {
+        "term": "2a23f980-26d3-499a-b5bb-394e5c657499",
+        "amount": "$1,450.00/monthly"
+      },
+      {
+        "term": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
+        "amount": "$185.00/weekly"
+      }
+    ],
+    "financials": "FINANCIALS\n\nCURRENT PERIOD\n\nSeptember 2026\n\nCHARGES\n\nTuition\n$1,450.00\nFee\n$150.00\nConsumable fee\n$36.00\n\nDISCOUNTS & CREDITS\n\nCredit\n-$260.06\nAdjustment\n$146.71\nDiscount\n-$145.00\nNET OBLIGATION\n$37.87\nAdd\n\nDUE\n\n$607.00\n\nNothing past due\n\nBalance\n-$37.13\nPaid\n$75.00\nUnassigned\n$132.00\nAvailable\n$125.00\nPayment\nDetails\n→"
+  },
+  "ledger": {
+    "rows": 6,
+    "hasDiscount": true,
+    "hasProvenance": true,
+    "hasGl": true
+  },
+  "api": {
+    "layoutVersion": 161,
+    "gen": "5 to bill, 5 not due, 0 refused for weekly 2026-09",
+    "disc": "0 obligations would be reduced by $0.00 for 2026-09 · 7 unchanged, 0 already posted, 0 not eligible, 0 refused"
+  },
+  "results": [
+    {
+      "id": "S1 Focus Panel Summary mounts its cards",
+      "ok": true,
+      "observed": "business_process, financials, children, household, attendance, health_safety, assignment_tuition"
+    },
+    {
+      "id": "S2 Billing Preview mounts exactly once",
+      "ok": true,
+      "observed": "1 card(s)"
+    },
+    {
+      "id": "S3 accepted recurring terms read back",
+      "ok": true,
+      "observed": "$1,450.00/monthly · $185.00/weekly"
+    },
+    {
+      "id": "S4 Financials card renders its position",
+      "ok": true,
+      "observed": "FINANCIALS /  / CURRENT PERIOD"
+    },
+    {
+      "id": "S5 Focus Panel Details opens with its ledger",
+      "ok": true,
+      "observed": "6 stat labels"
+    },
+    {
+      "id": "S6 discount provenance survives",
+      "ok": true,
+      "observed": "discount=true basis=true"
+    },
+    {
+      "id": "S7 GL accounts render",
+      "ok": true,
+      "observed": "true"
+    },
+    {
+      "id": "S8 assignment pricing reads",
+      "ok": true,
+      "observed": "2 assignments"
+    },
+    {
+      "id": "S9 recurring preview is cadence-specific",
+      "ok": true,
+      "observed": "5 to bill, 5 not due, 0 refused for weekly 2026-09"
+    },
+    {
+      "id": "S10 discount preview states the money",
+      "ok": true,
+      "observed": "0 obligations would be reduced by $0.00 for 2026-09 · 7 unchanged, 0 already posted, 0 not eligible, 0 refused"
+    },
+    {
+      "id": "S11 published Focus Panel layout is v161",
+      "ok": true,
+      "observed": "v161"
+    },
+    {
+      "id": "S12 Financials Workspace opens Accounts",
+      "ok": true,
+      "observed": "Overview · Accounts · Charges · Payments · Subsidy · Activity"
+    },
+    {
+      "id": "S13 organization financial configuration reachable",
+      "ok": true,
+      "observed": "Tuition chapter with Billing Frequencies"
+    }
+  ]
+}

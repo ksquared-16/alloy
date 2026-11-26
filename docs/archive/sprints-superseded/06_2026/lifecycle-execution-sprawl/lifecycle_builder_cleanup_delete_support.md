@@ -1,6 +1,6 @@
 # Lifecycle Builder — Cleanup, Debug Removal, and Delete Support
 
-**Path:** `docs/sprints/06_2026/lifecycle_builder_cleanup_delete_support.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_builder_cleanup_delete_support.md`  
 **Status:** Implemented (May 2026)
 
 ## Summary

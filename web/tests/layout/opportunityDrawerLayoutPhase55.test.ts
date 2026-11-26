@@ -16,8 +16,8 @@ const root = resolve(__dirname, "../..");
 
 describe("opportunity drawer layout editor field catalog", () => {
     it("uses human labels instead of raw refKeys", () => {
-        expect(resolveLayoutEditorFieldRefLabel("child.desired_start_date")).not.toContain("desired_start");
-        expect(resolveLayoutEditorFieldRefLabel("child.desired_start_date")).not.toContain("child.");
+        expect(resolveLayoutEditorFieldRefLabel("child.start_date")).not.toContain("desired_start");
+        expect(resolveLayoutEditorFieldRefLabel("child.start_date")).not.toContain("child.");
         expect(resolveLayoutEditorFieldRefLabel("child.dob_age")).not.toBe("dob_age");
         expect(resolveLayoutEditorFieldRefLabel("opportunity.tour_date")).toBe("Tour date");
     });

@@ -1,0 +1,55 @@
+{
+  "previewMixture": {
+    "status": 200,
+    "ms": 2637,
+    "alreadyAvailable": 3,
+    "newAssociations": 0,
+    "blocked": 0,
+    "previewKeys": [
+      "program",
+      "requestedLocationIds",
+      "newAssociations",
+      "alreadyAvailable",
+      "blocked",
+      "locallyConfigured",
+      "retainedLocalConfiguration",
+      "plannedOperations",
+      "impact"
+    ],
+    "rawSnippet": "{\"ok\":true,\"preview\":{\"program\":{\"id\":\"c0358ff7-ce0c-4caa-969a-194159bf8dab\",\"label\":\"Stage4 OK3 w9k7sx\",\"key\":\"stage4_ok3_w9k7sx\",\"lifecycleState\":\"published\",\"publicationRequired\":false,\"publicationId\":\"4f0efca4-4d26-4d2b-ae6e-871f5da27402\",\"revisionId\":\"76f8fa4d-ffe1-45cf-9243-e024ad81453c\",\"willPublish\":false},\"requestedLocationIds\":[\"1a5644a7-45c4-413b-9021-5f556118b6e2\",\"ae34d822-60ef-4f82-81eb-8f3513059627\",\"e9ed1883-d6a5-463d-bda0-b765e15c6214\"],\"newAssociations\":[],\"alreadyAvailable\":[{\"locationId\":\"1a5644a7-45c4-413b-9021-5f556118b6e2\",\"locationLabel\":\"North Campus\",\"status\":\"already_available\",\"hasLocalConfiguration\":false,\"offered\":false,\"currentRevisionId\":\"76f8fa4d-ffe1-45cf-9243-e024ad81453c\",\"reason\":\"Already available at this Location.\"},{\"locationId\":\"ae34d822-60ef-4f82-81eb-8f3513059627\",\"locationLabel\":\"West Campus\",\"status\":\"already_available\",\"hasLocalConfiguration\":false,\"offered\":false,\"currentRevisionId\":\"76f8fa4d-ffe1-45cf-9243-e024ad81453c\",\"reason\":\"Already available at this Location.\"},{\"locationId\":\"e9ed1883-d6a5-463d-bda0-b765e15c6214\",\"locationLabel\":\"South Campus\",\"status\":\"already_available\",\"hasLocalConfiguration\":false,\"offered\":false,\"currentRev"
+  },
+  "idempotentReplay": {
+    "status": 200,
+    "ms": 732,
+    "resultStatus": "committed",
+    "operationId": "fe88e786-0390-4c05-8eb0-9e8143c32f32",
+    "idempotentReplay": true,
+    "programId": "c0358ff7-ce0c-4caa-969a-194159bf8dab"
+  },
+  "materialIntentChange": {
+    "status": 200,
+    "ms": 8785,
+    "resultStatus": "committed",
+    "operationId": "3432c61a-0f6a-4579-a16c-cc3ae0cfb83d",
+    "differentOpFromReplay": true,
+    "rawSnippet": "{\"ok\":true,\"result\":{\"status\":\"committed\",\"operationId\":\"3432c61a-0f6a-4579-a16c-cc3ae0cfb83d\",\"programId\":\"c0358ff7-ce0c-4caa-969a-194159bf8dab\",\"revisionId\":\"76f8fa4d-ffe1-45cf-9243-e024ad81453c\",\"publicationId\":\"4f0efca4-4d26-4d2b-ae6e-871f5da27402\",\"createdProgram\":false,\"publishedProgram\":false,\"associatedLocationIds\":[\"1a5644a7-45c4-413b-9021-5f556118b6e2\"],\"unchangedLocationIds\":[\"1a5644a7-45c4-413b-9021-5f556118b6e2\"],\"blocked\":[],\"failed\":[],\"refreshTargets\":[\"locations:collection\",\"locations:location:1a5644a7-45c4-413b-9021-5f556118b6e2\",\"locations:location:1a5644a7-45c4-413b-9021-5f556118b6e2:programs\",\"organization:programs-locations\",\"programs:collection\",\"programs:program:c0358ff7-ce0c-4caa-969a-194159bf8dab\",\"programs:program:c0358ff7-ce0c-4caa-969a-194159bf8dab:assignment\"]"
+  },
+  "validationFailure": {
+    "status": 400,
+    "ms": 366,
+    "error": {
+      "code": "action_failed",
+      "title": "The Configuration action could not be completed",
+      "message": "Program key is required.",
+      "nextStep": "Review the requested change and try again.",
+      "reference": "cfg-942e1298"
+    },
+    "hasRpcLeak": false,
+    "rawSnippet": "{\"error\":{\"code\":\"action_failed\",\"title\":\"The Configuration action could not be completed\",\"message\":\"Program key is required.\",\"nextStep\":\"Review the requested change and try again.\",\"reference\":\"cfg-942e1298\"}}"
+  },
+  "draftBlockedCommit": {
+    "status": 400,
+    "ms": 2466,
+    "rawSnippet": "{\"error\":{\"code\":\"action_failed\",\"title\":\"The Configuration action could not be completed\",\"message\":\"invalid input syntax for type uuid: \\\"\\\"\",\"nextStep\":\"Review the requested change and try again.\",\"reference\":\"cfg-1b412d61\"}}"
+  }
+}

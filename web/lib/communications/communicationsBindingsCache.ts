@@ -1,4 +1,7 @@
-import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import {
+    bustCommunicationsBindingsFetchDedupe,
+    dedupeAdminFetchWithTtl,
+} from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 export const COMMUNICATIONS_BINDINGS_CACHE_TTL_MS = 90_000;
@@ -81,9 +84,18 @@ export function peekCommunicationsBindingsCached(): CommunicationsBindingsResult
     return isFresh(cached) ? cached.result : null;
 }
 
+/**
+ * Invalidate BOTH caches in front of this endpoint.
+ *
+ * This module's `cached`/`inflight` are only the first layer; `dedupeAdminFetchWithTtl`
+ * keeps its own 90s entry underneath. Clearing one and not the other is how a save
+ * appeared to do nothing — the forced refetch was answered from the lower cache with
+ * pre-save data, for up to a minute.
+ */
 export function invalidateCommunicationsBindingsCache(): void {
     cached = null;
     inflight = null;
+    bustCommunicationsBindingsFetchDedupe();
 }
 
 /** Drawer prefetch slot shape — channels list only. */

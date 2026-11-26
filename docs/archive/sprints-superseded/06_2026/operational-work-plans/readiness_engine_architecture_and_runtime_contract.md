@@ -1,6 +1,6 @@
 # Readiness Engine — Architecture & Runtime Contract
 
-**Path:** `docs/sprints/06_2026/readiness_engine_architecture_and_runtime_contract.md`  
+**Path:** `docs/sprints/archive/06_2026/readiness_engine_architecture_and_runtime_contract.md`  
 **Date:** 2026-06-02  
 **Status:** **Architecture frozen** — operating model for Phase 1 implementation planning  
 **Scope:** Runtime contracts, evaluation architecture, storage, events, consumers, performance, Phase 1 blueprint. **No implementation.**
@@ -8,10 +8,10 @@
 **Canonical inputs (frozen — do not redesign):**
 
 - [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
-- [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
-- [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md)
-- [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md)
-- [`completed/lifecycle_builder_hardening_closeout.md`](./completed/lifecycle_builder_hardening_closeout.md)
+- [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md)
+- [`lifecycle_v2_discovery_and_operating_model.md`](../../../../sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md)
+- [`lifecycle_builder_hardening_and_v2_canonical_model.md`](../../../../sprints/archive/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md)
+- [`completed/lifecycle_builder_hardening_closeout.md`](../../../../sprints/archive/06_2026/completed/lifecycle_builder_hardening_closeout.md)
 
 **Authority:** This document defines the **Readiness Engine** implementation contract. It extends — does not replace — the Operational Readiness Framework. On conflict, align code to both; escalate true conflicts to product.
 

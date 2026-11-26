@@ -1,0 +1,80 @@
+{
+ "steps": [
+  {
+   "label": "start",
+   "app": 1,
+   "rows": 3,
+   "overlays": []
+  },
+  {
+   "label": "escape-on-open-dropdown",
+   "app": 1,
+   "rows": 3,
+   "overlays": []
+  },
+  {
+   "label": "charge-details-open",
+   "app": 1,
+   "rows": 3,
+   "overlays": [
+    "charge_detail"
+   ]
+  },
+  {
+   "label": "escape-on-charge-details",
+   "app": 1,
+   "rows": 3,
+   "overlays": []
+  },
+  {
+   "label": "backdrop-click-on-charge-details",
+   "app": 1,
+   "rows": 3,
+   "overlays": []
+  },
+  {
+   "label": "tuition-open",
+   "app": 1,
+   "rows": 3,
+   "overlays": [
+    "tuition_billing"
+   ]
+  },
+  {
+   "label": "escape-on-tuition-billing",
+   "app": 1,
+   "rows": 3,
+   "overlays": []
+  },
+  {
+   "label": "escape-on-bulk-dropdown",
+   "app": 1,
+   "rows": 3,
+   "overlays": []
+  },
+  {
+   "label": "escape-on-bulk-charge",
+   "app": 1,
+   "rows": 3,
+   "overlays": []
+  }
+ ],
+ "typeOptions": [
+  "Every charge type",
+  "Adjustment",
+  "Certification household fee",
+  "Credit",
+  "Discount",
+  "Field trip",
+  "Late pickup",
+  "Materials",
+  "Monthly tuition",
+  "Registration fee"
+ ],
+ "bulkTally": "2 accounts · 2 charges · $80.00",
+ "bulkChain": "Dates for W7 QA · Weekly Family ⏎ Billing period Oct 14–20, 2026 ⏎ Invoice date Oct 15, 2026 ⏎ Due Oct 21, 2026 ⏎ Posting · Posts on confirm — the billing period has begun",
+ "actionModes": [
+  "charge.add:preview",
+  "charge.add:preview"
+ ]
+}

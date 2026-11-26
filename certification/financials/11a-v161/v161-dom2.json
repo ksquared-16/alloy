@@ -1,0 +1,73 @@
+{
+  "queueRows": [
+    {
+      "tag": "span",
+      "data-queue-row-subject": "true",
+      "_text": "Certb Certhouse"
+    },
+    {
+      "tag": "span",
+      "data-queue-row-subject": "true",
+      "_text": "Certa Certhouse"
+    }
+  ],
+  "bodySubject": {
+    "tag": "div",
+    "data-focus-panel-body-subject": "b5b62172-8b27-44ff-a852-b11b8888a6cd",
+    "_text": "ENROLLMENT Lead Aug 26 Tour Decision Sep 18 Waitlist Enrolling Enrolled Sep 18 CC Certa CC Certb LEAD No current work co"
+  },
+  "identity": {
+    "tag": "div",
+    "data-focus-panel-subject-identity": "true",
+    "_text": "CC Certb Certhouse Enrolled"
+  },
+  "inline": {
+    "tag": "section",
+    "data-inline-focus-panel": "true",
+    "data-inline-focus-panel-mode": "summary",
+    "data-inline-focus-panel-subject": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "data-inline-focus-panel-resolved": "true",
+    "data-focus-panel-operational": "resolved",
+    "data-focus-panel-settlement": "resolved",
+    "data-focus-panel-scope": "in_scope",
+    "_text": "CC Certb Certhouse Enrolled Manage ▾ Work Activity ENROLLMENT Lead Aug 26 Tour Decision Sep 18 Waitlist Enrolling Enroll"
+  },
+  "financialsSubject": {
+    "tag": "div",
+    "data-financials-card": "true",
+    "data-financials-subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "data-financials-account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "_text": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Fee $150.00 Consumable fee $36.00 DISCOUNTS & CREDITS Credit -$260.06 A"
+  },
+  "attendanceSubject": {
+    "tag": "div",
+    "data-attendance-card": "true",
+    "data-attendance-subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "_text": "ATTENDANCE — TODAY No record No attendance recorded today Not scheduled today. Nothing recorded. Check in Mark absent De"
+  },
+  "childrenChildren": [
+    {
+      "tag": "div",
+      "data-children-child": "unlinked:e408fa51-7261-43c4-8e60-555d17fc9888",
+      "_text": "CC Certa Certhouse Enrolled — Program — Date of birth Apr 12, 2021 Gender — M-F (Mon, Tue,"
+    },
+    {
+      "tag": "div",
+      "data-children-child": "unlinked:46105cd4-6030-417d-a7cb-faf409071c0d",
+      "data-children-focused-child": "true",
+      "_text": "CC Certb Certhouse Enrolled — Program — Date of birth Sep 30, 2022 Gender — M-F (Mon, Tue,"
+    }
+  ],
+  "focusedChild": {
+    "tag": "div",
+    "data-children-child": "unlinked:46105cd4-6030-417d-a7cb-faf409071c0d",
+    "data-children-focused-child": "true",
+    "_text": "CC Certb Certhouse Enrolled — Program — Date of birth Sep 30, 2022 Gender — M-F (Mon, Tue, Wed, Thu, Fri) → Needs progra"
+  },
+  "tuition": {
+    "tag": "div",
+    "data-assignment-tuition": "true",
+    "data-tuition-count": "0",
+    "_text": "No assignment on this record to price."
+  }
+}

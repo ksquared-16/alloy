@@ -77,10 +77,7 @@ export const LIFECYCLE_REQUIREMENTS_CAPTURE_NOTE =
     "Families can meet these requirements through forms, intake, imports, or manual entry in the record drawer.";
 
 function childHasProgram(child: InquiryChildCompletionSnapshot): boolean {
-    return (
-        !completionValueEmpty(child.desired_program_type) ||
-        !completionValueEmpty(child.program_room_cohort_key)
-    );
+    return !completionValueEmpty(child.program_category_id);
 }
 
 function resolveStageFromStatusKey(statusKey: string | null | undefined): LifecycleOperatorStage | null {
@@ -106,8 +103,8 @@ function evaluateChildFieldGaps(children: InquiryChildCompletionSnapshot[]) {
     const hasChild = children.length > 0;
     const allHaveProgram = hasChild && children.every((c) => childHasProgram(c));
     const allHaveSchedule =
-        hasChild && children.every((c) => !completionValueEmpty(c.desired_schedule_type));
-    const allHaveStart = hasChild && children.every((c) => !completionValueEmpty(c.desired_start_date));
+        hasChild && children.every((c) => !completionValueEmpty(c.schedule_type));
+    const allHaveStart = hasChild && children.every((c) => !completionValueEmpty(c.start_date));
     const allHaveClassroom =
         hasChild && children.every((c) => !completionValueEmpty(c.program_room_cohort_key));
     const allHavePersonLink = hasChild && children.every((c) => !completionValueEmpty(c.person_id));

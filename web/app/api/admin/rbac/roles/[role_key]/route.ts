@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
+import { ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
 /** PATCH: update role (role_label, is_active). Requires org admin or `settings.users_roles` permission. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ role_key: string }> }
 ) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -16,9 +19,9 @@ export async function PATCH(
         return NextResponse.json({ error: "Missing role_key" }, { status: 400 });
     }
 
-    let body: { role_label?: string; is_active?: boolean } = {};
+    let body: { role_label?: string; is_active?: boolean; permission_keys?: string[] } = {};
     try {
-        body = (await request.json()) as { role_label?: string; is_active?: boolean };
+        body = (await request.json()) as { role_label?: string; is_active?: boolean; permission_keys?: string[] };
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
@@ -37,6 +40,104 @@ export async function PATCH(
     }
 
     const is_system = (existing as { is_system: boolean }).is_system;
+
+    // W-58: the system-role guard must cover the combined path too. Placing the combined branch
+    // BEFORE this check would have let a submit that carries `permission_keys` deactivate a system
+    // role that the meta-only path refuses — a hole opened by the convenience of one request.
+    if (is_system && body.is_active === false) {
+        return NextResponse.json({ error: "System roles cannot be deactivated" }, { status: 400 });
+    }
+
+    // W-58 / `RM-11` — ONE submit, one transaction.
+    //
+    // `01…§40`: the role page had three independent save paths and no dirty-state tracking, so an
+    // operator who edited the label AND the grid and pressed one button silently discarded the other
+    // edit. Sending `permission_keys` alongside the meta fields makes this the single
+    // authority-mutating request for a submit.
+    //
+    // `01…§52` is why this could not be built when it was first listed: composing a PATCH with the
+    // old untransacted delete-then-insert would have given one operator action THREE failure points
+    // and no compensation — "a partial failure would leave the label changed and the grants empty."
+    // `W-28` supplied the atomicity, and this composes on it: meta is written first and the grants
+    // replacement second, in ONE transaction, so a failure in the grants half rolls the label back.
+    if (Array.isArray(body.permission_keys)) {
+        const permission_keys = body.permission_keys
+            .filter((k) => typeof k === "string" && k.trim())
+            .map((k) => (k as string).trim());
+
+        const audit = accessMutationAudit(auth.access);
+        const { data: granted, error: saveErr } = await supabase.rpc("save_role_definition_and_grants", {
+            p_org_id: orgId,
+            p_role_key: role_key,
+            p_actor_user_id: audit.actorUserId,
+            p_origin: audit.origin,
+            p_correlation_id: audit.correlationId,
+            // NULL means "not edited", so a submit that changes only the grid does not rewrite the
+            // label with whatever the page happened to be holding.
+            p_role_label: typeof body.role_label === "string" ? body.role_label.trim() : null,
+            p_is_active: typeof body.is_active === "boolean" ? body.is_active : null,
+            p_permission_keys: permission_keys,
+        });
+
+        if (saveErr) {
+            const message = saveErr.message ?? "";
+            /*
+             * W-18 — the delegation ceiling refused this. Role editing reaches the same transaction
+             * owner as the grants route, so the same refusal surfaces here and means the same thing:
+             * the actor asked to introduce authority they do not hold, and nothing was written.
+             */
+            const unlinked = moneyCapableGrantRefusal(message);
+            if (unlinked) return NextResponse.json({ error: unlinked }, { status: 403 });
+            const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
+            if (beyond) {
+                return NextResponse.json(
+                    {
+                        error:
+                            "You can only grant access you hold yourself. Not granted: "
+                            + beyond[1].split(",").join(", "),
+                        required_permission: beyond[1].split(",")[0],
+                    },
+                    { status: 403 },
+                );
+            }
+            const invalid = message.match(/invalid_permission_keys:([^\s"]+)/);
+            if (invalid) {
+                return NextResponse.json(
+                    { error: `Invalid or inactive permission keys: ${invalid[1].split(",").join(", ")}` },
+                    { status: 400 },
+                );
+            }
+            if (/unknown_role_key:/.test(message)) {
+                return NextResponse.json({ error: "Role not found" }, { status: 404 });
+            }
+            // Nothing persisted — the whole submit rolled back. Saying so is the point: the operator
+            // must not be left believing half of their edit landed.
+            return NextResponse.json({ error: "Nothing was saved." }, { status: 500 });
+        }
+
+        /*
+         * W-13 — the same reason as `rbac/grants/route.ts`, which carries the argument in full.
+         * `adminShellContextCache` now holds ADMISSION as well as capabilities, so a grant edit that
+         * did not clear it left a revoked operator with a portal that still opened for up to 120
+         * seconds. Cleared wholesale: a role's grants belong to every principal holding it.
+         */
+        invalidateAdminShellContextCache();
+
+        const { data: role } = await supabase
+            .from("role_definitions")
+            .select("role_key, role_label, is_system, is_active, created_at")
+            .eq("org_id", orgId)
+            .eq("role_key", role_key)
+            .single();
+
+        return NextResponse.json({
+            ...(role ?? {}),
+            permission_keys: Array.isArray(granted)
+                ? (granted as { granted_permission_key: string }[]).map((r) => r.granted_permission_key)
+                : [],
+        });
+    }
+
     const updates: { role_label?: string; is_active?: boolean } = {};
     if (typeof body.role_label === "string") {
         updates.role_label = body.role_label.trim();
@@ -58,17 +159,44 @@ export async function PATCH(
         return NextResponse.json(current ?? {});
     }
 
-    const { data: updated, error: updateErr } = await supabase
-        .from("role_definitions")
-        .update(updates)
-        .eq("org_id", orgId)
-        .eq("role_key", role_key)
-        .select("role_key, role_label, is_system, is_active, created_at")
-        .single();
+    /*
+     * THE SAME TRANSACTION OWNER AS THE GRID BRANCH, AND D2 IS WHY.
+     *
+     * This wrote `role_definitions` directly, so renaming a role — and, far more consequentially,
+     * DEACTIVATING one, which removes every capability it carries from everyone holding it — changed
+     * access and left no trace at all. It was the only mutating access path in the product that
+     * reached no audited owner, and a fixed list of routes could not have noticed: the route WAS on
+     * the list, and its other branch was audited.
+     *
+     * `p_permission_keys => null` means "the grid was not edited", the same way a null label means
+     * the label was not edited. An empty array would mean something entirely different — revoke
+     * everything — which is why the owner distinguishes them rather than treating absent as empty.
+     */
+    const audit = accessMutationAudit(auth.access);
+    const { error: metaErr } = await supabase.rpc("save_role_definition_and_grants", {
+        p_org_id: orgId,
+        p_role_key: role_key,
+        p_role_label: updates.role_label ?? null,
+        p_is_active: typeof updates.is_active === "boolean" ? updates.is_active : null,
+        p_permission_keys: null,
+        p_actor_user_id: audit.actorUserId,
+        p_origin: audit.origin,
+        p_correlation_id: audit.correlationId,
+    });
 
-    if (updateErr) {
-        return NextResponse.json({ error: updateErr.message }, { status: 400 });
+    if (metaErr) {
+        return NextResponse.json({ error: metaErr.message }, { status: 400 });
     }
 
-    return NextResponse.json(updated);
+    // Deactivating a role changes what its holders may do on their very next request.
+    invalidateAdminShellContextCache();
+
+    const { data: updated } = await supabase
+        .from("role_definitions")
+        .select("role_key, role_label, is_system, is_active, created_at")
+        .eq("org_id", orgId)
+        .eq("role_key", role_key)
+        .single();
+
+    return NextResponse.json(updated ?? {});
 }

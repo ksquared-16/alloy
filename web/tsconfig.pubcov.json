@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/businessProcesses/configuration/editProcessInDraft.ts",
+    "lib/lifecycle/persistWorkViewsV1.ts",
+    "lib/lifecycle/persistParticipationV1.ts",
+    "app/api/admin/lifecycle-builder/process-work-views/route.ts",
+    "app/api/admin/lifecycle-builder/process-participation/route.ts",
+    "app/api/admin/lifecycle-catalog/delete/route.ts",
+    "lib/configRuntime/organizationRuntime.ts",
+    "components/adminV2/settings/businessProcess/WorkViewsConfigurationContext.tsx"
+  ]
+}

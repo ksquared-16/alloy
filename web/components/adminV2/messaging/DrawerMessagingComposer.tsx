@@ -8,6 +8,7 @@ import MessagingComposerFrame from "@/components/adminV2/messaging/MessagingComp
 import { resolveComposeNewScheduleContext } from "@/lib/adminV2/messaging/messagingComposerScheduleContext";
 import type { DrawerCommunicationsEntityType } from "@/lib/adminV2/messaging/drawerCommunicationsEntity";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 export type DrawerMessagingRecipient = {
     person_id: string;
     display_name: string;
@@ -23,6 +24,8 @@ type DrawerMessagingComposerProps = {
     onChannelChange: (channel: "email" | "sms") => void;
     emailReady: boolean;
     smsReady: boolean;
+    /** Prefer specific reason (provider vs no phone) over the generic outbound title. */
+    smsDisabledTitle?: string;
     bindingsErr: string | null;
     loadingBindings: boolean;
     recipients: DrawerMessagingRecipient[];
@@ -39,18 +42,14 @@ type DrawerMessagingComposerProps = {
     compact?: boolean;
     /** Side-by-side drawer column — fills right pane instead of stacking under thread. */
     columnLayout?: boolean;
+    /** Optional seed when opening from a prepared command (e.g. tour invitation). */
+    initialSubject?: string | null;
+    initialBody?: string | null;
 };
 
 function formatDisplayPhoneUs(raw: string | null | undefined): string {
-    const digits = String(raw ?? "").replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) {
-        const d = digits.slice(1);
-        return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-    }
-    if (digits.length === 10) {
-        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-    }
-    return String(raw ?? "").trim() || "—";
+    // The platform's one phone formatter (lib/phone/phonePresentation).
+    return formatCanonicalPhone(raw);
 }
 
 export default function DrawerMessagingComposer({
@@ -60,6 +59,7 @@ export default function DrawerMessagingComposer({
     onChannelChange,
     emailReady,
     smsReady,
+    smsDisabledTitle = "SMS outbound is not configured for this org yet",
     bindingsErr,
     loadingBindings,
     recipients,
@@ -73,12 +73,14 @@ export default function DrawerMessagingComposer({
     sendOkNote,
     compact = true,
     columnLayout = false,
+    initialSubject = null,
+    initialBody = null,
 }: DrawerMessagingComposerProps) {
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [bosOpen, setBosOpen] = useState(false);
     // Composer draft is owned here so typing re-renders only this subtree, not the drawer tree.
-    const [subject, setSubject] = useState("");
-    const [body, setBody] = useState("");
+    const [subject, setSubject] = useState(() => String(initialSubject ?? "").trim());
+    const [body, setBody] = useState(() => String(initialBody ?? "").trim());
 
     /** Reproduce the parent's prior sendDisabledReason: base reasons first, then the body-empty case. */
     const composedDisabledReason =
@@ -173,7 +175,7 @@ export default function DrawerMessagingComposer({
                     emailDisabled={!emailReady}
                     smsDisabled={!smsReady}
                     emailDisabledTitle="Outbound email is not configured for this org"
-                    smsDisabledTitle="SMS outbound is not configured for this org yet"
+                    smsDisabledTitle={smsDisabledTitle}
                     channelHint={channelHint}
                     subject={subject}
                     onSubjectChange={setSubject}

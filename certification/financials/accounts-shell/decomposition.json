@@ -1,0 +1,472 @@
+[
+  {
+    "pass": "cold-1",
+    "acknowledgement": 58,
+    "firstGeometry": 61,
+    "interactiveList": 2137,
+    "selectedAccount": 3595,
+    "usableShell": 3595,
+    "firstLedger": 3606,
+    "settled": 3609,
+    "rows": 116,
+    "shellToLedger": 11,
+    "requests": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1945,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 2090,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3601,
+        "bytes": 218680,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "cold-2",
+    "acknowledgement": 258,
+    "firstGeometry": 259,
+    "interactiveList": 1760,
+    "selectedAccount": 3103,
+    "usableShell": 3103,
+    "firstLedger": 3108,
+    "settled": 3110,
+    "rows": 116,
+    "shellToLedger": 5,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1587,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1762,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3015,
+        "bytes": 218680,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "cold-3",
+    "acknowledgement": 199,
+    "firstGeometry": 200,
+    "interactiveList": 1973,
+    "selectedAccount": 3508,
+    "usableShell": 3508,
+    "firstLedger": 3512,
+    "settled": 3513,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1849,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1948,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3508,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 4015,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "cold-4",
+    "acknowledgement": 23,
+    "firstGeometry": 25,
+    "interactiveList": 1488,
+    "selectedAccount": 2990,
+    "usableShell": 2990,
+    "firstLedger": 2995,
+    "settled": 2996,
+    "rows": 116,
+    "shellToLedger": 5,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1418,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1474,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2925,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3431,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "cold-5",
+    "acknowledgement": 172,
+    "firstGeometry": 174,
+    "interactiveList": 1875,
+    "selectedAccount": 3134,
+    "usableShell": 3134,
+    "firstLedger": 3138,
+    "settled": 3139,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1680,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1794,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3099,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3690,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-1",
+    "acknowledgement": 136,
+    "firstGeometry": 138,
+    "interactiveList": 1949,
+    "selectedAccount": 3329,
+    "usableShell": 3329,
+    "firstLedger": 3332,
+    "settled": 3333,
+    "rows": 116,
+    "shellToLedger": 3,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1635,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1898,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3310,
+        "bytes": 218680,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-2",
+    "acknowledgement": 44,
+    "firstGeometry": 45,
+    "interactiveList": 1808,
+    "selectedAccount": 3200,
+    "usableShell": 3200,
+    "firstLedger": 3205,
+    "settled": 3206,
+    "rows": 116,
+    "shellToLedger": 5,
+    "requests": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1653,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1803,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3124,
+        "bytes": 218680,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-3",
+    "acknowledgement": 143,
+    "firstGeometry": 145,
+    "interactiveList": 2170,
+    "selectedAccount": 3937,
+    "usableShell": 3937,
+    "firstLedger": 3941,
+    "settled": 3942,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1922,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 2075,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3892,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3992,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-4",
+    "acknowledgement": 19,
+    "firstGeometry": 20,
+    "interactiveList": 1817,
+    "selectedAccount": 3018,
+    "usableShell": 3018,
+    "firstLedger": 3022,
+    "settled": 3023,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1738,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1792,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2999,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3432,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-5",
+    "acknowledgement": 60,
+    "firstGeometry": 61,
+    "interactiveList": 1576,
+    "selectedAccount": 2895,
+    "usableShell": 2895,
+    "firstLedger": 2898,
+    "settled": 2900,
+    "rows": 116,
+    "shellToLedger": 3,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1552,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1573,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2894,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3413,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-6",
+    "acknowledgement": 91,
+    "firstGeometry": 93,
+    "interactiveList": 1487,
+    "selectedAccount": 2754,
+    "usableShell": 2754,
+    "firstLedger": 2758,
+    "settled": 2758,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1426,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1483,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2682,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3142,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-7",
+    "acknowledgement": 57,
+    "firstGeometry": 59,
+    "interactiveList": 1772,
+    "selectedAccount": 3008,
+    "usableShell": 3008,
+    "firstLedger": 3013,
+    "settled": 3017,
+    "rows": 116,
+    "shellToLedger": 5,
+    "requests": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1461,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1772,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3007,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3591,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-8",
+    "acknowledgement": 40,
+    "firstGeometry": 41,
+    "interactiveList": 1591,
+    "selectedAccount": 2935,
+    "usableShell": 2935,
+    "firstLedger": 2939,
+    "settled": 2940,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1387,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1541,
+        "bytes": 4238,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2842,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3529,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  }
+]

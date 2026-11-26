@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-initiative-approve <initiative-key> --approver <name>
+  alloy-initiative-approve <initiative-key> --approver <name> --reason "change reason"
+
+Records approval timestamp, specification hash, and freezes the approved contract.
+If the specification changed since last approval, --reason is required.
+
+Transitions: awaiting_plan_approval → approved
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  shift
+  local approver="" reason=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --approver) [[ $# -ge 2 ]] || alloy_die "--approver requires value"; approver="$2"; shift 2 ;;
+      --approver=*) approver="${1#--approver=}"; shift ;;
+      --reason) [[ $# -ge 2 ]] || alloy_die "--reason requires value"; reason="$2"; shift 2 ;;
+      --reason=*) reason="${1#--reason=}"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+  [[ -n "$approver" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  [[ "$state" == "awaiting_plan_approval" || "$state" == "approved" ]] \
+    || alloy_die "cannot approve in state: $state"
+
+  local base spec_hash decisions_path open_decisions
+  base="$(alloy_initiative_dir "$key")"
+  spec_hash="$(alloy_engineering_approval_hash "$key")"
+  decisions_path="$base/decisions.yaml"
+
+  open_decisions="$(alloy_engineering_human_decisions_count "$key")"
+  if [[ "$open_decisions" != "0" ]]; then
+    alloy_die "cannot approve: ${open_decisions} unresolved human decision(s) — resolve or update plan first"
+  fi
+
+  local prev_hash=""
+  prev_hash="$(node -e "const d=require('${base}/state.json'); process.stdout.write(d.approved_spec_hash||'');")"
+
+  if [[ -n "$prev_hash" && "$prev_hash" != "$spec_hash" && -z "$reason" ]]; then
+    alloy_die "specification changed since last approval — provide --reason"
+  fi
+
+  local now
+  now="$(alloy_iso_now)"
+  node -e "
+    const fs = require('fs');
+    const p = '${base}/state.json';
+    const d = JSON.parse(fs.readFileSync(p,'utf8'));
+    d.approved_spec_hash = '${spec_hash}';
+    d.approver = $(node -e "console.log(JSON.stringify('${approver}'))");
+    d.approved_at = '${now}';
+    d.updated_at = '${now}';
+    if ('${reason}') {
+      d.approval_changes = d.approval_changes || [];
+      d.approval_changes.push({ at: '${now}', reason: $(node -e "console.log(JSON.stringify('${reason}'))"), prev_hash: '${prev_hash}', new_hash: '${spec_hash}' });
+    }
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  cat >"$decisions_path" <<EOF
+approved_at: "$now"
+approver: "$approver"
+specification_hash: "$spec_hash"
+frozen_contract:
+  specification: plan/specification.md
+  product_contract: plan/product-contract.yaml
+  acceptance: plan/acceptance.yaml
+  visual_contract: plan/visual-contract.yaml
+change_reason: $(node -e "console.log(JSON.stringify('${reason}'))")
+EOF
+
+  if [[ "$state" == "awaiting_plan_approval" ]]; then
+    alloy_initiative_transition "$key" "approved"
+  fi
+
+  alloy_info "Approved $key"
+  alloy_info "  approver:           $approver"
+  alloy_info "  specification hash: ${spec_hash:0:16}..."
+  alloy_info "  state:              $(alloy_initiative_current_state "$key")"
+  alloy_info ""
+  alloy_info "Next: alloy-initiative-start $key"
+}
+
+main "$@"

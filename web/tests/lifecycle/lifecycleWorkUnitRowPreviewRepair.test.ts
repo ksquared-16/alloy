@@ -36,7 +36,7 @@ describe("lifecycleWorkUnitRowPreviewRepair", () => {
         expect(ui.row_preview.fields).toContain("phone");
         expect(ui.row_preview.fields).toContain("email");
         expect(ui.row_preview.fields).toContain("tour_date");
-        expect(ui.row_preview.fields).toContain("desired_start_date");
+        expect(ui.row_preview.fields).toContain("start_date");
     });
 
     it("waitlist overlay omits tour_date", () => {

@@ -1,0 +1,4 @@
+L0 draft materialized at revision 2
+L0 draft outcomes: [{"label": "Reached / Qualified", "successful": true, "outcome_key": "reached_family", "completes_work": true}, {"label": "Tour Scheduled", "successful": true, "outcome_key": "tour_scheduled", "comple
+L0 published rules unchanged by authoring: true
+L1 validate can_publish=false errors=9 first="Close semantics require a configured closed status."

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { balanceCentsForAccountType } from "@/lib/financials";
 import type { GlAccountType } from "@/lib/financials";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,13 @@ export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const supabase = createAdminClient();
+    const allowedRead = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
     const orgId = ctx.orgId;
     const { searchParams } = request.nextUrl;
     const period = searchParams.get("period") || "pl";

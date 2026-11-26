@@ -3,24 +3,207 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ENROLLMENT_START_ENTRY_INTENT } from "@/lib/lifecycle/processEntryPointsV1";
 import { instantiateStageWorkFromTemplate } from "@/lib/lifecycle/instantiateStageWorkFromTemplate";
 import {
     mergeEnrollmentOperationalIntoMetadata,
     sanitizeEnrollmentOperationalPatch,
 } from "@/lib/opportunities/enrollmentOperationalMetadata";
-import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
+import type { FamilyCloseBlockedReason } from "@/lib/lifecycle/familyCloseGuard";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
+import { reconcileBusinessProcessWorkAcrossStageMove } from "@/lib/lifecycle/reconcileBusinessProcessWorkAcrossStageMove";
+import {
+    ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+    createEnrollmentProcessInstance,
+    moveEnrollmentInstanceStageByScope,
+    setEnrollmentInstanceStateByScope,
+    readEnrollmentInstanceState,
+    readEnrollmentInstanceStageKey,
+    PROCESS_INSTANCES_TABLE,
+    type EnrollmentProcessState,
+} from "@/lib/process/processInstances";
+import { assertStageConfigured, loadConfiguredStageInventory } from "@/lib/lifecycle/configuredStageInventory";
+import {
+    assertStageMoveGrainCompatible,
+    resolveStageGrain,
+    type StageMoveGrainError,
+} from "@/lib/lifecycle/stageGrainResolution";
+import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
+import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
+import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
+import { ensureChildEnrollmentTrack } from "@/lib/lifecycle/ensureChildEnrollmentTrack";
+import {
+    ENROLLED_CHILD_STATUS_KEY,
+    ENROLLING_CHILD_STATUS_KEY,
+    isReusableActiveParticipationStatus,
+} from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { emitEvent } from "@/lib/emitEvent";
+// BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
+// inside the enrolled disposition, gated by the childcare feature flag. Target decoupling is a childcare
+// event subscriber on child_lifecycle_status_changed (deferred — see docs/sprints/archive/07_2026/
+// process_instance_enrollment_materialization.md "Boundary: the one platform↔childcare seam").
+import { materializeEnrollmentForChildScope } from "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance";
+import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
+import { stampEnrollmentDateOnProcessInstances } from "@/lib/enrollment/stampEnrollmentDateOnProcessInstances";
+import {
+    assertSingleParticipantWrite,
+    type ParticipantWriteCountFailure,
+} from "@/lib/lifecycle/assertSingleParticipantWrite";
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
-    opportunity_id: string;
+    /**
+     * The acquisition Opportunity, when the subject has one.
+     *
+     * CONTEXT-FREE ENROLLMENT HAS NONE, and absence is `null` — never `""`. This was typed as a
+     * required `string`, which left a caller with no way to say "there is no Opportunity" and
+     * exactly one way to compile: pass the empty string. That is not absence, it is an invalid
+     * uuid, and it travelled through this executor into `.eq()` calls that reported
+     * `invalid input syntax for type uuid: ""` from whichever query reached Postgres first.
+     * Widening the type is the fix; the normalization below stops an older caller re-introducing it.
+     */
+    opportunity_id: string | null;
+    /** Child subject = customer_members.id. Threaded so movement targets the process instance directly. */
+    customer_member_id?: string | null;
+    /** Optional direct process-instance id (most specific child identity). */
+    process_instance_id?: string | null;
+    /** Legacy OCM id (temporary bridge; only used to resolve the child when customer_member_id is absent). */
     opportunity_customer_member_id?: string | null;
     placement_candidate_id?: string | null;
     /** Open lifecycle work task for repeat/reopen automations. */
     work_id?: string | null;
+    /**
+     * Operator-facing name of the participant this write is about, so a refusal can say WHO it is
+     * about instead of quoting an id. Presentation only — never an identity, never used to resolve
+     * a subject, and absence changes no behaviour.
+     */
+    participant_label?: string | null;
 };
+
+/**
+ * Resolve the child subject (customer_members.id) that a child movement targets. Prefers the
+ * identity threaded on the subject (customer_member_id) — NO OCM read. Falls back to an OCM lookup
+ * ONLY for legacy callers that still carry just the OCM id; that fallback is removed with OCM.
+ */
+async function resolveChildSubjectId(
+    supabase: SupabaseClient,
+    orgId: string,
+    subject: StageOutcomeExecutionSubject,
+): Promise<string | null> {
+    const direct = subject.customer_member_id?.trim();
+    if (direct) return direct;
+    const ocmId = subject.opportunity_customer_member_id?.trim();
+    if (!ocmId) return null;
+    // Legacy bridge read: old task/queue payloads carried only the OCM id. Temporary — removed with OCM.
+    const { data } = await supabase
+        .from("opportunity_customer_members")
+        .select("customer_member_id")
+        .eq("id", ocmId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    const id = (data as { customer_member_id?: string } | null)?.customer_member_id;
+    return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
+/**
+ * Resolve the ENROLLMENT PARTICIPATION (`opportunity_customer_members.id`) a child outcome writes.
+ *
+ * This is the durable Enrollment subject, and it is resolved rather than assumed because the id an
+ * outcome is handed differs by caller:
+ *
+ *   1. the subject's own OCM id, when a caller threaded it;
+ *   2. otherwise the child's participation within the acquisition episode, when there is one;
+ *   3. otherwise the child's ACTIVE context-free participation.
+ *
+ * Step 3 is what makes a context-free enrolment work at all. It deliberately asks for a REUSABLE
+ * ACTIVE row, so an outcome can never reach past the live episode and rewrite a concluded one —
+ * enrolling a child this year must not touch the participation they enrolled through last year.
+ */
+async function resolveParticipationIdForSubject(
+    supabase: SupabaseClient,
+    orgId: string,
+    subject: StageOutcomeExecutionSubject,
+    childId: string,
+): Promise<string | null> {
+    const threaded = subject.opportunity_customer_member_id?.trim();
+    if (threaded) return threaded;
+
+    const opportunityId = (subject.opportunity_id ?? "").trim() || null;
+    const { data } = await supabase
+        .from("opportunity_customer_members")
+        .select("id, opportunity_id, outcome_status_key")
+        .eq("org_id", orgId)
+        .eq("customer_member_id", childId);
+    const rows = (data ?? []) as {
+        id: string;
+        opportunity_id: string | null;
+        outcome_status_key: string | null;
+    }[];
+    if (!rows.length) return null;
+
+    if (opportunityId) {
+        const matched = rows.find((r) => r.opportunity_id === opportunityId);
+        if (matched) return matched.id;
+    }
+    const activeContextFree = rows.find(
+        (r) => r.opportunity_id === null && isReusableActiveParticipationStatus(r.outcome_status_key),
+    );
+    return activeContextFree?.id ?? null;
+}
+
+export type ApplyStageOutcomeRuleTargetResult = {
+    error?: string;
+    /** Why a guarded target refused, structured for a command preview to translate. */
+    blocked_reasons?: FamilyCloseBlockedReason[];
+    /** Why a stage move was refused on grain grounds — structured for the same reason. */
+    stage_grain_error?: StageMoveGrainError;
+    /** A participant-scoped write that matched no row, or several. Structured, not just a string. */
+    participant_write_error?: ParticipantWriteCountFailure;
+    needs_attention?: boolean;
+    status_updated?: boolean;
+    /**
+     * Inverse of this target's durable write, for the Platform Transaction Contract's
+     * compensation pass. Present only when the write SUCCEEDED and can be undone; a target
+     * that writes nothing durable returns none.
+     */
+    undo?: () => Promise<void>;
+    /**
+     * A declared out-of-boundary effect that did not run. Reported so the operator learns
+     * about it — the alternative (an empty catch) is what made results untrustworthy.
+     */
+    degraded?: string;
+};
+
+/** Blank optional uuid -> null. Absence is null; "" is an invalid uuid, not an absent one. */
+function blankToNull(value: string | null | undefined): string | null {
+    const trimmed = (value ?? "").trim();
+    return trimmed ? trimmed : null;
+}
+
+/**
+ * Normalize every optional uuid-valued identity on an execution subject.
+ *
+ * Scoped deliberately to this boundary: these are the fields that reach uuid columns on the
+ * Complete Enrollment / stage-outcome path. `journey_segment` and `participant_label` are not
+ * identities and are passed through untouched.
+ */
+export function normalizeSubjectIdentities(
+    subject: StageOutcomeExecutionSubject,
+): StageOutcomeExecutionSubject {
+    return {
+        ...subject,
+        opportunity_id: blankToNull(subject.opportunity_id),
+        customer_member_id: blankToNull(subject.customer_member_id),
+        process_instance_id: blankToNull(subject.process_instance_id),
+        opportunity_customer_member_id: blankToNull(subject.opportunity_customer_member_id),
+        placement_candidate_id: blankToNull(subject.placement_candidate_id),
+        work_id: blankToNull(subject.work_id),
+    };
+}
 
 export async function applyStageOutcomeRuleTarget(
     supabase: SupabaseClient,
@@ -33,47 +216,560 @@ export async function applyStageOutcomeRuleTarget(
         subject: StageOutcomeExecutionSubject;
         target: StageOutcomeRuleTargetV1;
     },
-): Promise<{ error?: string; needs_attention?: boolean; status_updated?: boolean }> {
-    const { orgId, userId, subject, target, plan, stageKey, departmentId } = params;
+): Promise<ApplyStageOutcomeRuleTargetResult> {
+    const { orgId, userId, target, plan, stageKey, departmentId } = params;
+
+    /*
+     * OPTIONAL UUIDS ARE NORMALIZED ONCE, HERE, AT THE BOUNDARY.
+     *
+     * Every optional identity on the subject is a uuid column downstream, and a blank string is
+     * not a uuid. Postgres refuses it with `invalid input syntax for type uuid: ""` — a message
+     * that names the type and not the field, which is why this one survived several layers and
+     * was read as a configuration fault rather than an identity one.
+     *
+     * Absence is `null` from here down. Coercing blanks at the single entry point every target
+     * kind passes through means no individual case has to remember, and a caller still typed
+     * against the old required-string shape cannot reintroduce it.
+     */
+    const subject = normalizeSubjectIdentities(params.subject);
 
     switch (target.kind) {
         case "no_movement":
         case "mark_stage_work_complete":
             return {};
 
+        case "stamp_enrollment_date": {
+            // Tenant-configured paperwork-completion outcome stamps Enrollment Date on
+            // enrollment process_instance(s). Child subject → one instance; family subject → all
+            // children on the lead. Refuses silent overwrite (mergeEnrollmentDateOntoProcessMetadata).
+            const childId = await resolveChildSubjectId(supabase, orgId, subject);
+            const stampResult = await stampEnrollmentDateOnProcessInstances(supabase, {
+                orgId,
+                opportunityId: subject.opportunity_id,
+                customerMemberId: childId,
+                processInstanceId: subject.process_instance_id ?? null,
+                source: "paperwork_completion_outcome",
+                actorUserId: userId,
+            });
+            if (stampResult.error) return { error: stampResult.error };
+            const wroteRows = stampResult.stamped.filter((r) => r.wrote && r.priorMetadata);
+            if (!wroteRows.length) return {};
+            return {
+                undo: async () => {
+                    for (const row of wroteRows) {
+                        const { error: undoErr } = await supabase
+                            .from(PROCESS_INSTANCES_TABLE)
+                            .update({
+                                metadata: row.priorMetadata,
+                                updated_at: new Date().toISOString(),
+                            })
+                            .eq("id", row.processInstanceId)
+                            .eq("org_id", orgId);
+                        if (undoErr) {
+                            throw new Error(
+                                `restore enrollment date on ${row.processInstanceId}: ${undoErr.message}`,
+                            );
+                        }
+                    }
+                },
+            };
+        }
+
         case "update_family_case_status": {
             const statusKey = target.status_key?.trim();
             if (!statusKey) return { error: "Missing family case status key" };
+            const closeReasonKey = target.close_reason_key?.trim();
+
+            /*
+             * THE FAMILY CASE IS THE OPPORTUNITY. With none, this target has no subject.
+             *
+             * `opportunity_id` became `string | null` so a context-free caller could state absence
+             * instead of encoding it as `""`. This target then still read it as a `string`, and the
+             * two paths below — the close guard's enumeration and the status write — would both
+             * have carried a null into an `.eq()` on a uuid column.
+             *
+             * Refusing here, by name, is the honest answer and the one the executor already gives
+             * for every other unsatisfiable target. Letting it fall through to the guard would have
+             * produced `child_track_enumeration_failed` instead, which says the guard could not see
+             * the children — when the truth is that there is no family case to close.
+             */
+            const familyCaseId = subject.opportunity_id;
+            if (!familyCaseId) {
+                return { error: "update_family_case_status needs a family case, and this subject has none" };
+            }
+
+            /**
+             * A family case cannot close out from under its children.
+             *
+             * The guard lives on the target executor because outcome rules, status-entry automation
+             * and domain-signal automation all resolve here; guarding only a command would leave
+             * every configured rule free to close a family with a waitlisted or enrolled child still
+             * riding on it. It is the SAME rule (`familyCloseRefusal`) the command paths that write
+             * case status directly now ask (E2E-09), so no path closes a family another refuses.
+             *
+             * Only closes are guarded. A write that leaves the case open is untouched, so
+             * `reached_qualified` (status `open`) never pays for this.
+             */
+            const refusal = await familyCloseRefusal(supabase, {
+                orgId,
+                opportunityId: familyCaseId,
+                targetStatusKey: statusKey,
+            });
+            if (refusal) {
+                // Nothing has been written, so there is nothing to compensate — the surrounding
+                // transaction aborts clean. The structured reasons travel out for the command layer
+                // to turn into operator language and a named preview.
+                return refusal;
+            }
+
+            // Read the prior value BEFORE the write so the transaction has an inverse.
+            const { data: priorStatus } = await supabase
+                .from("opportunities")
+                .select("status_key, close_reason_key")
+                .eq("id", familyCaseId)
+                .eq("org_id", orgId)
+                .maybeSingle();
             const res = await updateOpportunityStatusWithEvent({
                 supabase,
                 orgId,
-                opportunityId: subject.opportunity_id,
+                opportunityId: familyCaseId,
                 newStatusKey: statusKey,
                 actorUserId: userId,
                 normalizeContext: "stage_operating_plan_outcome",
+                // Persist close reason alongside the durable status (S4 collapse).
+                ...(closeReasonKey ? { additionalPatch: { close_reason_key: closeReasonKey } } : {}),
                 eventMetadata: { source: "stage_operating_plan_v1", stage_key: stageKey },
             });
             if (res.error) return { error: res.error.message };
-            return { status_updated: true };
+            return {
+                status_updated: true,
+                undo:
+                    priorStatus ?
+                        async () => {
+                            // Direct restore, not a second status EVENT: the transaction is being
+                            // unwound, so the forward transition never truthfully happened.
+                            const { error } = await supabase
+                                .from("opportunities")
+                                .update({
+                                    status_key: (priorStatus as { status_key?: string | null }).status_key ?? null,
+                                    close_reason_key:
+                                        (priorStatus as { close_reason_key?: string | null }).close_reason_key ?? null,
+                                    updated_at: new Date().toISOString(),
+                                })
+                                .eq("id", subject.opportunity_id)
+                                .eq("org_id", orgId);
+                            if (error) throw new Error(`restore family case status: ${error.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
         case "update_child_enrollment_status": {
-            const dispositionKey = target.disposition_key?.trim();
-            const ocmId = subject.opportunity_customer_member_id?.trim();
-            if (!dispositionKey || !ocmId) {
-                return { error: "Child enrollment track required for disposition update" };
+            /*
+             * `status_key` IS a disposition here, under its other authored name.
+             *
+             * The target schema declares both `disposition_key` and `status_key` as optional fields
+             * on this kind, and the parser preserves whichever was authored — so
+             * `{ kind: "update_child_enrollment_status", status_key: "enrolling" }` is
+             * schema-valid configuration. The executor read only the first, which made that config
+             * validate and then refuse: an operator could publish a Waitlist plan whose Spot offered
+             * rule could never run.
+             *
+             * Found by running it. The deployed tenant's `spot_offered` rule authors `status_key`,
+             * so recording the offer outcome aborted with "Child enrollment disposition required"
+             * after the stage move had already been applied — the transaction unwound correctly, and
+             * the outcome was simply unreachable.
+             *
+             * Reading both loosens nothing: they name the same child disposition, and an unnamed
+             * one is still refused below.
+             */
+            const dispositionKey = target.disposition_key?.trim() || target.status_key?.trim();
+            if (!dispositionKey) return { error: "Child enrollment disposition required" };
+            // Resolve the child from the threaded identity (no OCM read on the primary path).
+            const childId = await resolveChildSubjectId(supabase, orgId, subject);
+            if (!childId) return { error: "Could not resolve child for enrollment state update" };
+            // Prior state (from process_instances, not OCM) for the transition event.
+            /*
+             * The write REPORTS the row it touched, and the compensation names that row.
+             *
+             * Re-deriving it would break the undo: by then the journey is `enrolled`, which is
+             * CONCLUDED, so the live-journey predicate would no longer match it and the
+             * compensation would silently restore nothing while reporting a clean abort.
+             */
+            const journeyInstanceId = subject.process_instance_id ?? null;
+
+            const prevState = await readEnrollmentInstanceState(supabase, {
+                orgId,
+                opportunityId: subject.opportunity_id,
+                customerMemberId: childId,
+                processInstanceId: journeyInstanceId,
+            });
+            // Authoritative writer: the child's process instance owns durable state + close reason.
+            // The OCM durable enrollment-status column is NOT written — process_instances is the
+            // single source of truth for child participation state.
+            const closeReasonKey = target.close_reason_key?.trim() || undefined;
+            const pi = await setEnrollmentInstanceStateByScope(supabase, {
+                orgId,
+                opportunityId: subject.opportunity_id,
+                customerMemberId: childId,
+                state: dispositionKey as EnrollmentProcessState,
+                closeReasonKey,
+                processInstanceId: journeyInstanceId,
+            });
+            // The exact row the write landed on — the compensation must not re-derive it.
+            const writtenInstanceId = journeyInstanceId ?? pi.instanceId ?? null;
+            if (pi.error) return { error: pi.error };
+
+            /*
+             * A WRITE THAT TOUCHED NOTHING IS NOT A SUCCESS.
+             *
+             * `setEnrollmentInstanceStateByScope` already reports what it did — `moved: 0` when it
+             * resolved no journey, `moved: 2` when duplicates make the target ambiguous — and its own
+             * comment says the caller's single-write assertion is what refuses those. That assertion
+             * was missing: only `pi.error` was checked, so a target that matched zero rows returned a
+             * clean success and the outcome reported no failed targets while changing nothing.
+             *
+             * That is how a child could be "enrolled" by an operator, with every surface reporting
+             * the action succeeded, while the durable state never moved.
+             *
+             * STRICT FOR `enrolled` ONLY. Making every disposition strict was tried earlier in this
+             * program and broke governed family close and participant decisions, which legitimately
+             * run against journeys this scope does not resolve. `enrolled` is the one disposition
+             * that must never be silently skipped: it is the terminal, operator-owned decision the
+             * whole gate exists to protect. The others keep their established declarative semantics.
+             */
+            if (dispositionKey === ENROLLED_CHILD_STATUS_KEY) {
+                if (pi.moved === 0) {
+                    return {
+                        error:
+                            "Enrollment was not completed: no Enrollment journey matched this child, so nothing was "
+                            + "updated. Nothing has changed.",
+                    };
+                }
+                if (pi.moved > 1) {
+                    return {
+                        error:
+                            `Enrollment was not completed: ${pi.moved} Enrollment journeys matched this child, so it `
+                            + "is not clear which one to enrol. Nothing has changed.",
+                    };
+                }
             }
-            const res = await updateOpportunityCustomerMemberLifecycleStatus({
+
+            const degradedEffects: string[] = [];
+            let undoChildState = async () => {
+                const restored = await setEnrollmentInstanceStateByScope(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                    state: (prevState ?? null) as EnrollmentProcessState,
+                    processInstanceId: writtenInstanceId,
+                });
+                if (restored.error) throw new Error(`restore child enrollment state: ${restored.error}`);
+            };
+
+            // A scope-targeted update that matched no row, or several, is not a success. Checked
+            // before anything downstream (events, placement, materialization) treats it as one.
+            //
+            // The inverse travels WITH the failure when rows were actually written: `moved > 1`
+            // means the ambiguous scope already wrote to every matched row, so the transaction must
+            // be able to unwind them. `moved === 0` wrote nothing, so there is nothing to undo and
+            // offering one would only invent a write.
+            const stateWrite = assertSingleParticipantWrite({
+                moved: pi.moved,
+                operation: "enrollment path",
+                participantLabel: subject.participant_label,
+            });
+            if (!stateWrite.ok) {
+                return {
+                    error: stateWrite.failure.message,
+                    participant_write_error: stateWrite.failure,
+                    ...(stateWrite.failure.moved > 1 ? { undo: undoChildState } : {}),
+                };
+            }
+
+            /*
+             * ── THE DURABLE CHILD ENROLLMENT STATE, WRITTEN WHERE IT LIVES ──
+             *
+             * There are two owners here and they are complementary, not competing:
+             *
+             *   ENROLLMENT PARTICIPATION (OCM)  durable child Enrollment state — outcome_status_key
+             *   PROCESS INSTANCE                execution/process lifecycle state
+             *
+             * The process-instance write above is the second of those. Until now it was the ONLY
+             * one, so a child who completed Enrollment kept a participation reading `enrolling`
+             * forever — the durable answer to "is this child enrolled?" never changed, and because
+             * the episode could never conclude, its context-free slot stayed pinned open and the
+             * child could never start a second enrollment.
+             *
+             * The write goes through `updateOpportunityCustomerMemberLifecycleStatus`, the canonical
+             * writer, rather than patching the column here: that module owns status validation, the
+             * lifecycle event and the waitlist placement hook, and a second writer of the child's
+             * durable state is the duplication this converges away. It emits the lifecycle event
+             * itself, so the direct emit below runs ONLY when the canonical write did not — never
+             * both, or every subscribed workflow fires twice.
+             *
+             * ── WHY `enrolled` IS STRICT AND THE OTHERS ARE NOT ──
+             *
+             * For `enrolled` the durable write IS the outcome. Reporting success without it would
+             * tell an operator a child is enrolled while the record answering that question says
+             * otherwise, so it fails the target and compensates.
+             *
+             * The other dispositions are governed flows that predate this and never depended on an
+             * OCM write — family close, waitlist, withdraw. Making their success newly conditional
+             * on resolving a participation would break closes that work today, for a consistency
+             * benefit they were not asking for. They attempt the write and DECLARE it when it does
+             * not land, which is this executor's existing contract for a downstream effect.
+             */
+            const statusChanged = prevState !== dispositionKey;
+            const enrollmentIsThePoint = dispositionKey === "enrolled";
+            let lifecycleEventEmitted = false;
+
+            if (statusChanged) {
+                const ocmId = await resolveParticipationIdForSubject(supabase, orgId, subject, childId);
+
+                if (!ocmId) {
+                    if (enrollmentIsThePoint) {
+                        return {
+                            error:
+                                "Could not resolve this child's Enrollment participation, so their "
+                                + "durable enrollment status was not updated.",
+                            undo: undoChildState,
+                        };
+                    }
+                    degradedEffects.push("child enrollment status not updated: no participation resolved");
+                } else {
+                    /*
+                     * THROWS ARE CAUGHT, not allowed to escape. The canonical writer validates the
+                     * status against the org's catalog, and that resolver reaches `createAdminClient`
+                     * — a server-only dependency on a path this executor is otherwise given an
+                     * injected client for. An exception escaping here would abandon the outcome
+                     * mid-flight with the process-instance write already committed and no
+                     * compensation offered, which is strictly worse than a reported failure.
+                     */
+                    const lifecycle = await updateOpportunityCustomerMemberLifecycleStatus({
+                        supabase,
+                        orgId,
+                        // Optional acquisition context. Null is an ordinary context-free participation.
+                        opportunityId: (subject.opportunity_id ?? "").trim() || null,
+                        opportunityCustomerMemberId: ocmId,
+                        nextStatusKey: dispositionKey,
+                        actorUserId: userId,
+                        source: "stage_operating_plan_v1",
+                        rowGrain: "child",
+                        childDisplayName: subject.participant_label ?? null,
+                    } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]).catch(
+                        (e: unknown) => ({
+                            error: { message: e instanceof Error ? e.message : String(e) },
+                        }) as Awaited<ReturnType<typeof updateOpportunityCustomerMemberLifecycleStatus>>,
+                    );
+
+                    if (lifecycle.error) {
+                        if (enrollmentIsThePoint) {
+                            return {
+                                error: `Child enrollment status was not updated: ${lifecycle.error.message}`,
+                                undo: undoChildState,
+                            };
+                        }
+                        degradedEffects.push(`child enrollment status not updated: ${lifecycle.error.message}`);
+                    } else {
+                        lifecycleEventEmitted = lifecycle.eventEmitted;
+                        const restoredStatus = lifecycle.before.outcome_status_key;
+                        const undoProcessState = undoChildState;
+                        undoChildState = async () => {
+                            await undoProcessState();
+                            await updateOpportunityCustomerMemberLifecycleStatus({
+                                supabase,
+                                orgId,
+                                opportunityId: (subject.opportunity_id ?? "").trim() || null,
+                                opportunityCustomerMemberId: ocmId,
+                                nextStatusKey: restoredStatus,
+                                actorUserId: userId,
+                                source: "stage_operating_plan_v1_compensation",
+                                rowGrain: "child",
+                            } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]);
+                        };
+                    }
+                }
+            }
+
+            const ocmBridgeId = subject.opportunity_customer_member_id?.trim() ?? null;
+            // The event, when the canonical writer did not already emit it. Keyed on the OCM id so
+            // existing workflow subscriptions (entity_type=opportunity_customer_members) keep firing.
+            if (ocmBridgeId && statusChanged && !lifecycleEventEmitted) {
+                try {
+                    await emitChildLifecycleStatusChangedEvent({
+                        supabase,
+                        orgId,
+                        opportunityId: subject.opportunity_id,
+                        opportunityCustomerMemberId: ocmBridgeId,
+                        previousStatusKey: prevState,
+                        nextStatusKey: dispositionKey,
+                        actorUserId: userId,
+                        source: "stage_operating_plan_v1",
+                        rowGrain: "child",
+                        childDisplayName: subject.participant_label ?? null,
+                    });
+                } catch (e) {
+                    // Declared downstream effect: the state transition stands, but the operator
+                    // is told the event did not fire rather than it being logged and forgotten.
+                    console.error("[stageOutcomeRuleTargetExecutor] child lifecycle event", e);
+                    degradedEffects.push(
+                        `child lifecycle event not emitted: ${e instanceof Error ? e.message : String(e)}`,
+                    );
+                }
+            }
+
+            // Enrollment completion → materialize durable operational truth (agreement + placement +
+            // schedule assignment). The process produces the facts; it does not own them. Non-blocking
+            // and idempotent — a failure here must not roll back the state transition (retryable).
+            if (dispositionKey === "enrolled" && (await isChildcareOperationalEnrollmentV1EnabledForOrg(supabase, orgId))) {
+                /*
+                 * MATERIALIZATION IS OPPORTUNITY-SCOPED; THE STATE TRANSITION IS NOT.
+                 *
+                 * `update_child_enrollment_status` is child-grain and must succeed for a
+                 * context-free child — it is one of the three targets that were already applying
+                 * correctly while the outcome reported failure. Only this trailing step needs an
+                 * Opportunity, and it is already declared non-blocking and retryable.
+                 *
+                 * So absence is recorded as a degraded effect, exactly like a materialization that
+                 * throws, rather than being refused (which would roll back a durable enrolment) or
+                 * passed through as null (which is what reached Postgres as an invalid uuid).
+                 */
+                const materializeScopeId = subject.opportunity_id;
+                if (!materializeScopeId) {
+                    degradedEffects.push(
+                        "enrollment materialization did not run: this child has no acquisition episode to materialize against",
+                    );
+                } else {
+                    try {
+                        await materializeEnrollmentForChildScope(supabase, {
+                            orgId,
+                            opportunityId: materializeScopeId,
+                            customerMemberId: childId,
+                            userId,
+                        });
+                    } catch (e) {
+                        console.error("[stageOutcomeRuleTargetExecutor] enrollment materialization", e);
+                        degradedEffects.push(
+                            `enrollment materialization did not run: ${e instanceof Error ? e.message : String(e)}`,
+                        );
+                    }
+                }
+            }
+            return {
+                status_updated: true,
+                undo: undoChildState,
+                degraded: degradedEffects.length ? degradedEffects.join("; ") : undefined,
+            };
+        }
+
+        case "enter_child_enrollment": {
+            /*
+             * THE ACQUISITION → ENROLLMENT HANDOFF, at the child grain.
+             *
+             * The family outcome has decided the family is proceeding. This begins the CHILD's
+             * Enrollment execution: durable child status, and one journey anchored to that child's
+             * participation.
+             *
+             * IT DOES NOT NAME THE ENTRY STAGE. `process_instances.stage_key` stays NULL at creation
+             * by design, and `resolveEffectiveStageKey` governs an unmoved journey by the stage the
+             * tenant DECLARED for its intent in `entry_points_v1`. Stamping a stage key here would
+             * always win over that declaration, which is how this path came to sit on a stage the
+             * tenant had configured no requirements on while Start Enrollment -- which stamps
+             * nothing -- realized its objective. One Enrollment product, one declared entry stage,
+             * two ways in.
+             *
+             * IT REFUSES RATHER THAN GUESSING WHICH CHILDREN. `family_enrolling` carries no per-child
+             * disposition, and a household's children genuinely diverge — one enrols, one waitlists.
+             * Advancing all of them because the family said yes would be inventing bulk advancement
+             * the operator never expressed. So: exactly one candidate proceeds; zero or several
+             * refuses and says which, and the operator records per-child decisions instead.
+             */
+            const threadedChildId = subject.customer_member_id?.trim() || null;
+            let childIds: string[] = threadedChildId ? [threadedChildId] : [];
+            if (!childIds.length) {
+                // No child threaded: the children this acquisition episode actually carries.
+                const { data, error } = await supabase
+                    .from("opportunity_customer_members")
+                    .select("customer_member_id")
+                    .eq("org_id", orgId)
+                    .eq("opportunity_id", subject.opportunity_id);
+                if (error) return { error: `Could not resolve this family's children: ${error.message}` };
+                childIds = [
+                    ...new Set(
+                        ((data ?? []) as Array<{ customer_member_id?: string }>)
+                            .map((r) => (r.customer_member_id ?? "").trim())
+                            .filter(Boolean),
+                    ),
+                ];
+            }
+
+            if (childIds.length === 0) {
+                return {
+                    error:
+                        "No child on this family is ready to enter Enrollment, so there is nothing to "
+                        + "begin. Add the child to the lead first.",
+                };
+            }
+            if (childIds.length > 1) {
+                return {
+                    error:
+                        `This family has ${childIds.length} children and the decision does not say which `
+                        + "are enrolling. Record the decision per child rather than moving them together.",
+                };
+            }
+
+            const childId = childIds[0]!;
+            const participation = await ensureOpportunityCustomerMemberParticipation({
                 supabase,
                 orgId,
                 opportunityId: subject.opportunity_id,
-                opportunityCustomerMemberId: ocmId,
-                nextStatusKey: dispositionKey,
-                actorUserId: userId,
-                source: "stage_operating_plan_v1",
-                rowGrain: "child",
+                customerMemberId: childId,
+                source: "family_enrollment_decision",
+                outcomeStatusKey: ENROLLING_CHILD_STATUS_KEY,
             });
-            if (res.error) return { error: res.error.message };
+
+            // Durable child Enrollment status, through the canonical writer (audit + event parity).
+            const lifecycle = await updateOpportunityCustomerMemberLifecycleStatus({
+                supabase,
+                orgId,
+                opportunityId: (subject.opportunity_id ?? "").trim() || null,
+                opportunityCustomerMemberId: participation.ocmId,
+                nextStatusKey: ENROLLING_CHILD_STATUS_KEY,
+                actorUserId: userId,
+                source: "family_enrollment_decision",
+                rowGrain: "child",
+            } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]).catch((e: unknown) => ({
+                error: { message: e instanceof Error ? e.message : String(e) },
+            }) as Awaited<ReturnType<typeof updateOpportunityCustomerMemberLifecycleStatus>>);
+            if (lifecycle.error) {
+                return { error: `Child enrollment status was not updated: ${lifecycle.error.message}` };
+            }
+
+            /*
+             * ONE journey, anchored to the participation, at the DECLARED entry stage.
+             *
+             * `source` here is the process ENTRY INTENT, not audit provenance -- it is what
+             * `resolveEffectiveStageKey` reads back to find the declared stage. A family deciding to
+             * enrol a child IS an enrollment start, so it carries the same intent Start Enrollment
+             * carries and lands on the same configured stage. (The OCM ensure and the lifecycle
+             * writer above keep `family_enrollment_decision`: those are audit source, where saying
+             * how this child got here is the whole point.)
+             */
+            const journey = await createEnrollmentProcessInstance(supabase, {
+                orgId,
+                subjectId: childId,
+                contextId: participation.ocmId,
+                contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+                acquisitionOpportunityId: subject.opportunity_id,
+                stageKey: null,
+                state: null,
+                source: ENROLLMENT_START_ENTRY_INTENT,
+            });
+            if (journey.error) {
+                return { error: `Could not begin this child's Enrollment: ${journey.error}` };
+            }
+
             return { status_updated: true };
         }
 
@@ -83,13 +779,35 @@ export async function applyStageOutcomeRuleTarget(
             if (!candidateId || !candidateStatus) {
                 return { error: "Waitlist candidate required for candidate status update" };
             }
+            const { data: priorCandidate } = await supabase
+                .from("placement_candidates")
+                .select("status")
+                .eq("id", candidateId)
+                .eq("org_id", orgId)
+                .maybeSingle();
             const { error } = await supabase
                 .from("placement_candidates")
                 .update({ status: candidateStatus, updated_at: new Date().toISOString() })
                 .eq("id", candidateId)
                 .eq("org_id", orgId);
             if (error) return { error: error.message };
-            return { status_updated: true };
+            return {
+                status_updated: true,
+                undo:
+                    priorCandidate ?
+                        async () => {
+                            const { error: undoErr } = await supabase
+                                .from("placement_candidates")
+                                .update({
+                                    status: (priorCandidate as { status?: string | null }).status ?? null,
+                                    updated_at: new Date().toISOString(),
+                                })
+                                .eq("id", candidateId)
+                                .eq("org_id", orgId);
+                            if (undoErr) throw new Error(`restore candidate status: ${undoErr.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
         case "create_needs_attention": {
@@ -118,7 +836,18 @@ export async function applyStageOutcomeRuleTarget(
                 .eq("id", subject.opportunity_id)
                 .eq("org_id", orgId);
             if (upErr) return { error: upErr.message };
-            return { needs_attention: true };
+            return {
+                needs_attention: true,
+                undo: async () => {
+                    // Restore the metadata document captured before the merge.
+                    const { error: undoErr } = await supabase
+                        .from("opportunities")
+                        .update({ metadata, updated_at: new Date().toISOString() })
+                        .eq("id", subject.opportunity_id)
+                        .eq("org_id", orgId);
+                    if (undoErr) throw new Error(`restore needs-attention metadata: ${undoErr.message}`);
+                },
+            };
         }
 
         case "create_next_work": {
@@ -126,25 +855,64 @@ export async function applyStageOutcomeRuleTarget(
             if (!templateKey) return { error: "Missing work template key" };
             const workTpl = plan.work_templates.find((t) => t.template_key === templateKey);
             if (!workTpl) return { error: `Unknown work template: ${templateKey}` };
+            /*
+             * Stage work hangs off the Opportunity, so there is nowhere to hang it without one.
+             * Named refusal for the same reason as `update_family_case_status`: the executor
+             * reports failed targets by name, and "create_next_work" is a far more useful answer
+             * than the uuid-syntax error a null produced one layer down.
+             */
+            const nextWorkScopeId = subject.opportunity_id;
+            if (!nextWorkScopeId) {
+                return { error: "create_next_work needs an acquisition episode, and this subject has none" };
+            }
             const result = await instantiateStageWorkFromTemplate({
                 supabase,
                 orgId,
                 userId,
-                opportunityId: subject.opportunity_id,
+                opportunityId: nextWorkScopeId,
                 stageKey,
                 departmentId,
                 template: workTpl,
                 dueDaysOverride: target.due_days,
+                followUpDuePolicy: target.follow_up_due_policy ?? null,
+                // Follow-up for a child is that child's work, not a sibling's to share.
+                childSubject:
+                    subject.journey_segment === "child" && subject.customer_member_id?.trim()
+                        ? {
+                              customerMemberId: subject.customer_member_id.trim(),
+                              processInstanceId: subject.process_instance_id ?? null,
+                          }
+                        : null,
             });
             if (result.status === "rejected") {
                 return { error: result.error };
             }
-            return {};
+            return {
+                // Only a freshly CREATED work item is ours to remove; a deduped result matched
+                // work that already existed and must survive the rollback.
+                undo:
+                    result.status === "created" ?
+                        async () => {
+                            const { error: undoErr } = await supabase
+                                .from("operational_tasks")
+                                .delete()
+                                .eq("id", result.work_id)
+                                .eq("org_id", orgId);
+                            if (undoErr) throw new Error(`remove spawned work ${result.work_id}: ${undoErr.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
         case "reopen_work": {
             const workId = subject.work_id?.trim();
             if (!workId) return { error: "Open work required to repeat work item" };
+            const { data: priorWork } = await supabase
+                .from("operational_tasks")
+                .select("status, due_at")
+                .eq("id", workId)
+                .eq("org_id", orgId)
+                .maybeSingle();
             const dueDays =
                 typeof target.due_days === "number" && Number.isFinite(target.due_days) ?
                     Math.max(0, Math.floor(target.due_days))
@@ -156,11 +924,294 @@ export async function applyStageOutcomeRuleTarget(
                 dueDays,
             });
             if (!reopened.ok) return { error: reopened.error };
-            return {};
+            return {
+                undo:
+                    priorWork ?
+                        async () => {
+                            const prior = priorWork as { status?: string | null; due_at?: string | null };
+                            const { error: undoErr } = await supabase
+                                .from("operational_tasks")
+                                .update({
+                                    status: prior.status ?? null,
+                                    due_at: prior.due_at ?? null,
+                                    updated_at: new Date().toISOString(),
+                                })
+                                .eq("id", workId)
+                                .eq("org_id", orgId);
+                            if (undoErr) throw new Error(`restore work ${workId}: ${undoErr.message}`);
+                        }
+                    :   undefined,
+            };
         }
 
-        case "move_to_stage":
-            return {};
+        case "move_to_stage": {
+            const targetStageKey =
+                target.stage_key?.trim()
+                ?? (target.transition_ref?.startsWith("move_to_stage:")
+                    ? target.transition_ref.slice("move_to_stage:".length).trim()
+                    : null);
+            if (!targetStageKey) return { error: "Missing target stage key" };
+
+            // CANONICAL STAGE-MOVE GUARD (Configured Stage Referential Integrity).
+            // The destination must exist in the subject's current configured Business Process.
+            // This is the single chokepoint every stage-move caller inherits — outcome rules,
+            // status-entry automation, domain-signal automation and transition execution all
+            // resolve to this target executor. A non-configured target is a configuration error:
+            // no write happens, so the surrounding transaction aborts with nothing to compensate.
+            const inventory = await loadConfiguredStageInventory(supabase, orgId, departmentId);
+            const membership = assertStageConfigured(inventory, targetStageKey);
+            if (!membership.ok) {
+                return { error: membership.error.message };
+            }
+
+            /**
+             * GRAIN GUARD. Configured-and-existing is not the same as configured-and-compatible:
+             * the family case and each child's enrollment move on their own tracks, and until now
+             * nothing stopped a child outcome writing a family stage or the reverse.
+             *
+             * Placed here, above every branch below, so it covers both writers. The destination's
+             * own operating plan is not loaded on this path — `plan` is the SOURCE stage's — so
+             * the resolver weighs the canonical vocabulary against the configured metadata and
+             * refuses when they disagree rather than picking one.
+             */
+            const destinationGrain = resolveStageGrain({
+                stageKey: targetStageKey,
+                configuredMetadataGrain: inventory.stageGrainsByKey[targetStageKey],
+            });
+            const grainCheck = assertStageMoveGrainCompatible({
+                subjectGrain: subject.journey_segment,
+                destination: destinationGrain,
+            });
+            if (!grainCheck.ok) {
+                // No write has happened, so the transaction aborts with nothing to compensate.
+                return { error: grainCheck.error.message, stage_grain_error: grainCheck.error };
+            }
+
+            const nowIso = new Date().toISOString();
+            let undoStageMove: (() => Promise<void>) | undefined;
+            let stageMovePreviousKey: string | null = null;
+            let stageMoveChildId: string | null = null;
+            let stageMoveJourneyId: string | null = null;
+            if (subject.journey_segment === "child") {
+                // Authoritative + only writer: the child's process instance owns stage_key.
+                // (The OCM stage_key mirror write was removed — OCM is no longer a runtime dependency
+                // for child movement.)
+                const childId = await resolveChildSubjectId(supabase, orgId, subject);
+                if (!childId) return { error: "Child enrollment track required for move_to_stage" };
+                stageMoveChildId = childId;
+
+                /*
+                 * ── THE GRAIN CROSSING THAT BEGINS THE CHILD TRACK ──
+                 *
+                 * A child riding the family segment (`lead`, `tour`, `decision`) has no process
+                 * instance, because until now they have had no position of their own to record.
+                 * This is the moment that changes: the destination has already passed the grain
+                 * guard above, so it IS a child-grain stage, and the child is about to stand in it.
+                 *
+                 * Without this the move found nothing to write and returned `moved: 0`, which the
+                 * single-write assertion below correctly refused — "no enrollment track was found
+                 * for them on this lead". Every legitimate first waitlisting from Lead failed there,
+                 * having already written the disposition and minted a placement candidate, which is
+                 * the half-recorded state this whole seam exists to prevent.
+                 *
+                 * Placed HERE deliberately, not in each caller. This branch is the single chokepoint
+                 * every stage-move path inherits — outcome rules, status-entry automation, the
+                 * manual transition and the waitlist command all resolve to it — so the boundary is
+                 * defined once and cannot be reached around. It is also AFTER the referential-
+                 * integrity and grain guards, so a destination that is not configured, or not
+                 * child-grain, still refuses without a track ever being created.
+                 *
+                 * Nothing is created for a child that already has one, and nothing is created at a
+                 * fabricated starting stage: the track begins with `stage_key` null and the move
+                 * immediately below writes the operator's actual destination.
+                 */
+                const track = await ensureChildEnrollmentTrack(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                    opportunityCustomerMemberId: subject.opportunity_customer_member_id ?? null,
+                });
+                if (!track.ok) return { error: track.error };
+                // The move reports the row it touched; the compensation names that row rather than
+                // re-deriving it under a predicate the move itself may have changed.
+                const stageInstanceId = subject.process_instance_id ?? null;
+                const priorStage = await readEnrollmentInstanceStageKey(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                    processInstanceId: stageInstanceId,
+                });
+                stageMovePreviousKey = priorStage;
+                const pi = await moveEnrollmentInstanceStageByScope(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                    stageKey: targetStageKey,
+                    processInstanceId: stageInstanceId,
+                });
+                if (pi.error) return { error: pi.error };
+                const movedInstanceId = stageInstanceId ?? pi.instanceId ?? null;
+                stageMoveJourneyId = movedInstanceId ?? track.instanceId ?? null;
+                if (priorStage != null) {
+                    undoStageMove = async () => {
+                        const restored = await moveEnrollmentInstanceStageByScope(supabase, {
+                            orgId,
+                            opportunityId: subject.opportunity_id,
+                            customerMemberId: childId,
+                            stageKey: priorStage,
+                            processInstanceId: movedInstanceId,
+                        });
+                        if (restored.error) throw new Error(`restore child stage: ${restored.error}`);
+                    };
+                }
+                // Same contract as the state write: 1 succeeds, 0 fails, >1 is an integrity
+                // failure that carries its inverse out so the transaction can unwind it.
+                const stageWrite = assertSingleParticipantWrite({
+                    moved: pi.moved,
+                    operation: "stage move",
+                    participantLabel: subject.participant_label,
+                });
+                if (!stageWrite.ok) {
+                    return {
+                        error: stageWrite.failure.message,
+                        participant_write_error: stageWrite.failure,
+                        ...(stageWrite.failure.moved > 1 && undoStageMove ? { undo: undoStageMove } : {}),
+                    };
+                }
+            } else {
+                const { data: priorOpp } = await supabase
+                    .from("opportunities")
+                    .select("stage_key, stage_entered_at")
+                    .eq("id", subject.opportunity_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
+                const prior = priorOpp as {
+                    stage_key?: string | null;
+                    stage_entered_at?: string | null;
+                } | null;
+                stageMovePreviousKey = prior?.stage_key?.trim() || null;
+                const { error } = await supabase
+                    .from("opportunities")
+                    .update({ stage_key: targetStageKey, stage_entered_at: nowIso, updated_at: nowIso })
+                    .eq("id", subject.opportunity_id)
+                    .eq("org_id", orgId);
+                if (error) return { error: error.message };
+                if (prior) {
+                    undoStageMove = async () => {
+                        const { error: undoErr } = await supabase
+                            .from("opportunities")
+                            .update({
+                                stage_key: prior.stage_key ?? null,
+                                stage_entered_at: prior.stage_entered_at ?? null,
+                                updated_at: new Date().toISOString(),
+                            })
+                            .eq("id", subject.opportunity_id)
+                            .eq("org_id", orgId);
+                        if (undoErr) throw new Error(`restore family stage: ${undoErr.message}`);
+                    };
+                }
+            }
+
+            // Activity timeline: stage moves historically wrote no workflow_event, so
+            // What's Next / Activity never showed "Lead → Waitlist". Prefer the OCM-scoped
+            // child lifecycle event when the bridge exists (workflows + related activity fetch);
+            // otherwise emit on the opportunity entity so opportunity activity loaders see it.
+            if ((stageMovePreviousKey ?? "").trim() !== targetStageKey) {
+                try {
+                    const ocmBridgeId = subject.opportunity_customer_member_id?.trim() || null;
+                    let emitted = false;
+                    if (subject.journey_segment === "child" && ocmBridgeId) {
+                        const row = await emitChildLifecycleStatusChangedEvent({
+                            supabase,
+                            orgId,
+                            opportunityId: subject.opportunity_id,
+                            opportunityCustomerMemberId: ocmBridgeId,
+                            previousStatusKey: stageMovePreviousKey,
+                            nextStatusKey: targetStageKey,
+                            actorUserId: userId,
+                            source: "stage_operating_plan_v1",
+                            rowGrain: "child",
+                            childDisplayName: subject.participant_label ?? null,
+                        });
+                        emitted = Boolean(row);
+                    }
+                    if (!emitted) {
+                        await emitEvent({
+                            org_id: orgId,
+                            event_type:
+                                subject.journey_segment === "child"
+                                    ? "child_lifecycle_status_changed"
+                                    : "opportunity_status_changed",
+                            entity_type: "opportunities",
+                            entity_id: subject.opportunity_id,
+                            occurred_at: nowIso,
+                            payload: {
+                                opportunity_id: subject.opportunity_id,
+                                previous_status_key: stageMovePreviousKey,
+                                next_status_key: targetStageKey,
+                                old_status_key: stageMovePreviousKey,
+                                new_status_key: targetStageKey,
+                                source: "stage_operating_plan_v1",
+                                row_grain: subject.journey_segment,
+                                ...(stageMoveChildId ? { customer_member_id: stageMoveChildId } : {}),
+                                ...(ocmBridgeId ? { opportunity_customer_member_id: ocmBridgeId } : {}),
+                                ...(subject.journey_segment === "child" && subject.participant_label
+                                    ? { child_display_name: subject.participant_label }
+                                    : {}),
+                                ...(userId ? { actor_user_id: userId } : {}),
+                            },
+                        });
+                    }
+                } catch (e) {
+                    // Do not roll back a completed stage move for activity emission failure.
+                    console.error("[stageOutcomeRuleTargetExecutor] stage move activity event", e);
+                }
+            }
+
+            // Stage membership changes first; then reconcile work across the move.
+            // Declared OUTSIDE the boundary: a failed reconciliation must not roll back a stage
+            // move the operator completed — but it is REPORTED, never swallowed.
+            let spawnDegraded: string | undefined;
+            try {
+                const { data: deptRow } = await supabase
+                    .from("departments")
+                    .select("metadata")
+                    .eq("id", departmentId)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
+                const departmentMetadata =
+                    deptRow?.metadata != null
+                    && typeof deptRow.metadata === "object"
+                    && !Array.isArray(deptRow.metadata)
+                        ? (deptRow.metadata as Record<string, unknown>)
+                        : {};
+                const reconciled = await reconcileBusinessProcessWorkAcrossStageMove({
+                    supabase,
+                    orgId,
+                    userId,
+                    opportunityId: subject.opportunity_id,
+                    departmentId,
+                    sourceStageKey: stageKey,
+                    destinationStageKey: targetStageKey,
+                    departmentMetadata,
+                    initiatingWorkId: subject.work_id ?? null,
+                    // A child's move settles that child's work only; siblings and the family keep theirs.
+                    childSubject:
+                        subject.journey_segment === "child" && stageMoveChildId
+                            ? { customerMemberId: stageMoveChildId, processInstanceId: stageMoveJourneyId }
+                            : null,
+                });
+                if (reconciled.degraded) {
+                    spawnDegraded = reconciled.degraded;
+                }
+            } catch (e) {
+                // Test doubles or transient reads must not undo a successful stage move.
+                spawnDegraded = `stage work reconciliation failed for "${targetStageKey}": ${
+                    e instanceof Error ? e.message : String(e)
+                }`;
+            }
+            return { undo: undoStageMove, degraded: spawnDegraded };
+        }
 
         default:
             return { error: `Unsupported target kind` };

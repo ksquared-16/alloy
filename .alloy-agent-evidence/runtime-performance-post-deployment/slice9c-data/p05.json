@@ -1,0 +1,64 @@
+{
+ "instrument": "in-page rAF, performance.now() stamped at click — no IPC in the hot path",
+ "switches": [
+  {
+   "round": 0,
+   "view": "new_leads",
+   "target_rows": 3,
+   "t_ack_ms": 67,
+   "frames": 1,
+   "kind": "pill_selected",
+   "rows0": 16
+  },
+  {
+   "round": 1,
+   "view": "new_work_view_3",
+   "target_rows": 2,
+   "t_ack_ms": 62,
+   "frames": 1,
+   "kind": "pill_selected",
+   "rows0": 3
+  },
+  {
+   "round": 2,
+   "view": "new_work_view_4",
+   "target_rows": 16,
+   "t_ack_ms": 12,
+   "frames": 1,
+   "kind": "pill_selected",
+   "rows0": 3
+  },
+  {
+   "round": 3,
+   "view": "new_work_view_6",
+   "target_rows": 7,
+   "t_ack_ms": 16,
+   "frames": 1,
+   "kind": "pill_selected",
+   "rows0": 3
+  },
+  {
+   "round": 4,
+   "view": "new_work_view_7",
+   "target_rows": 2,
+   "t_ack_ms": 22,
+   "frames": 1,
+   "kind": "pill_selected",
+   "rows0": 7
+  },
+  {
+   "round": 5,
+   "view": "new_leads",
+   "target_rows": 3,
+   "t_ack_ms": 71,
+   "frames": 1,
+   "kind": "pill_selected",
+   "rows0": 2
+  }
+ ],
+ "n": 6,
+ "min": 12,
+ "median": 62,
+ "max": 71,
+ "over_150ms": 0
+}

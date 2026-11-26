@@ -6,6 +6,7 @@
  */
 
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
+import { formatActivitySignalSummary } from "@/lib/admin/activitySignals";
 import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
@@ -13,10 +14,25 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 export type LeadActivityPreviewKind = "note" | "communication" | "task" | "activity" | "created" | "updated";
 
 export type LeadActivityPreviewEntry = {
+    /**
+     * Canonical, namespaced identity for this entry when the producer has one.
+     *
+     * The layout-runtime timeline already carries an immutable `id` per entry (the canonical event
+     * row id where one exists). It was dropped here, so rendering had nothing to key on but the
+     * label and the FORMATTED timestamp — which is minute-granular. Optional because the lead
+     * preview producer below has no event id of its own.
+     */
+    id?: string;
+    /** Not something anyone did (delivery state / consequence notification). @see ActivityTimelineEntry */
+    notAnAction?: boolean;
+    /** The child the row is about; null = family activity. Absent when the producer cannot say. */
+    subject?: import("@/lib/admin/collapseBusinessEventMechanics").ActivityRowSubject | null;
     kind: LeadActivityPreviewKind;
     label: string;
     detail: string | null;
     at: string | null;
+    /** Epoch ms for canonical newest-first sorting — never derive from formatted `at`. */
+    atSortKey?: number;
 };
 
 const MAX_ENTRIES = 5;
@@ -41,10 +57,23 @@ function truncate(text: string, max = 100): string {
     return `${trimmed.slice(0, max - 1).trim()}…`;
 }
 
-function formatAt(raw: unknown): string | null {
+function formatAt(raw: unknown, timeZone?: string): string | null {
     const text = pickLine(raw);
     if (!text) return null;
-    return formatActivityTimestamp(text) || text;
+    // Canonical local-time doctrine: route through the platform formatter WITH the resolved
+    // operator timezone. Without it, `formatActivityTimestamp` defaults to UTC (the bug).
+    return formatActivityTimestamp(text, timeZone ? { timeZone } : undefined) || text;
+}
+
+function sortKeyFromRaw(raw: unknown): number {
+    const text = pickLine(raw);
+    if (!text) return 0;
+    const ms = Date.parse(text);
+    return Number.isFinite(ms) ? ms : 0;
+}
+
+function entryAt(raw: unknown, timeZone?: string): Pick<LeadActivityPreviewEntry, "at" | "atSortKey"> {
+    return { at: formatAt(raw, timeZone), atSortKey: sortKeyFromRaw(raw) };
 }
 
 function readOpenTasks(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow[] {
@@ -88,9 +117,14 @@ function pushUnique(entries: LeadActivityPreviewEntry[], entry: LeadActivityPrev
 }
 
 /** Build activity preview entries from available record fields (newest-first heuristic). */
-export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActivityPreviewEntry[] {
+export function resolveLeadActivityPreview(
+    record: ProofRuntimeRecord,
+    timeZone?: string,
+): LeadActivityPreviewEntry[] {
     const overview = overviewRecord(record);
     const entries: LeadActivityPreviewEntry[] = [];
+    // Every timestamp in this preview renders in the resolved operator timezone.
+    const atFields = (raw: unknown) => entryAt(raw, timeZone);
 
     const followUp = pickLine(record.follow_up_notes, overview.follow_up_notes);
     if (followUp) {
@@ -99,6 +133,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             label: "Note",
             detail: truncate(followUp),
             at: null,
+            atSortKey: 0,
         });
     }
 
@@ -111,7 +146,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
                 kind: "note",
                 label: pickLine(note.title, note.label) ?? "Note",
                 detail: truncate(body),
-                at: formatAt(note.created_at ?? note.at),
+                ...atFields(note.created_at ?? note.at),
             });
         }
     }
@@ -125,7 +160,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
                 kind: "communication",
                 label: pickLine(item.channel, item.type) ?? "Communication",
                 detail: truncate(primary),
-                at: formatAt(item.at ?? item.when ?? item.sent_at ?? item.created_at),
+                ...atFields(item.at ?? item.when ?? item.sent_at ?? item.created_at),
             });
         }
     }
@@ -137,7 +172,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "task",
             label: "Open task",
             detail: truncate(task.title ?? "Task"),
-            at: formatAt(task.due_at),
+            ...atFields(task.due_at),
         });
     }
 
@@ -145,11 +180,12 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
         record._activity_signal && typeof record._activity_signal === "object"
             ? (record._activity_signal as Record<string, unknown>)
             : null;
-    const activitySummary = pickLine(
+    const activitySummaryRaw = pickLine(
         record.last_activity_summary,
         overview.last_activity_summary,
         activitySignal?.last_activity_summary,
     );
+    const activitySummary = formatActivitySignalSummary(activitySummaryRaw);
     const activityAt = pickLine(
         record.last_activity_at,
         overview.last_activity_at,
@@ -160,7 +196,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "activity",
             label: "Last activity",
             detail: activitySummary ? truncate(activitySummary) : null,
-            at: formatAt(activityAt),
+            ...atFields(activityAt),
         });
     }
 
@@ -181,6 +217,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             label: "Lifecycle",
             detail: truncate(formatLifecyclePreviewDetail(lifecycleDisplay)),
             at: null,
+            atSortKey: 0,
         });
     }
 
@@ -191,7 +228,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "activity",
             label: "Status",
             detail: truncate(formatStatusPreviewDetail(statusLabelRaw)),
-            at: formatAt(statusAt),
+            ...atFields(statusAt),
         });
     }
 
@@ -201,7 +238,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "created",
             label: "Created",
             detail: null,
-            at: formatAt(createdRaw),
+            ...atFields(createdRaw),
         });
     }
 
@@ -211,7 +248,7 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
             kind: "updated",
             label: "Updated",
             detail: null,
-            at: formatAt(updatedRaw),
+            ...atFields(updatedRaw),
         });
     }
 

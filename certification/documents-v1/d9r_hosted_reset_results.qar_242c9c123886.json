@@ -1,0 +1,173 @@
+{
+  "at": "2026-11-09T04:14:54.457365+00:00",
+  "documents": [
+    {
+      "delete": 200,
+      "id": "2249a3ce-c2be-4c4f-8a59-75ec097a994d",
+      "key": "D_B",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "ca3c9a7c-d7c5-4e55-b4be-dbd8cfc33f54",
+      "key": "D_CUS",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "c28817f9-27fc-4510-a03f-44878b94500e",
+      "key": "D_MED",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "bf7eab97-f20b-44fb-bed0-f0672c3ae329",
+      "key": "D_PID",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "9dd836d5-e79c-421d-8fc5-62489f412ba4",
+      "key": "D_QUA",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "a2f56e75-f9c3-42af-b957-f30c72756d2f",
+      "key": "D_RES",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "72419c39-5664-4032-8231-fe96a6f14804",
+      "key": "D_SOUTH",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "8339bfae-c993-4289-9c15-47224fed1ecb",
+      "key": "D_STD_C",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "a42a66f3-2b8a-475c-8df9-31e5ed83a7a7",
+      "key": "D_STD_E",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "53fbeac4-5deb-4c51-90a8-9bcb600fdd59",
+      "key": "D_STD_G",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "f0fd04ad-7964-4e92-a5cf-093f11edfa9f",
+      "key": "D_STD_H",
+      "verify": 404
+    },
+    {
+      "delete": 200,
+      "id": "da1a5b31-dc31-4d9e-8077-ebc386ca6750",
+      "key": "D_SUP",
+      "verify": 404
+    }
+  ],
+  "installations": [
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "7c272ec2-b097-4d41-a2b0-cfb46fceb5cc",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "3fd353d1-d9b7-4772-8836-47339496e357",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-read-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "5f10efc6-f3c5-4c87-94c7-3ea9054d5fb1",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "1b9ef9bb-c6ba-497d-a3ff-09ba3de04282",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-read-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "b8d9a82e-2222-4d3f-bf2e-e63264083055",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-read-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "ecbb91fb-05e9-4a33-b759-d2fa90d4ae36",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "19a9c845-bd65-4c94-b838-c4e5ac515c0a",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-read-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "9bd991f8-2732-4d19-adcf-1062a0619a61",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "da018eac-ae0a-4f3a-b9d7-b2a5a2fb059c",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-read-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "843741a7-9d2b-4fd9-abed-14f1322fa325",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "630abbf6-1996-4776-ae12-a6628f566d7a",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-read-cert"
+    }
+  ],
+  "next": [
+    "database.read_census d9-link-audit-census.sql (case 11)",
+    "qa_d9_external_fixture_reset",
+    "environment.qa_run_close #1",
+    "database.read_census d9-residue-census.sql after closed_at (all 15 registered checks)",
+    "environment.qa_run_close #2 naming that census"
+  ],
+  "qa_run_id": "qar_242c9c123886",
+  "remaining": [],
+  "verdict": "CLEAN"
+}

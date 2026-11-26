@@ -6,6 +6,7 @@
 import {
     CANONICAL_ADMIN_BASE,
     CANONICAL_OPERATOR_BASE,
+    CANONICAL_ORGANIZATION_BASE,
     CANONICAL_SETTINGS_BASE,
     isCanonicalSettingsPath,
     isOperatorAdminPath,
@@ -23,6 +24,7 @@ export function requiresOperatorSession(pathname: string): boolean {
 /** Compatibility aliases that rewrite to `/settings/*` — must not bypass auth. */
 export function isSettingsCompatibilityPath(pathname: string): boolean {
     const p = pathname.trim();
+    if (p === CANONICAL_ORGANIZATION_BASE) return true;
     if (p === CANONICAL_SETTINGS_BASE || p.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) return true;
     if (p === `${CANONICAL_ADMIN_BASE}/settings` || p.startsWith(`${CANONICAL_ADMIN_BASE}/settings/`)) {
         return true;
@@ -39,7 +41,12 @@ export function operatorLoginRedirectPath(): "/login" {
 /** Paths that must match workspace auth behavior in tests and middleware. */
 export const OPERATOR_SESSION_GATE_EXAMPLES = {
     workspace: [`${CANONICAL_OPERATOR_BASE}`, `${CANONICAL_OPERATOR_BASE}/work-unit/new-leads`],
-    settings: [CANONICAL_SETTINGS_BASE, `${CANONICAL_SETTINGS_BASE}/processes`, `${CANONICAL_SETTINGS_BASE}/business-processes`],
+    settings: [
+        CANONICAL_ORGANIZATION_BASE,
+        CANONICAL_SETTINGS_BASE,
+        `${CANONICAL_SETTINGS_BASE}/processes`,
+        `${CANONICAL_SETTINGS_BASE}/business-processes`,
+    ],
     settingsCompatibility: [
         `${CANONICAL_ADMIN_BASE}/settings`,
         `${CANONICAL_ADMIN_BASE}/settings/business-processes`,

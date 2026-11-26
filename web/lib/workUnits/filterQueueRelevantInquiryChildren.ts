@@ -18,7 +18,7 @@ function trimOrNull(raw: unknown): string | null {
     return t || null;
 }
 
-function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
+export function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
     const direct = row._inquiry_children;
     if (Array.isArray(direct) && direct.length) {
         return direct.filter((x) => x != null && typeof x === "object");
@@ -56,8 +56,8 @@ function mapInquiryChildRaw(raw: Record<string, unknown>): QueueRelevantInquiryC
     const displayName =
         trimOrNull(raw.display_name) ?? trimOrNull(raw.child_display_name) ?? "Child";
     const programParts = [
-        trimOrNull(raw.desired_program_type),
-        trimOrNull(raw.desired_schedule_type),
+        trimOrNull(raw.program_key),
+        trimOrNull(raw.schedule_type),
     ].filter(Boolean);
     return {
         subject_id: subjectId,

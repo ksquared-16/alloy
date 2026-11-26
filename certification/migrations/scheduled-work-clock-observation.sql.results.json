@@ -1,0 +1,40 @@
+{
+  "trusted_host_action_id": "tha_a77ffbb2217c9e",
+  "query_hash": "89254c7c3da1406868562b8f920f63f9e1526326dc045fd147defc8dbc5263e8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T18:01:00.348Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_a77ffbb2217c9e",
+    "query_hash": "89254c7c3da1406868562b8f920f63f9e1526326dc045fd147defc8dbc5263e8",
+    "authorization_id": "grnt_b395e1729e744647",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T18:01:01.902Z",
+    "question_ids": [
+      "clock1"
+    ],
+    "questions": {
+      "clock1": {
+        "question_id": "clock1",
+        "row_count": null,
+        "rows": [
+          {
+            "schedules": 0,
+            "active_schedules": 0,
+            "occurrences": 0,
+            "attempts": 0,
+            "latest_attempt": null,
+            "observed_at": "2026-09-21 18:01:01.805586+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

@@ -15,16 +15,6 @@ import {
 import { resolvePersonDrawerHouseholdModel } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 
 describe("person drawer IA final cleanup", () => {
-    it("parent address section order is Household then Address then Employee Status", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const parentBlock = drawer.slice(drawer.indexOf("personParentGuardianChrome"));
-        const householdIdx = parentBlock.indexOf("<PersonDrawerParentHouseholdSection");
-        const addressIdx = parentBlock.indexOf("<PersonDrawerHouseholdAddress");
-        const employeeIdx = parentBlock.indexOf("<PersonDrawerEmployeeStatusSection");
-        expect(householdIdx).toBeGreaterThan(-1);
-        expect(addressIdx).toBeGreaterThan(householdIdx);
-        expect(employeeIdx).toBeGreaterThan(addressIdx);
-    });
 
     it("address resolves customer location when household address rows exist", () => {
         const model = resolvePersonDrawerHouseholdAddressModel({
@@ -44,30 +34,6 @@ describe("person drawer IA final cleanup", () => {
         });
         expect(model.source).toBe("customer_location");
         expect(personDrawerHouseholdAddressHasContent(model)).toBe(true);
-    });
-
-    it("parent address omits unavailable empty mailing copy when no household location", () => {
-        const address = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdAddress.tsx"),
-            "utf8"
-        );
-        expect(address).not.toContain("No household mailing address on file");
-        expect(address).not.toContain('data-person-drawer-address-empty="true"');
-        expect(address).toContain("data-person-drawer-household-address");
-    });
-
-    it("child program and lead pills render in header executive, not overview body", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const executive = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerChildHeaderExecutive.tsx"),
-            "utf8"
-        );
-        expect(drawer).toContain("PersonDrawerChildHeaderExecutive");
-        expect(drawer).not.toContain("PersonDrawerChildEnrollmentContext");
-        expect(executive).toContain("data-person-drawer-child-header-executive");
-        expect(executive).toContain("data-person-drawer-child-lead-pill");
-        const bodyBlock = drawer.slice(drawer.indexOf("<PersonDrawerChildSummary"));
-        expect(bodyBlock.slice(0, 1200)).not.toContain("data-person-drawer-enrollment-context");
     });
 
     it('lead pill label uses "Lead: {status}"', () => {

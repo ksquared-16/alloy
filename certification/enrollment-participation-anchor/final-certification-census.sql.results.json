@@ -1,0 +1,832 @@
+{
+  "trusted_host_action_id": "tha_6d874aa9487aa4",
+  "query_hash": "bf92193bbf68966ba2b1b8bcd83a9d0e7d668b09d84698f0ae4ae85074e8fa41",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-05T13:32:41.658Z",
+    "question_ids": [
+      "active_context_free_per_child",
+      "exceptions",
+      "fixture_totals",
+      "forms",
+      "handoff",
+      "journeys",
+      "opportunities",
+      "orphan_journeys",
+      "participations",
+      "session_by_journey"
+    ],
+    "questions": {
+      "active_context_free_per_child": {
+        "question_id": "active_context_free_per_child",
+        "row_count": null,
+        "rows": [
+          {
+            "child": "Patha Certfree",
+            "active": 1
+          }
+        ]
+      },
+      "exceptions": {
+        "question_id": "exceptions",
+        "row_count": null,
+        "rows": [
+          {
+            "total": 0,
+            "active": 0,
+            "revoked": 0
+          }
+        ]
+      },
+      "fixture_totals": {
+        "question_id": "fixture_totals",
+        "row_count": null,
+        "rows": [
+          {
+            "persons": 2,
+            "households": 2,
+            "members": 2,
+            "children": 2,
+            "participations": 2,
+            "journeys": 2,
+            "opportunities": 1,
+            "packet_sessions": 2
+          }
+        ]
+      },
+      "forms": {
+        "question_id": "forms",
+        "row_count": null,
+        "rows": [
+          {
+            "sessions": 2,
+            "sessions_in_progress": 2,
+            "sessions_completed": 0,
+            "items": 2,
+            "items_with_submission": 0,
+            "distinct_submissions": 0
+          }
+        ]
+      },
+      "handoff": {
+        "question_id": "handoff",
+        "row_count": null,
+        "rows": [
+          {
+            "operational_enrollment_v1_enabled": "absent",
+            "agreements": 0,
+            "placements": 0,
+            "schedule_assignments": 0
+          }
+        ]
+      },
+      "journeys": {
+        "question_id": "journeys",
+        "row_count": null,
+        "rows": [
+          {
+            "child": "Patha Certfree",
+            "state": null,
+            "stage": null,
+            "context_type": "enrollment_participation",
+            "anchored_to_participation": true,
+            "revision_pinned": true
+          },
+          {
+            "child": "Pathb Certopp",
+            "state": null,
+            "stage": null,
+            "context_type": "enrollment_participation",
+            "anchored_to_participation": true,
+            "revision_pinned": true
+          }
+        ]
+      },
+      "opportunities": {
+        "question_id": "opportunities",
+        "row_count": null,
+        "rows": [
+          {
+            "status": "new",
+            "children_on_it": 1
+          }
+        ]
+      },
+      "orphan_journeys": {
+        "question_id": "orphan_journeys",
+        "row_count": null,
+        "rows": [
+          {
+            "journey_id": "010bde6d-4bbe-43d0-9bac-4db2f2ce1164",
+            "subject_id": "1bfec86d-106b-465e-99e0-fa1cb5f15831"
+          },
+          {
+            "journey_id": "01a3e4f4-601f-4061-98c4-9d717eae822d",
+            "subject_id": "5d162432-0b65-44ca-a8bd-a1beb080018c"
+          },
+          {
+            "journey_id": "01bc382b-c21e-4b16-95d6-83b3f42a16d8",
+            "subject_id": "c1db8bf9-e1bc-4921-834d-0a4ae8f34df6"
+          },
+          {
+            "journey_id": "01d8b8e6-72bb-48a8-a45d-035f39f9fc70",
+            "subject_id": "269e03a3-0c8a-4b61-bcb2-3617b77a268a"
+          },
+          {
+            "journey_id": "035cd61f-9303-4450-b8e6-675474e8beca",
+            "subject_id": "5916b3ac-5945-46bc-9260-03385405d4b8"
+          },
+          {
+            "journey_id": "05acba65-969e-439a-a68a-983188b26a65",
+            "subject_id": "b97f65da-f307-4506-848f-d809784c8e8a"
+          },
+          {
+            "journey_id": "068963a9-d8aa-4da5-bbe1-dab376b53a57",
+            "subject_id": "3153a4fa-525b-4ab4-9535-aaab18a335ea"
+          },
+          {
+            "journey_id": "09226aa3-97ba-442b-a225-ca892ecf4f98",
+            "subject_id": "0ec1afc7-b187-400a-8061-432d55c5138f"
+          },
+          {
+            "journey_id": "09dab6a7-85cb-47c9-8897-b7b6b377ce02",
+            "subject_id": "348984d8-1569-4024-affe-427f16a149f9"
+          },
+          {
+            "journey_id": "0ad408ec-e6fa-4cb1-b8f5-1cfbd9203033",
+            "subject_id": "e21f84ef-5021-44a5-87fd-be0c4b043a0f"
+          },
+          {
+            "journey_id": "0b85160c-4b7d-44ce-aad9-560544d1183f",
+            "subject_id": "5916b3ac-5945-46bc-9260-03385405d4b8"
+          },
+          {
+            "journey_id": "0bfce3b0-d2a4-4d32-9ce1-981c5ad12f03",
+            "subject_id": "6051a91d-f61a-4218-8088-295aa272bd6d"
+          },
+          {
+            "journey_id": "0c02a4c5-8ce4-492e-a0d9-565dab65486d",
+            "subject_id": "b04d2139-aec6-49d6-adf3-de246e27cf41"
+          },
+          {
+            "journey_id": "0d6adaf2-59c1-4255-a2c9-9467f6dab991",
+            "subject_id": "ec8184d0-6942-4ff0-8fce-b5e3b8009e3b"
+          },
+          {
+            "journey_id": "0f72dffd-1c36-4e82-a15c-b5561b172e46",
+            "subject_id": "1163b3ef-4e32-44e5-b825-15bce065bd85"
+          },
+          {
+            "journey_id": "125ba229-1975-4966-96bd-73aead367187",
+            "subject_id": "617b2536-48a8-4d15-9b35-a51f308776b8"
+          },
+          {
+            "journey_id": "126774f1-665a-4400-980e-48793e10f6c7",
+            "subject_id": "65860a17-c2f9-4078-8316-d29e58a626b3"
+          },
+          {
+            "journey_id": "14655701-3573-4ceb-882a-321d21185a5a",
+            "subject_id": "41f39a95-ffbd-4be1-85b0-e9a45899650a"
+          },
+          {
+            "journey_id": "1539ca6b-6c85-47bc-ada8-8eeaa1e2227c",
+            "subject_id": "bda03dda-d5eb-4d52-82dc-a38c167579a1"
+          },
+          {
+            "journey_id": "16a00529-e4f6-41f8-82c2-abae37c93aec",
+            "subject_id": "0fbf854b-0952-4188-94cc-84ebfb884c1e"
+          },
+          {
+            "journey_id": "18e119e1-c2a1-4ec2-b4e5-6def8ef97986",
+            "subject_id": "f3b9628f-5cef-4711-b2a7-832b70c048e1"
+          },
+          {
+            "journey_id": "1929f503-eadc-4483-9656-8cd9b18a70d4",
+            "subject_id": "0949f21b-57a6-4e28-9d95-51cac51b42f2"
+          },
+          {
+            "journey_id": "1935e962-8686-47cd-8379-560b5bf45d72",
+            "subject_id": "d283f81b-8ded-4638-ad2e-9a649defa928"
+          },
+          {
+            "journey_id": "246a8f3b-7d4f-4317-83aa-b74023acf9d9",
+            "subject_id": "5a480026-cc31-4aa8-999c-94eb08e566b7"
+          },
+          {
+            "journey_id": "24d30cfa-3dfd-4bb6-9449-57dc5c9b13c0",
+            "subject_id": "57370acd-b079-4776-8200-23357f7dc310"
+          },
+          {
+            "journey_id": "25a208a5-61e2-40af-90ba-4f7cbf0ed304",
+            "subject_id": "3442efbe-acd5-4abb-8827-8fd9eebd436e"
+          },
+          {
+            "journey_id": "2758123d-34e4-46ae-b0e8-d3f87832147e",
+            "subject_id": "bffda5c5-a9c0-4ad7-af43-59e6144ae4a0"
+          },
+          {
+            "journey_id": "28d87171-07e5-4fb3-a4e7-615308980187",
+            "subject_id": "e16b887c-16a5-42cd-bfae-f0ae5b1a8318"
+          },
+          {
+            "journey_id": "2948e9f7-6dfc-46c4-b45d-e5e22981571c",
+            "subject_id": "fa3cdc71-1484-4917-a76d-27ca2dc26fe2"
+          },
+          {
+            "journey_id": "30143597-8fdf-4b9b-98c4-08fa9d2f3841",
+            "subject_id": "15fb8798-ecd7-4e93-8c60-362260369495"
+          },
+          {
+            "journey_id": "35825b53-ae0d-4e5c-9bbf-0eab6750537b",
+            "subject_id": "57d880df-beaa-45ef-b6a0-285166059605"
+          },
+          {
+            "journey_id": "35bc7a22-3135-4255-aac2-31f71ce07489",
+            "subject_id": "0a5b6e6a-ea9f-43b9-afab-8070640e50b7"
+          },
+          {
+            "journey_id": "36799ad6-cc7d-48dd-a539-fccf7d4fc037",
+            "subject_id": "203152c1-eacc-4ebf-a244-57bb8b42c94b"
+          },
+          {
+            "journey_id": "3964a606-b74d-48a6-93aa-7cce48aececb",
+            "subject_id": "8a6676b6-ea3d-4c5a-aafd-793ce639db0f"
+          },
+          {
+            "journey_id": "3a11fc31-8fb9-4975-a36c-12a5875a6321",
+            "subject_id": "4c5a3fe7-6fbe-4959-beaa-ea34fa147279"
+          },
+          {
+            "journey_id": "3ae29ae2-dda0-4dd3-96e0-2ef7f10aea6a",
+            "subject_id": "372b7477-c1ba-4215-bfc1-d1552d132f0a"
+          },
+          {
+            "journey_id": "3e2248b8-56b9-4571-aa0b-a3ac84b19f13",
+            "subject_id": "530466ea-de58-46d2-817a-e30b6a73d5a6"
+          },
+          {
+            "journey_id": "3fcafaa6-a8b5-4db5-b175-dc80d16623a9",
+            "subject_id": "1aff9cd0-6c7a-46cd-8e03-bb7d731c9e8a"
+          },
+          {
+            "journey_id": "411f52c0-9e3c-4b1b-bbab-83b6c5c781d3",
+            "subject_id": "5b7f7746-780f-40e9-8c71-69e4cbf439f5"
+          },
+          {
+            "journey_id": "41ddbf4b-1852-4a9e-8e29-68bc7d4638fc",
+            "subject_id": "720c6fa8-fea7-4d31-8bc4-ae2eb344e296"
+          },
+          {
+            "journey_id": "41eda11c-f91e-4528-adfc-fc07e8109cfb",
+            "subject_id": "4a77e543-873d-4ba7-bb12-856335b90445"
+          },
+          {
+            "journey_id": "43e1f1dc-4d44-41f7-bbde-28fde9920120",
+            "subject_id": "275149c5-95e4-4fdc-a827-2a063f569965"
+          },
+          {
+            "journey_id": "448a27a9-afe6-4dc1-82c7-42de3a09f640",
+            "subject_id": "6f87bdca-dd02-4c03-9378-6160b7b17de1"
+          },
+          {
+            "journey_id": "45414bec-b85c-4eee-8f70-0755d1465ef7",
+            "subject_id": "4917c315-2714-44ad-8733-d3654b969131"
+          },
+          {
+            "journey_id": "456ee1f8-1aad-4397-bd9d-cc7da2e9d929",
+            "subject_id": "a70031a9-71f6-4b4c-abb1-a6189d0afd21"
+          },
+          {
+            "journey_id": "457d3021-9f1c-49d3-8e97-464174d63a50",
+            "subject_id": "6f5b00de-5593-4ced-8b7e-7019c6709a67"
+          },
+          {
+            "journey_id": "469559a0-b53d-49ee-aa18-baa5a14b5d90",
+            "subject_id": "5a338736-a6bf-43fa-8120-7353fd29c42d"
+          },
+          {
+            "journey_id": "46dc3bdb-96c0-4770-b89a-fa890f34ae52",
+            "subject_id": "6064c35e-951e-400a-8664-e96b1a2aa152"
+          },
+          {
+            "journey_id": "487b75b3-8141-4ff3-82ee-7db34b304105",
+            "subject_id": "5b7f7746-780f-40e9-8c71-69e4cbf439f5"
+          },
+          {
+            "journey_id": "496ca100-2b6c-4121-b1f6-e41ee05cec80",
+            "subject_id": "9b680a55-f656-4b2e-9db7-e13442f7096f"
+          },
+          {
+            "journey_id": "4b32316d-9240-4973-9c45-dcf5ba748a1d",
+            "subject_id": "aee76258-de90-41f2-9a3a-3185b6bcb587"
+          },
+          {
+            "journey_id": "5322929e-2f7e-48ef-ae69-d00b92886eb8",
+            "subject_id": "5a47051f-90c0-4225-b089-95e32ad0f173"
+          },
+          {
+            "journey_id": "547b6ce2-0084-449c-bd65-d1d5fb1dfd9f",
+            "subject_id": "907d6154-2a6f-407e-806e-69fc69111e47"
+          },
+          {
+            "journey_id": "548d2d6d-80e5-476b-9a37-b247cfefc20b",
+            "subject_id": "3d869922-1fe2-4df3-b12b-a6d215c787c9"
+          },
+          {
+            "journey_id": "563d7ac3-ff5d-4228-bb2b-6a28c33aaddb",
+            "subject_id": "e1c86e37-c0e3-4b1b-b2d8-6b63af5d874d"
+          },
+          {
+            "journey_id": "587a861b-9114-47dd-9915-65ce0d56972b",
+            "subject_id": "a9b0e25e-6cee-486e-84bd-2f899ae2a836"
+          },
+          {
+            "journey_id": "5882e13a-3a76-4331-991c-2462b13a77bd",
+            "subject_id": "6fc4b98f-2721-4a9b-b86f-d11de3806f47"
+          },
+          {
+            "journey_id": "59efe3d9-77af-4a95-849d-47a9c592ddde",
+            "subject_id": "d61cc8d1-96bb-4375-ba1c-340326ed2fa3"
+          },
+          {
+            "journey_id": "5c815d5a-0949-4afa-a6e0-8787f969ac1e",
+            "subject_id": "3538e71e-46cd-49f5-a6e8-9d53c12cebcc"
+          },
+          {
+            "journey_id": "61571a0e-6cce-4313-88ac-b2a34d668dd3",
+            "subject_id": "b160501f-29a5-4709-bed6-9c252ecce4a8"
+          },
+          {
+            "journey_id": "620e2cb0-3dd1-4f40-8e28-46b73b543441",
+            "subject_id": "178b75b5-5857-4906-856d-15d6c89d63b5"
+          },
+          {
+            "journey_id": "621b8373-d0e1-49a4-8428-88b2b25444da",
+            "subject_id": "b6ec2f53-e321-4841-83ba-0eba62a0c9f4"
+          },
+          {
+            "journey_id": "6274127c-ca41-41f9-acb5-8906d04316d1",
+            "subject_id": "e79ab894-5a47-4efb-8834-d34c244d0580"
+          },
+          {
+            "journey_id": "6378919f-cfaa-4e9f-ad23-7a51d6bba308",
+            "subject_id": "5221552e-01ce-48a6-987c-142277ae8914"
+          },
+          {
+            "journey_id": "63f5936c-f17d-4304-b592-1b44c56be9f4",
+            "subject_id": "236f4b4d-4e99-43e8-8d09-e45ed7f12f48"
+          },
+          {
+            "journey_id": "6596814d-badd-4ab1-9394-15ea30d45cb2",
+            "subject_id": "6183c1c6-7ffe-4b3f-ba99-dbd043d6809a"
+          },
+          {
+            "journey_id": "65ede7f4-c3e3-4968-8c7d-dbcc5369a710",
+            "subject_id": "032022f8-0189-4e07-bfbb-386d83070d9d"
+          },
+          {
+            "journey_id": "677a5bd5-7068-46f9-86d6-cbdc4e9ea1fa",
+            "subject_id": "1cdd1d8b-5fe6-45be-94ce-fef758d3aa9f"
+          },
+          {
+            "journey_id": "69a9f149-8b97-4a8d-b397-9717967bb00c",
+            "subject_id": "69722530-f081-44ad-bee5-896c3c71dd26"
+          },
+          {
+            "journey_id": "6ac9de9d-5c30-461c-a4d2-dbd3d0285ec0",
+            "subject_id": "69722530-f081-44ad-bee5-896c3c71dd26"
+          },
+          {
+            "journey_id": "6bd80ec0-bf2a-4c68-b576-1482d0261415",
+            "subject_id": "1953a610-dc06-43cf-8c95-0a743635037c"
+          },
+          {
+            "journey_id": "6c1c9a27-249c-4e6d-9f5e-b8f280996daf",
+            "subject_id": "3153a4fa-525b-4ab4-9535-aaab18a335ea"
+          },
+          {
+            "journey_id": "6fc27747-21cc-4300-b301-b0030aec8f9e",
+            "subject_id": "cfd4db44-48ae-4eee-a99d-817de85b1f9f"
+          },
+          {
+            "journey_id": "714b7317-e2fd-4c59-a56d-4d6cbc86b991",
+            "subject_id": "522bb339-0e2c-427f-ab6d-b4b9eff0deb2"
+          },
+          {
+            "journey_id": "7225ac30-a47d-4091-853b-6c0a40975f2b",
+            "subject_id": "4641755d-8022-44f3-86b2-6860c2b373b9"
+          },
+          {
+            "journey_id": "7300091e-58aa-43be-8441-ab2b9bb2582d",
+            "subject_id": "eeeb8cb2-00da-4fff-8483-99545048a87b"
+          },
+          {
+            "journey_id": "75f0317d-6a47-4714-a4dd-1b44f48d611d",
+            "subject_id": "0cb559d0-e55e-4676-8d62-27ba84ba0135"
+          },
+          {
+            "journey_id": "7640beaa-d98e-4aae-8be9-bda04416c69a",
+            "subject_id": "0a5b6e6a-ea9f-43b9-afab-8070640e50b7"
+          },
+          {
+            "journey_id": "771cddbe-fe47-4b2d-b104-5457faaab012",
+            "subject_id": "92fb345e-745d-4813-9167-aee0ccd61e10"
+          },
+          {
+            "journey_id": "778392ad-0b7d-4eaa-a988-f2500ed1e03e",
+            "subject_id": "dd70f806-11c5-432f-97eb-b9803c50bee0"
+          },
+          {
+            "journey_id": "78bb1082-9794-4ab3-83bc-d49b037900ea",
+            "subject_id": "0b611370-0d95-49fd-8bcb-2a56a59852c0"
+          },
+          {
+            "journey_id": "79461874-3d49-4abd-ba2e-0bd2b68fada8",
+            "subject_id": "2ed71160-0d6c-4efa-aa63-e905abdb0982"
+          },
+          {
+            "journey_id": "7a5cde0a-ac1c-49ea-90d2-7737336c0ff4",
+            "subject_id": "9e27adba-7252-4a6d-b5ba-16b0835dbac4"
+          },
+          {
+            "journey_id": "7b4c80cd-3dc7-4b65-8a9f-ddb3383f2b34",
+            "subject_id": "c6e5da01-32bf-493e-8b96-ddd703ace874"
+          },
+          {
+            "journey_id": "7b6b8974-09cb-445c-899a-5c25746d85ba",
+            "subject_id": "4ae76697-c323-47ff-b061-024237069276"
+          },
+          {
+            "journey_id": "7c33cb5f-3006-48ae-bb74-bce79f70a834",
+            "subject_id": "75d3fd6d-b07a-4ca1-afcd-264677f96527"
+          },
+          {
+            "journey_id": "7c5a964c-882a-46af-a7d0-a1d8e870af87",
+            "subject_id": "9c065155-86d8-41d6-b5ea-bbff14a22526"
+          },
+          {
+            "journey_id": "7c70ca86-baaa-426e-9877-14c6fda2137b",
+            "subject_id": "8a6676b6-ea3d-4c5a-aafd-793ce639db0f"
+          },
+          {
+            "journey_id": "7d719b65-280a-4761-8c89-e087ffc5179b",
+            "subject_id": "0098031d-59d3-4e79-95e9-a4396a884537"
+          },
+          {
+            "journey_id": "7dd8ea0b-c270-4a13-944c-e40b3fc5edbb",
+            "subject_id": "9b680a55-f656-4b2e-9db7-e13442f7096f"
+          },
+          {
+            "journey_id": "80023b77-339b-498b-a53b-d5825b686fc7",
+            "subject_id": "4c5a3fe7-6fbe-4959-beaa-ea34fa147279"
+          },
+          {
+            "journey_id": "81793a8e-51bd-467b-b3c1-e21b84d408c4",
+            "subject_id": "d6d0982d-5f82-48ce-b4ad-8bf7798503f2"
+          },
+          {
+            "journey_id": "845238bf-6c73-474b-bc3c-11012d16eb37",
+            "subject_id": "027ce914-6251-4b97-bcbf-318bc7697344"
+          },
+          {
+            "journey_id": "846e2c1f-e8b2-4bd9-ba2d-35e35717ef8f",
+            "subject_id": "02f8abac-8dc1-4a00-bb5f-bb23999241b7"
+          },
+          {
+            "journey_id": "862a188b-3481-4975-ad7f-cc6d7d44d0b7",
+            "subject_id": "e5196f57-aa58-4b17-a5ab-be7dd16bb375"
+          },
+          {
+            "journey_id": "874cc4ca-c262-4593-b4e2-afaf1eefa667",
+            "subject_id": "e2da6372-a6bd-4d0f-a89a-7391b8f61aa8"
+          },
+          {
+            "journey_id": "8d5ed2bc-be9e-4f20-aaa5-c5047aefb6d7",
+            "subject_id": "7ba45ea7-d43a-474c-8a99-f0ba5f206d0c"
+          },
+          {
+            "journey_id": "9206e1cb-5250-4d05-ba60-40f7d918204d",
+            "subject_id": "97073825-ac55-4b4c-b46d-aee1b8eef38c"
+          },
+          {
+            "journey_id": "9280a566-4d93-4ac3-a610-277c64b4ea0f",
+            "subject_id": "92013043-8faa-4e3c-8d2b-8ed653f9b924"
+          },
+          {
+            "journey_id": "94e85e36-ba49-4b7a-80e9-7ba93dbfcb1e",
+            "subject_id": "d3d388bb-6cb5-4df4-86c2-bbbdd23f2420"
+          },
+          {
+            "journey_id": "9616cd45-7d89-4cc3-8613-b4c14bff4cb8",
+            "subject_id": "1cdd1d8b-5fe6-45be-94ce-fef758d3aa9f"
+          },
+          {
+            "journey_id": "9745d7bd-5d65-4168-b46c-e1abd04c66ce",
+            "subject_id": "39c6a1fd-4803-4d12-94ed-e7ec61d2ee5e"
+          },
+          {
+            "journey_id": "9a305f17-6524-4a00-bad7-d89dbcd2dd74",
+            "subject_id": "16790903-16ae-4fb9-8a99-e29c94278a04"
+          },
+          {
+            "journey_id": "9ad53279-0028-4367-9518-67fb9db8d906",
+            "subject_id": "49c273a7-2c2a-4e62-acd2-cd4892931b3b"
+          },
+          {
+            "journey_id": "9c1d4cd1-3ef3-487d-a823-bd5d41753563",
+            "subject_id": "3c890efc-d99b-4636-a446-31323317ad87"
+          },
+          {
+            "journey_id": "9c65a1b5-7828-4a29-a655-af62c304a1b4",
+            "subject_id": "aad81981-5f03-4672-bd5b-0e7b9f87c7dc"
+          },
+          {
+            "journey_id": "9e3390de-77f3-46ec-b442-0a0ec5f0c6f5",
+            "subject_id": "3354c153-0bd3-46f4-9be8-640dc81b0c59"
+          },
+          {
+            "journey_id": "9f10c551-3c37-4312-b777-87a081d65501",
+            "subject_id": "0ccfbdd4-8737-4974-a7c1-dc34893a29c6"
+          },
+          {
+            "journey_id": "a02abbc0-2859-4949-8554-e4a7ea812a31",
+            "subject_id": "fa31e95b-d88f-4813-bad8-4ee235b49bd9"
+          },
+          {
+            "journey_id": "a1211283-2f5e-4836-935a-740c8f7be313",
+            "subject_id": "7ad33b08-d11e-4602-8574-13216149ba3c"
+          },
+          {
+            "journey_id": "a1aba5c5-f2c0-47d3-a808-ae92f855932d",
+            "subject_id": "3acae2b0-f652-4b18-b62f-2d11d4b63e0f"
+          },
+          {
+            "journey_id": "a25dfd53-634f-44bf-bf94-60c715843148",
+            "subject_id": "3b361ecf-88ed-4b5a-b4be-744fc3b5e83f"
+          },
+          {
+            "journey_id": "a34f816d-077d-4c16-a4dd-40d5fc721fd1",
+            "subject_id": "6183c1c6-7ffe-4b3f-ba99-dbd043d6809a"
+          },
+          {
+            "journey_id": "a4953eba-c9ee-4724-a459-ade289c3483c",
+            "subject_id": "c3219b4f-7121-4afe-9517-1922fe682605"
+          },
+          {
+            "journey_id": "a64fdca1-2dbd-4685-8236-063e5b436855",
+            "subject_id": "b9bfc3ba-81fa-4b48-a207-eaca2bb814fc"
+          },
+          {
+            "journey_id": "a6e57b8d-c557-40d8-82ac-dddfe643e50e",
+            "subject_id": "b3f35bf1-7d4b-4757-9ff2-f5375191cab7"
+          },
+          {
+            "journey_id": "a85f74fc-14af-4a2e-80b4-9179142998db",
+            "subject_id": "92c5efdc-7ad0-4f84-a538-e7ffa6c26490"
+          },
+          {
+            "journey_id": "abbb7e9f-c45e-4787-bc92-00ff395fa7da",
+            "subject_id": "958a47ac-15ed-4148-97c7-70b54c1ec633"
+          },
+          {
+            "journey_id": "b1322141-9726-4ee0-b12f-4ef60b2a7909",
+            "subject_id": "97073825-ac55-4b4c-b46d-aee1b8eef38c"
+          },
+          {
+            "journey_id": "b2dfac18-6ef4-4c2b-abb8-ca4540e1fd00",
+            "subject_id": "4f8eb2f9-431f-4aa3-b7e1-0e367f59eb1a"
+          },
+          {
+            "journey_id": "b32aa379-036c-4387-89a1-2897cb82ea47",
+            "subject_id": "a4126e9d-07fe-4578-9060-266fb3b30bbf"
+          },
+          {
+            "journey_id": "b3b2ed8f-ea00-443c-8c21-511ef9d878d6",
+            "subject_id": "0a0c017e-5a25-482c-be07-76c275ad14b6"
+          },
+          {
+            "journey_id": "b6165a04-9301-462c-97b5-ed49b236af09",
+            "subject_id": "f3cbb9ae-c5a5-4fd7-8430-fe387ec9d0eb"
+          },
+          {
+            "journey_id": "b74df9ed-f48e-40e7-b9c4-d312a4f89794",
+            "subject_id": "dcfe91a8-6256-4643-b9a5-311a77c6cf99"
+          },
+          {
+            "journey_id": "b7cee10e-4e8a-4d72-826c-2097dfc87b05",
+            "subject_id": "eeeb8cb2-00da-4fff-8483-99545048a87b"
+          },
+          {
+            "journey_id": "b8347b9b-c4c5-4e11-97c7-d5165d3ae991",
+            "subject_id": "0bda68c3-e18e-4023-a00f-14f813182fa7"
+          },
+          {
+            "journey_id": "ba08b04e-b354-4832-a109-95d49f86ce39",
+            "subject_id": "dee930f8-229b-4d91-aba3-25f92b5c2701"
+          },
+          {
+            "journey_id": "be4954ed-91b4-4647-976a-db3c2564e75d",
+            "subject_id": "8c44ebd2-e5d3-444c-b469-44d529b7294e"
+          },
+          {
+            "journey_id": "be5bebd0-8616-4f7c-b469-accfd65c9ebb",
+            "subject_id": "e61bca16-a7f5-4bb7-88a8-b012fad3bfc4"
+          },
+          {
+            "journey_id": "c3c7a56e-74c1-4675-b8c2-d4d767065b52",
+            "subject_id": "86aa6433-d5f8-44a2-9e61-198656487654"
+          },
+          {
+            "journey_id": "c84c7219-c0f2-4aa1-b69a-b284cbd8f9f5",
+            "subject_id": "2d115346-8929-49cc-ae5e-45a5ccdc22b3"
+          },
+          {
+            "journey_id": "c85e9c77-5aa1-45dc-a9f7-80ca1863992a",
+            "subject_id": "a0995393-ea26-405e-9fc3-1e4f67a72fb1"
+          },
+          {
+            "journey_id": "c8fe7b94-c80f-4f6a-acc9-893dda1cf837",
+            "subject_id": "f3cbb9ae-c5a5-4fd7-8430-fe387ec9d0eb"
+          },
+          {
+            "journey_id": "c9b4cdec-1126-4d89-98e3-cf6f7e55217a",
+            "subject_id": "73381b26-662e-4565-855c-63c4ddd2504f"
+          },
+          {
+            "journey_id": "cab51341-0f3d-491a-8206-fd58e6479b1e",
+            "subject_id": "b97f65da-f307-4506-848f-d809784c8e8a"
+          },
+          {
+            "journey_id": "cd56c165-dfb7-4a4f-b414-8870c5ca4129",
+            "subject_id": "35dd38d3-32d2-41ea-9645-25fcca7b1b3b"
+          },
+          {
+            "journey_id": "cda3e23b-9e6b-4b51-b809-2b3edebf4704",
+            "subject_id": "3442efbe-acd5-4abb-8827-8fd9eebd436e"
+          },
+          {
+            "journey_id": "cef26b3b-fff3-4706-8f59-78a66101a52f",
+            "subject_id": "63891488-97de-4528-8a90-8775bc829d7f"
+          },
+          {
+            "journey_id": "d03ce8c6-3b32-486b-a1b7-32322c7c8dff",
+            "subject_id": "2853838b-8e01-4c66-b308-0ef26d06c5f9"
+          },
+          {
+            "journey_id": "d5f2072c-f651-4474-a046-037f7995db54",
+            "subject_id": "fffbf7aa-d096-4f01-8be7-ec841cb7b17c"
+          },
+          {
+            "journey_id": "d70c8159-521e-4693-b38c-8775f512de32",
+            "subject_id": "8a457760-4925-4ade-88fd-47c15a359577"
+          },
+          {
+            "journey_id": "d7d27e18-816c-434b-9185-aace3e9ee53f",
+            "subject_id": "0c17860e-7a33-48a9-ba98-403e16b8ca26"
+          },
+          {
+            "journey_id": "d9f59a21-c77b-4511-b52a-c53c18b6fd3e",
+            "subject_id": "9b77c009-5204-4142-8508-7cb4fa73b96c"
+          },
+          {
+            "journey_id": "dbc74d06-9b73-41ab-8678-1c0e04ecdc12",
+            "subject_id": "94d6ed56-51e4-4438-9f72-7b3af1dd4eb2"
+          },
+          {
+            "journey_id": "dcd4e08f-9a44-40fc-850b-b477adc7d362",
+            "subject_id": "f26dd659-cbeb-461a-8e9f-ad6e2b181172"
+          },
+          {
+            "journey_id": "dd44feae-0821-4c56-b5f0-5173358eb480",
+            "subject_id": "348984d8-1569-4024-affe-427f16a149f9"
+          },
+          {
+            "journey_id": "e0a88459-13a9-4648-8e52-efe7c00544d5",
+            "subject_id": "e617d0e9-21af-49ef-833c-42fb9b55d12c"
+          },
+          {
+            "journey_id": "e0c01058-ba65-4b1b-8ccc-317559cb643f",
+            "subject_id": "02175081-1833-4571-a25c-f6e444cbf72f"
+          },
+          {
+            "journey_id": "e6844d7e-b4d6-4454-9015-54469d62cae2",
+            "subject_id": "3bda731a-f2d7-499b-b7c0-3d2da64d791a"
+          },
+          {
+            "journey_id": "e7089689-ff8e-4cdf-8ae9-74583432d28e",
+            "subject_id": "4860248b-352f-4c36-ae86-cfe9ad7df03e"
+          },
+          {
+            "journey_id": "e70f6c09-a41c-4856-ac86-a229f25ac035",
+            "subject_id": "b53742e2-f814-4f66-95e3-9a741e131be5"
+          },
+          {
+            "journey_id": "ec089df1-a0a2-466d-b79e-454b88fae447",
+            "subject_id": "6d168f77-f8cc-472f-9fa6-f070a9eeca62"
+          },
+          {
+            "journey_id": "ecb99dec-d665-41c4-83d7-d34e3614003c",
+            "subject_id": "35dd38d3-32d2-41ea-9645-25fcca7b1b3b"
+          },
+          {
+            "journey_id": "edcd7226-3cf3-4594-a40e-d1a2a4a6b3b5",
+            "subject_id": "5a480026-cc31-4aa8-999c-94eb08e566b7"
+          },
+          {
+            "journey_id": "ef5fd670-e565-4003-8cfa-9dd33c0ce987",
+            "subject_id": "d585ebfa-3063-4521-8073-a4d7838ff6c6"
+          },
+          {
+            "journey_id": "f0ebf4f0-8b05-4e3e-a1a0-780e036e7bc7",
+            "subject_id": "1e518342-b5da-4423-8153-c6a0238c6ba0"
+          },
+          {
+            "journey_id": "f16874ff-0ac3-4152-9dd1-2e4d4db9e7ab",
+            "subject_id": "b1a77a67-7c70-41aa-af5d-5f0c40561f8d"
+          },
+          {
+            "journey_id": "f371a2c5-7aa3-4b06-9275-869ae676026d",
+            "subject_id": "4641755d-8022-44f3-86b2-6860c2b373b9"
+          },
+          {
+            "journey_id": "f49cafcc-711e-4f6a-83ac-09afbb383b7a",
+            "subject_id": "6ef656b1-ad25-436d-9abd-b96c4a480435"
+          },
+          {
+            "journey_id": "f4a1afec-8607-4656-9f03-0fd30de3707c",
+            "subject_id": "a531cc71-d38f-48c5-b7cd-1872c1e3baae"
+          },
+          {
+            "journey_id": "f77d54e9-a890-4976-bae9-5a303e00e6cf",
+            "subject_id": "76aa2c8d-b743-44a6-b5a8-11282b629761"
+          },
+          {
+            "journey_id": "f8096559-b88c-4c34-bad8-3551e4c97bc0",
+            "subject_id": "333ddfcb-64ac-4d5c-9792-86308ebad511"
+          },
+          {
+            "journey_id": "fd10aa3e-95d4-49a5-a33c-b48897411faa",
+            "subject_id": "fed9210c-454b-4304-af59-6881b8c93513"
+          },
+          {
+            "journey_id": "ff6d7e6d-382e-413a-8b80-e6f4810e792d",
+            "subject_id": "56566bcd-1920-463c-925c-35279045fff8"
+          },
+          {
+            "journey_id": "ffb99983-924d-4064-8006-2814104a2ee6",
+            "subject_id": "e34518be-2a56-4969-9562-e0539df742d2"
+          }
+        ]
+      },
+      "participations": {
+        "question_id": "participations",
+        "row_count": null,
+        "rows": [
+          {
+            "child": "Patha Certfree",
+            "status": "enrolling",
+            "stage": null,
+            "acquisition_backed": false
+          },
+          {
+            "child": "Pathb Certopp",
+            "status": "enrolling",
+            "stage": null,
+            "acquisition_backed": true
+          }
+        ]
+      },
+      "session_by_journey": {
+        "question_id": "session_by_journey",
+        "row_count": null,
+        "rows": [
+          {
+            "child": "Patha Certfree",
+            "journey_state": null,
+            "session_status": "in_progress",
+            "submissions": 0
+          },
+          {
+            "child": "Pathb Certopp",
+            "journey_state": null,
+            "session_status": "in_progress",
+            "submissions": 0
+          }
+        ]
+      }
+    },
+    "row_count": 177
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-05T13:32:40.828Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_df6f67b002e2c6",
+    "authorization_id": "grnt_c291bf746ad34ec3",
+    "query_hash": "bf92193bbf68966ba2b1b8bcd83a9d0e7d668b09d84698f0ae4ae85074e8fa41",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  }
+}

@@ -9,7 +9,7 @@
  *
  * Read-only: prepares UI state; never executes.
  *
- * @see docs/sprints/06_2026/command_surface_v1.md
+ * @see docs/sprints/archive/06_2026/command_surface_v1.md
  */
 
 import type { CommandFlowStage } from "@/lib/platform/commands/commandFlow";

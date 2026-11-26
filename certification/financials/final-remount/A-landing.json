@@ -1,0 +1,76 @@
+{
+  "rows": [
+    {
+      "id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "selected": "true",
+      "label": "Certhouse Family $2,218.82 58 charges · "
+    },
+    {
+      "id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+      "selected": "false",
+      "label": "Kurzman Family $75.00 3 charges · accoun"
+    },
+    {
+      "id": "fd000000-0000-4000-8000-0000000c0001",
+      "selected": "false",
+      "label": "Alvarez Household (demo) $0.00 Open · no"
+    },
+    {
+      "id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "selected": "false",
+      "label": "Automation Family $0.00 Open · nothing b"
+    },
+    {
+      "id": "fd000000-0000-4000-8000-0000000c0002",
+      "selected": "false",
+      "label": "Brennan Household (demo) $0.00 Open · no"
+    },
+    {
+      "id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "selected": "false",
+      "label": "Certfree Family $0.00 Open · nothing bil"
+    },
+    {
+      "id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "selected": "false",
+      "label": "Certopp Family $0.00 Open · nothing bill"
+    },
+    {
+      "id": "fd000000-0000-4000-8000-0000000c0003",
+      "selected": "false",
+      "label": "Chen Household (demo) $0.00 Open · nothi"
+    },
+    {
+      "id": "610a1496-7b96-4d1a-bf49-5cf193b31a6d",
+      "selected": "false",
+      "label": "Disposable0913 Family $0.00 Open · nothi"
+    },
+    {
+      "id": "fd000000-0000-4000-8000-0000000c0004",
+      "selected": "false",
+      "label": "Okafor Household (demo) $0.00 Open · not"
+    }
+  ],
+  "rowCount": 12,
+  "selectedRow": "29944d3e-8267-45b7-8dcb-7405060e2573",
+  "selectedLabel": "Certhouse Family $2,218.82 58 charges · ",
+  "floorPresent": 1,
+  "floorBox": {
+    "top": 230,
+    "left": 513,
+    "width": 838,
+    "height": 594
+  },
+  "backdropDisplay": "none",
+  "floorPosition": "static",
+  "detailRoot": 1,
+  "ledgerRows": 116,
+  "kpis": "FINANCIALS $1,525.00 past due September 2026 CURRENT BALANCE $2,023.87 DUE $1,912.00 PAST DUE $1,525.00 RESPONSIBILITY $2,098.87 PAID $75.00 AVAILABLE PREPAID $125.00 Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage ",
+  "payerRow": "Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage payments →",
+  "discountGear": 1,
+  "managePayments": 1,
+  "responsibilityGear": 1,
+  "responsibleFilter": 1,
+  "lenses": "All 79 Charges 23 Credits & adjustments 56 Funding 0 Payments 2 Everyone ▾ All periods ▾ Anyone responsible ▾",
+  "horizontalOverflow": false
+}

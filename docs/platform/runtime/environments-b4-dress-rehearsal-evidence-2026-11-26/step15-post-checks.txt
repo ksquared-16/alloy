@@ -1,0 +1,10 @@
+| §8 check | local result |
+|---|---|
+| Vercel /api/build-info | PASS (route handler, simulated Vercel env) |
+| Render /build-info | PASS (build_info handler, simulated RENDER_GIT_*) |
+| check-production --stage final | PASS |
+| Orgs | PASS: 252b4d3a-1d7b-4595-b08a-b226b869aa96|retired|_w17_selftest_252b4d3a |
+| Clock | PASS: step 14 tick; CRON_SECRET absent from the harness environment |
+| Settings I-2, I-3, I-10, I-11, I-13 | not local: dashboard re-read (owner) |
+| /login renders | not local: needs the deployed app |
+| Old project unchanged | not local: nothing in this rehearsal can reach it |

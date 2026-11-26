@@ -265,7 +265,7 @@ export const DEFAULT_WAITLIST_OPERATIONAL_QUEUE_RECORD_LAYOUT: QueueRecordLayout
             width: queueRecordWidthToCss("small"),
             widthToken: "small",
             role: "date",
-            widgets: [{ type: "date", fieldPaths: ["body.tour", "child.desired_start_date"] }],
+            widgets: [{ type: "date", fieldPaths: ["body.tour", "child.start_date"] }],
         },
     ],
 };

@@ -3,6 +3,8 @@ import type {
     OpportunityDrawerViewModel,
 } from "@/lib/adminV2/viewModel/drawer/types";
 
+import { enrichDemoViewModelForCurrentWorkPreview } from "./focusPanelCurrentWorkPreviewSeed";
+
 /**
  * Demo data for the Surfaces editor replica of the Enrollment Focus Panel Summary.
  *
@@ -136,6 +138,7 @@ export function buildDemoFocusPanelSummaryViewModel(): {
                     workflow_id: null,
                 },
             ],
+            record_header: null,
         },
         layout: {
             mode: "workflow_v1",
@@ -150,6 +153,9 @@ export function buildDemoFocusPanelSummaryViewModel(): {
                 geometry: { summary_right_column_reserved: true },
                 layout_config_snapshot: { inquiry_drawer_mode: "workflow_v1", overview_section_order: [] },
             },
+        },
+        activity: {
+            communicationsPreviewVm: null,
         },
         above_fold: {
             render_model: {
@@ -221,6 +227,23 @@ export function buildDemoFocusPanelSummaryViewModel(): {
                 "person.secondary_contact_name": "Taylor Johnson",
                 "person.secondary_phone": "(555) 987-6543",
                 "person.secondary_email": "taylor.johnson@example.com",
+                primary_person_id: "demo-p-1",
+                _opportunity_persons: [
+                    {
+                        person_id: "demo-p-2",
+                        role_type: "parent",
+                        name: "Taylor Johnson",
+                        phone: "(555) 987-6543",
+                        email: "taylor.johnson@example.com",
+                    },
+                    {
+                        person_id: "demo-p-emergency",
+                        role_type: "emergency_contact",
+                        name: "Sam Rivera",
+                        phone: "(555) 444-0199",
+                        email: "sam.rivera@example.com",
+                    },
+                ],
                 // Children collection — multiple siblings (related list, not flattened).
                 _inquiry_children: [
                     {
@@ -261,6 +284,7 @@ export function buildDemoFocusPanelSummaryViewModel(): {
         },
         summaries: {
             active_tour_bookings: [],
+            operator_relevant_tour_booking: null,
             tasks: {
                 state: "loaded",
                 open_count: 1,
@@ -286,6 +310,8 @@ export function buildDemoFocusPanelSummaryViewModel(): {
         background_refresh: { allowed: ["task_status", "scheduled_send_status", "readiness_values"] },
         timing: { compose_ms: 0, phases_ms: {} },
     };
+
+    enrichDemoViewModelForCurrentWorkPreview(vm);
 
     return { vm, record: vm.above_fold.record as unknown as Record<string, unknown> };
 }

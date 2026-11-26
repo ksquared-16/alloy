@@ -5,14 +5,22 @@ interface SectionShellProps {
   id?: string;
   className?: string;
   innerClassName?: string;
-  /** Alternate background for rhythm between sections */
+  /** Surface color — prefer sparse muted chapters, not strict alternation */
   variant?: "default" | "muted" | "accent";
+  /** Vertical rhythm for chapter pacing */
+  density?: "default" | "compact" | "spacious";
 }
 
 const variantClasses = {
   default: "bg-white",
-  muted: "bg-alloy-stone/50",
-  accent: "bg-gradient-to-b from-alloy-stone/30 to-white",
+  muted: "bg-alloy-stone",
+  accent: "bg-gradient-to-b from-alloy-stone to-white",
+};
+
+const densityClasses = {
+  default: "marketing-section-pad",
+  compact: "marketing-section-pad-compact",
+  spacious: "marketing-section-pad-spacious",
 };
 
 export default function SectionShell({
@@ -21,14 +29,14 @@ export default function SectionShell({
   className = "",
   innerClassName = "",
   variant = "default",
+  density = "default",
 }: SectionShellProps) {
   return (
-    <section id={id} className={`py-16 md:py-24 lg:py-28 ${variantClasses[variant]} ${className}`.trim()}>
-      <div
-        className={`mx-auto w-full max-w-screen-xl px-4 sm:px-6 lg:px-8 ${innerClassName}`.trim()}
-      >
-        {children}
-      </div>
+    <section
+      id={id}
+      className={`${densityClasses[density]} ${variantClasses[variant]} ${className}`.trim()}
+    >
+      <div className={`marketing-content-width ${innerClassName}`.trim()}>{children}</div>
     </section>
   );
 }

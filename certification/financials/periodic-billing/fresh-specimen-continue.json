@@ -1,0 +1,62 @@
+{
+  "steps": [
+    {
+      "step": "drawer",
+      "status": 200,
+      "customerId": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+    },
+    {
+      "step": "customer_member",
+      "status": 200,
+      "cmId": "bd5b59ae-bd04-4284-8d2a-5395960e11ab",
+      "body": "{\"id\":\"bd5b59ae-bd04-4284-8d2a-5395960e11ab\",\"customer_id\":\"e1c9afe0-5e8d-4077-904d-bb8e748a4fd4\",\"person_id\":\"a4957f89-609b-4837-98e9-32b0d929e7a5\",\"display_name\":\"Pbchild Automation\",\"relationship\":\"child\",\"first_name\":\"Pbchild\",\"last_name\":\"Automation\",\"dob\":\"2020-04-01\",\"is_active\":true,\"created"
+    },
+    {
+      "step": "ocm",
+      "status": 200,
+      "ocmId": "ef10654a-e4cf-494d-b38e-82900af1163e",
+      "body": "{\"id\":\"ef10654a-e4cf-494d-b38e-82900af1163e\",\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"opportunity_id\":\"7aa18e83-eea7-432c-af4b-684a1cef9386\",\"customer_member_id\":\"bd5b59ae-bd04-4284-8d2a-5395960e11ab\",\"program_category_id\":null,\"schedule_type\":null,\"start_date\":null,\"outcome_status_key\":null"
+    },
+    {
+      "step": "ocm_facts",
+      "status": 200,
+      "body": "{\"id\":\"ef10654a-e4cf-494d-b38e-82900af1163e\",\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"opportunity_id\":\"7aa18e83-eea7-432c-af4b-684a1cef9386\",\"customer_member_id\":\"bd5b59ae-bd04-4284-8d2a-5395960e11ab\",\"location_id\":\"1a5644a7-45c4-413b-9021-5f556118b6e2\",\"program_room_cohort_key\":null,\"program_category_id\":\"5e9e715a-eb8f-4534-bcfe-a8a74ed883d9\",\"schedule_type\":\"full_time\",\"start_date\":\"2026"
+    },
+    {
+      "step": "agreement",
+      "status": 201,
+      "agreementId": "771c085f-d145-4650-adee-4653db661975"
+    },
+    {
+      "step": "pricing",
+      "status": 200,
+      "state": "no_match",
+      "facts": {
+        "programKey": "school_age",
+        "attendanceType": "full_time",
+        "daysPerWeek": null,
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "payerType": "private_pay",
+        "cadenceKey": null,
+        "asOf": "2026-09-22"
+      },
+      "factSources": {
+        "programKey": "assignment",
+        "daysPerWeek": "none",
+        "locationId": "assignment",
+        "asOf": "assignment_start"
+      },
+      "resolutionKey": "d350e22b",
+      "recommended": "null",
+      "applicable": "[]",
+      "reason": "no_rate_for_scope"
+    }
+  ],
+  "ids": {
+    "opportunityId": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+    "customerId": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "cmId": "bd5b59ae-bd04-4284-8d2a-5395960e11ab",
+    "ocmId": "ef10654a-e4cf-494d-b38e-82900af1163e",
+    "agreementId": "771c085f-d145-4650-adee-4653db661975"
+  }
+}

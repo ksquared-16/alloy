@@ -1,0 +1,19 @@
+{
+  "at": "2026-08-13T19:27:53.807Z",
+  "kurzman": {
+    "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+    "name": "Kurzman Family",
+    "stage_key": "tour",
+    "status_key": "new"
+  },
+  "active_bookings": [
+    {
+      "id": "daa73d80-f166-4ff9-9e4a-201f4fa9d9a2",
+      "opportunity_id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+      "status_key": "confirmed",
+      "start_at": "2026-08-14T16:00:00+00:00"
+    }
+  ],
+  "tour_wu": null,
+  "wait_wu": null
+}

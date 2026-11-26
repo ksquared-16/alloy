@@ -7,9 +7,9 @@
  * - `_related_activity_timeline_events` when includeRelatedRecords is enabled
  */
 
+import { activityRowSubject, type ActivityRowSubject } from "@/lib/admin/collapseBusinessEventMechanics";
 import { formatActivityTimelineEvent } from "@/lib/admin/activityTimelineFormat";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
-import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 import {
     defaultActivityTimelineConfigForSurface,
     readLayoutEditorActivityTimelineConfig,
@@ -23,6 +23,7 @@ import { resolveChildActivityPreview } from "@/lib/layout/runtime/resolveChildAc
 import { resolveLeadActivityPreview, type LeadActivityPreviewEntry } from "@/lib/layout/runtime/resolveLeadActivityPreview";
 import { resolvePersonActivityPreview, type PersonActivityPreviewEntry } from "@/lib/layout/runtime/resolvePersonActivityPreview";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 
 export type ActivityTimelineEntry = {
     id: string;
@@ -34,6 +35,14 @@ export type ActivityTimelineEntry = {
     atSortKey: number;
     source: "direct" | "related";
     relatedScope?: ActivityTimelineRelatedScope;
+    /**
+     * A row that is not something anyone DID: a delivery state (queued / delivered / failed) or a
+     * notification sent as the consequence of another action. Shown on the timeline; never chosen as
+     * the Last action.
+     */
+    notAnAction?: boolean;
+    /** The child this row is about, or null for family activity (@see activityRowSubject). */
+    subject?: ActivityRowSubject | null;
 };
 
 type RawActivityEventRow = {
@@ -65,8 +74,12 @@ const WORKFLOW_EVENT_TYPE_TO_CATEGORY: Record<string, ActivityTimelineEventType>
     intake_case_linked: "forms_documents",
     message_received: "communications",
     message_sent: "communications",
+    message_queued: "communications",
+    message_delivered: "communications",
     note_added: "notes",
     action_executed: "tasks_work",
+    stage_work_outcome_recorded: "tasks_work",
+    participant_decision_recorded: "tasks_work",
     opportunity_enrollment_packet_created: "forms_documents",
     opportunity_enrollment_packet_opened: "forms_documents",
     opportunity_enrollment_packet_step_completed: "forms_documents",
@@ -77,6 +90,19 @@ const WORKFLOW_EVENT_TYPE_TO_CATEGORY: Record<string, ActivityTimelineEventType>
     opportunity_waitlist_manual_adjustment_created: "lifecycle",
     opportunity_waitlist_manual_adjustment_updated: "lifecycle",
     opportunity_waitlist_manual_adjustment_released: "lifecycle",
+    tour_invitation_activated: "appointments_tours",
+    tour_invitation_created: "appointments_tours",
+    tour_booked: "appointments_tours",
+    tour_confirmed: "appointments_tours",
+    tour_booking_pending: "appointments_tours",
+    tour_requested: "appointments_tours",
+    tour_slot_selected: "appointments_tours",
+    tour_rescheduled: "appointments_tours",
+    tour_canceled: "appointments_tours",
+    tour_cancelled: "appointments_tours",
+    tour_invitation_declined: "appointments_tours",
+    tour_completed: "appointments_tours",
+    tour_no_show: "appointments_tours",
 };
 
 function parseSortKey(raw: unknown): number {
@@ -90,7 +116,8 @@ function parseSortKey(raw: unknown): number {
 function formatEventRow(
     row: RawActivityEventRow,
     surfaceKey: ActivityTimelineSurfaceKey,
-): Pick<ActivityTimelineEntry, "title" | "detail" | "actorLabel" | "at" | "atSortKey" | "eventType"> {
+    timeZone?: string | null,
+): Pick<ActivityTimelineEntry, "title" | "detail" | "actorLabel" | "at" | "atSortKey" | "eventType" | "notAnAction" | "subject"> {
     const payload =
         row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? row.payload
@@ -102,7 +129,15 @@ function formatEventRow(
     const eventTypeKey = String(row.event_type ?? "").trim().toLowerCase();
     const eventType = WORKFLOW_EVENT_TYPE_TO_CATEGORY[eventTypeKey] ?? "activity";
     const occurredAt = row.occurred_at ?? null;
-    const atText = occurredAt ? (formatActivityTimestamp(String(occurredAt)) || String(occurredAt)) : null;
+    // Format once with the operator display timezone. Leave raw ISO when TZ is unknown so
+    // UI leaves can format through the canonical helper without double-converting.
+    const atText = occurredAt
+        ? (
+            timeZone
+                ? formatActivityTimestamp(String(occurredAt), { timeZone }) || String(occurredAt)
+                : String(occurredAt)
+        )
+        : null;
     return {
         title: formatted.title,
         detail: formatted.detail,
@@ -110,6 +145,12 @@ function formatEventRow(
         at: atText,
         atSortKey: parseSortKey(occurredAt),
         eventType,
+        notAnAction:
+            payload._consequence === true
+            || eventTypeKey === "message_queued"
+            || eventTypeKey === "message_delivered"
+            || eventTypeKey === "message_failed",
+        subject: activityRowSubject(payload),
     };
 }
 
@@ -119,6 +160,10 @@ function previewEntryToTimelineEntry(
     source: "direct" | "related",
     relatedScope?: ActivityTimelineRelatedScope,
 ): ActivityTimelineEntry {
+    const atSortKey =
+        "atSortKey" in entry && typeof entry.atSortKey === "number"
+            ? entry.atSortKey
+            : parseSortKey(entry.at);
     return {
         id: `preview-${source}-${relatedScope ?? "direct"}-${entry.kind}-${index}`,
         eventType: PREVIEW_KIND_TO_EVENT_TYPE[entry.kind] ?? "activity",
@@ -126,7 +171,7 @@ function previewEntryToTimelineEntry(
         detail: entry.detail,
         actorLabel: null,
         at: entry.at,
-        atSortKey: parseSortKey(entry.at),
+        atSortKey,
         source,
         ...(relatedScope ? { relatedScope } : {}),
     };
@@ -180,15 +225,18 @@ export function resolveLayoutRuntimeActivityTimeline(input: {
     surfaceKey: ActivityTimelineSurfaceKey;
     config?: LayoutEditorActivityTimelineConfig;
     itemMetadata?: Record<string, unknown>;
+    /** Operator/org display timezone (user → org → UTC). When set, formats `at` once. */
+    timeZone?: string | null;
 }): ActivityTimelineEntry[] {
     const config =
         input.config
         ?? readLayoutEditorActivityTimelineConfig(input.itemMetadata, input.surfaceKey);
     const allowedEventTypes = new Set(config.eventTypes);
     const entries: ActivityTimelineEntry[] = [];
+    const timeZone = input.timeZone ?? null;
 
     for (const [index, row] of readRawEventRows(input.record).entries()) {
-        const formatted = formatEventRow(row, input.surfaceKey);
+        const formatted = formatEventRow(row, input.surfaceKey, timeZone);
         if (!eventTypeAllowed(formatted.eventType, allowedEventTypes)) continue;
         entries.push({
             id: String(row.id ?? `workflow-${index}`),
@@ -210,7 +258,7 @@ export function resolveLayoutRuntimeActivityTimeline(input: {
             const relatedRows = readRelatedEventRows(input.record, scope);
             if (relatedRows.length > 0) {
                 for (const [index, row] of relatedRows.entries()) {
-                    const formatted = formatEventRow(row, input.surfaceKey);
+                    const formatted = formatEventRow(row, input.surfaceKey, timeZone);
                     if (!eventTypeAllowed(formatted.eventType, allowedEventTypes)) continue;
                     entries.push({
                         id: String(row.id ?? `related-${scope}-${index}`),

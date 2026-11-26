@@ -73,14 +73,16 @@ describe("default Lead drawer — Children & Enrollment table", () => {
             "child.name",
             "child.dob_age",
             "child.program",
-            "child.desired_start_date",
+            "child.start_date",
             "child.schedule",
             "child.room",
             "child.location",
             "child.status",
         ]);
-        // Child column links to the child drawer
-        expect(table!.columns?.[0].adornment?.action?.entity).toBe("child");
+        // The child column carries its icon; the retired `open_drawer` action is gone from the
+        // platform default — nothing renders it on an operator surface.
+        expect(table!.columns?.[0].adornment?.icon).toBe("child");
+        expect(table!.columns?.[0].adornment?.action).toBeUndefined();
         expect(doc.sections.find((s) => s.key === "children_enrollment")?.title).toBe("Children & Enrollment");
     });
 });

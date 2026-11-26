@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# =============================================================================
+# pre-push — the git entry point for the existing push guard.
+#
+# THIS IS NOT A SECOND GUARD. It contains no rule. Every decision stays in
+# guard-push.sh, which was written, tested and then never invoked by anything:
+# DevOps 8 measured it registered in no hook config and installed as no git hook,
+# which made CLAUDE.md's push prohibition the only thing enforcing it.
+#
+# WHY HERE AND NOT IN .claude/settings.json. guard-push.sh is documented as
+# "Invoked by git as: pre-push <remote-name> <remote-url>, with the ref list on
+# stdin". A Claude PreToolUse hook receives a JSON payload on stdin and no such
+# arguments, so wiring it there would have handed it the wrong input in the wrong
+# shape and produced a guard that always passed — worse than the unwired guard,
+# because it would look enforced.
+#
+# Installed by `alloy-install-git-hooks`, which points core.hooksPath at this
+# directory so every worktree of the shared .git is covered at once.
+# =============================================================================
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GUARD="${HERE}/../guard-push.sh"
+
+if [[ ! -x "$GUARD" ]]; then
+  # A missing guard must not silently allow the push it exists to refuse.
+  printf '\n\033[31mPUSH BLOCKED\033[0m — the push guard is missing at %s\n\n' "$GUARD" >&2
+  exit 1
+fi
+
+exec "$GUARD" "$@"

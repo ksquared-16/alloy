@@ -38,7 +38,7 @@ const CANDIDATE: PlacementCandidateRow = {
     program_room_cohort_key: "pre_k_4_5_years",
     program_room_group_label: "Pre-K — 4–5 years",
     wait_since: "2024-06-01T12:00:00.000Z",
-    desired_start_date: "2024-09-01",
+    start_date: "2024-09-01",
     status: "active",
     seed_key: "pc_v1:opp_1:ocm_1:pre_k",
     metadata: null,

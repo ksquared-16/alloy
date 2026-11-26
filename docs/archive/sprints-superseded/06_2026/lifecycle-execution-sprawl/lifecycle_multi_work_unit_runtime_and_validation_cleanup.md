@@ -1,6 +1,6 @@
 # Lifecycle Multi Work Unit Runtime + Validation Cleanup
 
-**Path:** `docs/sprints/06_2026/lifecycle_multi_work_unit_runtime_and_validation_cleanup.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_multi_work_unit_runtime_and_validation_cleanup.md`  
 **Status:** Implemented  
 **Related:** `lifecycle_runtime_binding_audit.md`, `lifecycle_runtime_binding_e2e_fix.md`
 

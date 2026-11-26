@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Settings V2 Doctrine
 
 **Status:** Active — Business Processes is the first reference implementation (June 2026).
@@ -34,7 +41,7 @@ People, locations, access, and communication.
 | Locations & hierarchy | `/admin/settings/locations` |
 | Departments | `/admin/settings/departments` |
 | Users & access | `/admin/settings/users-roles` |
-| Communications | `/admin/settings/communications` |
+| Communications | `/organization/communications` |
 
 ### Data Model
 
@@ -117,5 +124,5 @@ One **Save stage** action per stage workspace. Avoid per-section Save buttons.
 ## Related docs
 
 - `docs/system/configuration-system.md` — control plane vs runtime
-- `docs/sprints/06_2026/business_processes_v2_qa_path.md` — QA walkthrough
-- `docs/sprints/06_2026/enrollment_operations_configuration_ux_audit.md` — fragmentation diagnosis
+- `docs/sprints/archive/06_2026/business_processes_v2_qa_path.md` — QA walkthrough
+- `docs/sprints/archive/06_2026/enrollment_operations_configuration_ux_audit.md` — fragmentation diagnosis

@@ -26,7 +26,7 @@ export type PlacementCandidateRow = {
     program_room_cohort_key: string;
     program_room_group_label: string | null;
     wait_since: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     status: PlacementCandidateStatus;
     seed_key: string | null;
     metadata: Record<string, unknown> | null;
@@ -60,7 +60,7 @@ export type OpportunityPlacementCandidateVm = {
     program_room_cohort_key: string;
     program_room_group_label: string | null;
     wait_since: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     child: OpportunityPlacementCandidateChildVm;
     link_group?: PlacementCandidateLinkGroupSummary | null;
     active_overrides: PlacementCandidateActiveOverrideSummary[];

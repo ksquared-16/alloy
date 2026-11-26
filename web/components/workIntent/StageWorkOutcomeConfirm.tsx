@@ -3,59 +3,58 @@
 type Props = {
     outcomeLabel: string;
     effectLines: string[];
+    workTitle?: string | null;
     busy?: boolean;
     onConfirm: () => void;
     onCancel: () => void;
 };
 
-/** BOS-aligned confirmation step before applying a stage-work outcome. */
+/** Confirmation step before applying a configured stage-work outcome. */
 export default function StageWorkOutcomeConfirm({
     outcomeLabel,
     effectLines,
+    workTitle,
     busy = false,
     onConfirm,
     onCancel,
 }: Props) {
+    const uniqueEffects = [...new Set(effectLines.map((line) => line.trim()).filter(Boolean))];
+
     return (
-        <div className="space-y-3" data-testid="stage-work-outcome-confirm">
-            <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                    Result preview
-                </p>
-                <p className="mt-1 text-[15px] font-semibold text-alloy-midnight">{outcomeLabel}</p>
-            </div>
-            {effectLines.length > 0 ?
-                <div>
-                    <p className="text-[11px] font-medium text-alloy-midnight/60">Will:</p>
-                    <ul className="mt-1.5 space-y-1">
-                        {effectLines.map((line) => (
-                            <li key={line} className="flex gap-2 text-[12px] text-alloy-midnight/75">
-                                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-alloy-pine/70" aria-hidden />
-                                <span>{line}</span>
-                            </li>
+        <div className="alloy-os-outcome-confirm" data-testid="stage-work-outcome-confirm">
+            <p className="alloy-os-outcome-picker__eyebrow">Review outcome</p>
+            {workTitle ?
+                <p className="alloy-os-outcome-picker__hint">{workTitle}</p>
+            :   null}
+            <p className="alloy-os-outcome-picker__title">{outcomeLabel}</p>
+            {uniqueEffects.length > 0 ?
+                <div className="alloy-os-outcome-confirm__effects">
+                    <p className="alloy-os-outcome-confirm__effects-title">What changes</p>
+                    <ul className="alloy-os-outcome-confirm__list">
+                        {uniqueEffects.map((line) => (
+                            <li key={line}>{line}</li>
                         ))}
                     </ul>
                 </div>
             :   null}
-            <p className="text-[11px] text-alloy-midnight/50">Confirm?</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="alloy-os-card-nav" data-outcome-confirm-actions>
                 <button
                     type="button"
                     disabled={busy}
-                    className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-pine/90 disabled:opacity-50"
-                    data-testid="stage-work-outcome-confirm-submit"
-                    onClick={onConfirm}
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    data-testid="stage-work-outcome-confirm-cancel"
+                    onClick={onCancel}
                 >
-                    Confirm
+                    ← Back
                 </button>
                 <button
                     type="button"
                     disabled={busy}
-                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10 disabled:opacity-50"
-                    data-testid="stage-work-outcome-confirm-cancel"
-                    onClick={onCancel}
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5 alloy-os-ucard__action--cta"
+                    data-testid="stage-work-outcome-confirm-submit"
+                    onClick={onConfirm}
                 >
-                    Cancel
+                    {busy ? "Applying outcome…" : "Record outcome"}
                 </button>
             </div>
         </div>

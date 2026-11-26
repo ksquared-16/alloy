@@ -2,7 +2,7 @@
  * Record drawer layout composition capabilities (Settings control plane).
  * BOS: human operators and config_layout_assist proposals use the same mutation classes and admin APIs.
  * @see docs/product/bos-foundation.md
- * @see docs/sprints/05_2026/record_experience_builder_phase_1.md
+ * @see docs/sprints/archive/05_2026/record_experience_builder_phase_1.md
  */
 
 import type { LayoutSettingsEntityKey } from "@/lib/adminV2/layoutsSettingsEntities";

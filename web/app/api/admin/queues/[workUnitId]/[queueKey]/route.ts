@@ -12,12 +12,18 @@ import {
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
-import { filterQueueRowsByWorkViewFilters } from "@/lib/lifecycle/evaluateWorkViewFiltersV1";
+import {
+    applyWorkViewFilterToQueueItemsResult,
+    WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
+} from "@/lib/lifecycle/operationalProjection";
 import {
     fetchDepartmentMetadataForWorkUnit,
     resolveActiveWorkViewRuntimeContext,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { projectQueuePreviewRowContexts } from "@/lib/queues/queuePreviewRowContextProjection";
+import { documentActorFromAdminGate } from "@/lib/documents/projectPersonProfilePhotos";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
+import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
 import {
     buildWorkUnitQueueItemsServerCacheKey,
@@ -105,6 +111,9 @@ export async function GET(
             .select("id")
             .eq("id", workUnitId)
             .eq("org_id", gate.orgId)
+            // Operator runtime: an inactive/archived work unit must not serve queue rows (a stale
+            // bookmark/URL 404s instead of rendering legacy data). Admin/settings use other reads.
+            .eq("is_active", true)
             .maybeSingle(),
         resolveQueueRecordScopeConstraints(supabase, gate.orgId, dim, workspaceSiteId),
         fetchEffectiveUserDisplayTimezoneCached(supabase, {
@@ -133,6 +142,10 @@ export async function GET(
         const attentionBucketKey = (request.nextUrl.searchParams.get("attention_bucket") ?? "").trim() || null;
         const rowMode = (request.nextUrl.searchParams.get("row_mode") ?? "").trim().toLowerCase();
         const rowEnrichment = rowMode === "preview" || rowMode === "reveal" ? "queue_reveal" : "queue_list";
+        // Deployed instrumentation: surface which caller requested which mode, and how the server
+        // resolved it — so a trace shows at a glance whether the canonical surface is on queue_reveal.
+        const callerSurface = (request.nextUrl.searchParams.get("caller_surface") ?? "").trim() || "unknown";
+        const requestedMode = rowMode || "unset";
         const workViewIdParam =
             (request.nextUrl.searchParams.get("work_view_id") ?? request.nextUrl.searchParams.get("work_view") ?? "").trim()
             || null;
@@ -170,6 +183,9 @@ export async function GET(
                 server_cache_hit: true,
                 row_enrichment: rowEnrichment,
                 enrichment_mode: cached.rowsPerf.enrichment_mode ?? rowEnrichment,
+                requested_mode: requestedMode,
+                resolved_mode: rowEnrichment,
+                caller_surface: callerSurface,
                 row_count: Array.isArray(cached.result.items) ? cached.result.items.length : 0,
                 payload_kb: Math.round(payload_kb * 10) / 10,
                 count_mode: queueRowsCountModeLabel(omitTotalCount, countAccuracy),
@@ -180,48 +196,78 @@ export async function GET(
                 headers: {
                     "content-type": "application/json; charset=utf-8",
                     "x-alloy-queue-rows-cache": "hit",
+                    "x-alloy-queue-requested-mode": requestedMode,
+                    "x-alloy-queue-resolved-mode": rowEnrichment,
+                    "x-alloy-queue-caller-surface": callerSurface,
+                    "x-alloy-build-sha": process.env.VERCEL_GIT_COMMIT_SHA ?? "unknown",
+                    "Server-Timing": buildQueueRowsServerTimingHeader({
+                        cacheHit: true,
+                        metrics: {
+                            auth: auth_ms,
+                            prep: prep_ms,
+                            load_def: cached.rowsPerf.load_def_ms,
+                            operational_day: cached.rowsPerf.operational_day_ms,
+                            base_query: cached.rowsPerf.base_query_ms,
+                            count: cached.rowsPerf.count_ms,
+                            status_defs: cached.rowsPerf.status_defs_ms,
+                            enrichment: cached.rowsPerf.enrichment_ms,
+                            service_total: cached.rowsPerf.service_total_ms,
+                            total: Date.now() - handlerT0,
+                        },
+                    }),
                 },
             });
         }
+
+        let workViewFilterCtx: ReturnType<typeof resolveActiveWorkViewRuntimeContext> | null = null;
+        if (workViewIdParam) {
+            const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(supabase, gate.orgId, workUnitId);
+            workViewFilterCtx = resolveActiveWorkViewRuntimeContext({
+                departmentMetadata,
+                workViewId: workViewIdParam,
+                queueKey,
+            });
+        }
+        const needsWorkViewFilter = Boolean(workViewFilterCtx?.filters?.length);
 
         const { result, rowsPerf } = await getWorkUnitQueueItems({
             orgId: gate.orgId,
             workUnitId,
             queueKey,
-            limit,
-            offset,
+            limit: needsWorkViewFilter ? WORK_VIEW_QUEUE_FILTER_FETCH_CAP : limit,
+            offset: needsWorkViewFilter ? 0 : offset,
             countAccuracy,
-            omitTotalCount,
+            omitTotalCount: needsWorkViewFilter ? true : omitTotalCount,
             recordScopeImpossible,
             recordScopeConstraints,
             viewerDisplayTimeZone,
             attentionBucketKey,
             rowEnrichment,
+            documentActor: documentActorFromAdminGate(gate),
         });
 
         let responseResult = result;
-        if (workViewIdParam && Array.isArray(result.items) && result.items.length) {
-            const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(supabase, gate.orgId, workUnitId);
-            const ctx = resolveActiveWorkViewRuntimeContext({
-                departmentMetadata,
-                workViewId: workViewIdParam,
-                queueKey,
+        if (needsWorkViewFilter && workViewFilterCtx?.filters?.length) {
+            responseResult = applyWorkViewFilterToQueueItemsResult({
+                result,
+                filters: workViewFilterCtx.filters,
+                match: workViewFilterCtx.match,
+                pageLimit: limit,
+                pageOffset: offset,
+                omitTotalCount,
             });
-            if (ctx.filters?.length) {
-                const filtered = filterQueueRowsByWorkViewFilters(
-                    result.items as Array<Record<string, unknown>>,
-                    ctx.filters,
-                    ctx.match,
-                );
-                responseResult = {
-                    ...result,
-                    items: filtered,
-                    total:
-                        typeof result.total === "number" ?
-                            filtered.length
-                        :   result.total,
-                };
-            }
+        }
+
+        // Wire-only compact projection for the canonical visible-row (queue_reveal) surface: the
+        // deployed CondensedQueueRow reads only a narrow slice of `_queue_row_context`, so we strip the
+        // Focus-Panel-only / predicate-only / detail fields from the serialized context here — AFTER
+        // work-view filtering has consumed the base-query facts it needs. Counts, filtering, and
+        // `computeWorkViewOperationalSignals` run on base rows before this point and are untouched.
+        if (rowEnrichment === "queue_reveal" && Array.isArray(responseResult.items)) {
+            responseResult = {
+                ...responseResult,
+                items: projectQueuePreviewRowContexts(responseResult.items),
+            };
         }
 
         writeWorkUnitQueueItemsServerCache(cacheKey, { result: responseResult, rowsPerf });
@@ -244,6 +290,9 @@ export async function GET(
             server_cache_hit: false,
             row_enrichment: rowEnrichment,
             enrichment_mode: rowsPerf.enrichment_mode ?? rowEnrichment,
+            requested_mode: requestedMode,
+            resolved_mode: rowEnrichment,
+            caller_surface: callerSurface,
             enrichment_queries_run: rowsPerf.enrichment_queries_run,
             skipped_enrichment: rowsPerf.skipped_enrichment,
             ...rowsPerfForLog,
@@ -256,11 +305,45 @@ export async function GET(
             omit_total_count: omitTotalCount,
         });
 
+        // Same-invocation proof of the mode this exact request resolved to, plus the running build
+        // SHA — so a browser/network trace proves whether the canonical caller sent reveal and which
+        // build served it, without inferring from source or a deployment record.
+        console.info("[queue-mode-proof]", {
+            rawRowMode: rowMode || null,
+            requested_mode: requestedMode,
+            resolved_mode: rowEnrichment,
+            caller_surface: callerSurface,
+            work_unit_id: workUnitId,
+            queue_key: queueKey,
+            payload_kb: Math.round(payload_kb * 10) / 10,
+            gitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+        });
+
         return new NextResponse(bodyJson, {
             status: 200,
             headers: {
                 "content-type": "application/json; charset=utf-8",
                 "x-alloy-queue-rows-cache": "miss",
+                "x-alloy-queue-requested-mode": requestedMode,
+                "x-alloy-queue-resolved-mode": rowEnrichment,
+                "x-alloy-queue-caller-surface": callerSurface,
+                "x-alloy-build-sha": process.env.VERCEL_GIT_COMMIT_SHA ?? "unknown",
+                "Server-Timing": buildQueueRowsServerTimingHeader({
+                    cacheHit: false,
+                    metrics: {
+                        auth: auth_ms,
+                        prep: prep_ms,
+                        load_def: rowsPerf.load_def_ms,
+                        operational_day: rowsPerf.operational_day_ms,
+                        base_query: rowsPerf.base_query_ms,
+                        count: rowsPerf.count_ms,
+                        status_defs: rowsPerf.status_defs_ms,
+                        enrichment: rowsPerf.enrichment_ms,
+                        serialize: serialize_ms,
+                        service_total: rowsPerf.service_total_ms,
+                        total: total_ms,
+                    },
+                }),
             },
         });
     } catch (e) {

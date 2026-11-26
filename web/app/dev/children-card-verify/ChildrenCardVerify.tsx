@@ -19,7 +19,7 @@ import type {
 const SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
     communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
     billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
 };
@@ -40,7 +40,7 @@ const CONTEXT: OperationalContext = {
                 desired_program_label: "Preschool",
                 program_room_cohort_label: "Butterflies Room",
                 desired_schedule_label: "M–F · 8:30a – 2:30p",
-                desired_start_date: "Aug 20, 2024",
+                start_date: "Aug 20, 2024",
                 outcome_status_label: "Enrolled",
                 outcome_status_key: "enrolled",
             },

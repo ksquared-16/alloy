@@ -1,0 +1,330 @@
+{
+  "schema_version": "vacilando.tier2_baseline.v1",
+  "recorded_at": "2026-09-14",
+  "local": {
+    "staging_sha": "edaefbbcf667",
+    "total": 283,
+    "green": 253,
+    "red": 30,
+    "hang": 0
+  },
+  "ci": {
+    "run_id": "34847072382",
+    "workflow_definition_sha": "7204dff44a745f91e8f8a1218cb80e5e753c1995",
+    "workflow_definition_branch": "main",
+    "tested_sha": "7562763bb",
+    "tested_ref": "staging",
+    "total": 281,
+    "green": 242,
+    "red": 39,
+    "hang": 0,
+    "duration": "3m59s"
+  },
+  "delta_note": "CI ran 7562763bb (281 Tier 2 files); local ran edaefbbcf667 (283, +2 from PR 940). CI reported 39 red against local 30. The per-file CI red list is written to GITHUB_STEP_SUMMARY, not stdout, so it is NOT retrievable through the logs API - the counts are all that can be compared until the workflow also echoes the list. That change would require another write to main and is deliberately not made here.",
+  "reds": [
+    {
+      "file": "assignment-dispatch.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 103,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "continuous-improvement.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 87,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "deliverable-evidence-integrity.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 74,
+      "classification": "FIXTURE"
+    },
+    {
+      "file": "deliverable-feedback-loop-cert.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 79,
+      "classification": "FIXTURE"
+    },
+    {
+      "file": "deliverable-review.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 78,
+      "classification": "FIXTURE"
+    },
+    {
+      "file": "development-action-authorization-identity.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 64,
+      "classification": "ACTUAL_DEFECT"
+    },
+    {
+      "file": "development-autonomous-dispatch.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 1,
+      "ms": 17671,
+      "classification": "ACTUAL_DEFECT"
+    },
+    {
+      "file": "development-copy-control.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 1,
+      "ms": 67,
+      "classification": "OTHER"
+    },
+    {
+      "file": "development-director-execution-bridge.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 3,
+      "ms": 119,
+      "classification": "ACTUAL_DEFECT"
+    },
+    {
+      "file": "development-dispatch-wrapper-coverage.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 71,
+      "classification": "RUNNER_ENVIRONMENT"
+    },
+    {
+      "file": "development-execution-recovery.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 746,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "development-gateway-ui-v2.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 2,
+      "ms": 1796,
+      "classification": "OTHER"
+    },
+    {
+      "file": "development-lane-attachments.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 1,
+      "ms": 100,
+      "classification": "OTHER"
+    },
+    {
+      "file": "development-lane-output.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 89,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "development-lane-telemetry.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 68,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "development-mission-delegation-integration.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 22510,
+      "classification": "ACTUAL_DEFECT"
+    },
+    {
+      "file": "development-offline-lane.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 532,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "development-production-apply-owner.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 1,
+      "ms": 14726,
+      "classification": "ACTUAL_DEFECT"
+    },
+    {
+      "file": "development-provider-lifecycle.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 298,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "development-session-bootstrap.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 260,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "director-attention-model.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 2,
+      "ms": 60,
+      "classification": "OTHER"
+    },
+    {
+      "file": "executive-command-center-dx8.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 118,
+      "classification": "OTHER"
+    },
+    {
+      "file": "live-work-progress.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 123,
+      "classification": "OTHER"
+    },
+    {
+      "file": "mission-dashboard-closeout.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 124,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "mission-runtime.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": 2,
+      "ms": 3048,
+      "classification": "OTHER"
+    },
+    {
+      "file": "productize-improve-interp.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 83,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "trusted-host-actions.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 80,
+      "classification": "ACTUAL_DEFECT"
+    },
+    {
+      "file": "trusted-host-immutable-artifact.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 752,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "vacilando-status-perf.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 3197,
+      "classification": "LIVE_HOST_DEPENDENCY"
+    },
+    {
+      "file": "workspace-runtime-v3-3.test.mjs",
+      "state": "RED",
+      "exit_code": 1,
+      "failing_assertions": null,
+      "ms": 89,
+      "classification": "OTHER"
+    }
+  ],
+  "classification_note": "The four files first classified FIXTURE on their shared `if (!cond) throw` shape were reclassified after reading their actual failure text: 'POST improvements', 'timeline story created', 'director shows managed recovery', 'all complete, got complete,waiting,...'. They need a live surface, not a shared fixture helper. A common assertion helper is not evidence of a common root.",
+  "next_red_clusters": [
+    {
+      "rank": 1,
+      "name": "Governed dispatch and authorization correctness",
+      "files": [
+        "development-action-authorization-identity.test.mjs",
+        "trusted-host-actions.test.mjs",
+        "development-director-execution-bridge.test.mjs",
+        "development-mission-delegation-integration.test.mjs",
+        "development-production-apply-owner.test.mjs",
+        "development-autonomous-dispatch.test.mjs"
+      ],
+      "why": "Highest operator/runtime correctness and autonomy impact; these are the surfaces that decide whether governed work executes. Moderate shared-root probability around authorization identity and dispatch routing.",
+      "bounded": "Medium - six files, probably two roots."
+    },
+    {
+      "rank": 2,
+      "name": "Lane and provider runtime",
+      "files": [
+        "development-lane-output.test.mjs",
+        "development-lane-telemetry.test.mjs",
+        "development-provider-lifecycle.test.mjs",
+        "development-session-bootstrap.test.mjs",
+        "development-execution-recovery.test.mjs",
+        "development-offline-lane.test.mjs"
+      ],
+      "why": "Direct autonomy impact: lane binding, provider lifecycle and recovery. development-offline-lane fails on lane_worktree_unregistered, a known host-state coupling, so some of this cluster may be environment rather than defect.",
+      "bounded": "Medium - separate host-state coupling from real defects first."
+    },
+    {
+      "rank": 3,
+      "name": "Deliverable review",
+      "files": [
+        "deliverable-evidence-integrity.test.mjs",
+        "deliverable-review.test.mjs",
+        "deliverable-feedback-loop-cert.test.mjs"
+      ],
+      "why": "PROVEN shared root: all three import ../lib/vacilando/deliverable-review.mjs and fail on the same create-precondition. Smallest bounded fix with the highest confidence of one cause.",
+      "bounded": "Small - one module, three files."
+    },
+    {
+      "rank": 4,
+      "name": "Live-surface tests mis-tiered into Tier 2",
+      "files": [
+        "assignment-dispatch.test.mjs",
+        "continuous-improvement.test.mjs",
+        "mission-dashboard-closeout.test.mjs",
+        "productize-improve-interp.test.mjs"
+      ],
+      "why": "These need a running surface. The correct action is probably reclassification into Tier 3, not repair - they are deterministic only where that surface exists.",
+      "bounded": "Small - a partition rule change, but it lives on main."
+    },
+    {
+      "rank": 5,
+      "name": "Host-state coupled",
+      "files": [
+        "vacilando-status-perf.test.mjs",
+        "trusted-host-immutable-artifact.test.mjs"
+      ],
+      "why": "vacilando-status-perf fails with 'Runtime root already owned by pid 4407 on :3030'; trusted-host-immutable-artifact requires the real Alloy checkout to be dirty. Both couple to shared host state and cannot be deterministic in Tier 2.",
+      "bounded": "Small - Tier 3 reclassification."
+    }
+  ]
+}

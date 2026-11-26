@@ -1,0 +1,193 @@
+{
+  "entryUrl": "http://127.0.0.1:3012/workspace/work-unit/enrolled-children",
+  "runtime": {
+    "gitSha": null,
+    "gitBranch": null,
+    "gitMessage": null,
+    "vercelEnv": null,
+    "vercelUrl": null,
+    "vercelDeploymentId": null,
+    "nodeEnv": "development",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "entry": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition"
+    ],
+    "headings": [
+      "Enrollment",
+      "Certb Certhouse",
+      "Enrollment",
+      "Financials",
+      "Children",
+      "Certa CerthouseEnrolled",
+      "Certb CerthouseEnrolled",
+      "Household",
+      "Cert CerthousePrimary",
+      "Attendance — Today",
+      "Health & Safety",
+      "Tuition"
+    ],
+    "visibleWords": "9+ 6 ⌘K All locations ▾ QS Enrollment Pipeline 0 Needs attention 6 Overdue work 20 Pipeline Children Actions (2) ▶ New 3 Active Pipeline 0 Registration 3 Waitlist 16 Tours 0 All 7 Enrolled children 2 Filters ▼ PRESCHOOL 1 C Certb Certhouse Enrolled Certb (3y11m) 3w 1 child ▼ SCHOOL AGE 1 C Certa Certhouse Enrolled Certa (5y5m) 3w 1 child CC Certb Certhouse Enrolled North Campus Manage ▾ Work Activity ENROLLMENT Lead Aug 26 Tour Decision Sep 18 Waitlist Enrolling Enrolled Sep 18 CC Certa CC Certb LEAD No current work configured · Post-enrollment follow-up. Recent activity 4 ▾ FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $1,450.00 Fee $150.00 Consumable fee $36.00 DISCOUNTS & CREDITS Credit -$260.06 Adjustment $146.71 Discount -$145.00 NET OBLIGATION $1,487.87 Add DUE $1,912.00 $1,450.00 · 9 days past due Balance $1,412.87 Paid $75.00 Unassigned $132.00 Available $125.00 Payment Details → CHILDREN 2 2 children · 2 enrolled CC Certa Certhouse Enrolled North Campus Program School Age Date of birth Apr 12, 2021 Gender — custom → CC Certb Certhouse Enrolled North Campus Program Preschool Date of birth Sep 30, 2022 Gender — full_time → View children → HOUSEHOLD Needs contact Certhouse household Updated Sep 18, 2026 CC Cert Certhouse Primary guardian@operational-cards-cert.alloy.invalid (555) 555-0100 2 Children 0 Emergency contacts 0 Authorized pickups Add emergency contact → View household → ATTENDANCE — TODAY No record No attendance recorded today This child has more than one active enrolment; attendance cannot choose between them. Details → HEALTH & SAFETY HEALTH Mild intermittent asthma May need a rest break during sustained outdoor play. REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Medication authorization Missing View health details → TUITION 2 of 2 agreed Certb Certhouse Program · preschool Attendance · full_time Schedule · — days a week Effective · 2026-09-01 $1,450.00/monthly accepted, effective 2026-09-01 The assignment has changed since this was agreed. Re-resolve before accepting again. Billing period September 2026 · next October 2026 Recommended $1,450.00/monthly Program · Preschool Attendance · full_time Schedule · any Billed · monthly Organisation default Effective 2026-07-01 Accept tuition Certa Certhouse Program · school_age Attendance · custom Schedule · — days a week Effective · 2026-09-01 $185.00/weekly overridden, effective 2026-09-01 Family kept the organisation r"
+  },
+  "entryWords": {
+    "responsibility": false,
+    "discount": true,
+    "prepaid": true,
+    "billingFrequency": false,
+    "billingPeriod": true,
+    "accountingPeriod": false
+  },
+  "childRowVisible": true,
+  "childRowAccessibleName": "custom→",
+  "childPanel": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition",
+      "scheduling"
+    ],
+    "headings": [
+      "Enrollment",
+      "Certb Certhouse",
+      "Enrollment",
+      "Financials",
+      "Children",
+      "Certa CerthouseEnrolled",
+      "Certb CerthouseEnrolled",
+      "Household",
+      "Cert CerthousePrimary",
+      "Attendance — Today",
+      "Health & Safety",
+      "Tuition",
+      "Assignments"
+    ],
+    "visibleWords": "9+ 6 ⌘K All locations ▾ QS Enrollment Pipeline 0 Needs attention 6 Overdue work 20 Pipeline Children Actions (2) ▶ New 3 Active Pipeline 0 Registration 3 Waitlist 16 Tours 0 All 7 Enrolled children 2 Filters ▼ PRESCHOOL 1 C Certb Certhouse Enrolled Certb (3y11m) 3w 1 child ▼ SCHOOL AGE 1 C Certa Certhouse Enrolled Certa (5y5m) 3w 1 child CC Certb Certhouse Enrolled North Campus Manage ▾ Work Activity ENROLLMENT Lead Aug 26 Tour Decision Sep 18 Waitlist Enrolling Enrolled Sep 18 CC Certa CC Certb LEAD No current work configured · Post-enrollment follow-up. Recent activity 4 ▾ FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $1,450.00 Fee $150.00 Consumable fee $36.00 DISCOUNTS & CREDITS Credit -$260.06 Adjustment $146.71 Discount -$145.00 NET OBLIGATION $1,487.87 Add DUE $1,912.00 $1,450.00 · 9 days past due Balance $1,412.87 Paid $75.00 Unassigned $132.00 Available $125.00 Payment Details → CHILDREN 2 2 children · 2 enrolled CC Certa Certhouse Enrolled North Campus Program School Age Date of birth Apr 12, 2021 Gender — custom → CC Certb Certhouse Enrolled North Campus Program Preschool Date of birth Sep 30, 2022 Gender — full_time → View children → HOUSEHOLD Needs contact Certhouse household Updated Sep 18, 2026 CC Cert Certhouse Primary guardian@operational-cards-cert.alloy.invalid (555) 555-0100 2 Children 0 Emergency contacts 0 Authorized pickups Add emergency contact → View household → ATTENDANCE — TODAY No record No attendance recorded today This child has more than one active enrolment; attendance cannot choose between them. Details → HEALTH & SAFETY HEALTH Mild intermittent asthma May need a rest break during sustained outdoor play. REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Medication authorization Missing View health details → TUITION 2 of 2 agreed Certb Certhouse Program · preschool Attendance · full_time Schedule · — days a week Effective · 2026-09-01 $1,450.00/monthly accepted, effective 2026-09-01 The assignment has changed since this was agreed. Re-resolve before accepting again. Billing period September 2026 · next October 2026 Recommended $1,450.00/monthly Program · Preschool Attendance · full_time Schedule · any Billed · monthly Organisation default Effective 2026-07-01 Accept tuition Certa Certhouse Program · school_age Attendance · custom Schedule · — days a week Effective · 2026-09-01 $185.00/weekly overridden, effective 2026-09-01 Family kept the organisation r"
+  },
+  "childWords": {
+    "responsibility": false,
+    "discount": true,
+    "prepaid": true,
+    "billingFrequency": false,
+    "billingPeriod": true,
+    "accountingPeriod": false
+  },
+  "account": {
+    "customerId": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "prepaid": {
+      "availableCents": 12500,
+      "pendingCents": 0,
+      "heldCents": 0,
+      "heldSupported": true,
+      "positions": [
+        {
+          "paymentId": "7ca91075-1b80-4584-a722-c769d5241ff8",
+          "availability": "available",
+          "unappliedCents": 12500,
+          "heldCents": 0,
+          "payerCustomerId": null,
+          "payerLabel": null,
+          "receivedAt": "2026-09-18T15:53:51.405+00:00"
+        }
+      ],
+      "currency": "USD"
+    },
+    "heldDeposits": [],
+    "responsibility": {
+      "shares": 0,
+      "arrangementId": null
+    },
+    "reductions": 51,
+    "subjects": 2
+  },
+  "sidebarFinancialsPresent": true,
+  "sidebarFinancialsName": "Financials — the financial work waiting on an operator, and the accounts it belongs to",
+  "orgLanding": {
+    "cards": [],
+    "headings": [
+      "Financials",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Payments",
+      "Accounting",
+      "Simulator",
+      "Funding"
+    ],
+    "visibleWords": "⌘K QS Organization financials Financials Organization›Financials Choose the financial area you need to configure. Tuition Tuition Plans, enrollment commitments, organization pricing, and location overrides. Organization tuition defaults Location overrides and inheritance Cadence-based rates and day-band pricing Open Tuition Catalog Fees, optional services, and other chargeable offerings outside recurring tuition. Fees, add-ons, and deposits Commercial products for Programs Categories and location/program scoping Open Catalog Policies How operational events affect financial execution. Discount and deposit rules Commercial policy eligibility Organization-scoped policy authoring Open Policies Payments Connect a payment provider so this organization can accept card and bank payments. Connect a payment provider Card and bank payment readiness Provider status and disconnection Open Payments Accounting GL Codes, revenue mappings, and where tuition and fees post. Revenue categories GL account relationships Mapping review for commercial charges Open Accounting Simulator Preview how commercial execution resolves for a Program and schedule. Preview commercial execution Program · offering · schedule · cadence Utility workspace — not a config collection Open Simulator Funding Who pays remains owned by Processing — this chapter documents the boundary. Payment responsibility boundary Owned by Processing — not Financials config Documents who-pays separation from price Open Funding BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization / commands · ↵ to send · ⇧↵ new line BOS uses AI. Review for accuracy."
+  },
+  "orgLandingWords": {
+    "responsibility": true,
+    "discount": true,
+    "prepaid": false,
+    "billingFrequency": false,
+    "billingPeriod": false,
+    "accountingPeriod": false
+  },
+  "orgChapterAffordances": [
+    {
+      "name": "Tuition",
+      "interactive": false,
+      "tag": null,
+      "href": null
+    },
+    {
+      "name": "Catalog",
+      "interactive": false,
+      "tag": null,
+      "href": null
+    },
+    {
+      "name": "Policies",
+      "interactive": false,
+      "tag": null,
+      "href": null
+    },
+    {
+      "name": "Payments",
+      "interactive": false,
+      "tag": null,
+      "href": null
+    },
+    {
+      "name": "Accounting",
+      "interactive": false,
+      "tag": null,
+      "href": null
+    },
+    {
+      "name": "Simulator",
+      "interactive": false,
+      "tag": null,
+      "href": null
+    },
+    {
+      "name": "Funding",
+      "interactive": false,
+      "tag": null,
+      "href": null
+    }
+  ],
+  "chapter_Policies": {
+    "reachable": false,
+    "why": "no visible link or button with that name"
+  },
+  "chapter_Accounting": {
+    "reachable": false,
+    "why": "no visible link or button with that name"
+  },
+  "chapter_Tuition": {
+    "reachable": false,
+    "why": "no visible link or button with that name"
+  }
+}

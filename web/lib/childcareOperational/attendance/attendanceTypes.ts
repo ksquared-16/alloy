@@ -67,6 +67,14 @@ export type RecordAttendanceEventInput = {
     note?: string | null;
     metadata?: Record<string, unknown>;
     actor: AttendanceActorContext;
+    /**
+     * Producer-supplied ingestion identity. When present, a replay carrying the
+     * same key converges on the first fact instead of creating a second one.
+     * For an integration this is the external event id.
+     */
+    idempotencyKey?: string | null;
+    /** Correlation of the authoring command invocation (audit trace only). */
+    correlationId?: string | null;
 };
 
 export type CorrectAttendanceEventInput = Omit<RecordAttendanceEventInput, "enrollmentAgreementId"> & {

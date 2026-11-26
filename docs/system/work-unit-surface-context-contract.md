@@ -1,7 +1,14 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Work Unit Surface Context — Developer Contract
 
 **Status:** Contract frozen — **partial API wiring shipped** (case-grain rows only)  
-**Architecture:** [`status_ownership_and_lifecycle_grain_expansion.md`](../sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md), [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md), [`enrollment_lifecycle_status_matrix_contract.md`](../sprints/06_2026/enrollment_lifecycle_status_matrix_contract.md), **child-grain queue conversion (design gate):** [`child_grain_queue_conversion_design.md`](../sprints/06_2026/child_grain_queue_conversion_design.md), **Lifecycle Builder membership bridge:** [`lifecycle_builder_subject_grain_alignment_plan.md`](../sprints/06_2026/lifecycle_builder_subject_grain_alignment_plan.md)  
+**Architecture:** `status_ownership_and_lifecycle_grain_expansion.md` (historical: `../sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md`), `entity_status_lifecycle_stage_and_location_scope_contract.md` (historical: `../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`), `enrollment_lifecycle_status_matrix_contract.md` (historical: `../sprints/archive/06_2026/enrollment_lifecycle_status_matrix_contract.md`), **child-grain queue conversion (design gate):** `child_grain_queue_conversion_design.md` (historical: `../sprints/archive/06_2026/child_grain_queue_conversion_design.md`), **Lifecycle Builder membership bridge:** `lifecycle_builder_subject_grain_alignment_plan.md` (historical: `../sprints/archive/06_2026/lifecycle_builder_subject_grain_alignment_plan.md`)  
 **Types:** `web/lib/workUnits/`  
 **Contract version:** `1.1-partial` (grouped same-stage rows — optional fields; backward compatible with `1.0-partial`)
 
@@ -11,7 +18,7 @@
 
 Layout Configuration and AdminV2 work-unit surfaces need a **stable, grain-aware runtime payload** without embedding enrollment-specific branching in layout JSON.
 
-This module is the **runtime output** of the domain contract in [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7 — Lifecycle Builder configures stages and grains; queue membership resolves subjects; this layer normalizes **`QueueRowContext`** for layout blocks and drawer VM.
+This module is the **runtime output** of the domain contract in `entity_status_lifecycle_stage_and_location_scope_contract.md` (historical: `../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`) §7 — Lifecycle Builder configures stages and grains; queue membership resolves subjects; this layer normalizes **`QueueRowContext`** for layout blocks and drawer VM.
 
 Platform code resolves:
 
@@ -97,7 +104,7 @@ Existing grain-shaped rows always receive honest `row_subject` via `buildChildGr
 
 ### Phase C preflight
 
-[`child_grain_phase_c_preflight.md`](../sprints/06_2026/child_grain_phase_c_preflight.md) — counts and first-lane recommendation before flip.
+`child_grain_phase_c_preflight.md` (historical: `../sprints/archive/06_2026/child_grain_phase_c_preflight.md`) — counts and first-lane recommendation before flip.
 
 ### Not implemented yet
 - Grouped same-stage rows (`row_subjects`, `active_subject_group`) — types documented § grouped rows
@@ -249,7 +256,7 @@ Entity contract §7.4 — queue row click:
 
 ## Grouped rows — same case + same enrollment stage
 
-**Doctrine:** [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §3.3–§3.4 · [`enrollment_lifecycle_status_matrix_contract.md`](../sprints/06_2026/enrollment_lifecycle_status_matrix_contract.md) §4.1.
+**Doctrine:** `entity_status_lifecycle_stage_and_location_scope_contract.md` (historical: `../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`) §3.3–§3.4 · `enrollment_lifecycle_status_matrix_contract.md` (historical: `../sprints/archive/06_2026/enrollment_lifecycle_status_matrix_contract.md`) §4.1.
 
 ### Problem
 
@@ -374,8 +381,8 @@ cd web && npm run test -- tests/workUnits/buildPartialQueueRowContext.test.ts te
 
 | Doc | Role |
 |-----|------|
-| [`status_ownership_and_lifecycle_grain_expansion.md`](../sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md) | Lifecycle subject + queue row context |
-| [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) | Status vocabulary, location scope, redaction |
-| [`workspace-system.md`](./workspace-system.md) | Queue preview semantics |
-| [`completed/lifecycle_canonical_vocabulary.md`](../sprints/06_2026/completed/lifecycle_canonical_vocabulary.md) | Operator vocabulary |
-| [`lifecycle_builder_subject_grain_alignment_plan.md`](../sprints/06_2026/lifecycle_builder_subject_grain_alignment_plan.md) | Builder `queue_membership_v1` → honest `row_subject` resolver path |
+| `status_ownership_and_lifecycle_grain_expansion.md` (historical: `../sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md`) | Lifecycle subject + queue row context |
+| `entity_status_lifecycle_stage_and_location_scope_contract.md` (historical: `../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`) | Status vocabulary, location scope, redaction |
+| [`workspace-system.md`](../platform/core/navigation-and-workspace-doctrine.md) | Queue preview semantics |
+| `completed/lifecycle_canonical_vocabulary.md` (historical: `../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md`) | Operator vocabulary |
+| `lifecycle_builder_subject_grain_alignment_plan.md` (historical: `../sprints/archive/06_2026/lifecycle_builder_subject_grain_alignment_plan.md`) | Builder `queue_membership_v1` → honest `row_subject` resolver path |

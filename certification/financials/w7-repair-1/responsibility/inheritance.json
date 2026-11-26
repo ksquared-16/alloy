@@ -1,0 +1,30 @@
+[
+  {
+    "step": "B-inheritance",
+    "accountId": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+    "standing": {
+      "inForce": null,
+      "body": "RESPONSIBILITY Applies to Household — the whole account ▾ CURRENT Ada Certfree · since Oct 1, 2026 Saving replaces this arrangement. Effective from Applies from this date onward. Money already paid is not moved. RESPONSIBLE PARTIES Ada CertfreePrimary contact Fixed amount ▾ Enter an amount for at le"
+    },
+    "before": {
+      "ledgerRows": 0,
+      "chargeLines": 0
+    },
+    "preview": {
+      "responsibility": null,
+      "standing": null,
+      "chargeTo": null,
+      "amount": null,
+      "chargeToEditorOpen": false,
+      "submitDisabled": false
+    },
+    "after": {
+      "ledgerRows": 0,
+      "chargeLines": 0,
+      "overlay": "detail",
+      "error": null,
+      "floor": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "bodyText": "STAGING — NOT PRODUCTION 9+ 8 ⌘K All locations ▾ QS Enrollment Pipeline 0 Needs attention 8 Overdue work 22 Pipeline Children Actions (2) ▶ New 4 Active Pipeline 0 Registration 3 Waitlist 16 Tours 0 All 8 Enrolled children 2 Filters ▼ PRESCHOOL 1 C Certb Certhouse Enrolled Certb (4y) 1mo 1 child ▼ S"
+    }
+  }
+]

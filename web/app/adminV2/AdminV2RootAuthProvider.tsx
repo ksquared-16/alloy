@@ -10,6 +10,8 @@ type AdminV2RootAuthProviderProps = {
     orgId: string;
     role: string;
     roleKeys: string[];
+    /** Resolved grants for the org, so shell chrome can decide what to OFFER. Never an authorization. */
+    permissionKeys: string[];
     children: ReactNode;
 };
 
@@ -20,10 +22,18 @@ export default function AdminV2RootAuthProvider({
     orgId,
     role,
     roleKeys,
+    permissionKeys,
     children,
 }: AdminV2RootAuthProviderProps) {
     return (
-        <AdminAuthProvider userEmail={userEmail} userId={userId} orgId={orgId} role={role} roleKeys={roleKeys}>
+        <AdminAuthProvider
+            userEmail={userEmail}
+            userId={userId}
+            orgId={orgId}
+            role={role}
+            roleKeys={roleKeys}
+            permissionKeys={permissionKeys}
+        >
             {children}
         </AdminAuthProvider>
     );

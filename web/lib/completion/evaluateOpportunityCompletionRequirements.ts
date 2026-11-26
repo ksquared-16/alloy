@@ -42,10 +42,7 @@ function inquiryChildren(ctx: CompletionEvaluationContext): InquiryChildCompleti
 }
 
 function childHasProgram(child: InquiryChildCompletionSnapshot): boolean {
-    return (
-        !completionValueEmpty(child.desired_program_type) ||
-        !completionValueEmpty(child.program_room_cohort_key)
-    );
+    return !completionValueEmpty(child.program_category_id);
 }
 
 function childHasLocation(child: InquiryChildCompletionSnapshot): boolean {
@@ -168,7 +165,7 @@ export function evaluateOpportunityCompletionRequirements(
         if (!hasProgram) {
             violations.push(
                 oppViolation(ctx, {
-                    field_key: "desired_program_type",
+                    field_key: "program_category_id",
                     label: "Program / category",
                     requirement_type: "required_before_status_transition",
                     blocking_level: "hard_block",
@@ -198,12 +195,12 @@ export function evaluateOpportunityCompletionRequirements(
                     })
                 );
             }
-            if (!approveEnrollmentAction && completionValueEmpty(child.desired_start_date)) {
+            if (!approveEnrollmentAction && completionValueEmpty(child.start_date)) {
                 violations.push(
                     oppViolation(ctx, {
                         entity_type: "inquiry_child",
                         entity_id: childId,
-                        field_key: "desired_start_date",
+                        field_key: "start_date",
                         label: "Desired start date",
                         requirement_type: "required_before_status_transition",
                         blocking_level: "hard_block",

@@ -7,10 +7,13 @@
 
 import { randomUUID } from "crypto";
 
+import { captureUnknownFields, withUnknownFields } from "@/lib/config/preserveUnknownFields";
 import {
     canonicalWorkViewConditionFieldKey,
-    WORK_VIEW_CONDITION_FIELD_DEFS,
 } from "@/lib/lifecycle/workViewConditionFieldRegistry";
+import { workViewFilterFieldOptions } from "@/lib/lifecycle/workViewCanonicalOperands";
+import { canonicalWorkViewSortFieldKey } from "@/lib/lifecycle/workViewSortOperands";
+import { parseStageGrain, type StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export const WORK_VIEWS_V1_METADATA_KEY = "work_views_v1" as const;
 
@@ -49,11 +52,74 @@ export type WorkViewConfigV1Stored = {
     sorts_v1?: WorkViewSortV1[];
     visible_in_runtime?: boolean;
     display_order?: number;
+    /**
+     * DECLARED Row Grain — what one row of this lens IS.
+     *
+     * Row Grain is normally derived from the stages a lens filters on, and for a stage-scoped lens
+     * that derivation is authoritative. But a lens can be deliberately STAGE-INDEPENDENT ("every
+     * child with an active enrollment participation, wherever they are"), and such a lens has no
+     * stage predicate to derive from: the deriver reads "no stage predicate" as "spans every active
+     * stage" and, in a process with both family and child stages, refuses it as grain-ambiguous.
+     * Declaring the grain is how a stage-independent lens says what it is.
+     *
+     * This does NOT relax G-1. A declaration that contradicts the lens's own stage predicate is a
+     * lie, not an override, and `resolveLensRowGrain` refuses it.
+     */
+    row_grain_v1?: StageGrain;
     queue_layout_id?: string;
     focus_panel_layout_id?: string;
     /** Compatibility-only — maps to synced queue lane for runtime preview until migration. */
     compat_queue_key?: string;
+    /**
+     * BP V2 Slice 2 — the registered domain projection this view reads, on a `domain_projection`
+     * process only (`process_model_v1`). A KEY into a closed code registry, never a query: publication
+     * refuses an unregistered key, and refuses the field on a staged lifecycle.
+     * @see lib/businessProcesses/projections/domainProjectionRegistry.ts
+     */
+    projection_key?: string;
 };
+
+/** Summary label when a Work View includes all eligible process rows (empty `filters_v1`). */
+export const WORK_VIEW_CATCH_ALL_SUMMARY = "All work in this process" as const;
+
+/**
+ * Process-wide catch-all Work View — empty or absent `filters_v1`.
+ * Runtime: every row on the work unit all-records base passes the view predicate.
+ * Builder: "All work in this process" mode; skips mixed-grain stage validation.
+ */
+export function isWorkViewCatchAll(
+    view: Pick<WorkViewConfigV1Stored, "filters_v1"> | null | undefined,
+): boolean {
+    return !view?.filters_v1?.length;
+}
+
+/**
+ * Include-all Work Views (empty `filters_v1`) must resolve on the department aggregate host
+ * and all-records lane — not a stage-specific `compat_queue_key`. Strip erroneous bindings at
+ * load time so runtime counts/rows and pill routing agree with predicate-only semantics.
+ *
+ * Operator-configured labels are NEVER rewritten here — published Work View label is authoritative.
+ */
+export function normalizeCatchAllWorkViewCompatBinding(
+    view: WorkViewConfigV1Stored,
+): WorkViewConfigV1Stored {
+    if (!isWorkViewCatchAll(view) || !view.compat_queue_key?.trim()) return view;
+    const { compat_queue_key: _removed, ...rest } = view;
+    return rest;
+}
+
+/** Repair every catch-all view in a process work_views_v1 list. Returns changed rows + whether any changed. */
+export function repairWorkViewsCatchAllCompatBindings(
+    rows: readonly WorkViewConfigV1Stored[],
+): { workViews: WorkViewConfigV1Stored[]; changed: boolean } {
+    let changed = false;
+    const workViews = rows.map((row) => {
+        const repaired = normalizeCatchAllWorkViewCompatBinding(row);
+        if (repaired !== row) changed = true;
+        return repaired;
+    });
+    return { workViews: normalizeWorkViewsDisplayOrder(workViews), changed };
+}
 
 const FILTER_OPERATORS = new Set<WorkViewFilterOperatorV1>([
     "equals",
@@ -88,11 +154,44 @@ function parseFilter(raw: unknown): WorkViewFilterV1 | null {
 
 function parseSort(raw: unknown): WorkViewSortV1 | null {
     if (!isRecord(raw)) return null;
-    const field_key = typeof raw.field_key === "string" ? raw.field_key.trim() : "";
+    const rawFieldKey = typeof raw.field_key === "string" ? raw.field_key.trim() : "";
     const direction = raw.direction === "desc" ? "desc" : "asc";
-    if (!field_key) return null;
+    if (!rawFieldKey) return null;
+    const field_key = canonicalWorkViewSortFieldKey(rawFieldKey);
     return { field_key, direction };
 }
+
+/**
+ * Keys this parser owns. Anything else in a stored work view belongs to a newer writer and must
+ * survive the round trip untouched (Law 1/Law 7).
+ *
+ * A key this parser READS but does not declare here is worse than a missing feature: the residue
+ * carrier is an enumerable SYMBOL, and a symbol property makes the object unserializable across the
+ * React Server Component boundary. `row_grain_v1` was missing, so every work view with a declared
+ * row grain carried one — and every CLIENT navigation to `/workspace/work-unit/:slug` rendered a
+ * blank surface while a cold full-page load of the same URL rendered fine, because only the client
+ * transition re-serializes the props. `workViewsConfigV1OwnedKeys.test.ts` now derives this list
+ * from what the parser actually stores, so the omission cannot recur.
+ */
+const WORK_VIEW_OWNED_KEYS = [
+    "id",
+    "label",
+    "mission",
+    "match",
+    "filters_v1",
+    "sort_v1",
+    "sorts_v1",
+    "visible_in_runtime",
+    "display_order",
+    "row_grain_v1",
+    "queue_layout_id",
+    "focus_panel_layout_id",
+    "compat_queue_key",
+    "projection_key",
+] as const;
+
+/** Exported for the owned-key completeness test — not part of the runtime contract. */
+export const WORK_VIEW_OWNED_KEYS_FOR_TEST: readonly string[] = WORK_VIEW_OWNED_KEYS;
 
 export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (!isRecord(raw)) return null;
@@ -101,6 +200,25 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (!id || !label) return null;
 
     const stored: WorkViewConfigV1Stored = { id, label };
+    // `row_grain_v1` is owned ONLY WHEN THIS PARSER UNDERSTOOD IT.
+    //
+    // Both halves matter, and they pull in opposite directions:
+    //   - a grain this parser stores must be OWNED, or the value is duplicated into the residue and
+    //     the residue's enumerable symbol makes the record unserializable across the RSC boundary;
+    //   - a grain authored in a shape this parser does not recognise must stay UNOWNED, or an older
+    //     writer silently destroys a newer writer's field on the next read-modify-write (Law 1) —
+    //     which is how `row_grain_v1` was wiped four times before.
+    // Deciding per value satisfies both. `parseStageGrain` is the same acceptance test used below.
+    const declaredGrain = parseStageGrain(raw.row_grain_v1);
+    // Same rule for `projection_key`: owned only as a non-empty string, so a malformed value rides the
+    // residue untouched and publication can still name it.
+    const projectionKeyUnderstood = typeof raw.projection_key === "string" && raw.projection_key.trim() !== "";
+    const ownedKeys = WORK_VIEW_OWNED_KEYS.filter(
+        (key) =>
+            (key !== "row_grain_v1" || Boolean(declaredGrain))
+            && (key !== "projection_key" || projectionKeyUnderstood || raw.projection_key === undefined),
+    );
+    withUnknownFields(stored, captureUnknownFields(raw, ownedKeys));
     if (typeof raw.mission === "string" && raw.mission.trim()) stored.mission = raw.mission.trim();
     // `match` combinator (V3). Only persist when explicitly `any`; absent/`all` keeps the default AND
     // so legacy saved views are never silently reinterpreted.
@@ -123,6 +241,10 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (typeof raw.display_order === "number" && Number.isFinite(raw.display_order)) {
         stored.display_order = Math.max(1, Math.floor(raw.display_order));
     }
+    // Declared Row Grain — only a VALID grain persists as a typed field. An unrecognized value is not
+    // surfaced as a grain nothing can resolve; it rides in the residue instead (see the owned-key
+    // decision above), so a newer writer's shape survives the round trip untouched.
+    if (declaredGrain) stored.row_grain_v1 = declaredGrain;
     if (typeof raw.queue_layout_id === "string" && raw.queue_layout_id.trim()) {
         stored.queue_layout_id = raw.queue_layout_id.trim();
     }
@@ -132,7 +254,10 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (typeof raw.compat_queue_key === "string" && raw.compat_queue_key.trim()) {
         stored.compat_queue_key = raw.compat_queue_key.trim();
     }
-    return stored;
+    if (typeof raw.projection_key === "string" && raw.projection_key.trim()) {
+        stored.projection_key = raw.projection_key.trim();
+    }
+    return normalizeCatchAllWorkViewCompatBinding(stored);
 }
 
 export function parseWorkViewsV1(raw: unknown): WorkViewConfigV1Stored[] | null {
@@ -191,16 +316,18 @@ export function slugifyWorkViewId(raw: string): string {
 }
 
 /**
- * Selectable condition field options for the Work View editor — derived from the typed condition
- * registry. Generic `status` / `stage` are intentionally excluded (replaced by typed fields such as
- * Opportunity Stage / Opportunity Status / Child Enrollment Status). See
- * {@link WORK_VIEW_CONDITION_FIELD_DEFS} and {@link workViewConditionFieldGroups}.
+ * Selectable condition field options for the Work View editor — operational predicates plus
+ * canonical provider operands. Pass tenant field definitions for custom-field parity.
  */
+export function buildWorkViewFilterFieldOptions(
+    tenantFieldDefinitions?: readonly import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[],
+): ReadonlyArray<{ key: string; label: string }> {
+    return workViewFilterFieldOptions(tenantFieldDefinitions);
+}
+
+/** Operational-only seed list — prefer {@link buildWorkViewFilterFieldOptions}. */
 export const WORK_VIEW_FILTER_FIELD_OPTIONS: ReadonlyArray<{ key: string; label: string }> =
-    WORK_VIEW_CONDITION_FIELD_DEFS.filter((def) => def.runtimeSupported).map((def) => ({
-        key: def.key,
-        label: def.label,
-    }));
+    workViewFilterFieldOptions();
 
 export const WORK_VIEW_FILTER_OPERATOR_OPTIONS: ReadonlyArray<{ value: WorkViewFilterOperatorV1; label: string }> = [
     { value: "equals", label: "equals" },
@@ -212,9 +339,4 @@ export const WORK_VIEW_FILTER_OPERATOR_OPTIONS: ReadonlyArray<{ value: WorkViewF
     { value: "date_between", label: "date between" },
 ];
 
-export const WORK_VIEW_SORT_FIELD_OPTIONS = [
-    { key: "updated_at", label: "Updated" },
-    { key: "tour_time", label: "Tour time" },
-    { key: "created_at", label: "Created" },
-    { key: "priority", label: "Priority" },
-] as const;
+export { WORK_VIEW_SORT_FIELD_OPTIONS } from "@/lib/lifecycle/workViewSortOperands";

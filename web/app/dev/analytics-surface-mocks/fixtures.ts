@@ -7,7 +7,7 @@ import type { MetricHealthState, MetricTrendDirection, MetricTrendSentiment } fr
  *
  * These describe sample Dashboard Design Surfaces composed from the Metric
  * archetype + shared Renderer catalog — matching the Phase 2 mockups in
- * `docs/sprints/06_2026/analytics-operational-intelligence-platform/mockups`.
+ * `docs/sprints/archive/06_2026/analytics-operational-intelligence-platform/mockups`.
  *
  * Fixtures are presentation data only: every value is a pre-resolved display
  * string (calculation stays in OIP). They never call an API and are not used by

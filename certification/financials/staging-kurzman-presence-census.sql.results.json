@@ -1,0 +1,18 @@
+{
+  "trusted_host_action_id": "tha_e29662b7f3fffb",
+  "query_hash": "cedc902d11ea275e020035bc229bcd2ee79025758d029435e89a0bb35145887d",
+  "results": {
+    "org_firefly_present": true,
+    "opportunity_present": true,
+    "customer_present": true,
+    "case_still_waitlist_with_customer": true,
+    "candidates_on_case": {
+      "rows": 35,
+      "with_customer_id": 35
+    },
+    "totals": {
+      "orgs": 2,
+      "opportunities": 4
+    }
+  }
+}

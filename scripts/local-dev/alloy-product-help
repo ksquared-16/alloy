@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Alloy Product Runtime V1 — local artifact-driven product workflow.
+
+Product Runtime owns WHAT and WHY:
+  problem definition, outcomes, scope, UX/visual contract, acceptance,
+  product decisions, Product Contract approval, handoff to Engineering Runtime.
+
+V1 model:
+  Kelly + ChatGPT → Product Brief (YAML) → Product Runtime → approved Product Contract
+  → Engineering Runtime → workers → review package → human promotion
+
+Commands:
+  alloy-product-help
+  alloy-product-create <key> --clipboard|--from <path>
+  alloy-product-import <key>                    # stdin
+  alloy-product-status <key>
+  alloy-product-audit <key>
+  alloy-product-contract <key>
+  alloy-product-decisions <key>
+  alloy-product-decide <key> <decision-id> --choice <opt> --decided-by <name> --reason "..."
+  alloy-product-approve <key> --approver <name> [--reason "..."]
+  alloy-product-package <key>
+  alloy-product-handoff <key>
+  alloy-product-close <key> [--disposition "..."]
+  alloy-product-certify [--keep] [--verbose]
+
+Storage: ~/.local/state/alloy-dev/initiatives/<key>/product/
+
+See:
+  scripts/local-dev/PRODUCT-RUNTIME.md
+  scripts/local-dev/PRODUCT-CONTRACT.md
+  scripts/local-dev/HUMAN-DECISION-QUEUE.md
+  scripts/local-dev/PRODUCT-ENGINEERING-HANDOFF.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  usage
+}
+
+main "$@"

@@ -1,0 +1,141 @@
+[
+  {
+    "url": "/api/admin/queue-view-totals",
+    "status": 200,
+    "request": {
+      "targets": [
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_leads"
+        },
+        {
+          "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+          "queueKey": "lifecycle_qualification",
+          "workViewId": "new_work_view_2"
+        },
+        {
+          "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+          "queueKey": "lifecycle_tour",
+          "workViewId": "new_work_view_3"
+        },
+        {
+          "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+          "queueKey": "lifecycle_waitlist",
+          "workViewId": "new_work_view_4"
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_5"
+        },
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_work_view_6"
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_7"
+        }
+      ],
+      "selectedSiteId": null
+    },
+    "response": {
+      "generatedAt": "2026-09-18T23:06:50.916Z",
+      "totals": [
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_leads",
+          "count": 3,
+          "known": true
+        },
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_work_view_6",
+          "count": 7,
+          "known": true
+        },
+        {
+          "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+          "queueKey": "lifecycle_qualification",
+          "workViewId": "new_work_view_2",
+          "count": 0,
+          "known": true
+        },
+        {
+          "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+          "queueKey": "lifecycle_tour",
+          "workViewId": "new_work_view_3",
+          "count": 3,
+          "known": true
+        },
+        {
+          "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+          "queueKey": "lifecycle_waitlist",
+          "workViewId": "new_work_view_4",
+          "count": 16,
+          "known": true
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_5",
+          "count": 0,
+          "known": true
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_7",
+          "count": 2,
+          "known": true
+        }
+      ]
+    }
+  },
+  {
+    "url": "/api/admin/financial/policies",
+    "status": 201,
+    "request": {
+      "action": "create",
+      "scope_type": "org",
+      "policy_type": "due_date",
+      "label": "QA due date — on invoice",
+      "value": {
+        "strategy": "on_invoice",
+        "offset_days": 0
+      },
+      "effective_start": "2026-09-18"
+    },
+    "response": {
+      "policy": {
+        "id": "99f9511b-487d-431f-bce3-01e71d359b6e",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "scope_type": "org",
+        "location_id": null,
+        "service_id": null,
+        "rate_plan_id": null,
+        "policy_type": "due_date",
+        "label": "QA due date — on invoice",
+        "description": null,
+        "value": {
+          "strategy": "on_invoice",
+          "offset_days": 0
+        },
+        "is_active": true,
+        "effective_start": "2026-09-18",
+        "effective_end": null,
+        "source_key": "config",
+        "metadata": {},
+        "created_by": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+        "updated_by": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+        "created_at": "2026-09-18T23:07:12.093737+00:00",
+        "updated_at": "2026-09-18T23:07:12.093737+00:00"
+      }
+    }
+  }
+]

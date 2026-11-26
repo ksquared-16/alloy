@@ -28,7 +28,7 @@ describe("lifecycle required info queue scroll polish", () => {
 
     it("child field source audit doc exists", () => {
         const doc = readFileSync(
-            resolve(root, "../docs/sprints/06_2026/lifecycle_required_info_child_fields_audit.md"),
+            resolve(root, "../docs/sprints/archive/06_2026/lifecycle_required_info_child_fields_audit.md"),
             "utf8"
         );
         expect(doc).toContain("inquiry_child");

@@ -1,6 +1,135 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Documentation governance
 
-**Status:** Canonical rules for maintaining the doc system (June 2026 rebaseline).
+**Status:** Canonical rules for maintaining the doc system (June 2026 rebaseline; metadata contract July 2026).
+
+---
+
+## Machine-readable metadata contract
+
+Every **governed** document carries YAML frontmatter validated by `scripts/docs-lint.mjs`.
+
+### Required shape
+
+```yaml
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+superseded_by:
+---
+```
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `owner` | Yes | Concept owner (`platform`, `operator`, `modules`, `sprint`, etc.) |
+| `status` | Yes | Authority class (vocabulary below) |
+| `last_reviewed` | Yes | ISO date of last doctrine review |
+| `supersedes` | Optional | Paths or doc ids this doc replaces |
+| `superseded_by` | **Required when `status: superseded`** | Successor path or doc id |
+
+Optional fields (`concept`, `layer`) may be added when the lint system enforces them reliably. Wave 1 uses `concept` only on sprint execution artifacts.
+
+### Status vocabulary
+
+| Status | Meaning |
+|--------|---------|
+| `canonical` | Current platform truth |
+| `frozen` | Approved doctrine or architecture locked at a point in time |
+| `proposed` | Approved for consideration; not current truth |
+| `generated` | Machine-produced; do not hand-edit |
+| `sprint` | Implementation or execution artifact |
+| `historical` | Preserved context; not current truth |
+| `superseded` | Replaced; must identify successor via `superseded_by` |
+
+### Lifecycle
+
+```
+proposed → canonical / frozen → superseded → historical / archive
+```
+
+Generated references use `status: generated` and must name their generator in the
+document body. `generated` is a property of the **document**, not of its directory:
+
+- `docs/schema/` is wholly machine-produced; a hand-authored file there is a violation.
+- `docs/api/` is **mixed** — `api-index.md` is generated; every other file is authored
+  doctrine, reference, or a point-in-time record, and each declares its own status.
+  Do not assume a file is generated because of where it lives.
+
+---
+
+## Placement rules
+
+1. **One canonical owner per concept** — no duplicate doctrine for the same topic.
+2. **No new markdown files at `docs/` root** — only `docs/README.md` is permitted.
+3. **No sprint artifacts inside `docs/platform/`** — execution history lives under `docs/sprints/`.
+4. **No duplicated canonical doctrine** — merge or archive duplicates; banner survivors.
+5. **Canonical docs must not depend on sprint files as current truth** — sprint links are historical references only; docs-lint reports violations.
+6. **Generated files must name generator and source** — see schema/API regen commands below.
+7. **Doctrine-changing product PRs must update the owning canonical document** in the same PR.
+8. **Sprint closeout documents do not become doctrine by declaration alone** — summarize into `release-history.md` and archive sprint detail.
+
+### The `docs/platform/planning/` exception
+
+Placement rule 3 has one **named, dated exception**: `docs/platform/planning/` (242 files).
+
+A September 2026 audit examined relocating it and decided against, on evidence:
+
+- A live acceptance gate keys on the literal prefix — `ALLOWED_CHANGE_PREFIX` in
+  `scripts/local-dev/lib/vacilando/acceptance.mjs`.
+- `web/tests/enrollment/assignmentCommitmentAuthority.test.ts` reads a document from the tree
+  **at runtime**, and two `web/package.json` scripts write evidence JSON into it.
+- Roughly 46 hardcoded code paths and 186 depth-sensitive relative links would break.
+- About 38 of the files are genuine doctrine. `docs/sprints/` is not a legal home for doctrine —
+  this document says sprint material is *never* primary current truth — so a wholesale move would
+  strand them worse than leaving them.
+- `GOVERNED_GLOBS` does not cover `docs/sprints/**`, so moving the tree would **hide** its debt
+  rather than resolve it.
+
+The exception is scoped, not blanket. Files there stay governed for frontmatter, and three rules
+exist **because** of the exception:
+
+| Rule | Meaning |
+|------|---------|
+| `canonical-in-planning` | A document inside the exception may not declare `status: canonical`. The tree's own README says it is not doctrine; a canonical status line inside it contradicts that and is how planning material gets mistaken for truth. |
+| `canonical-planning-dependency` | A `status: canonical` document elsewhere may not take a planning document as its source of truth (governance rule 5, applied to this tree). |
+| `sprint-artifact-in-platform` | Placement rule 3 itself, now enforced everywhere **outside** the exception — so a second such tree cannot accumulate unnoticed. |
+
+All three are report-only. They are deliberately visible rather than suppressed: the point of the
+exception is that it is legible, not that it is silent.
+
+**Known limit:** these rules read markdown links. A path written in backticks is invisible to
+them, which is how a canonical document came to delegate `commitment_kind` truth into the tree
+without the linter noticing.
+
+---
+
+### Governed paths
+
+These are the paths `scripts/docs-lint.mjs` enforces frontmatter on
+(`GOVERNED_GLOBS`), and this list is kept in step with it:
+
+- `docs/README.md`
+- `docs/platform/**`
+- `docs/system/**`
+- `docs/product/**`
+
+Remaining repository docs are **baselined** for metadata adoption in later waves.
+
+Two limits are worth knowing before relying on this:
+
+- The lint scans `docs/**` and the root `README.md` only. Markdown elsewhere in the
+  repository — including execution artifacts left at the repository root — is invisible to it.
+- Broken links **block** only within `docs/README.md`, `docs/platform/**` and `docs/system/**`
+  (`CANONICAL_LINK_SCOPES`). `docs/product/**` is governed for frontmatter but its broken
+  links are reported, not blocked.
 
 ---
 
@@ -10,12 +139,33 @@
 |-------|----------|---------|
 | **Schema** | `docs/schema/` | Generated from Supabase CSV exports |
 | **Platform** | `docs/platform/` | Canonical platform doctrine and modules |
+| **System** | `docs/system/` | Locked runtime implementation detail (authoritative) |
 | **Sprints** | `docs/sprints/` | Execution history — not primary doctrine |
-| **Audits** | `docs/audits/` | Point-in-time investigations |
+| **Audits** | `docs/audits/` | Point-in-time investigations and planning artifacts |
 | **Archive** | `docs/archive/` | Superseded material — not current truth |
-| **Export packs** | `docs/export/` | Portable handoff bundles |
+| **Export packs** | `docs/archive/2026-06-handoff-packs/` | Portable handoff bundles (scheduled for retirement) |
+| **API** | `docs/api/` | API doctrine, per-domain reference, and one generated route index — see the mixed-directory note below |
+| **Product** | `docs/product/` | Vertical/reference-implementation material (childcare); governed for frontmatter |
+| **Runtime execution** | `docs/runtime/` | Mostly Runtime V1 freeze and certification execution history. **Not wholly non-doctrinal:** roughly ten files there state durable runtime authority with no equivalent under `docs/platform/`, and **20 `web/` source and test sites cite them** (`GRAIN-AUTHORITY-MAP.md`, `DURABLE-RECORD-ATTENTION.md`, `DEEPLINK-COMPOSE-OWNERSHIP.md`, `CARD-READINESS-LIFECYCLE.md`, `CARD-PLACEMENT-OWNERSHIP.md`, `SUBJECT-AUTHORITY.md`, `REFUSAL-HONEST-NOT-FATAL.md`, `BUSINESS-PROCESS-ENTRY-STAGE.md` and others). Promoting that subset into `docs/platform/runtime/` must rewrite those citations in the same change, or the doc-to-code binding breaks silently — open decision D9. The canonical runtime corpus is `docs/platform/runtime/`. |
+| **Handoffs** | `docs/handoffs/` | Session/sprint handoff artifacts — execution history |
+| **Marketing** | `docs/marketing/` | Positioning and messaging material |
+| **Schema source** | `docs/supabase/reference/` | The CSV export `docs/schema/` is generated from (no markdown) |
 
 Navigation hub: `docs/README.md`
+
+---
+
+## Validation
+
+```bash
+npm run docs:lint              # full report
+npm run docs:lint:ci           # narrow blocking on changed files
+cd web && npm run test -- tests/scripts/docsLint.test.ts
+```
+
+CI: `.github/workflows/docs-lint.yml` — report-only debt with **narrow blocking** on changed governed files (broken canonical links, invalid root placement, malformed frontmatter).
+
+Pre-existing debt is baselined in `scripts/docs-lint-baseline.json`.
 
 ---
 
@@ -50,6 +200,7 @@ Primary doc set stays industry-agnostic; vertical implementations link as supple
 - Aspirational architecture not reflected in code
 - Duplicating frozen doctrine in sprint docs
 - Organizing primary docs around CRM/enrollment-only framing
+- Placing planning audits (`docs/audits/documentation-*-2026-07.md`) in the agent load order as doctrine
 
 ---
 
@@ -63,23 +214,42 @@ AI/Cursor load order uses:
 - Generated schema docs under `docs/schema/`
 - Supabase CSV reference
 - Locked runtime doctrines in `docs/system/` (performance, queue record, BOS identity)
-- Agent repo boundaries: `docs/governance/agent-repo-boundaries.md`
+- Agent repo boundaries: `docs/platform/governance/agent-repo-boundaries.md`
+- Managed sprint operations: `docs/platform/governance/managed-sprint-operations.md`
+- Cursor rule: `.cursor/rules/managed-sprint-operations.mdc`
+- Claude Code entry: `CLAUDE.md`
 
-Sprints and archive **excluded** from default source pack.
+Sprints, audits, and archive **excluded** from default source pack unless explicitly needed for the task.
+
+---
+
+## Where decisions belong
+
+| Destination | Use when |
+|-------------|----------|
+| **Canonical doctrine** (`docs/platform/`, `docs/system/`) | Defining how Alloy works today — the encyclopedia |
+| **RFC** (`docs/platform/rfcs/`) | Proposing a material change that needs ratification before it becomes sole truth |
+| **Platform Decisions** (`docs/platform/foundation/platform-decisions.md`) | Recording a consequential, durable, **cross-platform** decision and its rationale so future engineers find *why* quickly — without restating doctrine |
+| **Release history** | Summarizing a **shipped** capability milestone after merge |
+| **Sprint / audit / archive** | Execution history, investigations, and preserved context — **never** primary current truth |
+
+Rule: open debates stay in sprints/audits until resolved; resolved durable decisions update doctrine **and**, when cross-cutting, receive a concise Platform Decisions entry linked to the owners.
 
 ---
 
 ## Doctrine freeze policy
 
-**Freeze before documenting.** Open debates belong in sprints/audits until resolved, then merge into platform docs as decisions.
+**Freeze before documenting.** Open debates belong in sprints/audits until resolved, then merge into platform docs as decisions (and record cross-platform decisions in [`../foundation/platform-decisions.md`](../foundation/platform-decisions.md)).
 
-Current frozen (June 2026):
+Current frozen (July 2026):
 
 - Business Process → Stage → Record operator model
 - Queue preview boundary
 - AdminV2 reveal gates
 - BOS human-in-the-loop
-- Enrollment single-WU multi-queue pattern
+- Platform architecture freeze (`platform/milestones/freeze-july-2026.md`)
+- Operational Expectations architecture (`platform/milestones/operational-expectations-architecture-closeout.md`); realization program: `platform/milestones/operational-expectations-engineering-realization.md`
+- **Documentation Platform v1.0** — handbook, governance, docs-lint, curation, certification; decision register: `platform/foundation/platform-decisions.md`
 
 ---
 
@@ -88,11 +258,16 @@ Current frozen (June 2026):
 - **Quarterly:** platform-capabilities + roadmap accuracy pass
 - **After major ship:** release-history milestone
 - **After migration apply:** schema regeneration
+- **After doc structure wave:** docs-lint baseline refresh
+- **After durable cross-platform decision:** Platform Decisions entry + owning doctrine in the same change when behavior changes
 
 ---
 
 ## Related
 
 - `design-and-operational-doctrine.md`
-- `../../execution/operating-doctrine.md` (transitional expanded rules)
-- `../../audits/documentation-audit.md`
+- [`../foundation/platform-decisions.md`](../foundation/platform-decisions.md)
+- [`../foundation/alloy-platform-handbook.md`](../foundation/alloy-platform-handbook.md)
+- `docs/archive/2026-06-execution/operating-doctrine.md` (historical)
+- `docs/audits/archive/2026-07-documentation-rebaseline/` (planning artifacts)
+- `docs/sprints/completed/documentation-rebaseline-v2/` (initiative closeout history)

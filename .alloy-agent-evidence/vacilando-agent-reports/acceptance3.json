@@ -1,0 +1,27 @@
+{
+  "header": {
+    "headerCount": 2,
+    "topbarDisplay": "none",
+    "sticky": "sticky",
+    "top": 8,
+    "back": "← Lanes",
+    "title": "Vacilando",
+    "state": "Working · Claude",
+    "details": "Details",
+    "refreshButtonVisible": false,
+    "statusCardCount": 0
+  },
+  "message": {
+    "source": "report",
+    "reportType": "progress",
+    "revision": "1",
+    "reportInThread": true,
+    "rawPaneInThread": false,
+    "rawPaneInDetails": true,
+    "renderedChars": 537,
+    "hasHeadings": 1,
+    "hasList": 0,
+    "text": "Conversation now reads reports, not the paneThe assistant bubble renders the run's stored "
+  },
+  "errors": []
+}

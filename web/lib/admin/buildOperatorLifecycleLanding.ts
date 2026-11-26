@@ -14,13 +14,28 @@ import {
     operatorWorkUnitKeyForPipelineQueueKey,
 } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { operatorWorkUnitHrefFromKey, operatorWorkViewHref } from "@/lib/admin/canonicalOperatorRoutes";
+import {
+    DOMAIN_PROJECTION_WORK_VIEWS_UNAVAILABLE,
+    isDomainProjectionModel,
+    resolveProcessModel,
+    type ProcessModelV1,
+} from "@/lib/lifecycle/processModelV1";
+import {
+    operatorWorkUnitHrefFromKey,
+    operatorWorkUnitHrefFromWorkViewSlug,
+} from "@/lib/admin/canonicalOperatorRoutes";
+import { workViewRouteKeyFromLabel } from "@/lib/admin/workUnitRouteSlug";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     extractDrawerLifecycleExecutionLanes,
     extractPipelineExecutionLanes,
 } from "@/lib/workspace/extractPipelineExecutionLanes";
-import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import {
+    pickDeptPipelineWorkUnit,
+    pickDeptWorkViewHostWorkUnit,
+} from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import { resolveWorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
+import type { WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import {
     operatorOperationalPerspectivesEnabled,
@@ -38,29 +53,70 @@ import {
     buildEnrollmentOperationalSurfaceFields,
     isEnrollmentLifecycleCard,
 } from "@/lib/admin/enrollmentOperationalSurfaceLanding";
+import type { LandingWorkItems } from "@/lib/admin/landingWorkItems";
 
 /** Default operator queue when configured on the enrollment pipeline. */
 export const OPERATOR_DEFAULT_ENTRY_QUEUE_KEY = "new_leads" as const;
 
+/** Shown on a staged lifecycle that has nothing to enter yet — instead of another process's queue. */
+export const PROCESS_HAS_NO_ENTRY_QUEUE = "No Work Views are configured for this process yet." as const;
+
 export type OperatorLifecycleWorkQueuePreview = {
     label: string;
+    /** Optional Work View mission line from `work_views_v1` — presentation only, not a metric. */
+    description?: string | null;
     platformKey: string;
     href: string;
+    /**
+     * Configured Work View identity + canonical count/rows location — present on work-view
+     * entries only (`resolveWorkViewCanonicalLocation`). The Workspace tile resolves its
+     * per-view counts from (host_work_unit_id, base_queue_key, work_view_id) — the SAME
+     * source the Work Unit pill counts and rendered rows read, so the numbers agree.
+     */
+    work_view_id?: string | null;
+    host_work_unit_id?: string | null;
+    base_queue_key?: string | null;
+    /** Label-derived route key (platform `_` form) — `href`'s slug; the active-state match key. */
+    route_key?: string | null;
+    /**
+     * Secondary, decision-supporting operational signals for this view — records needing
+     * attention / overdue, from the operational projection's already-fetched base rows
+     * (`computeWorkViewOperationalSignals`). Undefined until the client rollup pass resolves
+     * them (or when base rows are unavailable); null-safe consumers show no indicator then.
+     */
+    attention_count?: number | null;
+    overdue_count?: number | null;
+    /** Grain breakdown from operational projection rows — null when unresolved. */
+    primary_grain_count?: number | null;
+    supporting_grain_count?: number | null;
+    primary_grain_kind?: WorkViewGrainBucket | null;
+    supporting_grain_kind?: WorkViewGrainBucket | null;
 };
 
 export type OperatorLifecycleLandingCard = {
     id: string;
     departmentId: string;
     processKey: string;
+    /** How the process executes (BP V2 S1). Absent on cached pre-S1 cards → staged lifecycle. */
+    processModel?: ProcessModelV1;
     label: string;
     description: string;
-    entryHref: string;
+    /**
+     * Where opening the process lands. Null when the process has nothing it can open — a domain
+     * projection before its Work Views exist, or a lifecycle with no queues. Null is rendered as an
+     * explicit unavailable state; it is never replaced by another process's entry queue.
+     */
+    entryHref: string | null;
+    /** Operator-facing reason `entryHref` is null; null whenever the process can be opened. */
+    unavailableReason?: string | null;
     workQueues: OperatorLifecycleWorkQueuePreview[];
     stageCount: number;
     /** Populated when department queue summaries are available; otherwise null (UI shows —). */
     activeRecordCount: number | null;
     /** Populated when needs-attention lane summaries are available; otherwise null (UI shows —). */
     needsAttentionCount: number | null;
+    /** BP V2 S7 — explicit Work Items attributed to this process (see `lib/admin/landingWorkItems`). */
+    workItems?: LandingWorkItems | null;
     /** Optional OIP performance preview — server-resolved formatted values. */
     performanceMetrics?: readonly {
         label: string;
@@ -88,10 +144,35 @@ export type OperatorLifecycleDepartmentRow = {
     metadata: unknown;
 };
 
+/**
+ * Legacy/migration artifact process names must never reach an operator surface (e.g.
+ * "Enrollment (legacy)"). DEFENSE-IN-DEPTH only — the primary fix is data cleanup
+ * (cleanupEnrollmentLifecycleProcesses removes the stray process from department metadata). Does
+ * NOT gate on runtime_status=name_mismatch, which can be a legitimately renamed live process.
+ */
+export function isLegacyArtifactProcessName(name: string | null | undefined): boolean {
+    return /\(legacy\)/i.test((name ?? "").trim());
+}
+
+/**
+ * Render-boundary sanitizer: strip a trailing "(legacy)"/"(legacy copy)" artifact marker from a
+ * process name so a dirty data row can NEVER print "Enrollment (legacy)" to an operator, even if it
+ * slips past the upstream visibility filter. Returns the cleaned name (e.g. "Enrollment") or null
+ * when nothing meaningful remains. Belt-and-suspenders — data cleanup is still the primary fix.
+ */
+export function stripLegacyArtifactMarker(name: string | null | undefined): string | null {
+    const cleaned = (name ?? "")
+        .replace(/\s*\((?:legacy|legacy\s+copy|migrated)\)\s*/gi, " ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    return cleaned || null;
+}
+
 function isOperatorVisibleLifecycle(entry: LifecycleCatalogEntry): boolean {
     if (!entry.workspace.user_has_access) return false;
     if (!entry.workspace.department_is_active) return false;
     if (!entry.workspace.visible_in_workspace_api) return false;
+    if (isLegacyArtifactProcessName(entry.lifecycle_name)) return false;
     return entry.workspace.runtime_status === "visible" || entry.workspace.runtime_status === "name_mismatch";
 }
 
@@ -158,27 +239,25 @@ function workViewNavEntriesForDepartment(args: {
     departmentId: string;
     departmentMetadata: unknown;
     workUnits: OperatorLifecycleWorkUnitRow[];
+    processId?: string | null;
 }): OperatorLifecycleWorkQueuePreview[] {
-    const forDept = args.workUnits.filter(
-        (wu) => wu.department_id === args.departmentId && wu.is_active !== false,
-    );
-    const pipelineWu = pickDeptPipelineWorkUnit(forDept, args.departmentId);
-    const stageWu = forDept.find((wu) => isLifecycleStageWorkUnitKey(wu.key)) ?? null;
-    const targetWu = pipelineWu ?? stageWu;
+    // Shared host precedence (pipeline WU, else lifecycle-stage WU) — same helper the
+    // work-view slug resolver uses, so nav hrefs and slug resolution agree on the host.
+    const targetWu = pickDeptWorkViewHostWorkUnit(args.workUnits, args.departmentId);
     if (!targetWu) return [];
     const platformKey = (targetWu.key ?? "").trim();
     if (!platformKey) return [];
 
     // Materialization (Work View runtime materialization): every configured, visible Work View becomes
-    // its own nav item — ordering + visibility come straight from the saved config. This no longer
-    // collapses to the one view that happened to bind a pipeline queue lane.
-    //   - A view that binds a pipeline queue lane (`compat_queue_key`) keeps its canonical lane-slug
-    //     route (`/workspace/work-unit/:laneSlug`) — preserves existing routing + the legacy default.
-    //   - A view without a bound lane routes to the host work unit with `?work_view=<id>`, so it still
-    //     materializes as its own operational view (the runtime selects it, evaluates its predicates,
-    //     and shows its own count) instead of being dropped.
-    const savedWorkViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata).filter(
-        (view) => view.visible_in_runtime !== false,
+    // its own nav item — ordering + visibility + label come straight from the saved config, and EVERY
+    // view routes to its own work-view slug (`/workspace/work-unit/:viewSlug`, path routing only —
+    // no lane-slug branch, no `?work_view=` query routing). The by-slug resolver maps the view slug
+    // back to its host work unit and selects the configured view. A view without a configured label
+    // is a config bug — it is omitted rather than surfaced as a raw internal id.
+    // THIS process's views — not the department's active process's, which a second process in the
+    // same department would otherwise inherit (BP V2 S1).
+    const savedWorkViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata, args.processId).filter(
+        (view) => view.visible_in_runtime !== false && !!view.label?.trim(),
     );
     if (savedWorkViews.length) {
         return [...savedWorkViews]
@@ -187,21 +266,31 @@ function workViewNavEntriesForDepartment(args: {
                     (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
                     || a.label.localeCompare(b.label),
             )
-            .map((view) => {
-                const compat = view.compat_queue_key?.trim();
-                if (compat) {
-                    const laneKey = operatorWorkUnitKeyForPipelineQueueKey(compat) ?? compat;
-                    return {
-                        label: view.label?.trim() || view.id,
-                        platformKey: laneKey,
-                        href: operatorWorkUnitHrefFromKey(laneKey),
-                    };
-                }
-                return {
-                    label: view.label?.trim() || view.id,
-                    platformKey: view.id,
-                    href: operatorWorkViewHref(platformKey, view.id),
-                };
+            .flatMap((view) => {
+                // Slug from the configured LABEL, never the internal id (ids survive renames —
+                // "Active Pipeline" can carry id `new_work_view_2`; see workViewRouteKeyFromLabel).
+                const routeKey = workViewRouteKeyFromLabel(view.label);
+                if (!routeKey) return [];
+                // Canonical location: host unit + base lane the view's count/rows are defined
+                // on — the same host the slug in `href` resolves to (shared precedence).
+                const canonical = resolveWorkViewCanonicalLocation(
+                    view,
+                    args.workUnits,
+                    args.departmentId,
+                );
+                const mission = view.mission?.trim() || null;
+                return [
+                    {
+                        label: view.label.trim(),
+                        ...(mission ? { description: mission } : {}),
+                        platformKey: view.id,
+                        href: operatorWorkUnitHrefFromWorkViewSlug(routeKey),
+                        work_view_id: view.id,
+                        host_work_unit_id: canonical?.workUnitId ?? null,
+                        base_queue_key: canonical?.baseQueueKey ?? null,
+                        route_key: routeKey,
+                    },
+                ];
             });
     }
 
@@ -222,12 +311,14 @@ function workViewNavEntriesForDepartment(args: {
                 (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
                 || a.queue_key.localeCompare(b.queue_key),
         )
+        // Configured labels only — a lane without a label never surfaces its raw queue key.
+        .filter((row) => !!row.label?.trim())
         .map((row) => {
             // Phase 2 route canonicalization: each work-view lane resolves to its own operator
             // work-unit slug (`/workspace/work-unit/:slug`), matching the builder/pipeline nav path.
             const laneKey = operatorWorkUnitKeyForPipelineQueueKey(row.queue_key) ?? platformKey;
             return {
-                label: row.label?.trim() || row.queue_key,
+                label: row.label?.trim() ?? "",
                 platformKey: laneKey,
                 href: operatorWorkUnitHrefFromKey(laneKey),
             };
@@ -268,10 +359,12 @@ export function resolveOperatorLifecycleWorkQueueNavEntriesForDepartment(args: {
         .filter(
             (wu) =>
                 (wu.key ?? "").trim().toLowerCase() !== "needs_attention" &&
-                !isLifecycleStageWorkUnitKey(wu.key),
+                !isLifecycleStageWorkUnitKey(wu.key) &&
+                // Configured names only — never surface a raw work-unit key as an operator label.
+                !!wu.name?.trim(),
         )
         .map((wu) => ({
-            label: wu.name?.trim() || wu.key,
+            label: wu.name.trim(),
             platformKey: wu.key,
             href: operatorWorkUnitHrefFromKey(wu.key),
         }));
@@ -312,6 +405,43 @@ export function buildOperatorLifecycleLandingCards(args: {
     return args.catalogEntries
         .filter(isOperatorVisibleLifecycle)
         .map((entry) => {
+            const processModel = resolveProcessModel({ process_model_v1: entry.process_model });
+            if (isDomainProjectionModel(processModel)) {
+                // A domain projection is its own process with its own identity. Its tile lists ONLY its
+                // own published Work Views (BP V2 S2), located on its projection host — and gets NONE
+                // of the lifecycle fallbacks below: no department pipeline lanes, no builder stages, no
+                // work-unit list, no `new_leads` entry, no Enrollment surface fields. Any of those would
+                // route the operator into another process's queue. With no published views (or no host
+                // yet) it keeps the honest unavailable state.
+                const dept = departmentsById.get(entry.department_id);
+                const hasViews = Boolean(
+                    lifecycleBuilderFromDepartmentMetadata(dept?.metadata)
+                        .processes.find((p) => p.id === entry.process_id)?.work_views_v1?.length,
+                );
+                const projectionQueues = hasViews
+                    ? workViewNavEntriesForDepartment({
+                          departmentId: entry.department_id,
+                          departmentMetadata: dept?.metadata,
+                          workUnits: args.workUnits,
+                          processId: entry.process_id,
+                      }).filter((q) => Boolean(q.work_view_id && q.host_work_unit_id && q.base_queue_key))
+                    : [];
+                const projectionEntry = projectionQueues[0]?.href ?? null;
+                return {
+                    id: entry.id,
+                    departmentId: entry.department_id,
+                    processKey: entry.process_key,
+                    processModel,
+                    label: entry.lifecycle_name.trim() || entry.process_key,
+                    description: processDescriptionForEntry(entry, departmentsById),
+                    entryHref: projectionEntry,
+                    unavailableReason: projectionEntry ? null : DOMAIN_PROJECTION_WORK_VIEWS_UNAVAILABLE,
+                    workQueues: projectionQueues,
+                    stageCount: 0,
+                    activeRecordCount: null,
+                    needsAttentionCount: null,
+                } satisfies OperatorLifecycleLandingCard;
+            }
             const workQueues = workQueuesForDepartment(
                 entry,
                 entry.department_id,
@@ -319,16 +449,29 @@ export function buildOperatorLifecycleLandingCards(args: {
                 departmentsById,
             );
             const defaultQueue = resolveDefaultEntryQueue(workQueues);
-            const entryHref = defaultQueue?.href ?? operatorWorkUnitHrefFromKey(OPERATOR_DEFAULT_ENTRY_QUEUE_KEY);
+            // `new_leads` is Enrollment's entry queue. It stays Enrollment's last resort (unchanged
+            // behaviour, same Enrollment detection the surface fields below use); any other lifecycle
+            // with nothing to enter says so instead of opening Enrollment's queue.
+            const isEnrollment = isEnrollmentLifecycleCard({
+                processKey: entry.process_key,
+                label: entry.lifecycle_name.trim() || entry.process_key,
+                entryHref: defaultQueue?.href ?? null,
+                processModel,
+            });
+            const entryHref =
+                defaultQueue?.href ??
+                (isEnrollment ? operatorWorkUnitHrefFromKey(OPERATOR_DEFAULT_ENTRY_QUEUE_KEY) : null);
             const dept = departmentsById.get(entry.department_id);
 
             const baseCard: OperatorLifecycleLandingCard = {
                 id: entry.id,
                 departmentId: entry.department_id,
                 processKey: entry.process_key,
+                processModel,
                 label: entry.lifecycle_name.trim() || entry.process_key,
                 description: processDescriptionForEntry(entry, departmentsById),
                 entryHref,
+                unavailableReason: entryHref ? null : PROCESS_HAS_NO_ENTRY_QUEUE,
                 workQueues,
                 stageCount: entry.stage_count,
                 activeRecordCount: null,

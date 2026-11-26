@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ADMINV2_DRAWER_ACTION_MODAL_Z } from "@/components/admin/Drawer";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import { fetchCommunicationsBindingsCached } from "@/lib/communications/communicationsBindingsCache";
 import { launchAdminV2OpenOpportunityFromContext } from "@/lib/adminV2/contextualRecordOpen";
 import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
@@ -23,6 +23,7 @@ import {
 import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
 import { COMMS_COMPACT_LABEL_CLASS, COMMS_INPUT_CLASS, CommsInlineListReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 const TEMPLATES_API = "/api/admin/communications/templates";
 
 type TemplateOption = { id: string; name: string; channel: TemplateChannel };
@@ -56,16 +57,8 @@ type ThreadMessagePreviewRow = {
 };
 
 function formatDisplayPhoneUs(raw: string | null | undefined): string {
-    const digits = String(raw ?? "").replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) {
-        const d = digits.slice(1);
-        return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-    }
-    if (digits.length === 10) {
-        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-    }
-    const t = String(raw ?? "").trim();
-    return t || "—";
+    // The platform's one phone formatter (lib/phone/phonePresentation).
+    return formatCanonicalPhone(raw);
 }
 
 function previewSnippet(body: string | null | undefined, max = 72): string {
@@ -97,6 +90,9 @@ export type QuickMessageModalSeed = {
     /** Record-scoped launch — load linked contacts for opportunity (no global search). */
     recordScoped?: boolean;
     defaultChannel?: "email" | "sms";
+    draftSubject?: string | null;
+    draftBody?: string | null;
+    tourInvitationId?: string | null;
 };
 
 export interface QuickMessageModalProps {
@@ -265,7 +261,13 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             setScopedRecipientsResolved(false);
             return;
         }
-    }, [open]);
+        // Seed editable draft when opening (e.g. prepared tour invitation).
+        if (seed?.draftBody?.trim() || seed?.draftSubject?.trim()) {
+            setSubject(String(seed.draftSubject ?? "").trim());
+            setBody(String(seed.draftBody ?? "").trim());
+            setChannel(seed.defaultChannel === "sms" ? "sms" : "email");
+        }
+    }, [open, seed?.draftBody, seed?.draftSubject, seed?.defaultChannel]);
 
     const recordScoped = Boolean(seed?.recordScoped && seed?.opportunityId?.trim());
     const opportunityId = seed?.opportunityId?.trim() ?? "";
@@ -494,6 +496,9 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                         recipient_person_id: recipient.person_id,
                         channel,
                         body: body.trim(),
+                        // Explicit classification. The server never infers a
+                        // category, so the caller must state one.
+                        category: "operational",
                     };
                     if (channel === "email") {
                         payload.subject = subject.trim();
@@ -522,6 +527,26 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             }
             if (fail.length === 0) {
                 setSendOk(ok.length === 1 ? ok[0]! : `${ok.length} sends completed.`);
+                const invitationId = seed?.tourInvitationId?.trim();
+                if (invitationId) {
+                    // Link was prepared earlier; confirmed compose send records invitation activated.
+                    void fetch("/api/admin/actions/execute", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            action_key: "send_tour_invitation",
+                            entity_type: "opportunity",
+                            entity_id: seed?.opportunityId?.trim() || "",
+                            payload: {
+                                mode: "mark_sent",
+                                invitation_id: invitationId,
+                                channel,
+                            },
+                            confirmation: { confirmed: true },
+                        }),
+                    }).catch(() => null);
+                }
             } else if (ok.length === 0) {
                 setSendErr(fail.map((f) => `${f.name}: ${f.err}`).join(" · "));
             } else {
@@ -576,7 +601,24 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const dialog = (
         <div
             className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-alloy-midnight/45 px-3 py-6 backdrop-blur-[2px] sm:px-4 sm:py-8"
-            style={{ zIndex: ADMINV2_DRAWER_ACTION_MODAL_Z }}
+            /*
+             * THE NESTED-OVERLAY LAYER, NOT THE DRAWER-ACTION ONE.
+             *
+             * This portals to `document.body`, which escapes the shell's stacking context, so its
+             * value is read against the shell's own layers rather than against the drawer's. At
+             * `ADMINV2_DRAWER_ACTION_MODAL_Z` (80) it sat UNDER the BOS rail (95) and the shell
+             * chrome (100): launched from Manage on a record, the composer opened with its whole
+             * right edge — Send included — behind the rail, which reads to an operator as
+             * "Message does nothing". Measured: modal z-index 80, rail z-index 95, rail occupying
+             * everything from x=1256 rightward across the composer.
+             *
+             * `ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z` is the platform's existing answer for
+             * exactly this — a `document.body` portal opened from inside a workspace — and
+             * `communicationsOverlayAuthority` has asserted it for the Communications composers
+             * since the last time this shipped. This file sits outside that test's roots, which is
+             * why it kept the wrong number; the test now covers it too.
+             */
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
             data-adminv2-quick-message-modal="true"
         >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close modal" onClick={onClose} />

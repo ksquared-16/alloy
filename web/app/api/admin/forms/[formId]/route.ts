@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { dbGetFormDefinition, dbListVersionsForForm, dbUpdateFormDefinition } from "@/lib/admin/forms/formsAdminDb";
+import {
+    dbGetFormDefinition,
+    dbListFormIdsWithPublishedVersion,
+    dbListVersionsForForm,
+    dbUpdateFormDefinition,
+} from "@/lib/admin/forms/formsAdminDb";
+import { deleteFormDefinitionForAdmin } from "@/lib/admin/forms/deleteFormDefinitionForAdmin";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** GET /api/admin/forms/[formId] */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
@@ -21,14 +28,25 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: versions, error: vErr } = await dbListVersionsForForm(supabase, ctx.orgId, formId);
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
 
-    return jsonData({ ...form, versions: versions ?? [] });
+    const { data: pubRows, error: pubErr } = await dbListFormIdsWithPublishedVersion(supabase, ctx.orgId);
+    if (pubErr) return NextResponse.json({ error: pubErr.message }, { status: 500 });
+    const publishedFormIds = new Set(
+        (pubRows ?? []).map((r) => (r as { form_definition_id: string }).form_definition_id).filter(Boolean)
+    );
+
+    return jsonData({
+        ...form,
+        versions: versions ?? [],
+        has_published_version: publishedFormIds.has(formId),
+    });
 }
 
 /** PATCH /api/admin/forms/[formId] — admin only; key is immutable. */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { formId: rawId } = await params;
     const formId = parseUuidParam(rawId, "formId");
@@ -81,4 +99,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return jsonData(data);
+}
+
+/** DELETE /api/admin/forms/[formId] — hard-delete draft-only forms (admin). Published → use archive. */
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
+    const ctx = await getAdminContextCached();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
+
+    const { formId: rawId } = await params;
+    const formId = parseUuidParam(rawId, "formId");
+    if (formId instanceof NextResponse) return formId;
+
+    const supabase = createAdminClient();
+    try {
+        const result = await deleteFormDefinitionForAdmin(supabase, ctx.orgId, formId);
+        if (!result.ok) return jsonError(result.message, result.status);
+        return jsonData({ deleted: true, ...result.deleted });
+    } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Delete failed" }, { status: 500 });
+    }
 }

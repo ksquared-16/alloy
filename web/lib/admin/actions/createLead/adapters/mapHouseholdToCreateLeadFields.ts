@@ -28,7 +28,9 @@ export const CREATE_LEAD_HOUSEHOLD_FIELD_KEYS = {
         source: "source",
         intake_notes: "intake_notes",
         child_program: "child_program",
-        child_desired_start_date: "child_desired_start_date",
+        child_start_date: "child_start_date",
+        household_address_line1: "household_address_line1",
+        address_line1: "address_line1",
     },
 } as const;
 

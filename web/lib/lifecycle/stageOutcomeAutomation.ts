@@ -9,6 +9,23 @@ import type {
     StageWorkTemplateV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { outcomeAutomationSummaries } from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import {
+    effectiveFollowUpDuePolicy,
+    formatFollowUpDuePolicySummary,
+    type StageFollowUpDueAnchor,
+    type StageFollowUpWorkDuePolicyV1,
+} from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+import {
+    readTransitionRefFromTarget,
+    resolveLegacyStageKeyToTransitionRef,
+    resolveStageOutcomeTransitionOptions,
+    stageKeyFromTransitionRef,
+    type StageOutcomeTransitionOption,
+} from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import {
+    isClosedStatusKeyForEntity,
+    type OutcomeStatusConfiguredRow,
+} from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 
 export type OutcomeAutomationKind =
     | "none"
@@ -20,16 +37,140 @@ export type OutcomeAutomationKind =
 
 export type OutcomeAutomationDraft = {
     kind: OutcomeAutomationKind;
+    /** Canonical transition ref for move_to_stage — preferred over stage_key. */
+    transition_ref?: string;
     stage_key?: string;
     status_key?: string;
     repeat_template_key?: string;
     repeat_due_days?: number;
+    follow_up_due_policy?: StageFollowUpWorkDuePolicyV1;
     attention_reason?: string;
     attention_severity?: "low" | "medium" | "high";
+    /** When true, recording this outcome completes the active work item. */
+    completes_work?: boolean;
     /** Optional attempt gate for repeat vs attention branching. */
     when_attempt_count_lt?: number;
     when_attempt_count_gte?: number;
 };
+
+export type OutcomeFollowUpWorkDraft = {
+    template_key: string;
+    due_policy: StageFollowUpWorkDuePolicyV1;
+};
+
+export type OutcomeAttentionDraft = {
+    reason: string;
+    due_policy: StageFollowUpWorkDuePolicyV1;
+};
+
+export type OutcomeCaseCloseDraft = {
+    /** Canonical case status this outcome writes — `closed` for a terminal outcome. */
+    status_key: string;
+    /** Why the case closed. Canonical vocabulary: lost | withdrawn | not_a_fit | aged_out | other. */
+    close_reason_key?: string;
+};
+
+/**
+ * The editable shape of one outcome's behaviour.
+ *
+ * `preserved_targets` and `preserved_rules` are not decoration — they are why editing an outcome no
+ * longer destroys it. This draft models a subset of the ten `StageOutcomeRuleTargetKind`s, and
+ * `upsertComposableOutcomeBehavior` REBUILDS the outcome's rules from it. Anything the draft could
+ * not carry was therefore deleted the moment an operator touched an unrelated control: Closed Lost
+ * lost `update_family_case_status: closed`, and Unable To Reach lost `reopen_work` together with
+ * both of its `when_attempt_count_*` branches. The generated summary kept reading correctly the
+ * whole time — it reads the rules directly — so the loss stayed invisible until after save.
+ *
+ * The rule this encodes: what the editor cannot express, it carries through untouched.
+ */
+/**
+ * The candidate lifecycle states an outcome may write.
+ *
+ * Code-owned rather than tenant-configured: `StageOutcomeRuleTargetV1.candidate_status` is a closed
+ * union in `stageOperatingPlanV1.ts`, so this is the canonical vocabulary rather than a dropdown
+ * invented to finish a stage. Anything outside it would fail the parser, so offering more would be
+ * offering a choice that cannot be saved.
+ */
+export const OUTCOME_CANDIDATE_STATUS_VALUES = ["active", "paused", "withdrawn", "placed"] as const;
+
+export type OutcomeCandidateStatusValue = (typeof OUTCOME_CANDIDATE_STATUS_VALUES)[number];
+
+export type OutcomeCandidateStatusDraft = { candidate_status: OutcomeCandidateStatusValue };
+
+/** Operator-facing label for a candidate status. Never renders the raw key. */
+export function candidateStatusOperatorLabel(value: OutcomeCandidateStatusValue): string {
+    switch (value) {
+        case "active":
+            return "Active";
+        case "paused":
+            return "Paused";
+        case "withdrawn":
+            return "Withdrawn";
+        case "placed":
+            return "Placed";
+    }
+}
+
+export type ComposableOutcomeBehaviorDraft = {
+    movement: "stay_in_stage" | "move_through_transition";
+    transition_ref?: string;
+    follow_up_work: OutcomeFollowUpWorkDraft[];
+    attention_items: OutcomeAttentionDraft[];
+    /** `update_family_case_status` — durable case state, owned by the outcome. */
+    case_status?: OutcomeCaseCloseDraft;
+    /**
+     * `update_child_enrollment_status` — the CHILD's durable enrollment state.
+     *
+     * A separate consequence from `movement`, never inferred from it. The per-child paths editor
+     * states the rule this follows: the operator picks the destination AND the resulting status,
+     * because the second is not derivable from the first. A child can move to Enrolling as
+     * `enrolling`, and could equally move somewhere with a different disposition; collapsing the two
+     * would silently pick one.
+     */
+    child_enrollment_status?: OutcomeCaseCloseDraft;
+    /**
+     * `update_candidate_status` — the placement candidate's own lifecycle state.
+     *
+     * Distinct again from both of the above: pausing a waitlist candidate changes neither the
+     * child's enrollment disposition nor the stage. It is the outcome that "Candidate paused" has,
+     * and without it that result can only be authored as a no-op that lies.
+     */
+    candidate_status?: OutcomeCandidateStatusDraft;
+    /** `mark_stage_work_complete` — whether recording this outcome finishes the current work. */
+    completes_stage_work: boolean;
+    /** Target kinds this draft does not model, carried verbatim so an edit cannot drop them. */
+    preserved_targets: StageOutcomeRuleTargetV1[];
+    /** Conditional rules for this outcome (attempt count, domain signal, entry status) — untouched. */
+    preserved_rules: StageOutcomeRuleV1[];
+    /** Identity of the unconditional rule, so a round-trip keeps its `rule_key`. */
+    behavior_rule_key?: string;
+    /** Whether an unconditional behaviour rule existed at all, so read→write stays faithful. */
+    had_behavior_rule: boolean;
+};
+
+/** Kinds the draft models explicitly. Everything else rides in `preserved_targets`. */
+const MODELLED_TARGET_KINDS: ReadonlySet<string> = new Set([
+    "move_to_stage",
+    "no_movement",
+    "create_next_work",
+    "create_needs_attention",
+    "update_family_case_status",
+    // Promoted from `preserved_targets`, which is why existing configurations keep working: they
+    // were already carried verbatim, and are now READ into the draft instead of ridden through it.
+    "update_child_enrollment_status",
+    "update_candidate_status",
+    "mark_stage_work_complete",
+]);
+
+/** A rule the outcome editor owns: triggered by the outcome alone, with no extra condition. */
+function isUnconditionalBehaviorRule(rule: StageOutcomeRuleV1): boolean {
+    return (
+        rule.when_attempt_count_lt == null &&
+        rule.when_attempt_count_gte == null &&
+        !rule.when_domain_signal &&
+        !rule.when_enter_status_key
+    );
+}
 
 const ENROLLMENT_STAGE_DEFAULT_STATUS: Record<string, string> = {
     lead: "new_lead",
@@ -56,10 +197,61 @@ function trimKey(value: unknown): string | null {
 }
 
 function rulesForOutcome(rules: StageOutcomeRuleV1[], outcomeKey: string): StageOutcomeRuleV1[] {
-    return rules.filter((r) => (r.when_outcome_key ?? "").trim() === outcomeKey.trim());
+    return rules.filter(
+        (r): r is StageOutcomeRuleV1 =>
+            Boolean(r) && (r.when_outcome_key ?? "").trim() === outcomeKey.trim(),
+    );
 }
 
-function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutomationKind {
+function entityTypeForStatusTarget(kind: StageOutcomeRuleTargetV1["kind"]): string | null {
+    if (kind === "update_family_case_status") return "opportunities";
+    if (kind === "update_child_enrollment_status") return "opportunity_customer_members";
+    return null;
+}
+
+function statusKeyFromTarget(target: StageOutcomeRuleTargetV1): string | null {
+    return trimKey(target.status_key) ?? trimKey(target.disposition_key);
+}
+
+/**
+ * A status-update target is close_record only when the target status resolves as
+ * terminal/closed for the correct status domain (via the canonical closed-status
+ * resolver). Setting status to open (or any non-closed key) is not a close.
+ */
+function statusUpdateIsCloseRecord(
+    targets: StageOutcomeRuleTargetV1[],
+    options?: {
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
+    },
+): boolean {
+    for (const target of targets) {
+        const domain = entityTypeForStatusTarget(target.kind);
+        if (!domain) continue;
+        const statusKey = statusKeyFromTarget(target);
+        if (!statusKey) continue;
+        // Prefer the target's own domain; fall back to plan entityType when present.
+        const entityType = domain;
+        if (
+            isClosedStatusKeyForEntity({
+                statusKey,
+                entityType,
+                configuredStatuses: options?.configuredStatuses,
+            })
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function detectAutomationKind(
+    targets: StageOutcomeRuleTargetV1[],
+    options?: {
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
+    },
+): OutcomeAutomationKind {
     if (!targets.length) return "none";
 
     const kinds = new Set(targets.map((t) => t.kind));
@@ -67,18 +259,45 @@ function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutom
         return "mark_needs_attention";
     }
     if (kinds.has("reopen_work") || kinds.has("create_next_work")) return "repeat_work";
-    if (kinds.has("update_family_case_status") && targets.some((t) => trimKey(t.status_key) === "closed")) {
-        return "close_record";
+    // Transition-owned moves first — they may also carry companion status updates.
+    if (kinds.has("move_to_stage")) return "move_to_stage";
+    // Status-only updates: close_record only when the target status is terminal/closed
+    // for the correct domain. Non-closed status sets (e.g. open) stay in stage.
+    if (kinds.has("update_family_case_status") || kinds.has("update_child_enrollment_status")) {
+        return statusUpdateIsCloseRecord(targets, options) ? "close_record" : "stay_in_stage";
     }
-    if (kinds.has("move_to_stage") || kinds.has("update_family_case_status")) return "move_to_stage";
     if (kinds.has("no_movement")) return "stay_in_stage";
     return "none";
+}
+
+/** Exported for regression tests — classification must stay aligned with validation. */
+export function classifyOutcomeAutomationKind(
+    targets: StageOutcomeRuleTargetV1[],
+    options?: {
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
+    },
+): OutcomeAutomationKind {
+    return detectAutomationKind(targets, options);
+}
+
+function readFollowUpTarget(targets: StageOutcomeRuleTargetV1[]): StageOutcomeRuleTargetV1 | null {
+    return (
+        targets.find((t) => t.kind === "create_next_work")
+        ?? targets.find((t) => t.kind === "reopen_work")
+        ?? null
+    );
 }
 
 export function readOutcomeAutomationDraft(
     outcomeKey: string,
     rules: StageOutcomeRuleV1[],
-    options?: { preferAttemptGte?: boolean },
+    options?: {
+        preferAttemptGte?: boolean;
+        transitionOptions?: StageOutcomeTransitionOption[];
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
+    },
 ): OutcomeAutomationDraft {
     const matching = rulesForOutcome(rules, outcomeKey);
     if (!matching.length) return { kind: "none" };
@@ -86,38 +305,65 @@ export function readOutcomeAutomationDraft(
     let rule = matching[0]!;
     if (options?.preferAttemptGte) {
         rule =
-            matching.find((r) => r.when_attempt_count_gte != null) ??
-            matching.find((r) => r.when_attempt_count_lt != null) ??
-            rule;
+            matching.find((r) => r.when_attempt_count_gte != null)
+            ?? matching.find((r) => r.when_attempt_count_lt != null)
+            ?? rule;
     }
 
-    const kind = detectAutomationKind(rule.targets);
+    const kind = detectAutomationKind(rule.targets, {
+        configuredStatuses: options?.configuredStatuses,
+        entityType: options?.entityType,
+    });
     const draft: OutcomeAutomationDraft = { kind };
 
     if (rule.when_attempt_count_lt != null) draft.when_attempt_count_lt = rule.when_attempt_count_lt;
     if (rule.when_attempt_count_gte != null) draft.when_attempt_count_gte = rule.when_attempt_count_gte;
 
+    const transitionOptions = options?.transitionOptions ?? [];
+
     for (const target of rule.targets) {
-        if (target.kind === "move_to_stage" && target.stage_key) draft.stage_key = target.stage_key;
-        if (target.kind === "update_family_case_status" && target.status_key) {
-            draft.status_key = target.status_key;
+        if (target.kind === "move_to_stage") {
+            const transitionRef = readTransitionRefFromTarget(target, transitionOptions);
+            if (transitionRef) draft.transition_ref = transitionRef;
+            if (target.stage_key) draft.stage_key = target.stage_key;
         }
-        if ((target.kind === "reopen_work" || target.kind === "create_next_work") && target.template_key) {
-            draft.repeat_template_key = target.template_key;
+        if (target.kind === "update_family_case_status") {
+            const statusKey = statusKeyFromTarget(target);
+            if (statusKey) draft.status_key = statusKey;
         }
-        if (
-            (target.kind === "reopen_work" || target.kind === "create_next_work") &&
-            typeof target.due_days === "number"
-        ) {
-            draft.repeat_due_days = target.due_days;
+        if (target.kind === "update_child_enrollment_status") {
+            const statusKey = statusKeyFromTarget(target);
+            if (statusKey) draft.status_key = statusKey;
+        }
+        const followUp = readFollowUpTarget(rule.targets);
+        if (followUp && (target.kind === "reopen_work" || target.kind === "create_next_work")) {
+            if (target.template_key) draft.repeat_template_key = target.template_key;
+            if (target.follow_up_due_policy) draft.follow_up_due_policy = target.follow_up_due_policy;
+            if (typeof target.due_days === "number") draft.repeat_due_days = target.due_days;
         }
         if (target.kind === "create_needs_attention") {
             draft.attention_reason = target.attention_reason ?? undefined;
         }
+        if (target.kind === "mark_stage_work_complete") {
+            draft.completes_work = true;
+        }
     }
 
-    if (kind === "move_to_stage" && !draft.status_key && draft.stage_key) {
-        draft.status_key = defaultStatusKeyForStage(draft.stage_key);
+    if (kind === "move_to_stage") {
+        if (!draft.transition_ref && draft.stage_key) {
+            const legacy = resolveLegacyStageKeyToTransitionRef(draft.stage_key, transitionOptions);
+            if (legacy.transition_ref) draft.transition_ref = legacy.transition_ref;
+        }
+        if (!draft.status_key) {
+            const stageKey =
+                stageKeyFromTransitionRef(draft.transition_ref, transitionOptions)
+                ?? draft.stage_key;
+            if (stageKey) draft.status_key = defaultStatusKeyForStage(stageKey);
+        }
+    }
+
+    if (kind === "repeat_work" && !draft.follow_up_due_policy && draft.repeat_due_days != null) {
+        draft.follow_up_due_policy = effectiveFollowUpDuePolicy(null, draft.repeat_due_days);
     }
 
     return draft;
@@ -127,38 +373,58 @@ export function outcomeAutomationSummaryForOutcome(
     outcomeKey: string,
     outcomeLabel: string,
     rules: StageOutcomeRuleV1[],
-    options?: { workTemplateLabelByKey?: Record<string, string> },
+    options?: {
+        workTemplateLabelByKey?: Record<string, string>;
+        transitionOptions?: StageOutcomeTransitionOption[];
+        transitionLabelByRef?: Record<string, string>;
+        completesWork?: boolean;
+    },
 ): string {
-    const lines = outcomeAutomationSummaries(outcomeKey, rules, options);
-    if (!lines.length) return "No automation attached";
-    return `${outcomeLabel} → ${lines.join(" · ")}`;
+    const transitionLabelByRef =
+        options?.transitionLabelByRef
+        ?? Object.fromEntries(
+            (options?.transitionOptions ?? []).map((opt) => [opt.transition_ref, opt.label]),
+        );
+    const lines = outcomeAutomationSummaries(outcomeKey, rules, {
+        workTemplateLabelByKey: options?.workTemplateLabelByKey,
+        transitionLabelByRef,
+    });
+    if (!lines.length) return "No outcome behavior configured";
+    const prefix = `${outcomeLabel} →`;
+    const suffix =
+        options?.completesWork === true ? " · Complete current work"
+        : options?.completesWork === false ? ""
+        : "";
+    return `${prefix} ${lines.join(" · ")}${suffix}`;
 }
 
 export function buildOutcomeRuleFromAutomation(
     outcomeKey: string,
     draft: OutcomeAutomationDraft,
     index: number,
+    options?: { transitionOptions?: StageOutcomeTransitionOption[] },
 ): StageOutcomeRuleV1 | null {
     if (draft.kind === "none") return null;
 
     const rule_key = `${outcomeKey}_automation_${index + 1}`;
     const targets: StageOutcomeRuleTargetV1[] = [];
+    void options;
 
     switch (draft.kind) {
         case "stay_in_stage":
             targets.push({ kind: "no_movement" });
+            if (draft.completes_work) targets.push({ kind: "mark_stage_work_complete" });
             break;
         case "move_to_stage": {
-            const stageKey = trimKey(draft.stage_key);
-            if (!stageKey) return null;
-            const statusKey = trimKey(draft.status_key) ?? defaultStatusKeyForStage(stageKey);
-            targets.push({ kind: "update_family_case_status", status_key: statusKey });
-            targets.push({ kind: "move_to_stage", stage_key: stageKey });
-            targets.push({ kind: "mark_stage_work_complete" });
+            const transitionRef = trimKey(draft.transition_ref);
+            if (!transitionRef) return null;
+            targets.push({ kind: "move_to_stage", transition_ref: transitionRef });
             break;
         }
         case "close_record": {
-            const statusKey = trimKey(draft.status_key) ?? "closed";
+            // Never invent a closed status — require a configured status_key.
+            const statusKey = trimKey(draft.status_key);
+            if (!statusKey) return null;
             targets.push({ kind: "update_family_case_status", status_key: statusKey });
             targets.push({ kind: "mark_stage_work_complete" });
             break;
@@ -166,11 +432,22 @@ export function buildOutcomeRuleFromAutomation(
         case "repeat_work": {
             const templateKey = trimKey(draft.repeat_template_key);
             if (!templateKey) return null;
-            const dueDays =
-                typeof draft.repeat_due_days === "number" && Number.isFinite(draft.repeat_due_days) ?
-                    Math.max(0, Math.floor(draft.repeat_due_days))
-                :   1;
-            targets.push({ kind: "reopen_work", template_key: templateKey, due_days: dueDays });
+            const duePolicy = effectiveFollowUpDuePolicy(
+                draft.follow_up_due_policy,
+                draft.repeat_due_days,
+            );
+            const legacyDays =
+                duePolicy.anchor === "outcome_recorded_at"
+                && duePolicy.direction !== "before"
+                && (duePolicy.offset_unit ?? "days") === "days"
+                    ? duePolicy.offset_value ?? 0
+                    : undefined;
+            targets.push({
+                kind: "create_next_work",
+                template_key: templateKey,
+                ...(legacyDays != null ? { due_days: legacyDays } : {}),
+                follow_up_due_policy: duePolicy,
+            });
             break;
         }
         case "mark_needs_attention":
@@ -190,13 +467,170 @@ export function buildOutcomeRuleFromAutomation(
     return rule;
 }
 
+export function readComposableOutcomeBehaviorDraft(
+    outcomeKey: string,
+    rules: StageOutcomeRuleV1[],
+): ComposableOutcomeBehaviorDraft {
+    const forOutcome = rulesForOutcome(rules, outcomeKey);
+
+    // Conditional rules belong to whoever authored the condition. The outcome editor has no way to
+    // show "…but only below 3 attempts", so it must not rewrite them — it carries them verbatim.
+    const behaviorRules = forOutcome.filter(isUnconditionalBehaviorRule);
+    const preserved_rules = forOutcome.filter((rule) => !isUnconditionalBehaviorRule(rule));
+
+    const targets = behaviorRules.flatMap((rule) => rule.targets);
+    const move = targets.find((target) => target.kind === "move_to_stage");
+    const caseStatus = targets.find((target) => target.kind === "update_family_case_status");
+    const childStatus = targets.find((target) => target.kind === "update_child_enrollment_status");
+    const candidateStatus = targets.find((target) => target.kind === "update_candidate_status");
+
+    return {
+        movement: move ? "move_through_transition" : "stay_in_stage",
+        ...(move?.transition_ref ? { transition_ref: move.transition_ref } : {}),
+        follow_up_work: targets
+            .filter((target) => target.kind === "create_next_work")
+            .map((target) => ({
+                template_key: target.template_key ?? "",
+                due_policy: effectiveFollowUpDuePolicy(target.follow_up_due_policy, target.due_days),
+            })),
+        attention_items: targets
+            .filter((target) => target.kind === "create_needs_attention")
+            .map((target) => ({
+                reason: target.attention_reason ?? "Needs attention",
+                due_policy: effectiveFollowUpDuePolicy(target.follow_up_due_policy, target.due_days),
+            })),
+        ...(caseStatus?.status_key
+            ? {
+                  case_status: {
+                      status_key: caseStatus.status_key,
+                      ...(caseStatus.close_reason_key
+                          ? { close_reason_key: caseStatus.close_reason_key }
+                          : {}),
+                  },
+              }
+            : {}),
+        ...(childStatus && statusKeyFromTarget(childStatus)
+            ? {
+                  child_enrollment_status: {
+                      // `statusKeyFromTarget` reads `status_key` OR `disposition_key`: the platform
+                      // defaults author this target with `disposition_key`, so reading only the
+                      // first would show an empty control over a configuration that is actually set.
+                      status_key: statusKeyFromTarget(childStatus)!,
+                      ...(childStatus.close_reason_key
+                          ? { close_reason_key: childStatus.close_reason_key }
+                          : {}),
+                  },
+              }
+            : {}),
+        ...(candidateStatus?.candidate_status
+            ? { candidate_status: { candidate_status: candidateStatus.candidate_status } }
+            : {}),
+        completes_stage_work: targets.some((target) => target.kind === "mark_stage_work_complete"),
+        preserved_targets: targets.filter((target) => !MODELLED_TARGET_KINDS.has(target.kind)),
+        preserved_rules,
+        ...(behaviorRules[0]?.rule_key ? { behavior_rule_key: behaviorRules[0].rule_key } : {}),
+        had_behavior_rule: behaviorRules.length > 0,
+    };
+}
+
+export function upsertComposableOutcomeBehavior(
+    rules: StageOutcomeRuleV1[],
+    outcomeKey: string,
+    draft: ComposableOutcomeBehaviorDraft,
+): StageOutcomeRuleV1[] {
+    const without = rules.filter((rule) => rule.when_outcome_key !== outcomeKey);
+    const targets: StageOutcomeRuleTargetV1[] = [];
+    if (draft.movement === "move_through_transition") {
+        const transitionRef = trimKey(draft.transition_ref);
+        if (transitionRef) targets.push({ kind: "move_to_stage", transition_ref: transitionRef });
+    } else {
+        targets.push({ kind: "no_movement" });
+    }
+    // Durable case state before the work bookkeeping, matching how the seeds read.
+    if (draft.case_status?.status_key?.trim()) {
+        const closeReason = trimKey(draft.case_status.close_reason_key);
+        targets.push({
+            kind: "update_family_case_status",
+            status_key: draft.case_status.status_key.trim(),
+            ...(closeReason ? { close_reason_key: closeReason } : {}),
+        });
+    }
+    // The child's durable enrollment state, emitted with `status_key` — the shape
+    // `statusKeyFromTarget` and the runtime executor both read, and the one the family-case target
+    // beside it already uses. Legacy `disposition_key` configurations still READ correctly; they are
+    // simply normalised on the next save rather than carrying two spellings forward.
+    if (draft.child_enrollment_status?.status_key?.trim()) {
+        const closeReason = trimKey(draft.child_enrollment_status.close_reason_key);
+        targets.push({
+            kind: "update_child_enrollment_status",
+            status_key: draft.child_enrollment_status.status_key.trim(),
+            ...(closeReason ? { close_reason_key: closeReason } : {}),
+        });
+    }
+    if (draft.candidate_status?.candidate_status) {
+        targets.push({
+            kind: "update_candidate_status",
+            candidate_status: draft.candidate_status.candidate_status,
+        });
+    }
+    if (draft.completes_stage_work) targets.push({ kind: "mark_stage_work_complete" });
+    for (const followUp of draft.follow_up_work) {
+        const templateKey = trimKey(followUp.template_key);
+        if (!templateKey) continue;
+        targets.push({
+            kind: "create_next_work",
+            template_key: templateKey,
+            follow_up_due_policy: followUp.due_policy,
+        });
+    }
+    for (const attention of draft.attention_items) {
+        targets.push({
+            kind: "create_needs_attention",
+            attention_reason: trimKey(attention.reason) ?? "Needs attention",
+            wait_bucket: "waiting_on_staff",
+            follow_up_due_policy: attention.due_policy,
+        });
+    }
+    // Everything the editor cannot express, exactly as it arrived.
+    targets.push(...(draft.preserved_targets ?? []));
+
+    // Conditional rules are restored untouched — including their conditions and rule keys.
+    const restored = draft.preserved_rules ?? [];
+
+    // Only emit a behaviour rule if one existed or the operator has something to say. Inventing one
+    // for an outcome whose behaviour lives entirely in conditional rules would add configuration
+    // the operator never authored.
+    const hasContent =
+        draft.movement === "move_through_transition" ||
+        Boolean(draft.case_status?.status_key?.trim()) ||
+        Boolean(draft.child_enrollment_status?.status_key?.trim()) ||
+        Boolean(draft.candidate_status?.candidate_status) ||
+        draft.completes_stage_work ||
+        draft.follow_up_work.some((row) => trimKey(row.template_key)) ||
+        draft.attention_items.length > 0 ||
+        (draft.preserved_targets ?? []).length > 0;
+
+    if (!draft.had_behavior_rule && !hasContent) return [...without, ...restored];
+
+    return [
+        ...without,
+        ...restored,
+        {
+            rule_key: draft.behavior_rule_key?.trim() || `${outcomeKey}_behavior`,
+            when_outcome_key: outcomeKey,
+            targets,
+        },
+    ];
+}
+
 export function upsertOutcomeAutomationRule(
     rules: StageOutcomeRuleV1[],
     outcomeKey: string,
     draft: OutcomeAutomationDraft,
+    options?: { transitionOptions?: StageOutcomeTransitionOption[] },
 ): StageOutcomeRuleV1[] {
     const without = rules.filter((r) => r.when_outcome_key !== outcomeKey);
-    const built = buildOutcomeRuleFromAutomation(outcomeKey, draft, without.length);
+    const built = buildOutcomeRuleFromAutomation(outcomeKey, draft, without.length, options);
     if (!built) return without;
     return [...without, built];
 }
@@ -207,6 +641,7 @@ export function upsertAttemptConditionalOutcomeRules(
     belowMax: OutcomeAutomationDraft,
     atOrAboveMax: OutcomeAutomationDraft,
     maxAttempts: number,
+    options?: { transitionOptions?: StageOutcomeTransitionOption[] },
 ): StageOutcomeRuleV1[] {
     const without = rules.filter((r) => r.when_outcome_key !== outcomeKey);
     const next = [...without];
@@ -215,6 +650,7 @@ export function upsertAttemptConditionalOutcomeRules(
         outcomeKey,
         { ...belowMax, when_attempt_count_lt: maxAttempts },
         next.length,
+        options,
     );
     if (repeatRule) next.push(repeatRule);
 
@@ -222,12 +658,14 @@ export function upsertAttemptConditionalOutcomeRules(
         outcomeKey,
         { ...atOrAboveMax, when_attempt_count_gte: maxAttempts },
         next.length,
+        options,
     );
     if (terminalRule) next.push(terminalRule);
 
     return next;
 }
 
+/** @deprecated Use resolveStageOutcomeTransitionOptions with processStages instead. */
 export function enrollmentStageOptions(): Array<{ key: string; label: string }> {
     return [
         { key: "lead", label: "Lead" },
@@ -250,12 +688,12 @@ export type OutcomeAutomationEditorOption = {
 };
 
 export const OUTCOME_AUTOMATION_OPTIONS: OutcomeAutomationEditorOption[] = [
-    { value: "none", label: "No automation" },
-    { value: "stay_in_stage", label: "Stay in stage" },
-    { value: "move_to_stage", label: "Move to stage/status" },
+    { value: "none", label: "No outcome behavior" },
+    { value: "stay_in_stage", label: "Remain in current stage" },
+    { value: "move_to_stage", label: "Move through transition" },
     { value: "close_record", label: "Close record" },
-    { value: "repeat_work", label: "Repeat work item" },
-    { value: "mark_needs_attention", label: "Mark needs attention" },
+    { value: "repeat_work", label: "Create follow-up work" },
+    { value: "mark_needs_attention", label: "Create attention" },
 ];
 
 export function normalizeOutcomeRulesOnPersist(
@@ -265,8 +703,32 @@ export function normalizeOutcomeRulesOnPersist(
     const outcomeKeys = new Set(outcomes.map((o) => o.outcome_key));
     return rules.filter(
         (r) =>
-            Boolean((r.when_enter_status_key ?? "").trim()) ||
-            Boolean(r.when_domain_signal?.domain && r.when_domain_signal?.signal) ||
-            outcomeKeys.has((r.when_outcome_key ?? "").trim()),
+            Boolean((r.when_enter_status_key ?? "").trim())
+            || Boolean(r.when_domain_signal?.domain && r.when_domain_signal?.signal)
+            || outcomeKeys.has((r.when_outcome_key ?? "").trim()),
     );
 }
+
+export function defaultFollowUpDuePolicy(anchor: StageFollowUpDueAnchor = "outcome_recorded_at"): StageFollowUpWorkDuePolicyV1 {
+    return {
+        anchor,
+        offset_value: anchor === "outcome_recorded_at" ? 0 : 1,
+        offset_unit: "days",
+        direction: anchor === "scheduled_event_start" ? "before" : "after",
+        missing_anchor_behavior: "use_outcome_recorded_at",
+    };
+}
+
+export function summarizeRepeatWorkDraft(
+    draft: OutcomeAutomationDraft,
+    workTemplateLabelByKey: Record<string, string>,
+): string | null {
+    if (draft.kind !== "repeat_work") return null;
+    const templateKey = draft.repeat_template_key?.trim();
+    if (!templateKey) return null;
+    const label = workTemplateLabelByKey[templateKey] ?? templateKey.replace(/_/g, " ");
+    const policy = effectiveFollowUpDuePolicy(draft.follow_up_due_policy, draft.repeat_due_days);
+    return formatFollowUpDuePolicySummary(policy, label);
+}
+
+export { resolveStageOutcomeTransitionOptions };

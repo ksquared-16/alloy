@@ -1,0 +1,41 @@
+{
+  "trusted_host_action_id": "tha_9338e6fa6befa9",
+  "query_hash": "dbf6908f09777519f0b256b3ad73c0d38fb4953d31cf79b74aa303397ea21174",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-30T02:30:11.666Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_9338e6fa6befa9",
+    "query_hash": "dbf6908f09777519f0b256b3ad73c0d38fb4953d31cf79b74aa303397ea21174",
+    "authorization_id": "grnt_4fc524d2e0464a67",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-30T02:30:17.752Z",
+    "question_ids": [
+      "d0_revision_found",
+      "d1_document_requirement_count"
+    ],
+    "questions": {
+      "d0_revision_found": {
+        "question_id": "d0_revision_found",
+        "row_count": null,
+        "rows": [
+          "1 revision row(s) for a32816b4"
+        ]
+      },
+      "d1_document_requirement_count": {
+        "question_id": "d1_document_requirement_count",
+        "row_count": null,
+        "rows": [
+          "0 document requirement(s) in rev 59 payload"
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

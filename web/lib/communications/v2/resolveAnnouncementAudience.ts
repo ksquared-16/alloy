@@ -113,7 +113,7 @@ async function resolveFamiliesForSpec(
             let q = supabase.from("opportunity_customer_members").select("opportunity_id").eq("org_id", orgId);
             for (const f of childFilters) {
                 if (f.kind === "child_enrollment_status") q = q.in("outcome_status_key", f.status_keys);
-                else if (f.kind === "program") q = q.in("desired_program_category_id", f.program_category_ids);
+                else if (f.kind === "program") q = q.in("program_category_id", f.program_category_ids);
             }
             const { data: ocm, error } = await q.limit(OPP_SCAN_CAP * 2);
             if (error) {
@@ -194,11 +194,16 @@ async function loadFamilyChannelData(supabase: AdminClient, orgId: string, famil
         }
 
         const { data: personRows } = await supabase.from("persons").select("id, email, phone, archived_at").eq("org_id", orgId).in("id", personIdsCapped);
+        // Announcements are marketing-class at enqueue. Suppress anyone opted out of
+        // the dedicated announcements category OR the channel marketing preference —
+        // email consent must not be treated as SMS consent and vice versa, so the
+        // fan-out path still tags opted_out per person; channel filtering happens
+        // when addresses are chosen.
         const { data: prefRows } = await supabase
             .from("communication_preferences")
-            .select("person_id")
+            .select("person_id, category")
             .eq("org_id", orgId)
-            .eq("category", "announcements")
+            .in("category", ["announcements", "email_marketing", "sms_marketing"])
             .eq("state", "opted_out")
             .in("person_id", personIdsCapped);
         const optedOutSet = new Set((prefRows ?? []).map((r) => String((r as { person_id: string }).person_id)));

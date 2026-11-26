@@ -121,7 +121,8 @@ async function linkGuardianToHouseholdAndOpportunity(
             org_id: input.orgId,
             opportunity_id: input.opportunityId,
             person_id: input.personId,
-            role_type: "family_member",
+            // Match customer_persons: secondary adults are guardians, not generic family_member.
+            role_type: input.isPrimary ? "primary_contact" : "guardian",
             metadata: {
                 source: "create_lead",
                 role: input.isPrimary ? "primary_guardian" : "secondary_guardian",
@@ -132,11 +133,18 @@ async function linkGuardianToHouseholdAndOpportunity(
 
 function childOcmFromRecord(record: CreateLeadCommitRecord, merged: Record<string, unknown>): CreateLeadChildOcmFields {
     return {
-        location_id: trim(merged.child_location_id) || null,
-        desired_program_type: trim(record.program_interest) || trim(merged.child_program) || null,
-        desired_program_category_id: trim(merged.child_program_category_id) || null,
-        desired_schedule_type: trim(merged.child_desired_schedule_type) || null,
-        desired_start_date: trim(record.desired_start_date) || trim(merged.child_desired_start_date) || null,
+        // Prefer per-child / intake site, then lead location so program_key can resolve to FK.
+        location_id:
+            trim(merged.child_location_id)
+            || trim(merged.location_id)
+            || trim((record as { location_id?: string }).location_id)
+            || null,
+        // Stable program key from intake — resolved to program_category_id at persist, never stored.
+        // Per-child BOS program_interest wins; household child_program is the shared fallback.
+        program_key: trim(record.program_interest) || trim(merged.child_program) || null,
+        program_category_id: trim(merged.child_program_category_id) || null,
+        schedule_type: trim(merged.child_schedule_type) || null,
+        start_date: trim(record.start_date) || trim(merged.child_start_date) || null,
         program_room_cohort_key: trim(merged.child_program_room_cohort_key) || null,
         notes: trim(merged.child_notes) || trim(merged.intake_notes) || null,
     };

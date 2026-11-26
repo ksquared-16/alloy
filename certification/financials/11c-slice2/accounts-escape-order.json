@@ -1,0 +1,19 @@
+{
+  "before": {
+    "panel": 1,
+    "accountRows": 11,
+    "gear": 1,
+    "modalShell": 1
+  },
+  "journey": [
+    "1.window-CAPTURE propagationStopped=false panel=1 focus=SECTION[open-panel]",
+    "2.document-CAPTURE propagationStopped=false panel=1 focus=SECTION[open-panel]"
+  ],
+  "after": {
+    "panel": 0,
+    "accountRows": 11,
+    "gear": 1,
+    "modalShell": 1,
+    "focus": "BUTTON[Manage responsibility]"
+  }
+}

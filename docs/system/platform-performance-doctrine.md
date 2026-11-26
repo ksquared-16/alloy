@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Platform performance doctrine
 
 **Path:** `docs/system/platform-performance-doctrine.md`  

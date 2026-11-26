@@ -1,0 +1,244 @@
+{
+ "G2": {
+  "approve": {
+   "person": "f8ed7bfc-82cb-4006-b20b-9e237dfee348",
+   "lead": "d7d53bc7-a551-4189-817a-7f40d65c70b5"
+  },
+  "note": "approved in the first s13 run"
+ },
+ "standaloneControls": 1,
+ "standaloneUnchecked": true,
+ "G1_submit": true,
+ "G1": {
+  "approveLabel": "Approve — Create enrollment lead",
+  "consentOnCaseBefore": "-none@northwind.invalid | WHERE IT CAME FROM | Form | QA V2 Inquiry | primary | MARKETING CONSENT | Email news: no | Not applied yet — Approve records it against the person's preferences | Text news: no | Not applied yet — Approve records it against the person's preferences | Captured Oct 29, 2026 · 12:30 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | Robin Noneqa · qa+v3b-none@northwind.invalid | EXISTING RECORDS | No existing family matches — this looks new. | RECORDS | PARENT | Robin Noneqa | qa+v3b-none@northwind.invalid | New parent record | CHILD | Avery No",
+  "consentOnCaseAfter": "guardian first name | Robin | Parent / guardian last name | Noneqa | Email | qa+v3b-none@northwind.invalid | WHERE IT CAME FROM | Form | QA V2 Inquiry | primary | MARKETING CONSENT | Email news: no | Nothing recorded — no consent given | Text news: no | Nothing recorded — no consent given | Captured Oct 29, 2026 · 12:30 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | ",
+  "approve": {
+   "status": 200,
+   "person": "bc2fc1f3-7841-4d71-9ecf-da6e29f045ca",
+   "lead": "5bf695c8-2348-465b-9294-eafe126632c6",
+   "records": [
+    "household",
+    "child",
+    "person",
+    "lead",
+    "participation"
+   ],
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "bc2fc1f3-7841-4d71-9ecf-da6e29f045ca",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "skipped_unset"
+     },
+     {
+      "channel": "sms",
+      "outcome": "skipped_unset"
+     }
+    ],
+    "replayed": false
+   }
+  }
+ },
+ "G3_submit": true,
+ "G3": {
+  "approveLabel": "Approve — Create enrollment lead",
+  "consentOnCaseBefore": " Phone | (541) 555-0133 | WHERE IT CAME FROM | Form | QA V2 Inquiry | primary | MARKETING CONSENT | Email news: no | Not applied yet — Approve records it against the person's preferences | Text news: yes | Not applied yet — Approve records it against the person's preferences | Captured Oct 29, 2026 · 12:31 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | Robin Smsqa · qa+v3b-sms@northwind.invalid · 5415550133 | EXISTING RECORDS | No existing family matches — this looks new. | RECORDS | PARENT | Robin Smsqa | qa+v3b-sms@northwind.invalid | (541) 555-0133 | New paren",
+  "consentOnCaseAfter": "obin | Parent / guardian last name | Smsqa | Email | qa+v3b-sms@northwind.invalid | Phone | (541) 555-0133 | WHERE IT CAME FROM | Form | QA V2 Inquiry | primary | MARKETING CONSENT | Email news: no | Nothing recorded — no consent given | Text news: yes | Recorded as opted in | Captured Oct 29, 2026 · 12:31 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | Robin Smsqa · ",
+  "approve": {
+   "status": 200,
+   "person": "e765b1ad-13f6-48a4-8fa2-c6486de192e4",
+   "lead": "63fc526a-32f2-483f-b498-2a7a09b2fe1c",
+   "records": [
+    "household",
+    "child",
+    "person",
+    "lead",
+    "participation"
+   ],
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "e765b1ad-13f6-48a4-8fa2-c6486de192e4",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "skipped_unset"
+     },
+     {
+      "channel": "sms",
+      "outcome": "opted_in"
+     }
+    ],
+    "replayed": false
+   }
+  }
+ },
+ "G4_submit": true,
+ "G4": {
+  "approveLabel": "Approve — Create enrollment lead",
+  "consentOnCaseBefore": " Phone | (541) 555-0144 | WHERE IT CAME FROM | Form | QA V2 Inquiry | primary | MARKETING CONSENT | Email news: yes | Not applied yet — Approve records it against the person's preferences | Text news: yes | Not applied yet — Approve records it against the person's preferences | Captured Oct 29, 2026 · 12:31 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | Robin Bothqa · qa+v3b-both@northwind.invalid · 5415550144 | EXISTING RECORDS | No existing family matches — this looks new. | RECORDS | PARENT | Robin Bothqa | qa+v3b-both@northwind.invalid | (541) 555-0144 | New ",
+  "consentOnCaseAfter": "n | Parent / guardian last name | Bothqa | Email | qa+v3b-both@northwind.invalid | Phone | (541) 555-0144 | WHERE IT CAME FROM | Form | QA V2 Inquiry | primary | MARKETING CONSENT | Email news: yes | Recorded as opted in | Text news: yes | Recorded as opted in | Captured Oct 29, 2026 · 12:31 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | Robin Bothqa · qa+v3b-both@no",
+  "approve": {
+   "status": 200,
+   "person": "9c8c363e-7660-4ef8-ae72-a0e9dfad976f",
+   "lead": "ad538d1d-6d26-462d-ab2b-eda5e14a832a",
+   "records": [
+    "household",
+    "child",
+    "person",
+    "lead",
+    "participation"
+   ],
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "9c8c363e-7660-4ef8-ae72-a0e9dfad976f",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "opted_in"
+     },
+     {
+      "channel": "sms",
+      "outcome": "opted_in"
+     }
+    ],
+    "replayed": false
+   }
+  }
+ },
+ "G1_prefs": {
+  "email_marketing": {
+   "state": "unset",
+   "last": null,
+   "wording": null
+  },
+  "sms_marketing": {
+   "state": "unset",
+   "last": null,
+   "wording": null
+  }
+ },
+ "G2_prefs": {
+  "email_marketing": {
+   "state": "opted_out",
+   "last": "operator_person_record",
+   "wording": null
+  },
+  "sms_marketing": {
+   "state": "unset",
+   "last": null,
+   "wording": null
+  }
+ },
+ "G3_prefs": {
+  "email_marketing": {
+   "state": "unset",
+   "last": null,
+   "wording": null
+  },
+  "sms_marketing": {
+   "state": "opted_in",
+   "last": "public_intake",
+   "wording": null
+  }
+ },
+ "G4_prefs": {
+  "email_marketing": {
+   "state": "opted_in",
+   "last": "public_intake",
+   "wording": null
+  },
+  "sms_marketing": {
+   "state": "opted_in",
+   "last": "public_intake",
+   "wording": null
+  }
+ },
+ "S_G1_email_noconsent": {
+  "status": 409,
+  "outcome": "blocked",
+  "code": "eligibility_blocked:MARKETING_REQUIRES_OPT_IN",
+  "reason": "Marketing sends require explicit opt-in."
+ },
+ "S_G1_sms_noconsent": {
+  "status": 409,
+  "outcome": "blocked",
+  "code": "no_usable_phone",
+  "reason": "This person has no usable phone number on file."
+ },
+ "S_G2_email_optedin": {
+  "status": 409,
+  "outcome": "blocked",
+  "code": "eligibility_blocked:OPTED_OUT",
+  "reason": "Recipient opted out of marketing messages."
+ },
+ "S_G2_sms_emailonly": {
+  "status": 409,
+  "outcome": "blocked",
+  "code": "eligibility_blocked:MARKETING_REQUIRES_OPT_IN",
+  "reason": "Marketing sends require explicit opt-in."
+ },
+ "S_G3_sms_optedin": {
+  "status": 200,
+  "outcome": "sent_to_queue",
+  "code": null,
+  "reason": null
+ },
+ "S_G3_email_smsonly": {
+  "status": 409,
+  "outcome": "blocked",
+  "code": "eligibility_blocked:MARKETING_REQUIRES_OPT_IN",
+  "reason": "Marketing sends require explicit opt-in."
+ },
+ "S_G4_email": {
+  "status": 200,
+  "outcome": "sent_to_queue",
+  "code": null,
+  "reason": null
+ },
+ "S_G4_sms": {
+  "status": 200,
+  "outcome": "sent_to_queue",
+  "code": null,
+  "reason": null
+ },
+ "OPTOUT_G2_email": 409,
+ "OPTOUT_G3_sms": 200,
+ "S_G2_email_after_optout": {
+  "status": 409,
+  "outcome": "blocked",
+  "code": "eligibility_blocked:OPTED_OUT",
+  "reason": "Recipient opted out of marketing messages."
+ },
+ "S_G3_sms_after_optout": {
+  "status": 409,
+  "outcome": "blocked",
+  "code": "eligibility_blocked:OPTED_OUT",
+  "reason": "Recipient opted out of marketing messages."
+ },
+ "G2_prefs_after_optout": {
+  "email_marketing": {
+   "state": "opted_out",
+   "last": "operator_person_record",
+   "wording": null
+  },
+  "sms_marketing": {
+   "state": "unset",
+   "last": null,
+   "wording": null
+  }
+ },
+ "G3_prefs_after_optout": {
+  "email_marketing": {
+   "state": "unset",
+   "last": null,
+   "wording": null
+  },
+  "sms_marketing": {
+   "state": "opted_out",
+   "last": "operator_person_record",
+   "wording": null
+  }
+ }
+}

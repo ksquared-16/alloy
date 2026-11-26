@@ -23,6 +23,7 @@ const {
     mockMarkAgreementEnding,
     mockMarkAgreementEnded,
     mockCancelAgreementBeforeStart,
+    mockGetAdminAccessContextCached,
 } = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
     mockRequireAdminOrOps: vi.fn(),
@@ -35,7 +36,22 @@ const {
     mockMarkAgreementEnding: vi.fn(),
     mockMarkAgreementEnded: vi.fn(),
     mockCancelAgreementBeforeStart: vi.fn(),
+    mockGetAdminAccessContextCached: vi.fn(),
 }));
+
+/*
+ * ENROLLMENT RECORD AUTHORITY V1 — child placement and the agreement transitions are
+ * `enrollment.decide` now. `requireAdminOrOps()` resolved PORTAL ADMISSION and no role, so the
+ * mock below no longer decides these; authority is a grant on the access context.
+ *
+ * `schedule-assignments` is NOT in this slice and keeps its original gate.
+ */
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
+        "@/lib/admin/getAdminAccessContext"
+    );
+    return { ...actual, getAdminAccessContextCached: mockGetAdminAccessContextCached };
+});
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>(
@@ -100,12 +116,39 @@ describe("operational enrollment mutation API routes", () => {
         mockRequireAdminOrOps.mockResolvedValue(null);
         mockCreateAdminClient.mockReturnValue({ from: vi.fn() });
         mockResolveTodayYmd.mockResolvedValue("2026-06-15");
+        mockGetAdminAccessContextCached.mockResolvedValue({
+            ok: true,
+            userId,
+            orgId,
+            roleKeys: [],
+            permissionKeys: ["enrollment.decide"],
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "all",
+            allowedSiteLocationIds: null,
+        });
     });
 
-    it("POST child-placements supersede requires admin or ops", async () => {
-        mockRequireAdminOrOps.mockResolvedValue(
-            new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 })
-        );
+    it("POST child-placements requires enrollment.decide, not portal admission", async () => {
+        // Portal-admitted, holding every NEIGHBOURING key and not this one.
+        mockGetAdminAccessContextCached.mockResolvedValue({
+            ok: true,
+            userId,
+            orgId,
+            roleKeys: ["admin"],
+            permissionKeys: [
+                "portal.access",
+                "enrollment.record.manage",
+                "work.operate",
+                "business_process.configure",
+                "crm.customers.write",
+                "ops.opportunities.write",
+            ],
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "all",
+            allowedSiteLocationIds: null,
+        });
         const res = await postChildPlacements(
             new NextRequest("http://localhost/api/admin/child-placements", {
                 method: "POST",
@@ -117,6 +160,9 @@ describe("operational enrollment mutation API routes", () => {
             })
         );
         expect(res.status).toBe(403);
+        expect(await res.json()).toMatchObject({ required_permission: "enrollment.decide" });
+        expect(mockSupersedeChildPlacement).not.toHaveBeenCalled();
+        expect(mockCreateInitialChildPlacement).not.toHaveBeenCalled();
     });
 
     it("POST child-placements supersede creates via supersedeChildPlacement", async () => {

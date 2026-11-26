@@ -1,0 +1,910 @@
+{
+  "capturedAt": "2026-07-10T21:49:25.532Z",
+  "baseUrl": "http://127.0.0.1:3001",
+  "path": "/workspace/work-unit/new-leads",
+  "slugResolution": {
+    "status": "resolved",
+    "kind": "work_view",
+    "route_slug": "new-leads",
+    "work_unit_id": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+    "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+    "department_name": "Enrollment",
+    "work_unit_key": "lifecycle_wu_lead",
+    "work_unit_name": "New Leads",
+    "initial_queue_key": null,
+    "initial_work_view_id": "new_leads"
+  },
+  "canonical": {
+    "departmentId": "3933ac47-077a-4de8-aaac-8aed48d80413",
+    "activeProcessId": "42be9074-443f-4047-bece-d68cd1d22788",
+    "workViewLabels": [
+      {
+        "id": "new_leads",
+        "label": "New Leads",
+        "compat_queue_key": "lifecycle_lead"
+      },
+      {
+        "id": "new_work_view_2",
+        "label": "Active Pipeline",
+        "compat_queue_key": "communications_followup"
+      },
+      {
+        "id": "new_work_view_3",
+        "label": "Registration",
+        "compat_queue_key": "tours"
+      },
+      {
+        "id": "new_work_view_4",
+        "label": "Waitlist",
+        "compat_queue_key": "waitlist"
+      },
+      {
+        "id": "new_work_view_5",
+        "label": "Tours",
+        "compat_queue_key": "tours"
+      },
+      {
+        "id": "new_work_view_6",
+        "label": "All Leads"
+      }
+    ],
+    "canonicalByView": [
+      {
+        "viewId": "new_leads",
+        "label": "New Leads",
+        "compat_queue_key": "lifecycle_lead",
+        "filters_v1": [
+          {
+            "field_key": "opportunity_stage",
+            "operator": "equals",
+            "value": "lead"
+          }
+        ],
+        "match": null,
+        "canonical": {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "baseQueueKey": "lifecycle_lead",
+          "routeKey": "new_leads"
+        },
+        "rowsApiUrl": "/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=50&offset=0&count_mode=exact&work_view_id=new_leads",
+        "apiTotal": 2,
+        "apiItemCount": 2,
+        "apiTotalOmitted": null,
+        "apiError": null
+      },
+      {
+        "viewId": "new_work_view_6",
+        "label": "All Leads",
+        "compat_queue_key": null,
+        "filters_v1": [],
+        "match": null,
+        "canonical": {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "baseQueueKey": "lifecycle_lead",
+          "routeKey": "all_leads"
+        },
+        "rowsApiUrl": "/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+        "apiTotal": 2,
+        "apiItemCount": 1,
+        "apiTotalOmitted": null,
+        "apiError": null
+      }
+    ],
+    "recordTraces": [
+      {
+        "recordId": "df771481-841f-4329-b7bb-c0a03d9fb621",
+        "status_key": "open",
+        "stage_key": "lead",
+        "allLeadsPass": true,
+        "allLeadsFilters": [],
+        "viewPlacements": [
+          "New Leads",
+          "Active Pipeline",
+          "All Leads"
+        ]
+      },
+      {
+        "recordId": "c78a8e14-4e4f-4a17-acd4-0ad3245cc81a",
+        "status_key": "open",
+        "stage_key": "lead",
+        "allLeadsPass": true,
+        "allLeadsFilters": [],
+        "viewPlacements": [
+          "New Leads",
+          "Active Pipeline",
+          "All Leads"
+        ]
+      }
+    ],
+    "hostWorkUnitIdFromSlug": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "newLeadsCountInitial": null,
+      "allLeadsCountInitial": null,
+      "activePillInitial": "New Leads",
+      "activePillAfterAllLeads": "All Leads",
+      "activePillFinal": "New Leads",
+      "switchToAllMs": 1345,
+      "switchBackMs": 135,
+      "pillCountStable": true,
+      "pillsDisappeared": false,
+      "countsDisappeared": true,
+      "pillWidthsChanged": true,
+      "initialQueue": {
+        "queueWorkViewId": "new_leads",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "midSwitchQueue": {
+        "queueWorkViewId": "new_work_view_6",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "afterAllLeadsQueue": {
+        "queueWorkViewId": "new_work_view_6",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "finalQueue": {
+        "queueWorkViewId": "new_leads",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "focusClosedOnSwitch": true,
+      "perfMarks": [],
+      "networkLog": [
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/76b21da2-702e-4439-9002-dc1486e3e105/pipeline_total?limit=100&offset=0&omit_total_count=true&count_mode=planned",
+          "status": 404,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": null,
+          "count_mode": "planned",
+          "limit": "100"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_3",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_3",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_5",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_5",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/lifecycle_waitlist?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_4",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_4",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/lifecycle_waitlist?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_4",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_4",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_5",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_5",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_3",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_3",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/76b21da2-702e-4439-9002-dc1486e3e105/pipeline_total?limit=100&offset=0&omit_total_count=true&count_mode=planned",
+          "status": 404,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": null,
+          "count_mode": "planned",
+          "limit": "100"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_3",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_3",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/lifecycle_waitlist?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_4",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_4",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_5",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_5",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/76b21da2-702e-4439-9002-dc1486e3e105/pipeline_total?limit=100&offset=0&omit_total_count=true&count_mode=planned",
+          "status": 404,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": null,
+          "count_mode": "planned",
+          "limit": "100"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/lifecycle_waitlist?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_4",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_4",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_3",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_3",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_5",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_5",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "newLeadsCountInitial": null,
+      "allLeadsCountInitial": null,
+      "activePillInitial": "New Leads",
+      "activePillAfterAllLeads": "All Leads",
+      "activePillFinal": "New Leads",
+      "switchToAllMs": 87,
+      "switchBackMs": 128,
+      "pillCountStable": true,
+      "pillsDisappeared": false,
+      "countsDisappeared": true,
+      "pillWidthsChanged": true,
+      "initialQueue": {
+        "queueWorkViewId": "new_leads",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "midSwitchQueue": {
+        "queueWorkViewId": "new_work_view_6",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "afterAllLeadsQueue": {
+        "queueWorkViewId": "new_work_view_6",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "finalQueue": {
+        "queueWorkViewId": "new_leads",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": true,
+        "focusResolved": "false",
+        "focusPlaceholder": false
+      },
+      "focusClosedOnSwitch": true,
+      "perfMarks": [],
+      "networkLog": [
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/76b21da2-702e-4439-9002-dc1486e3e105/pipeline_total?limit=100&offset=0&omit_total_count=true&count_mode=planned",
+          "status": 404,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": null,
+          "count_mode": "planned",
+          "limit": "100"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_3",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_3",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/lifecycle_waitlist?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_4",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_4",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_5",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_5",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/76b21da2-702e-4439-9002-dc1486e3e105/pipeline_total?limit=100&offset=0&omit_total_count=true&count_mode=planned",
+          "status": 404,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": null,
+          "count_mode": "planned",
+          "limit": "100"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/lifecycle_waitlist?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_4",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_4",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_3",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_3",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_5",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_5",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "newLeadsCountInitial": "2",
+      "allLeadsCountInitial": "2",
+      "activePillInitial": "New Leads",
+      "activePillAfterAllLeads": "All Leads",
+      "activePillFinal": "New Leads",
+      "switchToAllMs": 154,
+      "switchBackMs": 93,
+      "pillCountStable": true,
+      "pillsDisappeared": false,
+      "countsDisappeared": false,
+      "pillWidthsChanged": false,
+      "initialQueue": {
+        "queueWorkViewId": "new_leads",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": true,
+        "focusResolved": "false",
+        "focusPlaceholder": false
+      },
+      "midSwitchQueue": {
+        "queueWorkViewId": "new_work_view_6",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": true,
+        "focusResolved": "false",
+        "focusPlaceholder": false
+      },
+      "afterAllLeadsQueue": {
+        "queueWorkViewId": "new_work_view_6",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": true,
+        "focusResolved": "false",
+        "focusPlaceholder": false
+      },
+      "finalQueue": {
+        "queueWorkViewId": "new_leads",
+        "queueBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "emptyVisible": false,
+        "skeletonVisible": false,
+        "genericLoading": false,
+        "focusInline": false,
+        "focusResolved": null,
+        "focusPlaceholder": false
+      },
+      "focusClosedOnSwitch": false,
+      "perfMarks": [],
+      "networkLog": [
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/76b21da2-702e-4439-9002-dc1486e3e105/pipeline_total?limit=100&offset=0&omit_total_count=true&count_mode=planned",
+          "status": 404,
+          "total": null,
+          "itemCount": null,
+          "work_view_id": null,
+          "count_mode": "planned",
+          "limit": "100"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/lifecycle_waitlist?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_4",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_4",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_3",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_3",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/5c0d15fc-6545-411c-9a73-8df3df772f62/lifecycle_tour?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_5",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_5",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_6",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_work_view_6",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=1&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 1,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "1"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/lifecycle_lead?limit=20&offset=0&count_mode=exact&work_view_id=new_leads",
+          "status": 200,
+          "total": 2,
+          "itemCount": 2,
+          "work_view_id": "new_leads",
+          "count_mode": "exact",
+          "limit": "20"
+        },
+        {
+          "url": "http://127.0.0.1:3001/api/admin/queues/a428520f-b6a1-4913-8209-2d45a9affcd9/lifecycle_qualification?limit=1&offset=0&count_mode=exact&work_view_id=new_work_view_2",
+          "status": 200,
+          "total": 0,
+          "itemCount": 0,
+          "work_view_id": "new_work_view_2",
+          "count_mode": "exact",
+          "limit": "1"
+        }
+      ]
+    }
+  ],
+  "medians": {
+    "switchToAllMs": 154,
+    "switchBackMs": 128
+  }
+}

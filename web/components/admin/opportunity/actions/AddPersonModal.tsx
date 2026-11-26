@@ -13,6 +13,21 @@ import {
 import ConfiguredCreateFormFields from "@/components/admin/opportunity/actions/ConfiguredCreateFormFields";
 import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/ActionModalOverlayShell";
 
+
+/**
+ * Not asked when adding a person. Employment is set elsewhere; and the legacy consent checkboxes
+ * (`field_values`) are read by NO send path — consent lives in `communication_preferences`, edited on
+ * the person's Communication preferences — so offering them here promised enforcement that did not exist.
+ */
+export const ADD_PERSON_EXCLUDED_FIELD_KEYS: ReadonlySet<string> = new Set([
+    "is_employee",
+    "employee_id",
+    "sms_opt_in",
+    "email_opt_in",
+    "communication_opt_out",
+    "sms_consent",
+    "email_consent",
+]);
 const ROLE_OPTIONS = [
     { value: "parent", label: "Parent" },
     { value: "guardian", label: "Guardian" },
@@ -59,7 +74,7 @@ export function AddPersonModal(props: AddPersonModalProps) {
                 if (cancelled) return;
                 const fields =
                     apiFields.length > 0
-                        ? apiFields.filter((f) => f.field_key !== "is_employee" && f.field_key !== "employee_id")
+                        ? apiFields.filter((f) => !ADD_PERSON_EXCLUDED_FIELD_KEYS.has(f.field_key))
                         : PERSON_CREATE_FORM_FALLBACK;
                 setFormFields(fields);
                 setValues(buildInitialValues(fields));
@@ -106,11 +121,18 @@ export function AddPersonModal(props: AddPersonModalProps) {
             open={open}
             onClose={onClose}
             busy={busy}
-            panelClassName="w-[92vw] max-w-[520px] overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl"
+            /*
+             * E2E-08 — reachable at any viewport. Manage → Add Parent and Household + Add Contact open
+             * this form, and with an org's configured person fields it measured 2,136px tall, centred:
+             * Close at y=-551 and Cancel / Add person at y=1513 in a 1000px window, with nothing that
+             * scrolls — the operator could neither submit nor dismiss it. The panel is capped to the
+             * viewport; the header and footer stay put and the fields scroll between them.
+             */
+            panelClassName="flex max-h-[var(--alloy-action-modal-max-h)] w-[92vw] max-w-[520px] flex-col overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl"
             data-testid="add-person-modal"
         >
-            <div role="dialog" aria-modal="true" aria-label={title} data-add-person-modal="true">
-                <div className="flex items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
+            <div role="dialog" aria-modal="true" aria-label={title} data-add-person-modal="true" className="flex min-h-0 flex-1 flex-col">
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
                     <div className="min-w-0">
                         <div className="text-sm font-semibold text-alloy-midnight">{title}</div>
                         <div className="mt-0.5 text-[12px] text-alloy-midnight/60">
@@ -127,7 +149,7 @@ export function AddPersonModal(props: AddPersonModalProps) {
                     </button>
                 </div>
 
-                <div className="space-y-3 px-5 py-4">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4" data-add-person-modal-body="true">
                     {fieldsLoading ?
                         <p className="text-sm text-alloy-midnight/60">Loading configured fields…</p>
                     :   null}
@@ -160,7 +182,7 @@ export function AddPersonModal(props: AddPersonModalProps) {
                     :   null}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 border-t border-alloy-stone/15 px-5 py-4">
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-alloy-stone/15 px-5 py-4">
                     <button
                         type="button"
                         disabled={busy}

@@ -1,0 +1,158 @@
+{
+  "trusted_host_action_id": "tha_072d3857255df8",
+  "query_hash": "3c03d022a1d4f3dee27ba1449bc9dbb66addbda5f95fa4a6533b263f38c029f8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-30T11:36:58.491Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_072d3857255df8",
+    "query_hash": "3c03d022a1d4f3dee27ba1449bc9dbb66addbda5f95fa4a6533b263f38c029f8",
+    "authorization_id": "grnt_71e632eccdcc4519",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-30T11:37:03.765Z",
+    "question_ids": [
+      "hdl_canonical_tables",
+      "hdl_captured_terms",
+      "hdl_disposition_columns",
+      "hdl_disposition_vocabulary",
+      "hdl_disposition_provenance",
+      "hdl_atomic_authority",
+      "hdl_guards",
+      "hdl_refund_carries_hold"
+    ],
+    "questions": {
+      "hdl_canonical_tables": {
+        "question_id": "hdl_canonical_tables",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 5,
+            "expected": 5,
+            "names": [
+              "payment_allocations",
+              "payment_hold_dispositions",
+              "payment_holds",
+              "payment_provider_refunds",
+              "payments"
+            ]
+          }
+        ]
+      },
+      "hdl_captured_terms": {
+        "question_id": "hdl_captured_terms",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 6,
+            "expected": 6,
+            "names": [
+              "amount_cents",
+              "payment_id",
+              "policy_id",
+              "reason",
+              "refundable",
+              "refundable_terms"
+            ]
+          }
+        ]
+      },
+      "hdl_disposition_columns": {
+        "question_id": "hdl_disposition_columns",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 5,
+            "expected": 5,
+            "names": [
+              "allocation_id",
+              "amount_cents",
+              "disposed_by",
+              "kind",
+              "refund_payment_id"
+            ]
+          }
+        ]
+      },
+      "hdl_disposition_vocabulary": {
+        "question_id": "hdl_disposition_vocabulary",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 1,
+            "expected": 1,
+            "def": "CHECK ((kind = ANY (ARRAY['released'::text, 'applied'::text, 'refunded'::text])))"
+          }
+        ]
+      },
+      "hdl_disposition_provenance": {
+        "question_id": "hdl_disposition_provenance",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 3,
+            "expected": 3,
+            "names": [
+              "payment_hold_dispositions_applied_names_allocation_chk",
+              "payment_hold_dispositions_refunded_names_payment_chk",
+              "payment_hold_dispositions_release_is_bare_chk"
+            ]
+          }
+        ]
+      },
+      "hdl_atomic_authority": {
+        "question_id": "hdl_atomic_authority",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 1,
+            "expected": 1,
+            "pronargs": 6,
+            "expected_pronargs": 6,
+            "identity_arguments": "p_org_id uuid, p_hold_id uuid, p_charge_id uuid, p_amount_cents bigint, p_actor uuid, p_notes text"
+          }
+        ]
+      },
+      "hdl_guards": {
+        "question_id": "hdl_guards",
+        "row_count": null,
+        "rows": [
+          {
+            "functions_found": 4,
+            "functions_expected": 4,
+            "triggers_found": 4,
+            "triggers_expected": 4,
+            "trigger_names": [
+              "trg_enforce_payment_hold_disposition_bounds",
+              "trg_enforce_payment_hold_immutability",
+              "trg_enforce_payment_hold_within_unapplied",
+              "trg_refuse_payment_hold_disposition_rewrite"
+            ]
+          }
+        ]
+      },
+      "hdl_refund_carries_hold": {
+        "question_id": "hdl_refund_carries_hold",
+        "row_count": null,
+        "rows": [
+          {
+            "hold_id_column": 1,
+            "expected_column": 1,
+            "indexes_found": 2,
+            "indexes_expected": 2,
+            "index_names": [
+              "idx_payment_provider_refunds_hold",
+              "uq_payment_hold_dispositions_one_per_refund"
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 8
+  }
+}

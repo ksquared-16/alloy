@@ -29,4 +29,29 @@ describe("PriorityRuleOrderEditor", () => {
         expect(html).toContain("(always on · last)");
         expect(html).not.toContain("Priority rule order");
     });
+
+    it("renders selectable active and available factor catalogs with drag and keyboard controls", () => {
+        const enabled = new Set(all);
+        enabled.delete("tier_sister_center");
+        const html = renderToStaticMarkup(
+            <PriorityRuleOrderEditor
+                order={[...CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1]}
+                enabledKeys={enabled}
+                fallbackBucketKey={fb}
+                selectableCatalog
+                onOrderChange={() => {}}
+                onEnabledKeysChange={() => {}}
+            />
+        );
+
+        expect(html).toContain("Active ranking");
+        expect(html).toContain("Available factors");
+        expect(html).toContain("Drag to reorder");
+        expect(html).toContain("draggable");
+        expect(html).toContain("Add Siblings enrolled at another location to ranking");
+        expect(html).toContain("Remove");
+        expect(html).toContain("Move Employee families up");
+        expect(html).toContain("Move Employee families down");
+        expect(html).toContain("(always on · last)");
+    });
 });

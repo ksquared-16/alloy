@@ -119,21 +119,6 @@ describe("Work Unit rail placement separation", () => {
 });
 
 describe("Work Unit page command rail wiring", () => {
-    it("Work Unit shell registers placement surface and does not use drawer command rail registrar", () => {
-        const layout = read("components/admin/workspace/WorkspaceShellLayout.tsx");
-        const shell = read("app/adminV2/components/workspace/WorkspaceCommandRailShell.tsx");
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(layout).toContain("actionsPlacementSurface={surface}");
-        expect(shell).toContain("shouldDrawerReplaceCommandRailActions");
-        expect(shell).toContain("data-ws-command-rail-placement-surface");
-        expect(runtime).not.toContain("DrawerCommandRailActionsRegistrar");
-    });
-
-    it("Work Unit page fetches only work_unit placement surfaces for the right rail", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain('placementSurfaces: ["work_unit"]');
-        expect(page).not.toContain('placementSurfaces: ["record_header"]');
-    });
 
     it("loadRightRailActionsBundleServer scopes surfaces explicitly", () => {
         const loader = read("lib/workspace/loadRightRailActionsBundleServer.ts");

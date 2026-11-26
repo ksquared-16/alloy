@@ -76,14 +76,6 @@ describe("drawer communications Messaging V2 alignment", () => {
         expect(section).toContain("if (active || backgroundPreload) return");
     });
 
-    it("AdminEntityDrawer prefetches and mounts background loader for supported entities", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("CommunicationsDrawerBackgroundLoader");
-        expect(drawer).toContain("drawerTypeToCommunicationsEntityType");
-        expect(drawer).toContain("backgroundPreload={drawerTab !== \"communications\"}");
-        expect(drawer).toContain("drawerCommsSurfaceActive");
-    });
-
     it("prefetch module dedupes arm while slot exists", () => {
         const prefetch = read("lib/admin/communications/communicationsDrawerPrefetch.ts");
         expect(prefetch).toContain("if (slots.has(key))");

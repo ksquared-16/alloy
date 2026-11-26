@@ -1,0 +1,42 @@
+{
+  "schema_version": "vacilando.continuation_backfill.v1",
+  "recorded_at": "2026-09-14",
+  "why_external": "Execution-run history is evidence and is not rewritten. continuation_of is recorded on the SUCCESSOR at creation time, by a caller that states the lineage explicitly. None of the runs below were created that way, and adding the link now would be inferring lineage after the fact from chronology - precisely what the doctrine forbids. This file records what is known, outside the runs, so the knowledge is not lost.",
+  "correction_to_the_brief": "The brief states four failed runs needing a continuation relation. Three remain in the live store. erun_9a803c0d5db3d534 was present earlier in this session and is gone now: the store holds a rolling window - still exactly 181 runs - so older rows age out as new ones arrive. A lineage mapping has to be captured while its runs still exist.",
+  "consequence_for_the_mechanism": "Because history is pruned, a continuation_of pointer can become dangling over time even though it was valid when written. validateContinuation requires the predecessor to exist AT LINK TIME, which is the only moment it can be checked. A reader traversing an old chain must tolerate a missing predecessor rather than treat it as corruption.",
+  "evidence_standard": "next_run_in_lane is CHRONOLOGY, not evidence. It is recorded to show what an inference would have produced, and is deliberately not treated as a continuation claim.",
+  "cases": [
+    {
+      "failed_run": "erun_d33750ff97320fc4",
+      "lane": "lane_9b9082778292",
+      "failed_at": "2026-09-12T13:12:06.557Z",
+      "failure_reason": "missing_wait_reason",
+      "next_run_in_lane": null,
+      "disposition": "NO_SUCCESSOR_IN_STORE",
+      "note": "Nothing followed it in this lane within the retained window. No continuation claim is made."
+    },
+    {
+      "failed_run": "erun_0e1e66990aea0acd",
+      "lane": "lane_db3431e755a8",
+      "failed_at": "2026-09-14T11:34:46.640Z",
+      "failure_reason": "missing_wait_reason",
+      "next_run_in_lane": "erun_0ad9da4ac46bd0ab",
+      "next_created_at": "2026-09-14T11:39:34.487Z",
+      "next_state": "COMPLETE",
+      "disposition": "OPERATOR_CONFIRMABLE_NOT_MACHINE_DERIVABLE",
+      "note": "The successor carried the G5 evidence work the failed run was admitted for. That is known from the mission record, not from anything persisted on either run - which is exactly the gap this mission closes for future runs."
+    },
+    {
+      "failed_run": "erun_05631cdf39aa08a9",
+      "lane": "lane_db3431e755a8",
+      "failed_at": "2026-09-14T12:41:16.563Z",
+      "failure_reason": "missing_wait_reason",
+      "next_run_in_lane": "erun_b5e0e04a022b95ca",
+      "next_created_at": "2026-09-14T13:02:19.661Z",
+      "next_state": "COMPLETE",
+      "disposition": "OPERATOR_CONFIRMABLE_NOT_MACHINE_DERIVABLE",
+      "note": "The failed run was admitted to repair the admission-wait defect and was killed by that same defect 627ms in; the successor carried the repair to completion. Again known from the mission record rather than from persisted lineage."
+    }
+  ],
+  "action": "No historical row is modified. If an operator wishes to assert either OPERATOR_CONFIRMABLE case, patchRunFields(successor, { continuation_of: { run_id: predecessor } }) now validates and records it on the successor, leaving the predecessor untouched."
+}

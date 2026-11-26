@@ -1,0 +1,192 @@
+{
+  "liveMissionId": "msn_f74ed02c126c88d7ff",
+  "controlPlane": "http://127.0.0.1:3022",
+  "checks": {
+    "stripKind": "executive_evidence_strip",
+    "galleryKind": "evidence_gallery",
+    "stripGalleryKindsAgree": true,
+    "primaryAgree": true,
+    "noScreenshotTruthy": true,
+    "certificationSufficiency": true,
+    "technicalDepthStillHasConfidence": true,
+    "groups": [
+      "certification:6",
+      "tests:3",
+      "technical:40",
+      "supporting:40"
+    ],
+    "liveStripKinds": [
+      {
+        "kind": "certification",
+        "count": 1,
+        "label": "1 certification record (W-4)"
+      },
+      {
+        "kind": "tests",
+        "count": 3,
+        "label": "3 automated checks"
+      },
+      {
+        "kind": "technical",
+        "count": 40,
+        "label": "40 technical records"
+      }
+    ],
+    "livePrimary": "Tests executed",
+    "liveSufficiency": [
+      {
+        "id": "no_screenshot",
+        "tone": "warn",
+        "text": "No screenshot evidence"
+      },
+      {
+        "id": "behavior",
+        "tone": "ok",
+        "text": "Behavior verified"
+      },
+      {
+        "id": "certification",
+        "tone": "ok",
+        "text": "Certification recorded"
+      },
+      {
+        "id": "ac_gap",
+        "tone": "warn",
+        "text": "1 acceptance criterion area still unverified"
+      }
+    ],
+    "l1Order": [
+      "outcome",
+      "summary",
+      "decisions",
+      "confidence",
+      "journey",
+      "evidence",
+      "depth"
+    ]
+  },
+  "strip": {
+    "kind": "executive_evidence_strip",
+    "missionId": "msn_f74ed02c126c88d7ff",
+    "empty": false,
+    "totalCount": 89,
+    "kinds": [
+      {
+        "kind": "certification",
+        "count": 1,
+        "label": "1 certification record (W-4)"
+      },
+      {
+        "kind": "tests",
+        "count": 3,
+        "label": "3 automated checks"
+      },
+      {
+        "kind": "technical",
+        "count": 40,
+        "label": "40 technical records"
+      }
+    ],
+    "counts": {
+      "product": 0,
+      "browser": 0,
+      "certification": 6,
+      "tests": 3,
+      "technical": 40,
+      "supporting": 40,
+      "unclassified": 0
+    },
+    "hasVisualProof": false,
+    "primaryProof": {
+      "evidenceId": "ev_08403bf8eee51c8d",
+      "title": "Present docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+      "proves": "Refreshed required output #4 (Authentication model) for Mission 2 msn_f74ed02c126c88d7ff. Reused the Mission 2 corpus (01 existing-state inventory, 02 canonical model, 05 enforcement census) as input rather than re-deriving covered outputs, and preserved the accepted artifact from msn_2d054741a54698fa4c verbatim as section 10 — the QA path is runtime certification evidence per PRODUCT-SOURCE.md, so the commit is 566 insertions and 0 deletions. Re-anchored all 14 load-bearing citations to c667da4e2 (all hold; four line numbers drifted). Established the central reframe: no code path in the product disables a credential (deleteUser/updateUserById/ban_duration/failed_attempt = 0 occurrences), so deactivation is an operation the system cannot perform rather than an unmodelled state. Added five new verified findings (A2-1..A2-6), invariants I-28..I-34, re-anchored D5-D8 which 02 delegates to this document, and recorded new decisions D11-D13.",
+      "typeLabel": "Document",
+      "category": "certification",
+      "previewHref": null
+    },
+    "preview": [],
+    "sufficiency": [
+      {
+        "id": "no_screenshot",
+        "tone": "warn",
+        "text": "No screenshot evidence"
+      },
+      {
+        "id": "behavior",
+        "tone": "ok",
+        "text": "Behavior verified"
+      },
+      {
+        "id": "certification",
+        "tone": "ok",
+        "text": "Certification recorded"
+      },
+      {
+        "id": "ac_gap",
+        "tone": "warn",
+        "text": "1 acceptance criterion area still unverified"
+      }
+    ],
+    "galleryHref": "evidence/msn_f74ed02c126c88d7ff",
+    "reviewLabel": "Review evidence"
+  },
+  "gallery": {
+    "kinds": [
+      {
+        "kind": "certification",
+        "count": 1,
+        "label": "1 certification record (W-4)"
+      },
+      {
+        "kind": "tests",
+        "count": 3,
+        "label": "3 automated checks"
+      },
+      {
+        "kind": "technical",
+        "count": 40,
+        "label": "40 technical records"
+      }
+    ],
+    "primary": {
+      "evidenceId": "ev_08403bf8eee51c8d",
+      "title": "Present docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+      "proves": "Refreshed required output #4 (Authentication model) for Mission 2 msn_f74ed02c126c88d7ff. Reused the Mission 2 corpus (01 existing-state inventory, 02 canonical model, 05 enforcement census) as input rather than re-deriving covered outputs, and preserved the accepted artifact from msn_2d054741a54698fa4c verbatim as section 10 — the QA path is runtime certification evidence per PRODUCT-SOURCE.md, so the commit is 566 insertions and 0 deletions. Re-anchored all 14 load-bearing citations to c667da4e2 (all hold; four line numbers drifted). Established the central reframe: no code path in the product disables a credential (deleteUser/updateUserById/ban_duration/failed_attempt = 0 occurrences), so deactivation is an operation the system cannot perform rather than an unmodelled state. Added five new verified findings (A2-1..A2-6), invariants I-28..I-34, re-anchored D5-D8 which 02 delegates to this document, and recorded new decisions D11-D13.",
+      "typeLabel": "Document",
+      "category": "certification",
+      "previewHref": null
+    },
+    "sufficiency": {
+      "kind": "evidence_sufficiency",
+      "statements": [
+        {
+          "id": "no_screenshot",
+          "tone": "warn",
+          "text": "No screenshot evidence"
+        },
+        {
+          "id": "behavior",
+          "tone": "ok",
+          "text": "Behavior verified"
+        },
+        {
+          "id": "certification",
+          "tone": "ok",
+          "text": "Certification recorded"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "hasVisualProof": false,
+      "hasBehavioralProof": true,
+      "certificationRecorded": true,
+      "fixtureOnly": false
+    },
+    "total": 89,
+    "pairs": 0
+  }
+}

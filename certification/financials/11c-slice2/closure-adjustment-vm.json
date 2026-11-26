@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "call": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+  "subjectCount": 2,
+  "subjects": [
+    {
+      "label": "Certa Certhouse",
+      "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "agreementId": "43ef5615-11c8-4ea9-96ce-5002a4664fd1"
+    },
+    {
+      "label": "Certb Certhouse",
+      "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "agreementId": "fa3767f8-3391-4655-b3a0-b7d461dae574"
+    }
+  ],
+  "adjustableSubjects": 2
+}

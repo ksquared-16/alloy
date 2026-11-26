@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Current Work Focus Workspace — QA Fixture</title>
+  <style>
+    :root {
+      --alloy-os-accent: #00a283;
+      --alloy-os-ink: #1b1b27;
+      --alloy-os-muted: #4b5563;
+      --alloy-os-border: #dde3eb;
+      --alloy-os-surface: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Poppins, Inter, system-ui, sans-serif; background: #f6f8fc; color: var(--alloy-os-ink); }
+    .shell { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+    .queue { background: #fff; border-right: 1px solid var(--alloy-os-border); padding: 16px; }
+    .queue h1 { font-size: 14px; margin: 0 0 12px; }
+    .queue-item { padding: 10px; border: 1px solid var(--alloy-os-border); border-radius: 8px; margin-bottom: 8px; }
+    .focus { padding: 16px; }
+    .cards { display: grid; gap: 12px; max-width: 520px; }
+    .card { background: #fff; border: 1px solid var(--alloy-os-border); border-radius: 12px; padding: 14px; }
+    .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--alloy-os-muted); }
+    .title { font-size: 18px; font-weight: 700; margin: 4px 0; }
+    .reason { color: #b91c1c; font-size: 13px; }
+    .bar { height: 8px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin: 8px 0; }
+    .bar > span { display: block; height: 100%; width: 80%; background: var(--alloy-os-accent); }
+    .btn-primary { background: var(--alloy-os-accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 600; width: 100%; }
+    .launcher { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--alloy-os-border); font-size: 13px; }
+    .pill { display: inline-block; background: #fee2e2; color: #b91c1c; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+    .workspace { background: #fff; border-radius: 12px; padding: 16px; min-height: 640px; }
+    .ws-cols { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; }
+    .section-title { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--alloy-os-muted); }
+    .outcome { display: inline-block; border: 1px solid var(--alloy-os-border); border-radius: 999px; padding: 6px 12px; margin: 4px 4px 0 0; font-size: 13px; }
+    .row { padding: 8px 0; border-bottom: 1px solid var(--alloy-os-border); font-size: 14px; }
+    .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--alloy-os-border); font-size: 12px; color: var(--alloy-os-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+    .back { color: var(--alloy-os-accent); font-weight: 600; font-size: 13px; border: 0; background: transparent; }
+    .hidden { display: none !important; }
+    @media (max-width: 900px) { .shell, .ws-cols { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="queue">
+      <h1>Enrollment Pipeline</h1>
+      <div class="queue-item"><strong>Kurzman Family</strong><div class="reason">First contact overdue</div></div>
+    </aside>
+    <main class="focus">
+      <div id="summary" class="cards" data-focus-panel-mode="summary">
+        <div class="card" data-work-summary="true" data-work-card="true">
+          <div class="eyebrow">Current Work <span class="pill">Needs attention</span></div>
+          <div class="title">Contact Family</div>
+          <div class="reason">First contact overdue</div>
+          <div class="bar"><span></span></div>
+          <div style="font-size:13px;color:#4b5563">8 of 10 requirements complete</div>
+          <p style="font-size:13px">Reach out to the family to understand their needs.</p>
+          <button class="btn-primary" data-work-primary-action="contact_family">Contact Family</button>
+          <div class="launcher">Requirements <span>2 remaining ▾</span></div>
+          <div class="launcher">More actions <span>5 available ▾</span></div>
+          <div class="launcher">Other transitions <span>2 available ▾</span></div>
+          <button class="back" data-work-action="open-work" onclick="openWorkspace()">Open workspace →</button>
+        </div>
+        <div class="card" data-card="household"><div class="eyebrow">Household</div><div class="title">Kurzman Household</div></div>
+        <div class="card" data-card="children"><div class="eyebrow">Children</div><div class="title">2 children</div></div>
+        <div class="card" data-card="billing_preview"><div class="eyebrow">Billing Preview</div><div class="title">2 missing</div></div>
+      </div>
+
+      <div id="workspace" class="workspace hidden" data-focus-panel-workspace="current_work" data-current-work-workspace="true">
+        <button class="back" data-work-action="back-to-summary" onclick="closeWorkspace()">← Back to summary</button>
+        <h2>Contact Family</h2>
+        <div><span class="pill">Blocked</span> · First contact overdue</div>
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin:12px 0">
+          <div>
+            <div class="section-title">Progress 80%</div>
+            <div class="bar"><span></span></div>
+            <div style="font-size:13px">8 of 10 requirements complete</div>
+          </div>
+          <div>
+            <div class="section-title">Waiting on</div>
+            <div class="row">Child Date of Birth</div>
+            <div class="row">Program Selection</div>
+          </div>
+        </div>
+        <div class="ws-cols">
+          <div>
+            <div class="section-title">Next action</div>
+            <p>Reach out to the family to understand their needs and determine the next step.</p>
+            <button class="btn-primary" data-work-primary-action="contact_family">Contact Family</button>
+            <div class="section-title" style="margin-top:16px">Record outcome</div>
+            <span class="outcome">Reached Family</span>
+            <span class="outcome">Left Message</span>
+            <span class="outcome">Needs Follow-up</span>
+            <div class="section-title" style="margin-top:16px">Requirements</div>
+            <div class="row">Child Date of Birth <span style="color:#b91c1c;float:right">Required</span></div>
+            <div class="row">Program Selection <span style="color:#b91c1c;float:right">Required</span></div>
+            <div class="section-title" style="margin-top:16px">More actions</div>
+            <div class="row" data-work-supporting-action="schedule_tour">Schedule Tour</div>
+            <div class="row" data-work-supporting-action="send_form">Send Form</div>
+            <div class="row" data-work-supporting-action="add_child">Add Child</div>
+            <div class="row" data-work-supporting-action="add_family_member">Add Family Member</div>
+            <div class="row" data-work-supporting-action="create_task">Create Task</div>
+          </div>
+          <div>
+            <div class="section-title">Other transitions</div>
+            <div class="row" data-work-transition-action="tour">Move to Tour</div>
+            <div class="row">Close Lead · Not available</div>
+            <div class="section-title" style="margin-top:16px">Recent activity</div>
+            <div class="row">Note added · Kelly K. · Today</div>
+            <div class="row">Email sent · Kelly K. · Yesterday</div>
+            <div class="row">Call attempted · Kelly K. · Mon</div>
+            <button class="back">View all activity →</button>
+          </div>
+        </div>
+        <div class="footer">
+          <span>Work template: Contact Family</span>
+          <span>Stage: Lead</span>
+          <span>Owner: KK Kelly K.</span>
+          <button class="back">Open full record →</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script>
+    function openWorkspace(){ document.getElementById('summary').classList.add('hidden'); document.getElementById('workspace').classList.remove('hidden'); }
+    function closeWorkspace(){ document.getElementById('workspace').classList.add('hidden'); document.getElementById('summary').classList.remove('hidden'); }
+  </script>
+</body>
+</html>

@@ -10,3 +10,4 @@ export { stubFamilyWorkspaceTail } from "./stubFamilyWorkspaceTail";
 export { resolveCustomerIdFromWorkspaceEntry } from "./resolveCustomerIdFromWorkspaceEntry";
 export { orchestrateFamilySend, type FamilySendChannel, type FamilySendStatus, type SendRecipientResult, type FamilySendResult, type FamilySendDeps, type FamilySendArgs } from "./orchestrateFamilySend";
 export { resolveCustomerScopeFromEntity, entityKind, type EntityScope, type EntityKind } from "./resolveCustomerScopeFromEntity";
+export { resolveFamilyCommunicationWorkspacePreview, type ResolveFamilyCommunicationWorkspacePreviewOptions } from "./resolveFamilyCommunicationWorkspacePreview";

@@ -40,8 +40,8 @@ export function parsePlacementWaitlistCandidateRowVm(
         cohortKey,
         cohortLabel,
         siteId: o.site_id,
-        desiredProgramType: o.desired_program_type,
-        desiredProgramCategoryId: o.desired_program_category_id,
+        programKey: o.program_key,
+        programCategoryId: o.program_category_id,
         locationCategoryContext: context,
     });
     const bucketLabel = formatPlacementBucketLabel(o.bucket);
@@ -80,6 +80,17 @@ export function parsePlacementWaitlistCandidateRowVm(
         })),
     });
 
+    const enrolledSiblings = (o.sibling_context?.enrolled_siblings ?? []).map((ref) => ({
+        childDisplayName: ref.child_display_name ?? null,
+        cohortLabel: ref.cohort_label ?? null,
+        locationLabel: ref.location_label ?? null,
+        sameSiteAsCandidate: ref.same_site_as_candidate === true,
+    }));
+    const hasWaitlistedSibling = siblingCount > 0;
+    const hasEnrolledSibling = enrolledSiblings.length > 0;
+    const householdOtherChildCount = o.household_other_children?.count ?? 0;
+    const householdOtherChildNames = o.household_other_children?.names?.trim() || null;
+
     const siblingLabel =
         siblingCount === 1
             ? "1 sibling also waitlisted"
@@ -106,8 +117,8 @@ export function parsePlacementWaitlistCandidateRowVm(
         cohortKey,
         cohortLabel,
         siteId: o.site_id?.trim() || null,
-        desiredProgramType: o.desired_program_type?.trim() || null,
-        desiredProgramCategoryId: o.desired_program_category_id?.trim() || null,
+        programKey: o.program_key?.trim() || null,
+        programCategoryId: o.program_category_id?.trim() || null,
         cohortSectionTitle: waitlistSection.sectionTitle,
         bucketLabel,
         waitSinceLabel: waitSince,
@@ -166,6 +177,12 @@ export function parsePlacementWaitlistCandidateRowVm(
         siblingCohorts,
         siblingContextLines: siblingContextBuilt.lines,
         siblingContextDiagnostics: siblingContextBuilt.diagnostics,
+        enrolledSiblings,
+        waitlistedSiblingCount: siblingCount,
+        hasWaitlistedSibling,
+        hasEnrolledSibling,
+        householdOtherChildCount,
+        householdOtherChildNames,
     };
 }
 

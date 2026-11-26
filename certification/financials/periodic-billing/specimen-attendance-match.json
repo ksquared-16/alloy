@@ -1,0 +1,35 @@
+[
+  {
+    "step": "schedule_type_options",
+    "items": [
+      "full_time",
+      "part_time",
+      "drop_in",
+      "before_school",
+      "after_school"
+    ]
+  },
+  {
+    "step": "skip",
+    "attendance": "custom",
+    "why": "not an authored option"
+  },
+  {
+    "step": "try",
+    "attendance": "part_time",
+    "state": "no_match",
+    "reason": "not_offered_at_scope",
+    "resolutionKey": "d7b3772f",
+    "recommended": "null",
+    "applicable": "[]"
+  },
+  {
+    "step": "try",
+    "attendance": "full_time",
+    "state": "no_match",
+    "reason": "no_rate_for_scope",
+    "resolutionKey": "d350e22b",
+    "recommended": "null",
+    "applicable": "[]"
+  }
+]

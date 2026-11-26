@@ -1,0 +1,233 @@
+import { describe, expect, it } from "vitest";
+
+import {
+    FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION,
+    FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION,
+    FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION,
+    focusPanelDefaultCompositionForGrain,
+    focusPanelSummaryGridForGrain,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
+import { focusPanelSummaryDefaultDocForGrain, FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+
+/**
+ * R-017 — a child seen through a family lens keeps the enrollment operating context.
+ *
+ * Two subjects are both `child` and are NOT the same situation. A durable child opened
+ * subject-first has no Opportunity and no lens, so nothing family-scoped is authoritative. A child
+ * selected from an Enrollment lens sits behind a settled family opportunity —
+ * `overlayChildMissionOntoSettledFocusModel` states it: "Record of Attention = child. Record of
+ * Truth / Settlement = family opportunity."
+ *
+ * The distinction is therefore CONTEXT, not grain. Making it a grain would have re-litigated
+ * `cardAppliesToGrain` and handed family cards to every child — including a standalone one.
+ */
+
+const keys = (c: readonly { key: string }[]) => c.map((e) => e.key);
+const visible = (c: readonly { key: string; visibility: string }[]) =>
+    c.filter((e) => e.visibility === "visible").map((e) => e.key);
+
+/*
+ * `children` is deliberately absent from this list.
+ *
+ * It is family-scoped ON A CASE, where it renders a family's roster, and it is child-scoped on a
+ * child record, where the collection holds the subject alone. One card, two truthful collections —
+ * so "does the standalone child composition avoid family cards" cannot be asked about it by key.
+ * The cards that are family-scoped in EVERY reading are the two below.
+ */
+const FAMILY_SCOPED = ["household"] as const;
+
+describe("a standalone durable child stays sparse", () => {
+    it("KEEPS its identity card — the configured child card, with nothing family-scoped beside it", () => {
+        const composition = focusPanelDefaultCompositionForGrain("child");
+        expect(keys(composition)).toEqual(["children"]);
+        for (const familyCard of FAMILY_SCOPED) expect(keys(composition)).not.toContain(familyCard);
+        expect(keys(composition)).not.toContain("current_work");
+    });
+
+    it("is what an absent context resolves to — the safe default is the sparse one", () => {
+        expect(focusPanelDefaultCompositionForGrain("child")).toBe(FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION);
+        expect(focusPanelDefaultCompositionForGrain("child", {})).toBe(FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION);
+        expect(focusPanelDefaultCompositionForGrain("child", { familySettlement: false })).toBe(
+            FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION,
+        );
+    });
+});
+
+describe("a child with family settlement keeps the enrollment context", () => {
+    const composition = focusPanelDefaultCompositionForGrain("child", { familySettlement: true });
+
+    it("selects the child-with-family composition", () => {
+        expect(composition).toBe(FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION);
+    });
+
+    it("carries Current Work, so What's Next and its command grammar are available", () => {
+        // Message / Send form / Tour are launched from the What's Next card, so Tour, Forms and
+        // Communications arrive with it rather than needing their own cards.
+        expect(visible(composition)).toContain("current_work");
+        expect(composition.find((e) => e.key === "current_work")?.tier).toBe("work");
+    });
+
+    it("keeps Children — a child subject scopes that card, never removes it", () => {
+        expect(visible(composition)).toContain("children");
+    });
+
+    it("keeps Household as family context", () => {
+        expect(visible(composition)).toContain("household");
+    });
+
+    /*
+     * ── BILLING PREVIEW IS NOT HERE, AND THAT IS THE ASSERTION NOW ──────────────────────────
+     *
+     * This required the card to be present, context-tier, compact and below Current Work — the
+     * right shape while tuition had nowhere else to live. Financials 11B settled that tuition is
+     * part of an Assignment: the card is retired from normal composition and Assignment owns
+     * Accept, Override, the options, the accepted-term read-back, Billing Frequency, the periods,
+     * responsibility and the discount forecast.
+     *
+     * What this composition still owes the operator is the ACCOUNT, and that is what is asserted:
+     * Financials is present and leads the money row, where the retired card used to close it.
+     */
+    it("states the account rather than a second tuition card", () => {
+        expect(composition.find((e) => e.key === "billing_preview"), "retired from normal composition").toBeUndefined();
+        const financials = composition.find((e) => e.key === "financials")!;
+        expect(financials, "the account is what this surface owes").toBeTruthy();
+        const rowOf = (k: string) => composition.find((e) => e.key === k)!.area!.rowStart;
+        expect(rowOf("financials")).toBeGreaterThan(rowOf("current_work"));
+    });
+
+    it("does NOT add a standalone child identity card", () => {
+        // The focused child is already stated by the Focus Panel header and by the Children card,
+        // which names him, marks him active and carries DOB/program/context. A third presentation
+        // of the same facts is redundant product chrome and a second place to maintain child truth.
+        expect(keys(composition)).not.toContain("child_identity");
+    });
+
+    it("represents the focused child through Children, not a card of its own", () => {
+        /*
+         * THE GUARD IS THE SET, NOT THE SEQUENCE.
+         *
+         * This asserted an exact ORDERED list, and its own comment already disclaimed that reading
+         * — "the guard's point is that `child_identity` is ABSENT ... not that this list never
+         * grows". The composition was re-authored to the approved artifact's geometry (`8ffcf4f71`,
+         * 2026-08-27), which reordered the declarations without changing which cards compose, and
+         * the sequence assertion failed for a change it was never meant to police.
+         *
+         * Membership is what this test is about, so membership is what it asserts. Order is
+         * asserted where order is owned: `rowStart`, checked directly below.
+         */
+        expect(visible(composition)).toContain("children");
+        expect([...visible(composition)].sort()).toEqual([
+            "attendance",
+            /* `billing_preview` left this set when it retired from normal composition (11B). */
+            "children",
+            "current_work",
+            "financials",
+            // Health & Safety, placed at child grain because this is where the record of attention
+            // IS a child. At case grain the card refuses rather than choosing a subject.
+            "health_safety",
+            "household",
+            "scheduling",
+        ]);
+        expect(visible(composition)).not.toContain("child_identity");
+    });
+
+    it("leads with the journey and closes with the roster, whatever the declaration order", () => {
+        // The reading order the composition owns, stated as the ordering key that owns it.
+        const rowOf = (k: string) => composition.find((e) => e.key === k)!.area!.rowStart;
+        expect(rowOf("current_work")).toBe(1);
+        for (const later of ["financials", "household", "attendance", "children"]) {
+            expect(rowOf(later), later).toBeGreaterThan(rowOf("current_work"));
+        }
+        expect(rowOf("children")).toBeGreaterThanOrEqual(rowOf("attendance"));
+    });
+
+    it("composes Assignments, the destination the Children placement links resolve to", () => {
+        // `DEFAULT_LINK_DESTINATIONS` maps inquiry_child.program / schedule / start_date to
+        // `scheduling`. Without it in the composition the card is absent from `focusTargets`,
+        // and `navigateIdentityFieldLink` returns `destination_unavailable` — the affordance
+        // renders and does nothing.
+        expect(visible(composition)).toContain("scheduling");
+    });
+
+    it("keeps Tour and Communications reachable as linked destinations", () => {
+        const linked = composition.filter((e) => e.visibility === "linked").map((e) => e.key);
+        expect(linked).toContain("tour_summary");
+        expect(linked).toContain("communications");
+    });
+});
+
+describe("the other grains are unchanged", () => {
+    it("case/family composition is the SAME object reference it always was", () => {
+        expect(focusPanelDefaultCompositionForGrain("opportunity")).toBe(FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION);
+        // Family settlement is the case grain's ordinary condition and must not alter it.
+        expect(focusPanelDefaultCompositionForGrain("opportunity", { familySettlement: true })).toBe(
+            FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION,
+        );
+        expect(focusPanelSummaryDefaultDocForGrain("opportunity")).toBe(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
+        expect(focusPanelSummaryDefaultDocForGrain("opportunity", { familySettlement: true })).toBe(
+            FOCUS_PANEL_SUMMARY_DEFAULT_DOC,
+        );
+    });
+
+    it("staff/person NEVER receives enrollment family cards, whatever the context says", () => {
+        for (const context of [undefined, {}, { familySettlement: true }]) {
+            const person = keys(focusPanelDefaultCompositionForGrain("person", context));
+            for (const familyCard of FAMILY_SCOPED) expect(person).not.toContain(familyCard);
+            expect(person).not.toContain("current_work");
+            expect(person).not.toContain("child_identity");
+        }
+    });
+});
+
+describe("the composed layout is plannable", () => {
+    it("places every card inside the twelve-column canvas", () => {
+        /*
+         * WHAT THIS USED TO ASSERT NO LONGER EXISTS.
+         *
+         * It read "gives no card all 12 columns", because a full-width card was the one shape the
+         * runtime's lane reading refused, which dropped the WHOLE panel to the grid strategy and
+         * moved every other card with it. PR #809 retired that second reading: an authored grid has
+         * one interpretation, and a 12-column card changes nothing about its neighbours. The rule
+         * had also already been broken deliberately — `current_work` is authored at a full row
+         * because the Journey is the most horizontal thing on the panel.
+         *
+         * So the constraint is gone and the real invariant takes its place: every authored region
+         * fits the canvas it is authored on. A card running past column 12 is a defect in any
+         * reading.
+         */
+        for (const entry of FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION) {
+            if (!entry.area) continue;
+            expect(entry.area.colStart, entry.key).toBeGreaterThanOrEqual(1);
+            expect(entry.area.colSpan, entry.key).toBeGreaterThanOrEqual(1);
+            expect(entry.area.colStart + entry.area.colSpan - 1, entry.key).toBeLessThanOrEqual(12);
+        }
+    });
+
+    it("places every visible card in the grid, and only visible cards", () => {
+        const grid = focusPanelSummaryGridForGrain("child", { familySettlement: true });
+        expect(grid.areas.map((a) => a.card).sort()).toEqual(
+            visible(FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION).sort(),
+        );
+    });
+
+    it("does not overlap two cards on the same cell", () => {
+        const grid = focusPanelSummaryGridForGrain("child", { familySettlement: true });
+        const occupied = new Set<string>();
+        for (const a of grid.areas) {
+            for (let c = a.colStart; c < a.colStart + a.colSpan; c++) {
+                for (let r = a.rowStart; r < a.rowStart + a.rowSpan; r++) {
+                    const cell = `${c}:${r}`;
+                    expect(occupied.has(cell)).toBe(false);
+                    occupied.add(cell);
+                }
+            }
+        }
+    });
+
+    it("builds a distinct doc for the settled-child context", () => {
+        const sparse = focusPanelSummaryDefaultDocForGrain("child");
+        const settled = focusPanelSummaryDefaultDocForGrain("child", { familySettlement: true });
+        expect(settled).not.toBe(sparse);
+        expect(settled.sections.length).toBeGreaterThan(sparse.sections.length);
+    });
+});

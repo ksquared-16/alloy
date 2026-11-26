@@ -7,7 +7,7 @@ import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
-import type { DepartmentRow } from "../departments/DepartmentsClient";
+import type { DepartmentApiRow as DepartmentRow } from "@/lib/admin/departmentApiRow";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import RuntimeMetadataReadOnlyPanel from "@/components/adminV2/settings/RuntimeMetadataReadOnlyPanel";
 

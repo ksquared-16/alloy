@@ -50,6 +50,17 @@ describe("public form lib", () => {
         expect(linkRequiresLeadCapture({ form_context_mode: "existing_record", lead_capture: true })).toBe(false);
     });
 
+    it("linkRequiresLeadCapture runs intake for Studio processing_intake links that carry the intent", () => {
+        // Studio "Create link" (incl. per-campus Share-by-location) mints form_context_mode
+        // = processing_intake. When the form's operational intent marked it lead-capture the
+        // link MUST still run intake — otherwise public submissions skip intake entirely and
+        // never reach the Mailroom.
+        expect(linkRequiresLeadCapture({ form_context_mode: "processing_intake", lead_capture: true })).toBe(true);
+        expect(linkRequiresLeadCapture({ form_context_mode: "processing_intake", intake: true })).toBe(true);
+        // A processing_intake link WITHOUT the intent flags still does not run intake.
+        expect(linkRequiresLeadCapture({ form_context_mode: "processing_intake" })).toBe(false);
+    });
+
     it("parseFormIntakeMeta extracts nested intake object", () => {
         const m = parseFormIntakeMeta({
             intake: { guardian: { email: "a@b.com", phone: "+15555550100" }, vertical_id: "vid" },

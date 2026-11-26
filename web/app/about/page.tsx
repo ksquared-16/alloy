@@ -4,50 +4,52 @@ import SectionShell from "@/components/marketing/SectionShell";
 export default function AboutPage() {
   return (
     <>
-      <SectionShell className="!pt-12 md:!pt-16" innerClassName="max-w-3xl">
-        <p className="text-sm font-semibold uppercase tracking-widest text-alloy-juniper">About</p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight text-alloy-forge md:text-5xl">
-          Why Alloy Exists
-        </h1>
-        <p className="mt-6 text-xl font-medium leading-relaxed text-alloy-forge">
-          Childcare operators do not need more software. They need fewer systems.
+      <SectionShell density="compact" className="!pt-10 md:!pt-14" innerClassName="max-w-2xl">
+        <p className="marketing-eyebrow">About</p>
+        <h1 className="marketing-page-headline mt-3">Why Alloy Exists</h1>
+        <p className="mt-5 text-lg font-medium leading-snug tracking-[-0.015em] text-alloy-midnight-forge md:text-xl">
+          Organizations that serve people do not need more software. They need work that moves
+          forward.
         </p>
-        <p className="mt-6 text-lg leading-relaxed text-alloy-forge/70">
-          Alloy was built to connect operational workflows, eliminate fragmented processes, and help
-          teams spend less time managing systems and more time serving families.
-        </p>
-        <p className="mt-4 text-lg leading-relaxed text-alloy-forge/70">
-          Most tools in childcare were designed as standalone products — a CRM here, a forms tool
-          there, email in another tab. Operators end up copying data, chasing context, and
-          reconciling reports that should already agree. Alloy replaces that patchwork with a
-          platform where enrollment, communications, documents, and tasks share one record model.
-        </p>
-      </SectionShell>
-
-      <SectionShell variant="muted">
-        <div className="mx-auto max-w-3xl">
-          <h2 className="text-2xl font-bold text-alloy-forge md:text-3xl">Built Differently</h2>
-          <p className="mt-4 text-lg leading-relaxed text-alloy-forge/70">
-            Most software starts with features. Alloy started with the foundation — entities,
-            workflows, lifecycle, layouts, forms, permissions, documents, messaging, and tasks,
-            powered by the BOS Intelligence Layer.
+        <div className="marketing-body-lg mt-6 space-y-4">
+          <p>
+            Alloy was built so teams spend less time managing systems and more time doing the work —
+            through Business Processes, Processing, and Operational Intelligence on one foundation.
           </p>
-          <p className="mt-4 text-lg leading-relaxed text-alloy-forge/70">
-            That foundation means new operational workflows can be added without creating another
-            disconnected system. Enrollment & Family Operations is the first workflow on Alloy. It
-            will not be the last.
+          <p>
+            Most tools were designed as standalone products — a CRM here, forms there, email in another
+            tab. Operators copy data, chase context, and reconcile reports that should already agree.
+            Alloy replaces that patchwork with an operating system where records, communications,
+            documents, and actions share one model.
           </p>
         </div>
       </SectionShell>
 
-      <SectionShell>
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-bold text-alloy-forge">See what a unified platform feels like</h2>
-          <p className="mt-4 text-alloy-forge/70">
-            We would love to show you Alloy — starting with enrollment operations and the platform
-            underneath.
+      <SectionShell variant="muted" density="compact">
+        <div className="mx-auto max-w-2xl">
+          <h2 className="marketing-section-headline">Built Differently</h2>
+          <div className="marketing-body-lg mt-4 space-y-4">
+            <p>
+              Most software starts with features. Alloy started with the foundation — records,
+              Business Processes, Processing, permissions, documents, communications, and Operational
+              Intelligence.
+            </p>
+            <p>
+              That foundation means new operational areas can be added without creating another
+              disconnected system. Alloy moves work forward today — and expands without starting over.
+            </p>
+          </div>
+        </div>
+      </SectionShell>
+
+      <SectionShell density="compact">
+        <div className="mx-auto max-w-md text-center">
+          <h2 className="marketing-statement-headline">See where work happens</h2>
+          <p className="marketing-body mt-3">
+            We would love to show you Alloy — Business Processes, Processing, and Operational
+            Intelligence working together.
           </p>
-          <div className="mt-8">
+          <div className="mt-7">
             <CTAButton href="/contact">Book a Demo</CTAButton>
           </div>
         </div>

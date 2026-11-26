@@ -1,0 +1,40 @@
+{
+  "trusted_host_action_id": "tha_9cd9507941dc23",
+  "query_hash": "a9ae50323c95cfa57a7670bb68273cf1c6b1f6de86469cd86a9333a5eb0ead07",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-24T15:39:22.887Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_9cd9507941dc23",
+    "query_hash": "a9ae50323c95cfa57a7670bb68273cf1c6b1f6de86469cd86a9333a5eb0ead07",
+    "authorization_id": "grnt_f29061d3aa484e8e",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-24T15:39:25.595Z",
+    "question_ids": [
+      "financials_ssp_high_water"
+    ],
+    "questions": {
+      "financials_ssp_high_water": {
+        "question_id": "financials_ssp_high_water",
+        "row_count": null,
+        "rows": [
+          {
+            "newest_applied": "20261023120000",
+            "total_applied": 493,
+            "has_20261023120000": 1,
+            "fn_account_fact_bundle_exists": 0,
+            "charges_indexes": 16,
+            "payment_allocations_indexes": 7
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

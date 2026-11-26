@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
     "plugins": [
       {
         "name": "next"
@@ -35,6 +36,9 @@
     "test-results",
     "playwright-report",
     "coverage",
-    "tmp"
+    "tmp",
+    "scripts/tmp-*.mts",
+    "scripts/tmp-*.mjs",
+    "scripts/tmp-*.ts"
   ]
 }

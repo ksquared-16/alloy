@@ -1,0 +1,462 @@
+/**
+ * WHAT LEGITIMATE REDUCTIONS APPLY TO THIS GROSS OBLIGATION — decided, not written.
+ *
+ * Thread 7 made a month's gross tuition real: an accepted pricing term becomes a posted charge for
+ * an amount a family agreed to. This module answers the next question without disturbing that one.
+ * Gross stays gross. A reduction is a SEPARATE, separately-explainable consequence, and the net a
+ * family owes is derived by the balance authority that already sums them
+ * (`buildFinancialsCardVM`: gross + discounts + funding + adjustments = responsibility).
+ *
+ * ── WHO OWNS THE POLICY ──
+ *
+ * `commercial_policies` does, and this module does not re-decide it. Commercial Execution doctrine
+ * is explicit — resolution-time policy types (`discount`, `sibling_discount`, `waiver`) belong to
+ * Commercial, "policies modify a resolution; they never create a charge". So Commercial says WHAT
+ * the reduction is; Billing says what it does to money owed. That is the same seam Thread 7 opened
+ * for pricing, and it is why nothing here reads a rate.
+ *
+ * ── WHY STACKING IS DETERMINISTIC BY CONSTRUCTION ──
+ *
+ * `resolvePolicy` selects ONE winning policy per type (most-specific-wins over
+ * org < location < program < offering < variant, then latest effective start). So stacking is
+ * across TYPES, never within one, and the order below is total. There is no "which of the two 10%
+ * policies won" question to answer, because the configuration cannot pose it.
+ *
+ * ── THE ARITHMETIC IS NOT INVENTED HERE ──
+ *
+ * Every rule is the one `lib/commercial/execution/policy/applyPolicies.ts` already runs:
+ *   waiver wins over discount, outright;
+ *   a percentage is taken on the line's GROSS, so multiple percentages ADD rather than compound
+ *     (`recomputeNet` sums adjustments against `line.gross`, never against a running net);
+ *   the aggregate reduction is clamped so net never goes below zero (`Math.max(0, …)`).
+ * Re-deciding any of them here would mean a quote and an invoice could disagree about the same
+ * policy, which is the whole reason one owner exists.
+ *
+ * Pure. No I/O, no clock, no Supabase.
+ */
+
+import { formatMoneyFromCents } from "@/lib/adminFormatters";
+import { chargeCategorySemantics } from "@/lib/financials/chargeCategorySemantics";
+
+/** How a benefit is expressed — the authoring vocabulary of the policy registry. */
+export type ReductionBasis = "percentage" | "amount";
+
+/** The commercial policy types that reduce money owed. Ordered; see STACK_ORDER. */
+export type ReductionPolicyKind = "waiver" | "sibling_discount" | "discount";
+
+/**
+ * Waiver first because it ends the question, then the relational discount, then the general one.
+ * A total order is what makes an explanation reproducible a year later.
+ */
+export const STACK_ORDER: readonly ReductionPolicyKind[] = ["waiver", "sibling_discount", "discount"];
+
+/**
+ * THE POLICY TYPES THAT REDUCE MONEY, named once.
+ *
+ * The same three, and the same list, but a different question from STACK_ORDER: that one says in
+ * what order they stack, this one says which policy types are reductions at all. Two callers had
+ * each declared their own private copy and a third was about to — and a surface filtering on a
+ * stale copy would offer an operator a proration rule in a discount selector.
+ */
+export const REDUCTION_KINDS: readonly ReductionPolicyKind[] = ["waiver", "sibling_discount", "discount"];
+
+/** One authored policy, already narrowed to the winner for its type and scope. */
+export type ReductionPolicy = {
+    id: string;
+    kind: ReductionPolicyKind;
+    /** The authored `value` jsonb, read defensively — an unreadable policy REFUSES. */
+    params: Record<string, unknown>;
+    label?: string | null;
+};
+
+/** The gross consequence a reduction is measured against. */
+export type GrossObligation = {
+    chargeId: string;
+    customerMemberId: string;
+    enrollmentAgreementId: string;
+    /** Positive cents. A reduction is never measured against a reduction. */
+    amountCents: number;
+    currencyCode: string;
+    categoryKey: string;
+    periodKey: string;
+};
+
+/**
+ * Facts, resolved server-side from canonical sources. Never asserted by a caller: a browser that
+ * could declare a family employed could grant itself a discount.
+ */
+export type EligibilityFacts = {
+    /** 1-based rank of this child among the household's concurrently enrolled children. */
+    siblingRank: number;
+    /** How many of the household's children are concurrently enrolled over the period. */
+    siblingCount: number;
+    /** A person on this household holds an employment covering the service period. */
+    employeeHousehold: boolean;
+    /*
+     * ── POLICIES THIS RELATIONSHIP HAS BEEN EXPLICITLY GIVEN ──────────────────────────────────
+     *
+     * Until this existed, a child received a discount only by satisfying a RULE — sibling rank and
+     * count, or an employee household — and an operator who wanted to give one family a configured
+     * discount the rules did not already reach had no way to say so.
+     *
+     * An assignment satisfies the policy's RELATIONSHIP-level eligibility and NOTHING ELSE. It
+     * does not decide whether the policy covers this charge, whether the category may be
+     * discounted at all, or whether an exception or exclusion removes it. Those gates are below
+     * and the assignment passes through every one of them, because "which policies does this child
+     * receive" and "does this policy apply to this charge" are two different questions and only
+     * the first is an operator's to answer.
+     *
+     * Server-resolved like every other fact here: a browser that could declare itself assigned
+     * could grant itself a discount.
+     */
+    assignedPolicyIds?: readonly string[];
+};
+
+export type AppliedReduction = {
+    policyId: string;
+    policyKind: ReductionPolicyKind;
+    basis: ReductionBasis;
+    /** The authored number: percent for `percentage`, cents for `amount`. */
+    basisValue: number;
+    /** What the benefit was calculated ON — always the gross, never a running net. */
+    basisAmountCents: number;
+    /** NEGATIVE cents. The sign is the direction money moves, and it is stored, not inferred. */
+    amountCents: number;
+    /** True when a configured maximum benefit bound the amount. */
+    capped: boolean;
+    explanation: string;
+};
+
+export type NotEligibleReason =
+    | "no_policy_configured"
+    | "not_enough_siblings"
+    | "rank_not_covered"
+    | "not_an_employee_household"
+    | "category_not_covered"
+    /**
+     * THE OTHER HALF OF THE INTERSECTION. The discount policy would have covered this charge, and
+     * the CATEGORY refuses. Told apart from `category_not_covered` — which means the policy did not
+     * name this category — because the two are different conversations with an operator: one is
+     * "your policy does not cover this", the other is "this kind of charge cannot be discounted".
+     */
+    | "category_not_discountable"
+    /**
+     * THE POLICY WOULD HAVE APPLIED, AND THIS COMMERCIAL RELATIONSHIP IS EXCLUDED FROM IT.
+     *
+     * Deliberately distinct from every other reason here. The others describe a family or a
+     * charge that the policy does not reach; this one describes a policy an operator has
+     * intentionally, attributably set aside for one relationship over an effective window.
+     * Collapsing it into `category_not_covered` would tell an operator their configuration is
+     * wrong when somebody on their team decided this on purpose and said why.
+     */
+    | "excluded_by_exception"
+    /**
+     * A policy that applies to this relationship, deliberately withheld from THIS charge.
+     *
+     * Deliberately its own reason rather than folded into `excluded_by_exception`: the two are
+     * different decisions with different blast radius, and an operator reading "excluded for this
+     * assignment" when only one charge was waived would believe the family had lost the discount
+     * entirely.
+     */
+    | "excluded_by_charge_exception";
+
+export type RefusalReason =
+    | "unreadable_basis"
+    | "unreadable_value"
+    | "percentage_out_of_range"
+    | "negative_gross";
+
+export type ReductionDecision =
+    | {
+          kind: "applied";
+          reductions: AppliedReduction[];
+          /** Negative: the sum of every reduction, after the floor. */
+          totalCents: number;
+          netCents: number;
+          /** True when the floor bound the aggregate — the family owes zero, never less. */
+          floored: boolean;
+      }
+    | { kind: "not_eligible"; reason: NotEligibleReason }
+    | { kind: "refused"; reason: RefusalReason; detail: string; policyId: string | null };
+
+/**
+ * The identity of "this policy, applied to this gross charge".
+ *
+ * Keyed on the CHARGE, which is already period- and child-specific, so the same policy cannot apply
+ * twice to one obligation while a distinct eligible period gets its own application for free. This
+ * is the same reasoning that anchored Thread 7's occurrence key on the assignment and the period
+ * rather than on the term.
+ */
+export function reductionKey(policyId: string, chargeId: string): string {
+    return `fred:${policyId}:${chargeId}`;
+}
+
+function num(v: unknown): number | null {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+    return null;
+}
+
+function readBasis(params: Record<string, unknown>): ReductionBasis | null {
+    const raw = typeof params.basis === "string" ? params.basis.trim() : "";
+    return raw === "percentage" || raw === "amount" ? raw : null;
+}
+
+/** `applies_to` is authored as tuition | fees | all; absent means everything. */
+function coversCategory(params: Record<string, unknown>, categoryKey: string): boolean {
+    const raw = typeof params.applies_to === "string" ? params.applies_to.trim() : "";
+    if (raw === "" || raw === "all") return true;
+    if (raw === "tuition") return categoryKey === "tuition";
+    if (raw === "fees") return categoryKey !== "tuition";
+    return true;
+}
+
+/** Positive cents to subtract, before caps. Mirrors `computeDiscountCents` exactly. */
+function benefitCents(basis: ReductionBasis, value: number, grossCents: number): number {
+    const raw = basis === "percentage" ? (grossCents * value) / 100 : value;
+    return Math.min(Math.max(0, Math.round(raw)), grossCents);
+}
+
+/**
+ * Is this household's child eligible for this policy, and for how much?
+ *
+ * Returns a refusal rather than a guess when the configuration cannot be read: a policy that says
+ * "percentage" with no readable number is an authoring mistake, and quietly treating it as zero
+ * would bill the family in full while the operator believed a discount was live.
+ */
+function evaluateOne(
+    policy: ReductionPolicy,
+    gross: GrossObligation,
+    facts: EligibilityFacts,
+): AppliedReduction | { skip: NotEligibleReason } | { refuse: RefusalReason; detail: string } {
+    if (!coversCategory(policy.params, gross.categoryKey)) return { skip: "category_not_covered" };
+
+    /*
+     * ── THE CATEGORY'S OWN SAY ──────────────────────────────────────────────────────────────
+     *
+     * Eligibility is an INTERSECTION and this is the half that was missing:
+     *
+     *     applies only if  the discount policy permits this charge
+     *                AND   the charge category permits discounting
+     *
+     * Until now only the policy had a vote, so a policy authored as `applies_to: "fees"` reached
+     * every non-tuition category — including `discount`, `credit` and `adjustment`, where a
+     * reduction of a reduction is not something any reconciliation can explain.
+     *
+     * Note what this deliberately does NOT encode: business opinion. `late_pickup` IS discountable
+     * here. An organisation that never discounts late fees says so through its policy's own
+     * `applies_to`; hard-coding that belief would take the decision away from every tenant that
+     * disagrees. Only incoherence is refused.
+     */
+    if (!chargeCategorySemantics(gross.categoryKey).discountable) {
+        return { skip: "category_not_discountable" };
+    }
+
+    // ── A WAIVER IS NOT A PERCENTAGE. It removes the charge, and says so in one place.
+    if (policy.kind === "waiver") {
+        return {
+            policyId: policy.id,
+            policyKind: "waiver",
+            basis: "amount",
+            basisValue: gross.amountCents,
+            basisAmountCents: gross.amountCents,
+            amountCents: -gross.amountCents,
+            capped: false,
+            explanation: `Waived in full under ${policy.label ?? "a waiver policy"}.`,
+        };
+    }
+
+    /*
+     * ── AN EXPLICIT ASSIGNMENT ANSWERS THE RELATIONSHIP QUESTION, AND ONLY THAT ───────────────
+     *
+     * The two gates below ask whether this RELATIONSHIP qualifies: enough siblings, the right
+     * rank, an employee household. An operator who assigned this policy to this relationship has
+     * answered that question themselves, deliberately and attributably, so the rules do not get
+     * to answer it again.
+     *
+     * NOTE WHAT IS ABOVE THIS LINE AND CANNOT BE REACHED FROM HERE: `coversCategory` and
+     * `chargeCategorySemantics(...).discountable` already ran. A sibling discount assigned to a
+     * child STILL cannot reduce a Registration Fee when the policy's own `applies_to` excludes
+     * fees, and still cannot reduce a charge whose category is not discountable at all. That is
+     * the intersection this model turns on: assignment says which policies a child receives,
+     * policy eligibility says whether one applies to a charge, and an operator may decide the
+     * first without being able to overrule the second.
+     */
+    const assigned = (facts.assignedPolicyIds ?? []).includes(policy.id);
+
+    if (!assigned && policy.kind === "sibling_discount") {
+        const minSiblings = num(policy.params.min_siblings) ?? 2;
+        if (facts.siblingCount < minSiblings) return { skip: "not_enough_siblings" };
+        const rankRule = typeof policy.params.applies_to_rank === "string" ? policy.params.applies_to_rank : "subsequent";
+        // "subsequent" means the discount starts at the Nth child, where N is the configured
+        // minimum — the first child pays full tuition, which is what a sibling discount MEANS.
+        if (rankRule !== "all" && facts.siblingRank < minSiblings) return { skip: "rank_not_covered" };
+    }
+
+    if (!assigned && policy.kind === "discount") {
+        // Employee eligibility is a CONFIGURED requirement, not a hard-coded discount type. The
+        // shared policy substrate stays free of childcare vocabulary; the tenant expresses "staff
+        // families" and the server proves it from `employments`.
+        const requires = typeof policy.params.requires === "string" ? policy.params.requires.trim() : "";
+        if (requires === "employee_household" && !facts.employeeHousehold) {
+            return { skip: "not_an_employee_household" };
+        }
+    }
+
+    const basis = readBasis(policy.params);
+    if (!basis) return { refuse: "unreadable_basis", detail: `policy ${policy.id} has no readable basis` };
+    const value = num(policy.params.value);
+    if (value == null) return { refuse: "unreadable_value", detail: `policy ${policy.id} has no readable value` };
+    if (basis === "percentage" && (value < 0 || value > 100)) {
+        return { refuse: "percentage_out_of_range", detail: `policy ${policy.id} percentage ${value}` };
+    }
+
+    const raw = benefitCents(basis, value, gross.amountCents);
+    const cap = num(policy.params.max_benefit_cents);
+    const capped = cap != null && cap >= 0 && raw > cap;
+    const amount = capped ? cap! : raw;
+    /*
+     * ONE MONEY FORMAT PER LINE. `toFixed(2)` prints 145000 cents as "$1450.00" while every
+     * surface that renders this explanation formats its own amounts through Intl — so the
+     * Financials Details line read "Expected $145.00 · … 10% of $1450.00", two conventions for
+     * the same currency, side by side. MEASURED on deployed f160bb907. The canonical formatter
+     * is the one the rest of admin already uses.
+     */
+    const shown = basis === "percentage" ? `${value}%` : formatMoneyFromCents(value);
+    return {
+        policyId: policy.id,
+        policyKind: policy.kind,
+        basis,
+        basisValue: value,
+        basisAmountCents: gross.amountCents,
+        amountCents: -amount,
+        capped,
+        explanation:
+            `${policy.label ?? policy.kind} · ${shown} of ${formatMoneyFromCents(gross.amountCents)}`
+            + (capped ? `, capped at ${formatMoneyFromCents(amount)}` : ""),
+    };
+}
+
+/**
+ * Every reduction that legitimately applies to one gross obligation, in a total order.
+ *
+ * `policies` must already be the winners for their types — one per kind — because that is what
+ * `resolvePolicy` returns and what makes this deterministic. A second policy of the same kind is
+ * REFUSED rather than ranked here, because ranking it would be this module inventing a precedence
+ * the configuration never expressed.
+ */
+export function resolveFinancialReductions(args: {
+    gross: GrossObligation;
+    policies: readonly ReductionPolicy[];
+    facts: EligibilityFacts;
+    /**
+     * Policies this commercial relationship is excluded from, resolved by
+     * `commercialPolicyExceptionService` for the obligation's own date. Empty or omitted is the
+     * ordinary case.
+     *
+     * ── WHY HERE AND NOT A FILTER OUTSIDE ─────────────────────────────────────────────────────
+     *
+     * A caller could simply drop excluded policies before calling, and the arithmetic would be
+     * right — but the ANSWER would be wrong: the resolver would report `no_policy_configured`,
+     * telling an operator nothing is set up when in fact something is set up and deliberately
+     * excepted. The exclusion is an eligibility fact, so it is evaluated where eligibility is
+     * decided, and it produces its own reason.
+     *
+     * This is the SAME function the forecast and `applyFinancialReductions` both call, so a
+     * forecast cannot promise a discount the application path will withhold.
+     */
+    excludedPolicyIds?: readonly string[];
+    /**
+     * Policies withheld from THIS charge alone, resolved by `chargePolicyExclusionService`.
+     *
+     * Same reasoning as the relationship exclusion above, one grain down: dropping these before
+     * the call would make the resolver answer `no_policy_configured` for a family that has a
+     * policy and an operator who deliberately waived it once. The waiver is an eligibility fact,
+     * so it is evaluated where eligibility is decided and carries its own reason.
+     */
+    chargeExcludedPolicyIds?: readonly string[];
+}): ReductionDecision {
+    const { gross, policies, facts } = args;
+    const excluded = new Set(args.excludedPolicyIds ?? []);
+    const chargeExcluded = new Set(args.chargeExcludedPolicyIds ?? []);
+    /* Either grain sets a policy aside; only the reason differs. */
+    const setAside = (id: string): boolean => excluded.has(id) || chargeExcluded.has(id);
+    if (gross.amountCents <= 0) {
+        return { kind: "refused", reason: "negative_gross", detail: `gross ${gross.amountCents}`, policyId: null };
+    }
+
+    const applied: AppliedReduction[] = [];
+    let sawAny = false;
+    /*
+     * WHY THE REDUCTION DID NOT APPLY IS THE ANSWER, not a category. "Not enough siblings" and
+     * "this policy does not cover fees" send an operator to two different places, and collapsing
+     * them into one reason sends them to neither.
+     */
+    let firstSkip: NotEligibleReason | null = null;
+
+    for (const kind of STACK_ORDER) {
+        const forKind = policies.filter((p) => p.kind === kind);
+        if (forKind.length === 0) continue;
+        sawAny = true;
+        /*
+         * An excepted policy is SEEN and then set aside, which is why `sawAny` is already true:
+         * "there is a policy and you are excluded from it" and "there is no policy" are different
+         * answers and only one of them is about a decision somebody made.
+         */
+        if (forKind.every((p) => setAside(p.id))) {
+            /*
+             * WHICH DECISION SET IT ASIDE. A charge-level waiver is named as one, because the
+             * family still has the policy for every other charge and the answer must not read as
+             * though they had lost it.
+             */
+            const everyOneCharge = forKind.every((p) => chargeExcluded.has(p.id) && !excluded.has(p.id));
+            firstSkip = firstSkip ?? (everyOneCharge ? "excluded_by_charge_exception" : "excluded_by_exception");
+            continue;
+        }
+        const contenders = forKind.filter((p) => !setAside(p.id));
+        if (contenders.length > 1) {
+            return {
+                kind: "refused",
+                reason: "unreadable_basis",
+                detail: `${contenders.length} active ${kind} policies for one scope; the winner is not expressed`,
+                policyId: contenders[0]!.id,
+            };
+        }
+        const eligibleOfKind = forKind.filter((p) => !excluded.has(p.id));
+        const result = evaluateOne(eligibleOfKind[0]!, gross, facts);
+        if ("refuse" in result) {
+            return { kind: "refused", reason: result.refuse, detail: result.detail, policyId: eligibleOfKind[0]!.id };
+        }
+        if ("skip" in result) {
+            firstSkip = firstSkip ?? result.skip;
+            continue;
+        }
+        applied.push(result);
+        // A waiver ends the question: there is nothing left of the charge for a discount to reduce,
+        // and stacking anything onto zero would drive the family's balance negative.
+        if (kind === "waiver") break;
+    }
+
+    if (applied.length === 0) {
+        return { kind: "not_eligible", reason: sawAny ? (firstSkip ?? "category_not_covered") : "no_policy_configured" };
+    }
+
+    const rawTotal = applied.reduce((acc, r) => acc + r.amountCents, 0);
+    const floored = gross.amountCents + rawTotal < 0;
+    const totalCents = floored ? -gross.amountCents : rawTotal;
+    if (floored) {
+        // The FLOOR IS THE AGGREGATE'S, and it is recorded on the last line rather than spread
+        // across all of them: an operator reading the ledger must see which reduction was trimmed,
+        // not a set of amounts that no policy would reproduce.
+        const excess = totalCents - rawTotal;
+        const last = applied[applied.length - 1]!;
+        applied[applied.length - 1] = {
+            ...last,
+            amountCents: last.amountCents + excess,
+            capped: true,
+            explanation: `${last.explanation}, reduced so the balance is not driven below zero`,
+        };
+    }
+
+    return { kind: "applied", reductions: applied, totalCents, netCents: gross.amountCents + totalCents, floored };
+}

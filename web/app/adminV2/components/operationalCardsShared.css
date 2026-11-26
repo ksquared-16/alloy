@@ -1,0 +1,4111 @@
+/*
+ * THE LOCKED OPERATIONAL CARD STYLES — one definition, loaded by both surfaces.
+ *
+ * These rules lived only in the design lab's stylesheet, so the production Focus Panel rendered the
+ * approved component's DOM with NONE of its appearance: 32 progression-band rules and 19 process
+ * rules simply were not there. The card was structurally right and visually unrecognisable, which is
+ * most of what QA was failing.
+ *
+ * Sharing the COMPONENT was necessary and not sufficient — a shared component with a private
+ * stylesheet is still two presentations. This file is imported by `alloyOsRuntime.css` (production)
+ * and by `cardLab.css` (the lab), so neither can drift from the other.
+ */
+
+/* ── progression band — Journey stages and the Attendance day ───────────── */
+
+.alloy-os-progression {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.alloy-os-progression__step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 12px 8px 8px;
+  border-radius: 8px;
+}
+
+/* Journey is an orientation strip: tighter rhythm, one folded supporting line. */
+.alloy-os-progression--compact .alloy-os-progression__step {
+  gap: 3px;
+  padding: 3px 12px 3px 6px;
+}
+
+.alloy-os-progression--compact .alloy-os-progression__glyph {
+  width: 12px;
+  height: 12px;
+}
+
+.alloy-os-progression--compact .alloy-os-progression__value {
+  font-size: 0.78rem;
+}
+
+/* A projection artefact, not an event — it reads as an affordance, never as a stage. */
+.alloy-os-progression__collapsed {
+  align-self: flex-start;
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 26%, transparent);
+  background: transparent;
+  border-radius: 999px;
+  padding: 1px 9px;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.alloy-os-progression__collapsed:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 50%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-progression__step[data-progression-state="collapsed"] .alloy-os-progression__rail {
+  opacity: 0.55;
+}
+
+/* The current column takes the Children --focused treatment: tint, no border, no banner. */
+.alloy-os-progression__step--current {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+
+.alloy-os-progression__rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.alloy-os-progression__glyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  box-sizing: border-box;
+}
+
+.alloy-os-progression__glyph[data-glyph="done"] {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+
+.alloy-os-progression__glyph[data-glyph="current"] {
+  background: var(--alloy-os-bend-pine, #00a283);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, transparent);
+}
+
+.alloy-os-progression__glyph[data-glyph="collapsed"] {
+  background: #fff;
+  border: 1.5px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 26%, transparent);
+}
+
+.alloy-os-progression__glyph[data-glyph="future"] {
+  background: #fff;
+  border: 1.5px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef));
+}
+
+.alloy-os-progression__connector {
+  flex: 1 1 auto;
+  height: 1.5px;
+  border-radius: 1px;
+  min-width: 8px;
+}
+
+.alloy-os-progression__connector[data-connector="done"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+}
+
+.alloy-os-progression__connector[data-connector="ahead"] {
+  background: var(--alloy-os-border, #e5e9ef);
+}
+
+.alloy-os-progression__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.alloy-os-progression__value {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__value {
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-progression__detail {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+.alloy-os-progression__note {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__note,
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__detail {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* ── process card: the work band under the stage band ─────────────────────── */
+/*
+ * A COMPACT COMMAND REGION — one row when the width allows, clean wrapping when it does not.
+ *
+ * Three rules have stood here, and each failed at a different authored width:
+ *
+ *   1. `flex-wrap: nowrap` + `overflow-x: auto`. Measured on a deployed Waitlist card,
+ *      `scrollWidth 409` against `clientWidth 300`: "Send form" sat outside the visible box with
+ *      nothing to say it existed. Silent clipping.
+ *   2. wrap with content-sized commands. Every command reachable, but each line a different
+ *      width — read as assembled rather than designed.
+ *   3. one row of equal columns (`grid-auto-columns: minmax(0, 1fr)`). Consistent, and at the
+ *      authored Business Process width it truncated labels mid-word inside their own columns.
+ *      Legible clipping is still clipping, and equal columns force it: four commands each take a
+ *      quarter of the track whether or not their labels fit.
+ *
+ * The product rule that settles it: COMMANDS MUST FIT THE CARD; THE CARD MUST NOT BE DISTORTED TO
+ * FIT THE COMMANDS. So the region wraps, and consistency is height, padding and treatment — NOT
+ * identical width. Equal widths were the thing forcing truncation, and they also waste the space a
+ * short label would have given back to a long one, causing wraps that were never necessary.
+ *
+ * The 1.9rem height, the `0 10px` padding and the type scale all come from the platform's own
+ * `.alloy-os-currentwork__helpful-action`, so nothing here restates them and the Process commands
+ * cannot drift from What's Next.
+ */
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row {
+  /*
+   * `flex` rather than the inherited `repeat(auto-fit, minmax(0, 1fr))` grid: auto-fit still
+   * distributes the track equally among whatever fits, which is the rule above that truncated.
+   * Flex wrapping asks each command only for the width its own label needs, so a row holds as many
+   * as genuinely fit and the rest take the next line — the minimum number of clean rows.
+   */
+  display: flex;
+  flex-wrap: wrap;
+  grid-template-columns: none;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+  /* Nothing is hidden and nothing scrolls sideways: what does not fit the line wraps onto one. */
+  overflow-x: visible;
+}
+
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action,
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > [data-work-tour-grouped="true"] {
+  /*
+   * Size to the label, and never shrink. `0 0 auto` is what keeps a command's own label whole
+   * instead of absorbing a neighbour's overflow — the behaviour that produced "hange lead
+   * locatio". A command too wide for what is left of the line takes the next line whole.
+   *
+   * The filled primary is listed with the outline commands deliberately: it used to size itself
+   * and stood a different HEIGHT from its neighbours, which is the consistency that matters.
+   */
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  /* One line per command. A wrapped label reads as two commands on a rail of many. */
+  white-space: nowrap;
+  /*
+   * THE LAST RESORT, AND ONLY THAT.
+   *
+   * A single command whose label is wider than the whole card cannot be made to fit by wrapping,
+   * and must still not render outside it. `max-width: 100%` bounds it and the ellipsis is what
+   * that bound costs. This engages only when ONE label exceeds the entire region — no configured
+   * command does today, and every ordinary set wraps with its labels intact.
+   */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action:disabled,
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/*
+ * ATTENDANCE COMMANDS SIZE TO THEIR LABELS — the same correction the Process rail above makes.
+ *
+ * `ActionRow` renders What's Next's `helpful-row`, whose base rule is
+ * `grid-template-columns: repeat(auto-fit, minmax(0, 1fr))` with `width: 100%` on each command.
+ * With two commands that is two equal half-card tracks, so "Check in" and "Mark absent" stretched
+ * the full width of the card and read as a split bar rather than as two controls.
+ *
+ * Scoped to this card's OWN identity, not to a wrapper that happens to enclose it: the row class
+ * belongs to Current Work and is shared with the Process rail, and `data-universal-card-key` is
+ * emitted by the approved card itself — so this reaches the Focus Panel and the design lab and
+ * cannot reach any other card's commands.
+ *
+ * Nothing else about the commands changes: same height variable, same states, same order.
+ */
+[data-universal-card-key="attendance"] .alloy-os-currentwork__helpful-row {
+  /* Flex, so the track stops being divided equally and each command asks for its own label. */
+  display: flex;
+  flex-wrap: wrap;
+  grid-template-columns: none;
+  justify-content: flex-start;
+}
+
+[data-universal-card-key="attendance"] .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
+[data-universal-card-key="attendance"] .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action {
+  /*
+   * Size to the label and never shrink, exactly as the Process rail does. The filled primary is
+   * listed beside the outline command deliberately — it used to stretch with the grid, and if only
+   * one of the pair sized itself the two would stand at different widths for no stated reason.
+   */
+  flex: 0 0 auto;
+  width: auto;
+  /* Room around the label, since the track no longer supplies it. */
+  padding-inline: 14px;
+  white-space: nowrap;
+  /* A label wider than the card still may not paint outside it. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alloy-os-process__work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+  gap: 10px 24px;
+  align-items: start;
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+
+.alloy-os-process__work-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/*
+ * Resolving the current work — a link under the stage's own lines, not a fifth button.
+ *
+ * Styled as text so it reads as a consequence of the sentence above it. It keeps
+ * `data-process-action`, so the command identity and every certification selector are unchanged by
+ * the move out of the row.
+ */
+.alloy-os-process__outcome-link {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #0f7a5a);
+  cursor: pointer;
+  text-align: left;
+}
+
+.alloy-os-process__outcome-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.alloy-os-process__outcome-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.alloy-os-process__work-label {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-process__work-line {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-process__due {
+  font-weight: 500;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* Participants projected onto the rail, under the stage each is actually at. Bounded: at most
+ * three avatars per stage, then a count — a busy family cannot destroy the rail. */
+.alloy-os-progression__participants {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+  padding-left: 1px;
+  min-height: 20px;
+}
+
+/* Avatar + first name — the rail identifies the participant, it does not abstract them. */
+.alloy-os-progression__marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 1px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, #fff);
+  min-width: 0;
+}
+
+.alloy-os-progression__marker-name {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+
+/* The existing selected/focused treatment — the same mint the Children card uses. */
+.alloy-os-progression__marker[data-scoped="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+}
+
+.alloy-os-progression__marker[data-scoped="true"] .alloy-os-progression__marker-name {
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 700;
+}
+
+.alloy-os-progression__marker-more {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+/* Bounded activity — a supporting region, never the card's body. */
+/* ── THE FOOT ROW ────────────────────────────────────────────────────────────────────────────
+ * Participants left, activity right, on ONE line. Two bands became one: the participant band and
+ * the activity band each used to claim its own height plus its own top rule. Halves, because the
+ * right side is an affordance and not a column of facts — it needs room to sit at the edge, not
+ * room to hold content. */
+.alloy-os-process__foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 24px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+
+.alloy-os-process__foot-left {
+  min-width: 0;
+}
+
+.alloy-os-process__foot-right {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* The trigger is the ONLY thing activity costs the card face. */
+.alloy-os-process__activity-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  margin-right: -4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--alloy-os-bend-pine, #00a283);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.alloy-os-process__activity-trigger:hover,
+.alloy-os-process__activity-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+}
+
+/* The count is what makes the closed state informative — an operator can tell whether opening it
+ * is worth the click without opening it. */
+.alloy-os-process__activity-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* The menu bounds its own HEIGHT; it never truncates the record. */
+.alloy-os-process__activity-menu {
+  min-width: 19rem;
+  max-height: 17rem;
+  overflow-y: auto;
+}
+
+.alloy-os-process__activity-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.alloy-os-process__activity-item .alloy-os-currentwork__recent-activity-when {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-process__activity-all {
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  border-radius: 0 0 6px 6px;
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 650;
+}
+
+/* The one row that survives the rail: a scoped child with its own action. */
+.alloy-os-process__scoped {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+  min-width: 0;
+}
+
+.alloy-os-process__scoped-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  white-space: nowrap;
+}
+
+.alloy-os-process__scoped .alloy-os-process__participant-actions {
+  margin-left: auto;
+}
+
+.alloy-os-process__participants {
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.alloy-os-process__participants-head {
+  margin: 0 0 1px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-process__participant {
+  display: grid;
+  grid-template-columns: 26px minmax(120px, 190px) 108px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 8px;
+  min-width: 0;
+}
+
+/* A scoped child is emphasised and ordered first — never substituted for the subject. */
+.alloy-os-process__participant[data-scoped="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+
+.alloy-os-process__participant-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alloy-os-process__participant-stage {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.alloy-os-process__participant-since {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alloy-os-process__participant-actions {
+  display: inline-flex;
+  gap: 12px;
+  justify-self: end;
+}
+
+/* Every child matches the case — one line instead of a per-child list. */
+/* The rule and the spacing now belong to the foot row that contains this line. */
+.alloy-os-process__aligned {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-process__aligned .alloy-os-process__needed-label {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-process__needed {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-process__needed-label {
+  margin-right: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+.alloy-os-process__anchor { display: none; }
+
+
+/* ══ FINANCIALS ═══════════════════════════════════════════════════════════════
+ *
+ * Extracted from the design lab's stylesheet so the approved Financials card renders identically in
+ * the lab and in the real Focus Panel. Production carried ZERO billing rules before this — the same
+ * gap the progression band had, and with the same symptom: the right DOM, the right class names,
+ * and none of the approved appearance.
+ *
+ * Copied verbatim rather than re-authored. The previous extraction was re-typed and silently
+ * inverted the stage rail; `tests/operationalCards/sharedStylesheetContract.test.ts` now guards the
+ * class of error, but not re-typing is the cheaper protection.
+ */
+
+/* ── billing ────────────────────────────────────────────────────────────── */
+
+.alloy-os-billing__zones {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.72fr) minmax(0, 1.23fr);
+  gap: 10px 34px;
+  min-width: 0;
+  margin-top: 2px;
+}
+/* Current Period is the primary financial explanation and needs width for the arithmetic.
+ * Past Due and Payment answer one related question — what needs collecting, and how — so they
+ * stack in a narrower right column instead of holding equal authority. */
+/*
+ * ── THE CARD IS ITS OWN YARDSTICK ──────────────────────────────────────────────────────────────
+ *
+ * This card is 366px wide at the Focus Panel's normal width and 185px at its narrowest, and that
+ * has nothing to do with the viewport — it is the column it was placed in. Sizing its internals
+ * off the viewport would be measuring the wrong thing, so the card is a query container and the
+ * one rule below asks about the card.
+ */
+.alloy-os-billing {
+  container-type: inline-size;
+  container-name: alloy-billing;
+}
+.alloy-os-billing__zones--two {
+  /*
+   * The 36px column gap was 23% of the whole zones width at the narrowest Focus Panel column, and
+   * it is what left Due a 48px box for a 65px figure — the clipped value in Kelly's screenshot.
+   * The zones still read as two columns at 20px; the figure now fits.
+   */
+  grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+  gap: 10px 20px;
+}
+.alloy-os-billing__collect {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-billing__zone--payment {
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-billing__zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-billing__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+/* Each zone announces itself in the family's in-body section-head grammar; the boundary is the
+ * 34px gap and the alignment, not a rule. */
+.alloy-os-billing__zone-head {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-billing__period {
+  margin: -2px 0 2px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* zone 1 — the arithmetic */
+.alloy-os-billing__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Cap the arithmetic's measure. At full column width the label and its amount drift apart and
+   * the stack stops reading as a sum. */
+  max-width: 380px;
+}
+.alloy-os-billing__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.alloy-os-billing__line-label {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* Only meaningful totals carry weight; individual rows stay regular and tabular. */
+.alloy-os-billing__line-value {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  min-width: 76px;
+  text-align: right;
+}
+/* The one rule the card carries — a financial subtotal, not a section divider. */
+.alloy-os-billing__line--emphasis {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, transparent);
+}
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/* The payer split, directly under the Responsibility total it divides. Quiet by construction:
+ * it is context for the number above it, never a second number competing with it. */
+.alloy-os-billing__split {
+  margin: 1px 0 0;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-billing__due {
+  margin: 3px 0 0;
+  max-width: 380px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__due strong {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* zone 2 — past due. The amount is the one number readable from across the room. */
+.alloy-os-billing__lines--compact {
+  max-width: none;
+  margin-top: 2px;
+}
+.alloy-os-billing__autopay--compact {
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
+.alloy-os-billing__amount {
+  margin: 2px 0 0;
+  /*
+   * ── EMPHASIS, NOT A HERO ──────────────────────────────────────────────────────────────────
+   *
+   * At 1.9rem Due was 30px beside a 10.9px zone head and 11.5px lines — nearly three times the
+   * largest thing near it. It stopped reading as the most important figure on the card and
+   * started reading as a different kind of object entirely, a dashboard tile that had landed in
+   * an operational card, and it pushed the commands down and out of the composition.
+   *
+   * Due is still the figure an operator acts on, so it stays the largest thing in its zone and
+   * keeps the warning colour and the tabular figures. It is simply back inside the card's own
+   * type hierarchy: one clear step above `Nothing past due` (0.86rem), not a scale of its own.
+   */
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__age {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #b45309;
+}
+.alloy-os-billing__decline {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__clear {
+  margin: 4px 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billing__clear-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* zone 3 — a ledger, not an activity feed: fixed columns, tabular figures, uniform row height. */
+.alloy-os-billing__ledger {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-billing__entry {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 82px;
+  gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+  height: 20px;
+}
+.alloy-os-billing__entry > :last-child {
+  text-align: right;
+}
+.alloy-os-billing__entry--head {
+  height: 16px;
+}
+.alloy-os-billing__entry--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billing__entry-when {
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-label {
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-amount {
+  font-size: 0.74rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+}
+/*
+ * ── SIGN IS ARITHMETIC; COLOUR IS BUSINESS STATE ──────────────────────────────────────────────
+ *
+ * This coloured an amount Bend Pine for being NEGATIVE, and that is the rule this pass removes.
+ * A negative amount is not a good amount any more than a positive one is a bad amount: a credit
+ * reducing an obligation is negative and ordinary, a refund is negative movement and ordinary, a
+ * reversal's sign depends on what it reverses, and a negative balance is money the centre owes the
+ * family. Green on one and nothing on the other taught an operator to read arithmetic direction as
+ * a verdict.
+ *
+ * The minus sign already carries the direction. Colour is reserved for STATE, which a caller sets
+ * deliberately — `--attention` for money that needs a decision, `--muted` for history that no
+ * longer counts — and which no rule here infers from a number.
+ *
+ * Kept as a no-op rather than deleted: the class name is still emitted by the summary card's
+ * period breakdown, and leaving it defined-but-neutral is what prevents the rule creeping back in
+ * as "it used to be green".
+ */
+.alloy-os-billing__entry-amount--credit {
+  color: inherit;
+}
+
+/*
+ * STATE, set by a caller that knows it. Attention is the canonical warning treatment — unapplied
+ * money answering nothing, a past-due figure. Muted is a reversed row: still readable, no longer
+ * counting. Neither is reachable from the amount's sign.
+ */
+.alloy-os-billingdetail__row--attention .alloy-os-billingdetail__amount,
+.alloy-os-billingdetail__row--attention .alloy-os-billingdetail__status {
+  color: #b45309;
+}
+.alloy-os-billingdetail__row--muted {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+}
+.alloy-os-billingdetail__row--muted .alloy-os-billingdetail__amount {
+  font-weight: 500;
+}
+/* The row's own operations, beneath the rows they act on. */
+.alloy-os-fdetail__paymentops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 2px 0 4px;
+}
+
+/* zone 3, composition B — how the bill is expected to be paid */
+.alloy-os-billing__autopay {
+  margin: 2px 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__autopay[data-autopay-ok="true"] {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billing__next {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__payer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 5px;
+}
+.alloy-os-billing__payer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+/* A funding source is not an ordinary parent payer, so it is not drawn as one. */
+.alloy-os-billing__payer-row[data-funding="true"] .alloy-os-billing__payer-name,
+.alloy-os-billing__payer[data-funding="true"] .alloy-os-billing__payer-name {
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__method-issue {
+  color: #b45309;
+  font-weight: 600;
+}
+/* When the ledger steps out of a primary zone it becomes one supporting line. */
+/* payer strip — full width, below the zones, deliberately placed rather than left over. */
+.alloy-os-billing__payers {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alloy-os-billing__payer-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 3px 34px;
+}
+.alloy-os-billing__payer {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+.alloy-os-billing__payer-name {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  white-space: nowrap;
+}
+.alloy-os-billing__payer-share {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__payer-method {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One place for the financial management actions, so they stop scattering across the zones. */
+.alloy-os-billing__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+}
+
+/* The section head inside the arithmetic column, shared with the detail composition. */
+.alloy-os-billingdetail__group {
+  margin: 6px 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+
+/* ══ HEALTH & SAFETY ══════════════════════════════════════════════════════════
+ *
+ * Extracted verbatim from the design lab's stylesheet, for the same reason as Financials: the
+ * approved card must render identically in the lab and in the real Focus Panel, and production
+ * carried only a partial set of its own.
+ *
+ * The section grammar these rules carry is the point of the card — a contained CRITICAL region with
+ * a restrained risk treatment, medications nested under the need they support, and ENROLLMENT
+ * HEALTH as a two-column list where "Missing" is a VALUE. The production approximation rendered the
+ * requirements as a cloud of pills instead, which reads as four warnings rather than one checklist
+ * with four rows.
+ */
+
+/* ── health & safety ────────────────────────────────────────────────────── */
+
+/* Restrained risk treatment. This card carries DURABLE safety information, not an active
+ * incident, so it stays a normal card surface with a narrow risk rail. Red is spent only on the
+ * two things that must be recognised: the severity, and what staff actually do. */
+.alloy-os-health__critical {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0 3px 10px;
+  border-left: 2px solid #c2410c;
+}
+.alloy-os-health__critical-label {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+.alloy-os-health__critical-icon {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+}
+.alloy-os-health__critical-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-health__critical-name {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-health__severity {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #c2410c 10%, #fff);
+  color: #c2410c;
+}
+.alloy-os-health__critical-line {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* What staff DO is the one line that has to survive a glance. */
+.alloy-os-health__critical-line--do {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #c2410c;
+}
+
+.alloy-os-health__need-inline {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.alloy-os-health__need-name {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-health__need-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* A medication sits UNDER the need it supports, indented against a quiet rail. */
+.alloy-os-health__med {
+  margin: 1px 0 0;
+  padding-left: 8px;
+  border-left: 1.5px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 30%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__med-name {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* Supporting operational context — two columns so it never dominates the care information. */
+.alloy-os-health__reqs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px 16px;
+}
+.alloy-os-health__req {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-health__req-name {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-health__req-value {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-health__req-value--missing {
+  color: #b45309;
+}
+
+/* Emergency contacts are relationship context, so they share the footer with the detail link
+ * rather than competing with medical information in the body. */
+.alloy-os-health__footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.alloy-os-health__emergency {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__emergency strong {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+
+/* ══ SHARED BODY IDIOMS (CardLabKit primitives) ═══════════════════════════════
+ *
+ * `CardLabKit` — SectionHead, Fact, EmptyLine and friends — is no longer lab-only: the approved
+ * Process, Financials and Health cards all render through it in production. Its rules therefore
+ * have to travel with them.
+ *
+ * This is what made the Health card's section heads render as ordinary dark body text instead of
+ * the specimen's small uppercase labels. The card had the right sections in the right order and
+ * still did not look like the approved card, because `.alloy-os-cardlab__section-head` existed only
+ * in the lab's stylesheet.
+ */
+
+/* ── shared body idioms ─────────────────────────────────────────────────── */
+
+/* In-body section head. Matches What's Next's RECENT ACTIVITY label, and carries the family's
+   single hairline when it follows other content. */
+.alloy-os-cardlab__section-head {
+  margin: 5px 0 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+/* The family has exactly ONE hairline — What's Next, before RECENT ACTIVITY, where a different
+ * KIND of content follows the action row. Sections of like content separate with whitespace. */
+.alloy-os-cardlab__section-head--ruled {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-cardlab__section-head:first-child {
+  margin-top: 0;
+}
+
+.alloy-os-cardlab__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px 12px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.alloy-os-cardlab__value--missing {
+  color: #b45309;
+}
+.alloy-os-cardlab__value--positive {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* A fact that is not a person: name over detail, optional right-aligned value. */
+.alloy-os-cardlab__fact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-row-value {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-cardlab__fact-row-value.alloy-os-household__row-detail--missing {
+  color: #b45309;
+  font-weight: 600;
+}
+.alloy-os-cardlab__row-main--inline {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.alloy-os-cardlab__name--severe {
+  color: #b91c1c;
+}
+
+/* The critical safety fact leads the card as the insight, so THAT is what carries the emphasis —
+ * no banner, no count, no separate section. */
+
+
+/* ══ ATTENDANCE DAY TRACK ═════════════════════════════════════════════════════
+ *
+ * Extracted verbatim from the design lab's stylesheet. The approved Attendance card is a horizontal
+ * day timeline at full row width; production drew a four-slot grid (EXPECTED / ARRIVED / NOW /
+ * DEPARTED) instead, which is a different card.
+ */
+
+/* ── attendance day track ───────────────────────────────────────────────── */
+
+.alloy-os-attendance__body {
+  gap: 6px;
+}
+.alloy-os-attendance__track {
+  position: relative;
+  height: 10px;
+  margin: 6px 8px 0;
+}
+.alloy-os-attendance__expected {
+  position: absolute;
+  inset: 4px 0 auto 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-border, #e5e9ef);
+}
+.alloy-os-attendance__actual {
+  position: absolute;
+  top: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick {
+  position: absolute;
+  top: 1px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 999px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.alloy-os-attendance__tick[data-tick="past"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick[data-tick="now"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, transparent);
+}
+.alloy-os-attendance__scale {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 8px;
+  font-size: 0.66rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-attendance__recent {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 2px;
+}
+.alloy-os-attendance__day {
+  display: grid;
+  grid-template-columns: 8px minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-attendance__day-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  align-self: center;
+}
+.alloy-os-attendance__day[data-day-state="present"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__day[data-day-state="partial"] .alloy-os-attendance__day-mark {
+  background: #b45309;
+}
+.alloy-os-attendance__day[data-day-state="absent"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-border, #e5e9ef);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, transparent);
+}
+.alloy-os-attendance__day-label {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-attendance__day-hours {
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ══ DETAIL EXPERIENCES (expanded density, centered Focus Card) ═══════════════
+ *
+ * The Financials and Health detail cards render into the Focus Panel's existing depth layer — the
+ * same centered card and scrim `useReportPerspective(..., "focused")` already drives. They are not
+ * new pages and not a second modal system.
+ */
+
+/* ── detail experiences (expanded density, centered Focus Card) ───────────── */
+
+.alloy-os-billingdetail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 30px;
+  min-width: 0;
+  margin-top: 2px;
+}
+.alloy-os-billingdetail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.alloy-os-billingdetail__group {
+  margin: 6px 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 2px 0 4px;
+}
+.alloy-os-billingdetail__filter {
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  background: #fff;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.alloy-os-billingdetail__filter--on {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billingdetail__ledger {
+  display: flex;
+  flex-direction: column;
+}
+/* The ledger takes the full card width beneath the three columns — a real table needs room. */
+.alloy-os-billingdetail__ledgerband {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.alloy-os-billingdetail__row {
+  display: grid;
+  /*
+   * ── SCAN IDENTITY FIRST; DESCRIPTION LAST AND SMALLEST ────────────────────────────────────
+   *
+   * Date, Type, Child, GL account, Amount, Status, Responsible party, Description.
+   *
+   * Description was bounded in 5F and still sat in the visual CENTRE of the row, so an operator's
+   * eye crossed free text to get from Child to GL and again to get from Amount to who owes it. It
+   * is the least identifying thing on a financial row and it is now physically last and narrow:
+   * a preview that truncates, not a column that organises the ledger.
+   *
+   * The order above IS the scan order — Date to Type to Child to GL to Amount to Status to
+   * Responsibility — and every track is sized to what it carries rather than to what is left over.
+   */
+  /*
+   * A NARROW LEADING ACTIONS TRACK, always present. The operations belong to the transaction, so
+   * they sit with it rather than on a line beneath it — and the track exists on every row, so a
+   * ledger's rhythm does not depend on which rows happen to be actionable.
+   */
+  /*
+   * GL ACCOUNT BEFORE DESCRIPTION. `4060 · Discounts & Credits` is a canonical account identity and
+   * it was truncating to `4060 · Discounts & Cre...` while the free-text preview beside it held more
+   * width than it needed. Description is explicitly a preview and yields first: GL takes the room to
+   * render the account names this product actually configures, and Description truncates earlier.
+   */
+  grid-template-columns: 46px 78px 112px 104px 178px 84px 72px 110px minmax(64px, 0.55fr);
+  gap: 8px;
+  align-items: baseline;
+  min-height: 21px;
+  padding: 1px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+}
+/* Amount is the sixth column: actions lead, then Date, Type, Child, GL, Amount. */
+.alloy-os-billingdetail__row > :nth-child(6) {
+  text-align: right;
+}
+.alloy-os-billingdetail__subject {
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__gl {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/*
+ * A ROW WITH NO GL ACCOUNT IS A CONFIGURATION FACT SOMEBODY MUST ACT ON.
+ *
+ * It read "— unmapped" in the same grey as a mapped account, which is the visual grammar of a
+ * successful value. Posting cannot be trusted while categories have no account behind them, so the
+ * state is toned as the attention it is — the same amber the Past due figure uses.
+ */
+.alloy-os-billingdetail__gl[data-financials-gl-state="unmapped"] {
+  color: #b45309;
+  font-weight: 600;
+  font-variant-numeric: normal;
+}
+.alloy-os-billingdetail__row--head {
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+}
+.alloy-os-billingdetail__row--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  /* The VALUES clip; the headers did not, so DESCRIPTION overran GL CODE at narrow widths and the
+     two headings read as one word. A header must obey its own column. */
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__when,
+.alloy-os-billingdetail__amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__amount {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billingdetail__type,
+.alloy-os-billingdetail__status,
+.alloy-os-billingdetail__source {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/*
+ * TYPE IS A CLASSIFICATION AND A TRUNCATED CLASSIFICATION IS UNREADABLE. It keeps the ellipsis as a
+ * last resort at very narrow widths, but it is never the column asked to give way first — that is
+ * Description, which is free text and flexes by construction.
+ */
+.alloy-os-billingdetail__type { min-width: 0; }
+.alloy-os-billingdetail__desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The row's name, when the row has a record behind it. Styled as the identity it already is rather
+ * than as a link decoration — the affordance is the pointer and the hover rule, so a ledger does
+ * not turn into a column of blue text.
+ */
+.alloy-os-billingdetail__open {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.alloy-os-billingdetail__open:hover {
+  text-decoration: underline;
+}
+.alloy-os-billingdetail__open:focus-visible {
+  outline: 2px solid var(--alloy-bend-pine, #1f6f5c);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+/*
+ * What a row still owes, under its own amount. Present only when money has been applied to the
+ * charge — the read model's per-row figure, not a difference computed on screen.
+ */
+.alloy-os-billingdetail__outstanding {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__note {
+  margin: 5px 0 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__unowned {
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-billing__funding-tag {
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-healthdetail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 30px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__record {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 0 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+  min-width: 0;
+}
+.alloy-os-healthdetail__record-name {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-healthdetail__link {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__fact {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.alloy-os-healthdetail__fact-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__fact-value {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__prov {
+  margin: 3px 0 0;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__prov--confirmed {
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 650;
+}
+.alloy-os-healthdetail__auth {
+  margin: 3px 0 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__auth--missing {
+  color: #b45309;
+}
+.alloy-os-healthdetail__auth-note {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__state {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.alloy-os-healthdetail__state--satisfied {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-healthdetail__state--missing {
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-healthdetail__state--expiring {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__why {
+  margin: 3px 0 0;
+  font-size: 0.66rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__table {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-healthdetail__docrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 74px 74px 78px;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 21px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  font-size: 0.7rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__docrow--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__docname {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-healthdetail__ver {
+  margin-left: 5px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+@media (max-width: 1000px) {
+  .alloy-os-billingdetail,
+  .alloy-os-healthdetail__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ══ ADD CHARGE — the approved command card ═══════════════════════════════════ */
+
+/*
+ * NO CARD INSIDE THE CARD.
+ *
+ * This carried its own border, radius, white background and 480px cap from when it was a lab
+ * specimen standing on a page. Inside the elevated host that produced a bordered card floating in a
+ * bordered card, which is the one thing every other centered surface does not do — the content sits
+ * directly on the Focus Card and only the outer border and scrim frame it.
+ */
+.alloy-os-addcharge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  /* The command's own width decides its field layout — a phone's Focus Panel is ~240px wide. */
+  container-type: inline-size;
+  container-name: alloy-addcharge;
+}
+.alloy-os-addcharge__title {
+  margin: 0 0 3px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 190px;
+  padding: 3px 9px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__optioncount {
+  margin-left: 8px;
+  font-size: 0.64rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__share {
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__field-value [data-locked="true"] {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.alloy-os-addcharge__type {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__type[data-on="true"] {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-addcharge__config {
+  margin: 1px 0 0;
+  font-size: 0.66rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__field {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+}
+/*
+ * NARROW: LABEL ABOVE VALUE. Beside a 116px label column, a ~240px command left the Charge type
+ * select ~60px ("Act…") and ran the override amount into its own "required" mark. Stacked, every
+ * value gets the full width; wide commands keep the two-column form unchanged.
+ */
+@container alloy-addcharge (max-width: 380px) {
+  .alloy-os-addcharge__field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    align-items: start;
+    padding: 4px 0;
+  }
+}
+.alloy-os-addcharge__field-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__req {
+  margin-left: 5px;
+  font-size: 8.5px;
+  color: #b45309;
+}
+/*
+ * A VALUE IS NOT A HEADING. At 600 the Service Date and every stated value competed with the
+ * section heads above them, so the form read as a stack of titles. Normal control weight.
+ */
+.alloy-os-addcharge__field-value {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__field-value[data-locked="true"] {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__hint {
+  margin-left: 7px;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+
+/* The two controls the template leaves open to the operator. They read as the stated values beside
+ * them until touched — an input that shouts is an input that looks like the only thing to do. */
+.alloy-os-addcharge__input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 16%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  /* Same weight as a stated value beside it — an input that shouts reads as the only thing to do. */
+  font-weight: 500;
+  color: inherit;
+}
+
+.alloy-os-addcharge__error {
+  margin: 6px 0 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #b45309;
+}
+
+
+/* ══ FINANCIALS DETAIL — the condensed strip and the period-grouped ledger ═════
+ *
+ * Missed by the first detail extraction, whose line range stopped before this block. The symptom
+ * was precise and ugly: the summary strip rendered as one run-together sentence
+ * ("Balance$75.00Past dueNoneResponsibility$75.00…") because the label/value pairs had no layout,
+ * and the ledger's DESCRIPTION header sat on top of its own values.
+ *
+ * Copied verbatim, and the brace count is asserted at extraction time — the last two extractions
+ * were the ones that inverted the stage rail and 500'd every workspace route.
+ */
+
+/* ── financials detail: condensed strip + period-grouped ledger ────────────── */
+.alloy-os-fdetail__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin-top: 1px;
+}
+.alloy-os-fdetail__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-fdetail__statlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__statvalue {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__statvalue--strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+/*
+ * PEERS. Equal label, equal value, equal baseline — the account summary's three figures answer one
+ * question between them and none of them outranks the others. Semantic colour still applies.
+ */
+.alloy-os-fdetail__strip--peers .alloy-os-fdetail__statvalue {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.alloy-os-fdetail__strip--peers { align-items: baseline; gap: 6px 32px; }
+
+/*
+ * The pending value: the same box a figure will occupy, visibly empty rather than faintly blank.
+ * It pulses so it reads as in-flight, and it is an em-dash rather than a bar so it cannot be
+ * mistaken for a rendered zero.
+ */
+.alloy-os-financials__pendingvalue {
+  display: inline-block;
+  min-width: 4.5rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, transparent);
+  /*
+   * Through a variable so the class declares `animation` exactly ONCE. Restating the selector under
+   * a media query is how a deliberate cascade becomes indistinguishable from a silent override, and
+   * the shared-stylesheet contract that refuses the second declaration is worth more than the
+   * convenience — it exists because a duplicate rule once rendered the whole stage rail vertically.
+   * Reduced motion is still honoured; the media query moves the variable rather than the property.
+   */
+  animation: var(--alloy-os-financials-pending-animation, alloy-os-financials-pending 1.4s ease-in-out infinite);
+}
+@keyframes alloy-os-financials-pending {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --alloy-os-financials-pending-animation: none; }
+}
+
+.alloy-os-fdetail__stat[data-tone="due"] .alloy-os-fdetail__statvalue { color: #b45309; }
+.alloy-os-fdetail__stat[data-tone="ok"] .alloy-os-fdetail__statvalue { color: var(--alloy-os-bend-pine, #00a283); }
+.alloy-os-fdetail__payers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  /* Row gap keeps a wrapped group clear of the line above; column gap separates the groups. */
+  gap: 4px 18px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__payer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+/*
+ * ── THE COMPACT RELATIONSHIP ROW ──────────────────────────────────────────────────────────────
+ *
+ * ONE row carries who is related to this account, what they owe, how they can pay, what reduces
+ * it, and the way to change any of it.
+ *
+ * It replaced a two-row administration grid that replaced a four-section block. Each step was a
+ * correction of the last: the sections pushed the ledger down the card, and the rows were right
+ * about grain but still spent permanent vertical space restating a Responsibility KPI that sits
+ * at the top of this same card. What is left is state plus doors, on the line the state was
+ * always about.
+ *
+ * The items are flex children with a real gap, which is the whole fix for the run-together
+ * string — that came from class names with no rules behind them, not from putting related facts
+ * on one line.
+ */
+/*
+ * ── THE DEPTH CARDS' TEXT HIERARCHY ───────────────────────────────────────────────────────────
+ *
+ * Responsibility, Discounts and Payments were written in Tailwind opacities — `text-alloy-midnight/55`
+ * for almost everything — so a section heading, a current balance, a person's name, a helper
+ * sentence and a piece of metadata all arrived at the same weight and the same gray. The cards
+ * worked and could not be scanned: there was nothing for the eye to land on.
+ *
+ * This is NOT a new scale. It is the grammar the strong cards beside them already use —
+ * `.alloy-os-billingdetail__group` for section labels, `.alloy-os-billing__line-label` for row
+ * labels, `.alloy-os-billing__line-value` for values — named here so a depth card can reach it
+ * without every panel re-deriving it from opacities.
+ *
+ * THE RULE THE CARDS BROKE: muted gray is for genuinely secondary explanation. Current financial
+ * truth — who owes, what they owe, which discount applies, what is on file — is PRIMARY, and
+ * primary content takes the normal foreground. A current arrangement rendered at 55% opacity
+ * reads as disabled, which is the one thing it is not.
+ */
+.alloy-os-depthcard__section {
+  margin: 12px 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+/* A fact the operator is reading, not a hint. Full foreground, the way a value is written. */
+.alloy-os-depthcard__value {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-depthcard__label {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* Genuinely secondary: why something is, what will happen next. Never the state itself. */
+.alloy-os-depthcard__hint {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+/*
+ * ONE CHILD, ONE UNIT. The discount card's rows were separated by nothing but margin, so two
+ * children read as one list of six lines. A rule and a little air make each a thing.
+ */
+.alloy-os-depthcard__unit {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-depthcard__unit:first-of-type {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: 0;
+}
+/* Identity leads the unit: the avatar and the name on one baseline. */
+.alloy-os-depthcard__identity {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.alloy-os-depthcard__identity-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/*
+ * ACTIONS READ AS ACTIONS, and not all at one weight. The card's own offer — Add discount — is
+ * the first-class one; the corrective beside it is quieter. Neither becomes a filled button:
+ * a depth card full of Bend Pine fills would shout louder than the command that opened it.
+ */
+.alloy-os-depthcard__action {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-depthcard__action:hover { text-decoration: underline; }
+.alloy-os-depthcard__action:disabled { opacity: 0.5; }
+.alloy-os-depthcard__action--quiet {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-depthcard__action--quiet:hover { text-decoration: underline; }
+.alloy-os-depthcard__actionrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 5px;
+}
+
+/*
+ * ── THE DEPTH CARDS' SHARED ACTION ROW ────────────────────────────────────────────────────────
+ *
+ * Responsibility, Discounts, Payments, Add Charge and Payment are one family of centred cards.
+ * They do not need identical content; they do need to END the same way, because "how do I get
+ * out of here" is the question every one of them has to answer and two of them answered it in
+ * faint underlined body text — or, in the Payments card, not at all.
+ *
+ * A rule, written at the same time as the markup that uses it. The administration row shipped
+ * with class names and no rules behind them and rendered as one run-together string; that is not
+ * a mistake worth making twice.
+ */
+.alloy-os-depthcard__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-depthcard__close {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  background: transparent;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.alloy-os-depthcard__close:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, transparent);
+}
+.alloy-os-depthcard__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 2px;
+}
+
+/*
+ * ── CHARGE DETAILS: LIFECYCLE COMMANDS THAT LOOK LIKE COMMANDS (W7 Scenario 8 final) ──────────
+ *
+ * Edit draft and Cancel draft rendered as unstyled text — the two lifecycle decisions on the
+ * record were the easiest things on it to miss. They take Add Charge's own footer grammar (the
+ * family's filled bend-pine primary, outlined secondaries, the same height and radius):
+ *
+ *   primary       Edit draft — the constructive action, filled.
+ *   destructive   Cancel draft — clearly destructive, outlined, never the dominant control.
+ *   secondary     Keep draft / Correct this charge — outlined bend-pine.
+ *   neutral       Close — midnight outline, pushed to the end of the row.
+ */
+.alloy-os-chargedetail__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.alloy-os-chargedetail__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--alloy-os-currentwork-action-height, 1.9rem);
+  min-height: var(--alloy-os-currentwork-action-height, 1.9rem);
+  border-radius: 7px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: background-color 120ms ease, border-color 120ms ease, filter 120ms ease;
+}
+.alloy-os-chargedetail__action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.alloy-os-chargedetail__action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 2px;
+}
+.alloy-os-chargedetail__action--primary {
+  border: 0;
+  color: var(--alloy-os-surface, #fff);
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-chargedetail__action--primary:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+.alloy-os-chargedetail__action--secondary {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 38%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+  background: var(--alloy-os-surface, #fff);
+}
+.alloy-os-chargedetail__action--secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, var(--alloy-os-surface, #fff));
+}
+.alloy-os-chargedetail__action--destructive {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-danger, #b3261e) 40%, transparent);
+  color: var(--alloy-os-danger, #b3261e);
+  background: var(--alloy-os-surface, #fff);
+}
+.alloy-os-chargedetail__action--destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 6%, var(--alloy-os-surface, #fff));
+}
+/* The confirmation IS the destructive decision, so it is the one place destructive is filled. */
+.alloy-os-chargedetail__action--destructive-confirm {
+  border: 0;
+  color: var(--alloy-os-surface, #fff);
+  background: var(--alloy-os-danger, #b3261e);
+}
+.alloy-os-chargedetail__action--destructive-confirm:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+.alloy-os-chargedetail__action--neutral {
+  margin-left: auto;
+  padding: 0 14px;
+  font-size: 0.74rem;
+  border-radius: 7px;
+}
+
+/*
+ * THREE GROUPS ON ONE LINE — identity, discount, payment. Each action sits with the state it
+ * acts on, and the groups are what wrap: at 1280 and up the row is one line with the payment
+ * group at its end; narrower, the groups break between themselves rather than mid-thought, and
+ * `Manage payments` stays attached to the method state it manages.
+ */
+.alloy-os-fdetail__rowgroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+/*
+ * RIGHT-ALIGNED WHERE THERE IS ROOM. `margin-left: auto` on a flex child claims the free space,
+ * so the payment group sits at the row's end on a wide card and falls back into normal flow the
+ * moment the row wraps — no media query needed for the alignment itself.
+ */
+.alloy-os-fdetail__rowgroup--end {
+  margin-left: auto;
+}
+.alloy-os-fdetail__rowitem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.alloy-os-fdetail__adminvalue {
+  font-size: 0.72rem;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+/*
+ * QUIET ON PURPOSE. A gear at the row's own size, no fill and no border: these are doors, not
+ * commands, and giving them button weight would make them compete with Payment and Add directly
+ * above. Sized in rem so it tracks the row rather than pinning the row's height to a constant.
+ */
+.alloy-os-fdetail__admingear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 4px;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.alloy-os-fdetail__admingear:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-fdetail__admingear:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 1px;
+}
+/*
+ * MANAGE PAYMENTS SITS AT THE ROW'S END, pushed there so the relationship reads left to right —
+ * who, what they owe, how they can pay, what reduces it, and then the way in.
+ */
+.alloy-os-fdetail__payeraction {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+  white-space: nowrap;
+}
+.alloy-os-fdetail__payeraction:hover { text-decoration: underline; }
+.alloy-os-fdetail__payeraction:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+/*
+ * At phone width the row wraps rather than shrinking its type — compactness is not worth buying
+ * with illegibility, and `Manage payments` stops being pushed to an end that is no longer there.
+ */
+/*
+ * ── RESPONSIVE, AT THE WIDTHS THE CARD IS ACTUALLY READ AT ────────────────────────────────────
+ *
+ * 1280 / 1440 / 1680 all hold the row on one line; the groups only wrap below that. When they do
+ * they wrap as GROUPS, so the row never reads as concatenated text — and the payment group gives
+ * up its right alignment rather than being pushed to an end that is no longer meaningful.
+ *
+ * The type scale is untouched at every width. A row that fits because its text shrank is not a
+ * row that fits.
+ */
+@media (max-width: 900px) {
+  .alloy-os-fdetail__rowgroup--end { margin-left: 0; }
+}
+@media (max-width: 520px) {
+  .alloy-os-fdetail__payeraction { margin-left: 0; }
+}
+
+.alloy-os-fdetail__filterrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+  align-items: center;
+}
+.alloy-os-fdetail__filterlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  margin-right: 2px;
+}
+/*
+ * ── THE LENS BAR ──────────────────────────────────────────────────────────────────────────────
+ *
+ * Five angles on one account, sitting between the rollup and the record. The pressed lens takes
+ * BEND PINE from the token — the product's active operational control. It was navy on the
+ * workspace, which reads as a neutral chip rather than a live selection, and a hardcoded green
+ * would be a sixth definition of the brand colour.
+ */
+/*
+ * ── THE DETAIL'S CONTROLS STAY; ITS RECORD SCROLLS ────────────────────────────────────────────
+ *
+ * The card body used to scroll as a whole, so reading August took the balance, the two commands
+ * and the lenses off the top of the panel. The body now holds its height and hands the overflow to
+ * one region — the ledger, payments, adjustments and upcoming beneath the lens bar.
+ *
+ * Scoped to the DETAIL card. The summary card and every command overlay keep the body scrolling
+ * they already had.
+ */
+.alloy-os-billing--detail > .alloy-os-ucard > .alloy-os-ucard__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.alloy-os-billing--detail .alloy-os-fdetail__rollup,
+.alloy-os-billing--detail .alloy-os-fdetail__lensbar {
+  flex: 0 0 auto;
+}
+.alloy-os-fdetail__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.alloy-os-fdetail__lensbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  padding-bottom: 4px;
+}
+.alloy-os-fdetail__lens {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 9px;
+  background: transparent;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, transparent);
+  cursor: pointer;
+}
+.alloy-os-fdetail__lens:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__lens--on,
+.alloy-os-fdetail__lens--on:hover {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+.alloy-os-fdetail__lenscount {
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+}
+.alloy-os-fdetail__lens--on .alloy-os-fdetail__lenscount {
+  color: color-mix(in srgb, #fff 80%, transparent);
+}
+/*
+ * SIDE BY SIDE, not stacked. The two selects are one toolbar region and were wrapping to their own
+ * line and then stacking vertically — two controls taking three rows of a panel whose height is the
+ * scarcest thing it has. `flex-wrap: wrap` on the row remains, so a genuinely narrow panel still
+ * wraps; what is removed is stacking at a width that has room for both.
+ */
+.alloy-os-fdetail__lensfilters {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+/*
+ * The two selects shrink rather than stack. A width-keyed override would restate this selector and
+ * the shared-stylesheet contract rightly refuses a second declaration of one property on one
+ * selector — it cannot tell a deliberate cascade from a silent override, and the rule that catches
+ * silent overrides is worth more than the media query. The lens BAR still wraps the whole filter
+ * group to its own line on a genuinely narrow panel, which is the responsive behaviour wanted.
+ */
+.alloy-os-fdetail__lensfilters > * {
+  flex: 0 1 auto;
+}
+/*
+ * ── SHRINKING IS NOT COLLAPSING ────────────────────────────────────────────────────────────────
+ *
+ * The primitive's base rule is `width: 100%; min-width: 0`, which is right in a form column and
+ * wrong in a shrink-to-fit rail: `100%` resolves against a parent that has no width of its own, so
+ * the trigger collapses, `.alloy-select__value` ellipsises the payer or the period away to nothing,
+ * and what is left is a chevron with no label — or, one pixel further, a clipped chevron too. This
+ * is the same defect the workspace header rail was repaired for, in a second rail, so it takes the
+ * same shape of answer: a CONTENT floor wide enough for the ordinary labels ("Everyone", "All
+ * periods", a payer's name, "August 2026") to sit on one line, and a ceiling so one pathological
+ * label cannot eat the lens bar. Past the ceiling it still ellipsises — that is a long name being
+ * shortened, not a control disappearing.
+ *
+ * The floor lives HERE and not on the `> *` rule above, which is why that rule no longer declares
+ * `min-width` at all: two selectors setting one property on one element is how a cascade becomes
+ * something nobody can read.
+ */
+.alloy-os-fdetail__lensfilters .alloy-select {
+  width: auto;
+  min-width: 7.25rem;
+  max-width: 11rem;
+}
+.alloy-os-fdetail__filter {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: #fff;
+  font-size: 0.68rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-fdetail__period { margin-top: 5px; }
+.alloy-os-fdetail__periodhead {
+  /*
+   * The heading IS the disclosure: a full-width button, so the hit target is the whole row rather
+   * than a chevron an operator has to aim at. Styled as the heading it replaced — a control that
+   * announces itself as a control by behaviour, not by looking like a form.
+   */
+  display: flex;
+  width: 100%;
+  margin: 0 0 2px;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 0 3px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.alloy-os-fdetail__periodhead:focus-visible {
+  outline: 2px solid var(--alloy-os-bend-pine, #00a283);
+  outline-offset: 2px;
+}
+.alloy-os-fdetail__periodhead .alloy-os-fdetail__periodsum { margin-left: auto; }
+/* The one piece of state the icon carries: pointing right is closed, down is open. */
+.alloy-os-fdetail__perioddisclosure {
+  flex: 0 0 auto;
+  align-self: center;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+  transition: transform 120ms ease;
+}
+[data-financials-period-expanded="true"] > .alloy-os-fdetail__periodhead .alloy-os-fdetail__perioddisclosure {
+  transform: rotate(90deg);
+}
+
+.alloy-os-fdetail__periodname {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-fdetail__periodsum {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__collapsed {
+  margin: 3px 0 0;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__upcoming { margin-top: 8px; }
+.alloy-os-fdetail__upcominglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+}
+.alloy-os-fdetail__up {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+/*
+ * HELD DEPOSITS — a position, not a ledger.
+ *
+ * Deliberately NOT the eight-column ledger grid: a held lot has no date, GL account or status to put
+ * in those columns, and forcing it in would state a restriction as a transaction. It is a list of
+ * facts with the acts that discharge them, so it is laid out as one.
+ */
+.alloy-os-fdetail__held { margin-top: 10px; }
+/* The sentence that stops held money reading as spendable. Quiet, but not so quiet it is skipped. */
+.alloy-os-fdetail__heldnote {
+  margin: 2px 0 7px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, transparent);
+}
+.alloy-os-fdetail__heldlist {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.alloy-os-fdetail__heldrow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 14%, transparent));
+  border-radius: 7px;
+  /* River Stone: a standing position, not an exception to resolve. */
+  background: var(--alloy-os-wash, #f4f6f9);
+}
+.alloy-os-fdetail__heldfacts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.alloy-os-fdetail__heldamount {
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--alloy-os-forge-ink, #18273a);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__heldreason {
+  font-size: 0.76rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/* Provenance, wrapped rather than truncated: a refund term that is cut off is worse than a wide row. */
+.alloy-os-fdetail__heldmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, transparent);
+}
+/*
+ * NON-REFUNDABLE IS STATED, NOT ALARMED. It is a term the family agreed to, so it carries no Ember:
+ * a deposit taken as non-refundable is not an error anybody needs to resolve.
+ */
+.alloy-os-fdetail__heldmeta [data-financials-held-refundable="no"] {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 78%, transparent);
+}
+.alloy-os-fdetail__heldactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+/*
+ * ── THE THREE ACTS ON A DEPOSIT ARE NOT PEERS ──────────────────────────────────────────────────
+ *
+ * Apply, Release and Refund rendered at identical weight — same size, same 55% midnight, same
+ * everything — so the row offered three equally-likely-looking choices, one of which sends money
+ * out of the building. Measured on deployed staging.
+ *
+ * Applying a deposit to what the family owes is the ordinary, expected end of a deposit's life, so
+ * it takes the product's active accent. Releasing lifts a restriction and changes no balance, so it
+ * stays as it was. Refunding is the exception and the only one that is not reversible by another
+ * click, so it carries the same danger colour this stylesheet already gives an irreversible act —
+ * quiet until the operator is on it, then unmistakable.
+ *
+ * NO NEW PRIMITIVE. `RowAction` already marks itself with the act it raises; this is emphasis on
+ * the control that exists, scoped to the held row so the ledger's own action column is untouched.
+ */
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"] {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"]:hover,
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"]:focus-visible {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, var(--alloy-os-surface, #fff));
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* Release keeps the row's ordinary weight: it ends a restriction and settles nothing. */
+.alloy-os-fdetail__heldactions [data-financials-row-action="release"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+}
+
+/* Refund is the way money leaves. Subordinate at rest, and named as danger the moment it is hovered. */
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 42%, transparent);
+}
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"]:hover,
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"]:focus-visible {
+  border-color: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 40%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 7%, var(--alloy-os-surface, #fff));
+  color: var(--alloy-os-danger, #b3261e);
+}
+
+
+/* The draft note under the preview — quiet, and never competing with the amount above it. */
+.alloy-os-addcharge__draftnote {
+  margin: 4px 0 2px;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+/* An inline action inside a note ("Change amount", "Use Catalog price"): text, not a button box. */
+.alloy-os-addcharge__link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--alloy-os-bend-pine, #2f6f5e);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The command lands in the elevated host; its own wrapper adds no box of its own. */
+.alloy-os-addcharge-host {
+  min-width: 0;
+}
+
+/* An absent command names itself. Quiet, non-interactive, and clearly not a button. */
+.alloy-os-healthdetail__unavailable {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
+}
+
+/*
+ * Two peer commands, sized to their labels, directly above the ledger they act on.
+ *
+ * `flex: 0 0 auto` matters: the platform's action button is `width: 100%` by default (it is built
+ * for a full-width row), so without it `Add charge` stretched across the card while `Payment` sat
+ * compact beside it — two peers that did not look like peers.
+ */
+.alloy-os-fdetail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+.alloy-os-fdetail__actions > button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 168px;
+}
+
+/* The utility link closes the card, bottom-right, out of the ledger's way. */
+.alloy-os-fdetail__utility {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+
+/* ══ ATTENDANCE DETAIL — the record over time ═════════════════════════════════
+ *
+ * A table, not a bigger timeline. Fixed columns and tabular figures so a month of days can be
+ * scanned down a column; a day expands in place to reveal its own event sequence.
+ */
+.alloy-os-adetail__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.alloy-os-adetail__table {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.alloy-os-adetail__row {
+  display: grid;
+  grid-template-columns:
+    minmax(108px, 1fr) minmax(88px, 1fr) 72px 72px 84px minmax(140px, 1.6fr) minmax(120px, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 6px 4px;
+  font-size: 0.76rem;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+
+.alloy-os-adetail__row--head {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  border-bottom-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+}
+
+.alloy-os-adetail__row--day {
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  cursor: pointer;
+}
+.alloy-os-adetail__row--day:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, transparent);
+}
+
+.alloy-os-adetail__date {
+  font-weight: 700;
+}
+
+.alloy-os-adetail__rooms {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+
+.alloy-os-adetail__state em {
+  font-style: normal;
+  font-weight: 700;
+  margin-right: 8px;
+}
+.alloy-os-adetail__state em[data-state="present"] { color: var(--alloy-os-bend-pine, #00a283); }
+.alloy-os-adetail__state em[data-state="absent"] { color: #b45309; }
+.alloy-os-adetail__state em[data-state="open"] { color: #b45309; }
+/* A correction is a fact about the record, not an error state — it reads as a note. */
+.alloy-os-adetail__state em[data-state="corrected"] {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-adetail__events {
+  list-style: none;
+  margin: 2px 0 8px;
+  padding: 6px 0 6px 14px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 26%, transparent);
+}
+
+.alloy-os-adetail__event {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 2px 0;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Superseded, not deleted. The original stays legible and struck so the record still reads true. */
+.alloy-os-adetail__event[data-corrected="true"] .alloy-os-adetail__event-what {
+  text-decoration: line-through;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, #64748b);
+}
+
+.alloy-os-adetail__event-at {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+}
+
+.alloy-os-adetail__event-from,
+.alloy-os-adetail__event-flag {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
+  font-size: 0.7rem;
+}
+
+/* Details sits with the day's other affordances, right-aligned and quiet. */
+.alloy-os-attendance__detaillink {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+/* ── Financials detail: one shallow command bar ────────────────────────────────
+ *
+ * The rollup and its two commands share a row: facts grow on the left, commands sit top-right of
+ * the same region. Previously this was summary -> action strip -> filters, three stacked bands
+ * before any ledger — which is how a workstation detail spends its height on a header.
+ */
+/*
+ * ── DENSITY, NOT ARCHITECTURE ─────────────────────────────────────────────────────────────────
+ *
+ * The information architecture was right and the spacing was not: summary, a gap, a divider, a gap,
+ * lenses, a gap, and the ledger starting halfway down a panel that is mostly ledger. Every value
+ * here is reduced; none is removed, and the controls are not cramped — this is the house dense-card
+ * rhythm rather than a new one.
+ */
+.alloy-os-fdetail__rollup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 24px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+}
+
+.alloy-os-fdetail__rollup-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 420px;
+}
+
+/* Top-aligned with the facts, never stretched: two commands, sized to their labels. */
+.alloy-os-fdetail__rollup .alloy-os-fdetail__actions {
+  margin: 0;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  /*
+   * A GRID, so the column is as wide as its widest ROW. As a wrapping flex box its max-content
+   * width was every item on one line — the holdings beneath Payment / Add widened the column by
+   * their own width and wrapped Scheduled onto a second line (deployed proof on 5cb6b2ed).
+   */
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 4px 8px;
+}
+
+/* ── Surface Builder: Add card chips ───────────────────────────────────────────
+ *
+ * The chip carries the CONSEQUENCE of the choice, not just the name: "Financials · Summary · 8/12"
+ * against "Financials · Compact · 4/12". Two placements of one canonical card are only a real
+ * choice if an operator can see how they differ before dropping one in.
+ */
+.alloy-os-fp-composer__chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.alloy-os-fp-composer__chip-label {
+  font-weight: 600;
+}
+
+.alloy-os-fp-composer__chip-shape {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * RECEIPTS, AND MOVING THE MONEY ON THEM (Financials Slice 6).
+ *
+ * The markup for the payments section and the Move / Apply panel shipped without any styles at all.
+ * That was not merely cosmetic: the panel is a sibling of the detail card, the detail card is
+ * absolutely positioned at z-index 60 when the card is expanded, and an unstyled panel has no
+ * stacking context of its own — so it rendered UNDERNEATH the card the operator is looking at and
+ * computed `pointer-events: none`. Mounted certification found Move openable and then unusable: the
+ * click landed on the card sitting on top of it.
+ *
+ * The panel therefore sits one layer above the expanded card. Everything else here is ordinary
+ * layout for rows that were inheriting whatever surrounded them.
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+.alloy-os-fdetail__payments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alloy-os-fdetail__payment {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 12%, transparent));
+  border-radius: 10px;
+}
+
+.alloy-os-fdetail__application {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+.alloy-os-fdetail__appstatus,
+.alloy-os-fdetail__appreason {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+
+/* A reversed application is history: it must read as quieter than the one that counts. */
+.alloy-os-fdetail__application[data-application-status="reversed"] {
+  opacity: 0.72;
+}
+
+.alloy-os-fdetail__unapplied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.alloy-os-fdetail__movenotice,
+.alloy-os-fdetail__movepanel {
+  /*
+   * The layer that makes this reachable at all — see the note above. `pointer-events: auto` is the
+   * other half and is not redundant: raising a card makes the layer behind it inert, that inertness
+   * INHERITS, and the panel renders in that layer. With the z-index alone the panel is drawn in the
+   * right place and still cannot be clicked. The raised card opts back in the same way.
+   */
+  position: relative;
+  z-index: 61;
+  pointer-events: auto;
+  background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 14%, transparent));
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  display: grid;
+  gap: 8px;
+
+  /*
+   * ── THE COMMAND KEEPS ITS OWN SCROLLBAR, AND ITS CONFIRM STAYS ON SCREEN ───────────────────
+   *
+   * These panels grew to whatever their content needed and relied on the PAGE to scroll. On a
+   * laptop-height window — and badly at phone height — the confirm button fell below the fold of a
+   * surface that does not look scrollable, so the operator either hunted for it or concluded the
+   * command was broken. A command that cannot be completed without discovering hidden scrolling is
+   * not finished.
+   *
+   * So the panel bounds itself to the viewport and owns the overflow: the body scrolls INSIDE the
+   * panel, and the action row is sticky at its foot. `70svh` rather than `vh` because mobile
+   * browsers shrink the visual viewport when the address bar is showing, and `vh` measures the
+   * taller one — which is exactly how a CTA ends up under the browser chrome.
+   */
+  max-height: min(70svh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.alloy-os-fdetail__moveheader {
+  font-weight: 600;
+}
+
+.alloy-os-fdetail__movefield {
+  display: grid;
+  gap: 4px;
+}
+
+.alloy-os-fdetail__movefield select,
+.alloy-os-fdetail__movefield input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 8px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+}
+
+.alloy-os-fdetail__movepreview {
+  display: grid;
+  gap: 2px;
+  font-size: 0.78rem;
+}
+
+.alloy-os-fdetail__moveerror {
+  font-size: 0.78rem;
+  color: var(--alloy-os-danger, #b3261e);
+}
+
+.alloy-os-fdetail__moveactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  /* Stays reachable while the body above it scrolls — see the note on `__movepanel`. */
+  position: sticky;
+  bottom: -10px;
+  z-index: 1;
+  padding-block: 8px;
+  margin-bottom: -10px;
+  background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
+}
+
+.alloy-os-fdetail__moveactions button {
+  padding: 5px 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 8px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.alloy-os-fdetail__moveactions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * WHAT SOMEBODY DECIDED BY HAND (Financials Slice 5C).
+ *
+ * The Add adjustment and Reverse panels deliberately reuse `__movepanel`, so they inherit the layer
+ * and the pointer-events opt-in that made Move reachable — the same trap would otherwise be waiting
+ * here, for the same reason.
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+.alloy-os-fdetail__adjustments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alloy-os-fdetail__adjustment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+/* A reversed decision is history; it must read quieter than the one that stands. */
+.alloy-os-fdetail__adjustment[data-adjustment-reversed="true"] {
+  opacity: 0.72;
+}
+
+.alloy-os-fdetail__adjmeta,
+.alloy-os-fdetail__adjreason,
+.alloy-os-fdetail__adjstatus {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+
+.alloy-os-fdetail__adjustadd {
+  display: flex;
+  gap: 8px;
+}
+
+/* A transition offered on a ledger row — Post a draft, Reverse a posted charge. */
+/*
+ * ── THE INLINE TRANSACTION ACTION ──────────────────────────────────────────────────────────────
+ *
+ * Small, square, quiet until wanted. It carries an icon and its accessible name lives in `title` /
+ * `aria-label`, so nothing about reaching it depends on hover: the control is a real button, keyboard
+ * focus shows, and the pointer target is the same box either way.
+ */
+.alloy-os-billingdetail__rowactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 17px;
+}
+.alloy-os-billingdetail__rowactions-head { min-height: 1px; }
+.alloy-os-fdetail__rowaction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+  cursor: pointer;
+}
+.alloy-os-fdetail__rowaction:hover {
+  border-color: var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  background: var(--alloy-os-surface, #fff);
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-fdetail__rowaction:focus-visible {
+  outline: 2px solid var(--alloy-os-bend-pine, #00a283);
+  outline-offset: 1px;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-fdetail__rowaction:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/*
+ * ── THE COMPACT CARD'S COMMAND ROW ────────────────────────────────────────────────────────────
+ *
+ * It was three arrows of identical weight — "Payment → Add charge → Details →" — which gave one row
+ * of a compact card to a list rather than to a hierarchy, and wrapped to two rows at panel width.
+ * Payment and Add mutate money; Details navigates. The two commands sit together at the left, the
+ * way out sits quietly at the right, and the row fits on one line.
+ */
+.alloy-os-billing__footer--commands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.alloy-os-billing__footer-commands {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /*
+   * The commands may take a second line rather than push the row past the card.
+   *
+   * The outer footer already wraps, but this group did not, so Payment and Add were stuck side by
+   * side: once they stopped shrinking they overflowed the card by 7px at the narrowest authored
+   * width under CI's fallback fonts. Wrapping between the two commands is the last degree of
+   * freedom before either truncating a money control or painting outside the card, and both of
+   * those are worse.
+   */
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.alloy-os-billing__footer--commands .alloy-os-currentwork__primary-action,
+.alloy-os-billing__footer--commands .alloy-os-currentwork__helpful-action {
+  /*
+   * SIZE TO THE LABEL, AND NEVER SHRINK.
+   *
+   * `min-width: 0` let these flex items be compressed below their own text, and the compact card's
+   * footer holds the command group against `Details →` with `justify-content: space-between`. The
+   * result was a truncated "Payment" — measured on CI at EVERY authored width, 252 through 340, so
+   * it was never a narrow-card problem but a flex item giving up its label. It went unseen locally
+   * only because the design fonts are narrower than CI's fallback stack.
+   *
+   * A truncated money control is the worst thing this footer can render, and the row already
+   * declares `flex-wrap: wrap` — so the designed fallback is for the group to take its own line,
+   * not for the primary action to lose letters. Same rule the Process rail and the Attendance
+   * commands use.
+   */
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.78rem;
+}
+
+/*
+ * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────────────────────
+ *
+ * The segmented control at the top of the financial entry command. Two primary modes an operator
+ * chooses between are not a list to be searched, so this is the platform's segmented grammar and
+ * not a dropdown. Selected takes Bend Pine, like every other active operational control.
+ */
+/*
+ * ── TWO MODES, ONE GEOMETRY ────────────────────────────────────────────────────────────────────
+ *
+ * `inline-flex` with per-button padding sized each mode to its own text, so "Charge" and
+ * "Adjustment" were different widths and the shorter one read as a small tab floating inside a
+ * control belonging to the other. They are peers: one financial fact, two kinds. Equal grid tracks
+ * make them the same width whatever the words are, and a shared min-height makes them the same
+ * height whatever the host is — the two modes render in different hosts (the charge command's own
+ * card, and the adjustment card) and must not inherit different proportions from them.
+ */
+.alloy-os-financials__entrymodes {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  /*
+   * COMPACT, so the command shows the form rather than its own chrome. The control was 32px tall
+   * inside 2px of padding under a 0.6rem margin — nearly 50px of a focused command spent on a
+   * two-word choice the operator makes once. The hit target stays comfortably above the 24px floor.
+   */
+  padding: 2px;
+  margin-bottom: 0.4rem;
+  width: 100%;
+  max-width: 22rem;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+.alloy-os-financials__entrymodes button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.28rem 0.85rem;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 65%, transparent);
+  cursor: pointer;
+}
+.alloy-os-financials__entrymodes button.is-selected {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+.alloy-os-financials__entrybody { min-width: 0; }
+
+/*
+ * ══ THE ADJUSTMENT BAND, WHEN IT IS A COMMAND'S BODY RATHER THAN A BAND ═══════════════════════
+ *
+ * ── THE DEFECT ───────────────────────────────────────────────────────────────────────────────
+ *
+ * Add → Charge presented correctly and Add → Adjustment left the Financials card protruding
+ * behind the command. Both open the SAME elevated command host; what differed was what each put
+ * inside it.
+ *
+ * `.alloy-os-fdetail__movepanel` was written as a BAND INSIDE THE DETAILS CARD — under the ledger,
+ * on the card's own surface — and it carries everything that role needs: its own border,
+ * background, 12px radius, padding, bottom margin, a `z-index: 61` lift above the Details floor,
+ * and — the part that makes this a layout defect rather than a styling one — `max-height:
+ * min(70svh, 520px)` with `overflow-y: auto`, so it bounds itself and owns its own scrolling.
+ *
+ * Convergence made that band the BODY of a command card. The elevated command host already
+ * supplies every one of those things: `.alloy-os-ucard[data-universal-card-modal="command"]` is
+ * the perimeter, the scrim, the shadow and the viewport cap, and its `__body` is the scroll
+ * container, capped at `min(76vh, 100dvh - 64px) - 104px`. So the band drew a second bordered,
+ * independently-scrolling card inside the first, lifted one layer above its own host, and capped
+ * itself SHORTER than the room the host had given it — leaving the command content floating in a
+ * box smaller than the card around it while the surface behind showed past both edges.
+ *
+ * ── WHY THIS IS THE CONTRACT AND NOT A PIXEL ─────────────────────────────────────────────────
+ *
+ * `.alloy-os-addcharge` learned exactly this lesson first, and its own comment records it: it
+ * "carried its own border, radius, white background and 480px cap from when it was a lab specimen
+ * standing on a page. Inside the elevated host that produced a bordered card floating in a
+ * bordered card, which is the one thing every other centered surface does not do." Add Charge was
+ * stripped to a plain flex column and has presented correctly ever since. The Adjustment band was
+ * never given the same treatment, so this is the shared contract being applied consistently rather
+ * than a height being special-cased — and it is why no second modal primitive is introduced here.
+ *
+ * ── THE SELECTOR IS THE HOST, NOT THE PANEL ──────────────────────────────────────────────────
+ *
+ * `.alloy-os-financials__entrybody` wraps the band ONLY where a command hosts it — both the
+ * unified Add command and Adjust-from-a-row — so the panel keeps its full band presentation
+ * everywhere it is genuinely a band (Move payment, Reverse, Responsibility) and loses it exactly
+ * where the host already provides it. One rule, both Accounts and Focus Panel, because both mount
+ * the same card.
+ */
+.alloy-os-financials__entrybody > .alloy-os-fdetail__movepanel {
+  /* The host is the perimeter. A second one is the bordered-card-in-a-bordered-card. */
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  margin-bottom: 0;
+
+  /*
+   * THE HOST OWNS THE SCROLLING. `max-height: none` and `overflow: visible` hand the overflow back
+   * to `.alloy-os-ucard__body`, which is already capped against the viewport and already scrolls —
+   * so the command has ONE scroll container instead of a nested pair, and the card sizes to its
+   * content up to the host's cap rather than to a 520px box inside it.
+   */
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+
+  /*
+   * NO SELF-LIFT. The 61 existed to clear the Details floor the band sat on; inside the command
+   * card the host is already the raised layer at 60, and a descendant one layer above its own host
+   * paints over the card's rounded edge.
+   */
+  position: static;
+  z-index: auto;
+
+  /* The field rhythm is the band's own and is the only thing it keeps. */
+  display: grid;
+  gap: 8px;
+}
+
+/*
+ * THE CONFIRM ROW STAYS REACHABLE, against the HOST's scroll container now.
+ *
+ * `position: sticky` resolves against the nearest scrolling ancestor, which is `.alloy-os-ucard__body`
+ * once the panel stops scrolling itself — so the action row keeps working. What has to change are
+ * the offsets: `bottom: -10px` and `margin-bottom: -10px` were cancelling the band's own `padding:
+ * 10px 12px`, and with that padding gone they pulled the row 10px off the bottom of the card and
+ * let the last field slide under it.
+ */
+.alloy-os-financials__entrybody > .alloy-os-fdetail__movepanel > .alloy-os-fdetail__moveactions {
+  bottom: 0;
+  margin-bottom: 0;
+}
+
+/*
+ * ── THE COMPACT CARD'S POSITION ZONE ───────────────────────────────────────────────────────────
+ *
+ * The right column states the position and carries the commands, so the card spends no row on a
+ * command bar. Payment and Add sit together as primary and its quieter peer; Details is navigation
+ * and reads as a link rather than a third equal button.
+ */
+/*
+ * ── COMMANDS ARE BUTTONS, NAVIGATION IS A LINK ─────────────────────────────────────────────────
+ *
+ * Payment and Add mutate money; Details only moves. Making all three links cured an overflow and
+ * erased that distinction, so the buttons are back — the SAME `Action` primitive the focused
+ * Details surface uses, per the /surfaces reference — and only Details stays a quiet link.
+ *
+ * What does not come back is the cluster that put all three in one row inside a column sized for a
+ * figure. Each command sits at the foot of the column whose story it belongs to and takes that
+ * column's width, so it cannot leave the card at any supported width; below the width where a
+ * second column can state a figure the zones stack, and each command simply gets the card.
+ */
+/*
+ * ── ONE ROW FOR THE TWO COMMANDS, WITHOUT A COMMAND ROW ────────────────────────────────────────
+ *
+ * Each command sits at the foot of its own narrative column, which is right — and it made them
+ * stagger, because the columns say different amounts and therefore end at different heights. That
+ * reads as an accident rather than a composition.
+ *
+ * `margin-top: auto` inside a stretched column puts both at the SAME baseline: the bottom of the
+ * zones row. They share a y and a height because the row does, not because a new footer band was
+ * introduced to hold them, and each stays visually owned by the column it belongs to.
+ */
+.alloy-os-billing__zone-action {
+  /*
+   * ── ANCHORED TO ITS COLUMN, NOT FLOATING IN IT ─────────────────────────────────────────────
+   *
+   * Putting both commands on one baseline fixed the stagger and left them looking like controls
+   * adrift in whitespace, because nothing tied either one to the figures it acts on. The rule does
+   * that: it spans the column's own width — so it reads as the foot of THAT column's story — and
+   * sits immediately above its action, close enough that the two are one object.
+   *
+   * It is a divider, not a footer band: there are two of them, each inside its own column, and
+   * neither spans the card.
+   */
+  display: flex;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  min-width: 0;
+}
+/* Both columns must reach the row's full height, or "the bottom" means two different places. */
+.alloy-os-billing__zones--two > .alloy-os-billing__zone,
+.alloy-os-billing__zones--two > .alloy-os-billing__collect {
+  align-self: stretch;
+}
+.alloy-os-billing__collect > .alloy-os-billing__zone--position {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.alloy-os-billing__zone-action > button {
+  /*
+   * ── EQUAL, AND PROPORTIONAL TO THE CARD ────────────────────────────────────────────────────
+   *
+   * `flex: 1 1 auto` made each command fill its own column, so Payment and Add came out different
+   * widths — the columns are 60/40 — and each read as a banner across its half of the card rather
+   * than as a control.
+   *
+   * The width is taken from the CARD instead of from the column, so both commands resolve to the
+   * same number wherever they sit, and it scales with the card rather than being pinned to a pixel
+   * count that only suits one width. The clamp keeps it usable when the card is narrow and stops it
+   * growing into a banner when the card is wide; `max-width` is the last guard, so a control can
+   * still never exceed the column it is in.
+   */
+  flex: 0 0 auto;
+  width: clamp(76px, 24cqi, 110px);
+  min-width: 0;
+  max-width: 100%;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 0.7rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+/*
+ * Navigation keeps the link grammar: quiet Bend Pine, an arrow, no underline, at the card's own
+ * lower-right edge rather than appended after the commands.
+ */
+.alloy-os-billing__cardlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+.alloy-os-billing__cardlink:disabled {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  cursor: default;
+}
+.alloy-os-billing__cardlink.is-pending {
+  opacity: 0.62;
+}
+.alloy-os-billing__cardlink-arrow {
+  font-size: 0.8em;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+.alloy-os-billing__cardlink:hover:not(:disabled) .alloy-os-billing__cardlink-arrow,
+.alloy-os-billing__cardlink:focus-visible .alloy-os-billing__cardlink-arrow {
+  transform: translateX(2px);
+}
+.alloy-os-billing__cardlink:hover:not(:disabled),
+.alloy-os-billing__cardlink:focus-visible {
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 78%, #04303f);
+}
+/*
+ * Navigation holds its own row beneath both commands, at the card's lower-right edge — the
+ * commands are a row above it. Sharing the command row reclaimed height but put a quiet link on
+ * the same baseline as a filled button, which reads as one group rather than two ranks.
+ */
+.alloy-os-billing__nav {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+/*
+ * ── THE POSITION LINES STATE THEMSELVES ON ONE LINE ────────────────────────────────────────────
+ *
+ * `Payments received` and `Current balance` wrapped in a column measured for a figure, which made
+ * the right side ragged and grew the card. The label yields its own width before the row breaks,
+ * the figure never does, and neither wraps.
+ */
+.alloy-os-billing__zone--position .alloy-os-billing__line {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.alloy-os-billing__zone--position .alloy-os-billing__line-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.alloy-os-billing__zone--position .alloy-os-billing__line-value {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  /*
+   * ── THE 76px FLOOR IS VESTIGIAL HERE, AND IT WAS STARVING THE LABEL ──────────────────────────
+   *
+   * The base `__line-value` reserves `min-width: 76px` so amounts line up as a column. In THIS zone
+   * the value is `flex: 0 0 auto` and sits at the row's end by `space-between`, so it already
+   * aligns; the floor only takes width away from the label beside it.
+   *
+   * Measured mounted at 1280: zone 91px − 76px value − 8px gap left the label SEVEN PIXELS, so
+   * `Balance`, `Paid`, `Unassigned` and `Available` all ellipsised to "…". At 1680 the label got
+   * 50px and the two longer words still clipped. Releasing the floor gives the label everything the
+   * figure does not need.
+   */
+  min-width: 0;
+}
+.alloy-os-billing__clear,
+.alloy-os-billing__age {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alloy-os-billing__zone--position .alloy-os-billing__amount { margin-bottom: 2px; }
+
+/* ── FINANCIALS COMMAND SHELL — THE BODY EVERY COMMAND SHARES ───────────────────────────────────
+ *
+ * Reverse used to borrow `.alloy-os-fdetail__movepanel`, the Move-payment band, and read as a raw
+ * horizontal strip laid across the ledger. These are the shell's own parts: a fact list stating
+ * what is about to happen, a sentence explaining the financial effect, and an action row whose
+ * primary is weighted rather than enlarged — the same hierarchy the compact card's commands use.
+ */
+.alloy-os-financials__commandbody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.alloy-os-financials__commandfacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+}
+.alloy-os-financials__commandfacts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-financials__commandfacts dt {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-financials__commandfacts dd {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow-wrap: anywhere;
+}
+.alloy-os-financials__commandnote {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__commandactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.15rem;
+}
+.alloy-os-financials__commandactions .alloy-os-financials__quiet {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  padding: 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/*
+ * ── TWO COLUMNS NEED THE WIDTH FOR TWO COLUMNS ─────────────────────────────────────────────────
+ *
+ * At the narrowest Focus Panel column the position zone is 57px and Due is a 65px figure, so the
+ * card's most actionable number rendered clipped — measured, not supposed. No split fixes that:
+ * 42% of 157px is 66px before the gap, and the gap has to exist for the two columns to read as
+ * two columns at all.
+ *
+ * So below the width where a second column can still state a figure, there is one column. The
+ * obligation story keeps its measure, Due states itself in full, and the command cluster — which
+ * already spans the card — is unaffected.
+ */
+/*
+ * ── THE THRESHOLD WAS SET FOR SHORTER WORDS ───────────────────────────────────────────────────
+ *
+ * Raised from 230px to 340px, measured. The card is 265px at a 1280 viewport and 286px at 1440,
+ * so the collapse never fired and the position column stayed 91px and 100px — narrower than
+ * `Available` plus `$200.00` needs (~108px) at any honest type size. Only at 1680, where the card
+ * is 366px and the column 134px, do both halves fit on one line.
+ *
+ * The first attempt at this stacked the label above its figure INSIDE the two-column layout. It
+ * removed the ellipsis and produced something worse: the taller right column overlapped the
+ * obligation story beside it, so `NET OBLIGATION` collided with `$18.00`. Clipping traded for a
+ * collision is not a repair.
+ *
+ * This rule's own note already had the answer — "below the width where a second column can still
+ * state a figure, there is one column". The width was simply measured for `Balance` and `Paid`,
+ * before `Unassigned` and `Available` existed. One instrument, one threshold, moved to where the
+ * evidence puts it.
+ */
+@container alloy-billing (max-width: 340px) {
+  .alloy-os-billing__zones--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alloy-os-billing__collect {
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  }
+}
+
+/*
+ * ── THE LEDGER REGION WHILE IT IS STILL READING ────────────────────────────────────────────────
+ *
+ * Reserved, quiet, and holding enough height that the surface does not resize under the operator
+ * when the real rows land. It reserves what several rows would occupy rather than drawing any: the
+ * region is the only part of Details allowed to say it is not finished, and it says it in words.
+ */
+.alloy-os-fdetail__ledgerpending {
+  display: flex;
+  align-items: flex-start;
+  min-height: 132px;
+  margin: 0;
+  padding: 14px 4px 0;
+  font-size: 0.78rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/*
+ * ── ALSO BILL THESE CHILDREN — the multi-child selection ────────────────────────────────────
+ *
+ * A column of checkboxes rather than a multi-select, because a multi-select hides the unselected
+ * options behind a scroll and an operator committing money should see every child they are and are
+ * not billing at once. Wraps to two columns when there are enough siblings to need it.
+ */
+.alloy-os-addcharge__children {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.alloy-os-addcharge__child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    cursor: pointer;
+}
+
+.alloy-os-addcharge__child input {
+    flex: 0 0 auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+/* The economics of the widened operation, stated where the selection is made. */
+.alloy-os-addcharge__childsum {
+    margin: 6px 0 0;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+/*
+ * THE DETAIL SURFACE'S OWN PAYMENT BAND.
+ *
+ * It rendered as a sibling of the card and therefore outside its box — an orphan `Record payment →`
+ * beside a focused surface. It is now a slot INSIDE the card, so it needs only to sit apart from
+ * the ledger above it, the way the utility footer does.
+ */
+.alloy-os-fdetail__paymentband {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+/*
+ * THE UNOWNED REMAINDER ON A PARTIALLY ALLOCATED OBLIGATION.
+ *
+ * Quieter than the party's name because the name is the answer and this is the qualifier — but
+ * present in the cell rather than hidden behind a hover, because "someone owes this" and "most of
+ * it is still nobody's" are different facts and an operator must not read the first as both.
+ */
+.alloy-os-billingdetail__partial {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/*
+ * WHY A DATE IS WHAT IT IS — the invoice-timing and payment-terms rule under each resolved date.
+ * Its own line, so the date stays the first thing read and the rule the second.
+ */
+/* W7 Scenario 8 final: a date's provenance is an info mark beside it, not prose beneath it. */
+.alloy-os-addcharge__date-with-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.alloy-os-addcharge__date-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  cursor: help;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 40%, transparent);
+}
+.alloy-os-addcharge__date-hint:hover {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, transparent);
+}
+.alloy-os-addcharge__date-hint svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.alloy-os-addcharge__date-rule {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.35;
+    color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/*
+ * ══ W7-F011 — ADD CHARGE, A COMPACT FINANCIAL FORM ══════════════════════════════════════════════
+ *
+ * Applies to + Responsibility are one group; Amount + Note share a row; the four dates share a
+ * row on desktop and collapse to two, then one, column as the modal narrows.
+ */
+.alloy-os-addcharge__group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+}
+.alloy-os-addcharge__pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 0 16px;
+}
+/*
+ * Label ABOVE value in the pair, as in the date cells beside it. A 64px label column could not
+ * hold "Amount · required", so the mark ran into the override's amount input.
+ */
+.alloy-os-addcharge__pair > .alloy-os-addcharge__field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    align-items: start;
+    /* The taller half (an override's summary) must not push the other half's control down. */
+    align-content: start;
+}
+.alloy-os-addcharge__dates {
+    display: grid;
+    /*
+     * W7-F015: the Service date cell holds a date CONTROL whose calendar glyph reserves 34px, so an
+     * equal quarter (~131px in the command modal) clipped "Oct 12, 2026". It gets a floor wide
+     * enough for the longest formatted date; the three read-only cells share the rest.
+     */
+    grid-template-columns: minmax(160px, 1.25fr) repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 4px 0 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+}
+.alloy-os-addcharge__datecell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.alloy-os-addcharge__datecell .alloy-date-input {
+    width: 100%;
+}
+.alloy-os-addcharge__datecell[data-readonly="true"] .alloy-os-addcharge__field-value {
+    color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__posting {
+    margin: 2px 0 0;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__sublabel {
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+@media (max-width: 760px) {
+    .alloy-os-addcharge__dates {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .alloy-os-addcharge__pair {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 420px) {
+    .alloy-os-addcharge__dates {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/*
+ * W7-F018 — A DRAFT ROW IS UPCOMING, NOT POSTED MONEY. Same columns as a posted row (so it can be
+ * opened, edited or cancelled where it sits), visibly set apart: a dashed rule and a softened amount,
+ * because it is not part of the balance the summary states.
+ */
+.alloy-os-billingdetail__row--upcoming {
+    border-left: 2px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, transparent);
+    background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 2.5%, transparent);
+}
+.alloy-os-billingdetail__row--upcoming .alloy-os-billingdetail__amount {
+    color: var(--alloy-os-text-secondary, #4b5563);
+    font-style: italic;
+}
+
+/*
+ * W7-F027 / W7-F028 — THE OPERATOR STATE MARK. One treatment for the account ledger and the Charges
+ * workspace. A dot and a restrained text tone, never a filled pill: a column of states must stay
+ * scannable without becoming a dashboard. Bend Pine for what the clock will do, amber for a person's
+ * decision, quiet midnight for standing money, muted for history.
+ */
+.alloy-os-chargestate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.alloy-os-chargestate::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.alloy-os-chargestate[data-charge-state="scheduled"] {
+  color: color-mix(in srgb, var(--color-alloy-bend-pine, #00a283) 82%, var(--color-alloy-midnight, #18273a));
+}
+.alloy-os-chargestate[data-charge-state="scheduled"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+.alloy-os-chargestate[data-charge-state="attention"] {
+  color: var(--color-alloy-ember, #bc4300);
+  font-weight: 650;
+}
+.alloy-os-chargestate[data-charge-state="posted"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 78%, transparent);
+}
+.alloy-os-chargestate[data-charge-state="posted"]::before {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+}
+.alloy-os-chargestate[data-charge-state="reversed"],
+.alloy-os-chargestate[data-charge-state="cancelled"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+  font-weight: 500;
+}
+.alloy-os-chargestate[data-charge-state="cancelled"]::before {
+  background: color-mix(in srgb, var(--color-alloy-ember, #bc4300) 45%, transparent);
+}
+.alloy-os-chargestate[data-charge-state="legacy"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+  font-weight: 500;
+}
+.alloy-os-chargestate[data-charge-state="legacy"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  border-radius: 1px;
+}
+
+/*
+ * W7-F028 — THE CHARGES WORKSPACE ROW: the account ledger's row, compact. Same classes, type scale
+ * and state mark; its own tracks, because a cross-account list leads with WHO the charge is for.
+ */
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row {
+  grid-template-columns: minmax(150px, 1.5fr) minmax(96px, 1fr) 88px 104px minmax(150px, 1.2fr) minmax(110px, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 34px;
+  padding: 4px 16px;
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row > :nth-child(6) {
+  text-align: left;
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row > :nth-child(3) {
+  text-align: right;
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row:not(.alloy-os-billingdetail__row--head):hover {
+  background: color-mix(in srgb, var(--color-alloy-midnight, #18273a) 3%, transparent);
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row:not(.alloy-os-billingdetail__row--head):focus-visible {
+  outline: 2px solid var(--color-alloy-bend-pine, #00a283);
+  outline-offset: -2px;
+}
+.alloy-os-chargeindex__for {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.alloy-os-chargeindex__for .alloy-os-billingdetail__subject {
+  font-size: 0.76rem;
+}
+.alloy-os-chargeindex__account {
+  font-size: 0.64rem;
+  color: var(--alloy-os-text-tertiary, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* W7-F031 — a summary figure's own context, and the quiet line of account context beneath. */
+.alloy-os-fdetail__statnote {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.66rem;
+  font-weight: 500;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+.alloy-os-fdetail__statnote[data-tone="due"] {
+  color: var(--color-alloy-ember, #bc4300);
+  font-weight: 600;
+}
+.alloy-os-fdetail__summarycontext {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 4px 0 0;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/*
+ * W7-F041/F043 — the relationship row spans the rollup, so its end group (method + Manage
+ * payments) sits beneath Payment / Add; secondary account facts share a line or stack beside the
+ * figures instead of claiming a row.
+ */
+.alloy-os-fdetail__rollup > .alloy-os-fdetail__payers {
+  flex: 1 0 100%;
+  margin-top: 0;
+  padding-top: 5px;
+}
+.alloy-os-fdetail__statnotes {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-fdetail__statside {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-end;
+  gap: 1px;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+.alloy-os-fdetail__statsidelink {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--alloy-os-bend-pine, #00a283);
+  text-align: left;
+  cursor: pointer;
+}
+.alloy-os-fdetail__statsidelink:hover { text-decoration: underline; }
+.alloy-os-fdetail__statsidelink:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  outline-offset: 2px;
+}
+
+/* W7-F045 — the Payment command's two jobs: take a payment, or refund one. */
+.alloy-os-financials__tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+}
+.alloy-os-financials__tab {
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.alloy-os-financials__tab--on {
+  color: var(--alloy-os-bend-pine, #00a283);
+  border-bottom-color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-financials__tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  outline-offset: 1px;
+}
+
+/* W7-F043 (747ad20d proof) — holdings sit under Payment / Add, so the figures keep one row. */
+.alloy-os-fdetail__actions > .alloy-os-fdetail__statside {
+  grid-column: 1 / -1;
+  justify-self: end;
+  align-items: flex-end;
+  align-self: auto;
+}
+
+/*
+ * W7-F048 — the Payment command's two tabs are one card at one size. The tabbed band holds a floor
+ * height so Refunds never collapses to a sliver beside Payment, and a chosen payment on Refunds
+ * reads as a record (its facts stacked over its refund form) rather than a compressed list row.
+ */
+.alloy-os-financials__band[data-financials-payment-tab] {
+  min-height: 26rem;
+}
+.alloy-os-financials__band[data-financials-payment-tab="refunds"] .alloy-os-financials__payment {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* W7-F049 — the method on file is the control that manages payments: one quiet, clickable chip. */
+.alloy-os-fdetail__methoddoor {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+}
+.alloy-os-fdetail__methoddoor:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, transparent);
+}
+.alloy-os-fdetail__methoddoor:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  outline-offset: 2px;
+}
+
+/* W7-F050 — Application: Automatic, with the calculated settlement beneath it. */
+.alloy-os-financials__settlement {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-financials__settlement-mode {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-financials__settlement-lines {
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0;
+  font-size: 0.76rem;
+}
+.alloy-os-financials__settlement-lines > li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-financials__settlement-total {
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+  font-weight: 600;
+}
+.alloy-os-financials__linkaction {
+  padding: 0;
+  margin-top: 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--alloy-os-bend-pine, #00a283);
+  cursor: pointer;
+}
+.alloy-os-financials__linkaction:hover { text-decoration: underline; }

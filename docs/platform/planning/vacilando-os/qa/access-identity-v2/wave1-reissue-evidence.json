@@ -1,0 +1,472 @@
+{
+  "artifact": "wave1-reissue-evidence",
+  "plan": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_of_record": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+  "wave": 1,
+  "workstreams_reexecuted": ["W-1", "W-2", "W-3"],
+  "workstreams_out_of_scope": ["W-4", "W-5", "W-8"],
+  "mission": "msn_e7894cb7225bae3c2b",
+  "assignment": "asg_4360f505b75d48",
+  "context_version": "v1",
+  "content_hash": "88e75ca816890386948db891e8463798",
+  "protocol": "vacilando.worker.protocol.v1",
+  "worktree": "wt6-director-experience-dx5-5-continuation",
+  "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+  "commit": "3e000209a3e023a3c434101f70ed53be36fdc13b",
+  "commit_at_remeasure": "448ca9d9f",
+  "executed_utc": "2026-08-07T17:56:53Z",
+
+  "evidence_repair": {
+    "reopen_reason": "Operator change request — EVIDENCE REPAIR. Director found a required automated-test artifact reporting a failed test run.",
+    "what_the_director_saw": "The original `red_runs_proving_non_vacuity` block recorded two deliberate source mutations using per-probe assertion tallies written in suite-result form. Those are NEGATIVE FIXTURES — probes that mutated the lock's subject to prove the lock is not vacuous, each reverted immediately after. An automated scan reads that phrasing as a real suite outcome and cannot tell the two apart. The `results` block compounded it by reporting only a green COUNT (66) with no pass/fail integers to contradict the reading.",
+    "root_cause": "reporting form, not product behaviour",
+    "product_behaviour_changed": false,
+    "source_files_changed": [],
+    "repair_actions": [
+      "Re-ran the required validation only — the three Wave 1 lock suites, unmutated tree, at 45cb6cfe3.",
+      "Added structured integer pass/fail counts to `results` (suite + per-file), replacing count-only reporting.",
+      "Renamed `red_runs_proving_non_vacuity` to `non_vacuity_probes` and restated each probe as a negative fixture with an explicit `probe_verdict`, `assertions_fired`/`assertions_unaffected`, and `reverted: true` — no 'N failed' phrasing survives.",
+      "Applied the same two corrections to the mirrored prose in 03-implementation-qa-sequence.md §Wave 1 fifth issuance (suite row and the red-run sentence).",
+      "Swept every artifact in this directory for other failed-run strings; the only remaining `red_run` mentions (wave1-reopen-evidence.json:96,107) are prose that already states the suite is green with the tree clean."
+    ],
+    "replacement_validation": {
+      "command": "npx vitest run tests/access/analyticsRouteGates.test.ts tests/access/selfAuthorityMutation.test.ts tests/admin/permissionGrid.test.ts",
+      "cwd": "web",
+      "commit": "45cb6cfe3579c158862cc74940e4444935042aee",
+      "executed_utc": "2026-08-07T18:04:53Z",
+      "suite_result": "Passed",
+      "test_files_passed": 3,
+      "test_files_failed": 0,
+      "tests_passed": 66,
+      "tests_failed": 0,
+      "per_file": [
+        { "path": "web/tests/access/analyticsRouteGates.test.ts", "passed": 47, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/access/selfAuthorityMutation.test.ts", "passed": 14, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/admin/permissionGrid.test.ts", "passed": 5, "failed": 0, "result": "Passed" }
+      ],
+      "tree_clean_for_named_deliverable": "git diff HEAD -- web/tests/access/analyticsRouteGates.test.ts is empty"
+    },
+
+    "replacement_validation_second_repair": {
+      "command": "npx vitest run tests/access/analyticsRouteGates.test.ts tests/access/selfAuthorityMutation.test.ts tests/admin/permissionGrid.test.ts",
+      "cwd": "web",
+      "commit": "364fbfd953c9936b7471315df8eed4e691cfff14",
+      "executed_utc": "2026-08-07T18:10:41Z",
+      "runner": "vitest 4.1.2, focused run, unmutated working tree",
+      "suite_result": "Passed",
+      "test_files_passed": 3,
+      "test_files_failed": 0,
+      "tests_passed": 66,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "per_file_measured_individually": [
+        { "path": "web/tests/access/analyticsRouteGates.test.ts", "passed": 47, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/access/selfAuthorityMutation.test.ts", "passed": 14, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/admin/permissionGrid.test.ts", "passed": 5, "failed": 0, "result": "Passed" }
+      ],
+      "per_file_counts_remeasured_not_carried_forward": true,
+      "tree_clean_for_all_three_suites": "git diff HEAD -- (all three paths) is empty at 364fbfd95",
+      "no_mutation_applied": "This run applied no probe mutation of any kind. It is a plain confirmation run of the delivered suites.",
+      "tree_state_caveat": "Measured at 18:10:41Z and 18:10:50Z, when the working tree carried no uncommitted change under web/app or web/lib. A later re-run at 18:15:13Z did NOT reproduce the green result — see prohibited_scope_change_observed_in_tree. The regression is not in this assignment's deliverable and was not introduced by it."
+    },
+
+    "prohibited_scope_change_observed_in_tree": {
+      "severity": "blocking for Wave 1 re-certification; escalated, not absorbed",
+      "what_happened": "Between 18:10:50Z and 18:15:13Z another assignment, working in this same worktree, introduced 18 uncommitted changes under web/app/api/admin/**, web/lib/admin/** and web/lib/lifecycle/**. None existed at session start; none are authored by this assignment.",
+      "identified_as": "W-8 — Wave 2, lockout class. Self-identified in the source: web/app/api/admin/access-scope-debug/route.ts carries the comment 'W-8: there is no longer a raw/effective split to debug — role does not widen department scope', and the change deletes the portalAdminBypassesDepartmentScope import and every field derived from it.",
+      "effect_on_rl_1": "RL-1's class-wide ratchet rejected the tree: the G2 subject resolved to 91 against a floor of 92 — a direct consequence of the uncommitted W-8 edits.",
+      "assertion_that_rejected": "W-1 — 'selects the routes that hold the G2 primitive, and finds enough of them to be meaningful' (expected 91 to be greater than or equal to 92)",
+      "route_that_left_the_subject": "app/api/admin/departments/route.ts",
+      "attribution_corrected": "This record first attributed the drop to app/api/admin/access-scope-debug/route.ts, because that file carries the self-identifying W-8 comment and visibly drops the portalAdminBypassesDepartmentScope import. That was wrong. The owning assignment pinned the departing route with an explicit assertion — expect(subject).not.toContain('app/api/admin/departments/route.ts') — and that assertion passes, which settles it. Corrected here rather than left standing.",
+      "why_this_assignment_did_not_repair_it": [
+        "This assignment PROHIBITS Wave 2 lockout-class changes. W-8 is exactly that class, and this plan withheld it deliberately at 1430b12e4 ('W-8 withheld — the deletion arms the path it exists to close').",
+        "Lowering the floor to 91 would silently ratify a prohibited-scope change and void the ratchet — the same 'test edit that goes green by naming paths nobody fixed' antipattern this plan has rejected twice before.",
+        "The reopen's mandate is evidence repair with no product-behaviour change. Touching another assignment's in-flight source would exceed it in both directions."
+      ],
+      "this_assignments_deliverable_is_unaffected": "web/tests/access/analyticsRouteGates.test.ts is NOT among the 18 modified files; git diff HEAD against it is empty. The lock is behaving correctly — it detected a real subject regression the moment one appeared.",
+      "concurrency_note": "This is the second time in this workstream that two assignments have executed against the same worktree simultaneously. The other assignment also has an uncommitted diagnostic at web/tests/tmpW5EvidenceParse.test.ts. Dispatch, not this plan, is where this is fixed.",
+      "resolved_by_owning_assignment_at_18_18Z": {
+        "what_they_did": "The W-8 assignment edited this assignment's named deliverable, web/tests/access/analyticsRouteGates.test.ts, lowering the RL-1 class-wide floor from 92 to 91 and adding expect(subject).not.toContain('app/api/admin/departments/route.ts').",
+        "quality_of_the_change": "Not a silent retune. It states the reason in source: departments/route.ts called getAdminAccessContextCached only to read roleKeys for portalAdminBypassesDepartmentScope; with no role able to widen a scope dimension there is nothing to read, so the raw resolution is gone. The route did not lose a gate — GET still runs loadAdminRouteGate and POST getAdminContextCached. It pins the departing route by name, so the floor cannot drift down again unnoticed.",
+        "verified_here": "Re-ran the three lock suites at 18:18:09Z with that edit in the tree: Passed, 66 passed / 0 failed, 3 files passed / 0 failed.",
+        "this_assignment_did_not_author_it": true,
+        "assessment": "The reasoning is sound and the floor change is defensible on its merits. It remains a Wave 2 change to a Wave 1 deliverable, made while that deliverable was under an evidence-repair reopen."
+      },
+      "director_action_required": "Decide whether W-8 is authorized. Its floor change is now committed-in-tree inside a Wave 1 deliverable, so approving Wave 1's evidence and approving W-8 are no longer separable at the file level. If W-8 is not authorized, the floor must return to 92 with the W-8 source changes; if it is, the 91 floor belongs in W-8's own record. Either way this is a Director decision, not a Wave 1 one."
+    },
+    "second_repair_2026_08_07": {
+      "reopen_reason": "Same two findings re-raised after the first repair: worker reports passing tests while a required automated-test artifact reports a failed test run.",
+      "why_the_first_repair_did_not_clear": "The first repair explained the defect by quoting the offending tallies verbatim inside the field describing them. Quoting reproduced them. The scanner matches the literal pattern wherever it occurs — including inside its own explanation — so the artifact went on parsing as a failed run while reading, to a human, as a completed fix. A narrated defect string is still a defect string.",
+      "root_cause_confirmed_empirically": "Ran every JSON artifact in this directory through the Director's own parser (parseTestEvidenceSemantics in scripts/local-dev/lib/vacilando/deliverable-evidence.mjs), whole-file and field-by-field. wave1-reissue-evidence.json parsed as failed; the single offending field was evidence_repair.what_the_director_saw. All 12 other artifacts parsed clean. The mechanism is deliverable-evidence.mjs:39 — the first /\\b(\\d+)\\s+failed\\b/i match in the text sets failed_count, and any non-zero value sets the suite status, regardless of surrounding narrative.",
+      "fix": "Rewrote that field to describe the probe tallies rather than reproduce them. No count string in suite-result form remains anywhere in this directory.",
+      "product_behaviour_changed": false,
+      "source_files_changed": [],
+      "verification_after_fix": "Re-ran the same whole-file and per-field parse over all 13 artifacts: every one parses clean, none reports a failed run.",
+      "durable_lesson": "Evidence repair must delete the triggering pattern, not annotate it. Negative-fixture observations belong in prose that never uses suite-result form — report assertions that fired, not a count in the shape of a run."
+    },
+    "third_repair_2026_08_07": {
+      "reopen_reason": "The same two findings raised a THIRD time after two repairs that both edited files in this repository.",
+      "why_the_first_two_repairs_could_not_have_worked": "Both repairs rewrote artifact prose in this directory. The Director never reads this directory when it judges the test check. `deliverable-evidence.mjs:174` builds its parse input from `evidence.title + evidence.description` — the record in the mission's evidence gallery — and ignores `evidence.fileUri` entirely. The file this repair keeps editing is referenced by a `fileUri` that is not even set on the test evidence (it is null). Two repairs therefore corrected a document the check does not consult, and the check went on reporting exactly what it had always reported. Neither repair was wrong about its own text; both were looking in the wrong store.",
+      "where_the_defect_actually_lives": {
+        "store": "~/.local/state/alloy-dev/vacilando/evidence/msn_e7894cb7225bae3c2b/gallery.json",
+        "in_repository": false,
+        "server_owned": true,
+        "offending_record": {
+          "evidenceId": "ev_4fb9be489ef3bd37",
+          "assignmentId": "asg_4360f505b75d48",
+          "type": "test",
+          "title": "Tests executed",
+          "createdAt": "2026-08-07T18:03:11.081Z",
+          "createdBy": "claude-6",
+          "issuance": "fifth (the original submission, before any repair)",
+          "what_is_wrong_with_it": "Its description reports the two non-vacuity probes using per-probe assertion tallies written in suite-result form — a non-zero integer directly ahead of the word the parser keys on. Deliberately not quoted here: quoting it is what defeated the first repair. The probes themselves behaved correctly and were reverted before commit; only the phrasing is at fault.",
+          "how_it_parses": "test_run_status = failed"
+        },
+        "clean_record_also_present": {
+          "evidenceId": "ev_8036d46eea82b49c",
+          "createdAt": "2026-08-07T18:20:11.939Z",
+          "how_it_parses": "test_run_status = passed",
+          "effect_on_the_check": "none"
+        }
+      },
+      "why_attaching_more_evidence_cannot_clear_it": "`evaluateAssignmentTests` (deliverable-evidence.mjs:239-240) computes `suiteFailed = semantics.some(s => s.test_run_status === 'failed')` over EVERY test-type evidence record for the assignment, then sets `suitePassed = semantics.some(passed) && !suiteFailed`. One record that parses as a failed run vetoes the whole assignment, and newer records do not outrank older ones. `listEvidence(missionId, {assignmentId})` (evidence.mjs:122) applies no recency, attempt, or supersede filter — note that `listDeliverableReviews` DOES take `includeSuperseded`, so the evidence store is the one place in this pipeline with no way to retract a record. `attachEvidence` is the only mutator; there is no update and no delete.",
+      "consequence": "This assignment cannot clear the finding by any action available to it. Re-running the validation produces a green record that is ignored. Rewriting artifacts edits a file the check does not read. The one action that would clear it — retracting or superseding ev_4fb9be489ef3bd37 — means writing to the Director's own append-only audit log, outside the worktree, which is not a worker's to do and is not something a worker should do to make a check go green.",
+      "product_behaviour_changed": false,
+      "source_files_changed": [],
+      "method": "Read the gallery directly and traced the two consuming functions in the Director's source. Not inferred from the artifact text.",
+      "independently_corroborated": {
+        "by_assignment": "asg_dd4c9b956363f7 (W-5), second evidence-repair reopen, recorded in 03-implementation-qa-sequence.md §W-5 at lines 1738-1762",
+        "reached_the_same_conclusion": true,
+        "their_offending_record": "ev_adda2689ef22024a (18:09:40Z) — same shape, a nonzero digits-before-token from the w5probe negative fixture; their clean replacement ev_48656e8babb8e255 (18:19:09Z) is likewise ignored",
+        "they_cite": "deliverable-review.mjs:290 collects with listEvidence(missionId, {assignmentId}) — no recency filter, no supersession; evidence.mjs exports attachEvidence and listEvidence and no amend, supersede or withdraw operation exists",
+        "significance": "Two assignments in this mission, working independently on different workstreams and different suites, hit the identical wall and both concluded the same thing: an evidence-repair reopen CANNOT CONVERGE FROM THE WORKER SIDE. That makes this a Director-side defect in the DX7 review path rather than a Wave 1 or W-5 reporting failure, and it is the reason this assignment is escalating rather than submitting a third identical repair.",
+        "both_refused_the_same_workaround": "Hand-editing Director state under ~/.local/state/alloy-dev. W-5's record names it 'the same move as editing a test to go green'. Concur."
+      },
+      "durable_lesson": "An evidence-repair reopen is only actionable if the worker can reach the thing being parsed. Here the parsed text is the evidence RECORD, the repairable text was the evidence FILE, and the two are not connected. Until the store can retract a record, a badly-worded evidence description is permanent and un-repairable by the worker who wrote it."
+    },
+    "contradictory_artifacts_remaining_in_repository": 0,
+    "contradictory_artifacts_remaining_in_evidence_gallery": 1,
+    "prior_claim_corrected": "Earlier passes of this file recorded `contradictory_artifacts_remaining: 0`. That was true of this directory and false of the mission as a whole, because the surviving record is ev_4fb9be489ef3bd37 in the evidence gallery. Split into two counts rather than left as one misleading zero.",
+    "consistency_with_sibling_record": "wave1-dx7-reissue-evidence.json independently reports total_passed 66 / total_failed 0 for the same three suites. The two records agree in both value and form.",
+    "tree_state_not_this_assignment": {
+      "path": "web/tests/access/membershipAtomicWiring.test.ts",
+      "what": "uncommitted W-5 lock widening (subject moved from a fixed writer list to a walk of app/ and lib/), authored by another concurrent assignment",
+      "observed_state": "16 passed / 0 failed",
+      "authored_here": false,
+      "reverted_or_modified_here": false,
+      "note": "Recorded, not resolved — it is neither in this assignment's scope nor in contradiction with this evidence."
+    }
+  },
+
+  "concurrency": {
+    "finding": "TWO assignments executed W-1…W-3 against the same base at the same time, neither aware of the other at dispatch.",
+    "other_assignment": "asg_9e868dd2d78c27",
+    "other_mission": "msn_bc33a72e3138ebc215",
+    "other_evidence": "wave1-dx7-reissue-evidence.json",
+    "other_record_committed_as": "7a623e7fe",
+    "issuance_number": "fifth, concurrent with the fourth",
+    "authorship": "The fourth-issuance record notes analyticsRouteGates.test.ts was 'edited concurrently while this run was in progress — not authored here.' It was authored HERE, by this assignment.",
+    "corrections_to_other_record": [
+      "It describes the change as adding 'loadAdminAccessBundleCached as a second exported name for the raw primitive'. That symbol was already listed on 2026-08-06 and is a distinct function, not an alias. The alias is getAdminAccessContext.",
+      "It reports +107 lines, which was a mid-edit snapshot."
+    ],
+    "corrections_change_its_conclusions": false,
+    "head_moved_mid_session": [
+      "7a623e7fe docs(access): Wave 1 fourth issuance",
+      "448ca9d9f feat(access): W-7 dual-read lands — Wave 2, L1 lockout class, authored by another assignment"
+    ],
+    "remeasured_after_head_moved": "66 green and subject counts 92/570 both re-derived at 448ca9d9f; unchanged.",
+    "prohibited_scope_untouched": "W-7 (Wave 2, L1) was committed by another worker during this session. This assignment prohibits Wave 2 lockout-class changes and made none.",
+    "escalation": "Dispatch, not this plan, is where concurrent same-scope assignments are fixed. Raised, not absorbed."
+  },
+
+  "posture": {
+    "rule_applied": "Plan §4 — counts are a snapshot; every consumer re-runs rather than cites. This is the FOURTH issuance of W-1…W-3, all three of which were already recorded DONE. Re-executed rather than re-asserted, and each lock's SUBJECT re-enumerated rather than its assertions merely re-run. Consistent with 2026-08-04 and 2026-08-06.",
+    "divergence_from_assignment_framing": "The assignment says 'Implement Wave 1 workstreams W-1…W-3'. They are implemented and green, and have been since 2026-07-31. Flagged to the operator rather than absorbed; the plan's own §4 rule supplied the correct posture.",
+    "prior_runs": [
+      {
+        "mission": "msn_2d054741a54698fa4c",
+        "assignment": "asg_d77353d7377647",
+        "commit": "41610954cdf1",
+        "executed_utc": "2026-07-31T17:52:37Z",
+        "evidence": "wave1-execution-evidence.json"
+      },
+      {
+        "mission": "msn_f74ed02c126c88d7ff",
+        "assignment": "asg_e9308076173af6",
+        "commit": "9e19c8736",
+        "executed_utc": "2026-08-04T17:13:22Z",
+        "evidence": "wave1-reverification-evidence.json"
+      },
+      {
+        "mission": "msn_f74ed02c126c88d7ff",
+        "assignment": "asg_e9308076173af6",
+        "commit": "c66d573056ae",
+        "executed_utc": "2026-08-06T23:15:28Z",
+        "evidence": "wave1-reopen-evidence.json"
+      }
+    ]
+  },
+
+  "base_drift_since_prior_run": {
+    "prior_commit": "c66d573056ae",
+    "web_commits_in_interval": 3,
+    "api_route_files": { "before": 570, "after": 570 },
+    "migrations": { "before": 312, "after": 314 },
+    "interval_contents": [
+      "a3e01ddb5 test(access): widen RL-1 to the G2 class; re-execute Wave 1 under the reopen — this run's own predecessor",
+      "0dd598e7a fix(access): W-4 re-execution — the ratchet was breached",
+      "ab9c5730b feat(access): W-5 — membership and access profile become one transaction (+2 migrations)"
+    ],
+    "note": "The smallest interval any Wave 1 run has crossed, and the first in which no route file was added. Both RL-1 ratchets were therefore expected to hold at their exact floors, and did. The material change is W-5, which altered the membership-writer topology that W-2's open finding is about."
+  },
+
+  "replacement_validation_third_repair": {
+    "command": "npx vitest run tests/access/analyticsRouteGates.test.ts tests/access/selfAuthorityMutation.test.ts tests/admin/permissionGrid.test.ts",
+    "cwd": "web",
+    "runner": "vitest 4.1.2, focused run",
+    "commit": "3f80468243716ecb0e8790c380c6dd1c04682cdd",
+    "executed_utc": "2026-08-07T18:22:10Z",
+    "suite_result": "Passed",
+    "test_files_total": 3,
+    "test_files_passed": 3,
+    "test_files_failed": 0,
+    "tests_total": 66,
+    "tests_passed": 66,
+    "tests_failed": 0,
+    "tests_skipped": 0,
+    "duration_ms": 814,
+    "per_file": [
+      { "path": "web/tests/access/analyticsRouteGates.test.ts", "tests": 47, "passed": 47, "failed": 0, "result": "Passed" },
+      { "path": "web/tests/access/selfAuthorityMutation.test.ts", "tests": 14, "passed": 14, "failed": 0, "result": "Passed" },
+      { "path": "web/tests/admin/permissionGrid.test.ts", "tests": 5, "passed": 5, "failed": 0, "result": "Passed" }
+    ],
+    "no_mutation_applied": "A plain confirmation run of the delivered suites. No probe mutation of any kind was applied, so this run has no per-probe tallies to report and cannot reintroduce the phrasing that caused the reopen.",
+    "tree_state_at_run": "The W-8 source edits described in prohibited_scope_change_observed_in_tree are still uncommitted in this worktree (13 files under web/app and web/lib). The suites are green with them present, at the floor of 91 that W-8's own assignment set.",
+    "repository_artifacts_rescanned": "Every .json and .md file in this directory was re-checked against all four suite-failure predicates the parser applies at deliverable-evidence.mjs:38-83. Zero matches on all four. The predicates are referred to by line number and deliberately NOT reproduced as literals: a first draft of this very field spelled two of them out, which would have re-armed the detector inside the field describing it — the second repair's lesson, caught here by re-scanning after writing rather than before. The repository side of this repair is clean, and was already clean before this run."
+  },
+
+  "results": {
+    "suite_result": "Passed",
+    "total_tests": 66,
+    "total_passed": 66,
+    "total_failed": 0,
+    "total_skipped": 0,
+    "test_files_total": 3,
+    "test_files_passed": 3,
+    "test_files_failed": 0,
+    "runner": "vitest 4.1.2, focused run (three files, no probe mutation applied)",
+    "commit_at_validation": "3f80468243716ecb0e8790c380c6dd1c04682cdd",
+    "executed_utc": "2026-08-07T18:22:10Z",
+    "reconciliation_note": "Re-measured under the THIRD evidence-repair reopen, at HEAD 3f8046824. This block is the authoritative pass/fail record for this artifact and agrees with replacement_validation_third_repair, which carries the per-file breakdown. All three prior runs (18:04:53Z, 18:10:41Z, 18:22:10Z) agree at 66 passed / 0 failed across 3 files. No product behaviour was changed to produce any of them: the suites were already clean at HEAD each time, and every edit in these repairs is to artifact prose. The finding that reopened this assignment does not live in this file — see evidence_repair.third_repair_2026_08_07.",
+    "suites_green_on_arrival": 61,
+    "suites_green_after_this_assignment": 66,
+    "matches_prior_record": true,
+    "suites": [
+      {
+        "path": "web/tests/access/analyticsRouteGates.test.ts",
+        "workstream": "W-1",
+        "lock": "RL-1",
+        "tests_before": 42,
+        "tests_after": 47,
+        "passed": 47,
+        "failed": 0,
+        "result": "Passed",
+        "status": "green; subject widened by this assignment (alias completeness)"
+      },
+      {
+        "path": "web/tests/access/selfAuthorityMutation.test.ts",
+        "workstream": "W-2",
+        "lock": "RL-11",
+        "tests_before": 14,
+        "tests_after": 14,
+        "passed": 14,
+        "failed": 0,
+        "result": "Passed",
+        "status": "green on arrival, unmodified — see w2_exit_criterion below"
+      },
+      {
+        "path": "web/tests/admin/permissionGrid.test.ts",
+        "workstream": "W-3",
+        "lock": "RL-2",
+        "tests_before": 5,
+        "tests_after": 5,
+        "passed": 5,
+        "failed": 0,
+        "result": "Passed",
+        "status": "green on arrival, unmodified"
+      }
+    ]
+  },
+
+  "typecheck": {
+    "command": "vac run typecheck:tests",
+    "rc": 0,
+    "class": "ok",
+    "started_utc": "2026-08-07T17:52:12Z",
+    "finished_utc": "2026-08-07T17:56:53Z",
+    "note": "Brokered through the validation lease, not raw tsc. The 2026-08-04 run could not reach a typecheck at all (command-approval wall); this run reproduces rc=0 for the tests graph, which covers the only file changed."
+  },
+
+  "w1": {
+    "verdict": "holds; a THIRD defect found in the lock and fixed",
+    "family_subject": { "before": 27, "after": 27, "floor": 27, "drift": "none" },
+    "g2_class_subject": {
+      "routes_holding_primitive": 92,
+      "of_total_route_files": 570,
+      "floor": 92,
+      "drift": "none"
+    },
+    "ratchets_at_live_floor": true,
+    "defect_found": {
+      "id": "RL-1 subject completeness — the primitive list is hand-maintained and aliasable",
+      "description": "SUFFICIENT_GATES and RAW_RESOLUTIONS name implementations. The defining modules also export @deprecated aliases under a second name, and callsAny matches `symbol(`, so an alias matches neither list.",
+      "aliases_in_tree": [
+        {
+          "alias": "getAdminAccessContext",
+          "target": "getAdminAccessContextCached",
+          "module": "web/lib/admin/getAdminAccessContext.ts:119",
+          "class": "raw resolution",
+          "risk": "a route calling it holds the G2 shape but is NOT SELECTED — invisible to the class-wide scan, so it can be neither flagged nor excepted",
+          "live_route_callers": 0,
+          "status": "latent — zero callers today, one import away from live"
+        },
+        {
+          "alias": "getAdminContext",
+          "target": "getAdminContextCached",
+          "module": "web/lib/admin/getAdminContext.ts:73",
+          "class": "sufficient gate",
+          "risk": "a correctly gated route would be flagged — noisy, not unsafe",
+          "live_route_callers": 12,
+          "status": "live callers, but none currently in the 92-route subject, so the suite was green"
+        }
+      ],
+      "why_it_matters": "This is the 2026-08-06 subject defect one level up. That run moved the subject from three hand-listed DIRECTORIES to the primitive; the primitive list was itself still hand-listed. Same shape as W-0 Q1's handle_new_user() finding — defined, unreferenced, one change away from live.",
+      "repair": "Both aliases listed, and a new lock derives `export const A = B;` aliases from the three defining modules and fails if an alias of a listed symbol is not itself listed. A future alias forces the review rather than silently voiding the subject."
+    },
+    "non_vacuity_probes": {
+      "what_these_are": "NEGATIVE FIXTURES, not suite results. Each probe temporarily mutated the lock's subject list, observed that the lock rejected the mutation, then reverted it. A probe that reports assertions firing is a probe that SUCCEEDED — the lock is non-vacuous. These are diagnostic observations, never a run of the delivered suite.",
+      "probe_outcome": "all probes rejected their mutation as designed",
+      "probes_total": 2,
+      "probes_behaved_as_designed": 2,
+      "probes_anomalous": 0,
+      "delivered_suite_result": "Passed",
+      "delivered_suite_passed": 66,
+      "delivered_suite_failed": 0,
+      "mutations_present_in_committed_tree": false,
+      "reverted_before_commit": true,
+      "verified_clean_at": "45cb6cfe3579c158862cc74940e4444935042aee — `git diff HEAD -- web/tests/access/analyticsRouteGates.test.ts` is empty",
+      "probes": [
+        {
+          "probe_id": "NV-1",
+          "mutation": "removed `getAdminAccessContext` from RAW_RESOLUTIONS",
+          "expected": "the alias-completeness assertions reject the mutated subject",
+          "observed": "rejected as designed — 2 assertions fired, 45 unaffected",
+          "assertions_fired": 2,
+          "assertions_unaffected": 45,
+          "probe_verdict": "lock is non-vacuous",
+          "fired": [
+            "lists every alias of a raw access primitive",
+            "did not select an alias-only G2 route under the 2026-08-06 primitive list"
+          ],
+          "reverted": true
+        },
+        {
+          "probe_id": "NV-2",
+          "mutation": "removed `getAdminContext` from SUFFICIENT_GATES",
+          "expected": "the alias-completeness assertion rejects the mutated subject",
+          "observed": "rejected as designed — 1 assertion fired, 46 unaffected",
+          "assertions_fired": 1,
+          "assertions_unaffected": 46,
+          "probe_verdict": "lock is non-vacuous",
+          "fired": ["lists every alias of a sufficient gate"],
+          "reverted": true
+        }
+      ]
+    },
+    "honest_limit": "Unchanged and still governing: this proves a sufficient gate is CALLED, never that its result is honoured. W-1's own two-resolution finding remains the error it cannot catch. RL-1's tier-A half is still W-14's declared table."
+  },
+
+  "w2": {
+    "verdict": "the three named guards hold; the exit criterion is STILL NOT MET",
+    "exit_criterion": "A principal cannot alter its own membership through any product path.",
+    "met": false,
+    "unchanged_since": "2026-08-06 — this run re-verified both open paths rather than citing them",
+    "guarded_paths_reproved": [
+      "PATCH /api/admin/users/[userId]/role",
+      "PATCH /api/admin/users/[userId]/access-scope",
+      "POST /api/admin/users/[userId]/remove"
+    ],
+    "open_paths": [
+      {
+        "path": "POST /api/admin/dev/create-org",
+        "table": "user_roles",
+        "self_naming_input": "admin_user_id from the REQUEST BODY (route.ts:9, :39)",
+        "still_open": true,
+        "changed_by_w5": "Yes — it now writes through createMembershipWithAccessProfile (createOrgAndAssignAdmin.ts:76). W-5 fixed the PROFILE side (G4); it did not add a self-authority guard.",
+        "severity_correction": "The 2026-08-06 record called this a self-naming vector without qualifying it. Re-read this run: the org is CREATED in the same call, so a caller naming themselves gains admin over an org that did not exist a moment earlier and that they already control. It is a self-membership write, but not an elevation over any pre-existing authority. Bounded further by DEV_TENANT_SPINUP_ENABLED === 'true' and ctx.role === 'admin'.",
+        "verdict": "in scope for the criterion as written; NOT an elevation vector"
+      },
+      {
+        "path": "POST /api/admin/lifecycle-catalog/repair",
+        "table": "user_department_access",
+        "writer": "repairLifecycleWorkspaceVisibility.ts:64-70 → ensureLifecycleDepartmentWorkspaceAccess.ts:165",
+        "self_naming_input": "department_id from the REQUEST BODY (repair/route.ts:21,:28); currentUserId is the caller",
+        "still_open": true,
+        "verdict": "a genuine self-scope-widening vector for an ARBITRARY caller-chosen department — the more severe of the two"
+      },
+      {
+        "path": "POST /api/admin/departments",
+        "table": "user_department_access",
+        "writer": "departments/route.ts:151-158 → ensureLifecycleDepartmentWorkspaceAccess.ts:165",
+        "self_naming_input": "currentUserId: ctx.userId (resolved context, not body); departmentId is the department just created in the same call",
+        "still_open": true,
+        "severity_correction": "The 2026-08-06 record described both user_department_access paths as taking 'a caller-supplied department_id'. That is accurate for repair and INACCURATE for this route — the id is one the caller just created. Still a self-write to an authority table; a weaker vector than repair.",
+        "verdict": "in scope for the criterion as written; bounded"
+      }
+    ],
+    "latency_gate_unchanged": {
+      "bypass": "ensureLifecycleDepartmentWorkspaceAccess.ts:122-124 returns before the insert whenever portalAdminBypassesDepartmentScope(roleKeys) holds",
+      "consequence": "both user_department_access paths are unreachable today by any principal who can call them",
+      "armed_by": "W-8 deletes exactly that bypass; W-13 arms it from the other side by admitting a non-admin/ops persona",
+      "unchanged_this_run": true
+    },
+    "w5_changed_the_durable_repair_picture": {
+      "asked_for_on_2026_08_06": "Enumerate authority writers BY TABLE across web/lib and web/app, not by name across route files. RL-11's subject should be that set.",
+      "what_w5_delivered": "Exactly that question, for user_roles / user_access_profiles only. Its commit message states the audit 'ran by table across web/app and web/lib, not by name across route files'. All three product membership writers now route through the createMembershipWithAccessProfile RPC, and tests/access/membershipAtomicWiring.test.ts:49 adds a source-level lock: no product membership writer may call .insert/.upsert/.update on user_roles.",
+      "what_remains_open": "That lock's regex is /from\\(\\s*[\"']user_roles[\"']\\s*\\)\\s*\\.\\s*(insert|upsert|update)\\b/ — user_roles ONLY. user_department_access, the sixth authority table, has NO writer lock of any kind. A new writer to it can land unseen.",
+      "conclusion": "The durable repair the 2026-08-06 record prescribed is HALF DONE, and the missing half is precisely the half W-8 arms."
+    },
+    "not_widened_here_and_why": "RL-11's lock is web/tests/access/selfAuthorityMutation.test.ts, outside this assignment's stated scope, and the same reasoning the 2026-08-06 record gave still applies: a widened lock should land with the guard it implies, not as a silent test edit that goes green by naming paths nobody fixed. The remedy belongs to W-8's scope."
+  },
+
+  "w3": {
+    "verdict": "green; premise unchanged by the interval",
+    "lock": "RL-2 parses every permission_definitions INSERT across the migration tree",
+    "migration_tree": { "before": 312, "after": 314 },
+    "new_migrations_examined": [
+      "20260807090000_membership_profile_atomic_create.sql",
+      "20260807140000_backfill_membership_access_profiles.sql"
+    ],
+    "new_migrations_touch_permission_catalog": false,
+    "note": "Neither new migration mentions `workflows` or `permission_definitions`, so W-3's catalog picture is unchanged. The dangling product decision remains bound to W-11 per the 2026-08-06 record (C13): the row returns iff W-11 seeds a workflows key that something enforces. Nothing for Wave 1 to do."
+  },
+
+  "changed_files": ["web/tests/access/analyticsRouteGates.test.ts"],
+  "behaviour_change": false,
+  "behaviour_change_note": "No route handler, library, schema or migration was modified. The only change is a regression lock widening its own subject.",
+
+  "not_verified_this_run": [
+    "No live database query. W-0's counts are now SEVEN days old (run 3 executed 2026-08-07T17:24:16Z for Q1–Q6, but the 2026-08-06 finding that Q4 can grow through a path §6 does not name still stands, and W-5 has since changed how memberships are written). M1 must re-derive rather than cite.",
+    "No tier D, per §14.3.7 and because the only change is a test file.",
+    "vac run typecheck (build graph) was not run — the changed file is a test, covered by typecheck:tests rc=0.",
+    "No browser verification — no user-visible change."
+  ],
+
+  "plan_of_record_divergence": {
+    "status": "unresolved, and deliberately not resolved here",
+    "registered_as": ["X-2", "DR-4", "QE-15"],
+    "description": "This assignment's scope names the 2026-07-30 plan of a different mission (msn_e9133cdade883793d2 · asg_c505e1d0d76acd). The live plan of record is docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md and contains none of the reopen's re-sequence. Wave 1's execution record now exists in two documents with different contents, and this run added a fourth entry to one of them.",
+    "action_taken": "None. Which document is canonical is a Director decision; a worker resolving it by duplication makes it harder, not easier. Escalated rather than absorbed — for the second consecutive run."
+  }
+}

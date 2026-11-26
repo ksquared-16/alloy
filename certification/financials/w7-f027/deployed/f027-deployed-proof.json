@@ -1,0 +1,194 @@
+{
+ "build": "827a345a2f9abd3d886c5180442f0dae89dba36f",
+ "activation": {
+  "count": 2,
+  "sample": [
+   "Certb Certhouse | Monthly tuition | period 2026-10 | created 2026-09-20 | posted 2026-10-20",
+   "Certa Certhouse | Field trip | period 2026-09 | created 2026-08-26 | posted 2026-09-14"
+  ]
+ },
+ "counts": {
+  "attention": 0,
+  "scheduled": 5,
+  "posted": 138,
+  "cancelled": 3,
+  "legacy": 34
+ },
+ "rowsCarryResponsibility": 20,
+ "overviewException": "0Charges needing attention",
+ "band": "CHARGES 0Needs attention — 5Scheduled — 6Households —",
+ "views": {
+  "scheduled": {
+   "tab": "Scheduled5",
+   "hint": "Future-period charges. Each activates by itself when its billing period begins — nothing to do.",
+   "rows": 5,
+   "states": [
+    "scheduled"
+   ],
+   "sample": [
+    "Certb Certhouse | Certhouse Family | Monthly tuition | $1,450.00 | Oct 26–Nov 8, 2026 | Scheduled · activates Oct 26, 2026 | Not allocated",
+    "Tilly Tuition | W7 QA · Tuition Family | Monthly tuition | $1,200.00 | November 2026 | Scheduled · activates Nov 1, 2026 | Tess Tuition",
+    "Milo Monthly | W7 QA · Monthly Family | Materials | $18.00 | November 2026 | Scheduled · activates Nov 1, 2026 | Mara Monthly",
+    "Alvarez Household (demo) | Household charge | Field trip | $40.00 | November 2026 | Scheduled · activates Nov 1, 2026 | Split"
+   ],
+   "postButtons": 0,
+   "words": false,
+   "stateMarks": [
+    "scheduled",
+    "scheduled",
+    "scheduled",
+    "scheduled",
+    "scheduled"
+   ],
+   "headClass": "ledger-head"
+  },
+  "attention": {
+   "tab": "Needs attention0",
+   "hint": "Only charges a person must decide: a configured posting review, or an activation that failed. Open one to act.",
+   "rows": 0,
+   "states": [],
+   "sample": [],
+   "postButtons": 0,
+   "words": false,
+   "stateMarks": [],
+   "headClass": "ledger-head"
+  },
+  "posted": {
+   "tab": "Posted138",
+   "hint": "Active charges, newest first.",
+   "rows": 138,
+   "states": [
+    "posted"
+   ],
+   "sample": [
+    "Certb Certhouse | Certhouse Family | Monthly tuition | $1,450.00 | October 2026 | Posted Oct 20, 2026 | Not allocated",
+    "Milo Monthly | W7 QA · Monthly Family | Materials | $18.00 | October 2026 | Posted Oct 20, 2026 | Mara Monthly",
+    "Certa Certhouse | Certhouse Family | Monthly tuition | $185.00 | Oct 12–25, 2026 | Posted Oct 20, 2026 | Certt Certhouse",
+    "Pbthree Automation | Automation Family | Monthly tuition | $195.00 | October 2026 | Posted Oct 20, 2026 | Not allocated"
+   ],
+   "postButtons": 0,
+   "words": false,
+   "stateMarks": [
+    "posted",
+    "posted",
+    "posted",
+    "posted",
+    "posted",
+    "posted",
+    "posted",
+    "posted",
+    "posted",
+    "posted"
+   ],
+   "headClass": "ledger-head"
+  },
+  "cancelled": {
+   "tab": "Cancelled3",
+   "hint": "Scheduled charges withdrawn before they activated. Kept on the record.",
+   "rows": 3,
+   "states": [
+    "cancelled"
+   ],
+   "sample": [
+    "Pathb Certopp | Certopp Family | Field trip | $40.00 | November 2026 | Cancelled Oct 17, 2026 | Not allocated",
+    "Ana Alvarez | Alvarez Household (demo) | Materials | $18.00 | November 2026 | Cancelled Oct 14, 2026 | Split",
+    "Ana Alvarez | Alvarez Household (demo) | Materials | $18.00 | November 2026 | Cancelled Oct 14, 2026 | Split"
+   ],
+   "postButtons": 0,
+   "words": false,
+   "stateMarks": [
+    "cancelled",
+    "cancelled",
+    "cancelled"
+   ],
+   "headClass": "ledger-head"
+  },
+  "legacy": {
+   "tab": "Legacy drafts34",
+   "hint": "Created before automatic posting, so they never activate on their own. Open one to post or cancel it.",
+   "rows": 34,
+   "states": [
+    "legacy"
+   ],
+   "sample": [
+    "Certb Certhouse | Certhouse Family | Field trip | $40.00 | November 2026 | Legacy draft | Not allocated",
+    "Pbfive Automation | Automation Family | Monthly tuition | $195.00 | September 2026 | Legacy draft | Not allocated",
+    "Pbfour Automation | Automation Family | Monthly tuition | $195.00 | September 2026 | Legacy draft | Not allocated",
+    "Pbthree Automation | Automation Family | Monthly tuition | $195.00 | September 2026 | Legacy draft | Not allocated"
+   ],
+   "postButtons": 0,
+   "words": false,
+   "stateMarks": [
+    "legacy",
+    "legacy",
+    "legacy",
+    "legacy",
+    "legacy",
+    "legacy",
+    "legacy",
+    "legacy",
+    "legacy",
+    "legacy"
+   ],
+   "headClass": "ledger-head"
+  }
+ },
+ "scheduledDetailAt300ms": {
+  "label": "Monthly tuition",
+  "provisional": true
+ },
+ "scheduledDetail": {
+  "text": "CHARGE DETAILS | Monthly tuition | Scheduled · Certhouse Family | APPLIES TO | Certb Certhouse | RESPONSIBILITY | Certt Certhouse · 100% | AMOUNT | Charge | $1,450.00 | DATES | SERVICE DATE | Nov 1, 2026 | BILLING PERIOD | Oct 26–Nov 8, 2026 | INVOICE DATE | Oct 19, 2026 | DUE DATE | Oct 31, 2026 | STATEScheduled · activates Oct 26, 2026 | RESPONSIBILITY & FUNDING | Certt Certhouse | 100% responsible | Expected funding · None | Manage funding | Manage responsibility | 1 responsible party from Sep 21, 2026. This charge is not divided under it yet. | HISTORY | Created by | QA Operator · Slot 1 |",
+  "post": 0
+ },
+ "legacyDetail": {
+  "state": "StateLegacy draft",
+  "post": {
+   "label": "Post legacy draft",
+   "reason": "unclassified",
+   "title": "Created before automatic posting, so why it was never posted was not recorded. It will not activate on its own: post it if the amount is right, or cancel it."
+  }
+ },
+ "accounts": {
+  "adjustmentsTable": false,
+  "postActions": 0,
+  "states": [
+   "posted:Posted",
+   "cancelled:Cancelled",
+   "scheduled:Scheduled"
+  ],
+  "oldWords": false,
+  "creditsLens": "1",
+  "creditRows": [
+   "— | Reversal | Household | 4060 · Discounts & Credits | -$200.00 | Posted | Not allocated | reversal of charge 94cc53af-2cfd-40d5-a58a-c84952d2788a"
+  ],
+  "reverseOffered": null
+ },
+ "focus": {
+  "adjustmentsTable": false,
+  "postActions": 0,
+  "states": [
+   "scheduled:Scheduled",
+   "posted:Posted",
+   "reversed:Reversed"
+  ],
+  "oldWords": false,
+  "creditsLens": "59",
+  "creditRows": [
+   "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$7.77 | Reversed | Not allocated | One-time · Oracle: goodwill against this obligation",
+   "— | Discount | Certa Certhouse | 4060 · Discounts & Credits | -$18.50 | Legacy draft | Not allocated | 10% of $185.00 · Ongoing",
+   "— | Reversal | Certb Certhouse | 4060 · Discounts & Credits | $12.34 | Reversed | Not allocated | adjustment · One-time · certification cleanup: restoring the household to where it was found",
+   "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$12.34 | Reversed | Not allocated | One-time · Certification: goodwill for a closure day",
+   "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$12.34 | Reversed | Not allocated | One-time · Certification: goodwill for a closure day",
+   "— | Reversal | Certb Certhouse | 4060 · Discounts & Credits | $12.34 | Posted | Not allocated | adjustment · One-time · Certification: recorded against the wrong enrolment",
+   "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$7.77 | Posted | Not allocated | One-time · Oracle: goodwill against this obligation",
+   "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$7.77 | Legacy draft | Not allocated | One-time · Oracle: goodwill against this obligation"
+  ],
+  "reverseOffered": {
+   "label": "Reverse adjustment",
+   "command": "billing.reverse_adjustment",
+   "record": "credit"
+  }
+ },
+ "writes": []
+}

@@ -1,0 +1,24 @@
+{
+  "database_target": "ikaxilmwmrmbagoidedu (NEXT_PUBLIC_SUPABASE_URL host for localhost app)",
+  "migrations": [
+    {
+      "file": "supabase/migrations/20260722140000_configuration_command_operations_make_available.sql",
+      "command": "Supabase MCP apply_migration name=configuration_command_operations_make_available project_id=ikaxilmwmrmbagoidedu",
+      "result": "success"
+    },
+    {
+      "file": "supabase/migrations/20260722153000_configuration_distribution_runs_publication_id.sql",
+      "command": "Supabase MCP apply_migration / execute_sql ALTER ADD publication_id",
+      "result": "success"
+    },
+    {
+      "file": "supabase/migrations/20260722154500_configuration_delivery_attempts_align_assign_rpc.sql",
+      "command": "Supabase MCP apply_migration / execute_sql ALTER align delivery columns",
+      "result": "success"
+    }
+  ],
+  "table_verification": "to_regclass('public.configuration_command_operations') = configuration_command_operations",
+  "production_command_uses_table": true,
+  "ephemeral_fallback_used_for_certification": false,
+  "notes": "No secrets recorded. Persisted operation sample in database-verification.json."
+}

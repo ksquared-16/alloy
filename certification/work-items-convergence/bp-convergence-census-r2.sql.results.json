@@ -1,0 +1,56 @@
+{
+  "trusted_host_action_id": "tha_1ecaa8db69a076",
+  "query_hash": "ef663f88f47192b76fc6e8131d2f896e504fdd8a0fb8ce80dae216b93a860831",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-10T21:58:05.783Z",
+    "question_ids": [
+      "bp_work_org_wide",
+      "cert_opportunity_position",
+      "tasks_on_cert_opportunity"
+    ],
+    "questions": {
+      "bp_work_org_wide": {
+        "question_id": "bp_work_org_wide",
+        "row_count": null,
+        "rows": [
+          {
+            "source": "manual",
+            "is_bp_stage_work": true,
+            "rows": 4
+          }
+        ]
+      },
+      "cert_opportunity_position": {
+        "question_id": "cert_opportunity_position",
+        "row_count": null,
+        "rows": [
+          {
+            "opportunity_id": "468a5a95-dcfa-45ab-9829-34709dd9a154",
+            "status_key": "new",
+            "stage_key": "lead",
+            "work_unit_id": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37"
+          }
+        ]
+      },
+      "tasks_on_cert_opportunity": {
+        "question_id": "tasks_on_cert_opportunity",
+        "row_count": null,
+        "rows": [
+          {
+            "task_id": "a3cfcbee-14a5-4761-9181-d8c8cfca2dca",
+            "source": "manual",
+            "status": "open",
+            "is_bp_stage_work": true,
+            "work_intent_key": "contact_family",
+            "lifecycle_stage_key": "lead",
+            "operating_plan_template_key": "contact_family",
+            "has_assignee": true,
+            "has_due": true
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

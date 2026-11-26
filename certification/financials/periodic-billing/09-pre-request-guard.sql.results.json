@@ -1,0 +1,133 @@
+{
+  "trusted_host_action_id": "tha_bc0f1df9f2970e",
+  "query_hash": "7a4904b50451f31cd6884c5d363ee797a07faab9e97b4d6165440472cff8939f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:57:04.288Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_bc0f1df9f2970e",
+    "query_hash": "7a4904b50451f31cd6884c5d363ee797a07faab9e97b4d6165440472cff8939f",
+    "authorization_id": "grnt_a9c584c2f6d6466e",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:57:05.966Z",
+    "question_ids": [
+      "specimen",
+      "certhouse_guard",
+      "schedule"
+    ],
+    "questions": {
+      "specimen": {
+        "question_id": "specimen",
+        "row_count": null,
+        "rows": [
+          {
+            "term": {
+              "term_id": "ef1e0159-63b8-4879-8fb4-9e61aba0a283",
+              "cadence": "weekly",
+              "amount_cents": 19500,
+              "effective_start": "2026-09-22",
+              "state": "accepted",
+              "agreement": "771c085f-d145-4650-adee-4653db661975"
+            },
+            "tuition_charges": 0,
+            "today_utc": "2026-09-22",
+            "now": "2026-09-22 01:57:05.886046+00"
+          }
+        ]
+      },
+      "certhouse_guard": {
+        "question_id": "certhouse_guard",
+        "row_count": null,
+        "rows": [
+          {
+            "certa": [
+              {
+                "service_date": "2026-09-01",
+                "status": "draft",
+                "cents": 18500
+              },
+              {
+                "service_date": "2026-09-08",
+                "status": "draft",
+                "cents": 18500
+              },
+              {
+                "service_date": "2026-09-15",
+                "status": "draft",
+                "cents": 18500
+              },
+              {
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "cents": 18500
+              },
+              {
+                "service_date": "2026-09-29",
+                "status": "draft",
+                "cents": 18500
+              }
+            ],
+            "certb": [
+              {
+                "service_date": "2026-09-01",
+                "status": "posted",
+                "cents": 145000
+              },
+              {
+                "service_date": "2026-10-01",
+                "status": "draft",
+                "cents": 145000
+              }
+            ],
+            "certhouse_terms": [
+              {
+                "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                "cadence": "monthly",
+                "cents": 145000,
+                "state": "accepted"
+              },
+              {
+                "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                "cadence": "weekly",
+                "cents": 18500,
+                "state": "overridden"
+              }
+            ]
+          }
+        ]
+      },
+      "schedule": {
+        "question_id": "schedule",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "id": "f5d1b0c3-dede-41de-9964-11e95d5f032b",
+                "org_id": null,
+                "next_due_at": null,
+                "is_active": true,
+                "label": "clock_activation_certification"
+              },
+              {
+                "id": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "next_due_at": "2026-09-23 01:13:18.353+00",
+                "is_active": true,
+                "label": "financials_periodic_billing"
+              }
+            ],
+            "open_occurrences": 0
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

@@ -20,16 +20,16 @@ describe("drawerViewModelFeatureGates", () => {
         expect(adminV2ChildDrawerVmCutoverEnabled()).toBe(true);
     });
 
-    it("kill switch disables person VM only", () => {
+    it("kill switch env no longer disables VM cutover", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH", "1");
-        expect(adminV2PersonDrawerVmCutoverEnabled()).toBe(false);
+        expect(adminV2PersonDrawerVmCutoverEnabled()).toBe(true);
         expect(adminV2OpportunityDrawerVmCutoverEnabled()).toBe(true);
         expect(adminV2ChildDrawerVmCutoverEnabled()).toBe(true);
     });
 
-    it("kill switch disables opportunity VM only", () => {
+    it("opportunity kill switch env no longer disables VM cutover", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH", "1");
-        expect(adminV2OpportunityDrawerVmCutoverEnabled()).toBe(false);
+        expect(adminV2OpportunityDrawerVmCutoverEnabled()).toBe(true);
         expect(adminV2PersonDrawerVmCutoverEnabled()).toBe(true);
     });
 });

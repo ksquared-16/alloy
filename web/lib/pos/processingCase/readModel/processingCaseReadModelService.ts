@@ -11,6 +11,9 @@
  * persisted.
  */
 
+import { readRequestedTour } from "@/lib/tours/publicCalendar/requestedTour";
+import { readIntakeMarketingConsent } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+import { presentIntakeMarketingConsent } from "@/lib/communications/preferences/intakeMarketingConsentPresentation";
 import type {
     ProcessingCaseCountQuery,
     ProcessingCaseDetail,
@@ -28,6 +31,8 @@ import { parseStoredExtraction } from "../extraction/processingCaseExtractionDb"
 import { parseStoredDocumentFormPreview } from "../structure/documentFormPreviewDb";
 import { parseStoredFormDraftPreview } from "../formDraft/formDraftPreviewDb";
 import { parseFormDraftCreated } from "../formDraft/createFormFromCaseDraft";
+import { resolveDetectionMode } from "../formDraft/detectionModeLabel";
+import { parseProcessingIntentFromMetadata } from "@/lib/pos/processingImportIntent";
 
 function toRef(row: ReadModelSourceRow): SourceRef {
     return { kind: row.source_kind, id: row.source_id, role: row.role, linkedAt: row.linked_at };
@@ -80,7 +85,28 @@ export async function listProcessingCaseQueue(
             statusChangedAt: c.status_changed_at,
             primarySource: primary,
             relatedSourceCount: g?.relatedCount ?? 0,
+            subjectRemoved: c.processing_case_subject_removed === true,
+            rejected: ((c.metadata as Record<string, unknown> | null)?.disposition as { outcome?: unknown } | undefined)?.outcome === "rejected",
             sourceDisplay,
+            caseTitle: (() => {
+                const raw = (c.metadata as Record<string, unknown> | null)?.case_title;
+                return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+            })(),
+            adminCategory: (() => {
+                const raw = (c.metadata as Record<string, unknown> | null)?.admin_category;
+                return typeof raw === "string" && raw.trim() ? raw.trim().toLowerCase() : null;
+            })(),
+            formDraftSummary: (() => {
+                const draft = parseStoredFormDraftPreview(c.metadata);
+                const created = parseFormDraftCreated(c.metadata);
+                if (!draft && !created) return null;
+                return {
+                    detectionMode: draft ? resolveDetectionMode(draft) : "unknown",
+                    questionCount: draft?.fields.length ?? 0,
+                    sectionCount: draft?.sections.length ?? 0,
+                    generatedFormId: created?.form_id ?? null,
+                };
+            })(),
         };
     });
 
@@ -124,11 +150,27 @@ export async function getProcessingCaseDetail(
         createdAt: c.created_at,
         updatedAt: c.updated_at,
         archivedAt: c.archived_at,
+        subjectRemoved: c.processing_case_subject_removed === true,
+        disposition: (() => {
+            const d = (c.metadata as Record<string, unknown> | null)?.disposition as Record<string, unknown> | undefined;
+            if (!d || typeof d.outcome !== "string") return null;
+            const s = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
+            return { outcome: d.outcome, reasonLabel: s(d.reason_label), note: s(d.note), at: s(d.at) };
+        })(),
         sources,
+        caseTitle: (() => {
+            const raw = (c.metadata as Record<string, unknown> | null)?.case_title;
+            return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+        })(),
         classification: parseStoredClassification(c.metadata),
         extraction: parseStoredExtraction(c.metadata),
         documentFormPreview: parseStoredDocumentFormPreview(c.metadata),
         formDraftPreview: parseStoredFormDraftPreview(c.metadata),
         formDraftCreated: parseFormDraftCreated(c.metadata),
+        processingIntent: parseProcessingIntentFromMetadata(c.metadata),
+        // Present only when the case was analysed as a packet. Read, never recomputed here.
+        packetIntake: ((c.metadata as Record<string, unknown> | null)?.packet_intake ?? null) as unknown,
+        requestedTour: readRequestedTour(c.metadata),
+        marketingConsent: presentIntakeMarketingConsent(readIntakeMarketingConsent(c.metadata)),
     };
 }

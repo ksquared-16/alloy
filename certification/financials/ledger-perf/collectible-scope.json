@@ -1,0 +1,14 @@
+{
+  "serverTiming": "auth;dur=439.6, perm;dur=226.9, collectible;dur=2841.7, payments;dur=123.2, policies;dur=122.2, read;dur=0.2, identity;dur=0.5, serialize;dur=0.9, total;dur=3755.1",
+  "periodKey": "2026-09",
+  "totalRows": 79,
+  "byLifecycleStatus": {
+    "scheduled": 3,
+    "posted": 53,
+    "draft": 18,
+    "reversed": 5
+  },
+  "postedRows": 53,
+  "postedThisPeriod": 49,
+  "bytes": 218659
+}

@@ -105,6 +105,28 @@ async function countLinkedJobs(
     return countByEq(supabase, "jobs", { opportunity_id: opportunityId }, orgId);
 }
 
+/**
+ * Enrollment journeys whose child is in this household. A journey's child and participation are
+ * polymorphic references, so deleting them would leave the journey, its packet session and its participant
+ * link pointing at nothing (staging: 254 such journeys). The database now refuses that delete
+ * (child_has_enrollment_journey); this states it before the operator confirms, rather than failing mid-way.
+ */
+async function countEnrollmentJourneysForChildren(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerMemberIds: readonly string[]
+): Promise<number> {
+    if (customerMemberIds.length === 0) return 0;
+    const { count, error } = await supabase
+        .from("process_instances")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .eq("subject_type", "child")
+        .in("subject_id", [...customerMemberIds]);
+    if (error) throw new Error(`deletion preview: journeys could not be read (${error.message})`);
+    return count ?? 0;
+}
+
 async function countLinkedDiscountRedemptions(
     supabase: SupabaseClient,
     orgId: string,
@@ -384,7 +406,8 @@ async function resolveFormSubmissionIds(
     orgId: string,
     opportunityId: string,
     deletableCustomerId: string | null,
-    deletablePersonIds: readonly string[]
+    deletablePersonIds: readonly string[],
+    deletableCustomerMemberIds: readonly string[] = [],
 ): Promise<string[]> {
     const ids = new Set<string>();
     const oppSubs = await selectIdsByIn(supabase, "form_submissions", "opportunity_id", [opportunityId], orgId);
@@ -416,19 +439,76 @@ async function resolveFormSubmissionIds(
         }
     }
 
+    // R5 (hosted qar_4246ac22ece0): a submission about a CHILD alone (an admin-created submission names only
+    // customer_member_id) belongs to the child this deletion removes. It was left behind — answers, and its generated
+    // PDF through form_submission_documents — once the child row was gone. Only deletable children: a child kept
+    // because something else still references it keeps its submissions.
+    for (const part of chunkIds(deletableCustomerMemberIds)) {
+        const { data, error } = await supabase
+            .from("form_submissions")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("customer_member_id", part);
+        if (error) throw new Error(`load form_submissions by child: ${error.message}`);
+        for (const row of data ?? []) {
+            const id = typeof row.id === "string" ? row.id.trim() : "";
+            if (id) ids.add(id);
+        }
+    }
+
     return [...ids];
 }
 
+/**
+ * CANDIDATE documents of the subjects this deletion removes. The candidates are:
+ *   * documents whose subject is one of the deleted subjects: the opportunity, deletable persons, the
+ *     deletable customer and deletable customer members (children's records were missed before);
+ *   * documents linked to the form submissions this deletion removes (generated PDFs, uploads, drawn signatures).
+ *     Their junctions go with the submissions; without them the documents would dangle.
+ *
+ * Candidates are not deletions. `disposeDocumentsOfDeletedSubjects` (Documents) decides each one: it keeps any
+ * document another subject, consumer, retention or legal hold still relies on, and deletes the rest WITH their
+ * stored files, audited.
+ */
 async function resolveDocumentIds(
     supabase: SupabaseClient,
     orgId: string,
     opportunityId: string,
     deletableCustomerId: string | null,
-    deletablePersonIds: readonly string[]
+    deletablePersonIds: readonly string[],
+    deletableCustomerMemberIds: readonly string[],
+    formSubmissionIds: readonly string[]
 ): Promise<string[]> {
-    const entityIds = [opportunityId, ...deletablePersonIds];
+    const entityIds = [opportunityId, ...deletablePersonIds, ...deletableCustomerMemberIds];
     if (deletableCustomerId) entityIds.push(deletableCustomerId);
-    return selectIdsByIn(supabase, "documents", "entity_id", entityIds, orgId);
+    const [owned, linked, drawn] = await Promise.all([
+        selectIdsByIn(supabase, "documents", "entity_id", entityIds, orgId),
+        selectColumnByIn(supabase, "form_submission_documents", "document_id", "form_submission_id", formSubmissionIds, orgId),
+        selectColumnByIn(supabase, "form_submission_signatures", "drawn_asset_document_id", "form_submission_id", formSubmissionIds, orgId),
+    ]);
+    return [...new Set([...owned, ...linked, ...drawn])];
+}
+
+/** Non-null values of `column` from `table` rows whose `filterColumn` is one of `ids`, in this org. */
+async function selectColumnByIn(
+    supabase: SupabaseClient,
+    table: string,
+    column: string,
+    filterColumn: string,
+    ids: readonly string[],
+    orgId: string
+): Promise<string[]> {
+    if (!ids.length) return [];
+    const out = new Set<string>();
+    for (const part of chunkIds(ids)) {
+        const { data, error } = await supabase.from(table).select(column).eq("org_id", orgId).in(filterColumn, part);
+        if (error) throw new Error(`select ${table}.${column}: ${error.message}`);
+        for (const row of (data ?? []) as unknown as Array<Record<string, unknown>>) {
+            const v = row[column];
+            if (typeof v === "string" && v.trim()) out.add(v.trim());
+        }
+    }
+    return [...out];
 }
 
 export async function resolveOpportunityLeadDeletionGraph(
@@ -445,12 +525,16 @@ export async function resolveOpportunityLeadDeletionGraph(
         countLinkedDiscountRedemptions(supabase, orgId, opportunityId),
     ]);
 
-    const blocked = linkedJobs > 0 || linkedDiscountRedemptions > 0;
+    const enrollmentJourneys = await countEnrollmentJourneysForChildren(supabase, orgId, household.customerMemberIds);
+
+    const blocked = linkedJobs > 0 || linkedDiscountRedemptions > 0 || enrollmentJourneys > 0;
     const blockReason =
         linkedJobs > 0 ?
             "This lead has linked jobs. Financial and job record deletion is not supported in this workflow."
         : linkedDiscountRedemptions > 0 ?
             "This lead has discount redemptions. Remove or reassign them before deleting this record."
+        : enrollmentJourneys > 0 ?
+            "A child in this family has started Enrollment (paperwork or an Enrollment record). Archive the lead instead — deleting it would leave that Enrollment history pointing at nothing."
         :   null;
 
     let deletableCustomerId: string | null = null;
@@ -478,11 +562,19 @@ export async function resolveOpportunityLeadDeletionGraph(
         if (!hasRefs) deletablePersonIds.push(personId);
     }
 
-    const [threadIds, formSubmissionIds, documentIds] = await Promise.all([
+    const [threadIds, formSubmissionIds] = await Promise.all([
         resolveCommunicationThreadIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
-        resolveFormSubmissionIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
-        resolveDocumentIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
+        resolveFormSubmissionIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds, deletableCustomerMemberIds),
     ]);
+    const documentIds = await resolveDocumentIds(
+        supabase,
+        orgId,
+        opportunityId,
+        deletableCustomerId,
+        deletablePersonIds,
+        deletableCustomerMemberIds,
+        formSubmissionIds
+    );
 
     return {
         orgId,

@@ -1,0 +1,544 @@
+{
+  "schema_version": "vacilando.compiled_mission.v1",
+  "compiledMissionId": "cmp_5d48bcfda573a935",
+  "missionId": "msn_2d054741a54698fa4c",
+  "briefVersion": 1,
+  "briefContentHash": "2c0b0b8fee88469de91e37587a3bb242",
+  "title": "Access & Identity V2 — Discovery & Specification",
+  "objective": "Access and Roles mission > **Create a complete, understandable, and configurable Identity, Authentication, Roles & Access system that lets an organization control who can log in, what operational surfaces they can see, what records they can access, and what actions they can perform—without exposing technical permission architecture to operators.** The Director should not begin implementation immediately. The mission should run through four stages. The worker should inspect and document: * Current Users, Roles, Access, Departments, Locations, and invitation/login screens. * Current role and permission tables, grants, permission keys, access profiles, RLS policies, and route assertions. * Every Settings and operator surface currently available. * Every registered operational command/action and whether access is enforced server-side. * Current authentication methods and account lifecycle flows. * How staff, parents, guardians, emergency contacts, children, vendors, and other person types currently relate to `persons`, accounts, and auth identities. * Known legacy or overlapping concepts. This must produce an evidence-backed matrix, not just a code summary: | Layer             | Questions                                                                                      | | ----------------- | ---------------------------------------------------------------------------------------------- | | Authentication    | How does someone prove identity and log in?                                                    | | User account      | Does this person have an Alloy account? Is it active, invited, locked, expired?                | | Person identity   | Which canonical `person` does the account represent?                                           | | Person type       | Staff, parent, guardian, contact, partner, vendor, etc.?                                       | | Role              | What job or responsibility bundle do they hold?                                                | | Surface access    | What workspaces, processes, settings areas, and modules can they see?                          | | Record scope      | Which organizations, locations, departments, households, children, or records can they access? | | Capability access | What actions can they execute?                                                                 | | Field access      | Which sensitive fields can they view or edit?                                                  | | Administration    | What access can they grant to others?                                                          | | Audit             | Who changed access, when, and why?                                                             | The canonical identity model already establishes `persons` as the human identity owner, with roles and responsibilities represented through relationships rather than copied identity records.  That principle needs to carry into users: **a user account should authenticate a person; it should not become another person database.** I would structure the product around four distinct concepts. A **User** is a login identity connected to a canonical Person. User lifecycle should include: * Draft * Invitation pending * Active * Temporarily suspended * Locked * Deactivated * Invitation expired User creation should support: * Create a new staff person and user together. * Add login access to an existing staff person. * Add parent/guardian portal access to an existing person. * Add limited access for another contact. * Invite by email or mobile number. * Create without invitation and send access later. * Assign one or several roles. * Assign organization/location/department/record scope. * Preview effective access before activation. We should not create separate “parent users,” “staff users,” and “contact users” as separate identity models. They are persons with different relationships, roles, scopes, and available experiences. A **Role** is a reusable access package. Roles should own defaults for: * Surface visibility * Workspaces and Business Processes * Settings areas * Actions/capabilities * Record types * Field visibility/editability * Administrative abilities * Default access scope Roles should be understandable presets such as: * Organization Administrator * Regional Leader * Center Director * Enrollment Specialist * Teacher * Billing Specialist * Parent / Guardian * Authorized Contact * Read-only Auditor Roles remain configuration. Security invariants and enforcement remain code and RLS-owned, consistent with Alloy’s rule that configuration steers while code owns invariants.  A user’s effective access should be computed from: ```text Authentication state + Person relationship + Assigned roles + Explicit grants + Explicit restrictions + Organization scope + Location / department scope + Record relationship scope + Field policy = Effective access ``` This should support granular scopes such as: * Entire organization * Selected regions * Selected locations * Selected departments * Records assigned to the user * Records associated with the user’s children * Records where the person has a specified relationship * Specific Business Processes or Work Views * Selected configuration domains * View-only versus manage * Temporary access with an expiration date Explicit **deny/restriction** needs a careful rule. I would initially allow role inheritance plus user-specific additions, but avoid a complicated deny-precedence engine unless the inventory proves it is necessary. Vacilando should make that determination during product modeling. Authentication options should be organization-configurable, not hardcoded to username/password. Target authentication capabilities: * Email and password * Passwordless email link * Email one-time code * SMS one-time code * Google * Microsoft * Apple where relevant for parent experience * Enterprise SSO/SAML as an advanced capability * MFA policies by role or risk level * Session timeout and trusted-device policy * Forced password reset * Account recovery * Invitation acceptance * Visible/hide-password control on every password field The password visibility control is a straightforward required baseline. The wider login model is the more consequential architecture and product decision. I would create a single **Access & Identity** configuration workspace with these sections: ```text Access & Identity ├── Overview ├── Users ├── Roles ├── Access Policies ├── Authentication ├── Invitations └── Audit Log ``` **Overview** Operational summary: active users, pending invitations, locked accounts, missing assignments, excessive access warnings, and authentication health. **Users** Dense list with person, type, status, roles, access scope, last login, MFA, and invitation state. Selecting a user opens an intentional configuration panel—not a raw field form. **Roles** Role catalog and role editor. The role editor should present meaningful access groups rather than thousands of disconnected checkboxes. **Access Policies** Reusable policies such as “Center Directors can manage all records at assigned locations” or “Parents can view only children for whom they have portal visibility.” **Authentication** Enabled login methods, password policy, MFA policy, invitation behavior, session policy, and identity-provider configuration. **Invitations** Pending, accepted, expired, failed, and resend/revoke operations. **Audit Log** Role changes, access changes, invitation activity, login events, account lockouts, and administrator actions. Your instinct is correct that surfaces should tie to roles. But surfaces alone are insufficient. A user could be blocked from seeing the Billing workspace while still calling a billing API unless capability and server access are separately enforced. Conversely, someone might need a Billing card in a record without access to the full Billing workspace. The access model therefore needs four layers: 1. **Navigation and surface visibility** 2. **Record/data scope** 3. **Operational capability/action permission** 4. **Field-level view/edit policy** Surface configuration controls what appears. Permission and scope enforcement controls what is actually allowed. That follows Alloy’s existing architecture: actions are registered capabilities with many placements, and the server remains authoritative regardless of where the command appears.  The Director should receive the mission, doctrine, constraints, and acceptance criteria. It should then create specialized work rather than handing one giant prompt to a coding worker. Suggested worker breakdown: | Worker                   | Responsibility                                                 | | ------------------------ | -------------------------------------------------------------- | | Product inventory worker | Existing UI, workflows, terminology, friction                  | | Architecture worker      | Auth, person-user relationship, RBAC, RLS, scopes, inheritance | | Security worker          | Route/API/action enforcement and privilege-escalation risks    | | Surface inventory worker | Full catalog of operator and configuration surfaces            | | Product design worker    | Information architecture, user flows, role/access editor       | | Implementation worker    | Approved slices only                                           | | QA worker                | Effective-access tests, security tests, visual/e2e validation  | Documents should be scoped by authority: * Canonical doctrine is read-only unless the mission explicitly requires an amendment. * Existing implementation and schema are evidence. * Sprint documents contain the inventory, gap analysis, product specification, decisions, implementation slices, and QA evidence. * Workers should not independently reinterpret roles, identity, or access. The Director owns synthesis. The mission must have measurable acceptance criteria before coding begins. * An administrator can create or link a person and grant login access. * Staff, parents, guardians, and other supported person types can receive appropriate access without identity duplication. * Roles can control surfaces, actions, records, fields, and administration. * User-specific scope can be previewed before saving. * Authentication methods are configurable. * Password fields include show/hide. * Invitations, suspension, lockout, deactivation, and recovery are complete. * Effective access is understandable in operator language. * Every protected route has a server-side access assertion. * Every registered command verifies authorization independently of UI placement. * RLS and API scopes agree. * Hidden surfaces cannot be accessed directly through URLs. * Cross-location, cross-org, cross-child, and cross-household leakage tests pass. * Privilege escalation and self-role-edit cases are covered. * Audit events exist for consequential access changes. * No raw permission-key wall as the default role editor. * Common roles can be configured quickly. * Advanced granularity remains available progressively. * Effective access can be explained: “Kelly can manage Enrollment for Bend and Redmond because of Center Director.” * Empty, inherited, restricted, conflicting, and expired states are visually clear. The Director should reject implementation as incomplete when: * A UI checkbox is added without enforcement evidence. * A permission exists but is not connected to a meaningful operator concept. * Parent access relies on household-wide assumptions instead of relationship scope. * A user account creates duplicate identity. * A role controls pages but not actions or data. * QA validates only the happy path. * A mock looks correct but the effective-access matrix disagrees. Do **not** ask Vacilando to build V2 immediately. The first mission should be: > **Discover and specify Access & Identity V2. Inventory the existing implementation, identify all authority paths and gaps, define the canonical product and security model, produce operator flows and implementation-ready specifications, and return a sequenced delivery plan. Do not materially implement the product except for disposable investigation tooling.** Its required outputs: 1. Existing-state inventory 2. Surface and capability access catalog 3. Person ↔ user ↔ role ↔ scope model 4. Authentication model 5. Effective-access resolution model 6. Product IA and principal flows 7. Security threat and enforcement matrix 8. Gap analysis 9. Decisions requiring approval 10. Sequenced implementation plan 11. Director acceptance rubric 12. QA and evidence plan",
+  "scope": {
+    "included": [
+      "Discovery and specification for Access & Identity V2",
+      "Reuse of accepted planning artifacts"
+    ],
+    "excluded": [
+      "Implementation beyond disposable investigation tooling"
+    ]
+  },
+  "exclusions": [
+    "Material product implementation (code/schema shipping)"
+  ],
+  "deliverables": [
+    {
+      "id": "d1_existing_state",
+      "title": "Existing-state inventory",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d1_existing_state"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d2_surface_catalog",
+      "title": "Surface and capability access catalog",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d2_surface_catalog"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d3_identity_model",
+      "title": "Person ↔ user ↔ role ↔ scope model",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d3_identity_model"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d4_authentication",
+      "title": "Authentication model",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d4_authentication"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d5_effective_access",
+      "title": "Effective-access resolution model",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d5_effective_access"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d6_product_ia",
+      "title": "Product IA and principal flows",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d6_product_ia"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d7_security_matrix",
+      "title": "Security threat and enforcement matrix",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d7_security_matrix"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d8_gap_analysis",
+      "title": "Gap analysis",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d8_gap_analysis"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d9_decisions",
+      "title": "Decisions requiring approval",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d9_decisions"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d10_sequence",
+      "title": "Sequenced implementation / QA plan",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d10_sequence"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d11_acceptance_rubric",
+      "title": "Director acceptance rubric",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d11_acceptance_rubric"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/vacilando-os/qa/access-identity-v2/07-director-acceptance-rubric.md",
+      "phaseId": "p_reuse_only"
+    },
+    {
+      "id": "d12_qa_evidence",
+      "title": "QA and evidence plan",
+      "status": "reused",
+      "dependsOn": [],
+      "acceptanceCriteriaIds": [
+        "AC_d12_qa_evidence"
+      ],
+      "evidenceRequirements": [
+        "document"
+      ],
+      "discipline": "Platform / Access",
+      "expectedPath": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "phaseId": "p_reuse_only"
+    }
+  ],
+  "deliverableDependencies": [],
+  "acceptanceCriteria": [
+    {
+      "id": "AC_reuse_confirmed",
+      "statement": "Operator confirms accepted Access & Identity artifacts satisfy the Mission Brief without new discovery.",
+      "evidenceType": "document"
+    }
+  ],
+  "evidenceRequirements": [
+    {
+      "acceptanceCriterionId": "AC_reuse_confirmed",
+      "evidenceType": "document"
+    }
+  ],
+  "workerDisciplines": [
+    "Platform / Access",
+    "Security",
+    "Operator experience",
+    "Runtime / Workflow"
+  ],
+  "executionPhases": [
+    {
+      "phaseId": "p_reuse_only",
+      "order": 1,
+      "title": "Confirm reused specification corpus",
+      "objective": "No new discovery deliverables remain — confirm accepted artifacts cover the Mission Brief.",
+      "deliverableIds": [
+        "d1_existing_state",
+        "d2_surface_catalog",
+        "d3_identity_model",
+        "d4_authentication",
+        "d5_effective_access",
+        "d6_product_ia",
+        "d7_security_matrix",
+        "d8_gap_analysis",
+        "d9_decisions",
+        "d10_sequence",
+        "d11_acceptance_rubric",
+        "d12_qa_evidence"
+      ],
+      "dependencies": [],
+      "kind": "validation"
+    }
+  ],
+  "expectedDecisions": [],
+  "knownAmbiguities": [
+    {
+      "code": "conflicting_instructions",
+      "severity": "conflict",
+      "message": "Mission Brief forbids implementation, but the ingested plan looked like implementation (or was a truncated shell)."
+    }
+  ],
+  "referencedAcceptedArtifacts": [
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Existing-state inventory",
+      "coversDeliverableIds": [
+        "d1_existing_state"
+      ],
+      "status": "reused",
+      "bytes": 34402
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md",
+      "title": "Surface and capability access catalog",
+      "coversDeliverableIds": [
+        "d2_surface_catalog"
+      ],
+      "status": "reused",
+      "bytes": 10571
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Person ↔ user ↔ role ↔ scope model",
+      "coversDeliverableIds": [
+        "d3_identity_model"
+      ],
+      "status": "reused",
+      "bytes": 43952
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+      "title": "Authentication model",
+      "coversDeliverableIds": [
+        "d4_authentication"
+      ],
+      "status": "reused",
+      "bytes": 13042
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Effective-access resolution model",
+      "coversDeliverableIds": [
+        "d5_effective_access"
+      ],
+      "status": "reused",
+      "bytes": 43952
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md",
+      "title": "Product IA and principal flows",
+      "coversDeliverableIds": [
+        "d6_product_ia"
+      ],
+      "status": "reused",
+      "bytes": 10416
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Security threat and enforcement matrix",
+      "coversDeliverableIds": [
+        "d7_security_matrix"
+      ],
+      "status": "reused",
+      "bytes": 34402
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "title": "Gap analysis",
+      "coversDeliverableIds": [
+        "d8_gap_analysis"
+      ],
+      "status": "reused",
+      "bytes": 34402
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "title": "Decisions requiring approval",
+      "coversDeliverableIds": [
+        "d9_decisions"
+      ],
+      "status": "reused",
+      "bytes": 43952
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "title": "Sequenced implementation / QA plan",
+      "coversDeliverableIds": [
+        "d10_sequence"
+      ],
+      "status": "reused",
+      "bytes": 49719
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/07-director-acceptance-rubric.md",
+      "title": "Director acceptance rubric",
+      "coversDeliverableIds": [
+        "d11_acceptance_rubric"
+      ],
+      "status": "reused",
+      "bytes": 11880
+    },
+    {
+      "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "title": "QA and evidence plan",
+      "coversDeliverableIds": [
+        "d12_qa_evidence"
+      ],
+      "status": "reused",
+      "bytes": 49719
+    }
+  ],
+  "compilationWarnings": [
+    {
+      "code": "conflicting_implement_vs_specify",
+      "severity": "conflict",
+      "message": "Specification work already exists and conflicts with the requested execution plan.",
+      "recommendation": "Reuse the accepted corpus — do not start an implementation phase."
+    },
+    {
+      "code": "truncated_brief_plan",
+      "message": "Ingested plan was a single truncated phase with empty outputs — compiler recovered structure from objective + accepted artifacts."
+    }
+  ],
+  "compilationErrors": [],
+  "compilationConfidence": 87,
+  "status": "ready",
+  "readyToExecute": true,
+  "report": {
+    "schema_version": "vacilando.compilation_report.v1",
+    "compiledMissionId": "cmp_5d48bcfda573a935",
+    "missionId": "msn_2d054741a54698fa4c",
+    "compiled_at": "2026-07-30T23:48:07.957Z",
+    "compiler_version": "vacilando.mission_compiler.brief.v1",
+    "inputs": {
+      "briefVersion": 1,
+      "briefContentHash": "2c0b0b8fee88469de91e37587a3bb242",
+      "acceptedArtifactRoots": [
+        "docs/platform/planning/access-identity-v2",
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2"
+      ],
+      "templates": [
+        "access_identity_discovery_v1"
+      ],
+      "platformCapabilities": [
+        "mission_control",
+        "claude_execution",
+        "decisions",
+        "evidence"
+      ],
+      "briefTitle": "Access and Roles mission > **Create a complete, understandable, and c…",
+      "forbidsImplementation": true,
+      "planTruncated": true
+    },
+    "accepted_artifacts_reused": [
+      {
+        "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+        "title": "Existing-state inventory",
+        "covers": [
+          "d1_existing_state"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md",
+        "title": "Surface and capability access catalog",
+        "covers": [
+          "d2_surface_catalog"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+        "title": "Person ↔ user ↔ role ↔ scope model",
+        "covers": [
+          "d3_identity_model"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+        "title": "Authentication model",
+        "covers": [
+          "d4_authentication"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+        "title": "Effective-access resolution model",
+        "covers": [
+          "d5_effective_access"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md",
+        "title": "Product IA and principal flows",
+        "covers": [
+          "d6_product_ia"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+        "title": "Security threat and enforcement matrix",
+        "covers": [
+          "d7_security_matrix"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+        "title": "Gap analysis",
+        "covers": [
+          "d8_gap_analysis"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+        "title": "Decisions requiring approval",
+        "covers": [
+          "d9_decisions"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+        "title": "Sequenced implementation / QA plan",
+        "covers": [
+          "d10_sequence"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/07-director-acceptance-rubric.md",
+        "title": "Director acceptance rubric",
+        "covers": [
+          "d11_acceptance_rubric"
+        ]
+      },
+      {
+        "path": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+        "title": "QA and evidence plan",
+        "covers": [
+          "d12_qa_evidence"
+        ]
+      }
+    ],
+    "new_work_identified": [],
+    "warnings": [
+      {
+        "code": "conflicting_implement_vs_specify",
+        "severity": "conflict",
+        "message": "Specification work already exists and conflicts with the requested execution plan.",
+        "recommendation": "Reuse the accepted corpus — do not start an implementation phase."
+      },
+      {
+        "code": "truncated_brief_plan",
+        "message": "Ingested plan was a single truncated phase with empty outputs — compiler recovered structure from objective + accepted artifacts."
+      }
+    ],
+    "conflicts": [
+      {
+        "code": "conflicting_instructions",
+        "severity": "conflict",
+        "message": "Mission Brief forbids implementation, but the ingested plan looked like implementation (or was a truncated shell)."
+      }
+    ],
+    "compiler_decisions": [
+      {
+        "decision": "normalized_title",
+        "reason": "Brief title was truncated or missing — recovered a display title from intent",
+        "value": "Access & Identity V2 — Discovery & Specification"
+      },
+      {
+        "decision": "catalog_access_identity_v1",
+        "reason": "Brief matches Access & Identity — applied discovery deliverable catalog and scanned accepted artifacts",
+        "reused": 12,
+        "remaining": 0
+      },
+      {
+        "decision": "resolve_conflict_by_scoping_to_gaps",
+        "reason": "Compiler prefers reuse + remaining discovery over contradictory implementation",
+        "remainingDeliverables": []
+      }
+    ],
+    "execution_summary": {
+      "phaseCount": 1,
+      "deliverableCount": 12,
+      "reuseCount": 12,
+      "executeCount": 0,
+      "readyToExecute": true,
+      "status": "ready"
+    },
+    "compilation_confidence": 87
+  },
+  "compiler_version": "vacilando.mission_compiler.brief.v1",
+  "compiled_at": "2026-07-30T23:48:07.884Z",
+  "compiled_by": "mission_compiler"
+}

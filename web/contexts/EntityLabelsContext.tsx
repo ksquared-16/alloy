@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -157,9 +157,12 @@ export function EntityLabelsProvider({
         void refreshEntityLabels();
     }, [seeded, refreshEntityLabels]);
 
-    return (
-        <EntityLabelsContext.Provider value={{ labels, loading, refreshEntityLabels }}>
-            {children}
-        </EntityLabelsContext.Provider>
+    // Stable value identity — `refreshEntityLabels` is memoized and labels/loading are state, so the
+    // whole runtime tree re-renders on a real label/loading change, not on every parent render.
+    const value = useMemo(
+        () => ({ labels, loading, refreshEntityLabels }),
+        [labels, loading, refreshEntityLabels],
     );
+
+    return <EntityLabelsContext.Provider value={value}>{children}</EntityLabelsContext.Provider>;
 }

@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseProcessModelV1, processModelV1Problem } from "@/lib/lifecycle/processModelV1";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
+import { financialRequirementRefusals } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
+import { listPublishedDocumentTypePolicies } from "@/lib/documents/configuration/documentTypeEnforcement";
+import { documentStageRequirementRefusals } from "@/lib/documents/requirements/documentStageRequirementRefs";
+import {
+    STAGE_ANNOTATION_PROJECTIONS,
+    isStageAnnotationProjectionKey,
+} from "@/lib/adminV2/runtime/focusPanel/businessProcess/stageAnnotationProjections";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import {
     departmentIdAllowed,
-    effectiveDepartmentScopeDimensions,
     scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
 import {
-    isLifecycleBuilderOwnedDepartmentMetadata,
-    mergeLifecycleBuilderOwnedIntoMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderOwned";
 import {
     activeLifecycleProcess,
@@ -18,8 +24,6 @@ import {
     createLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
     clampLifecycleDescription,
-    lifecycleWorkspaceTileDescription,
-    mergeLifecycleBuilderIntoMetadata,
     reorderStage,
     removeProcessFromConfig,
     removeStageFromProcess,
@@ -28,9 +32,36 @@ import {
     updateProcessName,
     updateProcessDescription,
     updateStageDescription,
+    updateStageAnnotations,
+    updateStageGrain,
+    ensureStageTransitionInConfig,
+    updateProcessCommandSet,
+    parseLifecycleBuilderV1,
     type LifecycleBuilderV1,
+    setProcessEntryPoint,
+    setStageRequirements,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { applyEnrollmentTemplateInConfig } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
+import { isProcessEntryIntent, PROCESS_ENTRY_INTENTS } from "@/lib/lifecycle/processEntryPointsV1";
+import { parseParticipantDecision } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    isAuthorableRequirementKind,
+    parseStageRequirementsV1,
+    validateWorkRequirementReferences,
+    REQUIREMENT_KIND_UNSUPPORTED_REASON_V1,
+} from "@/lib/lifecycle/stageRequirementsV1";
+import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import {
+    draftBuilder,
+    openDraft,
+    saveDraft,
+} from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
+import { applyEnrollmentTemplateWithCommandsInConfig } from "@/lib/businessProcessTemplates/enrollmentTemplateCommandSelection";
+import { trackAdoptionTemplateForProcessKey } from "@/lib/businessProcessTemplates/processTrackTemplates";
+import {
+    adoptProcessTracks,
+    evaluateProcessTrackAdoption,
+} from "@/lib/businessProcesses/configuration/processTrackAdoption";
+import { observedProcessInstanceStages } from "@/lib/businessProcesses/configuration/observedProcessInstanceStages";
 import { syncWorkUnitSortOrderFromBuilderStages } from "@/lib/lifecycle/syncWorkUnitSortOrderFromBuilder";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import {
@@ -40,6 +71,12 @@ import {
     lifecycleBuilderProcessNotFoundError,
     lifecycleBuilderV1MissingError,
 } from "@/lib/lifecycle/lifecycleBuilderRouteErrors";
+import { validateConfiguredStageReferences } from "@/lib/lifecycle/validateConfiguredStageReferences";
+import { evaluateStageGrainChange } from "@/lib/lifecycle/stageGrainChangePreflight";
+import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
+import { ensureBuilderCommandSetsOnSave } from "@/lib/lifecycle/ensureProcessCommandSetV1OnSave";
+import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 function processIdInConfig(config: LifecycleBuilderV1, processId: string): boolean {
     const pid = processId.trim();
@@ -79,35 +116,12 @@ async function loadDepartment(orgId: string, departmentId: string) {
     return data as { id: string; metadata?: unknown } | null;
 }
 
-async function saveConfig(orgId: string, departmentId: string, config: LifecycleBuilderV1) {
-    const row = await loadDepartment(orgId, departmentId);
-    if (!row) return null;
-    const metadata =
-        row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-            ? (row.metadata as Record<string, unknown>)
-            : {};
-    let nextMeta = mergeLifecycleBuilderIntoMetadata(metadata, config);
-    const active = activeLifecycleProcess(config);
-    if (active?.id && isLifecycleBuilderOwnedDepartmentMetadata(nextMeta)) {
-        nextMeta = mergeLifecycleBuilderOwnedIntoMetadata(nextMeta, { process_id: active.id });
-    }
-    const supabase = createAdminClient();
-    const syncTileDescription =
-        active && isLifecycleBuilderOwnedDepartmentMetadata(nextMeta)
-            ? lifecycleWorkspaceTileDescription(active.description, active.name)
-            : null;
-    const { error } = await supabase
-        .from("departments")
-        .update({
-            metadata: nextMeta,
-            ...(syncTileDescription != null ? { description: syncTileDescription } : {}),
-            updated_at: new Date().toISOString(),
-        })
-        .eq("id", departmentId)
-        .eq("org_id", orgId);
-    if (error) throw new Error(error.message);
-    return config;
-}
+/**
+ * `saveConfig` lived here and wrote `departments.metadata.lifecycle_builder_v1` directly. It is
+ * deleted rather than left unused: that field is a published projection guarded at the database,
+ * so the helper could not succeed, and an unused writer pointing at a forbidden target is exactly
+ * the thing a future caller reaches for. Authoring goes through `saveDraft`.
+ */
 
 function payloadFromConfig(config: LifecycleBuilderV1) {
     const process = activeLifecycleProcess(config);
@@ -125,7 +139,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
@@ -145,7 +159,31 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             );
         }
 
-        let config = lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        /**
+         * READ PRECEDENCE (Law 4, editor slices 2/3).
+         *
+         * This GET feeds the Stage editor's V2 fields — purpose, grain, description, operator
+         * guidance, action catalog — through the `stageRecord` prop. Reading the PUBLISHED
+         * projection here is what made a saved stage edit vanish on reload even though the stage
+         * save had correctly written the draft: the save wrote one place and this read looked at
+         * another.
+         *
+         * Found by browser certification, not by any unit test — the two halves only disagree once
+         * a real reload happens.
+         *
+         * The PATCH below still writes the projection directly; migrating it is the next editor
+         * family. That asymmetry is deliberate and temporary: reading the draft is strictly more
+         * correct today, because the draft is seeded from the projection and only ever diverges by
+         * an operator's own unpublished edits.
+         */
+        const editorState = await loadBusinessProcessEditorState(createAdminClient(), {
+            orgId: ctx.orgId,
+            departmentId,
+            actorUserId: ctx.userId,
+        });
+        const config =
+            (editorState ? parseLifecycleBuilderV1(editorState.draft_payload) : null) ??
+            lifecycleBuilderFromDepartmentMetadata(row.metadata);
 
         return NextResponse.json(payloadFromConfig(config));
     } catch (e) {
@@ -157,13 +195,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 export async function PATCH(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
@@ -193,7 +230,34 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             );
         }
 
-        let config = lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        /**
+         * AUTHORING WRITES THE DRAFT, NEVER THE PROJECTION.
+         *
+         * `departments.metadata.lifecycle_builder_v1` is a published projection, and
+         * `trg_departments_lifecycle_projection_guard` refuses any write to it that publication
+         * did not authorize. This route used to load from that projection and save straight back
+         * to it, so once a department had configuration at all, EVERY action here failed at the
+         * database — rename_stage as surely as update_stage_grain.
+         *
+         * The draft is the editable surface (`business_process_drafts`), and it already carries
+         * both conflict tokens: `draft_revision` for concurrent edits, `base_revision_id` for
+         * staleness against the publication. `openDraft` is idempotent and seeds the first draft
+         * from the current publication, so a department that has never been edited enters here
+         * with a faithful copy rather than an empty one.
+         */
+        const draftClient = createAdminClient();
+        const draft = await openDraft(draftClient, {
+            orgId: ctx.orgId,
+            departmentId,
+            actorUserId: ctx.userId,
+            // Never-published departments seed from the projection they already have.
+            templateSeed: lifecycleBuilderFromDepartmentMetadata(row.metadata),
+        });
+        const loadedDraftRevision = draft.draftRevision;
+        let config = draftBuilder(draft) ?? lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        let ensuredTransition: { transition_ref: string; target_stage_key: string; created: boolean } | null = null;
+        let commandSetChange: { added: string[]; removed: string[]; commands: string[] } | null = null;
+        let trackAdoption: Record<string, unknown> | null = null;
         const action = typeof body.action === "string" ? body.action.trim() : "";
 
         switch (action) {
@@ -204,7 +268,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 const description = descriptionRaw.trim()
                     ? clampLifecycleDescription(descriptionRaw)
                     : undefined;
-                config = createLifecycleProcess(name, config, { primary_entity, description });
+                // BP V2 S1 — absent means staged lifecycle (every existing caller). A model that is
+                // present but unreadable is refused here rather than created as a staged lifecycle.
+                const process_model =
+                    body.process_model === undefined || body.process_model === null
+                        ? undefined
+                        : parseProcessModelV1(body.process_model);
+                if (process_model === null) {
+                    return NextResponse.json(
+                        { error: processModelV1Problem(body.process_model) ?? "Invalid process_model" },
+                        { status: 400 },
+                    );
+                }
+                config = createLifecycleProcess(name, config, { primary_entity, description, process_model });
                 break;
             }
             case "clear_active_process": {
@@ -227,6 +303,222 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 config = updateProcessDescription(config, processId, description);
                 break;
             }
+            case "set_process_entry_point": {
+                // D-103. One intent, one stage, authored explicitly — the stage is never inferred,
+                // because inferring it would make "which stage does a journey start in" a thing the
+                // platform decided rather than a thing configuration says.
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const intentRaw = typeof body.intent === "string" ? body.intent.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                if (!stageKey) return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
+                if (!isProcessEntryIntent(intentRaw)) {
+                    return NextResponse.json(
+                        { error: `"${intentRaw}" is not an initiation this platform can supply.`, known_intents: [...PROCESS_ENTRY_INTENTS] },
+                        { status: 400 }
+                    );
+                }
+                const targetProcess = config.processes.find((p) => p.id === processId);
+                if (!targetProcess) return NextResponse.json({ error: "Unknown process" }, { status: 404 });
+                // Active, not merely present: publish refuses an entry stage that is not active, and
+                // catching it here means the operator hears it now instead of at publication.
+                const entryStage = targetProcess.stages.find((st) => st.key === stageKey && st.is_active);
+                if (!entryStage) {
+                    return NextResponse.json(
+                        { error: `Stage "${stageKey}" is not an active stage of this process.` },
+                        { status: 400 }
+                    );
+                }
+                config = setProcessEntryPoint(config, processId, intentRaw, stageKey);
+                break;
+            }
+            case "set_work_template_participant_decisions": {
+                /*
+                 * Per-child paths out of a family-grain stage.
+                 *
+                 * A participant decision is child-grain BY DEFINITION on a template that may sit on a
+                 * family stage — that asymmetry is the point: the family stays on the family track
+                 * while each child moves on its own. It was fully consumed (parsed, validated,
+                 * projected, executed) and authorable nowhere, which is why six legitimate
+                 * family→child paths were configured as stage transitions the grain rule correctly
+                 * refuses.
+                 *
+                 * Replaces the template's set intentionally, for the same reason
+                 * `set_stage_requirements` does: row-merging would make removal inexpressible.
+                 */
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                const templateKey = typeof body.template_key === "string" ? body.template_key.trim() : "";
+                if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                if (!stageKey) return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
+                if (!templateKey) return NextResponse.json({ error: "template_key is required" }, { status: 400 });
+                if (!Array.isArray(body.decisions)) {
+                    return NextResponse.json({ error: "decisions must be an array" }, { status: 400 });
+                }
+                const targetProcess = config.processes.find((p) => p.id === processId);
+                if (!targetProcess) return NextResponse.json({ error: "Unknown process" }, { status: 404 });
+                const targetStage = targetProcess.stages.find((st) => st.key === stageKey);
+                if (!targetStage) return NextResponse.json({ error: `Unknown stage "${stageKey}"` }, { status: 404 });
+                const plan = targetStage.stage_operating_plan_v1;
+                const template = plan?.work_templates?.find((w) => w.template_key === templateKey);
+                if (!plan || !template) {
+                    return NextResponse.json({ error: `Unknown work template "${templateKey}" on "${stageKey}"` }, { status: 404 });
+                }
+
+                // Delegate to the ONE parser the runtime reads with — never a second definition.
+                const parsedDecisions = (body.decisions as unknown[]).map((row) => parseParticipantDecision(row));
+                if (parsedDecisions.some((d) => d === null)) {
+                    return NextResponse.json(
+                        {
+                            error:
+                                "One or more per-child paths are not readable — each needs a decision key, an action, "
+                                + "a child subject and at least one target.",
+                        },
+                        { status: 400 },
+                    );
+                }
+                const decisions = parsedDecisions as NonNullable<(typeof parsedDecisions)[number]>[];
+                // A duplicate identity collides in audit, idempotency and the operator row key at
+                // once, and the canonical parser drops the second silently — which for AUTHORING
+                // would store fewer paths than the operator wrote.
+                const keys = new Set(decisions.map((d) => d.decision_key));
+                if (keys.size !== decisions.length) {
+                    return NextResponse.json({ error: "Two per-child paths share the same key." }, { status: 400 });
+                }
+
+                config = {
+                    ...config,
+                    processes: config.processes.map((p) =>
+                        p.id !== processId
+                            ? p
+                            : {
+                                  ...p,
+                                  stages: p.stages.map((st) =>
+                                      st.key !== stageKey
+                                          ? st
+                                          : {
+                                                ...st,
+                                                stage_operating_plan_v1: {
+                                                    ...plan,
+                                                    work_templates: plan.work_templates.map((w) =>
+                                                        w.template_key !== templateKey
+                                                            ? w
+                                                            : { ...w, participant_decisions: decisions },
+                                                    ),
+                                                },
+                                            },
+                                  ),
+                              },
+                    ),
+                };
+                break;
+            }
+            case "set_stage_requirements": {
+                // Replaces the whole authored section for one stage. An authored empty array is a
+                // legitimate statement ("this stage requires nothing") and stays distinct from a
+                // stage that never authored one, where the legacy projection still answers.
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                if (!stageKey) return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
+                if (!Array.isArray(body.requirements)) {
+                    return NextResponse.json({ error: "requirements must be an array" }, { status: 400 });
+                }
+                const targetProcess = config.processes.find((p) => p.id === processId);
+                if (!targetProcess) return NextResponse.json({ error: "Unknown process" }, { status: 404 });
+                if (!targetProcess.stages.some((st) => st.key === stageKey)) {
+                    return NextResponse.json({ error: `Unknown stage "${stageKey}"` }, { status: 404 });
+                }
+                const parsed = parseStageRequirementsV1({ version: 1, requirements: body.requirements });
+                if (!parsed) return NextResponse.json({ error: "requirements could not be read" }, { status: 400 });
+                // The canonical parser SKIPS a row it cannot read. That is right for reading stored
+                // configuration and wrong for authoring: silently accepting four of five would tell
+                // the operator their fifth requirement exists when it does not.
+                if (parsed.requirements.length !== body.requirements.length) {
+                    return NextResponse.json(
+                        { error: "One or more requirements are not readable — each needs a unique requirement_id, a known kind with its reference, and a level." },
+                        { status: 400 }
+                    );
+                }
+                /*
+                 * A work requirement must name work THIS STAGE produces. The runtime reports state
+                 * for the template keys in the stage's own operating plan, so a requirement naming
+                 * anything else would wait forever on work that never appears here — an operator
+                 * meeting a stage they cannot leave, with a blocker pointing at no button.
+                 */
+                const stageRecord = targetProcess.stages.find((st) => st.key === stageKey);
+                const workRefusals = validateWorkRequirementReferences(
+                    parsed.requirements,
+                    (stageRecord?.stage_operating_plan_v1?.work_templates ?? []).map((t) => t.template_key),
+                );
+                if (workRefusals.length) {
+                    return NextResponse.json(
+                        {
+                            error: workRefusals.map((r) => r.detail).join(" "),
+                            code: "unknown_work_template",
+                            refusals: workRefusals,
+                        },
+                        { status: 422 },
+                    );
+                }
+                /*
+                 * A financial requirement must name a charge template Financials actually has — a
+                 * missing one would only surface when a family's fee could not be resolved.
+                 */
+                if (parsed.requirements.some((r) => r.ref.kind === "financial")) {
+                    const financialRefusals = financialRequirementRefusals(
+                        parsed.requirements,
+                        await listChargeTemplates(createAdminClient(), ctx.orgId),
+                    );
+                    if (financialRefusals.length) {
+                        return NextResponse.json(
+                            {
+                                error: financialRefusals.map((r) => r.detail).join(" "),
+                                code: "unknown_charge_template",
+                                refusals: financialRefusals,
+                            },
+                            { status: 422 },
+                        );
+                    }
+                }
+                /*
+                 * A document requirement must name a PUBLISHED Studio type that accepts a child's documents
+                 * (Documents V1 / D6): Documents evaluates it for the journey's child, and a type it cannot file
+                 * for a child would leave the family at a stage they can never finish.
+                 */
+                if (parsed.requirements.some((r) => r.ref.kind === "document")) {
+                    const publishedTypes = await listPublishedDocumentTypePolicies(createAdminClient(), ctx.orgId);
+                    if (!publishedTypes) {
+                        return NextResponse.json({ error: "Document types could not be read.", code: "document_types_unavailable" }, { status: 503 });
+                    }
+                    const documentRefusals = documentStageRequirementRefusals(parsed.requirements, publishedTypes);
+                    if (documentRefusals.length) {
+                        return NextResponse.json(
+                            {
+                                error: documentRefusals.map((r) => r.detail).join(" "),
+                                code: "unknown_document_type",
+                                refusals: documentRefusals,
+                            },
+                            { status: 422 },
+                        );
+                    }
+                }
+                for (const requirement of parsed.requirements) {
+                    if (isAuthorableRequirementKind(requirement.ref.kind)) continue;
+                    return NextResponse.json(
+                        {
+                            error: `Requirements of kind "${requirement.ref.kind}" cannot be authored yet.`,
+                            reason: REQUIREMENT_KIND_UNSUPPORTED_REASON_V1[
+                                requirement.ref.kind as keyof typeof REQUIREMENT_KIND_UNSUPPORTED_REASON_V1
+                            ],
+                            requirement_id: requirement.requirement_id,
+                        },
+                        { status: 400 }
+                    );
+                }
+                config = setStageRequirements(config, processId, stageKey, parsed);
+                break;
+            }
             case "set_active_process": {
                 const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
                 if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
@@ -241,7 +533,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 if (!pid) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
                 const missingProcess = requireProcessInConfig(config, pid, departmentId, row.metadata);
                 if (missingProcess) return missingProcess;
-                config = addStageToProcess(config, pid, label, { description });
+                /*
+                 * WHICH TRACK THE NEW STAGE BELONGS TO. `addStageToProcess` has always accepted it,
+                 * but this action never passed it on, so a stage added to a tracked process (family
+                 * track → child track) belonged to no track: the child status control and the config
+                 * reader, which select stages by track, could never see it. Only a track the process
+                 * declares is accepted.
+                 */
+                const trackKey = typeof body.track_key === "string" ? body.track_key.trim() : "";
+                if (trackKey) {
+                    const tracks = config.processes.find((p) => p.id === pid)?.tracks_v1?.tracks ?? [];
+                    if (!tracks.some((t) => t.key === trackKey)) {
+                        return NextResponse.json(
+                            { error: `Track "${trackKey}" is not declared by this process.` },
+                            { status: 400 },
+                        );
+                    }
+                }
+                config = addStageToProcess(config, pid, label, {
+                    description,
+                    ...(trackKey ? { track_key: trackKey } : {}),
+                });
                 break;
             }
             case "update_stage_description": {
@@ -264,6 +576,283 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     return NextResponse.json({ error: "process_id and stage_id are required" }, { status: 400 });
                 }
                 config = renameStage(config, pid, stageId, label);
+                break;
+            }
+            /**
+             * `grain` was persisted authored configuration with no authoring path: the enrollment
+             * template seeded it, `add_stage` wrote it once, and nothing could correct it. That is
+             * how a stage came to declare one journey while its own operating plan declared the
+             * other, with no way for an operator to reconcile them.
+             *
+             * Accepts stage_key OR stage_id, because the operator-facing concept is the stage, not
+             * its generated identifier. Refuses anything the preflight cannot vouch for.
+             */
+            /**
+             * Transitions were authorable in the stage editor's draft but had no lifecycle-builder
+             * ACTION, so a plan whose rules referenced a transition that was never persisted could
+             * not be repaired through the canonical save path at all.
+             *
+             * Grain-checked with the same resolver the runtime and the editor use: a path may only
+             * join two stages on the same journey.
+             */
+            case "ensure_stage_transition": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const sourceKey = typeof body.source_stage_key === "string" ? body.source_stage_key.trim() : "";
+                const targetKey = typeof body.target_stage_key === "string" ? body.target_stage_key.trim() : "";
+                const requestedRef = typeof body.transition_ref === "string" ? body.transition_ref.trim() : "";
+                const pid = processId || config.active_process_id;
+
+                if (!pid || !sourceKey || !targetKey) {
+                    return NextResponse.json(
+                        { error: "process_id, source_stage_key and target_stage_key are required" },
+                        { status: 400 },
+                    );
+                }
+                const proc = config.processes.find((p) => p.id === pid);
+                if (!proc) return NextResponse.json({ error: "Process not found" }, { status: 404 });
+
+                const src = proc.stages.find((s) => s.key === sourceKey);
+                const dst = proc.stages.find((s) => s.key === targetKey);
+                if (!src) return NextResponse.json({ error: "Source stage not found" }, { status: 404 });
+                if (!dst) return NextResponse.json({ error: "Target stage not found" }, { status: 404 });
+                if (src.key === dst.key) {
+                    return NextResponse.json(
+                        { error: "A stage cannot transition to itself" },
+                        { status: 400 },
+                    );
+                }
+
+                const srcGrain = resolveStageGrain({
+                    stageKey: src.key,
+                    operatingPlanJourneySegment: src.stage_operating_plan_v1?.journey_segment,
+                    configuredMetadataGrain: src.grain,
+                });
+                const dstGrain = resolveStageGrain({
+                    stageKey: dst.key,
+                    operatingPlanJourneySegment: dst.stage_operating_plan_v1?.journey_segment,
+                    configuredMetadataGrain: dst.grain,
+                });
+                // ONE GUARD PER SIDE. `message` exists only on the failing variants, and `grain`
+                // only on the succeeding one — so the check has to narrow each variable
+                // individually. A combined `if (!src.ok || !dst.ok)` cannot read `.message`
+                // inside it, and hoisting the failing side into a local loses the narrowing that
+                // the code AFTER the guard needs to read `.grain`.
+                if (!srcGrain.ok) {
+                    return NextResponse.json(
+                        { error: srcGrain.message, code: "stage_grain_unresolved" },
+                        { status: 409 },
+                    );
+                }
+                if (!dstGrain.ok) {
+                    return NextResponse.json(
+                        { error: dstGrain.message, code: "stage_grain_unresolved" },
+                        { status: 409 },
+                    );
+                }
+                if (srcGrain.grain !== dstGrain.grain) {
+                    return NextResponse.json(
+                        {
+                            error:
+                                `"${src.label || src.key}" belongs to `
+                                + `${srcGrain.grain === "family" ? "the family case" : "individual children"}, `
+                                + `and "${dst.label || dst.key}" belongs to `
+                                + `${dstGrain.grain === "family" ? "the family case" : "individual children"}. `
+                                + `A stage can only move records onto its own journey.`,
+                            code: "stage_grain_mismatch",
+                        },
+                        { status: 409 },
+                    );
+                }
+
+                try {
+                    const result = ensureStageTransitionInConfig(
+                        config,
+                        pid,
+                        sourceKey,
+                        targetKey,
+                        requestedRef || undefined,
+                    );
+                    config = result.config;
+                    ensuredTransition = {
+                        transition_ref: result.transition_ref,
+                        target_stage_key: result.target_stage_key,
+                        created: result.created,
+                    };
+                } catch (cause) {
+                    return NextResponse.json(
+                        {
+                            error: cause instanceof Error ? cause.message : "Could not ensure transition",
+                            code: "transition_ref_collision",
+                        },
+                        { status: 409 },
+                    );
+                }
+                break;
+            }
+            /**
+             * `command_set_v1` was authored configuration with no authoring path: only the
+             * automatic stamp ever wrote it. A Work Template could reference a capability the
+             * process had not selected, publication would refuse it, and no operator surface could
+             * resolve the disagreement.
+             *
+             * Additions must resolve through the canonical registry, and the CANONICAL key is what
+             * is stored. An unregistered key is rejected with a structured blocker rather than
+             * written through raw-key fallback — which is how an unimplemented command would
+             * otherwise be authorized by accident.
+             */
+            case "update_process_command_set": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const pid = processId || config.active_process_id;
+                const addKeys = Array.isArray(body.add_capability_keys)
+                    ? body.add_capability_keys.filter((k): k is string => typeof k === "string")
+                    : [];
+                const removeKeys = Array.isArray(body.remove_capability_keys)
+                    ? body.remove_capability_keys.filter((k): k is string => typeof k === "string")
+                    : [];
+
+                if (!pid) {
+                    return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                }
+                if (!addKeys.length && !removeKeys.length) {
+                    return NextResponse.json(
+                        { error: "add_capability_keys or remove_capability_keys is required" },
+                        { status: 400 },
+                    );
+                }
+                if (!config.processes.some((p) => p.id === pid)) {
+                    return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                }
+
+                const result = updateProcessCommandSet(config, pid, {
+                    addCapabilityKeys: addKeys,
+                    removeCapabilityKeys: removeKeys,
+                });
+                if (result.rejected.length) {
+                    // Nothing is written when any requested capability cannot be vouched for.
+                    return NextResponse.json(
+                        {
+                            error:
+                                `These commands are not registered in the platform capability `
+                                + `registry and cannot be enabled: `
+                                + result.rejected.map((r) => r.requested).join(", ")
+                                + `.`,
+                            code: "capability_unregistered",
+                            rejected: result.rejected,
+                        },
+                        { status: 409 },
+                    );
+                }
+                config = result.config;
+                commandSetChange = {
+                    added: result.added,
+                    removed: result.removed,
+                    commands: result.commandSet.commands.map((c) => c.capability_key),
+                };
+                break;
+            }
+            case "update_stage_grain": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                const stageIdInput = typeof body.stage_id === "string" ? body.stage_id.trim() : "";
+                const grainInput = typeof body.grain === "string" ? body.grain.trim() : "";
+                const pid = processId || config.active_process_id;
+
+                if (grainInput !== "family" && grainInput !== "child") {
+                    return NextResponse.json(
+                        { error: 'grain must be "family" or "child"' },
+                        { status: 400 },
+                    );
+                }
+                if (!pid || (!stageKey && !stageIdInput)) {
+                    return NextResponse.json(
+                        { error: "process_id and stage_key (or stage_id) are required" },
+                        { status: 400 },
+                    );
+                }
+                const proc = config.processes.find((p) => p.id === pid);
+                if (!proc) {
+                    return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                }
+                const stage = proc.stages.find(
+                    (s) => (stageIdInput && s.id === stageIdInput) || (stageKey && s.key === stageKey),
+                );
+                if (!stage) {
+                    return NextResponse.json({ error: "Stage not found" }, { status: 404 });
+                }
+
+                const decision = evaluateStageGrainChange({
+                    stageKey: stage.key,
+                    requestedGrain: grainInput,
+                    currentConfiguredGrain: stage.grain,
+                    operatingPlan: stage.stage_operating_plan_v1 ?? null,
+                    processStages: proc.stages.map((s) => ({
+                        key: s.key,
+                        label: s.label,
+                        grain: s.grain,
+                    })),
+                    otherStagePlans: proc.stages
+                        .filter((s) => s.id !== stage.id)
+                        .map((s) => s.stage_operating_plan_v1)
+                        .filter((plan): plan is NonNullable<typeof plan> => Boolean(plan)),
+                });
+                if (!decision.allowed) {
+                    // Nothing is written when the change cannot be vouched for.
+                    return NextResponse.json(
+                        {
+                            error: decision.blockers.map((b) => b.message).join(" "),
+                            blockers: decision.blockers,
+                        },
+                        { status: 409 },
+                    );
+                }
+
+                config = updateStageGrain(config, pid, stage.id, grainInput);
+                break;
+            }
+            case "update_stage_annotations": {
+                /*
+                 * WHICH canonical projections this stage may show beneath its label.
+                 *
+                 * The keys are validated against the platform's own registry rather than stored as
+                 * whatever the caller sent. A configuration naming a projection that does not exist
+                 * would render nothing at runtime and look like a broken card, so it is refused here
+                 * with the list of what IS selectable.
+                 */
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                const stageIdInput = typeof body.stage_id === "string" ? body.stage_id.trim() : "";
+                const pid = processId || config.active_process_id;
+                const slotsInput = Array.isArray(body.slots)
+                    ? (body.slots as unknown[]).map((v) => (typeof v === "string" ? v.trim() : "")).filter(Boolean)
+                    : null;
+
+                if (!pid || (!stageKey && !stageIdInput)) {
+                    return NextResponse.json(
+                        { error: "process_id and stage_key (or stage_id) are required" },
+                        { status: 400 },
+                    );
+                }
+                if (!slotsInput) {
+                    return NextResponse.json({ error: "slots must be an array of projection keys" }, { status: 400 });
+                }
+                const unknownKeys = slotsInput.filter((k) => !isStageAnnotationProjectionKey(k));
+                if (unknownKeys.length) {
+                    return NextResponse.json(
+                        {
+                            error: `Unknown annotation projection: ${unknownKeys.join(", ")}`,
+                            selectable: Object.keys(STAGE_ANNOTATION_PROJECTIONS),
+                        },
+                        { status: 400 },
+                    );
+                }
+                const annProc = config.processes.find((p) => p.id === pid);
+                if (!annProc) return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                const annStage = annProc.stages.find(
+                    (st) => (stageIdInput && st.id === stageIdInput) || (stageKey && st.key === stageKey),
+                );
+                if (!annStage) return NextResponse.json({ error: "Stage not found" }, { status: 404 });
+
+                config = updateStageAnnotations(config, pid, annStage.id, slotsInput);
                 break;
             }
             case "reorder_stage": {
@@ -293,6 +882,94 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 config = removeStageFromProcess(config, pid, stageId);
                 break;
             }
+            /**
+             * PREVIEW ADOPTION — reads, judges, and RETURNS. Never saves.
+             *
+             * The early return is the point: every other action in this switch falls through to
+             * `saveDraft`, so a preview implemented as a normal case would persist a draft revision
+             * just for looking. An operator asking "what would this do" must be able to ask it as
+             * often as they like and change nothing.
+             */
+            case "preview_process_track_adoption":
+            case "adopt_process_tracks": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const pid = processId || config.active_process_id || "";
+                if (!pid) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                const missingProcess = requireProcessInConfig(config, pid, departmentId, row.metadata);
+                if (missingProcess) return missingProcess;
+
+                const proc = config.processes.find((p) => p.id === pid);
+                if (!proc) {
+                    return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                }
+
+                const template = trackAdoptionTemplateForProcessKey(proc.key);
+                if (!template) {
+                    return NextResponse.json(
+                        {
+                            error: `No canonical track model is published for process "${proc.key}", so there is nothing to adopt.`,
+                            code: "no_adoptable_track_model",
+                        },
+                        { status: 400 },
+                    );
+                }
+
+                /*
+                 * The instance read is part of the DECISION, not decoration on the preview. Adoption
+                 * re-homes every lane onto track membership, so a running record standing on a stage
+                 * no track claims would stop resolving. Reading it here means the same evidence backs
+                 * the preview an operator saw and the apply they then pressed.
+                 */
+                let observed;
+                try {
+                    observed = await observedProcessInstanceStages(createAdminClient(), {
+                        orgId: ctx.orgId,
+                        processKey: proc.key,
+                    });
+                } catch (e) {
+                    return NextResponse.json(
+                        { error: e instanceof Error ? e.message : "Could not read process instances" },
+                        { status: 502 },
+                    );
+                }
+
+                const evaluation = evaluateProcessTrackAdoption({
+                    process: proc,
+                    template,
+                    observedInstanceStageKeys: observed.stage_keys,
+                });
+
+                const report = {
+                    process_id: pid,
+                    process_key: proc.key,
+                    adoptable: evaluation.ok,
+                    already_adopted: evaluation.already_adopted,
+                    blockers: evaluation.blockers,
+                    assignments: evaluation.assignments,
+                    preview: evaluation.preview,
+                    observed_instances: observed,
+                };
+
+                if (action === "preview_process_track_adoption") {
+                    return NextResponse.json({ ...report, previewed: true });
+                }
+
+                if (!evaluation.ok) {
+                    // ALL OR NOTHING. A partially adopted process is one whose routing already flipped.
+                    return NextResponse.json(
+                        {
+                            error: evaluation.blockers.map((b) => b.message).join(" "),
+                            code: "track_adoption_refused",
+                            ...report,
+                        },
+                        { status: 409 },
+                    );
+                }
+
+                config = adoptProcessTracks(config, pid, evaluation.tracks, evaluation.assignments);
+                trackAdoption = report;
+                break;
+            }
             case "apply_enrollment_v2_template": {
                 const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
                 const pid = processId || config.active_process_id || "";
@@ -300,7 +977,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 const missingProcess = requireProcessInConfig(config, pid, departmentId, row.metadata);
                 if (missingProcess) return missingProcess;
                 try {
-                    config = applyEnrollmentTemplateInConfig(config, pid);
+                    config = applyEnrollmentTemplateWithCommandsInConfig(config, pid);
                 } catch (e) {
                     return NextResponse.json(
                         { error: e instanceof Error ? e.message : "Template apply failed" },
@@ -313,24 +990,82 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 return NextResponse.json({ error: "Unknown action" }, { status: 400 });
         }
 
-        await saveConfig(ctx.orgId, departmentId, config);
+        // PUBLISH-TIME REFERENTIAL INTEGRITY (Configured Stage Referential Integrity).
+        // Reject any config that references a stage outside its own inventory — no silent drops.
+        const referenceCheck = validateConfiguredStageReferences(config);
+        if (!referenceCheck.ok) {
+            return NextResponse.json(
+                {
+                    error:
+                        "Business Process contains stage references that are not in its own stage inventory. " +
+                        "Fix or remove them before saving.",
+                    code: "dangling_stage_reference",
+                    violations: referenceCheck.violations,
+                },
+                { status: 422 },
+            );
+        }
+
+        // Stamp command_set_v1 before the readiness read so orphan checks see selection.
+        config = ensureBuilderCommandSetsOnSave(config);
+
+        /**
+         * PUBLICATION READINESS — reported, never blocking.
+         *
+         * This check used to refuse the save with a 422, which made an incomplete draft impossible
+         * to repair: every save was rejected, including the save that would have fixed the thing
+         * being complained about. A draft is allowed to be mid-build; completeness is a question
+         * asked at Validate and Publish, where `validateBusinessProcessForPublish` now asks it and
+         * blocks on the answer.
+         *
+         * Structural and referential gates above stay blocking. Nothing is hidden: the issues ride
+         * out on the save response so the editor can say "saved, not ready to publish" and name the
+         * stages and Work Templates involved.
+         */
+        const commandSetCheck = validateProcessCommandSetsForPublish(config);
+
+        // Compare-and-set on the revision the editor loaded: a colleague who saved in between
+        // makes this fail rather than silently lose their work.
+        const savedDraft = await saveDraft(draftClient, {
+            orgId: ctx.orgId,
+            departmentId,
+            builder: ensureBuilderCommandSetsOnSave(config),
+            actorUserId: ctx.userId,
+            expectedDraftRevision: loadedDraftRevision,
+        });
         if (actionName === "reorder_stage") {
-            const deptRow = await loadDepartment(ctx.orgId, departmentId);
-            if (!deptRow) {
-                return NextResponse.json(
-                    { error: lifecycleBuilderDepartmentNotFoundError(departmentId) },
-                    { status: 404 }
-                );
-            }
-            const metadata =
-                deptRow.metadata !== null && typeof deptRow.metadata === "object" && !Array.isArray(deptRow.metadata)
-                    ? (deptRow.metadata as Record<string, unknown>)
-                    : {};
+            /**
+             * Order from the DRAFT THAT WAS JUST SAVED, not from `departments.metadata`.
+             *
+             * This block used to reload the department and sync from its metadata — the published
+             * projection. A reorder that had not been applied yet therefore synchronized Work Unit
+             * order from the PREVIOUS order, which is stale by exactly the change the operator just
+             * made. `savedDraft.builder` is the authoritative saved configuration, so the two can no
+             * longer disagree, and the projection stays untouched until Apply.
+             */
             const supabase = createAdminClient();
-            await syncWorkUnitSortOrderFromBuilderStages(supabase, ctx.orgId, departmentId, metadata);
+            // Read back from the PERSISTED draft rather than the in-memory candidate, so the
+            // synchronization uses exactly the ordering that was stored.
+            await syncWorkUnitSortOrderFromBuilderStages(
+                supabase,
+                ctx.orgId,
+                departmentId,
+                draftBuilder(savedDraft),
+            );
         }
         logLifecycleBuilderSaveTiming("lifecycle-builder-patch", saveStartedAt, { action: actionName });
-        return NextResponse.json(payloadFromConfig(config));
+        return NextResponse.json({
+            ...payloadFromConfig(config),
+            publication_readiness: {
+                ready: commandSetCheck.ok,
+                // `issues` exists only on the failing variant of the union.
+                issues: commandSetCheck.ok ? [] : commandSetCheck.issues,
+            },
+            draft_revision: savedDraft.draftRevision,
+            ...(ensuredTransition ? { ensured_transition: ensuredTransition } : {}),
+            ...(commandSetChange ? { command_set_change: commandSetChange } : {}),
+            ...(trackAdoption ? { track_adoption: trackAdoption } : {}),
+        });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed" }, { status: 400 });
     }

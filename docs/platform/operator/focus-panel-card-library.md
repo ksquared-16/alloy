@@ -1,6 +1,13 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Focus Panel — Canonical Card Library
 
-> **Status**: V1 — Cards 1–8 implemented. Billing Preview, Tour, Communications, and Timeline joined the Core Four (Household, Children, Current Work, Readiness).
+> **Status**: Canonical (July 2026). Cards 1–8 implemented. Billing Preview, Tour, Communications, and Timeline joined the Core Four (Household, Children, **What's Next** (`current_work`), Readiness). **What's Next** is the canonical operational progression owner on the Focus Panel — see [current-work-surface.md](./current-work-surface.md).
 
 The card library is the authoritative catalog of every Focus Panel card. Each entry names the card's operational question, archetype, lifecycle states, evidence source, and behavioral contract. New experiences are assembled from these primitives — they are not invented per-surface.
 
@@ -50,21 +57,24 @@ Each child row: program · room · schedule · teacher · desired start · enrol
 
 ## Work Domain
 
-### Current Work
+### What's Next (Current Work)
 
 | | |
 |---|---|
-| **Key** | `current_work` |
+| **Key** | `current_work` (canonical; legacy aliases `whats_next` / label "Current Work" normalize here) |
+| **Operator label** | **What's Next** (builder catalog, search, reset-to-default, runtime micro-label) |
 | **Archetype** | Action |
 | **Tier** | Work |
+| **Card class** | **Work-owning** |
 | **Operational question** | "What needs to happen next on this record?" |
-| **Lifecycle** | Summary only (diagnostic — never becomes a Focus Card) |
-| **Evidence source** | `context.signals.work` (via `buildCurrentWorkCardEvidence`) |
-| **Capabilities** | supportsExpanded |
-| **Expansion groups** | work_items |
-| **Footprint** | narrow (1 column) |
+| **Lifecycle** | Summary → Focus (completion inside Focus) |
+| **Evidence source** | `projectCurrentWork(context)` from `context.stageWorkRuntime` + `context.signals.work` |
+| **Capabilities** | supportsFocus (no expanded overlay — Focus replaces it) |
+| **Footprint** | full (default row 1; configurable via `/settings/surfaces`) |
 
-Primary work item + due label in 2 seconds. Full queue appears as a card-anchored inline overlay without moving the base surface. Clicking an item hands off to the owning card (contact work → Household; enrollment work → Children). Ownerless items are inert.
+Primary work title, purpose, and progress in 2 seconds on Summary. Click or Bend Pine CTA opens Focus — same grammar as Household. Focus holds checklist (work-surface handoffs), blockers, and outcome completion via **`Record what happened`** → **What happened?** picker → `completeStageWorkWithOutcome`. Outreach items hand off to Communications; contact-data verification to Household; program/fit to Children; packet work to Documents — never edit truth here.
+
+See [current-work-surface.md](./current-work-surface.md) and [actions-current-work-alignment.md](./actions-current-work-alignment.md).
 
 ---
 
@@ -246,7 +256,7 @@ Max 3 events visible at summary density; "View all →" opens inline overlay wit
 |------|-----|-----------|------|--------|
 | Household | `household` | Profile | Reference | ✅ Pure card |
 | Children | `children` | Collection | Reference | ✅ Pure card |
-| Current Work | `current_work` | Action | Work | ✅ Pure card |
+| What's Next | `current_work` | Action | Work | ✅ Pure card |
 | Readiness | `readiness_kpi` | Status | Metric | ✅ Pure card |
 | Tour | `tour_summary` | Summary | Context | ✅ Pure card (Sprint 2) |
 | Communications | `communications` | Summary | Context | ✅ Pure card (Sprint 2) |

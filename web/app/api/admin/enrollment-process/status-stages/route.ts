@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
@@ -25,6 +26,7 @@ import { syncDepartmentQueueForStage } from "@/lib/lifecycle/syncDepartmentQueue
 import { syncLifecycleStageWorkUnitQueueForDepartment } from "@/lib/lifecycle/lifecycleStageWorkUnitQueueSync";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 async function loadDepartmentMetadata(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -86,9 +88,8 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: { stage?: string; status_keys?: string[]; reset_stage?: string; department_id?: string } = {};
     try {
@@ -214,6 +215,14 @@ async function resetStageMetadata(
             .eq("org_id", orgId);
         if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
         changedIds.push(String(row.id));
+    }
+
+    if (changedIds.length > 0) {
+        // The reset path writes status_definitions directly rather than through
+        // `persistStageStatusAssignments`, so it carries its own bump. Without it this handler's OWN
+        // response — rebuilt from `fetchEffectiveStatusDefinitions` below, which reads through the
+        // cache — could return the metadata it just cleared.
+        revalidateEffectiveStatusDefinitionsCache(orgId);
     }
 
     logAdminAudit({

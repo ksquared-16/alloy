@@ -138,6 +138,17 @@ export async function fetchSchedulePatternsForSite(siteLocationId: string): Prom
     return json.patterns ?? [];
 }
 
+/**
+ * Org-wide schedule patterns in one request (Checkpoint B — collapses per-site N+1).
+ * Server already supports omitting `site_location_id` (`listSchedulePatterns` org scope).
+ */
+export async function fetchSchedulePatternsForOrg(): Promise<SchedulePatternRow[]> {
+    const res = await fetch("/api/admin/schedule-patterns", { credentials: "include" });
+    const json = (await res.json().catch(() => ({}))) as { patterns?: SchedulePatternRow[]; error?: string };
+    if (!res.ok) throw new Error(json.error ?? `Failed to load schedule patterns (${res.status})`);
+    return json.patterns ?? [];
+}
+
 export async function createSchedulePattern(input: {
     site_location_id: string;
     key: string;
@@ -145,6 +156,8 @@ export async function createSchedulePattern(input: {
     schedule_type_key: string;
     weekdays: number[];
     sort_order?: number;
+    is_active?: boolean;
+    metadata?: Record<string, unknown>;
 }): Promise<SchedulePatternRow> {
     const res = await fetch("/api/admin/schedule-patterns", {
         method: "POST",
@@ -166,6 +179,7 @@ export async function patchSchedulePattern(
         weekdays: number[];
         sort_order: number;
         is_active: boolean;
+        metadata: Record<string, unknown>;
     }>
 ): Promise<SchedulePatternRow> {
     const res = await fetch(`/api/admin/schedule-patterns/${patternId}`, {

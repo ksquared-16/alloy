@@ -13,6 +13,7 @@ import {
     INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS,
     isInquiryChildNativeFieldKey,
 } from "@/lib/fields/inquiryChildFieldRegistry";
+import { isEnrollmentAssignmentFieldKeyOnCustomerMember } from "@/lib/fields/canonicalFieldProjection";
 
 /** field_definitions entity_type → ownership summary (documentation + guards). */
 export const CANONICAL_FIELD_OWNER_ENTITIES = {
@@ -21,6 +22,7 @@ export const CANONICAL_FIELD_OWNER_ENTITIES = {
     customer_member: "Durable child profile facts (name, DOB, health config fields)",
     opportunity: "Enrollment case / family-level process facts",
     inquiry_child: "Child participation / enrollment facts on a case (OCM grain)",
+    person_child_relationship: "Person ↔ Child relationship instance facts (roles, kinship, edge attributes)",
     field_definitions: "Configurable field metadata (labels, types, options)",
     status_definitions: "Status vocabulary (not field values)",
 } as const;
@@ -70,7 +72,7 @@ export function validateFieldDefinitionOwnership(entityType: string, fieldKey: s
     if (entity === "inquiry_child" && isCustomerMemberProfileFieldKey(key)) {
         return `Profile field '${key}' belongs on entity_type customer_member, not inquiry_child`;
     }
-    if (entity === "customer_member" && ENROLLMENT_KEY_SET.has(key)) {
+    if (entity === "customer_member" && (ENROLLMENT_KEY_SET.has(key) || isEnrollmentAssignmentFieldKeyOnCustomerMember(key))) {
         return `Enrollment field '${key}' belongs on entity_type inquiry_child, not customer_member`;
     }
     return null;

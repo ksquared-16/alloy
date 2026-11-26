@@ -1,0 +1,56 @@
+warning: You appear to have cloned an empty repository.
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+FAIL - D1 — an approved metadata promotion reaches its executor through the real dispatcher :: Command failed: git push -q origin main
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+
+warning: You appear to have cloned an empty repository.
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+FAIL - D1a — and the write it performed is exactly one workflow file :: Command failed: git push -q origin main
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+
+warning: You appear to have cloned an empty repository.
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+FAIL - D1b — the caller's index is untouched by the build :: Command failed: git push -q origin main
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+
+warning: You appear to have cloned an empty repository.
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+FAIL - D2 — the wrapper's git factory is constructable and runs :: Command failed: git push -q origin main
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+
+ok  - D2a — a missing worktree is refused by the wrapper, not thrown
+warning: You appear to have cloned an empty repository.
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+FAIL - D5 — an executor failure's actionable sentence survives to the operator surface :: Command failed: git push -q origin main
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+
+ok  - D5a — the historical specimen shape is carried, not collapsed
+ok  - D5b — and a secret in that detail does not reach the operator
+ok  - D5c — a detail that merely repeats the code adds no noise
+warning: You appear to have cloned an empty repository.
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+FAIL - R1 — the dispatched result carries every field the registry declares :: Command failed: git push -q origin main
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+
+warning: You appear to have cloned an empty repository.
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+FAIL - R1a — and the declared fields are not silently null on a successful write :: Command failed: git push -q origin main
+git: 'remote-henry-blocked-push' is not a git command. See 'git --help'.
+fatal: remote helper 'henry-blocked-push' aborted session
+
+
+# pass 4
+# fail 7

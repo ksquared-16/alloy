@@ -1,0 +1,433 @@
+{
+  "trusted_host_action_id": "tha_e355c32625db72",
+  "query_hash": "558416d3705a292615b242f674923b84701ff7293867e83026e1449536625499",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T00:49:32.979Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e355c32625db72",
+    "query_hash": "558416d3705a292615b242f674923b84701ff7293867e83026e1449536625499",
+    "authorization_id": "grnt_ccec02a67d524a5c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T00:49:34.355Z",
+    "question_ids": [
+      "tbl_types",
+      "tbl_qualifications",
+      "tbl_evidence",
+      "tbl_requirements",
+      "ck_types_key_format",
+      "ck_types_label_not_blank",
+      "ck_types_validity_positive",
+      "uq_types_org_key",
+      "ck_qual_date_order",
+      "ck_qual_verification_state",
+      "ck_qual_verified_has_timestamp",
+      "ck_qual_no_self_supersede",
+      "ck_qual_revoked_has_timestamp",
+      "uq_evidence_qualification_document",
+      "ck_req_scope_type",
+      "ck_req_scope_id_presence",
+      "ck_req_level",
+      "ck_req_date_order",
+      "uq_req_scope",
+      "idx_types_org_active",
+      "idx_qual_org_employment",
+      "idx_qual_org_expiry",
+      "idx_evidence_qualification",
+      "idx_req_org_scope",
+      "fk_qual_employment",
+      "fk_qual_type",
+      "fk_evidence_document",
+      "fk_req_type",
+      "no_stored_is_expired_column",
+      "rls_enabled_types",
+      "rls_enabled_qualifications",
+      "ledger_has_20260926120000",
+      "employments_total",
+      "pk_types",
+      "pk_qualifications",
+      "pk_evidence",
+      "pk_requirements",
+      "org_id_not_null_types",
+      "org_id_not_null_qualifications",
+      "org_id_not_null_evidence",
+      "org_id_not_null_requirements",
+      "fk_org_all_four",
+      "fk_evidence_qualification",
+      "fk_qual_supersedes_self",
+      "col_supersedes_qualification_id",
+      "rls_enabled_evidence",
+      "rls_enabled_requirements",
+      "rls_enabled_employments_baseline",
+      "rls_enabled_documents_baseline",
+      "policies_on_slice3_tables",
+      "policies_on_employments_baseline"
+    ],
+    "questions": {
+      "tbl_types": {
+        "question_id": "tbl_types",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "tbl_qualifications": {
+        "question_id": "tbl_qualifications",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "tbl_evidence": {
+        "question_id": "tbl_evidence",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "tbl_requirements": {
+        "question_id": "tbl_requirements",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_types_key_format": {
+        "question_id": "ck_types_key_format",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_types_label_not_blank": {
+        "question_id": "ck_types_label_not_blank",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_types_validity_positive": {
+        "question_id": "ck_types_validity_positive",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "uq_types_org_key": {
+        "question_id": "uq_types_org_key",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_qual_date_order": {
+        "question_id": "ck_qual_date_order",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_qual_verification_state": {
+        "question_id": "ck_qual_verification_state",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_qual_verified_has_timestamp": {
+        "question_id": "ck_qual_verified_has_timestamp",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_qual_no_self_supersede": {
+        "question_id": "ck_qual_no_self_supersede",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_qual_revoked_has_timestamp": {
+        "question_id": "ck_qual_revoked_has_timestamp",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "uq_evidence_qualification_document": {
+        "question_id": "uq_evidence_qualification_document",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_req_scope_type": {
+        "question_id": "ck_req_scope_type",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_req_scope_id_presence": {
+        "question_id": "ck_req_scope_id_presence",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_req_level": {
+        "question_id": "ck_req_level",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_req_date_order": {
+        "question_id": "ck_req_date_order",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "uq_req_scope": {
+        "question_id": "uq_req_scope",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_types_org_active": {
+        "question_id": "idx_types_org_active",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_qual_org_employment": {
+        "question_id": "idx_qual_org_employment",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_qual_org_expiry": {
+        "question_id": "idx_qual_org_expiry",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_evidence_qualification": {
+        "question_id": "idx_evidence_qualification",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_req_org_scope": {
+        "question_id": "idx_req_org_scope",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fk_qual_employment": {
+        "question_id": "fk_qual_employment",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fk_qual_type": {
+        "question_id": "fk_qual_type",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fk_evidence_document": {
+        "question_id": "fk_evidence_document",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fk_req_type": {
+        "question_id": "fk_req_type",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "no_stored_is_expired_column": {
+        "question_id": "no_stored_is_expired_column",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_types": {
+        "question_id": "rls_enabled_types",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_qualifications": {
+        "question_id": "rls_enabled_qualifications",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ledger_has_20260926120000": {
+        "question_id": "ledger_has_20260926120000",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "employments_total": {
+        "question_id": "employments_total",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "pk_types": {
+        "question_id": "pk_types",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "pk_qualifications": {
+        "question_id": "pk_qualifications",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "pk_evidence": {
+        "question_id": "pk_evidence",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "pk_requirements": {
+        "question_id": "pk_requirements",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "org_id_not_null_types": {
+        "question_id": "org_id_not_null_types",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "org_id_not_null_qualifications": {
+        "question_id": "org_id_not_null_qualifications",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "org_id_not_null_evidence": {
+        "question_id": "org_id_not_null_evidence",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "org_id_not_null_requirements": {
+        "question_id": "org_id_not_null_requirements",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fk_org_all_four": {
+        "question_id": "fk_org_all_four",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "fk_evidence_qualification": {
+        "question_id": "fk_evidence_qualification",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fk_qual_supersedes_self": {
+        "question_id": "fk_qual_supersedes_self",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "col_supersedes_qualification_id": {
+        "question_id": "col_supersedes_qualification_id",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_evidence": {
+        "question_id": "rls_enabled_evidence",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_requirements": {
+        "question_id": "rls_enabled_requirements",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_employments_baseline": {
+        "question_id": "rls_enabled_employments_baseline",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_documents_baseline": {
+        "question_id": "rls_enabled_documents_baseline",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "policies_on_slice3_tables": {
+        "question_id": "policies_on_slice3_tables",
+        "row_count": null,
+        "rows": [
+          20
+        ]
+      },
+      "policies_on_employments_baseline": {
+        "question_id": "policies_on_employments_baseline",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      }
+    },
+    "row_count": 51
+  }
+}

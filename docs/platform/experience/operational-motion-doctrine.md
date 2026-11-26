@@ -1,3 +1,10 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Motion Doctrine
 
 **Path:** `docs/platform/experience/operational-motion-doctrine.md`

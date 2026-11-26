@@ -3,7 +3,11 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -17,6 +21,8 @@ export async function POST(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
 
     let body: Record<string, unknown>;
     try {
@@ -65,7 +71,7 @@ export async function POST(req: Request) {
         if (!personCheck.ok) return NextResponse.json({ error: "Person not found" }, { status: 404 });
     }
 
-    const exec = await executeCommunicationsSend({
+    const exec = await executeLegacyCommunicationsSendAdapter({
         supabase,
         orgId: ctx.orgId,
         quickMessage: false,
@@ -77,6 +83,9 @@ export async function POST(req: Request) {
         bindingIdOpt: "",
         recipientPersonIdRaw: "",
         toRawInput: "",
+        audience: "internal",
+        category: "operational",
+        callSite: "family-note",
         sendMetadataAugment: {
             kind: "note",
             source: "comms_v2_note_compose",
@@ -87,7 +96,7 @@ export async function POST(req: Request) {
 
     if (!exec.ok) {
         return NextResponse.json(
-            { error: exec.error, code: exec.code, thread_id: exec.thread_id },
+            { error: exec.error, code: exec.code, outcome: exec.outcome, reason: exec.reason, thread_id: exec.thread_id },
             { status: exec.status ?? 500 }
         );
     }

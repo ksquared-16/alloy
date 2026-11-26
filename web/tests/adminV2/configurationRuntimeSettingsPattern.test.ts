@@ -34,9 +34,10 @@ describe("Configuration Runtime settings pattern rollout", () => {
         expect(bpShell).not.toContain("process-config-setup-workspace");
     });
 
-    it("Statuses page uses queue/workspace configuration page, not legacy accordion client", () => {
+    it("Statuses page redirects into Data Model; StatusesConfigurationPage remains the queue/workspace editor", () => {
         const page = read("app/adminV2/settings/statuses/page.tsx");
-        expect(page).toContain("StatusesConfigurationPage");
+        expect(page).toContain("dataModelSectionHref");
+        expect(page).toContain('"statuses"');
         expect(page).not.toContain("StatusesClient");
 
         const statusesPage = read("components/adminV2/settings/statuses/StatusesConfigurationPage.tsx");
@@ -54,17 +55,27 @@ describe("Configuration Runtime settings pattern rollout", () => {
         expect(detail).toContain("status-detail-open-processes");
     });
 
-    it("Statuses queue labels match enrollment, lead/case, and people groups", () => {
+    it("Statuses queue shows Opportunity Status + People — 'Enrollment Participation' is retired", () => {
         const hook = read("components/adminV2/settings/statuses/useStatusDefinitionsSettings.ts");
-        expect(hook).toContain("Enrollment Statuses");
-        expect(hook).toContain("Lead / Case Statuses");
+        // The per-child OCM disposition status model ("Enrollment Participation") is no longer a
+        // configurable category — the Process Instance owns execution (stage + state).
+        expect(hook).toContain("Opportunity Status");
         expect(hook).toContain("People Statuses");
+        // No configurable "Enrollment Participation" LABEL entry (only the retirement comment mentions it).
+        expect(hook).not.toContain('"Enrollment Participation"');
+        // OCM child disposition rows no longer load into /statuses.
+        expect(hook).not.toContain("opportunity_customer_members");
     });
 
-    it("Fields documents next pattern without full implementation", () => {
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("ConfigurationPatternPlaceholder");
-        expect(read("components/adminV2/settings/configurationRuntime/ConfigurationPatternPlaceholder.tsx")).toContain(
-            "fields-configuration-pattern-placeholder",
+    it("Fields redirects into the Data Model shell; FieldsConfigurationPage remains available", () => {
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
+        const fieldsPage = read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx");
+        expect(fieldsPage).toContain("ConfigurationContext");
+        expect(fieldsPage).toContain("ConfigurationShell");
+        // Data Model is Entity-centric: `?section=fields` lands on the selected Entity's
+        // Fields tab, not a legacy DataModelWorkspaceClient category pane.
+        expect(read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx")).toContain(
+            "EntitiesWorkspaceSurface",
         );
     });
 
@@ -77,7 +88,7 @@ describe("Configuration Runtime settings pattern rollout", () => {
     it("rollout doc and playwright settings-pattern spec exist", () => {
         expect(
             readFileSync(
-                resolve(root, "../docs/sprints/06_2026/configuration_runtime_settings_pattern_rollout.md"),
+                resolve(root, "../docs/sprints/archive/06_2026/configuration_runtime_settings_pattern_rollout.md"),
                 "utf8",
             ),
         ).toContain("Context → Queue → Workspace → BOS");

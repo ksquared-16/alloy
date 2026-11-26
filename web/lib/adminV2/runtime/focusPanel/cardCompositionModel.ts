@@ -70,6 +70,15 @@ export const CARD_COMPOSITION_PREFERENCES: Partial<
         preferredHeight: "tall",
         perspectiveExpansion: "takeover_row",
     },
+    milestones: {
+        weight: "medium",
+        preferredPartners: ["children", "current_work", "timeline"],
+        preferredRow: "support",
+        minWidth: 2,
+        maxWidth: 6,
+        preferredHeight: "standard",
+        perspectiveExpansion: "in_place",
+    },
     communications: {
         weight: "heavy",
         preferredPartners: ["household", "timeline"],

@@ -1,0 +1,162 @@
+[
+  {
+    "t": "2026-08-12T22:04:20.142Z",
+    "step": "start",
+    "marker": "CERT_TOUR_TMPL_1786572259833"
+  },
+  {
+    "t": "2026-08-12T22:04:21.158Z",
+    "step": "provision",
+    "created": 0,
+    "existing": 12
+  },
+  {
+    "t": "2026-08-12T22:04:21.792Z",
+    "step": "inventory",
+    "keys": [
+      "tour_cancel:email",
+      "tour_cancel:sms",
+      "tour_confirmation:email",
+      "tour_confirmation:sms",
+      "tour_invitation:email",
+      "tour_invitation:sms",
+      "tour_no_show_followup:email",
+      "tour_no_show_followup:sms",
+      "tour_reminder:email",
+      "tour_reminder:sms",
+      "tour_reschedule:email",
+      "tour_reschedule:sms"
+    ],
+    "missing": []
+  },
+  {
+    "t": "2026-08-12T22:04:22.463Z",
+    "step": "required-placeholder",
+    "ok": {
+      "ok": true
+    },
+    "blocked": {
+      "ok": false,
+      "error": "This Tour template requires: Tour Invitation Link ({{invitation_action_url}}). Add the placeholder back before saving."
+    }
+  },
+  {
+    "t": "2026-08-12T22:04:24.102Z",
+    "step": "edit-invitation",
+    "version": {
+      "id": "acee84ea-558f-495a-a4ae-99ed04565987",
+      "version_number": 3
+    }
+  },
+  {
+    "t": "2026-08-12T22:04:26.079Z",
+    "step": "edit-confirmation",
+    "version": {
+      "id": "29645c66-cece-4fd6-8446-941a06a9e76d",
+      "version_number": 3
+    }
+  },
+  {
+    "t": "2026-08-12T22:04:27.442Z",
+    "step": "library-resolve",
+    "invHasMarker": true,
+    "confHasMarker": true,
+    "confSubject": "Your tour is scheduled — {{tour_display_label}} · CERT_TOUR_TMPL_1786572190971 · CERT_TOUR_TMPL_1786572259833"
+  },
+  {
+    "t": "2026-08-12T22:04:27.450Z",
+    "step": "friendly-render",
+    "hasMarker": true,
+    "subjectHasMarker": true,
+    "anchors": [
+      {
+        "hrefLen": 181,
+        "hrefStarts": "https://calendar.google.com/calendar/ren",
+        "text": "Add to calendar"
+      },
+      {
+        "hrefLen": 87,
+        "hrefStarts": "http://localhost:3015/tour-booking/abcde",
+        "text": "Reschedule tour"
+      },
+      {
+        "hrefLen": 86,
+        "hrefStarts": "http://localhost:3015/tour-booking/zyxwv",
+        "text": "Manage or cancel tour"
+      }
+    ],
+    "rawUrlAsVisibleText": false,
+    "smsKeepsUrl": true,
+    "smsBodySlice": "Hi Alex, your tour is set for  at . Details: https://calendar.google.com/calendar/render?action=TEMPLATE&text=Tour&dates=20260820T170000Z%2F20260820T173000Z&details=VeryLongTokenABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "htmlSlice": "<p>Hello Alex,</p>\n<p>Your tour is confirmed for .<br/>Main</p>\n<p><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Tour&amp;dates=20260820T170000Z%2F20260820T173000Z&amp;details=VeryLongTokenABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\" style=\"color:#1f4d3a;text-decoration:underline;\">Add to calendar</a><br/><a href=\"http://localhost:3015/tour-booking/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOP\" style=\"color:#1f4d3a;text-decoration:underline;\">Reschedule tour</a><br/><a href=\"http://localhost:3015/tour-booking/zyxwvutsrqponmlkjihgfedcba9876543210MANAGETOKENHERE\" "
+  },
+  {
+    "t": "2026-08-12T22:04:27.452Z",
+    "step": "invitation-friendly",
+    "hasMarker": true,
+    "chooseAnchor": [
+      "Choose a tour time"
+    ],
+    "hrefPreserved": true
+  },
+  {
+    "t": "2026-08-12T22:04:27.453Z",
+    "step": "polish-plain",
+    "hasAdd": true,
+    "hasResched": true,
+    "hasManage": true,
+    "fullHref": true
+  },
+  {
+    "t": "2026-08-12T22:04:36.915Z",
+    "step": "prepare",
+    "ok": true,
+    "invitationId": "e7a9a29d-c597-4ae0-aa93-92e89f78b866",
+    "bodyHasMarker": true,
+    "bodyHasChoose": true,
+    "hasUrl": true,
+    "emailBodySlice": "Hello Kelly,\n\nWe’d love to show your family around North Campus.\nNorth Campus — 123 Main Street, Bend OR 97701\n\nChoose a tour time:\n/a/bE9NPP5A\n\nWe look forward to meeting you.\n\n[CERT_TOUR_TMPL_1786572259833 invitation]\n\n[CERT_TOUR_TMPL_1786572190971 invitation]\n\nWarmly,\nFirefly Early Learning"
+  },
+  {
+    "t": "2026-08-12T22:04:40.604Z",
+    "step": "orchestrate-confirmation",
+    "bookingId": "6dad1e22-48d0-455b-9dfa-c0db4e3a3d8d",
+    "immediate": [
+      {
+        "channel": "email",
+        "eventKey": "tour_confirmation",
+        "status": "sent",
+        "communicationMessageId": "cert-msg-CERT_TOUR_TMPL_1786572259833",
+        "idempotencyKey": "tour_scheduling:immediate:6dad1e22-48d0-455b-9dfa-c0db4e3a3d8d:tour_confirmation:email:cert:CERT_TOUR_TMPL_1786572259833"
+      }
+    ],
+    "captured": [
+      {
+        "channel": "email",
+        "bodyIsHtml": true,
+        "subject": "Your tour is scheduled — 08/14/2026, 10:00 AM · CERT_TOUR_TMPL_1786572190971 · CERT_TOUR_TMPL_1786572259833",
+        "bodySlice": "<p>Hello Kelly,</p>\n<p>Your tour is confirmed for 08/14/2026, 10:00 AM.<br/>North Campus — 123 Main Street, Bend, OR, 97701</p>\n<p><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Tour%20at%20North%20Campus&amp;dates=20260814T170000Z%2F20260814T174500Z&amp;details=Tour%20for%20Kurzman%20Family&amp;location=North%20Campus%20%E2%80%94%20123%20Main%20Street%2C%20Bend%2C%20OR%2C%2097701\" style=\"color:#1f4d3a;text-decoration:underline;\">Add to calendar</a><br/><a href=\"ht",
+        "hasMarker": true,
+        "hasAddAnchor": true,
+        "hasReschedAnchor": true,
+        "hasManageAnchor": true,
+        "rawUrlLabel": false
+      }
+    ]
+  },
+  {
+    "t": "2026-08-12T22:04:40.605Z",
+    "step": "RESULT",
+    "pass": {
+      "templatesProvisioned": true,
+      "invitationLibraryMarker": true,
+      "confirmationLibraryMarker": true,
+      "requiredPlaceholderEnforced": true,
+      "friendlyEmailAnchors": true,
+      "smsKeepsUrl": true,
+      "prepareUsesLibrary": true,
+      "orchestrateUsesLibraryHtml": true
+    },
+    "marker": "CERT_TOUR_TMPL_1786572259833"
+  }
+]

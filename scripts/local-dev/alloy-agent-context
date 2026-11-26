@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Print or copy generated agent verification context.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-agent-context <slot|name> [--copy] [--refresh]
+
+Prints <worktree>/.alloy-agent-context.md (regenerate with --refresh).
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local target="" do_copy=0 refresh=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --copy) do_copy=1; shift ;;
+      --refresh) refresh=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="$1"
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$target" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  local name path ctx
+  name="$(alloy_resolve_worktree_name "$target")"
+  alloy_load_metadata "$name"
+  path="$ALLOY_WORKTREE_PATH"
+
+  if [[ "$refresh" -eq 1 ]] || [[ ! -f "$(alloy_agent_context_path "$path")" ]]; then
+    ctx="$(alloy_generate_agent_context "$name")"
+  else
+    ctx="$(alloy_agent_context_path "$path")"
+  fi
+
+  local body
+  body="$(cat "$ctx")"
+
+  if [[ "$do_copy" -eq 1 ]]; then
+    alloy_copy_to_clipboard "$body"
+    alloy_info "Copied context for ${name} to clipboard."
+    alloy_info "File: ${ctx}"
+  else
+    printf '%s\n' "$body"
+  fi
+}
+
+main "$@"

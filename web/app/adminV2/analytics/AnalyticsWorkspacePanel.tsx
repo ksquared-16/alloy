@@ -15,8 +15,6 @@ import {
     OipKpiObjectRow,
 } from "@/components/admin/workspace/OipKpiObjectCard";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
-import { fetchMetricTrends } from "@/lib/metrics/fetchMetricTrends";
-import type { MetricTrendMap } from "@/lib/metrics/fetchMetricTrends";
 import {
     listMetricPacks,
     type MetricPackDefinition,
@@ -189,14 +187,11 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
     );
 
     const [resolved, setResolved] = useState<ResolvedMetricMap>(cachedOnMount ?? {});
-    const [trends, setTrends] = useState<MetricTrendMap>({});
     const [loading, setLoading] = useState(!cachedOnMount || Object.keys(cachedOnMount).length === 0);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(cachedOnMount ? new Date() : null);
     const [mode, setMode] = useState<OipMode>("work");
     const [studioView, setStudioView] = useState<OipStudioView>("playbooks");
-
-    void trends;
 
     useEffect(() => {
         return subscribeOipWarmCache(() => {
@@ -220,14 +215,13 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
         }
         setFetchError(null);
 
-        void Promise.all([
-            prefetchOipMetricsWarm({ siteId: selectedSiteId, keys: metricKeys }),
-            fetchMetricTrends({ keys: metricKeys, window: DEFAULT_WINDOW, siteId: selectedSiteId }),
-        ])
-            .then(([metrics, trendMap]) => {
+        // Only the resolved metric map drives this surface; it is warm-first + deduped via the OIP warm
+        // cache. (The former `fetchMetricTrends` result was discarded — `void trends` — so it was a pure
+        // wasted round-trip on every open; removed.)
+        void prefetchOipMetricsWarm({ siteId: selectedSiteId, keys: metricKeys })
+            .then((metrics) => {
                 if (!cancelled) {
                     setResolved(metrics);
-                    setTrends(trendMap);
                     setLastUpdated(new Date());
                 }
             })

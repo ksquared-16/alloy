@@ -4,6 +4,7 @@ import {
     isChildcareCanonicalField,
     isChildcareOperatorPickerVisible,
 } from "@/lib/fields/childcareFieldCatalogDoctrine";
+import { ENROLLMENT_PLACEMENT_OPERATOR_LABELS } from "@/lib/fields/enrollmentPlacementDoctrine";
 
 /**
  * Operator-facing field Settings helpers (display filtering + labels).
@@ -52,6 +53,12 @@ export const FIELDS_HUB_DATA_STRUCTURE_INTRO =
 /** F1 — fields created here propagate to Layouts, Forms, and Business Processes pickers. */
 export const FIELDS_HUB_REGISTRY_TRUST_NOTE =
     "Fields you create or edit here are the canonical registry. They appear in Layouts, Forms Builder, and Business Processes stage requirements without adding them to a separate catalog.";
+
+export const FIELDS_SURFACE_AVAILABILITY_INTRO =
+    "Fields define the canonical data model. A field can exist here without being available on every surface. Surface availability depends on runtime resolvers.";
+
+export const FIELDS_CUSTOM_FIELD_SURFACE_NOTE =
+    "Adding a custom field saves it to the registry. It is not immediately available on every surface — enable visibility here, then place the field on Layouts, Forms, Queue Rows, or Focus Panel where supported.";
 
 /** Layouts — record experience presentation reads from the same field registry (F1). */
 export const LAYOUTS_HUB_REGISTRY_TRUST_NOTE =
@@ -163,6 +170,13 @@ const OPERATOR_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
         email: "Email",
         phone: "Phone",
     },
+    // Placement labels follow enrollment placement doctrine (Location / Program / Room / Schedule).
+    inquiry_child: {
+        location_id: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.location,
+        program_category_id: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.program,
+        program_room_cohort_key: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.room,
+        schedule_type: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.schedule,
+    },
 };
 
 export function operatorFieldDisplayLabel(entityType: string, row: OperatorFieldRow): string {
@@ -186,6 +200,7 @@ function deferredFieldHint(entityType: string, fieldKey: string): string | null 
     if (/^status/.test(key) || key === "status_key") return "Changed on the record status control";
     if (/^tour_/.test(key) || key === "tour_date" || key === "tour_time") return "Set through tour scheduling";
     if (/quote|pricing|discount|tuition|fee_/.test(key)) return "Set through quote or pricing flows";
+    // Opportunity-level legacy field keys (desired_start_date unrenamed by the S2 OCM migration).
     if (key === "desired_start_date" || key === "program_type" || key === "schedule_type") {
         return "Set through enrollment or inquiry workflow";
     }

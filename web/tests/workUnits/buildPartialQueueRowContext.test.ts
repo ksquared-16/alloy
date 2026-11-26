@@ -28,7 +28,8 @@ describe("buildPartialQueueRowContext", () => {
             subject_id: "opp-1",
             display_name: "Smith Household",
         });
-        expect(ctx.row_stage).toBe("Tours");
+        // Process stage from membership stage_key ("tour"), not Work View label ("Tours").
+        expect(ctx.row_stage).toBe("Tour");
         expect(ctx.lifecycle_key).toBe("enrollment");
         expect(ctx.row_status_key).toBe("tour_scheduled");
         expect(ctx.row_status_label).toBe("Tour scheduled");
@@ -38,6 +39,22 @@ describe("buildPartialQueueRowContext", () => {
         expect(ctx.drawer_open.entity_id).toBe("opp-1");
         expect(ctx.drawer_open.active_subject!.subject_type).toBe("case");
         expect(ctx.drawer_open.active_subject!.stage_key).toBe("tour");
+    });
+
+    it("prefers household _customer_name over opportunity title for case display", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-2",
+                title: "Ravi Almead",
+                _customer_name: "Almead Family",
+                status_key: "open",
+                _primary_contact_name: "Ravi Almead",
+            },
+            queue,
+        });
+        expect(ctx.row_subject.display_name).toBe("Almead Family");
+        expect(ctx.case_context.display_name).toBe("Almead Family");
+        expect(ctx.primary_contact?.display_name).toBe("Ravi Almead");
     });
 
     it("maps boring case label for open-like keys", () => {
@@ -99,11 +116,11 @@ describe("buildPartialQueueRowContext", () => {
                         outcome_status_key: "tour_scheduled",
                         location_id: "loc-1",
                         location_label: "North Campus",
-                        desired_program_type: "infant",
+                        program_key: "infant",
                         desired_program_label: "Infant",
                         program_room_cohort_key: "room-a",
                         program_room_cohort_label: "Infant A",
-                        desired_schedule_type: "full_time",
+                        schedule_type: "full_time",
                         desired_schedule_label: "Full time",
                     },
                 ],
@@ -135,14 +152,14 @@ describe("buildPartialQueueRowContext", () => {
                         display_name: "Child A",
                         location_id: "loc-1",
                         location_label: "Site 1",
-                        desired_program_type: "infant",
+                        program_key: "infant",
                     },
                     {
                         id: "ocm-b",
                         display_name: "Child B",
                         location_id: "loc-2",
                         location_label: "Site 2",
-                        desired_program_type: "preschool",
+                        program_key: "preschool",
                     },
                 ],
             },
@@ -164,14 +181,14 @@ describe("buildPartialQueueRowContext", () => {
                         display_name: "Child A",
                         location_id: "loc-1",
                         location_label: "North Campus",
-                        desired_program_type: "infant",
+                        program_key: "infant",
                     },
                     {
                         id: "ocm-b",
                         display_name: "Child B",
                         location_id: "loc-1",
                         location_label: "North Campus",
-                        desired_program_type: "infant",
+                        program_key: "infant",
                     },
                 ],
             },
@@ -216,6 +233,70 @@ describe("buildPartialQueueRowContext", () => {
         });
     });
 
+    it("builds related_subjects_summary from _crm_compact_children when inquiry children are absent", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                _crm_compact_children: [
+                    { primary: "Avery Lee", secondary: "Infant", personId: "person-a" },
+                    { primary: "Rowan Lee", secondary: "Toddler", personId: "person-b" },
+                ],
+                _household_children: [
+                    { person_id: "person-a", display_name: "Avery Lee", dob: "2024-01-15" },
+                    { person_id: "person-b", display_name: "Rowan Lee", dob: "2025-10-01" },
+                ],
+            },
+            queue,
+        });
+
+        expect(ctx.related_subjects_summary.map((s) => s.display_name)).toEqual(["Avery Lee", "Rowan Lee"]);
+        expect(ctx.related_subjects_summary[0]?.age_label).toMatch(/\d+[ym]/i);
+        expect(ctx.related_subjects_summary[1]?.age_label).toMatch(/\d+[ym]/i);
+    });
+
+    it("renders age through collection presentation when CRM compact rows carry household DOB", async () => {
+        const { renderCollectionFieldPresentation, DEFAULT_CHILDREN_COLLECTION_PRESENTATION } = await import(
+            "@/lib/presentation/collectionFieldPresentation"
+        );
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                _crm_compact_children: [{ primary: "Lennon Kurzman", personId: "person-1" }],
+                _household_children: [
+                    { person_id: "person-1", display_name: "Lennon Kurzman", dob: "2024-01-15", gender: "female" },
+                ],
+            },
+            queue,
+        });
+
+        const display = renderCollectionFieldPresentation("children", ctx, {
+            ...DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
+            includedFields: ["first_name", "age", "gender"],
+        });
+        expect(display).toMatch(/Lennon · \d+[ym]/i);
+        expect(display).toMatch(/female/i);
+    });
+
+    it("builds related_subjects_summary from _child_display_name when only one child is known", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                _child_display_name: "Avery Lee",
+                _primary_child_person_id: "person-1",
+            },
+            queue,
+        });
+
+        expect(ctx.related_subjects_summary).toHaveLength(1);
+        expect(ctx.related_subjects_summary[0]?.display_name).toBe("Avery Lee");
+    });
+
     it("missing inquiry children does not crash and leaves placement unset", () => {
         const ctx = buildPartialQueueRowContext({
             row: { id: "opp-1", name: "Empty Case", status_key: "new_inquiry" },
@@ -228,11 +309,53 @@ describe("buildPartialQueueRowContext", () => {
     });
 
     it("attaches _queue_row_context without mutating source row fields", () => {
-        const row = { id: "opp-2", name: "Jones Family", status_key: "new_inquiry" };
-        const out = attachPartialQueueRowContext(row, { key: "new_leads", label: "New Leads" });
+        const row = { id: "opp-2", name: "Jones Family", status_key: "new_inquiry", stage_key: "lead" };
+        const out = attachPartialQueueRowContext(row, {
+            key: "new_leads",
+            label: "New Leads",
+            stage_key: "lead",
+        });
         expect(out._queue_row_context).toBeDefined();
-        expect((out._queue_row_context as { row_stage: string }).row_stage).toBe("New Leads");
+        // Stage field = process stage (Lead), not Work View label (New Leads).
+        expect((out._queue_row_context as { row_stage: string }).row_stage).toBe("Lead");
         expect(row).not.toHaveProperty("_queue_row_context");
+    });
+
+    it("uses opportunity location when inquiry children lack placement", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-loc",
+                name: "Fitz Family",
+                status_key: "new_inquiry",
+                stage_key: "lead",
+                location_id: "loc-north",
+                _location_label: "North Campus",
+            },
+            queue: { key: "new_leads", label: "New Leads", stage_key: "lead" },
+        });
+        expect(ctx.row_stage).toBe("Lead");
+        expect(ctx.placement_context?.location_label).toBe("North Campus");
+        expect(ctx.placement_context?.location_id).toBe("loc-north");
+    });
+
+    it("renders the New Lead status label for a lead — never the raw new_inquiry key", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: { id: "opp-9", name: "New Lead Household", status_key: "new_inquiry" },
+            queue: { key: "new_leads", label: "New Leads", lifecycle_key: "enrollment", stage_key: "lead" },
+        });
+        expect(ctx.row_status_key).toBe("new_inquiry");
+        // The status pill canonicalizes to "New Lead" (not "New inquiry", never the raw key).
+        expect(ctx.row_status_label).toBe("New Lead");
+        // The case container keeps its durable "boring" label separately.
+        expect(ctx.case_context.case_status_label).toBe("Active");
+    });
+
+    it("canonicalizes a raw new_inquiry _status_display to New Lead", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: { id: "opp-10", name: "H", status_key: "new_inquiry", _status_display: "new_inquiry" },
+            queue: { key: "new_leads", label: "New Leads", lifecycle_key: "enrollment", stage_key: "lead" },
+        });
+        expect(ctx.row_status_label).toBe("New Lead");
     });
 
     it("builds WorkUnitSurfaceContext from rows", () => {

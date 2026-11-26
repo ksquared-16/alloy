@@ -124,9 +124,11 @@ describe("Operational Consumption Slice 2 — Agreement + Schedule consumption",
         for (const kind of ["holiday_override", "exception", "no_op"]) expect(eng).toContain(kind);
     });
 
-    it("the service consumes Rate Resolution + the Charge resolver (does not reimplement pricing) and never posts", () => {
+    it("prices tuition from Commercial Execution (Phase 9 convergence) + the Charge resolver, and never posts", () => {
         const svc = read("lib/operationalConsumption/consumptionService.ts");
-        expect(svc).toContain("resolveRate");
+        // Phase 9 — tuition is priced by Commercial Execution (frozen V1), not Substrate-A resolveRate.
+        expect(svc).toContain("getCommercialTuitionValuation");
+        expect(svc).not.toContain("resolveRate(");
         expect(svc).toContain("resolveFinancialPolicy");
         expect(svc).toContain("writeTemplateDraftCharge"); // existing lifecycle service
         expect(svc).not.toMatch(/from\(["'](ledger_transactions|gl_journal_lines|invoices|payments|statements)["']\)/);

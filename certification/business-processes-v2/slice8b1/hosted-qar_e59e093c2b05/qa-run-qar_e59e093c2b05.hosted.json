@@ -1,0 +1,384 @@
+{
+  "schema": "alloy.bp_v2.hosted_readiness.v1",
+  "slice": "8B-1",
+  "deployed_staging": "e541dba05f34c7c7678ad0d45c9d4cb2bc603201",
+  "pr": 1574,
+  "run": {
+    "run_id": "qar_e59e093c2b05",
+    "plan_key": "bp_v2",
+    "target": {
+      "kind": "hosted",
+      "key": "alloy_staging_web"
+    },
+    "lane_id": "lane_581d120e4e41",
+    "run_ref": "erun2_4b6679b64209f24b",
+    "open_request_id": "gar_fc5fc192f2b982",
+    "state": "CLOSED",
+    "opened_at": "2026-10-23T02:12:15.436Z",
+    "lease_expires_at": "2026-10-23T08:12:15.436Z",
+    "personas": [
+      {
+        "persona_key": "admin",
+        "identity_key": "qa_pool_01",
+        "email": "qa-pool-01@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "admin"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "director",
+        "identity_key": "qa_pool_02",
+        "email": "qa-pool-02@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "restricted_operator",
+        "identity_key": "qa_pool_03",
+        "email": "qa-pool-03@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "restricted"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "identity_key": "qa_pool_04",
+        "email": "qa-pool-04@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_bp_no_finance"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      }
+    ],
+    "fixture_namespace": {
+      "qa_run_id": "qar_e59e093c2b05"
+    },
+    "sessions": [
+      {
+        "persona_key": "admin",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_e59e093c2b05/admin/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "director",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_e59e093c2b05/director/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "restricted_operator",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_e59e093c2b05/restricted_operator/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_e59e093c2b05/no_finance_operator/storage-state.json",
+        "failure": null
+      }
+    ],
+    "failure": null,
+    "close": {
+      "request_id": "gar_8b861be9a19a2a",
+      "started_at": "2026-10-23T02:36:08.504Z",
+      "recovery": false,
+      "closed_at": "2026-10-23T02:36:08.504Z",
+      "verdict": "QUIESCED_RETAINED",
+      "access_clean": true,
+      "sessions_removed": true,
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ],
+      "custom_roles": [
+        {
+          "role_key": "qa_bp_no_finance",
+          "grants": 0,
+          "existed": true
+        }
+      ],
+      "sessions_signed_out": [
+        {
+          "identity_key": "qa_pool_01",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "signed_out": true
+        }
+      ],
+      "residue_census": {
+        "ok": true,
+        "request_id": "gar_eaa41f83f0838b",
+        "executed_at": "2026-10-23T02:37:18.691Z",
+        "checks": [
+          "bp_qr_pool_access",
+          "bp_qr_zero_sent",
+          "bp_qr_org_exists",
+          "bp_qr_fin_no_merchant",
+          "bp_qr_fin_no_usable_method",
+          "bp_qr_fin_no_autopay",
+          "bp_qr_fin_no_provider_activity",
+          "bp_qr_fin_no_active_schedule",
+          "bp_qr_fin_no_draft",
+          "bp_qr_fin_no_open_balance",
+          "bp_qr_fin_no_open_variance",
+          "bp_qr_fin_no_unapplied_money",
+          "bp_qr_fin_attributed"
+        ]
+      },
+      "retained_by_design": [
+        "posted financial records (immutable), neutralized and attributed by run",
+        "published process configuration",
+        "access audit history (mutation_events)"
+      ]
+    },
+    "updated_at": "2026-10-23T02:39:05.663Z",
+    "history": [
+      {
+        "at": "2026-10-23T02:12:15.436Z",
+        "event": "opening"
+      },
+      {
+        "at": "2026-10-23T02:12:15.436Z",
+        "event": "open"
+      },
+      {
+        "at": "2026-10-23T02:36:08.504Z",
+        "event": "closing",
+        "detail": "live"
+      },
+      {
+        "at": "2026-10-23T02:36:08.504Z",
+        "event": "closed",
+        "detail": "ACCESS_CLEAN_RETAINED_ARTIFACTS_UNVERIFIED"
+      },
+      {
+        "at": "2026-10-23T02:39:05.663Z",
+        "event": "census_attached",
+        "detail": "gar_eaa41f83f0838b"
+      }
+    ],
+    "sessions_minted": true
+  },
+  "requests": {
+    "open": {
+      "request_id": "gar_fc5fc192f2b982",
+      "action_key": "environment.qa_run_open",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_40a8974f3acc8f",
+      "execution_ended_at": "2026-10-23T02:12:15.436Z"
+    },
+    "close": {
+      "request_id": "gar_8b861be9a19a2a",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_8d680c993a8ede",
+      "execution_ended_at": "2026-10-23T02:36:08.504Z"
+    },
+    "census": {
+      "request_id": "gar_eaa41f83f0838b",
+      "action_key": "database.read_census",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_e788166763a360",
+      "execution_ended_at": "2026-10-23T02:37:18.691Z"
+    },
+    "bind": {
+      "request_id": "gar_bd1d5c718729ae",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_3b1a4949f57892",
+      "execution_ended_at": "2026-10-23T02:39:05.663Z"
+    }
+  },
+  "enrollment_publication": {
+    "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+    "process_id": "2b324043-8bc0-46ae-a45b-f4b462e1a104",
+    "rev1": {
+      "revision_id": "16d048a2-42a3-49fc-8c10-3085c61b3c41",
+      "publication_id": "b13bf2cf-9390-480e-84d3-bdecd53a7dc9",
+      "validate_errors": 0,
+      "stages": 8,
+      "tracks": 2
+    },
+    "rev2": {
+      "revision_id": "caaf8b6a-e578-4699-be5e-ac2e6a2d19b0",
+      "publication_id": "eb126e5f-ff35-41fc-a795-2d2f7ac5e817",
+      "validate_errors": 0,
+      "change": "Registration/Waitlist Work Views declared row_grain child (QA view configuration; rev1 declared family and the runtime refused the contradiction)"
+    }
+  },
+  "lead_work_unit": {
+    "id": "2611a9d8-726a-45c3-bf3f-ece0937d59b6",
+    "key": "lifecycle_wu_lead",
+    "status_keys": [
+      "open"
+    ],
+    "note": "refused without status filters (LIFECYCLE_QUEUE_FILTERS_EMPTY); canonical family status `open` (ENROLLMENT_STAGE_DURABLE_STATES.lead)"
+  },
+  "create_lead": {
+    "opportunity_id": "de17caff-d706-44e8-b9d1-07aa58caa44b",
+    "mode": "committed",
+    "processing_case_id": "09920ba9-31db-4599-9db7-90dd1a3b8342",
+    "stage_key": "lead",
+    "status_key": "open",
+    "household": {
+      "customer_id": "4e324c66-e63b-46e9-aa7d-95cce6517b6e",
+      "name": "Readiness e59e093c2b05 Family"
+    },
+    "child": {
+      "customer_member_id": "c5fa60c4-2ab6-4396-8773-fff992e74f03",
+      "name": "QA Child A Readiness e59e093c2b05"
+    }
+  },
+  "close_as_lost_hosted": {
+    "outcome": "not_interested",
+    "applied_targets": [
+      {
+        "kind": "update_family_case_status",
+        "status_key": "closed",
+        "close_reason_key": "lost"
+      },
+      {
+        "kind": "move_to_stage",
+        "transition_ref": "lead_to_closed_lost",
+        "target_stage": "closed"
+      }
+    ],
+    "stage_work": "35c800ed-2804-4745-97eb-4b77272b3682 completed"
+  },
+  "tiles_after": {
+    "Assignments": "No open work items, 5 views",
+    "Billing": "No open work items, 5 views",
+    "Enrollment": "No open work items; New Leads 0, Tours 0, Decision 0, Registration 0, Waitlist 0, All 1"
+  },
+  "findings": [
+    "closed family record cannot be opened from All: 'stage \"closed\" offers no work templates \u2014 the answer will not claim operational on identity alone' (terminal template stage has no work template; Runtime/Enrollment; reported, not changed)",
+    "QA Shared has no child status definitions (opportunity_customer_members: []), so waitlist_child resolves no target; child status vocabulary must be configured before per-child waitlisting can be exercised hosted (tenant configuration)",
+    "QA Shared option sets person_gender / childcare_program_type return 404 (non-blocking configuration gap)",
+    "publish validation does not check Work View row grain against filtered stage grain; the runtime does"
+  ],
+  "census": {
+    "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "census_run_at": "2026-10-23T02:37:27.825Z",
+    "checks": {
+      "bp_qr_pool_access": "user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ true",
+      "bp_qr_zero_sent": "communication_messages ~ outbound_send_evidence ~ zero ~ true",
+      "bp_qr_org_exists": "orgs ~ qa_shared ~ present ~ true",
+      "bp_qr_fin_no_merchant": "payment_provider_merchants ~ any ~ zero ~ true",
+      "bp_qr_fin_no_usable_method": "payment_methods ~ usable ~ zero ~ true",
+      "bp_qr_fin_no_autopay": "payment_autopay_arrangements ~ active_or_paused ~ zero ~ true",
+      "bp_qr_fin_no_provider_activity": "payment_collection_attempts+payment_provider_refunds+provider_payments ~ any ~ zero ~ true",
+      "bp_qr_fin_no_active_schedule": "scheduled_work ~ financials_or_payments_active ~ zero ~ true",
+      "bp_qr_fin_no_draft": "charges ~ draft ~ zero ~ true",
+      "bp_qr_fin_no_open_balance": "charges ~ owed_unreversed_uncovered ~ zero ~ true",
+      "bp_qr_fin_no_open_variance": "financial_subsidy_variances ~ unresolved ~ zero ~ true",
+      "bp_qr_fin_no_unapplied_money": "payments ~ inbound_posted_unapplied ~ zero ~ true",
+      "bp_qr_fin_attributed": "charges+payments+variances ~ non_qa_actor ~ zero ~ true"
+    },
+    "retained": {
+      "bp_qr_retained_financial": [
+        {
+          "artifact": "posted financial records (immutable)",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_charge_rows": 0,
+          "by_status": {},
+          "reversal_rows": 0,
+          "payment_rows": 0,
+          "variance_rows": 0
+        }
+      ],
+      "bp_qr_retained_process_config": [
+        {
+          "artifact": "published process configuration",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_configuration_publication_rows": 4
+        }
+      ],
+      "bp_qr_retained_audit": [
+        {
+          "artifact": "access audit history (mutation_events)",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_mutation_event_rows": 96
+        }
+      ]
+    }
+  },
+  "retained_non_financial": [
+    "Enrollment department + published process (rev 2) and lead work unit (configuration)",
+    "household 4e324c66, child c5fa60c4, opportunity de17caff (closed, reason lost), processing case 09920ba9 \u2014 run-attributed by name"
+  ]
+}

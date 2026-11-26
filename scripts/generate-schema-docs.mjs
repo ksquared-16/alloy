@@ -13,40 +13,51 @@ const REF = path.join(ROOT, "docs/supabase/reference");
 const OUT = path.join(ROOT, "docs/schema");
 
 function parseCsv(text) {
-  const lines = text.trim().split("\n");
-  const headers = parseCsvLine(lines[0]);
-  return lines.slice(1).map((line) => {
-    const vals = parseCsvLine(line);
-    const row = {};
-    headers.forEach((h, i) => {
-      row[h] = vals[i] ?? "";
-    });
-    return row;
-  });
-}
-
-function parseCsvLine(line) {
-  const out = [];
+  const rows = [];
+  const headers = [];
   let cur = "";
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
+  let row = [];
+  const pushCell = () => {
+    row.push(cur);
+    cur = "";
+  };
+  const pushRow = () => {
+    if (headers.length === 0) {
+      headers.push(...row);
+    } else if (row.length) {
+      const obj = {};
+      headers.forEach((h, i) => {
+        obj[h] = row[i] ?? "";
+      });
+      rows.push(obj);
+    }
+    row = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
     if (c === '"') {
-      if (inQuotes && line[i + 1] === '"') {
+      if (inQuotes && text[i + 1] === '"') {
         cur += '"';
         i++;
       } else {
         inQuotes = !inQuotes;
       }
     } else if (c === "," && !inQuotes) {
-      out.push(cur);
-      cur = "";
+      pushCell();
+    } else if ((c === "\n" || c === "\r") && !inQuotes) {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      pushCell();
+      pushRow();
     } else {
       cur += c;
     }
   }
-  out.push(cur);
-  return out;
+  if (cur.length || row.length) {
+    pushCell();
+    pushRow();
+  }
+  return rows;
 }
 
 function readCsv(name) {
@@ -58,7 +69,20 @@ function ensureDir(p) {
 }
 
 function write(name, body) {
-  fs.writeFileSync(path.join(OUT, name), body, "utf8");
+  // Generated references carry the governed metadata contract
+  // (docs/platform/governance/documentation-governance.md): status `generated`,
+  // and the body names its generator and source below.
+  const frontmatter = [
+    "---",
+    "owner: platform",
+    "status: generated",
+    `last_reviewed: ${generatedAt}`,
+    "supersedes: []",
+    "---",
+    "",
+    "",
+  ].join("\n");
+  fs.writeFileSync(path.join(OUT, name), frontmatter + body, "utf8");
   console.log("wrote", name);
 }
 
@@ -89,7 +113,7 @@ let tablesMd = `# Schema — tables and views
 
 **Regenerate:** \`npm run export:supabase-schema\` then \`node scripts/generate-schema-docs.mjs\`
 
-**Generated:** ${generatedAt}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database)
 
 ## Summary
 
@@ -145,7 +169,7 @@ let colsMd = `# Schema — columns
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Column count:** ${columns.filter((c) => c.table_schema === "public").length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Column count:** ${columns.filter((c) => c.table_schema === "public").length}
 
 Columns for \`public\` schema tables, grouped alphabetically by table.
 
@@ -165,7 +189,7 @@ let conMd = `# Schema — constraints
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Constraint count:** ${constraints.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Constraint count:** ${constraints.length}
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|
@@ -181,7 +205,7 @@ let idxMd = `# Schema — indexes
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Index count:** ${indexes.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Index count:** ${indexes.length}
 
 | Table | Index | Unique | Definition |
 |-------|-------|--------|------------|
@@ -197,7 +221,7 @@ let fnMd = `# Schema — functions
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Function count:** ${functions.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Function count:** ${functions.length}
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
@@ -213,7 +237,7 @@ let trMd = `# Schema — triggers
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Trigger count:** ${triggers.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Trigger count:** ${triggers.length}
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -229,7 +253,7 @@ let polMd = `# Schema — policies and security
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **RLS policy count:** ${policies.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **RLS policy count:** ${policies.length}
 
 ## Posture
 

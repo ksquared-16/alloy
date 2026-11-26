@@ -10,6 +10,7 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     attention: "action",
     current_mission: "action",
     current_work: "action",
+    business_process: "action",
     required_information: "action",
     primary_next_action: "action",
     readiness_kpi: "status",
@@ -24,10 +25,29 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     workflow_history: "summary",
     household: "profile",
     children: "collection",
+    employment: "profile",
+    staff: "profile",
+    // A collection, not a profile: the answer is a LIST whose length varies — the qualifications
+    // held and the requirements that apply. A profile archetype would present a fixed set of
+    // labelled fields, which is the wrong shape for a list that is often empty and sometimes long.
+    staff_qualifications: "collection",
+    // A list whose length varies — the weekdays worked, and the exceptions on the
+    // books. A profile archetype would promise a fixed set of labelled fields.
+    staff_availability: "collection",
+    // The same archetype as the case-grain readiness answer, so the two look alike.
+    staff_readiness: "status",
+    staff_compensation: "status",
+    attendance: "timeline",
+    financials: "summary",
+    health_safety: "status",
+    milestones: "summary",
+    scheduling: "collection",
     tasks: "collection",
     work_launcher: "launcher",
     timeline: "timeline",
     billing_preview: "status",
+    // Durable child identity — a profile of durable facts, the same archetype `household` uses.
+    child_identity: "profile",
 };
 
 export function system5ArchetypeForCard(key: FocusPanelCardKey): FocusPanelCardArchetype {

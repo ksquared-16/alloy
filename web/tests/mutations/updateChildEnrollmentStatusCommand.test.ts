@@ -73,9 +73,10 @@ describe("enrollment domain handler shape", () => {
         expect(typeof handler?.evaluateReadiness).toBe("function");
     });
 
-    it("lead status handler does NOT have evaluateReadiness hook", () => {
+    it("lead status handler gates only the family-close rule as readiness (E2E-09)", () => {
+        // A close may not strand live child tracks; the preview names the refusal before commit.
         const handler = getDomainHandlerForCommand("update_lead_status");
-        // V1: no readiness gating for lead status
-        expect(handler?.evaluateReadiness).toBeUndefined();
+        expect(typeof handler?.evaluateReadiness).toBe("function");
+        expect(getDomainHandlerForCommand("close_lead")).toBe(handler);
     });
 });

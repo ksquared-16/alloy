@@ -1,3 +1,4 @@
+import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { hydrateActionLinkDisplay } from "@/lib/actionLinkDisplayDetails";
@@ -19,7 +20,7 @@ export async function GET(
     const { data: row, error } = await supabase
         .from("action_links")
         .select("id, org_id, action_type, entity_type, entity_id, expires_at, consumed_at, created_at, metadata")
-        .eq("token", token)
+        .eq("token_hash", hashFormLinkToken(token))
         .single();
 
     if (error || !row) {

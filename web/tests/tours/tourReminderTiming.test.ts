@@ -18,12 +18,16 @@ const enabledConfig = {
 };
 
 describe("tourReminderTiming", () => {
-    it("schedules 24h and 2h reminders at correct instants", () => {
+    it("schedules configured offsets (24h + 2h example — multi-timer via config, not one column)", () => {
         const tourStart = "2026-06-16T12:00:00.000Z";
         const now = new Date("2026-06-14T00:00:00.000Z");
         const config = {
             ...enabledConfig,
             quiet_hours: { ...enabledConfig.quiet_hours, enabled: false },
+            reminder_offsets: [
+                { reminder_key: "tour_reminder_24h", offset_minutes: 24 * 60, channels: ["email" as const] },
+                { reminder_key: "tour_reminder_2h", offset_minutes: 2 * 60, channels: ["email" as const] },
+            ],
         };
 
         const plans = buildTourReminderSchedulePlans({

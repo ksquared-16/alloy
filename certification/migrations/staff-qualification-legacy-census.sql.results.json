@@ -1,0 +1,145 @@
+{
+  "trusted_host_action_id": "tha_87e856a4d98ff8",
+  "query_hash": "a4b21a53f6ff0e31f9a2e619007b5b5fc1c563ac88da9e0d543af390e12253f9",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T22:48:43.827Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_87e856a4d98ff8",
+    "query_hash": "a4b21a53f6ff0e31f9a2e619007b5b5fc1c563ac88da9e0d543af390e12253f9",
+    "authorization_id": "grnt_97f7f23ecd0d481c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T22:48:45.479Z",
+    "question_ids": [
+      "cert_shaped_defs_total",
+      "cert_shaped_defs_entity_types",
+      "cert_shaped_values_total",
+      "employment_defs_total",
+      "employment_defs_active",
+      "form_definitions",
+      "form_submissions",
+      "form_submission_documents",
+      "cert_shaped_form_definitions",
+      "employments_total",
+      "employment_positions",
+      "sites",
+      "operational_assignment_types",
+      "assignment_types_admitting_staff",
+      "assignment_types_staffing_supply"
+    ],
+    "questions": {
+      "cert_shaped_defs_total": {
+        "question_id": "cert_shaped_defs_total",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "cert_shaped_defs_entity_types": {
+        "question_id": "cert_shaped_defs_entity_types",
+        "row_count": null,
+        "rows": [
+          "location vendor"
+        ]
+      },
+      "cert_shaped_values_total": {
+        "question_id": "cert_shaped_values_total",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "employment_defs_total": {
+        "question_id": "employment_defs_total",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "employment_defs_active": {
+        "question_id": "employment_defs_active",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "form_definitions": {
+        "question_id": "form_definitions",
+        "row_count": null,
+        "rows": [
+          47
+        ]
+      },
+      "form_submissions": {
+        "question_id": "form_submissions",
+        "row_count": null,
+        "rows": [
+          250
+        ]
+      },
+      "form_submission_documents": {
+        "question_id": "form_submission_documents",
+        "row_count": null,
+        "rows": [
+          151
+        ]
+      },
+      "cert_shaped_form_definitions": {
+        "question_id": "cert_shaped_form_definitions",
+        "row_count": null,
+        "rows": [
+          17
+        ]
+      },
+      "employments_total": {
+        "question_id": "employments_total",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "employment_positions": {
+        "question_id": "employment_positions",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "sites": {
+        "question_id": "sites",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "operational_assignment_types": {
+        "question_id": "operational_assignment_types",
+        "row_count": null,
+        "rows": [
+          15
+        ]
+      },
+      "assignment_types_admitting_staff": {
+        "question_id": "assignment_types_admitting_staff",
+        "row_count": null,
+        "rows": [
+          2
+        ]
+      },
+      "assignment_types_staffing_supply": {
+        "question_id": "assignment_types_staffing_supply",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      }
+    },
+    "row_count": 15
+  }
+}

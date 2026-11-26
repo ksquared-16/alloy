@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 
 const outDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/assets/bos-operational-intake-shell-lock",
+    "../../../docs/sprints/archive/06_2026/assets/bos-operational-intake-shell-lock",
 );
 
 test.beforeAll(() => {

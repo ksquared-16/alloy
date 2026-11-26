@@ -1,0 +1,44 @@
+[
+  {
+    "id": "7-1",
+    "what": "the resolved obligation names its party in the projection",
+    "ok": true,
+    "observed": "named \"Cert Certhouse\" child=Certb Certhouse amount=$75.00"
+  },
+  {
+    "id": "7-2",
+    "what": "the Responsible Party filter is offered now that it divides the cohort",
+    "ok": true,
+    "observed": "{\"present\":true,\"text\":\"Anyone responsible ▾\"}"
+  },
+  {
+    "id": "7-3",
+    "what": "filtering to the party returns the resolved obligation and excludes the rest",
+    "ok": true,
+    "observed": "rows=45 includesResolved=true includesUnassignedHistorical=false"
+  },
+  {
+    "id": "9-1",
+    "what": "Resolve is no longer offered where Reallocate is appropriate",
+    "ok": true,
+    "observed": "reallocate=1 resolve=0"
+  },
+  {
+    "id": "9-2",
+    "what": "Reallocate opens and demands a reason before it will commit",
+    "ok": true,
+    "observed": "{\"overlay\":\"responsibility\",\"mode\":\"reallocate\",\"reason\":true,\"confirmDisabled\":true}"
+  },
+  {
+    "id": "8-1",
+    "what": "the Workspace states the same party, child and amount for the same charge",
+    "ok": true,
+    "observed": "named \"Cert Certhouse\" child=Certb Certhouse amount=$75.00"
+  },
+  {
+    "id": "8-2",
+    "what": "the Workspace offers the same Responsible Party filter and the same row command",
+    "ok": true,
+    "observed": "filters=[\"financials-filter-subject\",\"financials-filter-period\",\"financials-filter-responsible-party\"] actions=[\"reverse\",\"adjust\",\"reallocateResponsibility\"]"
+  }
+]

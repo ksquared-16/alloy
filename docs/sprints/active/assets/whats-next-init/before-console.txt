@@ -1,0 +1,15 @@
+[WN-INIT] +   0ms #0 surfaceHost.render {"subjectId":null,"note":"none"}
+[WN-INIT] +   3ms #1 surfaceHost.render {"subjectId":null,"note":"none"}
+[WN-INIT] +   0ms #0 currentWorkCard.compose {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","note":"content"}
+[WN-INIT] +   4ms #1 recordRuntime.fetch.start {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","runtimeId":"recordRuntime-2","reqGen":1,"cacheKey":"opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23","preloadSource":"live","cache":"miss","note":"cold"}
+[WN-INIT] +   8ms #2 focusPanel.mount {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","componentId":"focusPanel-1"}
+[WN-INIT] +   8ms #3 focusPanel.body {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","componentId":"focusPanel-1","note":"commit-critical-seed","cache":"seed"}
+[WN-INIT] +  12ms #4 surfaceHost.render {"subjectId":"new-leads","note":"provisioned"}
+[WN-INIT] +  13ms #5 focusPanel.unmount {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","componentId":"focusPanel-1"}
+[WN-INIT] +  13ms #6 currentWorkCard.compose {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","note":"content"}
+[WN-INIT] +  14ms #7 recordRuntime.fetch.start {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","runtimeId":"recordRuntime-2","reqGen":2,"cacheKey":"opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23","preloadSource":"live","cache":"miss","note":"cold"}
+[WN-INIT] +  15ms #8 focusPanel.mount {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","componentId":"focusPanel-1"}
+[WN-INIT] +  15ms #9 focusPanel.body {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","componentId":"focusPanel-1","note":"commit-critical-seed","cache":"seed"}
+[WN-INIT] +  43ms #10 recordRuntime.fetch.apply {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","runtimeId":"recordRuntime-2","reqGen":2,"preloadSource":"live","cache":"live","note":"atomic complete reveal (stage-work pre-resolved)"}
+[WN-INIT] + 105ms #11 recordRuntime.fetch.skip {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","runtimeId":"recordRuntime-2","reqGen":2,"cache":"hit","note":"displayVm already matches subject — no refetch"}
+[WN-INIT] + 106ms #12 focusPanel.body {"subjectId":"b13ecce9-74d4-442d-9891-7c88f587bc23","componentId":"focusPanel-1","note":"enriched:resolved","cache":"live"}

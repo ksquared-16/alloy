@@ -1,12 +1,99 @@
-# Commercial Configuration
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-09-30
+supersedes: []
+---
 
-**Status:** V1 — Programs & Tuition (June 2026).
+# Commercial Configuration (Compatibility Runtime)
+
+**Status:** ✅ **Commercial Platform V1 — SHIPPED & FROZEN (2026-07-03).** **Programs** is now the operator-facing domain; Commercial remains the internal runtime/route name until a separately authorized module migration. Canonical architecture: **[Commercial Platform V1](../commercial/commercial-platform-v1.md)**.
 
 ---
 
+## Certification record — measured 2026-09-30
+
+**State:** `COMMERCIAL_DOCUMENTATION_CONTEXT_READY`. Measured against staging `64cdee20a`. Row counts are
+from the **certification stack** and say what is exercised there, not what exists in production.
+
+### The boundary that must not collapse
+
+**Commercial intent ≠ Financial obligation ≠ Payment.** Commercial owns what something costs and under
+what policy. It does not own the obligation that intent produces, the payment that settles it, or the
+subsidy that suppresses collection of it.
+
+| Concept | Owner | Source of truth | State |
+|---|---|---|---|
+| tuition rates | Commercial | `commercial_tuition_rates` (**8 rows**) | CURRENT |
+| commercial policy | Commercial | `commercial_policies` (**1 row**), `commercial_policy_exceptions` | CURRENT |
+| discount programs | Commercial | `discount_programs` (**5 rows**) + benefits/qualifiers/commitment rules | CURRENT |
+| discount codes and redemptions | Commercial | `discount_codes`, `discount_redemptions`, `discount_applications` (0 rows here) | IMPLEMENTED, unexercised |
+| fees and add-ons | Commercial | `commercial_fees`, `commercial_addons` (0 rows) | IMPLEMENTED, unexercised |
+| accepted pricing term | **Financials** | `enrollment_pricing_terms` via `enrollment.pricing.accept` | CURRENT — the hand-off point |
+| reductions → net obligation | **Financials** | `financial_reduction_applications` | CURRENT, not Commercial |
+| accounting | **Financials** | `financial_journal_entries` (13,136), `financial_accounting_periods` (102) | CURRENT, not Commercial |
+| subsidy | **Subsidy** | `financial_subsidy_*`, capability `fin.subsidy` | CURRENT, not Commercial |
+| payment | **Payments** | `payments`, `payment_allocations` | CURRENT, not Commercial |
+| vouchers | — | nothing | **ABSENT** — not deferred, not present |
+| quotes / estimates | — | no quote or estimate table for childcare commercial | **ABSENT** for this product |
+
+### Surface census — exact
+
+53 route files · **88 handlers** (60 write, 28 read) · 12 mounted UI pages.
+
+**Authority: zero portal-only or session-only Commercial mutations.** 53 of 60 writes declare a
+capability; the remaining 7 all carry a real gate, and every one is a ROLE gate rather than a missing one:
+
+| Handler | Gate | Classification |
+|---|---|---|
+| `addons/[id]` DELETE | role `admin` + deletion-eligibility check | IMPLEMENTED · legacy vertical |
+| `pricing-dimensions/[id]` DELETE | role `admin` | IMPLEMENTED · legacy vertical |
+| `pricing-dimension-values/[id]` DELETE | role `admin` | IMPLEMENTED · legacy vertical |
+| `pricing-modes/[id]` DELETE | role `admin` | IMPLEMENTED · legacy vertical |
+| `service-offerings/[id]` DELETE | role `admin` **and** `requireFinancialsCapability` | IMPLEMENTED · declaration understates enforcement |
+| `subscriptions/[id]` PATCH | `requireAdminOrOps` | IMPLEMENTED · `customer_subscriptions` (0 rows) |
+| `subscriptions/[id]/generate-next` POST | `requireAdminOrOps` | IMPLEMENTED · same |
+
+Converting those role gates to capabilities is W-15's burndown, not a Commercial gap.
+
+### The DELETE question, answered
+
+The five pending DELETEs are **IMPLEMENTED, not declared-and-missing**: each resolves an eligibility
+check that refuses with 409 and a `recommended_action`, then performs a real delete with the foreign-key
+violation mapped to "in use". What makes them unusual is *what they administer*.
+
+**They operate on the retired Jobs/Booking pricing vertical.** `pricing_addons`, `pricing_dimensions`,
+`pricing_dimension_values`, `pricing_modes`, `pricing_matrix`, `pricing_first_clean_prices` and
+`pricing_square_footage_tiers` all hold **zero rows**, and the last two name a cleaning-service concept
+this product does not sell. The schema and the routes are retained and supported; they are not the
+childcare commercial model. Do not read `pricing_*` as the pricing engine for tuition — that is
+`commercial_tuition_rates`.
+
+### What is exercised versus what merely exists
+
+The Commercial surface is large and its exercised core is narrow: tuition rates, commercial policies and
+discount programs carry data on the certification stack; subscriptions, service offerings, discount codes,
+fees, add-ons and the whole `pricing_*` family do not. **Zero rows here is not proof of disuse in
+production** — it is proof that this pass did not exercise them, and a benchmark consumer should treat
+those as implemented-but-unverified rather than as active behaviour.
+
+### Benchmark inference contract
+
+**SAFE, because measured:** Commercial defines pricing and policy INTENT; commercial configuration is not
+payment truth; discounts and fees are Commercial and are distinct from subsidy, which is Subsidy;
+discount programs, policies and tuition rates are implemented and carry data; accounting and obligations
+belong to Financials.
+
+**FORBIDDEN:** quote = obligation (there is no childcare quote entity at all) · offer = payment · subsidy
+= discount (different owners, different tables, different reversal semantics) · Commercial owns
+ledger/accounting truth · a `pending` DELETE declaration means DELETE is unimplemented (all five are
+implemented) · vouchers exist (nothing implements them) · `pricing_*` is the tuition pricing engine (it
+is the retired Jobs/Booking vertical) · zero rows on the certification stack proves a feature is unused in
+production.
+
 ## Purpose
 
-Commercial Configuration is the first production consumer of the Configuration Runtime. It owns the business structure of an operator's offering: what programs they run and what they charge for them.
+Commercial Configuration is the first production consumer of the Configuration Runtime. It prices and financially interprets what the organization-owned Programs catalog defines; it does not own Program identity.
 
 Commercial Configuration surfaces feel like "I am configuring my business" — not "I am configuring software."
 
@@ -39,17 +126,28 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 
 ## Domain: Programs
 
-**Route:** `/admin/commercial/programs`
+**Route:** `/organization/programs` (canonical). Legacy
+`/settings/commercial/programs` and `/admin/commercial/programs` redirect here.
 
-**Storage:** `location_program_categories` (existing table, per-site).
+**Storage:** Organization identity now uses `programs` → editable
+`program_drafts` → immutable `program_revisions`.
+`location_program_categories` remains the stable compatibility representation
+of a Location Program offering and carries its consumed revision link.
 
-**Ownership:** Location. Each site owns its own program list. Org-level program catalog is the union of all site programs, seeded from common defaults (Infant, Toddler, Preschool, Pre-K, School Age).
+**Ownership:** Organization. Programs define a reusable service catalog. Locations choose which Programs they offer.
 
-**Inheritance:** Programs are location-owned — there is no org-level override. Each site configures exactly the programs it offers.
+**Inheritance:** Program identity is organization-owned; Location participation is availability/assignment. Rooms/Delivery Resources, capacity, and schedules are not Program-owned.
 
 **Operator model:** "Which programs does this location offer?" Not "which settings does this location have."
 
-**Backend reused:** `location_program_categories` + `/api/admin/location-program-categories` (GET, POST, PATCH). No new tables.
+**Publication backend:** `/api/admin/configuration/programs` owns draft,
+validation, publication, impact preview, Location assignment, history, and
+retry.
+`/api/admin/location-program-categories` remains the Location offering read and
+local-mutation path; direct creation of Program identity there is rejected.
+Assignment creates or links the stable row and advances its consumed revision
+without changing Location-owned offer state, evidence, metadata, resource
+relationships, or schedules.
 
 ---
 
@@ -57,22 +155,45 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 
 **Route:** `/admin/commercial/tuition`
 
-**Storage:** `commercial_tuition_rates` (new table, June 2026).
+**Storage:** `commercial_tuition_rates`.
 
-**Schema:** `(org_id, location_id, program_key, schedule_key, billing_period) → rate_cents`
+**Schema (V3, current):** `(org_id, location_id, variant_id, cadence_key, payer_type) → rate_cents`,
+effective-dated by `effective_start` / `effective_end`, with `is_active` and `not_offered`.
+
+> **The V1 shape is gone, and this doc used to describe it.** Until Thread 3 this section said the
+> schema was `(org_id, location_id, program_key, schedule_key, billing_period)`. Migration
+> `20260702000002_commercial_tuition_rates_v2` DROPPED `program_key`, `schedule_key` and
+> `billing_period` in July 2026, and `20260702000003_program_offering_variants` moved rates onto
+> `variant_id`. Two readers went on selecting the dropped columns for two months — every request
+> they served answered `42703 column commercial_tuition_rates.program_key does not exist` — and the
+> stale doctrine here is part of why nobody caught it. A guard test now refuses those column names
+> from returning: `web/tests/enrollment/droppedTuitionColumnsCannotReturn.test.ts`.
 
 - `location_id = NULL` = org default
 - `location_id = <site_id>` = location override
 
 **Ownership:** Org for defaults, Location for overrides.
 
-**Inheritance:** The tuition grid resolves: location override → org default. If a location has no override for a cell, it inherits the org rate. Implemented in `lib/commercial/tuitionRates.ts` via `buildTuitionRateMap`.
+**Inheritance:** A location override supersedes the org default. Within a cadence, a later
+`effective_start` supersedes an earlier one. Anything still tied afterwards is **ambiguous** and is
+reported as a tie — never resolved by array order.
 
-**Grid structure:** Rows = programs (`location_program_categories.key`), Columns = schedule types (`childcare_schedule_type` option set). Each cell = a rate in cents.
+**Where the eligibility dimensions live.** A rate hangs off a `program_offering_variant`, which
+hangs off a `program_offering` (`program_key` × `attendance_type`). So the dimensions this model
+actually has are **program × attendance type × quantity (days a week) × cadence × payer ×
+location × effective date**. Age banding is NOT one of them — it belongs to `childcare_rate_plans`,
+a separate system feeding draft charge resolution.
 
-**Billing periods:** weekly | biweekly | monthly | annual. Default: monthly.
+**`is_active` is folded into the readers.** `readPricing` excludes inactive rates from the
+Commercial Export, so a deactivated rate is not in the catalog at all. `not_offered` is different
+and stays visible: it is a deliberate statement that a scope is not sold, and the resolver explains
+it rather than hiding it.
 
-**Operator model:** "What do we charge for Infant full-time at this location?" Displayed as a spreadsheet-style grid with inline editing.
+**Billing cadence:** `billing_cadences` item keys (weekly | biweekly | monthly | annual). A cadence
+the operator has **not** chosen is not a wildcard: if more than one is offered, the resolution is
+ambiguous and the operator settles it.
+
+**Operator model:** "What do we charge for Infant full-time, five days a week, at this location?"
 
 ---
 
@@ -87,23 +208,44 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 
 ---
 
-## Future domains (deferred)
+## Future domains — CORRECTED 2026-09-30
 
-- **Funding Sources** — discount programs, subsidies, vouchers
-- **Fees & Add-Ons** — registration fees, supply fees, activity fees
-- **Billing Policies** — payment schedules, late fees, auto-billing
-- **Accounting** — chart of accounts, revenue recognition
-- **Simulator** — what-if tuition modeling
+**This list said "deferred" and was wrong about most of it.** It was written 2026-07-17 and several of
+these shipped afterwards. A canonical document telling a reader that subsidies and discount programs do
+not exist is worse than silence, so each line is now measured rather than asserted. Counts are from the
+certification stack.
 
-These are scoped out of V1. Do not build them until Programs & Tuition is stable.
+| Was listed as deferred | Measured state 2026-09-30 |
+|---|---|
+| **Funding Sources — discount programs** | **IMPLEMENTED AND IN USE.** `discount_programs` (5 rows), plus `discount_program_benefits`, `discount_program_qualifiers`, `discount_program_commitment_rules`, `discount_commitments`, `discount_codes`, `discount_redemptions`, `discount_applications` |
+| **Funding Sources — subsidies** | **IMPLEMENTED.** Seven `financial_subsidy_*` tables, `financial_funding_agencies`, `financial_expected_funding`, and **10 production registered commands** under one capability `fin.subsidy`. Zero rows on this stack, which is not the same as unimplemented. Owned by Subsidy, not by Commercial — see below |
+| **Funding Sources — vouchers** | **NOT FOUND** as a distinct concept. Not implemented and not merely deferred |
+| **Fees & Add-Ons** | **TABLES EXIST, UNUSED HERE.** `commercial_fees` and `commercial_addons` exist with 0 rows; `pricing_addons` exists |
+| **Billing Policies** | `financial_policies`, `payment_autopay_arrangements` and `payment_collection_attempts` exist. Not audited by this pass — treat as unmeasured rather than deferred |
+| **Accounting** | **IMPLEMENTED AND HEAVILY USED.** `financial_journal_entries` holds **13,136 rows** and `financial_accounting_periods` 102, with `financial_accounting_calendars`. Revenue recognition specifically was NOT verified by this pass; journal entries are not by themselves revenue recognition |
+| **Simulator** | A canonical owner exists: [`../core/commercial-execution-simulator-deltas.md`](../core/commercial-execution-simulator-deltas.md) |
+
+**Where the boundary actually falls.** Commercial owns **intent** — what something costs and under what
+policy. It does not own the financial obligation that intent produces, the payment that settles it, or
+the subsidy that suppresses collection of it. Those are Financials, Payments and Subsidy respectively,
+and collapsing them is the specific error this correction guards against.
 
 ---
 
 ## Backend gaps
 
-None in V1. The backend for Programs reuses `location_program_categories`. The tuition grid adds `commercial_tuition_rates` — a genuine new domain, not a workaround.
+Commercial V1 remains complete on its frozen substrate. Programs now has
+authoritative Organization identity, immutable publication, and revision-linked
+Location consumption. `location_program_categories` still carries cached
+identity columns for compatibility because enrollment, placement, rules, and
+resource relationships reference its stable id. Effective Program identity
+resolves from the consumed revision; the compatibility row owns availability
+and permitted local values, not Program identity. Deleting or renaming this
+storage is deferred. The tuition grid remains in `commercial_tuition_rates`.
 
 The schedule type vocabulary (`childcare_schedule_type` option set) is an org option set today. Future work: per-location schedule offerings. This is deferred.
+
+**Tuition day-count commitments** (1–5 days/week via `program_offering_variants`) are likewise an interim stand-in pending Schedule Offerings evolution — see **Deferred evolution — Schedule Offerings** in `docs/platform/commercial/ownership-model.md`. Do not rebuild tuition on schedule offerings until that design lands.
 
 ---
 

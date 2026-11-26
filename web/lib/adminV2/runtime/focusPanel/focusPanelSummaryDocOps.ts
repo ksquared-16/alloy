@@ -66,6 +66,48 @@ export function buildSummaryDocFromOrder(order: readonly SummaryCardOrderEntry[]
     };
 }
 
+/**
+ * Apply Focus Panel Summary working edits onto the latest canonical document.
+ *
+ * Persistence law: never rebuild a saved document from a partial form projection.
+ * Untouched metadata (card links, forward-compatible keys, nested surfaces not in
+ * the working map, etc.) survives. Sections + known composition keys are replaced
+ * by the typed mutation inputs.
+ */
+export function mergeFocusPanelSummaryWorkingDoc(args: {
+    base: LayoutDoc;
+    order: readonly SummaryCardOrderEntry[];
+    /** When set, replaces published layout metadata; when null/undefined, preserves base. */
+    publishedLayoutMetadata?: Record<string, unknown> | null;
+    /** When set, replaces nestedSurfaces; when null/undefined, preserves base. */
+    nestedSurfaces?: Record<string, unknown> | null;
+}): LayoutDoc {
+    const { base, order } = args;
+    const baseMeta =
+        base.metadata && typeof base.metadata === "object" && !Array.isArray(base.metadata)
+            ? { ...base.metadata }
+            : {};
+    const metadata: Record<string, unknown> = {
+        ...baseMeta,
+        focusPanelMode: "summary",
+        layoutKey: FOCUS_PANEL_SUMMARY_LAYOUT_KEY,
+    };
+    if (args.publishedLayoutMetadata) {
+        Object.assign(metadata, args.publishedLayoutMetadata);
+    }
+    if (args.nestedSurfaces) {
+        metadata.nestedSurfaces = args.nestedSurfaces;
+    }
+    return {
+        ...base,
+        formatVersion: base.formatVersion ?? LAYOUT_DOC_FORMAT_VERSION,
+        surface: FOCUS_PANEL_SUMMARY_SURFACE,
+        entityType: FOCUS_PANEL_SUMMARY_ENTITY_TYPE,
+        sections: order.map((meta) => buildFocusPanelCardSection({ ...meta, gridRow: 0 })),
+        metadata,
+    };
+}
+
 /** Allocate a unique instance id for a card type, given the existing order. Pure. */
 export function nextInstanceId(order: readonly SummaryCardOrderEntry[], key: string): string {
     const taken = new Set(order.map((card) => entryInstanceId(card)));

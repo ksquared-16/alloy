@@ -14,6 +14,31 @@ import { defaultOpportunityLaunchPrefillFieldMap } from "@/lib/forms/prefill/def
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 import { resolveOpportunityEnrollmentSelection } from "@/lib/forms/packets/opportunityPacketLaunchValidation";
 import { emitOpportunityEnrollmentPacketCreatedSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
+import { REQUIREMENT_DERIVED_PACKET_SOURCE } from "@/lib/enrollment/participantLaunch/requirementDerivedPacket";
+
+/**
+ * A MANUAL SHARE IS NEVER AN ENROLLMENT LAUNCH.
+ *
+ * Every packet link is minted here: Studio's packet links, the opportunity packet modal, compose,
+ * from-template — and Start Enrollment's own launcher. Only the last one is an Enrollment launch: it
+ * derives the packet from the pinned Business Process revision, checks the child's admission, anchors a
+ * journey, resumes an existing session and binds the payer. The manual paths do none of that, yet they
+ * accepted ANY packet in the org — including the requirement-derived Enrollment packet — and let the
+ * caller's metadata stamp Enrollment provenance (created_via enrollment_start, stage_key, the payer
+ * recipient_person_id, the revision pin, a process instance). Measured on staging: a real child still in
+ * `new_inquiry` held Enrollment paperwork minted this way, with no journey, no stage and no payer.
+ *
+ * So: a requirement-derived Enrollment packet is minted ONLY for `purpose: "enrollment_start"` — a
+ * server-side argument no request can supply — and the Enrollment-reserved keys are stripped from every
+ * other caller's metadata. Authored (document) packets share exactly as before.
+ */
+export const ENROLLMENT_RESERVED_LINK_METADATA_KEYS = [
+    "stage_key",
+    "recipient_person_id",
+    "derived_from_business_process_revision_id",
+    "process_instance_id",
+] as const;
+export const ENROLLMENT_PACKET_NOT_SHAREABLE_CODE = "enrollment_packet_requires_start_enrollment";
 
 export async function assertPacketStepsPublishableCore(
     supabase: SupabaseClient,
@@ -62,15 +87,18 @@ export type MintPacketPublicLinkResult =
               first_step_sequence_index: number;
           };
       }
-    | { ok: false; status: number; message: string };
+    | { ok: false; status: number; message: string; code?: string };
 
 export async function mintPacketPublicLinkForAdmin(params: {
     supabase: SupabaseClient;
     orgId: string;
     embedBaseUrl: string | null;
     body: Record<string, unknown>;
+    /** Server-side only: Start Enrollment's launcher. Never read from a request body. */
+    purpose?: "enrollment_start";
 }): Promise<MintPacketPublicLinkResult> {
     const { supabase, orgId, embedBaseUrl, body } = params;
+    const enrollmentLaunch = params.purpose === "enrollment_start";
 
     const packetDefinitionIdRaw = body.packet_definition_id;
     if (typeof packetDefinitionIdRaw !== "string") {
@@ -83,12 +111,21 @@ export async function mintPacketPublicLinkForAdmin(params: {
 
     const { data: pktDef, error: pktErr } = await supabase
         .from("form_packet_definitions")
-        .select("id")
+        .select("id, metadata")
         .eq("id", packetDefinitionId)
         .eq("org_id", orgId)
         .maybeSingle();
     if (pktErr) return { ok: false, status: 500, message: pktErr.message };
     if (!pktDef) return { ok: false, status: 404, message: "packet_definition_id not found in this organization" };
+    const pktMeta = ((pktDef as { metadata?: unknown }).metadata ?? {}) as Record<string, unknown>;
+    if (pktMeta.derived_from === REQUIREMENT_DERIVED_PACKET_SOURCE && !enrollmentLaunch) {
+        return {
+            ok: false,
+            status: 409,
+            code: ENROLLMENT_PACKET_NOT_SHAREABLE_CODE,
+            message: "This is the Enrollment packet. It is sent with Start enrollment, once the child's offer is accepted — not shared as a document.",
+        };
+    }
 
     const { data: steps, error: stErr } = await supabase
         .from("form_packet_items")
@@ -164,6 +201,10 @@ export async function mintPacketPublicLinkForAdmin(params: {
             ? { ...(body.metadata as Record<string, unknown>) }
             : {};
     delete clientMetadata.prefill_field_map;
+    if (!enrollmentLaunch) {
+        for (const key of ENROLLMENT_RESERVED_LINK_METADATA_KEYS) delete clientMetadata[key];
+        if (clientMetadata.created_via === "enrollment_start") delete clientMetadata.created_via;
+    }
 
     const metadata = await mergePublicLinkMetadataForCreate(supabase, {
         orgId,

@@ -1,0 +1,212 @@
+# Alloy local parallel-agent development toolkit — example config
+# Installed copy (never overwritten by install.sh):
+#   ~/.config/alloy-dev/config
+#
+# Paths are configurable. Defaults match the Phase 1 directory model.
+
+ALLOY_REPO="$HOME/Alloy"
+ALLOY_WORKTREE_ROOT="$HOME/Code/alloy-worktrees"
+ALLOY_RUNTIME_ROOT="$HOME/.local/state/alloy-dev"
+ALLOY_CONFIG_DIR="$HOME/.config/alloy-dev"
+ALLOY_BIN_DIR="$HOME/bin/alloy-dev"
+
+ALLOY_BASE_REMOTE="origin"
+ALLOY_BASE_BRANCH="staging"
+
+# Exact canonical-repo identity (opt-in).
+#
+# When set, alloy_verify_canonical_repo REFUSES an ALLOY_REPO whose remote does
+# not match this URL. scp-style and https forms of the same remote compare equal.
+# When unset, the toolkit falls back to a name heuristic and says so — it warns,
+# it does not verify.
+#
+# Left unset by default because the certification harness and test fixtures point
+# ALLOY_REPO at synthetic repositories with local remotes. Set it in your
+# installed config (~/.config/alloy-dev/config) to make identity enforced:
+#
+#   ALLOY_REPO_EXPECTED_REMOTE="git@github.com:ksquared-16/alloy.git"
+#
+# Note this checks WHICH REPOSITORY, not WHICH CLONE — two clones of Alloy share
+# one remote. Ambient root identity is answered by alloy-root, not by this.
+ALLOY_REPO_EXPECTED_REMOTE="${ALLOY_REPO_EXPECTED_REMOTE:-}"
+
+# Canonical staging app on the main checkout; agent slots use 3011–3016.
+ALLOY_CANONICAL_PORT="3000"
+ALLOY_FIRST_AGENT_PORT="3011"
+ALLOY_MAX_AGENTS="6"
+
+# Permanent slot identities (Phase 2). Slots keep these roles across initiatives.
+# alloy-agent-create uses DEFAULT_AGENT when cursor|claude is omitted.
+ALLOY_SLOT_1_ROLE="Product implementation"
+ALLOY_SLOT_1_DEFAULT_AGENT="cursor"
+ALLOY_SLOT_2_ROLE="Architecture / doctrine"
+ALLOY_SLOT_2_DEFAULT_AGENT="claude"
+ALLOY_SLOT_3_ROLE="Performance"
+ALLOY_SLOT_3_DEFAULT_AGENT="cursor"
+ALLOY_SLOT_4_ROLE="UI / UX"
+ALLOY_SLOT_4_DEFAULT_AGENT="cursor"
+ALLOY_SLOT_5_ROLE="Refactor / infrastructure"
+ALLOY_SLOT_5_DEFAULT_AGENT="claude"
+ALLOY_SLOT_6_ROLE="Experimental"
+ALLOY_SLOT_6_DEFAULT_AGENT="cursor"
+
+# Per-slot QA identities — MANAGED MACHINE ACCOUNTS in hosted staging, not mailboxes.
+#
+# These addresses are the real identities, not placeholders to replace: they are machine
+# identifiers that receive no mail and that no human signs in as. Leave them as shipped unless a
+# slot should point at a different managed QA account.
+#
+# They are created by the governed action `environment.provision_qa_identity` and signed in by
+# `environment.restore_qa_session` — two separate operator approvals, because creating an account
+# and signing into one are different decisions. Never put a password here; none is created for a
+# person to hold. See VERIFICATION-SECURITY.md.
+ALLOY_SLOT_1_QA_IDENTITY="qa-slot1-product@example.com"
+ALLOY_SLOT_2_QA_IDENTITY="qa-slot2-architecture@example.com"
+ALLOY_SLOT_3_QA_IDENTITY="qa-slot3-performance@example.com"
+ALLOY_SLOT_4_QA_IDENTITY="qa-slot4-ui@example.com"
+ALLOY_SLOT_5_QA_IDENTITY="qa-slot5-refactor@example.com"
+ALLOY_SLOT_6_QA_IDENTITY="qa-slot6-experimental@example.com"
+#
+# THE LIST MUST COVER EVERY MANAGED SLOT, NOT THE FIRST SIX.
+#
+# This stopped at 6 because ALLOY_MAX_AGENTS was 6 when it was written. The host
+# now runs 12 managed slots, and the gap was filled one slot at a time in the
+# INSTALLED config whenever a lane happened to land somewhere undeclared — so 8
+# and 12 acquired identities while 7 and 9-11 did not.
+#
+# That is not a cosmetic gap. `qaIdentityForSlot` is what browser auth, mounted
+# certification and the governed QA session actions all resolve through, so a
+# lane on slot 9 could not run mounted certification while the same lane on slot
+# 3 could. Which slot the scheduler picked silently decided what the lane was
+# capable of, which is exactly the uniform-baseline invariant inverted.
+#
+# CAPABILITY IS UNIFORM; ACTIVATION IS ON DEMAND. Declaring an identity here
+# creates no account and mints no session — the account is created by the
+# governed `environment.provision_qa_identity` action, and the session by
+# `environment.restore_qa_session`, each with its own operator decision. What
+# this fixes is that the slot can now ASK.
+#
+# Keep this list in step with ALLOY_MAX_AGENTS. A managed slot with no identity
+# is reported by the `lane.bootstrap` health check rather than discovered by a
+# lane that cannot certify.
+ALLOY_SLOT_7_QA_IDENTITY="qa-slot7-integration@example.com"
+ALLOY_SLOT_8_QA_IDENTITY="qa-slot8-product@example.com"
+ALLOY_SLOT_9_QA_IDENTITY="qa-slot9-interface@example.com"
+ALLOY_SLOT_10_QA_IDENTITY="qa-slot10-identity@example.com"
+ALLOY_SLOT_11_QA_IDENTITY="qa-slot11-attendance@example.com"
+ALLOY_SLOT_12_QA_IDENTITY="qa-slot12-work-items@example.com"
+
+# Safe env bootstrap (alloy-agent-prepare) — agent-visible sanitized file only.
+ALLOY_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
+# Extra allowlisted non-secret names (space-separated). Denylist always wins.
+# NEXT_PUBLIC_* allowed after denylist pass. Built-in: PORT, NODE_ENV, NEXT_PUBLIC_APP_URL, ALLOY_AGENT_ENV.
+ALLOY_ENV_ALLOWLIST="DEV_QUEUE_ORG_ID PLAYWRIGHT_BASE_URL"
+# Set to 1 to refuse remote Supabase URLs in agent env.
+ALLOY_BLOCK_REMOTE_SUPABASE="0"
+
+# Trusted server env — injected only into toolkit-owned Next process by alloy-dev-start.
+# Never copied into the worktree. Distinct from ALLOY_ENV_SOURCE.
+ALLOY_SERVER_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
+# Optional extra required server variable names (space-separated). Built-in minimum: SUPABASE_SERVICE_ROLE_KEY.
+ALLOY_SERVER_ENV_REQUIRED=""
+
+# Per-slot QA session env source — WHERE THIS SLOT AUTHENTICATES.
+#
+# ALLOY_SERVER_ENV_SOURCE above is one value for the whole host, and it is read by
+# the trusted host for migrations, raw SQL and production applies as well as by the
+# QA session mint. That is right for a host whose slots all run against the same
+# project, and wrong the moment one does not.
+#
+# A slot retargeted at the local alloy-cert stack serves the certification project,
+# so its QA session must be minted from the certification source too. Otherwise the
+# mint produces a cookie for the hosted project, the slot's own server rejects it,
+# and the symptom looks like a product authentication defect while being an
+# infrastructure mismatch. Set this on exactly the slots that are retargeted; a slot
+# that declares nothing keeps ALLOY_SERVER_ENV_SOURCE and is wholly unaffected.
+#
+# DECLARED-BUT-MISSING REFUSES. The mint does not fall back to the host default,
+# because falling back is how this defect comes back invisibly.
+#
+# Same reasoning as ALLOY_CERT_DATABASE_URL, which exists because reading the
+# deployed credential for a certification request was the defect PR 821 closed.
+#
+#   ALLOY_SLOT_8_QA_ENV_SOURCE="$ALLOY_WORKTREE_ROOT/documentation-api/web/.env.certification.local"
+
+# Auth routes (discovered: Supabase email/password at /login).
+ALLOY_AGENT_LOGIN_ROUTE="/login"
+ALLOY_AGENT_AUTH_CHECK_ROUTE="/workspace"
+# Optional extra hosts for verify allowlist (space-separated hostnames).
+ALLOY_VERIFY_ALLOWED_HOSTS=""
+
+# App package lives under web/ (npm + package-lock.json).
+ALLOY_PM="npm"
+ALLOY_WEB_DIR="web"
+ALLOY_DEV_COMMAND="npm run dev"
+# Production server for `alloy-dev-start --production`. Same trusted-env injection, different
+# command; the build is a separate operation and the server never builds implicitly.
+ALLOY_PROD_COMMAND="npm run start"
+
+# Heavy validation runs from ALLOY_WEB_DIR inside the worktree.
+# These commands are invoked BY the broker — never `npm run typecheck|build|test`
+# (those package scripts route INTO the broker; using them here would recurse).
+ALLOY_TYPECHECK_COMMAND='node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.build.json --noEmit'
+ALLOY_TYPECHECK_TESTS_COMMAND='node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.json --noEmit'
+# Leave EMPTY. The broker builds the vitest command from what the installed CLI actually accepts
+# (lib/validate-caps.sh probes `vitest run --help`). Hardcoding worker flags here is what broke
+# `vac run test`: vitest 4.x rejects --minWorkers, so every brokered test run died with
+# `CACError: Unknown option --minWorkers` before running a test. Set this only to override the
+# whole command, and do not put worker flags in it.
+ALLOY_TEST_COMMAND=''
+# Worker cap the broker applies when the installed vitest supports it.
+ALLOY_TEST_MAX_WORKERS='2'
+ALLOY_BUILD_COMMAND='npx next build'
+ALLOY_PLAYWRIGHT_COMMAND='npx playwright test --workers=1'
+# Canonical import verification for the web package:
+ALLOY_IMPORTS_COMMAND='npm run verify:module-imports'
+
+# Default Node heap for alloy-dev-start and alloy-validate wrappers.
+NODE_OPTIONS_DEFAULT="--max-old-space-size=8192"
+
+# Cleanup age thresholds (hours) for generated artifacts only.
+ALLOY_CLEAN_ARTIFACT_AGE_HOURS="24"
+
+# Validation lease polling (seconds) and heartbeat stale threshold.
+ALLOY_VALIDATE_POLL_SECONDS="5"
+ALLOY_VALIDATE_HEARTBEAT_STALE_SECONDS="90"
+
+# Managed Sprint Operations V1 — resource guardrails.
+# Six assigned worktrees must not automatically mean six servers or six heavy jobs.
+#
+# PRECEDENCE, later wins:
+#
+#   1. canonical derived capacity   capacity-policy.mjs, from measured hardware
+#   2. local host config            ~/.config/alloy-dev/config (these names)
+#   3. explicit scoped override     ALLOY_CAPACITY_OVERRIDE, one process only
+#
+# EXPORTING ONE OF THESE NAMES DOES NOTHING. This file and the host config both
+# assign them unconditionally and alloy_load_config sources both, so an exported
+# value is overwritten before anything reads it. That is deliberate: an ambient
+# export must not be able to move a production ceiling. To raise one for an
+# experiment or an incident, use the scoped override, which requires a reason,
+# is bounded by the managed slot count, refuses malformed entries without moving
+# anything, is reported by `vac health`, and is never written anywhere — so it
+# cannot outlive the process that set it:
+#
+#   ALLOY_CAPACITY_OVERRIDE="ALLOY_MAX_RUNNING_SERVERS=5" \
+#   ALLOY_CAPACITY_OVERRIDE_REASON="capacity certification phase 2" \
+#     alloy-dev-start wt3-communications-inbound-sms
+ALLOY_MAX_ACTIVE_PROVIDERS="3"
+ALLOY_MAX_RUNNING_SERVERS="3"
+ALLOY_MAX_CONCURRENT_INSTALLS="1"
+ALLOY_MAX_CONCURRENT_HEAVY_JOBS="1"
+# Runtime Resource Orchestration V1 — max concurrent backing-infrastructure
+# runtimes (Supabase stacks). OBSERVATIONAL ONLY in Runtime Registry & Inspection
+# V1: `alloy-ro runtime-capacity` reports over-budget status; nothing is blocked,
+# stopped, or provisioned. Enforcement arrives in a later phase.
+ALLOY_MAX_ACTIVE_RUNTIMES="2"
+# When macOS memory pressure reaches this level, refuse/defer heavy work (never auto-kill workers).
+# Values: warn | critical | off
+ALLOY_MEMORY_PRESSURE_THRESHOLD="warn"
+
+# Phase 4 — Engineering Manager initiatives (local state under ALLOY_RUNTIME_ROOT/initiatives/)
+# ALLOY_INITIATIVE_LOCK_POLL_SECONDS="2"

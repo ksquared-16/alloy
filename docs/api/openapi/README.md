@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy OpenAPI (internal v0)
 
 This folder holds Alloy's **internal** OpenAPI specification.

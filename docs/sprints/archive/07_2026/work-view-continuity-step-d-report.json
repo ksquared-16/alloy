@@ -1,0 +1,257 @@
+{
+  "capturedAt": "2026-07-11T02:44:19.781Z",
+  "baseUrl": "http://127.0.0.1:3001",
+  "path": "/workspace/work-unit/new-leads",
+  "runs": [
+    {
+      "run": 1,
+      "settledInitial": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "afterAllLeads": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "afterOther": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": "true",
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "final": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": "true",
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "analysis": {
+        "switchToAll": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 109
+        },
+        "switchToOther": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 83
+        },
+        "switchBack": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 98
+        }
+      },
+      "totals": {
+        "blankFrames": 0,
+        "skeletonAfterSettle": 0,
+        "falseEmptyFrames": 0,
+        "queueRegionRemounts": 0
+      },
+      "networkLogCount": 20
+    },
+    {
+      "run": 2,
+      "settledInitial": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "afterAllLeads": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "afterOther": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": "true",
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "final": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": "true",
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "analysis": {
+        "switchToAll": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 118
+        },
+        "switchToOther": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 81
+        },
+        "switchBack": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 89
+        }
+      },
+      "totals": {
+        "blankFrames": 0,
+        "skeletonAfterSettle": 0,
+        "falseEmptyFrames": 0,
+        "queueRegionRemounts": 0
+      },
+      "networkLogCount": 27
+    },
+    {
+      "run": 3,
+      "settledInitial": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "afterAllLeads": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "afterOther": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": null,
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": true,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "final": {
+        "regionPresent": true,
+        "regionMountId": "958341e253ed",
+        "ariaBusy": "true",
+        "rowCount": 0,
+        "rowIds": [],
+        "skeletonVisible": false,
+        "emptyVisible": false,
+        "noMatchesVisible": false,
+        "errorVisible": false,
+        "errorText": null
+      },
+      "analysis": {
+        "switchToAll": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 115
+        },
+        "switchToOther": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 94
+        },
+        "switchBack": {
+          "blankFrames": 0,
+          "skeletonAfterSettle": 0,
+          "falseEmptyFrames": 0,
+          "queueRegionRemounts": 0,
+          "frameCount": 97
+        }
+      },
+      "totals": {
+        "blankFrames": 0,
+        "skeletonAfterSettle": 0,
+        "falseEmptyFrames": 0,
+        "queueRegionRemounts": 0
+      },
+      "networkLogCount": 26
+    }
+  ],
+  "aggregate": {
+    "blankFrames": 0,
+    "skeletonAfterSettle": 0,
+    "falseEmptyFrames": 0,
+    "queueRegionRemounts": 0
+  },
+  "pass": true
+}

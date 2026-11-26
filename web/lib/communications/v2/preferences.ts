@@ -13,11 +13,23 @@ export const COMMS_V2_PREFERENCE_TABLES = {
     preferenceEvents: "communication_preference_events",
 } as const;
 
-/** Per-person preference categories (freeze §3.4). */
+/**
+ * Per-person preference categories (freeze §3.4).
+ *
+ * Phase 0 added the `*_operational` pair. The message-classification model
+ * distinguishes `operational` from `transactional`, and the decided semantics
+ * are explicit that operational sends honor an operational opt-out while
+ * transactional sends are not suppressible by a broad opt-out. Without these
+ * two entries an operational opt-out would have had nowhere to live and would
+ * have mapped onto the transactional preference — which is exempt — silently
+ * defeating it.
+ */
 export const PREFERENCE_CATEGORIES = [
     "email_transactional",
+    "email_operational",
     "email_marketing",
     "sms_transactional",
+    "sms_operational",
     "sms_marketing",
     "announcements",
     "emergency",

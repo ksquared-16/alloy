@@ -1,0 +1,224 @@
+{
+ "cold": {
+  "structure": {
+   "t_header": 20686,
+   "t_pills": 20686,
+   "t_grid": null,
+   "t_any_cell": 20686,
+   "t_card_roles": 20686,
+   "t_rows": 20686
+  },
+  "meaning": {
+   "bp": {
+    "present": 20686,
+    "meaningful": 20686
+   },
+   "fin": {
+    "present": 20686,
+    "meaningful": 20686
+   },
+   "att": {
+    "present": 20686,
+    "meaningful": 20686
+   },
+   "hs": {
+    "present": 20686,
+    "meaningful": 20686
+   },
+   "hh": {
+    "present": 28396,
+    "meaningful": 28396
+   },
+   "kids": {
+    "present": 28396,
+    "meaningful": 28396
+   },
+   "ready": {
+    "present": null,
+    "meaningful": null
+   }
+  },
+  "reserved_peak": 0,
+  "reserved_at_end": 0,
+  "cards_at_end": 6,
+  "heights_at_end": {
+   "business_process": 232,
+   "financials": 325
+  },
+  "settled": 37998
+ },
+ "switch": {
+  "target": "new_leads",
+  "target_rows": 3,
+  "rows_before": 16,
+  "t_ack": null,
+  "t_rows_changed": 3308,
+  "t_first_row_changed": null,
+  "old_rows_visible_frames": 94,
+  "t_destination_meaningful": 3308,
+  "requests": [
+   {
+    "u": "/admin/work-units/waitlist/provisioning-answer",
+    "start": 40180,
+    "dur": 3002
+   },
+   {
+    "u": "/api/admin/queues/stage-membership-ack",
+    "start": 43300,
+    "dur": 945
+   },
+   {
+    "u": "/api/admin/entity-layouts/focus-panel-summary",
+    "start": 43300,
+    "dur": 1012
+   },
+   {
+    "u": "portunity/ebe6cb44-957b-48f0-9a6d-603670443ec2",
+    "start": 43301,
+    "dur": 5420
+   },
+   {
+    "u": "/api/admin/communications/family-workspace",
+    "start": 43417,
+    "dur": 2009
+   },
+   {
+    "u": "/api/admin/communications/threads",
+    "start": 43538,
+    "dur": 1176
+   },
+   {
+    "u": "/api/admin/communications/drawer-recipients",
+    "start": 44714,
+    "dur": 1321
+   },
+   {
+    "u": "i/admin/layout-runtime/opportunity-drawer-body",
+    "start": 48777,
+    "dur": 3630
+   },
+   {
+    "u": "/api/admin/operational-tasks",
+    "start": 48804,
+    "dur": 841
+   },
+   {
+    "u": "/api/admin/locations",
+    "start": 48804,
+    "dur": 606
+   },
+   {
+    "u": "portunity/ebe6cb44-957b-48f0-9a6d-603670443ec2",
+    "start": 48938,
+    "dur": 855
+   },
+   {
+    "u": "/api/admin/activity",
+    "start": 48938,
+    "dur": 801
+   }
+  ]
+ },
+ "record": {
+  "rowA": "ebe6cb44-957b-48f0-9a6d-603670443ec2",
+  "rowB": "8a0d0fb4-24f8-4716-bcb0-baf07b436471",
+  "A_subject": "ebe6cb44-957b-48f0-9a6d-603670443ec2",
+  "A_avatars": [],
+  "A_header": "ENROLLMENT Lead Sep 16 Tour Decision Sep 16 Waitlist Enrolling PC Path",
+  "t_active_row_changed": 169,
+  "t_body_subject_changed": 3168,
+  "t_header_text_changed": 7553,
+  "t_avatars_changed": null,
+  "stale_avatar_frames": 574,
+  "final_avatars": [],
+  "final_subject": "8a0d0fb4-24f8-4716-bcb0-baf07b436471"
+ },
+ "requests_total": 71,
+ "kb_total": 1770,
+ "slowest": [
+  {
+   "u": "/api/admin/work-units/waitlist/provisioning-answer",
+   "dur": 11689,
+   "start": 8848,
+   "kb": 236
+  },
+  {
+   "u": "wer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "dur": 7499,
+   "start": 20640,
+   "kb": 165
+  },
+  {
+   "u": "/api/admin/layout-runtime/opportunity-drawer-body",
+   "dur": 6292,
+   "start": 28254,
+   "kb": 173
+  },
+  {
+   "u": "wer/opportunity/ebe6cb44-957b-48f0-9a6d-603670443ec2",
+   "dur": 5420,
+   "start": 43301,
+   "kb": 96
+  },
+  {
+   "u": "/api/admin/layout-runtime/opportunity-drawer-body",
+   "dur": 4963,
+   "start": 79643,
+   "kb": 45
+  },
+  {
+   "u": "wer/opportunity/8a0d0fb4-24f8-4716-bcb0-baf07b436471",
+   "dur": 4315,
+   "start": 75273,
+   "kb": 93
+  },
+  {
+   "u": "77a-4de8-aaac-8aed48d80413/work-unit-queue-summaries",
+   "dur": 4238,
+   "start": 5162,
+   "kb": 2
+  },
+  {
+   "u": "wer/opportunity/8a0d0fb4-24f8-4716-bcb0-baf07b436471",
+   "dur": 4107,
+   "start": 72253,
+   "kb": 95
+  },
+  {
+   "u": "wer/opportunity/1a132b7f-4737-42af-897b-b942ccf5546e",
+   "dur": 3964,
+   "start": 72319,
+   "kb": 106
+  },
+  {
+   "u": "/api/admin/layout-runtime/opportunity-drawer-body",
+   "dur": 3630,
+   "start": 48777,
+   "kb": 47
+  },
+  {
+   "u": "/api/admin/work-units/waitlist/provisioning-answer",
+   "dur": 3153,
+   "start": 72319,
+   "kb": 46
+  },
+  {
+   "u": "/api/admin/work-units/waitlist/provisioning-answer",
+   "dur": 3002,
+   "start": 40180,
+   "kb": 46
+  },
+  {
+   "u": "/api/admin/work-units/waitlist/provisioning-answer",
+   "dur": 2949,
+   "start": 72252,
+   "kb": 46
+  },
+  {
+   "u": "/api/admin/queue-view-totals",
+   "dur": 2652,
+   "start": 20641,
+   "kb": 1
+  }
+ ]
+}

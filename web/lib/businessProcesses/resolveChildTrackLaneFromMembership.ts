@@ -40,8 +40,9 @@ export function buildChildTrackLaneFromMembership(params: {
     const stageKey = trimOrNull(params.membership.stage_key);
     if (!stageKey) return null;
 
+    // S4: membership keys off the persisted stage_key, so a child lane is valid with an empty
+    // disposition list. Disposition keys are retained only as a legacy filter fallback.
     const dispositionKeys = dispositionKeysFromMembership(params.membership);
-    if (!dispositionKeys.length) return null;
 
     return {
         enabled: true,

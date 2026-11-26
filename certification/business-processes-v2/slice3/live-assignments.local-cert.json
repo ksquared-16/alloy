@@ -1,0 +1,369 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "today": "2026-10-20",
+  "at": "2026-10-20T22:05:15.230Z",
+  "views": {
+    "current_assignments": {
+      "total": 9,
+      "facts": 115,
+      "truncated": false,
+      "by_grain": {
+        "child": 8,
+        "person": 1
+      },
+      "per_site": {
+        "00000000-0000-4000-8000-000000000010": {
+          "total": 9,
+          "facts": 115
+        },
+        "00000000-0000-4000-8000-000000000011": {
+          "total": 0,
+          "facts": 0
+        }
+      },
+      "per_site_sum": 9,
+      "outside_selection_total": 0,
+      "sample": [
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-00005000006b"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "00000000-0000-4000-8000-00005000006e",
+            "count": 1
+          },
+          "reason": "Primary since Jan 5",
+          "site": "Northwind — Riverside Campus",
+          "room": "Toddler Room A",
+          "type": "Primary Classroom",
+          "start": "2026-01-05",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-000050000021"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "065e750f-7141-4bcf-b705-c993ff8b11b4",
+            "count": 53
+          },
+          "reason": "Secondary since Jan 5 · 53 assignments",
+          "site": "Northwind — Riverside Campus",
+          "room": null,
+          "type": null,
+          "start": "2026-01-05",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-000070000052"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "00000000-0000-4000-8000-000070000082",
+            "count": 1
+          },
+          "reason": "Primary since Jan 5",
+          "site": "Northwind — Riverside Campus",
+          "room": "Toddler Room A",
+          "type": "Primary Classroom",
+          "start": "2026-01-05",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "person",
+            "id": "00000000-0000-4000-8000-000050000010"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "1b3138b1-761d-4966-a514-32c05d26b15a",
+            "count": 2
+          },
+          "reason": "Primary since Sep 1 · 2 assignments",
+          "site": "Northwind — Riverside Campus",
+          "room": "Toddler Room A",
+          "type": "Classroom Staff",
+          "start": "2026-09-01",
+          "end": "2026-10-29"
+        }
+      ]
+    },
+    "assignments_ending_soon": {
+      "total": 2,
+      "facts": 2,
+      "truncated": false,
+      "by_grain": {
+        "child": 1,
+        "person": 1
+      },
+      "per_site": {
+        "00000000-0000-4000-8000-000000000010": {
+          "total": 2,
+          "facts": 2
+        },
+        "00000000-0000-4000-8000-000000000011": {
+          "total": 0,
+          "facts": 0
+        }
+      },
+      "per_site_sum": 2,
+      "outside_selection_total": 0,
+      "sample": [
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-000050000020"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "3e65185f-3536-4f8b-8ac8-5bc20dcefe4b",
+            "count": 1
+          },
+          "reason": "Ends Oct 25 · in 5 days",
+          "site": "Northwind — Riverside Campus",
+          "room": null,
+          "type": null,
+          "start": "2026-01-05",
+          "end": "2026-10-25"
+        },
+        {
+          "subject": {
+            "type": "person",
+            "id": "00000000-0000-4000-8000-000050000010"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "1b3138b1-761d-4966-a514-32c05d26b15a",
+            "count": 1
+          },
+          "reason": "Ends Oct 29 · in 9 days",
+          "site": "Northwind — Riverside Campus",
+          "room": "Toddler Room A",
+          "type": "Classroom Staff",
+          "start": "2026-09-01",
+          "end": "2026-10-29"
+        }
+      ]
+    },
+    "assignments_upcoming_changes": {
+      "total": 3,
+      "facts": 3,
+      "truncated": false,
+      "by_grain": {
+        "child": 2,
+        "person": 1
+      },
+      "per_site": {
+        "00000000-0000-4000-8000-000000000010": {
+          "total": 3,
+          "facts": 3
+        },
+        "00000000-0000-4000-8000-000000000011": {
+          "total": 0,
+          "facts": 0
+        }
+      },
+      "per_site_sum": 3,
+      "outside_selection_total": 0,
+      "sample": [
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-000050000021"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "0f65e234-f877-4c45-8366-96ec0d3acd17",
+            "count": 1
+          },
+          "reason": "New assignment starts Oct 27",
+          "site": "Northwind — Riverside Campus",
+          "room": null,
+          "type": null,
+          "start": "2026-10-27",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "person",
+            "id": "00000000-0000-4000-8000-000050000010"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "f7824e83-813c-4cc7-a883-2047f23059cc",
+            "count": 1
+          },
+          "reason": "Primary change starts Oct 30",
+          "site": "Northwind — Riverside Campus",
+          "room": "Toddler Room A",
+          "type": "Classroom Staff",
+          "start": "2026-10-30",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-000050000020"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "611e364b-ecbf-4d97-aa65-12a80ca77286",
+            "count": 1
+          },
+          "reason": "New primary assignment starts Nov 9",
+          "site": "Northwind — Riverside Campus",
+          "room": null,
+          "type": null,
+          "start": "2026-11-09",
+          "end": null
+        }
+      ]
+    },
+    "schedule_gaps": {
+      "total": 315,
+      "facts": 333,
+      "truncated": false,
+      "by_grain": {
+        "child": 315,
+        "person": 0
+      },
+      "per_site": {
+        "00000000-0000-4000-8000-000000000010": {
+          "total": 4,
+          "facts": 4
+        },
+        "00000000-0000-4000-8000-000000000011": {
+          "total": 5,
+          "facts": 5
+        }
+      },
+      "per_site_sum": 9,
+      "outside_selection_total": 0,
+      "sample": [
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-30000000003b"
+          },
+          "source": {
+            "kind": "enrollment_agreement",
+            "id": "a0000000-0000-4000-8000-30000000003b",
+            "count": 1
+          },
+          "reason": "No committed schedule",
+          "site": "Northwind — Lakeside Campus",
+          "start": "2023-05-29",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "child",
+            "id": "8c000000-0000-4000-8000-00000000c002"
+          },
+          "source": {
+            "kind": "enrollment_agreement",
+            "id": "8c000000-0000-4000-8000-00000000a001",
+            "count": 1
+          },
+          "reason": "No committed schedule",
+          "site": "Northwind — Lakeside Campus",
+          "start": "2023-05-29",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "child",
+            "id": "f7c011bb-0000-4000-8000-0000000d0001"
+          },
+          "source": {
+            "kind": "enrollment_agreement",
+            "id": "f7c011bb-0000-4000-8000-0000000a0001",
+            "count": 1
+          },
+          "reason": "No committed schedule",
+          "site": "W7 chain site 11bb118f",
+          "start": "2026-01-01",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "child",
+            "id": "f7c015ee-0000-4000-8000-0000000d0001"
+          },
+          "source": {
+            "kind": "enrollment_agreement",
+            "id": "f7c015ee-0000-4000-8000-0000000a0001",
+            "count": 1
+          },
+          "reason": "No committed schedule",
+          "site": "W7 chain site 15eecb4e",
+          "start": "2026-01-01",
+          "end": null
+        }
+      ]
+    },
+    "assignments_proposed_incomplete": {
+      "total": 2,
+      "facts": 110,
+      "truncated": false,
+      "by_grain": {
+        "child": 2,
+        "person": 0
+      },
+      "per_site": {
+        "00000000-0000-4000-8000-000000000010": {
+          "total": 2,
+          "facts": 110
+        },
+        "00000000-0000-4000-8000-000000000011": {
+          "total": 0,
+          "facts": 0
+        }
+      },
+      "per_site_sum": 2,
+      "outside_selection_total": 0,
+      "sample": [
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-000050000021"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "065e750f-7141-4bcf-b705-c993ff8b11b4",
+            "count": 54
+          },
+          "reason": "54 assignments missing their type",
+          "site": "Northwind — Riverside Campus",
+          "room": null,
+          "type": null,
+          "start": "2026-01-05",
+          "end": null
+        },
+        {
+          "subject": {
+            "type": "child",
+            "id": "00000000-0000-4000-8000-000050000020"
+          },
+          "source": {
+            "kind": "schedule_assignment",
+            "id": "f69c4503-1468-4823-a7dc-beec824fca1b",
+            "count": 56
+          },
+          "reason": "Proposed assignment awaiting disposition · 55 assignments missing their type",
+          "site": "Northwind — Riverside Campus",
+          "room": null,
+          "type": null,
+          "start": "2026-11-03",
+          "end": null
+        }
+      ]
+    }
+  }
+}

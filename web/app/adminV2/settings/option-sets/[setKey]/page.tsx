@@ -19,7 +19,7 @@ export default async function AdminV2SettingsOptionSetDetailPage({
   const setKey = decodeSetKey(raw ?? "");
   return (
     <div className="w-full min-w-0">
-      <OptionSetDetailClient setKey={setKey} basePath="/admin/settings/option-sets" adminV2Chrome />
+      <OptionSetDetailClient setKey={setKey} basePath="/settings/option-sets" adminV2Chrome />
     </div>
   );
 }

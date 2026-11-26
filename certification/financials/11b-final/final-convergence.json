@@ -1,0 +1,76 @@
+{
+  "shellUrl": "http://127.0.0.1:3012/workspace/work-unit/enrolled-children",
+  "assignment": {
+    "reached": true,
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition",
+      "scheduling"
+    ],
+    "billingPreviewRendered": false,
+    "tuitionSelect": true,
+    "tuitionOptions": [
+      "Select a plan to lock in…",
+      "Recommended — $195.00/weekly",
+      "$185.00/weekly"
+    ],
+    "accepted": "Recommended · $195.00/weekly",
+    "billingFrequency": "Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026",
+    "billingPeriod": "2026-09",
+    "discountSection": true,
+    "discountOutcomes": [
+      {
+        "kind": "expected",
+        "reason": null,
+        "policy": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "text": "discount · $18.50 expected to applyAdd exception"
+      }
+    ],
+    "noMatch": null,
+    "rejected": "1",
+    "addExceptionOffered": true,
+    "exceptionsListed": [],
+    "responsibility": false
+  },
+  "focusPanelSummary": {
+    "present": true,
+    "account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "reserved": null,
+    "text": "FINANCIALS\n\nCURRENT PERIOD\n\nSeptember 2026\n\nCHARGES\n\nTuition\n$1,450.00\nFee\n$150.00\nConsumable fee\n$36.00\n\nDISCOUNTS & CREDITS\n\nCredit\n-$260.06\nAdjustment\n$146.71\nDiscount\n-$145.00\nNET OBLIGATION\n$1,487.87\nAdd\n\nDUE\n\n$1,912.00\n\n$1,450.00 · 9 days past due\n\nBalance\n$1,412.87\nPaid\n$75.00\nUnassigned\n$132.00\nAvailable\n$125.00\nPayment\nDetails\n→"
+  },
+  "focusPanelDetails": {
+    "opened": false
+  },
+  "accounts": {
+    "reached": true,
+    "rows": 11,
+    "manageResponsibility": true,
+    "columns": []
+  },
+  "accountingPeriod": {
+    "navigateToMeaningfulMs": 69241,
+    "meaningfulRenderMs": -1,
+    "calendarRead": {
+      "url": "/api/admin/financials/accounting-calendar",
+      "ms": 872,
+      "status": 200,
+      "ok": true
+    },
+    "periodState": {
+      "url": "/api/admin/financials/accounting-calendar?include=periods",
+      "ms": 317,
+      "status": 200,
+      "ok": true
+    }
+  },
+  "unrelatedSurfaceAfterAccounting": {
+    "ms": 10126,
+    "rendered": 7,
+    "url": "http://127.0.0.1:3012/workspace/work-unit/enrolled-children"
+  }
+}

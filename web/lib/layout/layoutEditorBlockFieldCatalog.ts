@@ -26,7 +26,7 @@ const CONTEXT_ENTITY_ORDER: Record<LayoutEditorDataContext, string[]> = {
 const CHILD_ROW_SUGGESTED_REFS = [
     "child.name",
     "child.program",
-    "child.desired_start_date",
+    "child.start_date",
     "child.dob_age",
     "child.status",
     "child.schedule",

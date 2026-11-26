@@ -17,7 +17,7 @@
  * (user_selection / queue_selection / suggested_record / bos_proposal). The subject is
  * never silently assumed from the highlighted row.
  *
- * @see docs/sprints/06_2026/actions_runtime_audit.md
+ * @see docs/sprints/archive/06_2026/actions_runtime_audit.md
  * @see docs/platform/modules/actions-and-workflows.md
  */
 

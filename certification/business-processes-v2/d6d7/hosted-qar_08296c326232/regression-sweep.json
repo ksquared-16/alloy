@@ -1,0 +1,217 @@
+{
+  "run": "qar_08296c326232",
+  "persona": "admin",
+  "build": "502d597537a753125c0e11d2f299cb134c60fb1b",
+  "views": [
+    {
+      "proc": "enrollment",
+      "slug": "new-leads",
+      "title": "New Leads",
+      "active_tab": "New Leads0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    },
+    {
+      "proc": "enrollment",
+      "slug": "tours",
+      "title": "Tours",
+      "active_tab": "Tours0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    },
+    {
+      "proc": "enrollment",
+      "slug": "decision",
+      "title": "New Leads",
+      "active_tab": "Decision1",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": [
+        {
+          "url": "/api/admin/option-sets/childcare_program_type",
+          "status": 404
+        },
+        {
+          "url": "/api/admin/option-sets/person_gender",
+          "status": 404
+        }
+      ]
+    },
+    {
+      "proc": "enrollment",
+      "slug": "registration",
+      "title": "New Leads",
+      "active_tab": "Registration1",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": [
+        {
+          "url": "/api/admin/option-sets/childcare_program_type",
+          "status": 404
+        },
+        {
+          "url": "/api/admin/option-sets/person_gender",
+          "status": 404
+        }
+      ]
+    },
+    {
+      "proc": "enrollment",
+      "slug": "waitlist",
+      "title": "Waitlist",
+      "active_tab": "Waitlist2",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": [
+        {
+          "url": "/api/admin/option-sets/childcare_program_type",
+          "status": 404
+        },
+        {
+          "url": "/api/admin/option-sets/person_gender",
+          "status": 404
+        }
+      ]
+    },
+    {
+      "proc": "enrollment",
+      "slug": "all",
+      "title": "New Leads",
+      "active_tab": "All3",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": [
+        {
+          "url": "/api/admin/option-sets/childcare_program_type",
+          "status": 404
+        },
+        {
+          "url": "/api/admin/option-sets/person_gender",
+          "status": 404
+        }
+      ]
+    },
+    {
+      "proc": "assignments",
+      "slug": "current-assignments",
+      "title": "Assignments",
+      "active_tab": "Current assignments3",
+      "error_text": null,
+      "empty_state": false,
+      "api_errors": []
+    },
+    {
+      "proc": "assignments",
+      "slug": "ending-soon",
+      "title": "Assignments",
+      "active_tab": "Ending soon0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    },
+    {
+      "proc": "assignments",
+      "slug": "upcoming-changes",
+      "title": "Assignments",
+      "active_tab": "Upcoming changes1",
+      "error_text": null,
+      "empty_state": false,
+      "api_errors": []
+    },
+    {
+      "proc": "assignments",
+      "slug": "schedule-gaps",
+      "title": "Assignments",
+      "active_tab": "Schedule gaps1",
+      "error_text": null,
+      "empty_state": false,
+      "api_errors": []
+    },
+    {
+      "proc": "assignments",
+      "slug": "proposed-incomplete",
+      "title": "Assignments",
+      "active_tab": "Proposed / incomplete4",
+      "error_text": null,
+      "empty_state": false,
+      "api_errors": []
+    },
+    {
+      "proc": "billing",
+      "slug": "charges-needing-review",
+      "title": "Billing",
+      "active_tab": "Charges needing review0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    },
+    {
+      "proc": "billing",
+      "slug": "payments-due",
+      "title": "Billing",
+      "active_tab": "Payments due0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    },
+    {
+      "proc": "billing",
+      "slug": "overdue-payments",
+      "title": "Billing",
+      "active_tab": "Overdue payments0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    },
+    {
+      "proc": "billing",
+      "slug": "payment-exceptions",
+      "title": "Billing",
+      "active_tab": "Payment exceptions0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    },
+    {
+      "proc": "billing",
+      "slug": "funding-variances",
+      "title": "Billing",
+      "active_tab": "Funding variances0",
+      "error_text": null,
+      "empty_state": true,
+      "api_errors": []
+    }
+  ],
+  "writes": [
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals",
+    "/api/admin/queue-view-totals"
+  ]
+}

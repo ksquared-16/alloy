@@ -6,11 +6,11 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(__dirname, "../..");
-const mockupDir = resolve(root, "../docs/sprints/06_2026/configuration-runtime-bp-ux-redesign");
-const freezeDoc = resolve(root, "../docs/sprints/06_2026/configuration_runtime_concept_a_freeze.md");
+const mockupDir = resolve(root, "../docs/sprints/archive/06_2026/configuration-runtime-bp-ux-redesign");
+const freezeDoc = resolve(root, "../docs/sprints/archive/06_2026/configuration_runtime_concept_a_freeze.md");
 const realignmentDoc = resolve(
     root,
-    "../docs/sprints/06_2026/configuration_runtime_process_work_views_realignment.md",
+    "../docs/sprints/archive/06_2026/configuration_runtime_process_work_views_realignment.md",
 );
 
 function read(rel: string): string {

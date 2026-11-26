@@ -45,7 +45,7 @@ async function main() {
 
     const { data: ocms } = await supabase
         .from("opportunity_customer_members")
-        .select("id, outcome_status_key, desired_start_date, customer_member_id, first_name, last_name, dob")
+        .select("id, outcome_status_key, start_date, customer_member_id, first_name, last_name, dob")
         .eq("opportunity_id", opportunityId);
 
     const ocmIssues = (ocms ?? []).flatMap((row) =>
@@ -57,7 +57,7 @@ async function main() {
     if (memberIds.length) {
         const { data: members } = await supabase
             .from("customer_members")
-            .select("id, first_name, last_name, dob, location_id, desired_start_date")
+            .select("id, first_name, last_name, dob, location_id, start_date")
             .in("id", memberIds as string[]);
         cmIssues = (members ?? []).flatMap((row) => validateCustomerMemberRowGrain(row as Record<string, unknown>));
     }

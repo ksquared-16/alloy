@@ -1,0 +1,13 @@
+{
+  "action_key": "environment.build_certification_baseline",
+  "purpose": "Isolated QA database at the current staging tip 1045a8ce0794 (includes PR #1615 and PR #1614) for the Director's Human QA V2 of Tours, Forms Studio Marketing consent, Communications opt-out and public booking. Replaces failed gar_c5af13ba211f57 (base_not_target_tip). No hosted staging data or providers involved.",
+  "reason_worker_cannot_execute": "Building an isolated certification environment starts Docker resources on the trusted host and requires governed authorization.",
+  "requested_mode": "other",
+  "inputs": {
+    "repository": "ksquared-16/alloy",
+    "baseBranch": "staging",
+    "expectedBaseSha": "1045a8ce0794ce99e37074495b346237d99c4650",
+    "expected_repo_head": "1045a8ce0794ce99e37074495b346237d99c4650",
+    "expected_repo_ref": "refs/remotes/origin/staging"
+  }
+}

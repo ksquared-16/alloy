@@ -174,14 +174,4 @@ describe("lead primary contact reassignment", () => {
         expect(ebAction).toContain("make_primary_contact");
     });
 
-    it("person drawer UI wires make-primary confirmation and existing PATCH route", () => {
-        const section = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
-            "utf8"
-        );
-        expect(section).toContain("LeadHouseholdPrimaryContactConfirmModal");
-        expect(section).toContain("patchHouseholdPrimaryContact");
-        expect(section).toContain("Make primary contact");
-        expect(section).not.toContain('type="radio"');
-    });
 });

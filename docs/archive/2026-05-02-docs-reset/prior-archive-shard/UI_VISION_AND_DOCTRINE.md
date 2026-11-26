@@ -4,7 +4,7 @@
 
 # Alloy UI Vision & Doctrine
 
-> **Note (2026-04):** Canonical **platform doctrine** for record rendering, overview layout, workspace vs record, and identity lives in [`docs/architecture/`](./architecture/README.md). This file remains **experience vision** (tone, motion, AI-native feel); where it conflicts with architecture doctrine, prefer the architecture folder.
+> **Note (2026-04):** Canonical **platform doctrine** for record rendering, overview layout, workspace vs record, and identity lives in [`docs/architecture/`](../architecture/README.md). This file remains **experience vision** (tone, motion, AI-native feel); where it conflicts with architecture doctrine, prefer the architecture folder.
 
 ## Purpose
 

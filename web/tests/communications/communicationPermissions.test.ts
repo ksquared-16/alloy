@@ -5,28 +5,37 @@ import {
     LEGACY_MESSAGING_SEND_PERMISSION_ALIAS,
 } from "@/lib/communications/communicationPermissions";
 
+/**
+ * THE TITLE CONFERS NOTHING. These four cases used to read the other way round: `["admin"], []`
+ * was the first assertion in the file and it expected `true`. That was the behaviour, and it meant
+ * the role editor lied in both directions — a custom role holding exactly the administrator's
+ * package still could not send, and an `admin` role deliberately stripped of `communications.send`
+ * still could.
+ *
+ * The signature no longer accepts a role list at all, so the inversion is enforced by the compiler
+ * rather than only by these expectations.
+ */
 describe("hasCommunicationsSendPermission", () => {
-    it("allows admin role without explicit permission keys", () => {
-        expect(hasCommunicationsSendPermission(["admin"], [])).toBe(true);
+    it("denies a principal holding no send capability, whatever its role is called", () => {
+        expect(hasCommunicationsSendPermission([])).toBe(false);
     });
 
-    it("allows ops role without explicit permission keys", () => {
-        expect(hasCommunicationsSendPermission(["ops"], [])).toBe(true);
-    });
-
-    it("denies custom role without send grants", () => {
-        expect(hasCommunicationsSendPermission(["school_director"], ["crm.read"])).toBe(false);
+    it("denies a package that carries other capabilities but not send", () => {
+        expect(hasCommunicationsSendPermission(["crm.read", "portal.access"])).toBe(false);
     });
 
     it("allows communications.send when present", () => {
-        expect(
-            hasCommunicationsSendPermission(["coordinator"], [COMMUNICATIONS_SEND_PERMISSION_KEY, "crm.read"])
-        ).toBe(true);
+        expect(hasCommunicationsSendPermission([COMMUNICATIONS_SEND_PERMISSION_KEY, "crm.read"])).toBe(true);
     });
 
-    it("allows ops.messaging.write legacy alias", () => {
-        expect(hasCommunicationsSendPermission(["coordinator"], [LEGACY_MESSAGING_SEND_PERMISSION_ALIAS])).toBe(
-            true
-        );
+    it("allows the legacy ops.messaging.write capability alias", () => {
+        expect(hasCommunicationsSendPermission([LEGACY_MESSAGING_SEND_PERMISSION_ALIAS])).toBe(true);
+    });
+
+    it("decides identically for two principals with the same package", () => {
+        // The whole point of configurable roles: the package answers, not the name it was given.
+        const pkg = [COMMUNICATIONS_SEND_PERMISSION_KEY];
+        expect(hasCommunicationsSendPermission(pkg)).toBe(hasCommunicationsSendPermission([...pkg]));
+        expect(hasCommunicationsSendPermission(pkg)).toBe(true);
     });
 });

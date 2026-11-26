@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { refuseOutOfScopeFinancialRead } from "@/lib/financials/workspace/financialReadScopeGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,13 @@ export async function GET(
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const allowedRead = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
     const orgId = ctx.orgId;
 
     const { data: txn, error: txnErr } = await supabase
@@ -35,6 +44,16 @@ export async function GET(
     if (txnErr || !txn) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+
+    // BP V2 D4 — a childcare ledger row is located by its billable source; a row naming only a household
+    // follows the household rule. Vendor/job rows are outside the Financials location contract (unchanged).
+    const located = txn as { billable_source_type?: string | null; billable_source_id?: string | null; customer_id?: string | null };
+    const outOfScope = located.billable_source_type
+        ? await refuseOutOfScopeFinancialRead(supabase, orgId, { source: located })
+        : located.customer_id
+          ? await refuseOutOfScopeFinancialRead(supabase, orgId, { household: { customerId: located.customer_id } })
+          : null;
+    if (outOfScope) return outOfScope;
 
     const t = txn as {
         customer_id?: string | null;

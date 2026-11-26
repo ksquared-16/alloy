@@ -1,6 +1,6 @@
 /**
  * Location-owned program categories — single source of truth for site offerings.
- * Keys align with legacy OCM `desired_program_type` text storage.
+ * Stable keys identify categories across sites; OCM stores the category FK (`program_category_id`).
  */
 
 import { slugifyAdminKey } from "@/lib/admin/slugifyAdminKey";
@@ -14,7 +14,30 @@ export type LocationProgramCategoryRow = {
     sort_order?: number | null;
     is_active?: boolean | null;
     metadata?: Record<string, unknown> | null;
+    /** Null on legacy local-only compatibility rows. */
+    program_id?: string | null;
+    /** Published Organization revision consumed by this Location. */
+    program_revision_id?: string | null;
+    configuration_consumption_id?: string | null;
+    /** Optional Location-facing display name. Null inherits Organization Program name. */
+    local_display_name?: string | null;
+    /** Inclusive start date for offering at this Location. Null = immediately. */
+    available_from?: string | null;
+    /** Inclusive end date for offering at this Location. Null = indefinite. */
+    available_through?: string | null;
+    /** Location-owned description difference (not the display name). */
+    local_description_override?: string | null;
+    /** Location-owned evidence required for local readiness. */
+    local_authorization_evidence?: string | null;
 };
+
+/** Effective label: local display name when set, otherwise Organization Program label. */
+export function effectiveLocationProgramLabel(
+    row: Pick<LocationProgramCategoryRow, "label" | "local_display_name">,
+): string {
+    const local = typeof row.local_display_name === "string" ? row.local_display_name.trim() : "";
+    return local || String(row.label ?? "").trim() || "Program";
+}
 
 export type LocationProgramCategorySelectOption = {
     value: string;
@@ -51,7 +74,7 @@ export function locationProgramCategoriesToSelectOptions(
 ): LocationProgramCategorySelectOption[] {
     return categories.map((c) => ({
         value: c.key,
-        label: c.label,
+        label: effectiveLocationProgramLabel(c),
         category_id: c.id,
     }));
 }
@@ -147,7 +170,7 @@ export function resolveProgramCategoryIdForSiteKey(
     return row?.id ?? null;
 }
 
-/** Stable key slug for new location program categories (stored on OCM `desired_program_type`). */
+/** Stable key slug for new location program categories. */
 export function slugifyLocationProgramCategoryKey(label: string): string {
     return slugifyAdminKey(label);
 }

@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-day-start — the START OF DAY sequence for a managed slot.
+#
+# Yesterday's base is not today's base. A slot that resumes on a stale base does
+# rework: slot 4 sat 265 commits behind and needed six controlled promotions to
+# land; slot 6 was 230 behind and needed a reconstruction. Both were avoidable by
+# rebasing every morning instead of every quarter.
+#
+# Sequence:
+#   1. fetch origin
+#   2. report ahead/behind
+#   3. rebase onto current origin/staging  (BEFORE new implementation)
+#   4. run configured smoke tests
+#   5. push rebased branch with --force-with-lease
+#   6. then resume work
+#
+#   alloy-day-start [<slot|worktree>] [--no-rebase] [--no-smoke]
+#
+# --no-rebase reports the drift and stops without rewriting history — use it when
+# the rebase needs a recorded reconciliation decision first (>=100 behind).
+# =============================================================================
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+
+SMOKE_CMD="${ALLOY_SMOKE_CMD:-}"
+
+usage() { sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+main() {
+  local target="" do_rebase=1 do_smoke=1
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-rebase) do_rebase=0; shift ;;
+      --no-smoke) do_smoke=0; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) target="$1"; shift ;;
+    esac
+  done
+
+  alloy_load_config
+  local name path
+  if [[ -n "$target" ]]; then
+    name="$(alloy_resolve_worktree_name "$target")" || alloy_die "unknown slot/worktree: $target"
+    alloy_load_metadata "$name"; path="$ALLOY_WORKTREE_PATH"
+  else
+    path="$(git rev-parse --show-toplevel 2>/dev/null)" || alloy_die "not in a git worktree"
+    name="$(basename "$path")"
+  fi
+  local base; base="$(alloy_git_base_ref)"
+  local branch; branch="$(git -C "$path" rev-parse --abbrev-ref HEAD)"
+
+  printf 'START OF DAY — %s (%s)\n' "$name" "$branch"
+  printf -- '-------------------------------------------\n'
+
+  # 1. fetch
+  printf '  fetching origin…\n'
+  git -C "$path" fetch -q origin || alloy_warn "fetch failed — figures below may be stale"
+
+  # 2. ahead / behind
+  local ahead behind
+  ahead="$(git -C "$path" rev-list --count "${base}..HEAD" 2>/dev/null || echo 0)"
+  behind="$(git -C "$path" rev-list --count "HEAD..${base}" 2>/dev/null || echo 0)"
+  printf '  DAY_START_BASE=%s\n  DAY_START_AHEAD=%s\n  DAY_START_BEHIND=%s\n' "$base" "$ahead" "$behind"
+
+  # A dirty tree must not be rebased over.
+  local dirty; dirty="$(git -C "$path" status --porcelain | wc -l | tr -d ' ')"
+  if [[ "$dirty" != "0" ]]; then
+    printf '  DAY_START_DIRTY=%s\n' "$dirty"
+    alloy_die "uncommitted changes — commit or park them before rebasing (that is what yesterday's alloy-day-end is for)"
+  fi
+
+  # The integration-debt gate still applies: >=100 behind needs a recorded decision.
+  local debt rc=0
+  debt="$(alloy_assert_integration_debt_acceptable "$path" "$name" 2>&1)" || rc=$?
+  printf '%s\n' "$debt" | sed 's/^/  /'
+  [[ "$rc" -eq 0 ]] || alloy_die "start blocked: record a reconciliation decision before resuming on this base"
+
+  # 3. rebase
+  if [[ "$do_rebase" -eq 1 && "$behind" != "0" ]]; then
+    printf '  rebasing onto %s…\n' "$base"
+    if ! git -C "$path" rebase "$base"; then
+      git -C "$path" rebase --abort 2>/dev/null || true
+      alloy_die "rebase hit conflicts — resolve deliberately, do not resume on a half-rebased tree"
+    fi
+    printf '  DAY_START_REBASED=yes  new_head=%s\n' "$(git -C "$path" rev-parse --short HEAD)"
+  else
+    printf '  DAY_START_REBASED=no (%s)\n' "$([[ "$behind" == "0" ]] && echo 'already current' || echo '--no-rebase')"
+  fi
+
+  # 4. smoke
+  if [[ "$do_smoke" -eq 1 && -n "$SMOKE_CMD" ]]; then
+    printf '  smoke: %s\n' "$SMOKE_CMD"
+    if ( cd "$path" && eval "$SMOKE_CMD" >/dev/null 2>&1 ); then
+      printf '  DAY_START_SMOKE=pass\n'
+    else
+      printf '  DAY_START_SMOKE=fail\n'
+      alloy_die "smoke tests failed on the rebased base — fix before layering new work on it"
+    fi
+  else
+    printf '  DAY_START_SMOKE=skipped (set ALLOY_SMOKE_CMD to configure)\n'
+  fi
+
+  # 5. push the rebased branch
+  if [[ "$do_rebase" -eq 1 && "$behind" != "0" ]]; then
+    if git -C "$path" push --force-with-lease origin "$branch" >/dev/null 2>&1; then
+      printf '  DAY_START_PUSHED=yes (force-with-lease)\n'
+    else
+      alloy_die "push --force-with-lease refused — the remote moved under you; re-fetch and look before forcing"
+    fi
+  fi
+
+  printf '\nDAY_START_VERDICT=ready — rebased, verified, pushed. Resume work.\n'
+}
+
+main "$@"

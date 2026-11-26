@@ -1,5 +1,7 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { effectiveFieldRulesForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
+import { effectiveFieldRulesStoredForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
+import { selectRulesForRecordCreation } from "@/lib/lifecycle/requirementTimingEvaluation";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import type {
     ActionIntakeConstraint,
@@ -12,6 +14,7 @@ import type {
     ActionIntakeValidationRule,
 } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import {
+    CREATE_LEAD_CODE_OWNED_FLOOR_RULE_IDS,
     CREATE_LEAD_CONTACT_RULE_IDS,
     CREATE_LEAD_INTAKE_ENTITIES,
     CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS,
@@ -20,6 +23,9 @@ import {
     validationRulesForIntakeField,
 } from "@/lib/lifecycle/createLeadIntakeFieldMap";
 import {
+    splitRequiredRulesByFormMoment,
+} from "@/lib/forms/lifecycle/formRequirementTiming";
+import {
     isValidCreateLeadEmail,
     isValidCreateLeadPhone,
 } from "@/lib/admin/actions/createLeadIntakeValidation";
@@ -27,7 +33,10 @@ import {
     lifecycleEntityLabel,
     lifecycleFieldRequirementById,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
-import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
+import {
+    lifecycleFieldRuleBinding,
+    parseCustomFieldRuleId,
+} from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import {
     mergeLifecycleFieldPaletteForStage,
     type LifecycleFieldPaletteEntry,
@@ -80,10 +89,10 @@ function orgFieldDefForKey(
 
 function placementSelectForInquiryChildField(fieldKey: string | null): ActionIntakePlacementSelect | null {
     if (fieldKey === "location_id") return "site";
-    // The child:program_interest rule binds `desired_program_category_id` (canonical program field).
+    // The child:program_interest rule binds `program_category_id` (canonical program field).
     // Without this it falls through to a free-text input; map it to the location-aware program select
     // so Program renders as a dropdown like Room (matching the platform gather field's intent).
-    if (fieldKey === "desired_program_category_id" || fieldKey === "desired_program_type") return "site_program";
+    if (fieldKey === "program_category_id") return "site_program";
     if (fieldKey === "program_room_cohort_key") return "site_room";
     return null;
 }
@@ -99,11 +108,12 @@ function buildFieldSpec(
 
     const catalog = lifecycleFieldRequirementById(ruleId);
     const binding = lifecycleFieldRuleBinding(ruleId);
-    const entity = paletteEntry?.entity ?? catalog?.entity ?? binding?.entity;
+    const custom = parseCustomFieldRuleId(ruleId);
+    const entity = paletteEntry?.entity ?? catalog?.entity ?? binding?.entity ?? custom?.entity;
     if (!entity || !CREATE_LEAD_INTAKE_ENTITIES.includes(entity)) return null;
 
-    const fieldKey = paletteEntry?.field_key ?? binding?.field_key ?? null;
-    const fieldLabel = paletteEntry?.field_label ?? catalog?.field_label ?? ruleId;
+    const fieldKey = paletteEntry?.field_key ?? binding?.field_key ?? custom?.field_key ?? null;
+    const fieldLabel = paletteEntry?.field_label ?? catalog?.field_label ?? fieldKey ?? ruleId;
     const orgDef = orgFieldDefForKey(org_field_definitions, entity, fieldKey);
     const fallbackOptionSetKey =
         entity === "child" && fieldKey ? fallbackOptionSetKeyForInquiryChildField(fieldKey) : null;
@@ -139,23 +149,36 @@ function buildFieldSpec(
     };
 }
 
-/** create_lead: child rules configured as required do not block capture (added after create or optional). */
-function applyCreateLeadIntakePolicy(fields: {
-    requiredIds: string[];
-    recommendedIds: string[];
-}): { requiredIds: string[]; recommendedIds: string[] } {
-    const requiredIds: string[] = [];
-    const recommendedIds = [...fields.recommendedIds];
+/**
+ * create_lead: only rules whose configured timing includes `record_creation` block capture.
+ *
+ * Delegates to the shared form/action moment resolver (`formRequirementTiming.ts`) so create_lead
+ * and every stage form judge timing by one rule. This is behavior-preserving: at the
+ * `record_creation` moment the shared split reaches the same verdict the hand-rolled policy did —
+ * explicit `record_creation` rules stay required; child-entity rules, rules with any other explicit
+ * timing, and untagged rules (which default to `stage_progress`) all become recommended.
+ */
+function applyCreateLeadIntakePolicy(
+    fields: {
+        requiredIds: string[];
+        recommendedIds: string[];
+    },
+    stored: import("@/lib/lifecycle/lifecycleStageRequirementLevels").LifecycleStageFieldRulesStored,
+): { requiredIds: string[]; recommendedIds: string[] } {
+    const split = splitRequiredRulesByFormMoment({
+        requiredRuleIds: fields.requiredIds,
+        rules: stored,
+        ruleMeta: stored.rule_meta_v1 ?? null,
+        moment: { kind: "record_creation" },
+    });
 
-    for (const id of fields.requiredIds) {
-        const binding = lifecycleFieldRuleBinding(id);
-        if (binding?.entity === "child") {
-            if (!recommendedIds.includes(id)) recommendedIds.push(id);
-            continue;
-        }
-        if (!requiredIds.includes(id)) requiredIds.push(id);
+    const requiredIds = [...split.blockingRuleIds];
+    const recommendedIds = [...fields.recommendedIds];
+    for (const id of split.deferredRuleIds) {
+        if (!recommendedIds.includes(id)) recommendedIds.push(id);
     }
 
+    // Platform floor — a Lead is not a Lead without a name, whatever the tenant configured.
     for (const id of CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS) {
         if (!requiredIds.includes(id)) requiredIds.push(id);
     }
@@ -187,30 +210,25 @@ function buildGroups(fields: ActionIntakeFieldSpec[]): ActionIntakeEntityGroup[]
         if (!entityFields.length) continue;
         groups.push({
             entity,
-            entity_label: lifecycleEntityLabel(entity),
+            entity_label: entity === "opportunity" ? "Lead" : lifecycleEntityLabel(entity),
             fields: entityFields,
         });
     }
     return groups;
 }
 
-function buildCreateLeadContactConstraints(
-    requiredIds: string[],
-    requirementsSource: "platform" | "department",
-): ActionIntakeConstraint[] {
+function buildCreateLeadContactConstraints(requiredIds: string[]): ActionIntakeConstraint[] {
     const emailRequired = requiredIds.includes("person:email");
     const phoneRequired = requiredIds.includes("person:phone");
     if (emailRequired || phoneRequired) return [];
-    if (requirementsSource === "platform") {
-        return [
-            {
-                kind: "at_least_one",
-                rule_ids: CREATE_LEAD_CONTACT_RULE_IDS,
-                message: "Phone or email is required.",
-            },
-        ];
-    }
-    return [];
+    // Code-owned floor: email|phone regardless of platform vs department source.
+    return [
+        {
+            kind: "at_least_one",
+            rule_ids: CREATE_LEAD_CONTACT_RULE_IDS,
+            message: "Phone or email is required.",
+        },
+    ];
 }
 
 export function resolveCreateLeadActionIntakeSpec(input: {
@@ -224,6 +242,11 @@ export function resolveCreateLeadActionIntakeSpec(input: {
     primary_record_label?: string;
 }): ActionIntakeSpec {
     const builderStageKey = input.builder_stage_key?.trim() || input.operator_stage;
+    const stored = effectiveFieldRulesStoredForBuilderStage(
+        builderStageKey,
+        input.department_metadata ?? null,
+        input.operator_stage,
+    );
     const { rules, source: rulesSource } = effectiveFieldRulesForBuilderStage(
         builderStageKey,
         input.department_metadata ?? null,
@@ -237,10 +260,20 @@ export function resolveCreateLeadActionIntakeSpec(input: {
     );
     const byRule = paletteByRuleId(palette);
 
-    const policy = applyCreateLeadIntakePolicy({
-        requiredIds: rules.required_rule_ids,
-        recommendedIds: rules.recommended_rule_ids,
-    });
+    const policy = applyCreateLeadIntakePolicy(
+        {
+            requiredIds: rules.required_rule_ids,
+            recommendedIds: rules.recommended_rule_ids,
+        },
+        stored,
+    );
+
+    // Merge explicit record_creation rules that may only exist in rule_meta.
+    for (const row of selectRulesForRecordCreation(stored, stored.rule_meta_v1 ?? null)) {
+        if (!policy.requiredIds.includes(row.ruleId)) {
+            policy.requiredIds.push(row.ruleId);
+        }
+    }
 
     const required: ActionIntakeFieldSpec[] = [];
     const recommended: ActionIntakeFieldSpec[] = [];
@@ -256,15 +289,35 @@ export function resolveCreateLeadActionIntakeSpec(input: {
         if (spec) recommended.push(spec);
     }
 
-    const allRuleIds = new Set([...policy.requiredIds, ...policy.recommendedIds]);
-    for (const entry of palette) {
-        if (allRuleIds.has(entry.rule_id)) continue;
-        if (!CREATE_LEAD_INTAKE_ENTITIES.includes(entry.entity)) continue;
-        const spec = buildFieldSpec(entry.rule_id, "optional", entry, input.org_field_definitions);
-        if (spec) optional.push(spec);
+    // Do NOT dump unused palette fields as optional. The palette is the catalog of
+    // fields available for configuration — not the effective Create Lead intake.
+    // Code-owned contact (email|phone) must still be present for Form + constraint.
+    const includedRuleIds = new Set([
+        ...policy.requiredIds,
+        ...policy.recommendedIds,
+    ]);
+    for (const ruleId of CREATE_LEAD_CONTACT_RULE_IDS) {
+        if (includedRuleIds.has(ruleId)) continue;
+        if (policy.requiredIds.includes(ruleId)) continue;
+        const spec = buildFieldSpec(ruleId, "optional", byRule.get(ruleId) ?? null, input.org_field_definitions);
+        if (spec) {
+            optional.push(spec);
+            includedRuleIds.add(ruleId);
+        }
+    }
+    // Ensure code-owned name floor specs exist even if palette lookup missed them.
+    for (const ruleId of CREATE_LEAD_CODE_OWNED_FLOOR_RULE_IDS) {
+        if (includedRuleIds.has(ruleId)) continue;
+        if (CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS.includes(ruleId as (typeof CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS)[number])) {
+            const spec = buildFieldSpec(ruleId, "required", byRule.get(ruleId) ?? null, input.org_field_definitions);
+            if (spec) {
+                required.push(spec);
+                includedRuleIds.add(ruleId);
+            }
+        }
     }
 
-    const constraints = buildCreateLeadContactConstraints(policy.requiredIds, requirementsSource);
+    const constraints = buildCreateLeadContactConstraints(policy.requiredIds);
 
     const leadLabel = input.primary_record_label?.trim() || "Lead";
     const allFields = dedupeFieldSpecs([...required, ...recommended, ...optional]);

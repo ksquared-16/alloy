@@ -15,7 +15,7 @@ type Props = {
     onSuccess?: () => void;
 };
 
-/** @deprecated Use RelationshipActionGuidedModal with actionKey add_emergency_contact. */
+/** @deprecated Prefer RelationshipActionGuidedModal / IdentityResolvedEmergencyContactModal for Focus Panel. */
 export default function AddEmergencyContactGuidedModal({
     open,
     context,

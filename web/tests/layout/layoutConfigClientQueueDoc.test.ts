@@ -12,6 +12,9 @@ describe("layout settings queue doc load", () => {
         const items = parsed.doc!.sections[0]!.rows[0]!.columns[0]!.items;
         const childrenList = items.find((item) => item.kind === "related_list");
         expect(childrenList?.columns?.length).toBeGreaterThan(0);
-        expect(childrenList?.columns?.[0]?.adornment?.action?.entity).toBe("child");
+        // The column keeps its icon; the retired `open_drawer` action is gone from the platform
+        // default. Parsing is what this test is about, and an adornment still parses without one.
+        expect(childrenList?.columns?.[0]?.adornment?.icon).toBe("child");
+        expect(childrenList?.columns?.[0]?.adornment?.action).toBeUndefined();
     });
 });

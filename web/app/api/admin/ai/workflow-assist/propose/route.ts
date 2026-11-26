@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { requireAdmin } from "@/lib/adminAuth";
 import type { WorkflowAssistCreateTemplateIdV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
@@ -9,13 +9,8 @@ import {
     buildWorkflowAssistSuggestionV1,
     parseWorkflowAssistProposeRequest,
 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
-import { isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
-import { computeOpenAiLiveInvocationPermitted, resolveAiEnrichmentPortalAccess } from "@/lib/ai/aiEnrichmentPermissions";
-import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
-import {
-    evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute,
-    evaluateOrgPolicyForStubWorkflowAssistProposeRoute,
-} from "@/lib/ai/aiEnrichmentRouteGuards";
+import { completeTrustAuthorization, resolveTrustAccessAuthorization } from "@/lib/ai/resolveTrustAuthorization";
+import { trustAuthorizationRefusalResponse } from "@/lib/ai/trustAuthorizationHttp";
 import {
     findWorkflowAssistDuplicates,
     type WorkflowAssistDuplicateProbeRowV1,
@@ -27,32 +22,31 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 /**
  * POST `/api/admin/ai/workflow-assist/propose` — deterministic Workflow Assist proposal (Cards 4–5).
  *
- * **Gates:** `requireAdmin` (ops excluded); then same portal + org `ai_policy` pattern as Task Assist propose
- * (`workflow_assist_draft` feature; stub requires `AI_ENRICHMENT_STUB_ENABLED`; openai branch is policy-only — no LLM).
+ * **Gates:** `requireAdmin` (ops excluded — this route's own access authority), then the canonical Trust
+ * authorization seam (`resolveTrustAccessAuthorization` then `completeTrustAuthorization`, consumer
+ * `workflow_assist_propose`). This route branches on no `ai_policy` authority of its own. The openai policy
+ * branch is policy-only — no LLM.
  *
  * **Body:** {@link import("@/lib/agent/workflowAssist/workflowAssistProposalV1").WorkflowAssistProposeRequestV1}
  *
  * **No mutations** to `workflows` in this handler.
  */
 export async function POST(request: NextRequest) {
+    // Route access authority, owned by `lib/adminAuth`. Intentionally NOT part of
+    // the Trust authorization seam: it is this route's own admin-only rule (ops
+    // excluded), it runs before any context resolution, and no other consumer
+    // has it. Converging it would change who may reach the other two routes.
     const forbidden = await requireAdmin();
     if (forbidden) return forbidden;
 
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
-
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return adminContextFailureResponse(access);
-
-    const portal = resolveAiEnrichmentPortalAccess({ ctx, access });
-    if (!portal.ok) {
-        return NextResponse.json(
-            { ok: false, error: portal.error, message: portal.message },
-            { status: portal.status }
-        );
-    }
-
-    const openaiLiveInvocationPermitted = computeOpenAiLiveInvocationPermitted(access);
+    // Stage 1 of the canonical authorization seam: identity, org context, portal.
+    const gate = resolveTrustAccessAuthorization({
+        consumer: "workflow_assist_propose",
+        ctx: await getAdminContextCached(),
+        access: await getAdminAccessContextCached(),
+    });
+    if (!gate.ok) return trustAuthorizationRefusalResponse(gate.decision)!;
+    const { ctx } = gate;
 
     let body: unknown;
     try {
@@ -81,55 +75,11 @@ export async function POST(request: NextRequest) {
     }
 
     const org_metadata = orgSettings?.metadata ?? {};
-    const policyQuick = parseAiPolicyFromMetadata(org_metadata);
 
-    if (policyQuick.provider === "openai") {
-        if (!openaiLiveInvocationPermitted) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    error: "AI_OPENAI_FORBIDDEN",
-                    message:
-                        "Workflow Assist (openai policy branch) requires AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true and permission ai.enrichment.use.",
-                },
-                { status: 403 }
-            );
-        }
-        const policyGate = evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute(org_metadata);
-        if (!policyGate.ok) {
-            return NextResponse.json(
-                { ok: false, error: policyGate.error, message: policyGate.message },
-                { status: 403 }
-            );
-        }
-    } else if (policyQuick.provider === "stub") {
-        if (!isAiEnrichmentStubEnvEnabled()) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    error: "FEATURE_DISABLED",
-                    message: "Set AI_ENRICHMENT_STUB_ENABLED=true to enable Workflow Assist stub policy routes.",
-                },
-                { status: 403 }
-            );
-        }
-        const policyGate = evaluateOrgPolicyForStubWorkflowAssistProposeRoute(org_metadata);
-        if (!policyGate.ok) {
-            return NextResponse.json(
-                { ok: false, error: policyGate.error, message: policyGate.message },
-                { status: 403 }
-            );
-        }
-    } else {
-        return NextResponse.json(
-            {
-                ok: false,
-                error: "AI_POLICY_PROVIDER",
-                message: "Workflow Assist requires ai_policy.provider stub or openai with workflow_assist_draft allowed.",
-            },
-            { status: 403 }
-        );
-    }
+    // Stage 2: organization policy, reasoning mode, provider availability.
+    // The route branches on nothing itself.
+    const authorization = completeTrustAuthorization({ accessDecision: gate.decision, orgMetadata: org_metadata });
+    if (!authorization.permitted) return trustAuthorizationRefusalResponse(authorization)!;
 
     const scope_labels =
         body != null && typeof body === "object" && !Array.isArray(body) ?

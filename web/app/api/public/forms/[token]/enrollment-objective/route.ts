@@ -1,0 +1,99 @@
+/**
+ * GET /api/public/forms/[token]/enrollment-objective
+ *
+ * The participant's own view of their Enrollment: what is done, what remains, and the one thing to
+ * do next. Hosted on the EXISTING public forms token surface — same route family, same access
+ * doctrine, no second participant application.
+ *
+ * Read only. Opening this never launches a session or writes participant state.
+ */
+
+import { canonicalValuesWithHouseholdProvisional } from "@/lib/enrollment/family/householdProvisionalAnswers";
+import { NextRequest } from "next/server";
+
+import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
+import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import {
+    recomputeParticipantObjectiveFromContext,
+    resolveParticipantEnrollmentObjectiveWithContext,
+} from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
+import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
+import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
+import { readPendingClarification } from "@/lib/enrollment/participantRuntime/pendingClarification";
+
+function plaintextToken(raw: string): string {
+    try {
+        return decodeURIComponent(raw);
+    } catch {
+        return raw;
+    }
+}
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const timing = startParticipantTiming();
+    const tokenStart = timing.now();
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        return publicErr("Server misconfiguration", 500);
+    }
+
+    const { token: rawToken } = await params;
+    const supabase = createServiceRoleClient();
+
+    const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
+    timing.mark("token", tokenStart);
+    if (!access.ok) {
+        // An ordinary public form link has no participant session until the family submits: that is the
+        // expected answer to this read-only probe, not a failure — answered `ok: false` without an error
+        // status, so every anonymous inquiry page stops logging a 409 (P1-close, UX-04).
+        return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : access.error.code === "NO_SESSION" ? 200 : 409, {
+            code: access.error.code,
+        });
+    }
+
+    // What the organization already holds about this child. Without it every known fact arrives as
+    // `missing`, and the participant is asked for information that is on file — which is exactly
+    // what live QA hit.
+    // Canonical record and objective context are independent reads — one wave. The needs
+    // projection DOES depend on canonical values, so the objective is re-assembled purely (zero
+    // queries) once both are in hand.
+    const parallelStart = timing.now();
+    const [canonical, resolved] = await Promise.all([
+        resolveParticipantCanonicalContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+        }),
+        resolveParticipantEnrollmentObjectiveWithContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+            // The session row the access check already read — one fewer serial round trip.
+            preloadedSession: access.value.session,
+        }),
+    ]);
+    timing.mark("objective", parallelStart);
+    if (!resolved.ok) return publicErr(resolved.refusal.detail, 409, { code: resolved.refusal.code });
+    const objective = {
+        ok: true as const,
+        value: recomputeParticipantObjectiveFromContext(
+            { ...resolved.context, canonicalValues: canonicalValuesWithHouseholdProvisional(canonical.values, canonical.provisionalValues) },
+            resolved.context.needsContext.session,
+        ),
+    };
+
+    // Narrowed for the wire: a participant surface never receives org ids, revision internals or
+    // requirement plumbing it has no use for.
+    // A question raised on a previous turn survives a reload — the parent sees the same ask.
+    const pending = readPendingClarification(
+        resolved.context.needsContext.session?.metadata,
+        objective.value.next_turn.need?.identity.key ?? null,
+    );
+    const response = publicOk(
+        participantObjectiveWireModel(objective.value, {
+            subjectDisplayName: canonical.subjectDisplayName,
+            pendingClarificationQuestion: pending?.question ?? null,
+        }),
+    );
+    response.headers.set("Server-Timing", timing.header());
+    return response;
+}

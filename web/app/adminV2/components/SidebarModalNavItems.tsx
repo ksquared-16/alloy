@@ -1,24 +1,30 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
-import { ClipboardList, Inbox, ListChecks, BarChart3, Layers } from "lucide-react";
+// Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
+import { Inbox, ListChecks, BarChart3, Layers, Contact, Banknote } from "lucide-react";
 
-import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
-import { ADMIN_FORMS_HREF, isCanonicalFormsPath, normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
+import { useProcessingAttentionNavCount } from "@/lib/adminV2/useProcessingAttentionNavCount";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+import { offersFinancialsSurface } from "@/lib/access/financialsSurfaceVisibility";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { warmOperationsWorkspace } from "@/lib/scheduling/operationsWorkspaceWarmCache";
+import { dispatchAdminV2OpenFinancialsModal } from "@/lib/adminV2/workspaceModalEvents";
 import { warmOipAnalyticsModal } from "@/lib/metrics/oipWorkspaceWarmCache";
+import { warmOperationalIntelligence } from "@/lib/analytics/runtime/operationalIntelligenceWarmCache";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import { warmProcessingFormsCache } from "@/lib/pos/processingFormsWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     dispatchAdminV2OpenInboxModal,
     dispatchAdminV2OpenTasksPanel,
     dispatchAdminV2OpenAnalyticsModal,
     dispatchAdminV2OpenProcessingModal,
+    dispatchAdminV2OpenOperationsModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -119,6 +125,12 @@ export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
             badge={badge}
             active={activeModal === "tasks"}
             dataAttr="tasks"
+            onMouseEnter={() => {
+                prefetchWorkspaceOperationalTasks("open");
+            }}
+            onFocus={() => {
+                prefetchWorkspaceOperationalTasks("open");
+            }}
             onClick={() => {
                 prefetchWorkspaceOperationalTasks("open");
                 dispatchAdminV2OpenTasksPanel();
@@ -168,46 +180,6 @@ export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
     );
 }
 
-function SidebarRouteNavItem({
-    collapsed,
-    href,
-    title,
-    label,
-    active,
-    icon,
-    badge,
-}: {
-    collapsed: boolean;
-    href: string;
-    title: string;
-    label: string;
-    active?: boolean;
-    icon: ReactNode;
-    badge?: ReactNode;
-}) {
-    return (
-        <AdminV2NavLink
-            href={href}
-            title={title}
-            aria-label={title}
-            active={active}
-            className={collapsed ? "adminv2-sidebar-rail-link relative" : `${EXPANDED_PRIMARY_LINK} relative`}
-        >
-            {collapsed ?
-                <>
-                    <span className={badge ? "adminv2-sidebar-rail-icon-with-badge" : undefined}>{icon}</span>
-                    {badge ? <span className="adminv2-sidebar-nav-badge-anchor">{badge}</span> : null}
-                </>
-            :   <span className="inline-flex w-full items-center gap-2">
-                    {icon}
-                    <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-                    {badge}
-                </span>
-            }
-        </AdminV2NavLink>
-    );
-}
-
 export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
     return (
@@ -221,12 +193,15 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
             dataAttr="analytics"
             onMouseEnter={() => {
                 void warmOipAnalyticsModal();
+                void warmOperationalIntelligence({ siteId: null, window: "rolling_30d", compare: false });
             }}
             onFocus={() => {
                 void warmOipAnalyticsModal();
+                void warmOperationalIntelligence({ siteId: null, window: "rolling_30d", compare: false });
             }}
             onClick={() => {
                 void warmOipAnalyticsModal();
+                void warmOperationalIntelligence({ siteId: null, window: "rolling_30d", compare: false });
                 dispatchAdminV2OpenAnalyticsModal();
             }}
         />
@@ -236,41 +211,127 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
 /** POS intake workspace — operator application alongside Tasks, Inbox, and Analytics. */
 export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
+    // New work: actionable intake no operator has acted on yet (processingCaseAttention).
+    const unworked = useProcessingAttentionNavCount();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
-            title="Processing — intake, documents, and forms"
+            title={
+                unworked > 0
+                    ? `Processing — ${unworked} new item${unworked === 1 ? "" : "s"} to review`
+                    : "Processing — intake, documents, and forms"
+            }
             label="Processing"
             icon={<Layers size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-            badge={null}
+            badge={
+                unworked > 0 ?
+                    <span className="adminv2-sidebar-nav-badge adminv2-sidebar-nav-badge--inbox" data-adminv2-processing-attention-badge="true">
+                        {formatSidebarBadgeCount(unworked, collapsed)}
+                    </span>
+                :   null
+            }
             active={activeModal === "processing"}
             dataAttr="processing"
             onMouseEnter={() => {
                 void warmProcessingQueueCache();
+                void warmProcessingFormsCache();
             }}
             onFocus={() => {
                 void warmProcessingQueueCache();
+                void warmProcessingFormsCache();
             }}
             onClick={() => {
                 void warmProcessingQueueCache();
+                void warmProcessingFormsCache();
                 dispatchAdminV2OpenProcessingModal();
             }}
         />
     );
 }
-
-export function SidebarFormsNavItem({ collapsed }: { collapsed: boolean }) {
-    const pathname = usePathname();
-    const active = isCanonicalFormsPath(normalizeToCanonicalAdminPath(pathname));
-
+/**
+ * OPERATIONS — the operating day, the people it is made of, and its configuration.
+ *
+ * One rail entry where there were three. Roster answered "who is expected where", Records answered
+ * "who are these people", and Assignments answered "what commitments is that derived from, and how
+ * are they configured" — three doors onto the same day, which made an operator declare in advance
+ * which question they were about to ask. They are now WORK and STUDIO inside one workspace.
+ *
+ * The ICON stays the people mark rather than a calendar. The name is broader now, but what an
+ * operator is reaching for is unchanged — "where do I find Lennon", "is Toddler A short" — and the
+ * mark they already learned to find in the rail should keep pointing at it.
+ */
+export function SidebarOperationsNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
     return (
-        <SidebarRouteNavItem
+        <SidebarModalNavButton
             collapsed={collapsed}
-            href={ADMIN_FORMS_HREF}
-            title="Forms — definitions, submissions, and packets"
-            label="Forms"
-            active={active}
-            icon={<ClipboardList size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            title="Operations — the operating day, the people it is made of, and its configuration"
+            label="Operations"
+            icon={<Contact size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            active={activeModal === "operations"}
+            dataAttr="operations"
+            /*
+             * Readiness on NAV INTENT, not on the click. Warming inside the modal's own open effect
+             * runs at the same instant the workspace mounts, so a serial chain (configuration ->
+             * section data) gains nothing from it. Hover/focus is the earliest honest signal, and it
+             * is the seam Communications already uses.
+             *
+             * `warmOperationsWorkspace` reads the REMEMBERED position and prepares that destination —
+             * bounded to the configuration class, never a full hydration of a closed workspace.
+             */
+            onMouseEnter={() => warmOperationsWorkspace()}
+            onFocus={() => warmOperationsWorkspace()}
+            onClick={() => {
+                warmOperationsWorkspace();
+                dispatchAdminV2OpenOperationsModal();
+            }}
+        />
+    );
+}
+
+/**
+ * Financials in the primary navigation, offered only to a principal who can read it.
+ *
+ * ── WHAT THIS IS, AND WHAT IT IS NOT ──
+ *
+ * It is not the gate. `fin.read` is enforced by `assertFinancialsReadAllowed` on every Financials
+ * read route, and every financial mutation is enforced by its own registered action; both refuse a
+ * direct API call that never rendered a screen, and both would refuse if this component always drew
+ * the button. Removing the item is a product decision about what to put in front of an operator,
+ * and the doctrine is explicit that navigation hiding is never the security boundary.
+ *
+ * ── WHY IT IS THE ITEM AND NOT A DISABLED STATE ──
+ *
+ * A disabled control that never becomes enabled teaches an operator that the product is broken. A
+ * role configured without Financials is not a temporary condition to wait out; it is the
+ * organization's answer. The surface is simply not theirs, and the Access workspace is where that
+ * changes.
+ *
+ * ── AND IT FAILS OPEN ──
+ *
+ * `permissionKeys` is `null` when the shell that mounted the context did not supply it, and
+ * `offersFinancialsSurface` answers "offer" in that case. A missed mount must not hide Financials
+ * from someone who holds the grant: that would recreate the operator report this work began with,
+ * with a vanished nav item instead of a message that at least explained itself. The server gives the
+ * real answer either way.
+ */
+export function SidebarFinancialsNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
+    const auth = useAdminAuthOptional();
+    if (!offersFinancialsSurface(auth?.permissionKeys)) return null;
+    return (
+        <SidebarModalNavButton
+            collapsed={collapsed}
+            title="Financials — the financial work waiting on an operator, and the accounts it belongs to"
+            label="Financials"
+            icon={<Banknote size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            active={activeModal === "financials"}
+            dataAttr="financials"
+            onClick={() => {
+                dispatchAdminV2OpenFinancialsModal();
+            }}
         />
     );
 }

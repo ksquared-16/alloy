@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { FORM_BRAND_SNAPSHOT_KEY, snapshotFormBrand } from "@/lib/branding/publicBrand";
 
 export type FormDefinitionRow = {
     id: string;
@@ -180,18 +181,51 @@ export async function dbUpdateVersionDraft(
         .single();
 }
 
+/**
+ * The version `metadata` a publish should write: the draft's own metadata plus a snapshot of the
+ * form's branding as it stands at publish (S4). Published versions are immutable (DB trigger), so the
+ * snapshot can only be taken here, in the draft → published transition. Null when the draft is gone.
+ */
+export async function buildPublishBrandSnapshotMetadata(
+    supabase: SupabaseClient,
+    orgId: string,
+    versionId: string
+): Promise<Record<string, unknown> | null> {
+    const { data: ver } = await supabase
+        .from("form_definition_versions")
+        .select("form_definition_id, metadata")
+        .eq("org_id", orgId)
+        .eq("id", versionId)
+        .eq("status", "draft")
+        .maybeSingle();
+    if (!ver) return null;
+    const v = ver as { form_definition_id: string; metadata?: Record<string, unknown> | null };
+    const { data: def } = await supabase
+        .from("form_definitions")
+        .select("metadata")
+        .eq("org_id", orgId)
+        .eq("id", v.form_definition_id)
+        .maybeSingle();
+    return {
+        ...(v.metadata ?? {}),
+        [FORM_BRAND_SNAPSHOT_KEY]: snapshotFormBrand((def as { metadata?: unknown } | null)?.metadata),
+    };
+}
+
 export async function dbPublishVersion(
     supabase: SupabaseClient,
     orgId: string,
     versionId: string,
     publishedByUserId: string
 ) {
+    const metadata = await buildPublishBrandSnapshotMetadata(supabase, orgId, versionId);
     return supabase
         .from("form_definition_versions")
         .update({
             status: "published",
             published_at: new Date().toISOString(),
             published_by_user_id: publishedByUserId,
+            ...(metadata ? { metadata } : {}),
         })
         .eq("org_id", orgId)
         .eq("id", versionId)
@@ -277,7 +311,7 @@ export async function dbListSubmissionLinkedDocuments(
 
     const { data: docs, error: dErr } = await supabase
         .from("documents")
-        .select("id, name, original_filename, document_type, status, created_at")
+        .select("id, title, original_filename, doc_type, status, created_at")
         .eq("org_id", orgId)
         .in("id", ids);
     if (dErr) return { data: null, error: dErr };
@@ -289,9 +323,9 @@ export async function dbListSubmissionLinkedDocuments(
         const doc = docById.get(row.document_id) as
             | {
                   id: string;
-                  name: string | null;
+                  title: string | null;
                   original_filename: string | null;
-                  document_type: string | null;
+                  doc_type: string | null;
                   status: string | null;
                   created_at: string | null;
               }
@@ -302,9 +336,9 @@ export async function dbListSubmissionLinkedDocuments(
             junction_created_at: row.created_at,
             document: {
                 id: doc.id,
-                name: doc.name,
+                name: doc.title,
                 original_filename: doc.original_filename,
-                document_type: doc.document_type,
+                document_type: doc.doc_type,
                 status: doc.status,
                 created_at: doc.created_at,
             },
@@ -340,7 +374,7 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
     const ids = [...new Set(rows.map((r: { document_id: string }) => r.document_id))];
     const { data: docs, error: dErr } = await supabase
         .from("documents")
-        .select("id, name, original_filename, document_type, status, created_at")
+        .select("id, title, original_filename, doc_type, status, created_at")
         .eq("org_id", orgId)
         .in("id", ids);
     if (dErr) return { data: null, error: dErr };
@@ -362,9 +396,9 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
         const doc = docById.get(j.document_id) as
             | {
                   id: string;
-                  name: string | null;
+                  title: string | null;
                   original_filename: string | null;
-                  document_type: string | null;
+                  doc_type: string | null;
                   status: string | null;
                   created_at: string | null;
               }
@@ -375,9 +409,9 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
             junction_created_at: j.created_at,
             document: {
                 id: doc.id,
-                name: doc.name,
+                name: doc.title,
                 original_filename: doc.original_filename,
-                document_type: doc.document_type,
+                document_type: doc.doc_type,
                 status: doc.status,
                 created_at: doc.created_at,
             },

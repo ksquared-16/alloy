@@ -61,6 +61,8 @@ import { ActionWorkspaceSuccessState } from "@/components/admin/actions/ActionWo
 import { ActionWorkspaceStepContent } from "@/components/admin/actions/ActionWorkspaceStepContent";
 import { queueActionWorkspaceLeadHandoff } from "@/lib/bos/actionWorkspaceDrawerHandoff";
 import { warmCreateLeadOpportunityDrawer } from "@/lib/admin/actions/warmCreateLeadOpportunityDrawer";
+import IdentityReviewPanel from "@/app/adminV2/processing/IdentityReviewPanel";
+import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 import {
     buildCreateLeadFieldConfidenceMap,
     type CreateLeadFieldConfidenceState,
@@ -89,12 +91,16 @@ function platformFallbackBundle(departmentId: string): CreateLeadRequiredFieldsB
     return resolveCreateLeadRequiredFields({ departmentId, stageKey: "lead" });
 }
 
+export type CreateLeadSubmitResult =
+    | { mode: "processing_review"; processing_case_id: string }
+    | { mode: "committed"; opportunity_id: string };
+
 export function CreateLeadModal(props: {
     open: boolean;
     departmentId: string | null;
     title?: string;
     onClose: () => void;
-    onSubmit: (payload: CreateLeadFormPayload) => Promise<{ opportunity_id: string }>;
+    onSubmit: (payload: CreateLeadFormPayload) => Promise<CreateLeadSubmitResult>;
     onCreated?: (opportunityId: string) => void;
 }) {
     const { open, departmentId, title = CREATE_LEAD_WORKSPACE_TITLE, onClose, onSubmit, onCreated } = props;
@@ -121,6 +127,7 @@ export function CreateLeadModal(props: {
     const [successDetail, setSuccessDetail] = useState<string | null>(null);
     const [postCreateActionKeys, setPostCreateActionKeys] = useState<string[]>([]);
     const [createdOpportunityId, setCreatedOpportunityId] = useState<string | null>(null);
+    const [processingCaseId, setProcessingCaseId] = useState<string | null>(null);
     const createdIdRef = useRef<string | null>(null);
     const drawerWarmRef = useRef<Promise<void> | null>(null);
 
@@ -203,6 +210,7 @@ export function CreateLeadModal(props: {
         setSuccessDetail(null);
         setPostCreateActionKeys([]);
         setCreatedOpportunityId(null);
+        setProcessingCaseId(null);
         createdIdRef.current = null;
         drawerWarmRef.current = null;
     }, []);
@@ -437,6 +445,19 @@ export function CreateLeadModal(props: {
         setValues((prev) => syncCreateLeadValuesFromCommitSelection(prev, next));
     }, []);
 
+    const finishCommittedLead = useCallback(
+        async (opportunityId: string) => {
+            const trimmed = opportunityId.trim();
+            if (!trimmed) throw new Error("Lead was created but no opportunity id was returned.");
+            createdIdRef.current = trimmed;
+            setCreatedOpportunityId(trimmed);
+            drawerWarmRef.current = warmCreateLeadOpportunityDrawer(trimmed, { department_id: departmentId });
+            setSuccessDetail(null);
+            setStep("success");
+        },
+        [departmentId],
+    );
+
     const runExecute = useCallback(async () => {
         if (!departmentId) return;
         const check = commitSelection ?
@@ -471,19 +492,19 @@ export function CreateLeadModal(props: {
                     )
                 :   legacyPayloadFromValues(mapped);
             const result = await onSubmit(payload);
-            const opportunityId = result.opportunity_id?.trim();
-            if (!opportunityId) throw new Error("Lead was created but no opportunity id was returned.");
-            createdIdRef.current = opportunityId;
-            setCreatedOpportunityId(opportunityId);
-            drawerWarmRef.current = warmCreateLeadOpportunityDrawer(opportunityId, { department_id: departmentId });
-            setSuccessDetail(null);
-            setStep("success");
+            if (result.mode === "processing_review") {
+                setProcessingCaseId(result.processing_case_id);
+                setStep("execute");
+                return;
+            }
+            await finishCommittedLead(result.opportunity_id);
         } catch (e) {
+            setProcessingCaseId(null);
             setStep("gather");
             setGatherPhase("details");
             setError(e instanceof Error ? e.message : "Create lead failed");
         }
-    }, [commitSelection, departmentId, intakeSpec, locationRequired, onSubmit, values]);
+    }, [commitSelection, departmentId, finishCommittedLead, intakeSpec, locationRequired, onSubmit, values]);
 
     const footer =
         step === "gather" ?
@@ -612,10 +633,34 @@ export function CreateLeadModal(props: {
             </ActionWorkspaceStepContent>
 
             <ActionWorkspaceStepContent step="execute" activeStep={step}>
-                <ActionWorkspaceExecuteState
-                    title="Creating Lead…"
-                    subtitle="Saving person, household, and lead record."
-                />
+                {processingCaseId ?
+                    <div className="h-full overflow-y-auto px-6 py-4" data-testid="create-lead-processing-review">
+                        <p className="mb-3 text-sm text-alloy-midnight/70">
+                            Review identity matches, approve the commit plan, then explicitly commit to create records.
+                        </p>
+                        <IdentityReviewPanel
+                            caseId={processingCaseId}
+                            onCommitted={({ operations }) => {
+                                const opportunityId = opportunityIdFromAttempt(
+                                    operations.map((o) => ({
+                                        commandKey: o.commandKey ?? "",
+                                        recordId: o.recordId,
+                                        status: o.status,
+                                    })),
+                                );
+                                if (!opportunityId) {
+                                    setError("Commit completed but no lead record id was returned.");
+                                    return;
+                                }
+                                void finishCommittedLead(opportunityId);
+                            }}
+                        />
+                    </div>
+                :   <ActionWorkspaceExecuteState
+                        title="Creating Lead…"
+                        subtitle="Opening processing review…"
+                    />
+                }
             </ActionWorkspaceStepContent>
 
             <ActionWorkspaceStepContent step="success" activeStep={step}>

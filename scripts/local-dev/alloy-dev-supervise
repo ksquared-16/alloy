@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-dev-supervise — restore a dev server that vanished, and only that.
+#
+# THE DEFECT THIS CLOSES. alloy-dev-start launches Next detached and nobody owns
+# the question "should this still be running?". Four legitimate servers exited
+# on this host in a single session with abundant free memory and zero swap, and
+# every one of them stayed dead: lane QA capacity disappeared silently and the
+# only recovery was a human noticing. Next itself exits expecting a supervisor
+# to bring it back, and there was none.
+#
+# WHY THIS IS NOT A NEW REGISTRY. dev-server-lifecycle.jsonl already records
+# every canonical start and stop, and its own header says why: "a server that
+# stopped WITH a matching event was stopped by someone through a sanctioned
+# path, and a server that vanished with NO event was killed outside the
+# lifecycle. Those are different problems and they were previously identical."
+# That distinction is exactly what a supervisor needs, so desired state is
+# DERIVED from the audit rather than duplicated beside it. A second registry
+# would be a second truth, and the two would disagree the first time anything
+# crashed.
+#
+#   desired RUNNING   last canonical action for the worktree was `start`
+#   desired STOPPED   last canonical action was `stop`, or it never started
+#   desired PAUSED    pause-state file exists — a paused lane stays paused
+#
+#   reality           the loopback listener, read through the one port owner
+#
+# A restart happens only where desired is RUNNING and reality is absent. An
+# operator stop, a pause, a retirement and a capacity teardown all write a
+# canonical stop first, so none of them can be undone by this command.
+#
+# BOUNDED BY CONSTRUCTION. A crash loop is worse than a dead server: it burns
+# the host and hides the fault. Restarts are counted from the audit itself
+# within a window, and past the threshold the server is left down and marked
+# restart_exhausted for an operator, never retried silently.
+#
+# ATTRIBUTION SURVIVES RECOVERY. The evidence is captured BEFORE the restart —
+# previous pid, log tail, whether a process.exit trace exists, age, port owner —
+# because a fault that heals without a record is a fault that recurs unexplained.
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+
+# Restart budget. Deliberately small: this exists to survive a transient loss,
+# not to keep a broken server alive.
+SUPERVISE_MAX_RESTARTS="${ALLOY_SUPERVISE_MAX_RESTARTS:-3}"
+SUPERVISE_WINDOW_MIN="${ALLOY_SUPERVISE_WINDOW_MIN:-30}"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-supervise [--check] [--worktree <name>]
+
+Restores dev servers that vanished without a canonical stop.
+
+  --check              report decisions, change nothing
+  --worktree <name>    supervise one worktree instead of every registered one
+
+Never restarts a server that was stopped or paused through the lifecycle.
+Bounded: ALLOY_SUPERVISE_MAX_RESTARTS (default 3) within
+ALLOY_SUPERVISE_WINDOW_MIN (default 30) minutes, then restart_exhausted.
+EOF
+}
+
+# Last canonical action for a worktree: start | stop | none.
+# Read from the audit, which is the existing owner of that fact.
+supervise_last_action() {
+  local name="$1" path
+  path="$(alloy_server_audit_path)"
+  [[ -f "$path" ]] || { printf 'none'; return 0; }
+  /usr/bin/awk -v w="\"worktree\":\"$name\"" '
+    index($0, w) > 0 {
+      if (index($0, "\"action\":\"start\"") > 0) last = "start"
+      else if (index($0, "\"action\":\"stop\"") > 0) last = "stop"
+    }
+    END { print (last == "" ? "none" : last) }
+  ' "$path" 2>/dev/null || printf 'none'
+}
+
+# Restarts this supervisor performed for a worktree inside the window.
+supervise_recent_restarts() {
+  local name="$1" path cutoff
+  path="$(alloy_server_audit_path)"
+  [[ -f "$path" ]] || { printf '0'; return 0; }
+  cutoff="$(/bin/date -u -v-"${SUPERVISE_WINDOW_MIN}"M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '')"
+  [[ -n "$cutoff" ]] || { printf '0'; return 0; }
+  /usr/bin/awk -v w="\"worktree\":\"$name\"" -v c="$cutoff" '
+    index($0, w) > 0 && index($0, "\"action\":\"supervise_restart\"") > 0 {
+      # at is the first field: {"at":"...",
+      split($0, a, "\"at\":\""); split(a[2], b, "\"")
+      if (b[1] >= c) n++
+    }
+    END { print n + 0 }
+  ' "$path" 2>/dev/null || printf '0'
+}
+
+# Everything worth knowing about the loss, gathered before we disturb it.
+supervise_capture_evidence() {
+  local name="$1" port="$2" prev_pid="$3" log
+  log="${ALLOY_RUNTIME_ROOT}/logs/${name}.log"
+  local trace="no" tail_line="" owner
+  if [[ -f "$log" ]]; then
+    /usr/bin/grep -q "WARNING: Exited the environment" <(/usr/bin/tail -50 "$log" 2>/dev/null) 2>/dev/null && trace="yes"
+    tail_line="$(/usr/bin/tail -3 "$log" 2>/dev/null | /usr/bin/tr '\n' ' ' | /usr/bin/cut -c1-160)"
+  fi
+  owner="$(alloy_rc_loopback_port_owner "$port" 2>/dev/null || printf 'unknown')"
+  printf 'prev_pid=%s port_owner=%s process_exit_trace=%s log_tail=%s' \
+    "${prev_pid:-none}" "$owner" "$trace" "${tail_line:-none}"
+}
+
+supervise_one() {
+  local name="$1" check="$2"
+  local meta="${ALLOY_RUNTIME_ROOT}/metadata/${name}.env"
+  [[ -f "$meta" ]] || return 0
+
+  local port slot
+  port="$(/usr/bin/grep -E '^PORT=' "$meta" 2>/dev/null | /usr/bin/cut -d'"' -f2)"
+  slot="$(/usr/bin/grep -E '^ALLOY_WORKTREE_SLOT=' "$meta" 2>/dev/null | /usr/bin/cut -d'"' -f2)"
+  [[ -n "$port" ]] || return 0
+
+  # Desired state. Paused wins over everything: a paused lane stays paused.
+  local desired
+  if [[ -f "$(alloy_pause_state_path "$name" 2>/dev/null || printf '/nonexistent')" ]]; then
+    desired="PAUSED"
+  else
+    case "$(supervise_last_action "$name")" in
+      start) desired="RUNNING" ;;
+      stop)  desired="STOPPED" ;;
+      # No recorded start or stop at all — a server predating the audit, or one
+      # never started here. Calling that STOPPED would be a guess dressed as a
+      # fact, and calling it RUNNING could resurrect something nobody asked for.
+      *)     desired="UNKNOWN" ;;
+    esac
+  fi
+
+  # Reality, through the one port owner. Loopback scope, because that is the
+  # address the dev server binds and Tailscale legitimately holds the others.
+  local owner alive="no" cur_pid=""
+  owner="$(alloy_rc_loopback_port_owner "$port" 2>/dev/null || printf 'unknown')"
+  case "$owner" in
+    owned\ *) alive="yes"; cur_pid="${owner#owned }" ;;
+  esac
+
+  if [[ "$desired" != "RUNNING" ]]; then
+    printf '  %-44s desired=%-8s listener=%-9s -> no action\n' "$name" "$desired" "$alive"
+    return 0
+  fi
+  if [[ "$alive" == "yes" ]]; then
+    printf '  %-44s desired=RUNNING  listener=pid %-7s -> healthy\n' "$name" "$cur_pid"
+    return 0
+  fi
+  # An unreadable port is not an absent server. Refusing here is the same
+  # fail-closed rule the start path uses; guessing would risk a second server.
+  if [[ "$owner" == "unknown" ]]; then
+    printf '  %-44s desired=RUNNING  listener=UNKNOWN -> deferred (port not readable)\n' "$name"
+    return 0
+  fi
+
+  # Desired RUNNING, nothing listening, and no canonical stop explains it.
+  local prev_pid evidence restarts
+  prev_pid="$(alloy_read_pid_file "${ALLOY_RUNTIME_ROOT}/pids/${name}.pid" 2>/dev/null || printf '')"
+  evidence="$(supervise_capture_evidence "$name" "$port" "$prev_pid")"
+  restarts="$(supervise_recent_restarts "$name")"
+
+  printf '  %-44s desired=RUNNING  listener=NONE -> UNEXPECTED EXIT (%s restarts in %sm)\n' \
+    "$name" "$restarts" "$SUPERVISE_WINDOW_MIN"
+  printf '      evidence: %s\n' "$evidence"
+
+  if [[ "$check" == "yes" ]]; then
+    printf '      --check: would restart\n'
+    return 0
+  fi
+
+  ALLOY_WORKTREE_SLOT="$slot" PORT="$port" ALLOY_SERVER_AUDIT_ACTOR="supervisor" \
+    alloy_record_server_lifecycle "unexpected_exit" "$name" "observed" "$evidence" "${prev_pid:-}" "" || true
+
+  if (( restarts >= SUPERVISE_MAX_RESTARTS )); then
+    ALLOY_WORKTREE_SLOT="$slot" PORT="$port" ALLOY_SERVER_AUDIT_ACTOR="supervisor" \
+      alloy_record_server_lifecycle "restart_exhausted" "$name" "refused" \
+      "$restarts restarts in ${SUPERVISE_WINDOW_MIN}m reached the bound" "${prev_pid:-}" "" || true
+    printf '      RESTART EXHAUSTED — left down for an operator, not retried\n'
+    return 0
+  fi
+
+  # Canonical start path only. No second spawn implementation, so dependency
+  # readiness, ownership, the port check, the loopback bind model, the Serve
+  # route and the pid metadata all behave exactly as a normal start.
+  local rc=0
+  ALLOY_SERVER_AUDIT_ACTOR="supervisor" "${SCRIPT_DIR}/alloy-dev-start" "$name" >/dev/null 2>&1 || rc=$?
+  local new_pid="" outcome="failed"
+  owner="$(alloy_rc_loopback_port_owner "$port" 2>/dev/null || printf 'unknown')"
+  case "$owner" in owned\ *) new_pid="${owner#owned }"; outcome="succeeded" ;; esac
+
+  ALLOY_WORKTREE_SLOT="$slot" PORT="$port" ALLOY_SERVER_AUDIT_ACTOR="supervisor" \
+    alloy_record_server_lifecycle "supervise_restart" "$name" "$outcome" \
+    "rc=$rc attempt=$((restarts + 1))/${SUPERVISE_MAX_RESTARTS}" "${prev_pid:-}" "${new_pid:-}" || true
+
+  if [[ "$outcome" == "succeeded" ]]; then
+    printf '      RESTARTED -> pid %s\n' "$new_pid"
+  else
+    printf '      RESTART FAILED (rc=%s) — recorded, not retried in this pass\n' "$rc"
+  fi
+}
+
+main() {
+  local check="no" only=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --check) check="yes"; shift ;;
+      --worktree) only="${2:-}"; shift 2 ;;
+      *) usage >&2; exit 2 ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_sprint_ops_defaults
+  alloy_ensure_sprint_ops_dirs
+
+  printf 'dev-server supervision (desired state derived from the lifecycle audit)\n'
+  if [[ -n "$only" ]]; then
+    supervise_one "$only" "$check"
+  else
+    local f name
+    for f in "${ALLOY_RUNTIME_ROOT}"/metadata/*.env; do
+      [[ -e "$f" ]] || continue
+      name="$(/usr/bin/basename "$f" .env)"
+      supervise_one "$name" "$check"
+    done
+  fi
+}
+
+main "$@"

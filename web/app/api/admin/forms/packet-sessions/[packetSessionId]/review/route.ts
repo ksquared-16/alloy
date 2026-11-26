@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { packetSessionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -69,6 +70,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!(await assertRowOrg(supabase, "form_packet_sessions", packetSessionId, ctx.orgId)).ok) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    // R2: the same 404 for a packet session outside the caller's department/site scope as for a missing one.
+    if (!(await packetSessionReadableById(supabase, ctx.orgId, packetSessionId))) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const status = String((sess as { status?: string }).status ?? "");
     if (status !== "completed") {

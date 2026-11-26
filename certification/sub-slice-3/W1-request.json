@@ -1,0 +1,1 @@
+{"action":"ensure_stage_transition","process_id":"42be9074-443f-4047-bece-d68cd1d22788","source_stage_key":"lead","target_stage_key":"tour","transition_ref":"lead_to_tour"}

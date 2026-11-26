@@ -50,16 +50,54 @@ describe("parseStageOperatingPlanV1", () => {
             }),
         ).toBeNull();
     });
+
+    it("round-trips first-class outgoing transitions and keeps legacy absence compatible", () => {
+        const base = {
+            version: 1,
+            lifecycle_key: "enrollment",
+            stage_key: "tour",
+            journey_segment: "family",
+            work_templates: [],
+            outcomes: [],
+            outcome_rules: [],
+            attention_rules: [],
+        };
+        expect(parseStageOperatingPlanV1(base)?.outgoing_transitions).toBeUndefined();
+
+        const parsed = parseStageOperatingPlanV1({
+            ...base,
+            outgoing_transitions: [{
+                transition_ref: "tour_to_closed_lost",
+                source_stage_key: "tour",
+                target_stage_key: "closed_lost",
+                label: "Close as Lost",
+                available: true,
+                status_key: "closed",
+                closes_record: true,
+            }],
+        });
+        expect(parsed?.outgoing_transitions).toEqual([{
+            transition_ref: "tour_to_closed_lost",
+            source_stage_key: "tour",
+            target_stage_key: "closed_lost",
+            label: "Close as Lost",
+            available: true,
+            status_key: "closed",
+            closes_record: true,
+        }]);
+    });
 });
 
 describe("defaultStageOperatingPlanForEnrollmentStage", () => {
-    it("seeds lead stage with Review Lead + Contact Family and completion policy", () => {
+    it("seeds lead stage with Direct Action Contact Family and tour/closed transitions", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead");
         expect(plan?.journey_segment).toBe("family");
-        expect(plan?.work_templates.length).toBe(2);
-        expect(plan?.work_templates[1]?.completion_policy?.min_attempts).toBe(3);
-        expect(outcomeRulesForKey(plan!, "qualified").length).toBeGreaterThan(0);
-        expect(successfulOutcomeKeys(plan!).has("qualified")).toBe(true);
+        expect(plan?.work_templates.length).toBe(1);
+        const contactFamily = plan?.work_templates.find((t) => t.template_key === "contact_family");
+        expect(contactFamily?.execution_mode).toBe("direct_action");
+        expect(contactFamily?.primary).toBe(true);
+        expect(outcomeRulesForKey(plan!, "reached_family").length).toBeGreaterThan(0);
+        expect(successfulOutcomeKeys(plan!).has("reached_family")).toBe(true);
         expect(outcomeRulesForKey(plan!, "left_message").length).toBeGreaterThan(0);
     });
 

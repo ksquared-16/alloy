@@ -20,7 +20,7 @@ const SECTIONS: ReadonlyArray<{
     { id: "stages", label: BUSINESS_PROCESS_NAV_STAGES, description: "Status membership, requirements, operating plan", icon: "◎" },
     { id: "work-views", label: BUSINESS_PROCESS_NAV_WORK_VIEWS, description: "Process-level operational lenses", icon: "◆" },
     { id: "presentation", label: BUSINESS_PROCESS_NAV_PRESENTATION, description: "Queue and Focus Panel assignments", icon: "▦" },
-    { id: "actions", label: BUSINESS_PROCESS_NAV_ACTIONS, description: "Process actions matrix", icon: "⚡" },
+    { id: "actions", label: BUSINESS_PROCESS_NAV_ACTIONS, description: "Process commands matrix", icon: "⚡" },
     { id: "automation", label: BUSINESS_PROCESS_NAV_AUTOMATION, description: "Workflow entry points", icon: "↻" },
     { id: "health", label: BUSINESS_PROCESS_NAV_HEALTH, description: "Ready check and configuration health", icon: "✓" },
 ];

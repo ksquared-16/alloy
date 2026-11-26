@@ -1,0 +1,51 @@
+[
+  {
+    "sec": "S4",
+    "id": "4A-CT",
+    "what": "the Charges tab is reachable in the Financials workspace",
+    "ok": true,
+    "observed": "opened"
+  },
+  {
+    "sec": "S4",
+    "id": "4A",
+    "what": "ONE responsibility administration surface is mounted-reachable",
+    "ok": false,
+    "observed": "no Manage responsibility control found on this path"
+  },
+  {
+    "sec": "S4",
+    "id": "4A-R",
+    "what": "the charge detail states responsibility at all",
+    "ok": false,
+    "observed": "responsibility=false arrangement=false unassigned=false share/%=false"
+  },
+  {
+    "sec": "S3",
+    "id": "3I-1",
+    "what": "Reverse raises the canonical focused command, not a raw movepanel",
+    "ok": true,
+    "observed": "overlay=reverse_charge movepanel=0"
+  },
+  {
+    "sec": "S3",
+    "id": "3I-2",
+    "what": "Cancel returns to the SAME Details",
+    "ok": true,
+    "observed": "{\"overlay\":\"detail\",\"account\":true}"
+  },
+  {
+    "sec": "S3",
+    "id": "3G-1",
+    "what": "the Credits & adjustments lens isolates reductions in the shared ledger",
+    "ok": true,
+    "observed": "concepts=[\"Credit\",\"Reversal\",\"Discount\",\"Adjustment\"] rows=75"
+  },
+  {
+    "sec": "S3",
+    "id": "3G-2",
+    "what": "reduction rows carry period and responsible-party grain",
+    "ok": true,
+    "observed": "responsibleCol=true periods=[\"SEPTEMBER 2026\"] basis=[\"10% of $400.00\"]"
+  }
+]

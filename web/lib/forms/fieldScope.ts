@@ -17,7 +17,8 @@ import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 
 export type FieldScope = "household" | "child" | "recipient";
 
-const CHILD_ENTITIES = new Set(["customer_member", "child", "inquiry_child", "student"]);
+// `enrollment` is one child's enrollment (its process instance): a start date is that child's own.
+const CHILD_ENTITIES = new Set(["customer_member", "child", "inquiry_child", "student", "enrollment"]);
 const HOUSEHOLD_ENTITIES = new Set([
     "person",
     "parent",

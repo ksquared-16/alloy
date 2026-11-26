@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Financials / Tuition mockups — grounded in live Alloy rates (2026-07 rev2)</title>
+  <style>
+    :root {
+      --midnight: #13212b; --pine: #2f6f5e; --pine-soft: rgba(47,111,94,.08);
+      --stone: #c5c0b6; --sand: #f4f2ee; --white: #fff; --amber: #9a6b2f;
+      --line: rgba(19,33,43,.1); --muted: rgba(19,33,43,.55); --faint: rgba(19,33,43,.38);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; color: var(--midnight); background: #e8e4dc; }
+    .pack-header { position: sticky; top: 0; z-index: 20; background: var(--midnight); color: #f5f3ef; padding: 12px 18px; }
+    .pack-header h1 { margin: 0; font-size: 14px; font-weight: 600; }
+    .pack-header p { margin: 4px 0 8px; font-size: 11px; opacity: .7; }
+    .toc { display: flex; flex-wrap: wrap; gap: 5px; }
+    .toc a { color: #d7efe6; text-decoration: none; font-size: 10px; border: 1px solid rgba(215,239,230,.25); padding: 3px 7px; border-radius: 4px; }
+    main { max-width: 1180px; margin: 0 auto; padding: 20px 14px 72px; }
+    .mock { margin: 0 0 28px; background: var(--sand); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .mock-meta { background: var(--white); border-bottom: 1px solid var(--line); padding: 10px 14px; }
+    .mock-meta .id { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--pine); text-transform: uppercase; }
+    .mock-meta h2 { margin: 2px 0 0; font-size: 15px; }
+    .mock-meta .note { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .tag { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; margin-right: 4px; }
+    .tag.exist { background: var(--pine-soft); color: var(--pine); }
+    .tag.plan { background: rgba(154,107,47,.12); color: var(--amber); }
+    .tag.nosup { background: rgba(19,33,43,.06); color: var(--faint); }
+    .frame { display: grid; grid-template-columns: 52px 1fr 220px; min-height: 480px; }
+    .rail { background: #0f1a22; padding: 10px 6px; }
+    .rail .dot { width: 26px; height: 26px; margin: 0 auto 8px; border-radius: 7px; background: rgba(255,255,255,.06); color: #9eb0bc; display: grid; place-items: center; font-size: 9px; }
+    .rail .dot.on { background: var(--pine); color: #fff; }
+    .workspace { padding: 14px 16px 20px; }
+    .bos { border-left: 1px solid var(--line); background: var(--white); padding: 10px; font-size: 11px; color: var(--muted); }
+    .bos strong { display: block; color: var(--midnight); margin-bottom: 6px; font-size: 12px; }
+    .crumb { font-size: 10px; color: var(--faint); margin-bottom: 4px; }
+    .crumb b { color: var(--pine); }
+    .title-row { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+    .title-row h3 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+    .title-row .sub { margin: 3px 0 0; font-size: 12px; color: var(--muted); max-width: 40rem; }
+    .btn { background: var(--pine); color: #fff; border: 0; border-radius: 6px; padding: 7px 11px; font-size: 11px; font-weight: 600; }
+    .btn.ghost { background: transparent; color: var(--midnight); border: 1px solid var(--line); }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+    .pills strong { color: var(--midnight); }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+    .card { background: var(--white); border: 1px solid var(--line); border-radius: 9px; padding: 10px; }
+    .card .label { font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+    .card .value { font-size: 20px; font-weight: 650; margin-top: 2px; }
+    .card .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 6px 0 10px; flex-wrap: wrap; }
+    .tabs span { padding: 7px 9px; font-size: 11px; color: var(--muted); border-bottom: 2px solid transparent; }
+    .tabs span.on { color: var(--pine); font-weight: 650; border-bottom-color: var(--pine); }
+    .panel { background: var(--white); border: 1px solid var(--line); border-radius: 9px; padding: 10px; margin-bottom: 8px; }
+    .panel h4 { margin: 0 0 8px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+    .row { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 12px; }
+    .row:first-of-type { border-top: 0; padding-top: 0; }
+    .badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 99px; background: var(--pine-soft); color: var(--pine); }
+    .badge.warn { background: rgba(154,107,47,.12); color: var(--amber); }
+    .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .tile { background: var(--white); border: 1px solid var(--line); border-radius: 9px; padding: 12px; min-height: 100px; display: flex; flex-direction: column; gap: 4px; }
+    .tile h5 { margin: 0; font-size: 13px; }
+    .tile p { margin: 0; font-size: 11px; color: var(--muted); flex: 1; }
+    .tile .meta { font-size: 10px; color: var(--faint); display: flex; justify-content: space-between; }
+    .scope { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; font-size: 11px; }
+    .scope select, .scope .chip { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--white); font-size: 11px; }
+    .chip.on { border-color: var(--pine); background: var(--pine-soft); font-weight: 600; }
+    table.rate { width: 100%; border-collapse: collapse; font-size: 11px; background: var(--white); }
+    table.rate th, table.rate td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+    table.rate th { background: #faf9f7; font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; }
+    table.rate td.amt { font-variant-numeric: tabular-nums; font-weight: 600; }
+    table.rate td.inherit { font-style: italic; font-weight: 500; color: var(--muted); }
+    table.rate td.override { position: relative; }
+    table.rate td.override::before { content: ""; position: absolute; left: 4px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--pine); }
+    table.rate td.override { padding-left: 14px; }
+    table.rate td.na { text-decoration: line-through; color: var(--faint); }
+    table.rate td.unset { color: var(--faint); }
+    table.rate .offering { background: var(--pine-soft); font-weight: 650; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 10px; color: var(--muted); margin: 6px 0 8px; }
+    .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pine); margin-right: 3px; }
+    .callout { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(154,107,47,.08); border: 1px dashed rgba(154,107,47,.35); font-size: 11px; color: var(--amber); }
+    .callout.ok { background: var(--pine-soft); border-color: rgba(47,111,94,.35); color: var(--pine); }
+    .editor { display: grid; gap: 6px; max-width: 280px; }
+    .editor label { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+    .editor input { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+    .ghost-hold { position: relative; }
+    .ghost-hold::after { content: "Warm hold — prior Tuition grid visible while cells refresh"; position: absolute; inset: 6px; border: 2px dashed var(--pine); border-radius: 10px; background: rgba(47,111,94,.06); display: grid; place-items: center; font-size: 12px; font-weight: 650; color: var(--pine); }
+    .dim { opacity: .5; }
+    .grid2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; }
+    @media (max-width: 900px) {
+      .frame { grid-template-columns: 1fr; }
+      .rail, .bos { display: none; }
+      .cards, .tiles, .grid2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="pack-header">
+    <h1>Financials / Tuition — low-fi mockups grounded in live rate model</h1>
+    <p>Rev 3 · ownership annotations from Organization Configuration Relationship Model (2026-07) · no page redesign</p>
+    <p style="font-size:11px;opacity:.85;margin:0 0 8px">Ownership legend: <strong>Defined once</strong> · <strong>Assigned</strong> · <strong>Inherited</strong> · <strong>Overridden</strong> · <strong>Executed locally</strong> — see <code>organization-configuration-relationship-model-2026-07.md</code></p>
+    <nav class="toc">
+      <a href="#m1">M1 Nav</a>
+      <a href="#m2">M2 Financials</a>
+      <a href="#m3">M3 Tuition list</a>
+      <a href="#m4">M4 Overview</a>
+      <a href="#m5">M5 Weekly</a>
+      <a href="#m6">M6 Daily</a>
+      <a href="#m7">M7 Monthly</a>
+      <a href="#m8">M8 Location</a>
+      <a href="#m9">M9 Effective</a>
+      <a href="#m10">M10 Disc/Fees</a>
+      <a href="#m11">M11 Schedule</a>
+      <a href="#m12">M12 Warm</a>
+      <a href="#m13">M13 Empty</a>
+    </nav>
+  </header>
+  <main>
+
+    <section class="mock" id="m1">
+      <div class="mock-meta">
+        <div class="id">M1</div>
+        <h2>Organization nav</h2>
+        <p class="note"><span class="tag exist">Frozen IA</span> Peer hub: Programs &amp; Locations · Financials replaces Commercial · Programs/Locations remain collections (not peers)</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="crumb"><b>Organization</b></div>
+          <h3 style="margin:0 0 10px;font-size:22px">Organization</h3>
+          <div class="panel">
+            <div class="row"><span><strong>Programs &amp; Locations</strong> — relationship hub → Programs collection · Locations collection</span><span class="badge">Hub</span></div>
+            <div class="row"><span><strong>Financials</strong> — tuition, fees, catalog, policies, accounting</span><span class="badge">Hub · owns rates</span></div>
+            <div class="row"><span>Access · Data Model · Business Processes · Surfaces</span><span class="badge">Hubs</span></div>
+          </div>
+          <div class="callout ok">Ownership: Programs defined once at Org · assigned to Locations · Financials consumes Programs (does not own). Rooms stay Location-owned.</div>
+        </div>
+        <aside class="bos"><strong>Out of Tuition</strong>Programs does not host rate chapters. Rates: Org default → Inherited → Location override · executed at charge time.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m2">
+      <div class="mock-meta">
+        <div class="id">M2</div>
+        <h2>Financials landing — real Tuition posture</h2>
+        <p class="note"><span class="tag exist">Existing</span> Counts derived from rates/variants/products — not decorative tiles · <span class="tag exist">Owns</span> Tuition/Catalog/Policies/Accounting · <span class="tag plan">Utility</span> Simulator · <span class="tag nosup">Boundary</span> Funding → Processing</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="crumb">Organization › <b>financials</b></div>
+          <div class="title-row">
+            <div>
+              <h3>Financials</h3>
+              <p class="sub">Tuition rates, fees, discounts, and accounting mappings.</p>
+            </div>
+          </div>
+          <div class="pills">
+            <span><strong>18</strong> variant×cadence cells priced (org)</span>
+            <span><strong>6</strong> unset on active boards</span>
+            <span><strong>4</strong> Location overrides</span>
+            <span><strong>2</strong> not-offered cells</span>
+          </div>
+          <div class="cards">
+            <div class="card"><div class="label">Tuition coverage</div><div class="value">75%</div><div class="hint">Active Delivery Options with ≥1 cadence priced</div></div>
+            <div class="card"><div class="label">Needs attention</div><div class="value">6</div><div class="hint">Unset critical cells · incomplete day bands</div></div>
+            <div class="card"><div class="label">Overrides</div><div class="value">4</div><div class="hint">Location cells differing from org default</div></div>
+          </div>
+          <div class="tiles">
+            <div class="tile"><h5>Tuition</h5><p>Variant × cadence matrix · org defaults · Location overrides.</p><div class="meta"><span>3 Programs · 5 offerings</span><span class="badge warn">6 gaps</span></div></div>
+            <div class="tile"><h5>Fees &amp; Add-ons</h5><p>commercial_products fees/addons — not tuition cells.</p><div class="meta"><span>8 active</span><span class="badge">Ready</span></div></div>
+            <div class="tile"><h5>Catalog</h5><p>Deposits &amp; billable products.</p><div class="meta"><span>14</span><span class="badge">Ready</span></div></div>
+            <div class="tile"><h5>Policies</h5><p>Discounts &amp; sibling discounts (commercial_policies).</p><div class="meta"><span>3 discounts</span><span class="badge">Ready</span></div></div>
+            <div class="tile"><h5>Accounting</h5><p>Revenue / GL mappings.</p><div class="meta"><span>2 unmapped</span><span class="badge warn">Attention</span></div></div>
+            <div class="tile"><h5>Simulator</h5><p>Preview tuition + fees + discounts for a variant×cadence.</p><div class="meta"><span>Utility</span><span>—</span></div></div>
+          </div>
+          <div class="callout">Funding chapter remains Processing boundary — not a fake config domain.</div>
+        </div>
+        <aside class="bos"><strong>Attention</strong>
+          <div class="row"><span>Toddler · 3 days · weekly unset</span></div>
+          <div class="row"><span>South · Preschool monthly override missing end date</span></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m3">
+      <div class="mock-meta">
+        <div class="id">M3</div>
+        <h2>Tuition collection landing</h2>
+        <p class="note"><span class="tag exist">Existing</span> Rows = Delivery Options (offerings) with variant/cadence posture — not abstract “rate sets”</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="crumb">Financials › <b>tuition</b></div>
+          <div class="title-row">
+            <div>
+              <h3>Tuition</h3>
+              <p class="sub">Each board is a Delivery Option: variants (day bands) × billing cadences.</p>
+            </div>
+            <button class="btn" type="button">Open grid</button>
+          </div>
+          <div class="tabs"><span>Financials</span><span class="on">Tuition</span><span>Fees</span><span>Policies</span><span>Simulator</span></div>
+          <div class="panel">
+            <h4>Delivery Option boards</h4>
+            <div class="row">
+              <div><strong>Preschool · Full Time</strong><br /><span style="font-size:11px;color:var(--muted)">Variants 2–5 days · Cadences weekly, monthly, daily · Org default</span></div>
+              <span class="badge">12/15 cells</span>
+            </div>
+            <div class="row">
+              <div><strong>Preschool · Part Time</strong><br /><span style="font-size:11px;color:var(--muted)">Variants 2–3 days · weekly, monthly</span></div>
+              <span class="badge warn">2 gaps</span>
+            </div>
+            <div class="row">
+              <div><strong>Toddler · Full Time</strong><br /><span style="font-size:11px;color:var(--muted)">4 Locations inherit · 1 override (North)</span></div>
+              <span class="badge">Overrides 1</span>
+            </div>
+          </div>
+        </div>
+        <aside class="bos"><strong>Mental model</strong>Selected object later = cells on a board — see M4–M7.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m4">
+      <div class="mock-meta">
+        <div class="id">M4</div>
+        <h2>Selected Delivery Option — Overview</h2>
+        <p class="note"><span class="tag exist">Existing</span> Header = Program + Offering · stable across Rates / Locations / Dates</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="crumb">Tuition › <b>Preschool · Full Time</b></div>
+          <div class="title-row">
+            <div>
+              <h3>Preschool · Full Time</h3>
+              <p class="sub">Delivery Option · attendance_type full_time · Program Preschool · Scope Org default</p>
+            </div>
+            <button class="btn ghost" type="button">Edit rates</button>
+          </div>
+          <div class="tabs"><span class="on">Overview</span><span>Rates</span><span>Locations</span><span>Effective dates</span><span>Related</span></div>
+          <div class="cards">
+            <div class="card"><div class="label">Day bands</div><div class="value">4</div><div class="hint">Variants: 2, 3, 4, 5 days/week</div></div>
+            <div class="card"><div class="label">Cadences priced</div><div class="value">3</div><div class="hint">weekly · monthly · daily</div></div>
+            <div class="card"><div class="label">Attention</div><div class="value">1</div><div class="hint">2-day daily unset</div></div>
+          </div>
+          <div class="panel">
+            <h4>At a glance</h4>
+            <div class="row"><span>Inheritance</span><strong>Org default board · 1 Location override set</strong></div>
+            <div class="row"><span>Discounts</span><strong>2 policies apply to Preschool</strong></div>
+            <div class="row"><span>Fees</span><strong>Registration fee in Catalog (not a tuition cell)</strong></div>
+            <div class="row"><span>Next</span><strong>Complete daily column for 2-day variant</strong></div>
+          </div>
+        </div>
+        <aside class="bos"><strong>Preserved</strong>Compare mode + copy org→location remain actions on Rates.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m5">
+      <div class="mock-meta">
+        <div class="id">M5</div>
+        <h2>Weekly rate editor — days/week as variant rows</h2>
+        <p class="note"><span class="tag exist">Existing</span> This is the live grid semantics (cadence column focused). Amounts are per week for each day-band variant.</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="crumb">Tuition › Preschool · Full Time › <b>Rates</b></div>
+          <div class="title-row"><div><h3>Preschool · Full Time</h3><p class="sub">Focus cadence: <strong>Weekly</strong> · Scope: Organization default</p></div>
+            <div class="scope"><span class="chip on">Org default</span><span class="chip">North Campus</span><span class="chip">Compare</span></div>
+          </div>
+          <div class="tabs"><span>Overview</span><span class="on">Rates</span><span>Locations</span><span>Effective dates</span></div>
+          <div class="legend"><span>Cadences shown: <strong>Weekly</strong> (focus) · Monthly · Daily available as columns</span></div>
+          <table class="rate">
+            <thead>
+              <tr><th>Variant (days/week)</th><th>Weekly</th><th>Monthly</th><th>Daily</th></tr>
+            </thead>
+            <tbody>
+              <tr class="offering"><td colspan="4">Preschool · Full Time</td></tr>
+              <tr><td>2 days / week</td><td class="amt">$185</td><td class="amt">$720</td><td class="unset">— unset</td></tr>
+              <tr><td>3 days / week</td><td class="amt">$255</td><td class="amt">$980</td><td class="amt">$95</td></tr>
+              <tr><td>4 days / week</td><td class="amt">$310</td><td class="amt">$1,150</td><td class="amt">$90</td></tr>
+              <tr><td>5 days / week</td><td class="amt">$350</td><td class="amt">$1,240</td><td class="amt">$85</td></tr>
+            </tbody>
+          </table>
+          <div class="callout ok">Where do I set 2/3/4/5 day weekly amounts? → Variant rows × Weekly column (cells = commercial_tuition_rates).</div>
+        </div>
+        <aside class="bos"><strong>Cell editor</strong>
+          <div class="editor">
+            <label>Amount (weekly)</label>
+            <input value="$255.00" readonly />
+            <label>Effective start</label>
+            <input value="2026-08-01" readonly />
+            <label>Effective end</label>
+            <input value="" placeholder="Open-ended" readonly />
+            <button class="btn ghost" type="button">Mark not offered</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m6">
+      <div class="mock-meta">
+        <div class="id">M6</div>
+        <h2>Daily rates + Full Time / Part Time offerings</h2>
+        <p class="note"><span class="tag exist">Existing</span> Half/full day = separate Delivery Options (attendance_type), not rate-cell fields. <span class="tag nosup">Not supported</span> half_day enum on rates.</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="title-row"><div><h3>Preschool — daily focus</h3><p class="sub">Two offerings · Daily cadence column</p></div></div>
+          <table class="rate">
+            <thead><tr><th>Delivery Option / Variant</th><th>Daily</th><th>Weekly</th></tr></thead>
+            <tbody>
+              <tr class="offering"><td colspan="3">Full Time (full_time)</td></tr>
+              <tr><td>5 days / week</td><td class="amt">$85 / day</td><td class="amt">$350</td></tr>
+              <tr class="offering"><td colspan="3">Part Time (part_time)</td></tr>
+              <tr><td>3 days / week</td><td class="amt">$70 / day</td><td class="amt">$190</td></tr>
+            </tbody>
+          </table>
+          <div class="callout">Label drift in code: UI may say Full Time while ops language says Full Day — same offering attendance_type.</div>
+        </div>
+        <aside class="bos"><strong>Answer</strong>Daily amounts live in the Daily cadence column for each variant row.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m7">
+      <div class="mock-meta">
+        <div class="id">M7</div>
+        <h2>Monthly rates — same day-band variants</h2>
+        <p class="note"><span class="tag exist">Existing</span> Monthly is another cadence column on the same variants — not a separate mapping invention.</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="title-row"><div><h3>Preschool · Full Time</h3><p class="sub">Focus cadence: Monthly</p></div></div>
+          <table class="rate">
+            <thead><tr><th>Days / week (variant)</th><th>Monthly amount</th></tr></thead>
+            <tbody>
+              <tr><td>2 days</td><td class="amt">$720 / month</td></tr>
+              <tr><td>3 days</td><td class="amt">$980 / month</td></tr>
+              <tr><td>4 days</td><td class="amt">$1,150 / month</td></tr>
+              <tr><td>5 days</td><td class="amt">$1,240 / month</td></tr>
+            </tbody>
+          </table>
+          <div class="callout ok">Weekly $255 for 3 days and Monthly $980 for 3 days are independent cells (same variant_id × different cadence_key).</div>
+        </div>
+        <aside class="bos"><strong>Also seeded</strong>biweekly · annual · hourly · per_session — preserve as columns when used.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m8">
+      <div class="mock-meta">
+        <div class="id">M8</div>
+        <h2>Location inheritance &amp; override</h2>
+        <p class="note"><span class="tag exist">Frozen</span> Org default · Inherited · Location override · clear restores inherit · Financials owns rates · Continuity may surface under Location without changing SoR</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="crumb">Locations › North Campus › <b>Tuition</b> <span class="tag exist">Continuity surface</span></div>
+          <div class="title-row">
+            <div>
+              <h3>North Campus · Preschool · Full Time</h3>
+              <p class="sub">Location scope — does not create a second rate identity · executed at charge time</p>
+            </div>
+            <div class="scope"><span class="chip">Org default</span><span class="chip on">North Campus</span><span class="chip">Compare</span></div>
+          </div>
+          <div class="legend"><span><i></i> Override</span><span style="font-style:italic">Inherited from org</span><span style="text-decoration:line-through">Not offered</span></div>
+          <table class="rate">
+            <thead><tr><th>Variant</th><th>Weekly (North)</th><th>Org default</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>3 days</td><td class="amt override">$270</td><td class="inherit">$255</td><td><button class="btn ghost" type="button">Restore inherit</button></td></tr>
+              <tr><td>4 days</td><td class="inherit">$310</td><td class="inherit">$310</td><td></td></tr>
+              <tr><td>5 days</td><td class="na">Not offered</td><td class="amt">$350</td><td></td></tr>
+            </tbody>
+          </table>
+          <div class="callout ok">Ownership: Defined once at Org · Inherited until override · Overridden at Location · SoR remains Financials / commercial_tuition_rates.</div>
+        </div>
+        <aside class="bos"><strong>Stay in Location</strong>Operator inspects/overrides without ejecting to Programs chapter.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m9">
+      <div class="mock-meta">
+        <div class="id">M9</div>
+        <h2>Effective dates (single-row window)</h2>
+        <p class="note"><span class="tag exist">Existing</span> effective_start / effective_end on the one cell row. <span class="tag nosup">Not supported</span> Multiple future versions for same cell (V2).</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="grid2">
+            <div class="panel">
+              <h4>Cell · 5 days · Monthly · Org</h4>
+              <div class="editor">
+                <label>Amount</label><input value="$1,240.00" readonly />
+                <label>Effective start</label><input value="2026-08-01" readonly />
+                <label>Effective end</label><input value="" placeholder="(none = open)" readonly />
+                <label>Payer</label><input value="private_pay (UI default)" readonly />
+              </div>
+            </div>
+            <div class="panel">
+              <h4>History / scheduled versions</h4>
+              <p style="font-size:12px;color:var(--muted);margin:0 0 8px">V1 uniqueness: one row per (org, location, variant, cadence, payer).</p>
+              <div class="callout">Cannot author a second “starts 2027-01-01” row for the same cell until schema V2. Execution can respect a window on the single row.</div>
+            </div>
+          </div>
+        </div>
+        <aside class="bos"><strong>Answer</strong>When does it become effective? → cell effective_start. Prior stack? → Not supported in V1.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m10">
+      <div class="mock-meta">
+        <div class="id">M10</div>
+        <h2>Discounts &amp; fees — linked, not conflated</h2>
+        <p class="note"><span class="tag exist">Existing</span> Discounts = commercial_policies · Fees/Add-ons = commercial_products / Catalog</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="tabs"><span>Tuition</span><span class="on">Related</span></div>
+          <div class="grid2">
+            <div class="panel">
+              <h4>Discounts (Policies)</h4>
+              <div class="row"><div><strong>Sibling discount</strong><br /><span style="font-size:11px;color:var(--muted)">10% · applies_to tuition · org scope</span></div><span class="badge">Active</span></div>
+              <div class="row"><div><strong>Employee discount</strong><br /><span style="font-size:11px;color:var(--muted)">15% · eligibility rule · effective 2026-01-01</span></div><span class="badge">Active</span></div>
+            </div>
+            <div class="panel">
+              <h4>Fees &amp; add-ons (Catalog)</h4>
+              <div class="row"><div><strong>Registration fee</strong><br /><span style="font-size:11px;color:var(--muted)">$150 · once · cadence none</span></div></div>
+              <div class="row"><div><strong>Meal add-on</strong><br /><span style="font-size:11px;color:var(--muted)">$45 / month · optional</span></div></div>
+            </div>
+          </div>
+          <div class="callout ok">Tuition Overview links here — does not edit discount % inside a rate cell.</div>
+        </div>
+        <aside class="bos"><strong>Simulator</strong>Combines tuition cell + fees + discounts for a variant×cadence preview.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m11">
+      <div class="mock-meta">
+        <div class="id">M11</div>
+        <h2>Schedule → suggested rate</h2>
+        <p class="note"><span class="tag plan">Planned connection</span> resolveCommercialScope + simulator exist. <span class="tag exist">Existing</span> Simulator schedule = variant. Do not pretend Continuity UX is live.</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="panel">
+            <h4>Selected schedule (enrollment / ops)</h4>
+            <div class="row"><span>Mon · Wed · Fri · Full day pattern</span><strong>3 days · full_time hint</strong></div>
+          </div>
+          <div class="panel">
+            <h4>Suggested tuition cells</h4>
+            <div class="row"><div>Preschool · Full Time · <strong>3 days</strong> · Weekly</div><strong>$255</strong></div>
+            <div class="row"><div>Preschool · Full Time · <strong>3 days</strong> · Monthly</div><strong>$980</strong></div>
+          </div>
+          <div class="panel">
+            <h4>Selection</h4>
+            <div class="row"><span>Selected rate</span><strong>Weekly $255</strong></div>
+            <div class="row"><span>Override</span><button class="btn ghost" type="button">Enter custom amount…</button></div>
+            <div class="row"><span>Discounts in decision</span><strong>Sibling 10% → preview $229.50</strong></div>
+          </div>
+          <div class="callout">Schedule never owns the rate. Tuition cells remain authority. Override must be explicit + audited when wired.</div>
+        </div>
+        <aside class="bos"><strong>Legacy risk</strong>resolveEnrollmentTuitionRate still uses old program×schedule×period vocabulary — migrate carefully.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m12">
+      <div class="mock-meta">
+        <div class="id">M12</div>
+        <h2>Warm Continuity — Financials → Tuition</h2>
+        <p class="note"><span class="tag plan">Target runtime</span> Today: N+1 variants + double rate fetch under Programs chapter. Must match Locations feel.</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace ghost-hold">
+          <div class="dim">
+            <div class="crumb">Financials › <b>tuition</b></div>
+            <table class="rate">
+              <thead><tr><th>Variant</th><th>Weekly</th></tr></thead>
+              <tbody>
+                <tr><td>3 days</td><td class="amt">$255</td></tr>
+                <tr><td>5 days</td><td class="amt">$350</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <aside class="bos"><strong>Must remain mounted</strong>Org shell · Financials chrome · Tuition grid chrome · hydrate cells only.</aside>
+      </div>
+    </section>
+
+    <section class="mock" id="m13">
+      <div class="mock-meta">
+        <div class="id">M13</div>
+        <h2>Valid empty + attention</h2>
+        <p class="note"><span class="tag exist">Doctrine</span> Zero boards still show Financials/Tuition product — not setup/educational collapse</p>
+      </div>
+      <div class="frame">
+        <aside class="rail"><div class="dot on">ORG</div></aside>
+        <div class="workspace">
+          <div class="title-row"><div><h3>Tuition</h3><p class="sub">No Delivery Option rate boards yet.</p></div><button class="btn" type="button">Create Delivery Option rates</button></div>
+          <div class="cards">
+            <div class="card"><div class="label">Boards</div><div class="value">0</div><div class="hint">Create offerings/variants in Programs, then price here</div></div>
+            <div class="card"><div class="label">Attention</div><div class="value">None</div><div class="hint">0 cells need follow-up</div></div>
+            <div class="card"><div class="label">Overrides</div><div class="value">0</div><div class="hint">No Location rows</div></div>
+          </div>
+          <div class="callout ok">Attention example when data exists: “3-day weekly unset on Toddler · Full Time” — never “Financials not initialized” for empty.</div>
+        </div>
+        <aside class="bos"><strong>Distinct</strong>empty · attention · permission · request fail · missing schema</aside>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

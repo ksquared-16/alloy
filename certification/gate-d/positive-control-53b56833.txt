@@ -1,0 +1,9 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateD-t6.spec.ts:24:5 › gate D — usable details, pane-scoped
+[1A[2K[chromium] › playwright/tests/zz-gateD-t6.spec.ts:24:5 › gate D — usable details, pane-scoped
+[T6] {"sha":"53b56833d08ed89794c3886373fa2924abc79bda","control":{"paneLocated":true,"identityABeforeSwitch":true,"paneBecameB":true,"paneLocalPendingObservable":false,"predicateDiscriminates":true,"usableObservable":true,"floorObservable":true,"T6floor":42,"T6":1056,"finalFigs":32},"accounts":12,"samples":[{"id":"fd000000-0000-4000-8000-0000000c0001","T1":42,"T3":42,"T4":42,"T5":42,"T6":1056,"T6floor":42,"sawPaneLocalPending":false,"staleUsableFrames":0,"sawNotUsableForB":true,"finalFigs":32,"lastRequiredEnd":1041,"requestToUsable":15,"slowestRequired":1035,"requiredCount":2,"routes":[["family-discount-position",939],["card",1035]],"finalAccount":"fd000000-0000-4000-8000-0000000c0001","finalUsable":true,"CORRECT":true},{"id":"0658832a-48d6-4b80-beae-0b12d573fdf2","T1":109,"T3":109,"T4":109,"T5":109,"T6":833,"T6floor":109,"sawPaneLocalPending":false,"staleUsableFrames":0,"sawNotUsableForB":true,"finalFigs":19,"lastRequiredEnd":809,"requestToUsable":24,"slowestRequired":806,"requiredCount":1,"routes":[["card",806]],"finalAccount":"0658832a-48d6-4b80-beae-0b12d573fdf2","finalUsable":true,"CORRECT":true,"warm":false}]}
+
+[1A[2K  1 passed (40.0s)

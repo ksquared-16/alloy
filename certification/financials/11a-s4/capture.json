@@ -1,0 +1,137 @@
+{
+  "before": {
+    "chargeId": "6005cf5f-24e8-4fd2-a624-0bc83496b977",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "actions": [
+      "reverse",
+      "adjust",
+      "resolveResponsibility"
+    ],
+    "cells": [
+      "Sep 18, 2026",
+      "Late pickup",
+      "Certa Certhouse",
+      "4040 · Late Pickup Fees",
+      "$25.00",
+      "posted",
+      "Not allocated",
+      "Late pickup"
+    ]
+  },
+  "afterPreview": {
+    "preview": "$25.00 to divide. / Gross $25.00 / Reductions $0.00",
+    "error": null
+  },
+  "afterConfirm": {
+    "overlay": "detail",
+    "error": null,
+    "preview": null,
+    "current": null
+  },
+  "after": {
+    "chargeId": "6005cf5f-24e8-4fd2-a624-0bc83496b977",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "actions": [
+      "reverse",
+      "adjust",
+      "resolveResponsibility"
+    ],
+    "cells": [
+      "Sep 18, 2026",
+      "Late pickup",
+      "Certa Certhouse",
+      "4040 · Late Pickup Fees",
+      "$25.00",
+      "posted",
+      "Not allocated",
+      "Late pickup"
+    ]
+  },
+  "historical": {
+    "chargeId": "f089a3f4-85a1-44b6-bb94-50588a581b00",
+    "responsibility": "unassigned",
+    "responsibilityText": "Unassigned",
+    "actions": [
+      "reverse",
+      "adjust",
+      "resolveResponsibility"
+    ],
+    "cells": [
+      "Sep 2, 2026",
+      "Consumable fee",
+      "Certa Certhouse",
+      "4030 · Supply Fees",
+      "$18.00",
+      "posted",
+      "Unassigned",
+      "Materials"
+    ]
+  },
+  "wire": [
+    {
+      "status": 200,
+      "request": {
+        "action_key": "billing.resolve_responsibility",
+        "entity_type": "child",
+        "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "mode": "preview",
+        "payload": {
+          "charge_id": "6005cf5f-24e8-4fd2-a624-0bc83496b977"
+        }
+      },
+      "response": {
+        "ok": true,
+        "data": {
+          "execution_result": {
+            "mode": "preview",
+            "eligibility": {
+              "eligible": true,
+              "blockers": [],
+              "availableTransitions": [],
+              "requiredInputs": []
+            },
+            "preview": {
+              "summary": "$25.00 to divide.",
+              "changes": [
+                "Gross $25.00",
+                "Reductions $0.00"
+              ]
+            }
+          },
+          "affected_id": null
+        },
+        "correlation_id": "a59bde98-10a7-4dd9-aa09-f122c0673e69"
+      }
+    },
+    {
+      "status": 200,
+      "request": {
+        "action_key": "billing.resolve_responsibility",
+        "entity_type": "child",
+        "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "mode": "execute",
+        "confirmation": {
+          "confirmed": true
+        },
+        "payload": {
+          "charge_id": "6005cf5f-24e8-4fd2-a624-0bc83496b977"
+        }
+      },
+      "response": {
+        "ok": true,
+        "data": {
+          "execution_result": {
+            "kind": "refused",
+            "chargeId": "6005cf5f-24e8-4fd2-a624-0bc83496b977",
+            "reason": "fixed_exceeds_net",
+            "detail": "fixed 50000 over net 2500"
+          },
+          "affected_id": "6005cf5f-24e8-4fd2-a624-0bc83496b977"
+        },
+        "correlation_id": "4c278e30-829e-4628-b806-77355e0abda8"
+      }
+    }
+  ]
+}

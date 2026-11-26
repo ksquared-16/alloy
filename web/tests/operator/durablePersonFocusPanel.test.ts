@@ -1,0 +1,495 @@
+/**
+ * DURABLE PERSON FOCUS PANEL — Workstreams B + D.
+ *
+ * Three properties, in order of how badly each would fail silently:
+ *
+ *  1. A staff Person with no household, no Opportunity and no Work Unit composes a SETTLED Focus
+ *     Panel model with the Employment card in it.
+ *  2. Card applicability is DECLARED per card and selected by grain — case-only cards do not reach a
+ *     person surface merely by existing in the global catalog.
+ *  3. The existing case surface is UNCHANGED: same cards, same order, same doc object.
+ *
+ * (3) is the one that would be invisible. Grain generalization that quietly reshuffles the enrollment
+ * panel would still pass every person-side assertion, so the case regression is asserted by object
+ * IDENTITY and by explicit card order, not by "it still renders".
+ */
+
+import { describe, expect, it } from "vitest";
+
+import {
+    FOCUS_PANEL_SUMMARY_DEFAULT_DOC,
+    focusPanelSummaryDefaultDocForGrain,
+} from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+import {
+    FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION,
+    focusPanelDefaultCompositionForGrain,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
+import {
+    cardAppliesToGrain,
+    cardGrains,
+    cardKeysForGrain,
+    FOCUS_PANEL_CARDS,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { DEFAULT_CARD_GRAINS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern";
+import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
+import { focusPanelWorkModeModelFromDurablePerson } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
+import { derivePersonQualificationsCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
+import {
+    personEmploymentSignal,
+    type DurablePersonSubject,
+} from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
+import type { PersonEmploymentComposition } from "@/lib/employment/buildPersonEmploymentComposition";
+import { NOT_APPLICABLE_CASE_SIGNALS } from "@/lib/adminV2/runtime/operationalContext/types";
+
+const PERSON_ID = "person-teacher";
+
+/** Exactly what `buildPersonEmploymentComposition` returns for an employed staff member. */
+function employedComposition(): PersonEmploymentComposition {
+    return {
+        is_staff: true,
+        current: {
+            id: "emp-1",
+            status: "active",
+            state_label: "Active",
+            is_open: true,
+            position_label: "Lead Teacher",
+            employment_type: "full_time",
+            employment_type_label: "Full time",
+            primary_location_id: "loc-1",
+            primary_location_label: "Riverside",
+            external_employee_id: null,
+            badge_number: null,
+            start_date: "2026-01-05",
+            end_date: null,
+            end_reason_key: null,
+        },
+        periods: [
+            {
+                id: "emp-1",
+                status: "active",
+                state_label: "Active",
+                is_open: true,
+                position_label: "Lead Teacher",
+                employment_type: "full_time",
+                employment_type_label: "Full time",
+                primary_location_id: "loc-1",
+                primary_location_label: "Riverside",
+                external_employee_id: null,
+                badge_number: null,
+                start_date: "2026-01-05",
+                end_date: null,
+                end_reason_key: null,
+            },
+        ],
+        configured_facts: [],
+        never_employed: false,
+    };
+}
+
+function neverEmployedComposition(): PersonEmploymentComposition {
+    return { is_staff: false, current: null, periods: [], configured_facts: [], never_employed: true };
+}
+
+/**
+ * A staff member exactly as `staff.add` creates one — and nothing else. No `_customer_persons`, no
+ * `_linked_opportunities`: the point of the fixture is that those are genuinely absent, not empty.
+ */
+function staffSubject(
+    composition: PersonEmploymentComposition = employedComposition(),
+): DurablePersonSubject {
+    const truth: Record<string, unknown> = {
+        id: PERSON_ID,
+        org_id: "org-1",
+        first_name: "Dana",
+        last_name: "Okafor",
+        _person_name: "Dana Okafor",
+        _employment: composition,
+    };
+    return {
+        personId: PERSON_ID,
+        label: "Dana Okafor",
+        truth,
+        imageUrl: null,
+        employment: personEmploymentSignal(PERSON_ID, "Dana Okafor", composition),
+    };
+}
+
+// ── B — the durable Person model ─────────────────────────────────────────────────────
+
+describe("a staff Person with no case composes a Focus Panel model", () => {
+    const model = focusPanelWorkModeModelFromDurablePerson({
+        mode: "summary",
+        subject: staffSubject(),
+        canMutate: true,
+    });
+
+    it("is a person subject, settled, from the durable producer", () => {
+        expect(model.subject).toEqual({ type: "person", id: PERSON_ID, label: "Dana Okafor" });
+        expect(model.source).toBe("durable_subject");
+        // Settled, not commit: there is no later pass, so a card that is not ready is resolved-empty.
+        expect(model.phase).toBe("settled");
+        expect(model.context.grain).toBe("person");
+        expect(model.context.status).toBe("ready");
+    });
+
+    it("includes the Employment card, ready, with the person's own answer", () => {
+        expect(model.cardReadiness.get("staff")).toBe("ready");
+        const card = model.cardModels.get("staff");
+        expect(card?.visible).toBe(true);
+        // "who, in what capacity, where" — minus the name, which is the surface's own subject.
+        expect(card?.insight).toBe("Lead Teacher at Riverside");
+        expect(card?.statusChip).toBe("Active");
+    });
+
+    it("carries employment truth verbatim from lib/employment and recomputes nothing", () => {
+        const signal = model.context.employment;
+        expect(signal?.primary?.personId).toBe(PERSON_ID);
+        // The composition object is passed through, not rebuilt at another grain.
+        expect(signal?.primary?.employment).toEqual(employedComposition());
+        expect(signal?.people).toHaveLength(1);
+    });
+
+    it("claims no business process, because a person is not in one", () => {
+        expect(model.context.businessProcess).toEqual({ key: null, label: null, stageKey: null });
+        expect(model.perspective).toBeNull();
+        expect(model.statusLabel).toBeNull();
+    });
+
+    it("offers no commands — employment is authored elsewhere", () => {
+        expect(model.commands).toEqual([]);
+        expect(model.cardModels.get("staff")?.primaryAction).toBeNull();
+    });
+
+    it("never-employed resolves to not_applicable, keeping the cell without claiming employment", () => {
+        const m = focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(neverEmployedComposition()),
+            canMutate: true,
+        });
+        expect(m.cardReadiness.get("staff")).toBe("not_applicable");
+        expect(m.cardModels.get("staff")?.visible).toBe(false);
+        // Null signal, not an empty one: "never employed" is an answer the card must not dress up.
+        expect(m.context.employment).toBeNull();
+    });
+});
+
+describe("the case-shaped signals are not read on a person panel", () => {
+    // NOT_APPLICABLE_CASE_SIGNALS is safe ONLY under this invariant. If a future person-grain card
+    // reads one of these, it gets a zero that means "not applicable" and renders it as an answer.
+    it("no card declared for the person grain is a case-signal consumer", () => {
+        const CASE_SIGNAL_CARDS = [
+            "current_work",
+            "attention",
+            "tour_summary",
+            "communications",
+            "billing_preview",
+            "readiness_kpi",
+            "health",
+        ] as const;
+        for (const key of CASE_SIGNAL_CARDS) {
+            expect(cardAppliesToGrain(key, "person"), `${key} must not apply to person`).toBe(false);
+        }
+    });
+
+    it("the constant is the declared not-applicable state, not incidental zeroes", () => {
+        const model = focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(),
+            canMutate: true,
+        });
+        expect(model.context.signals).toBe(NOT_APPLICABLE_CASE_SIGNALS);
+    });
+});
+
+// ── D — grain-aware card selection ───────────────────────────────────────────────────
+
+describe("card applicability is declared per card, not switched centrally", () => {
+    it("Employment is the one card declared for both case and person", () => {
+        // Employment is CASE-ONLY now: on a durable person the presentation is superseded by
+        // `staff` (registry SUPERSESSION concern, person grain only). The case chip answers a
+        // different question — "does anyone on this household work here?" — and is untouched.
+        expect(cardGrains("employment")).toEqual(["opportunity"]);
+        expect(cardAppliesToGrain("employment", "person")).toBe(false);
+        expect(cardAppliesToGrain("employment", "opportunity")).toBe(true);
+        expect(cardGrains("staff")).toEqual(["person"]);
+        expect(cardAppliesToGrain("staff", "person")).toBe(true);
+        expect(cardAppliesToGrain("staff", "opportunity")).toBe(false);
+    });
+
+    it("an undeclared card is case-only — silence never widens applicability", () => {
+        expect(DEFAULT_CARD_GRAINS).toEqual(["opportunity"]);
+        /*
+         * `milestones` is the honest witness for this rule now. `children` carried the argument
+         * before, but it has since EARNED a declaration for the child grain — the durable child
+         * composes itself as the one member of its own collection, so the card reads canonical
+         * truth there. Its declaration still deliberately excludes `household` and `person`: a
+         * durable household knows its children through `customer_members`, a wider and
+         * differently-shaped set than any single collection key this card reads, and a person has
+         * no child collection at all.
+         */
+        expect(cardGrains("milestones")).toEqual(["opportunity"]);
+        expect(cardGrains("children")).toEqual(["opportunity", "child"]);
+        expect(cardAppliesToGrain("children", "household")).toBe(false);
+        expect(cardAppliesToGrain("children", "person")).toBe(false);
+        // …and a declaration widens a card only to the grains it NAMES, never to every grain: the
+        // Household card is declared for `household`, and is still not a person card.
+        expect(cardAppliesToGrain("household", "person")).toBe(false);
+    });
+
+    it("Household is declared for the case AND the durable family", () => {
+        // The second card to carry a grain declaration, and the reason the durable Household surface
+        // composes at all: silence would have left it case-only, `deriveHouseholdFocusPanelCards`
+        // would have built nothing, and the record would have opened empty.
+        expect(cardGrains("household")).toEqual(["opportunity", "household"]);
+        expect(cardAppliesToGrain("household", "household")).toBe(true);
+        expect(cardAppliesToGrain("household", "opportunity")).toBe(true);
+    });
+
+    /**
+     * The person grain selects TWO cards, and the second one arrived by declaration.
+     *
+     * This asserted `["employment"]` for as long as a person had exactly one canonical truth to
+     * show. `scheduling` joined it when the Assignments card was generalized around
+     * `OperationalAssignmentSubject`: `schedule_assignments` was extended in place so children and
+     * staff would not acquire competing scheduling engines, and every canonical assignment action
+     * already declared `person` among its supported entity types — the CARD was the last layer
+     * still assuming a child.
+     *
+     * The assertion is updated rather than loosened. An exact list is what makes an accidental
+     * widening visible, and this test earned its keep by failing the moment the grain changed.
+     */
+    it("the person grain selects Staff, Qualifications, Availability, Readiness and Assignments", () => {
+        /*
+         * `staff_qualifications` is the third, and it arrived the same way `scheduling` did — by
+         * DECLARATION, not by a central switch. The list stays exact for the reason above: an
+         * accidental widening is only visible against an exact list.
+         *
+         * Order matters here because it is registry order, and registry order is the order a
+         * composer reads. Qualifications is declared immediately after Staff because the two are
+         * read together.
+         */
+        expect(cardKeysForGrain("person")).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation", "scheduling"]);
+        // The catalog is one vocabulary; selection is what varies.
+        expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
+        // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
+        // a household's is not.
+        expect(cardAppliesToGrain("scheduling", "household")).toBe(false);
+    });
+
+    it("every card that was case-grain is still case-grain — only child-grain cards are excluded", () => {
+        // Written when every registered card was case-only. It is no longer "all of them", and that
+        // is the point: the ONLY cards outside the case grain are ones explicitly declared elsewhere.
+        const caseKeys = cardKeysForGrain("opportunity");
+        const excluded = FOCUS_PANEL_CARDS.map((c) => c.key).filter((k) => !caseKeys.includes(k));
+        // `staff` and `staff_qualifications` join it: a person-grain card is legitimately not
+        // case-grain. The invariant the test guards is unchanged — no card that WAS case-grain
+        // silently stopped being one.
+        // `staff_compensation` joins them (Slice 9). `health_safety` was already
+        // outside the case grain and this census had stopped noticing — recording it
+        // restores the test's function rather than papering over it; the drift is
+        // another lane's and is called out here rather than absorbed silently.
+        expect(excluded).toEqual([
+            "staff", "staff_qualifications", "staff_availability", "staff_readiness",
+            "staff_compensation", "health_safety", "child_identity",
+        ]);
+    });
+
+    it("an unsupported grain/card pair is refused deterministically, never thrown", () => {
+        expect(cardAppliesToGrain("current_work", "person")).toBe(false);
+        expect(cardAppliesToGrain("employment", "child")).toBe(false);
+        // An unregistered key is applicable to NOTHING — including the case grain, so an unknown
+        // card can never slip onto the enrollment panel through the default.
+        expect(cardAppliesToGrain("not_a_card" as never, "opportunity")).toBe(false);
+        expect(cardAppliesToGrain("not_a_card" as never, "person")).toBe(false);
+    });
+
+    it("a person model emits no cell for a card that does not apply", () => {
+        const model = focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(),
+            canMutate: true,
+        });
+        expect([...model.cardModels.keys()]).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation"]);
+        // No empty shell pretending applicability.
+        expect(model.cardReadiness.has("current_work")).toBe(false);
+        expect(model.cardReadiness.has("household")).toBe(false);
+    });
+
+    /*
+     * DECLARED AND PLACED IS NOT COMPOSED — the defect this locks, found on deployed staging.
+     *
+     * `staff_qualifications` was declared for the `person` grain, placed on the person composition,
+     * and given a renderer branch. All three were green, and the card still never appeared: the
+     * DERIVATION had no branch for it, so no model was ever built and the panel rendered as though
+     * the card had never been added.
+     *
+     * The assertion above asserted `["staff"]`, passed, and was reporting exactly this the whole
+     * time. So the lock is stated in its own words here: every card the person composition places
+     * must actually come out of the derivation.
+     */
+    it("every card the person composition places is actually derived into a model", () => {
+        const model = focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(),
+            canMutate: true,
+        });
+        const derived = new Set(model.cardModels.keys());
+        for (const entry of focusPanelDefaultCompositionForGrain("person")) {
+            expect(
+                derived.has(entry.key),
+                `${entry.key} is placed on the person surface and declared for the grain, but no `
+                    + "model is derived for it — the panel will render nothing.",
+            ).toBe(true);
+        }
+    });
+
+    it("the qualifications model is a shell, and is not visible without an employment", () => {
+        // It carries no facts on purpose: standing is derived server-side against the org day, and
+        // a count baked in here would be wrong the moment a credential expired overnight.
+        const withJob = derivePersonQualificationsCard({
+            primary: {
+                personId: "p1",
+                personLabel: "A Person",
+                employment: {
+                    is_staff: true,
+                    current: { id: "emp-1" } as never,
+                    periods: [],
+                    configured_facts: [],
+                    never_employed: false,
+                },
+            },
+            people: [],
+            hasEmployment: true,
+        } as never);
+        expect(withJob.key).toBe("staff_qualifications");
+        expect(withJob.visible).toBe(true);
+        expect(withJob.title).toBe("Qualifications");
+
+        // Never employed: not visible, and phrased as a fact rather than a pending read.
+        const never = derivePersonQualificationsCard(null);
+        expect(never.visible).toBe(false);
+    });
+});
+
+describe("default composition varies by grain", () => {
+    it("person composes Staff, Qualifications, Availability and Readiness, all visible", () => {
+        /*
+         * This asserted exactly one card for as long as Employment was the only canonical Person
+         * truth. Qualifications is the second, and it had to be earned TWICE to appear here — once
+         * by declaring the `person` grain in the registry, once by being placed on this surface.
+         * Either alone is inert, which is the friction the composition module documents.
+         */
+        const composition = focusPanelDefaultCompositionForGrain("person");
+        expect(composition.map((e) => e.key)).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation"]);
+        expect(composition.map((e) => e.visibility)).toEqual(["visible", "visible", "visible", "visible", "visible"]);
+        // Side by side, not stacked: two six-column areas on the same row. A qualification that
+        // expires is not something an operator should have to scroll to.
+        expect(composition.map((e) => e.area)).toEqual([
+            { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+            { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+            // Availability takes the full width beneath them: a week of windows reads
+            // as a row of days, and six columns would wrap every one.
+            { colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 3 },
+            // Readiness reads LAST: it summarises the three above it, so an operator
+            // sees the verdict after the facts it derives from.
+            { colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3 },
+            // Compensation last: the most sensitive card in the family, and the least
+            // often the reason the record was opened.
+            { colStart: 1, colSpan: 12, rowStart: 10, rowSpan: 3 },
+        ]);
+    });
+
+    it("child composes its own identity card, never the case composition", () => {
+        // Was asserted EMPTY before Workstream C — the point then and now is the same: a second
+        // surface must not fall through to the enrollment cards (inventory R3). The identity card
+        // is now the CONFIGURED child card (`children`), not the retired hardcoded one.
+        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).toEqual(["children"]);
+        expect(focusPanelSummaryDefaultDocForGrain("child").sections).toHaveLength(1);
+    });
+
+    it("every card a grain's default composition places is declared for that grain", () => {
+        for (const grain of ["opportunity", "person", "child"] as const) {
+            for (const entry of focusPanelDefaultCompositionForGrain(grain)) {
+                expect(
+                    cardAppliesToGrain(entry.key, grain),
+                    `${entry.key} is placed on the ${grain} surface but not declared for it`,
+                ).toBe(true);
+            }
+        }
+    });
+});
+
+// ── CASE REGRESSION — the failure that would be invisible ────────────────────────────
+
+describe("the existing case surface is unchanged", () => {
+    it("the case default doc is the SAME OBJECT, not an equivalent rebuild", () => {
+        expect(focusPanelSummaryDefaultDocForGrain("opportunity")).toBe(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
+        expect(focusPanelDefaultCompositionForGrain("opportunity")).toBe(
+            FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION,
+        );
+    });
+
+    it("the case card set and its reading order are exactly what they were", () => {
+        expect(FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.map((e) => e.key)).toEqual([
+            "current_work",
+            "household",
+            "children",
+            "scheduling",
+            "billing_preview",
+            "employment",
+            "tour_summary",
+            "communications",
+            "milestones",
+        ]);
+    });
+
+    it("the case doc's sections keep their order and visibility", () => {
+        const sections = FOCUS_PANEL_SUMMARY_DEFAULT_DOC.sections;
+        expect(sections).toHaveLength(FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.length);
+        expect(sections.map((s, i) => s.key === FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION[i]!.key)).not.toContain(
+            false,
+        );
+    });
+
+    it("an opportunity subject still reads as the case grain", () => {
+        expect(asFocusPanelSubjectGrain("opportunity")).toBe("opportunity");
+        // Compatibility default: unrecognized narrows to the case grain, which is what the surface
+        // has always been — the renderer never blanks on an unexpected producer.
+        expect(asFocusPanelSubjectGrain(undefined)).toBe("opportunity");
+        expect(asFocusPanelSubjectGrain("typo")).toBe("opportunity");
+        expect(asFocusPanelSubjectGrain("person")).toBe("person");
+        expect(asFocusPanelSubjectGrain("child")).toBe("child");
+    });
+});
+
+// ── E — optional operational-host enrichment (person) ────────────────────────────────
+
+describe("a person's operational host is enrichment only", () => {
+    const HOST = { opportunityId: "opp-active", workUnitKey: "enrollment_pipeline" };
+
+    function personModel(host: typeof HOST | null) {
+        return focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(),
+            canMutate: true,
+            operationalHost: host,
+        });
+    }
+
+    it("is null for a staff member with no household — the ordinary case", () => {
+        expect(personModel(null).context.operationalHost).toBeNull();
+    });
+
+    it("is carried when a household case is being worked", () => {
+        expect(personModel(HOST).context.operationalHost).toEqual(HOST);
+    });
+
+    it("changes neither identity, cards, nor businessProcess", () => {
+        const withHost = personModel(HOST);
+        const without = personModel(null);
+        expect(withHost.subject).toEqual(without.subject);
+        expect([...withHost.cardModels.keys()]).toEqual([...without.cardModels.keys()]);
+        expect(withHost.cardModels.get("staff")).toEqual(without.cardModels.get("staff"));
+        expect(withHost.context.businessProcess).toEqual({ key: null, label: null, stageKey: null });
+    });
+});

@@ -63,20 +63,6 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("setPopoverTaskId");
     });
 
-    it("orchestrator handoff lives in Review Assist band, not drawer header or compact strip card", () => {
-        const src = readFileSync(stripPath, "utf8");
-        const drawer = readFileSync(drawerPath, "utf8");
-        const bosCta = readFileSync(
-            join(dirname(fileURLToPath(import.meta.url)), "../../../components/admin/drawer/BosDrawerAssistCta.tsx"),
-            "utf8",
-        );
-        expect(drawer).not.toContain('data-drawer-action="open_in_orchestrator"');
-        expect(bosCta).toContain('data-drawer-action="bos_assist"');
-        expect(bosCta).toContain("triggerBosDrawerAssistHandoff");
-        expect(src).toContain("const showHandoffCard = false");
-        expect(src).not.toContain("Ask AI");
-        expect(src).not.toContain("Chat with AI");
-    });
 });
 
 describe("ScheduledSendDetailPopover", () => {
@@ -95,17 +81,5 @@ describe("ScheduledSendDetailPopover", () => {
         expect(src).toContain("Process now");
         expect(src).toContain("Cancel send");
         expect(src).not.toContain("Send now");
-    });
-});
-
-describe("AdminEntityDrawer operational strip wiring", () => {
-    it("renders compact strip in header and omits heavy overview operational sections", () => {
-        const src = readFileSync(drawerPath, "utf8");
-        expect(src).toContain("OpportunityOperationalCompactStrip");
-        expect(src).toContain("data-admin-opportunity-operational-strip");
-        expect(src).not.toContain("OpportunityOperationalTasksSection");
-        expect(src).not.toContain("OperationalAttentionDrawerSection");
-        expect(src).not.toContain("Operational tasks & follow-ups");
-        expect(src).not.toContain('data-drawer-section="operational_attention_detail"');
     });
 });

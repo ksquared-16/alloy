@@ -1,0 +1,114 @@
+{
+  "trusted_host_action_id": "tha_d5ea644ddacd5f",
+  "query_hash": "a0f281634840e1144a9a7d0ebb43d5d4d421569b48bb63231f09b89ce18dbc89",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T17:20:39.918Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d5ea644ddacd5f",
+    "query_hash": "a0f281634840e1144a9a7d0ebb43d5d4d421569b48bb63231f09b89ce18dbc89",
+    "authorization_id": "grnt_5be43e869d744258",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T17:20:41.599Z",
+    "question_ids": [
+      "e1_catalog",
+      "e2_exclusions",
+      "e3_package",
+      "e4_no_other_roles",
+      "e5_duplicates",
+      "e6_new_org_seed",
+      "e7_legacy_inert",
+      "e8_ledger",
+      "e9_exceptions"
+    ],
+    "questions": {
+      "e1_catalog": {
+        "question_id": "e1_catalog",
+        "row_count": null,
+        "rows": [
+          1,
+          1,
+          2
+        ]
+      },
+      "e2_exclusions": {
+        "question_id": "e2_exclusions",
+        "row_count": null,
+        "rows": [
+          0,
+          0,
+          0
+        ]
+      },
+      "e3_package": {
+        "question_id": "e3_package",
+        "row_count": null,
+        "rows": [
+          3,
+          3,
+          3,
+          6,
+          6
+        ]
+      },
+      "e4_no_other_roles": {
+        "question_id": "e4_no_other_roles",
+        "row_count": null,
+        "rows": [
+          0,
+          2,
+          0
+        ]
+      },
+      "e5_duplicates": {
+        "question_id": "e5_duplicates",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "e6_new_org_seed": {
+        "question_id": "e6_new_org_seed",
+        "row_count": null,
+        "rows": [
+          2,
+          2,
+          0,
+          1
+        ]
+      },
+      "e7_legacy_inert": {
+        "question_id": "e7_legacy_inert",
+        "row_count": null,
+        "rows": [
+          2,
+          2,
+          17
+        ]
+      },
+      "e8_ledger": {
+        "question_id": "e8_ledger",
+        "row_count": null,
+        "rows": [
+          1,
+          1
+        ]
+      },
+      "e9_exceptions": {
+        "question_id": "e9_exceptions",
+        "row_count": null,
+        "rows": [
+          0,
+          0
+        ]
+      }
+    },
+    "row_count": 26
+  }
+}

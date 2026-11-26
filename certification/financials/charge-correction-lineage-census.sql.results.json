@@ -1,0 +1,37 @@
+{
+  "trusted_host_action_id": "tha_99cd80248adb56",
+  "query_hash": "6e9b0cc1e5e58a571689ee81c28a5ee025777ba7caf65ac9fda4748f9bbb041b",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T21:29:14.039Z",
+    "question_ids": [
+      "corrections_of_corrections",
+      "duplicate_live_reversals",
+      "existing_lineage_constraints"
+    ],
+    "questions": {
+      "corrections_of_corrections": {
+        "question_id": "corrections_of_corrections",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "duplicate_live_reversals": {
+        "question_id": "duplicate_live_reversals",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "existing_lineage_constraints": {
+        "question_id": "existing_lineage_constraints",
+        "row_count": null,
+        "rows": [
+          "index"
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

@@ -32,18 +32,6 @@ import {
 
 
 import {
-    computeDeptRevealGate,
-    deptRevealShellReady,
-    deptRevealWorkUnitsReady,
-    deptRevealKpiStripReady,
-    deptRevealActionsReady,
-} from "@/lib/adminV2/deptRevealGate";
-
-import {
-    shouldApplyWorkUnitQueueRowsResponse,
-} from "@/lib/workspace/workUnitQueueRowFetchApply";
-
-import {
     resolveWorkUnitQueueLaneRevealState,
     workUnitQueueLaneMayPaintRows,
     workUnitQueueLaneRevealSettled,
@@ -151,154 +139,6 @@ describe("workspace warm cache", () => {
 // 2. Dept warm cache → reveal gate passes immediately from cache
 // ---------------------------------------------------------------------------
 
-describe("dept warm cache", () => {
-    const ORG = "org-1";
-    const DEPT_ID = "dept-abc";
-    const USER = "user-1";
-    const FP = "scope:user1-all";
-
-    const baseSnap = {
-        dept: { id: DEPT_ID, name: "Enrollment", key: "enrollment" },
-        workUnits: [
-            { id: "wu-1", name: "Pipeline", key: "enrollment_pipeline" },
-            { id: "wu-2", name: "Needs Attention", key: "needs_attention" },
-        ],
-        workUnitSummaries: {
-            "wu-1": { total: 42, needs_attention: null },
-            "wu-2": { total: 7, needs_attention: 7 },
-        },
-        summariesComplete: true,
-        attentionBuckets: [
-            { key: "late_contact", label: "Late Contact", description: null, count: 5, reason_codes: ["late_contact"] },
-            { key: "tour_due", label: "Tour Due", description: null, count: 2, reason_codes: ["tour_due"] },
-        ] as CachedDeptAttentionBucket[],
-        attentionPreviewTotal: 7,
-        kpiPlacementRows: [{ id: "kpi-1", surface: "department", position: 1 }],
-        kpiScopeHasPlacements: true,
-    };
-
-    it("round-trips and restores all warm-nav fields", () => {
-        writeDepartmentPageCache(ORG, USER, FP, baseSnap);
-        const hit = readDepartmentPageCache(ORG, DEPT_ID, USER, FP);
-
-        expect(hit).not.toBeNull();
-        expect(hit!.dept.id).toBe(DEPT_ID);
-        expect(hit!.workUnits).toHaveLength(2);
-        expect(hit!.summariesComplete).toBe(true);
-        expect(hit!.workUnitSummaries["wu-1"].total).toBe(42);
-        expect(hit!.attentionBuckets).toHaveLength(2);
-        expect(hit!.attentionBuckets![0].key).toBe("late_contact");
-        expect(hit!.attentionPreviewTotal).toBe(7);
-        expect(hit!.kpiPlacementRows).toHaveLength(1);
-        expect(hit!.kpiScopeHasPlacements).toBe(true);
-    });
-
-    it("with summaries + attention + KPI from cache, non-enrollment dept reveal gate passes", () => {
-        // Simulate the non-enrollment dept where actions rail doesn't need settling
-        const nonEnrollSnap = {
-            ...baseSnap,
-            dept: { id: DEPT_ID, name: "Operations", key: "operations" },
-            workUnits: [
-                { id: "wu-1", name: "Queue", key: "queue" },
-            ],
-        };
-        writeDepartmentPageCache(ORG, USER, FP, nonEnrollSnap);
-        const hit = readDepartmentPageCache(ORG, DEPT_ID, USER, FP);
-        expect(hit).not.toBeNull();
-
-        // Simulate what useLayoutEffect restores from the cache:
-        // - dept loaded, not blocking, work units resolved
-        const shell_ready = deptRevealShellReady({
-            department_id: DEPT_ID,
-            department_loaded: true,         // from hit.dept
-            bootstrap_loading: false,        // seededDeptShellRef prevents setDeptLoading(true)
-        });
-        const work_units_ready = deptRevealWorkUnitsReady({ work_units_resolved: true });
-        // kpiPlacementRows from cache means placement_rows_defined = true
-        const kpi_strip_ready = deptRevealKpiStripReady({
-            placement_rows_defined: hit!.kpiPlacementRows !== undefined && hit!.kpiPlacementRows !== null,
-        });
-        // Non-enrollment: actions rail not reserved
-        const actions_ready = deptRevealActionsReady({
-            reserve_actions_rail: false,
-            enrollment_actions_settled: false,
-        });
-
-        const gate = computeDeptRevealGate({
-            shell_ready,
-            work_units_ready,
-            // operational_region_ready would be true once summaries + attention from cache are applied
-            // In practice this depends on deptThroughputBodyReady + deptAttentionBodyReady passing,
-            // which requires summariesLoading=false and attentionBuckets !== null — both satisfied by cache restore.
-            operational_region_ready: true,
-            kpi_strip_ready,
-            actions_ready,
-        });
-
-        expect(gate.above_fold_ready).toBe(true);
-        expect(gate.reason_if_blocked).toHaveLength(0);
-    });
-
-    it("without summaries in cache, operational_region_ready is false (old behavior pre-fix)", () => {
-        // Simulate the OLD cache state: only dept + workUnits, no summaries/attention/KPI
-        const oldCacheSnap = {
-            dept: baseSnap.dept,
-            workUnits: baseSnap.workUnits,
-            workUnitSummaries: {},
-            summariesComplete: false,
-            // no attentionBuckets, no kpiPlacementRows
-        };
-        writeDepartmentPageCache(ORG, USER, FP, oldCacheSnap);
-        const hit = readDepartmentPageCache(ORG, DEPT_ID, USER, FP);
-        expect(hit).not.toBeNull();
-
-        // kpiPlacementRows is undefined → placement_rows_defined = false → kpi_strip_ready = false
-        const kpi_strip_ready = deptRevealKpiStripReady({
-            placement_rows_defined: hit!.kpiPlacementRows !== undefined && hit!.kpiPlacementRows !== null,
-        });
-        expect(kpi_strip_ready).toBe(false);
-
-        // attentionBuckets is undefined → cannot restore → deptAttentionBuckets stays null → attention NOT ready
-        expect(hit!.attentionBuckets).toBeUndefined();
-        expect(hit!.kpiPlacementRows).toBeUndefined();
-    });
-
-    it("cache key scoped by org + dept + user + fingerprint", () => {
-        writeDepartmentPageCache(ORG, USER, FP, baseSnap);
-
-        // Wrong org
-        expect(readDepartmentPageCache("wrong-org", DEPT_ID, USER, FP)).toBeNull();
-        // Wrong dept
-        expect(readDepartmentPageCache(ORG, "wrong-dept", USER, FP)).toBeNull();
-        // Wrong fingerprint
-        expect(readDepartmentPageCache(ORG, DEPT_ID, USER, "fp-different")).toBeNull();
-        // Correct
-        expect(readDepartmentPageCache(ORG, DEPT_ID, USER, FP)).not.toBeNull();
-    });
-
-    it("department cache fingerprint includes workspace site when site selected", () => {
-        const siteFp = workspaceViewCacheFingerprint(FP, "site-a");
-        writeDepartmentPageCache(ORG, USER, siteFp, baseSnap);
-
-        expect(readDepartmentPageCache(ORG, DEPT_ID, USER, siteFp)).not.toBeNull();
-        expect(readDepartmentPageCache(ORG, DEPT_ID, USER, FP)).toBeNull();
-    });
-
-    it("attentionBuckets is undefined in cache when not written — backward compatible", () => {
-        writeDepartmentPageCache(ORG, USER, FP, {
-            ...baseSnap,
-            attentionBuckets: undefined,
-            attentionPreviewTotal: undefined,
-            kpiPlacementRows: undefined,
-            kpiScopeHasPlacements: undefined,
-        });
-        const hit = readDepartmentPageCache(ORG, DEPT_ID, USER, FP);
-        expect(hit).not.toBeNull();
-        // Optional fields absent — should not crash
-        expect(Array.isArray(hit!.attentionBuckets) || hit!.attentionBuckets === undefined || hit!.attentionBuckets === null).toBe(true);
-    });
-});
-
 // ---------------------------------------------------------------------------
 // 3. Work-unit queue row cache key includes queueKey + viewScopeFingerprint
 // ---------------------------------------------------------------------------
@@ -342,48 +182,6 @@ describe("queueRowLogicalCacheKey", () => {
 // ---------------------------------------------------------------------------
 // 4. Stale lane response blocked by ownership guard
 // ---------------------------------------------------------------------------
-
-describe("shouldApplyWorkUnitQueueRowsResponse", () => {
-    it("applies when requestSeq matches and lane is still selected", () => {
-        const result = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: 5,
-            latestRequestSeq: 5,
-            stillSelected: true,
-        });
-        expect(result.apply).toBe(true);
-        expect(result.skippedReason).toBeNull();
-    });
-
-    it("stale request seq — blocked with stale_request_seq reason", () => {
-        const result = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: 3,
-            latestRequestSeq: 7,
-            stillSelected: true,
-        });
-        expect(result.apply).toBe(false);
-        expect(result.skippedReason).toBe("stale_request_seq");
-    });
-
-    it("lane changed — blocked with lane_changed reason", () => {
-        const result = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: 5,
-            latestRequestSeq: 5,
-            stillSelected: false,
-        });
-        expect(result.apply).toBe(false);
-        expect(result.skippedReason).toBe("lane_changed");
-    });
-
-    it("stale seq takes precedence over lane change", () => {
-        const result = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: 2,
-            latestRequestSeq: 9,
-            stillSelected: false,
-        });
-        expect(result.apply).toBe(false);
-        expect(result.skippedReason).toBe("stale_request_seq");
-    });
-});
 
 // ---------------------------------------------------------------------------
 // 5. Lane reveal state — no false empty / no skeleton under loaded pills
@@ -599,18 +397,6 @@ describe("prefetch isolation — structural checks", () => {
         expect(src).not.toMatch(
             /prefetchOpportunityDrawerOnRowIntent[\s\S]{0,400}prefetchOpportunityDrawerFull\(/
         );
-    });
-
-    it("work-unit page defers duplicate primary row force fetch when bootstrap inline is complete", () => {
-        const page = readFileSync(
-            join(
-                webRoot,
-                "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-            ),
-            "utf8"
-        );
-        expect(page).toContain("inlineIncomplete");
-        expect(page).toContain("quietStaleRefresh: true");
     });
 
     it("record-actions route accepts person entity_type", () => {

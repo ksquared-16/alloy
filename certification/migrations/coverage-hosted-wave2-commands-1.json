@@ -1,0 +1,77 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "date": "2027-04-02",
+  "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+  "phase": "1",
+  "transcript": [
+    {
+      "step": "A_create",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+        "start_time": "08:00",
+        "end_time": "10:00",
+        "reason_key": "wave2_authored"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+      "detail": null,
+      "at": "2026-09-22T01:33:41.105Z"
+    },
+    {
+      "step": "B_adjacent",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "0c58d0d2-d756-4b56-9008-32649389d323",
+        "start_time": "10:00",
+        "end_time": "12:00",
+        "reason_key": "wave2_adjacent"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+      "detail": null,
+      "at": "2026-09-22T01:33:41.744Z"
+    },
+    {
+      "step": "C_overlap_refused",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "0c58d0d2-d756-4b56-9008-32649389d323",
+        "start_time": "09:30",
+        "end_time": "11:00",
+        "reason_key": "wave2_overlap"
+      },
+      "http_status": 409,
+      "ok": false,
+      "error_code": "ACTION_BLOCKED",
+      "error_message": "This person is already planned somewhere else during part of that time. Change or cancel the existing Coverage first.",
+      "blockers": [
+        {
+          "code": "coverage_conflict",
+          "message": "This person is already planned somewhere else during part of that time. Change or cancel the existing Coverage first.",
+          "field": null
+        }
+      ],
+      "affected_id": null,
+      "detail": null,
+      "at": "2026-09-22T01:33:42.660Z"
+    }
+  ]
+}

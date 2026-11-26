@@ -1,6 +1,6 @@
 # Operational Work V1 — UX & Placement Audit
 
-**Path:** `docs/sprints/06_2026/operational_work_v1_ux_placement_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_work_v1_ux_placement_audit.md`  
 **Date:** 2026-06-03  
 **Status:** **UX audit frozen — design only** (no implementation)  
 **Scope:** Determine where Operational Work should appear across Alloy before PR2+ UX delivery.
@@ -10,7 +10,7 @@
 - [`operational_work_framework_v1.md`](./operational_work_framework_v1.md)
 - [`operational_work_v1_implementation_plan.md`](./operational_work_v1_implementation_plan.md)
 - [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
-- [`completed/readiness_phase_1_closeout.md`](./completed/readiness_phase_1_closeout.md)
+- [`completed/readiness_phase_1_closeout.md`](../../../../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md)
 
 **Prerequisite:** PR1 (`operationalWorkService` facade) is complete. This audit informs PR2–PR6 UX only.
 

@@ -1,0 +1,361 @@
+/**
+ * A COMPILED participant artifact — the paperwork Alloy filled out, as something to read.
+ *
+ * ## The abstraction gap this closes
+ *
+ * `FormEngineRenderer` takes a schema, a payload and `mode: "edit" | "readonly"`. That mode is the
+ * whole vocabulary, and it is per-FORM: every control is editable, or none is. So the only thing the
+ * runtime could hand a parent after the conversation was the entire form as inputs — including the
+ * two facts they had just settled, rendered as empty-looking boxes to fill in again.
+ *
+ * The missing piece was never a document model. It is a CLASSIFICATION: for each control, what does
+ * the runtime already know about it? Answer that and the review writes itself — resolved facts read
+ * as facts, artifact-specific work reads as work, and the legal actions stay where they belong.
+ *
+ * ## Not a second Forms authority
+ *
+ * Nothing here validates, submits, signs, or stores. Every input is already owned elsewhere:
+ *
+ *   schema            the pinned `form_definition_version` (D-94)
+ *   values            canonical record + session shared values, in that precedence
+ *   binding identity  `canonicalKeyFor` — the SAME derivation that keys an information need
+ *   what collects     `formFieldCollectsValue` — shared with the packet plan and needs projection
+ *
+ * It is a view model derived from those, and it holds no truth of its own. Delete it and the
+ * artifact still submits; you just lose the ability to show a parent what was filled in for them.
+ *
+ * ## Why this survives the document renderer
+ *
+ * The future target is an uploaded original document, filled and shown in its own format. That
+ * renderer needs exactly this classification and nothing more — which control carries a resolved
+ * value, which still needs the participant, which is a signature. The HTML review below is one
+ * renderer OF this model, not the model itself.
+ *
+ * Pure. No I/O.
+ */
+
+import { canonicalKeyFor } from "@/lib/pos/packet/packetFieldPlan";
+import {
+    participantFacingLabel,
+    sourceFieldNamesByFieldId,
+    type SourceFieldMapping,
+} from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
+import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
+import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { fieldIdsControllingVisibility, fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
+import { completeGroupMemberCount, groupMemberState } from "@/lib/forms/groupMembers";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
+
+export type CompiledControlKind =
+    /** A shared fact the conversation settled. Shown as a fact, editable on request. */
+    | "resolved_shared_value"
+    /** Belongs to this artifact alone and still needs the participant. */
+    | "unresolved_artifact_specific"
+    | "acknowledgment"
+    | "signature"
+    /** Authored prose and headings — the document's own content. */
+    | "display_content";
+
+export type CompiledArtifactControl = {
+    readonly field_id: string;
+    readonly label: string;
+    /**
+     * The words Alloy may print for this control — null when the authored label is the source
+     * document's own widget name and therefore says nothing to a parent.
+     *
+     * A caller that prints `label` instead of this one has reintroduced the source-label leak.
+     */
+    readonly participant_label: string | null;
+    readonly kind: CompiledControlKind;
+    /** The authored control type, so an edit uses the same semantics the Form would. */
+    readonly input_type: string;
+    readonly options: readonly string[];
+    readonly required: boolean;
+    readonly value: unknown;
+    /** Authored prose, for `display_content`. */
+    readonly content: string | null;
+    /**
+     * The canonical binding identity, when the control has one.
+     *
+     * This is what makes an EDIT a shared-value write rather than a form patch: every control
+     * carrying the same key is the same fact, so a correction applied to one must show on all of
+     * them. Null for the artifact's own controls — they have no shared identity to write to.
+     */
+    readonly shared_key: string | null;
+};
+
+export type CompiledArtifactSection = {
+    readonly title: string | null;
+    readonly controls: readonly CompiledArtifactControl[];
+};
+
+export type CompiledArtifact = {
+    readonly sections: readonly CompiledArtifactSection[];
+    /** Everything the participant still has to do, in document order. */
+    readonly outstanding: readonly CompiledArtifactControl[];
+    readonly acknowledgments: readonly CompiledArtifactControl[];
+    readonly signatures: readonly CompiledArtifactControl[];
+    /** Facts filled in for the participant — what "I filled this out for you" refers to. */
+    readonly resolved: readonly CompiledArtifactControl[];
+};
+
+function hasValue(value: unknown): boolean {
+    if (value == null) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    if (typeof value === "boolean") return value;
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+}
+
+function readOptions(field: unknown): readonly string[] {
+    const raw = (field as { options?: unknown })?.options;
+    if (!Array.isArray(raw)) return [];
+    const out: string[] = [];
+    for (const item of raw) {
+        if (typeof item === "string" && item.trim()) out.push(item.trim());
+        else if (item && typeof item === "object") {
+            const v = (item as { value?: unknown; label?: unknown }).value ?? (item as { label?: unknown }).label;
+            if (typeof v === "string" && v.trim()) out.push(v.trim());
+        }
+    }
+    return out;
+}
+
+/**
+ * Classify one control.
+ *
+ * Signature and acknowledgment are recognised STRUCTURALLY, not by reading their labels: a signature
+ * is the authored signature type, and an acknowledgment is a REQUIRED boolean with no canonical
+ * binding — an affirmation the participant must make before the document is complete. A
+ * label-matching rule would break the moment a tenant wrote "I agree" instead.
+ *
+ * `required` is load-bearing, not decoration. Without it every optional tickbox on an imported
+ * document became an acknowledgment: the Oregon CIS's "check if the child had chickenpox" and all
+ * fourteen of the Exemption's vaccine and reason boxes were gathered under "please confirm you have
+ * reviewed the information above" — a legal affirmation manufactured out of a status question a
+ * parent is free to leave blank. An optional unbound boolean is this artifact's own work, and it is
+ * classified as exactly that.
+ */
+function classify(
+    field: FormField,
+    sharedKey: string | null,
+    value: unknown,
+    participantLabel: string | null,
+    controlsVisibility = false,
+): CompiledControlKind {
+    if (!formFieldCollectsValue(field)) return "display_content";
+    if (field.type === "signature") return "signature";
+
+    /*
+     * A control Alloy has no words for is not work Alloy can present.
+     *
+     * The source document named this box, so any caption here would be invented and any input would
+     * be forty-one boxes all labelled the same thing. It belongs to the artifact, where the school's
+     * own sentence sits beside it, and the same rule already keeps it out of the conversation.
+     */
+    if (participantLabel == null) return "display_content";
+
+    /*
+     * A READ-ONLY destination is placed, not asked.
+     *
+     * Four of them on the Admissions packet — the derived "Student Age Upon Enrolling" among them —
+     * were offered on the change surface as editable inputs, and the platform then restored the
+     * baseline over whatever the parent typed. An input whose value is discarded on write is worse
+     * than no input at all.
+     */
+    if (field.read_only === true) {
+        return sharedKey != null && hasValue(value) ? "resolved_shared_value" : "display_content";
+    }
+
+    /*
+     * ONE definition of an acknowledgment, shared with the need projection.
+     *
+     * This rule used to live only here, so the conversation could — and did — classify the same
+     * field as an ordinary question and ask it before the document existed.
+     */
+    const bound = sharedKey != null;
+    if (!bound && field.type === "boolean") {
+        return fieldIsAcknowledgement(field, { bound, controlsVisibility }) ? "acknowledgment" : "unresolved_artifact_specific";
+    }
+    if (bound && hasValue(value)) return "resolved_shared_value";
+    return "unresolved_artifact_specific";
+}
+
+/** The binding identity an edit writes to — the same derivation that keys an information need. */
+function sharedKeyOf(field: FormField): string | null {
+    const resolved = canonicalKeyFor(field);
+    if (resolved.basis === "unbound") return null;
+    return resolved.shared_value_key ?? resolved.key;
+}
+
+/**
+ * Compile the artifact for review.
+ *
+ * `values` is the merged view the participant surface already holds — canonical record beneath the
+ * session's own settled answers. Passing it in rather than resolving it here keeps this pure and
+ * keeps precedence owned in one place.
+ */
+export function compileParticipantArtifact(
+    schema: Pick<FormSchemaV1, "fields"> & { sections?: unknown },
+    values: Readonly<Record<string, unknown>>,
+    /**
+     * The version's `pdf_mapping_json`, when this artifact is source-fidelity.
+     *
+     * It is the record of which widget each control was imported from, which is the only reliable
+     * way to tell an authored question from the PDF's internal name for a box. Absent (a generated
+     * document) every label is authored by definition, so nothing is suppressed.
+     */
+    sourceMapping?: SourceFieldMapping,
+    /**
+     * The participant's group rows, when the caller holds them. A people collection is satisfied by
+     * its COMPLETE members — the Forms authority's own member count — and without the rows it can
+     * only be reported as outstanding.
+     */
+    groups?: Readonly<Record<string, ReadonlyArray<{ values: Record<string, unknown> }>>>,
+): CompiledArtifact {
+    const controls: CompiledArtifactControl[] = [];
+    /*
+     * Calculated values, from the Form's own derived authority. A destination whose inputs are not
+     * there yet is absent — the dependency is the participant's work, never the calculation.
+     */
+    let derivedValues: Record<string, string> = {};
+    try {
+        derivedValues = resolveFormDerivedValues(schema as FormSchemaV1, values as Record<string, unknown>, {});
+    } catch {
+        derivedValues = {};
+    }
+    const labelOf = (id: string | undefined) => {
+        if (!id) return null;
+        const hit = (schema.fields as FormField[]).find((f) => f.id === id);
+        return hit?.label?.trim() || null;
+    };
+    const groupSatisfied = new Set<string>();
+    const sourceNames = sourceFieldNamesByFieldId(sourceMapping);
+
+    const shown = (fieldId: string) =>
+        fieldShownForAnswers(schema as FormSchemaV1, fieldId, (id) => values[id]);
+    const visibilityControllers = fieldIdsControllingVisibility(schema as FormSchemaV1);
+
+    const walk = (fields: readonly FormField[]) => {
+        for (const field of fields) {
+            // A question hidden by its condition is not on the family's paperwork.
+            if (!shown(field.id)) continue;
+            if (field.type === "group") {
+                /*
+                 * A PEOPLE GROUP STAYS A GROUP.
+                 *
+                 * "Emergency Contacts, at least 2" is a collection: each contact's Name and Phone
+                 * belong to THAT contact. Flattening it here turned its lines into standalone
+                 * controls with no member to belong to — they rendered empty, the minimum could not
+                 * be met, and the submit then refused the packet for a group nobody could fill. It is
+                 * one outstanding control, edited by the shared form engine as rows (Add another,
+                 * the minimum, each member's required lines), which is exactly what the generic
+                 * runtime does with it.
+                 */
+                const g = field as FormField & { fields: FormField[]; collection_binding?: unknown; repeat?: { min?: number } };
+                if (g.collection_binding) {
+                    const needed = Math.max(g.repeat?.min ?? 0, g.required === true ? 1 : 0);
+                    const complete = groups
+                        ? completeGroupMemberCount(field as FormField & { type: "group" }, groups[g.id], schema as FormSchemaV1, [values as Record<string, unknown>])
+                        : null;
+                    // Members the family started but did not finish. Submit refuses them even in an
+                    // optional group, so the collections step must be able to show them.
+                    const started = groups
+                        ? (groups[g.id] ?? []).filter((r) => groupMemberState(field as FormField & { type: "group" }, r, schema as FormSchemaV1, [values as Record<string, unknown>]).state !== "blank").length
+                        : null;
+                    if (complete != null && complete >= needed && (started == null || started <= complete)) groupSatisfied.add(g.id);
+                    controls.push({
+                        field_id: g.id,
+                        label: g.label ?? "",
+                        participant_label: g.label ?? "",
+                        kind: "unresolved_artifact_specific",
+                        input_type: "group",
+                        options: [],
+                        required: needed > 0,
+                        // How many COMPLETE members it has against how many it needs, so the minimum
+                        // stays visible beside the group rather than appearing first as a refusal.
+                        value: complete == null
+                            ? null
+                            : {
+                                  complete,
+                                  needed,
+                                  ...(started != null && started > complete ? { started } : {}),
+                                  // An optional MEDICAL collection (insurance, medications) is offered
+                                  // once in the collections step — otherwise a family has no way in.
+                                  ...(needed === 0 && String((g.collection_binding as { collection_provider_ref?: string } | undefined)?.collection_provider_ref ?? "").startsWith("health.")
+                                      ? { offer_optional: true }
+                                      : {}),
+                              },
+                        content: null,
+                        shared_key: null,
+                    });
+                    continue;
+                }
+                walk(g.fields);
+                continue;
+            }
+            const value = values[field.id];
+            const sharedKey = sharedKeyOf(field);
+            const participantLabel = participantFacingLabel(field.label, sourceNames[field.id]);
+            /*
+             * A CALCULATED value is placed, never asked. It is either resolved, or waiting on the
+             * answer it is calculated from — which is that question's work, not this one's.
+             */
+            const derived = (field as { derived?: { kind?: string; source_key?: string; as_of_key?: string } }).derived;
+            if (derived) {
+                const caption = participantLabel ?? field.label ?? "";
+                const resolved = derivedValues[field.id];
+                const from = [labelOf(derived.source_key), labelOf(derived.as_of_key)].filter(Boolean).join(" and ");
+                controls.push({
+                    field_id: field.id,
+                    label: field.label ?? "",
+                    participant_label: participantLabel,
+                    kind: "display_content",
+                    input_type: field.type,
+                    options: [],
+                    required: false,
+                    value: resolved ?? null,
+                    content: resolved
+                        ? `${caption}: ${resolved} (calculated)`
+                        : derived.kind === "execution_date"
+                          ? `${caption} is filled in when you sign.`
+                          : `${caption} is calculated${from ? ` from ${from}` : ""}.`,
+                    shared_key: null,
+                });
+                continue;
+            }
+            controls.push({
+                field_id: field.id,
+                label: field.label ?? "",
+                participant_label: participantLabel,
+                kind: classify(field, sharedKey, value, participantLabel, visibilityControllers.has(field.id)),
+                input_type: field.type,
+                options: readOptions(field),
+                required: field.required === true,
+                value: value ?? null,
+                content: (field as { content?: string }).content ?? null,
+                shared_key: sharedKey,
+            });
+        }
+    };
+    walk(schema.fields);
+
+    /**
+     * One section for now, in document order.
+     *
+     * The authored `sections` array is deliberately NOT read yet: on the certification form it
+     * carries OCR page markers ("Page 1", "Page 2") rather than meaningful document structure, and
+     * promoting those to headings would present scan artifacts to a parent as if they were the
+     * document's own organisation. When a tenant authors real sections this is where they belong.
+     */
+    const sections: CompiledArtifactSection[] = [{ title: null, controls }];
+
+    return {
+        sections,
+        resolved: controls.filter((c) => c.kind === "resolved_shared_value"),
+        outstanding: controls.filter((c) => c.kind === "unresolved_artifact_specific" && !groupSatisfied.has(c.field_id)),
+        acknowledgments: controls.filter((c) => c.kind === "acknowledgment"),
+        signatures: controls.filter((c) => c.kind === "signature"),
+    };
+}

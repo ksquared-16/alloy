@@ -144,4 +144,19 @@ describe("opportunityDisplayLocationFromRecord", () => {
         expect(resolved.locationId).toBe("site-child");
         expect(resolved.label).toBe("East Room Site");
     });
+
+    it("inherits lead site for children without owned location_id (siblings can span sites)", () => {
+        const resolved = opportunityDisplayLocationFromRecord({
+            location_id: "site-north",
+            _location_label: "North",
+            _inquiry_children: [
+                { location_id: "site-south", location_label: "South" },
+                { location_id: null, location_label: null },
+            ],
+        });
+        expect(resolved.kind).toBe("multiple");
+        if (resolved.kind !== "multiple") return;
+        expect(resolved.label).toBe("2 locations");
+        expect(resolved.locations.map((l) => l.id).sort()).toEqual(["site-north", "site-south"]);
+    });
 });

@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+# Host-wide validation broker — serialized heavyweight checks across worktrees.
+# Package scripts and `vac run` route here so workers cannot bypass coordination.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/lock.sh
+source "${SCRIPT_DIR}/lib/lock.sh"
+# shellcheck source=lib/validate-reuse.sh
+source "${SCRIPT_DIR}/lib/validate-reuse.sh"
+# shellcheck source=lib/validate-caps.sh
+source "${SCRIPT_DIR}/lib/validate-caps.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+# shellcheck source=lib/browser-cert-lease.sh
+source "${SCRIPT_DIR}/lib/browser-cert-lease.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-validate <worktree-name|slot> <kind> [--force]
+  alloy-validate <worktree-name|slot> command -- <command...>
+  alloy-validate status
+  alloy-validate cancel <request_id>
+  alloy-validate --cwd <kind> [--force]     # auto-detect worktree from cwd (via vac-run)
+
+Kinds (one host-wide heavy_validate lease — mutually exclusive):
+  typecheck | typecheck:tests | test | build | playwright | imports
+
+Focused package tests remain OUTSIDE this broker, e.g.:
+  cd <worktree>/web && npx vitest run path/to/file.test.ts
+
+Examples:
+  alloy-validate wt1-example typecheck
+  alloy-validate 1 build
+  alloy-validate status
+  vac run typecheck
+EOF
+}
+
+resolve_kind_command() {
+  # $1=kind  $2=web_dir  $3..=caller passthrough args (test paths / filters)
+  local kind="$1"
+  case "$kind" in
+    typecheck)
+      if [[ -n "${ALLOY_TYPECHECK_COMMAND:-}" ]]; then
+        alloy_apply_heap_floor "$ALLOY_TYPECHECK_COMMAND"
+      else
+        printf '%s' "node --max-old-space-size=${ALLOY_TYPECHECK_MIN_HEAP_MB} node_modules/typescript/bin/tsc -p tsconfig.build.json --noEmit"
+      fi
+      ;;
+    typecheck:tests)
+      if [[ -n "${ALLOY_TYPECHECK_TESTS_COMMAND:-}" ]]; then
+        alloy_apply_heap_floor "$ALLOY_TYPECHECK_TESTS_COMMAND"
+      else
+        printf '%s' "node --max-old-space-size=${ALLOY_TYPECHECK_MIN_HEAP_MB} node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
+      fi
+      ;;
+    test)
+      # Built from what the INSTALLED vitest accepts, not from a config string asserting flags.
+      # `ALLOY_TEST_COMMAND` is honoured only if an operator has deliberately overridden it AND it
+      # carries no worker flags — otherwise the version-drift bug just comes back through config.
+      if [[ -n "${ALLOY_TEST_COMMAND:-}" && "$ALLOY_TEST_COMMAND" != *"Workers"* ]]; then
+        printf '%s' "$ALLOY_TEST_COMMAND"
+      else
+        alloy_build_test_command "$2" "${@:3}"
+      fi
+      ;;
+    build) printf '%s' "$ALLOY_BUILD_COMMAND" ;;
+    playwright) printf '%s' "$ALLOY_PLAYWRIGHT_COMMAND" ;;
+    imports)
+      if [[ -z "${ALLOY_IMPORTS_COMMAND:-}" || "$ALLOY_IMPORTS_COMMAND" == unsupported ]]; then
+        alloy_die "imports verification is unsupported in config"
+      fi
+      printf '%s' "$ALLOY_IMPORTS_COMMAND"
+      ;;
+    *) alloy_die "unknown kind '$kind' (typecheck|typecheck:tests|test|build|playwright|imports|command)" ;;
+  esac
+}
+
+alloy_validate_git_commit() {
+  local path="$1"
+  (cd "$path" && git rev-parse HEAD 2>/dev/null) || printf 'unknown'
+}
+
+alloy_validate_git_branch() {
+  local path="$1"
+  (cd "$path" && git rev-parse --abbrev-ref HEAD 2>/dev/null) || printf 'unknown'
+}
+
+run_validate() {
+  local name="$1"
+  local kind="$2"
+  shift 2
+  local force=0
+  local -a extra=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=1; shift ;;
+      *) extra+=("$1"); shift ;;
+    esac
+  done
+
+  local path web_dir cmd
+  local -a cmd_args=()
+  local use_argv=0
+  local slot="" branch="" commit=""
+
+  if [[ "${ALLOY_VALIDATE_UNMANAGED:-0}" == "1" ]]; then
+    path="${ALLOY_VALIDATE_PATH_OVERRIDE:?}"
+    slot="${ALLOY_VALIDATE_SLOT_OVERRIDE:-0}"
+    branch="$(alloy_validate_git_branch "$path")"
+    commit="$(alloy_validate_git_commit "$path")"
+  else
+    name="$(alloy_resolve_worktree_name "$name")"
+    alloy_load_metadata "$name"
+    path="$ALLOY_WORKTREE_PATH"
+    slot="${ALLOY_WORKTREE_SLOT:-}"
+    branch="${ALLOY_WORKTREE_BRANCH:-$(alloy_validate_git_branch "$path")}"
+    commit="$(alloy_validate_git_commit "$path")"
+  fi
+
+  web_dir="$(alloy_web_dir_for "$path")"
+  [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
+
+  if [[ "$kind" == "command" ]]; then
+    set -- "${extra[@]}"
+    if [[ "${1:-}" != "--" ]]; then
+      alloy_die "usage: alloy-validate <worktree-name> command -- <command...>"
+    fi
+    shift
+    [[ $# -ge 1 ]] || alloy_die "missing command after --"
+    use_argv=1
+    cmd_args=("$@")
+    cmd="${cmd_args[*]}"
+  elif [[ "$kind" == "test" ]]; then
+    # Focused paths and filters are preserved verbatim — a broker that rewrites a worker's test
+    # selection is worse than no broker. Passthrough also means a focused run can take the lease
+    # instead of being driven off-broker, which is how the host got saturated in the first place.
+    cmd="$(resolve_kind_command "$kind" "$web_dir" ${extra[@]+"${extra[@]}"})"
+  else
+    [[ ${#extra[@]} -eq 0 ]] || alloy_die "unexpected args after kind (use 'command --' for custom commands)"
+    cmd="$(resolve_kind_command "$kind" "$web_dir")"
+  fi
+
+  # Result identity includes SCOPE, so a focused run is now safely cacheable under its own key and
+  # structurally cannot satisfy the full suite (see lib/validate-reuse.sh).
+  local scope_id
+  scope_id="$(alloy_validate_scope_id ${extra[@]+"${extra[@]}"})"
+
+  if [[ "$use_argv" -eq 0 && "$kind" != "command" ]]; then
+    local reuse
+    reuse="$(alloy_validate_reuse_lookup "$commit" "$kind" "$web_dir" "$force" "$scope_id" "$cmd" || true)"
+    if [[ "$reuse" == HIT\|* ]]; then
+      local rpath rcode rsrc
+      IFS='|' read -r _ rpath rcode rsrc <<<"$reuse"
+      if [[ "$rsrc" == "$kind" ]]; then
+        alloy_info "reusing ${kind} result for ${commit:0:12} (cached exit ${rcode})"
+      else
+        alloy_info "reusing ${kind} result for ${commit:0:12} (satisfied by ${rsrc}; exit ${rcode})"
+      fi
+      exit "$rcode"
+    fi
+  fi
+
+  # Register on the FIFO queue ASAP (before memory/heavy guards) so a slow
+  # startup cannot be barged by a later worker.
+  local request_id="req_$(alloy_validate_queue_key)_$$"
+  local early_queue=""
+  early_queue="$(alloy_validate_queue_register "$request_id" "$name" "$kind")"
+  export ALLOY_VALIDATE_QUEUE_ENTRY="$early_queue"
+  export ALLOY_VALIDATE_ACTIVE_REQUEST_ID="$request_id"
+  # shellcheck disable=SC2064
+  trap 'alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
+
+  alloy_sprint_ops_defaults
+  # A REFUSAL, not an authorisation. It can only stop work from starting; it can
+  # never grant capacity, so it does not make a second budget. See the
+  # single-owner invariant in lib/vacilando/validation-routing.mjs.
+  alloy_refuse_if_memory_pressure_heavy "$kind"
+
+  # ---------------------------------------------------------------------------
+  # S5 IS THE CAPACITY AUTHORITY. One decision, not two.
+  #
+  # This used to hold a host-wide mkdir MUTEX plus a counted heavy-job budget,
+  # neither of which knew anything about S5's weighted tokens — the same class
+  # of work authorised twice by two regimes that could not see each other. Both
+  # are now replaced by a single S5 claim, which is hardware-derived (S4),
+  # weighted by classification (S3), and worker-capped by the same policy that
+  # governs `vac run`.
+  #
+  # The queue registration below stays: it is VISIBILITY, and it grants nothing.
+  # ---------------------------------------------------------------------------
+  local admit_out=""
+  if ! admit_out="$(ALLOY_VALIDATE_HOLDER_PID=$$ node "${SCRIPT_DIR}/vac-validate-admit.mjs" --kind "$kind" --command "$cmd")"; then
+    alloy_die "validation capacity refused by the S5 broker (see: vac health --check validation.collisions)"
+  fi
+  eval "$admit_out"
+  local heavy_lock=""
+  # shellcheck disable=SC2064
+  trap 'node "'"${SCRIPT_DIR}"'/vac-validate-release.mjs" "'"${ALLOY_S5_CLAIM_ID:-}"'" "" 2>/dev/null || true; alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
+  if [[ "${ALLOY_S5_ENFORCED:-0}" == "1" ]]; then
+    alloy_info "governed by S5: ${ALLOY_S5_CLASS} · weight ${ALLOY_S5_WEIGHT} · workers <= ${ALLOY_S5_WORKER_CEILING} · claim ${ALLOY_S5_CLAIM_ID}"
+  fi
+
+  # THE HEARTBEAT BELONGS TO THE LEASE, AND THIS COMMAND NO LONGER TAKES ONE.
+  #
+  # S5 is the capacity authority here; the validate mutex is not acquired, so
+  # its lock directory does not exist and there is nothing to keep alive. This
+  # loop wrote into that missing directory every fifteen seconds and the shell
+  # printed the failure into the middle of real validation output.
+  #
+  # It now runs ONLY while this process genuinely holds the lease, and a failed
+  # write is reported rather than swallowed — a heartbeat that cannot be written
+  # is a liveness signal that has stopped, which is exactly what the reclaimer
+  # is supposed to see.
+  local hb_pid=""
+  if alloy_validate_lock_held_by_self; then
+    (
+      while true; do
+        if ! alloy_validate_write_heartbeat; then
+          alloy_warn "validation heartbeat write failed; the lease can no longer prove liveness"
+          exit 1
+        fi
+        sleep 15
+      done
+    ) &
+    hb_pid=$!
+  fi
+
+  # Machine-bounded browser certification: capacity-1 lease on top of the
+  # host-wide validate lock so two Chromium fleets cannot start even when
+  # callers bypass the broker kind and use `command -- npx playwright …`.
+  local browser_lease=0
+  local browser_holder=""
+  if [[ "$kind" == "playwright" ]] || alloy_command_is_browser_certification "$cmd"; then
+    browser_holder="$(basename "$path")"
+    if alloy_browser_cert_acquire --wait --reason "alloy-validate ${kind} ${name}" --holder "$browser_holder"; then
+      browser_lease=1
+    else
+      alloy_die "browser-certification lease refused — another slot holds the machine-bounded Playwright capacity (alloy-compute status browser-certification)"
+    fi
+  fi
+
+  # shellcheck disable=SC2064
+  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; node "'"${SCRIPT_DIR}"'/vac-validate-release.mjs" "'"${ALLOY_S5_CLAIM_ID:-}"'" "" 2>/dev/null || true; alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
+
+  local vlog
+  vlog="$(alloy_validate_log_path)"
+  alloy_export_node_defaults
+  export CI="${CI:-1}"
+  export ALLOY_VALIDATE_EXECUTING=1
+  export ALLOY_VALIDATE_WORKTREE="$name"
+  export ALLOY_VALIDATE_KIND="$kind"
+  export ALLOY_VALIDATE_SLOT="$slot"
+  export ALLOY_VALIDATE_COMMIT="$commit"
+  export ALLOY_VALIDATE_REQUEST_ID="$request_id"
+
+  {
+    printf '[%s] START worktree=%s slot=%s commit=%s kind=%s pid=%s request_id=%s cmd=%s\n' \
+      "$(alloy_iso_now)" "$name" "$slot" "${commit:0:12}" "$kind" "$$" "$request_id" "$cmd"
+  } | tee -a "$vlog"
+
+  local rc=0
+  # OWNED EXECUTION. The job leads its own process group and the pgid is recorded, so cancellation,
+  # timeout, worker closure or a crash can reap the ENTIRE tree (vitest workers, tsc children,
+  # turbopack workers). Previously only the wrapper died and its workers kept burning CPU — observed
+  # for 21 minutes after the parent was gone, while the lease read `idle`.
+  local pgid_file
+  pgid_file="$(alloy_validate_pgid_file)"
+  # shellcheck disable=SC2064
+  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; alloy_reap_owned_job "'"$pgid_file"'"; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; node "'"${SCRIPT_DIR}"'/vac-validate-release.mjs" "'"${ALLOY_S5_CLAIM_ID:-}"'" "$rc" 2>/dev/null || true; alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
+
+  if [[ "$use_argv" -eq 1 ]]; then
+    ( cd "$web_dir" && alloy_run_owned "$pgid_file" "$vlog" --argv \
+        env CI=1 NODE_OPTIONS="$NODE_OPTIONS" ALLOY_VALIDATE_EXECUTING=1 "${cmd_args[@]}" ) || rc=$?
+  else
+    ( cd "$web_dir" && alloy_run_owned "$pgid_file" "$vlog" --shell \
+        "env CI=1 NODE_OPTIONS=\"$NODE_OPTIONS\" ALLOY_VALIDATE_EXECUTING=1 $cmd" ) || rc=$?
+  fi
+
+  # Classify BEFORE recording anything: a CLI/config error means the command never ran, and caching
+  # it as a test result would poison every later run on this commit with a failure that never happened.
+  local failure_class
+  failure_class="$(alloy_classify_exec_failure "$vlog" "$rc")"
+
+  {
+    printf '[%s] FINISH worktree=%s kind=%s rc=%s class=%s\n' \
+      "$(alloy_iso_now)" "$name" "$kind" "$rc" "$failure_class"
+  } | tee -a "$vlog"
+
+  # Scope is part of the key now, so a focused result records under its own identity rather than being
+  # suppressed. The outcome gate (inside the store) refuses anything that was not a real execution.
+  if [[ "$use_argv" -eq 0 && "$kind" != "command" ]]; then
+    alloy_validate_reuse_store "$commit" "$kind" "$web_dir" "$rc" "$name" "$slot" "$scope_id" "$cmd" "$failure_class"
+  fi
+  if [[ "$failure_class" == "config" ]]; then
+    alloy_warn "${kind} FAILED TO START (CLI/config error, not a test failure) — result not cached."
+    alloy_warn "the command never ran: $cmd"
+  fi
+
+  exit "$rc"
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+
+  case "${1:-}" in
+    status)
+      alloy_validate_status
+      exit 0
+      ;;
+    cancel)
+      shift
+      alloy_validate_cancel "${1:-}"
+      exit $?
+      ;;
+    --cwd)
+      # Invoked by vac-run after setting ALLOY_VALIDATE_* overrides / resolving name.
+      shift
+      local kind="${1:-}"
+      [[ -n "$kind" ]] || { usage >&2; exit 2; }
+      shift
+      local name="${ALLOY_VALIDATE_RESOLVED_NAME:-}"
+      [[ -n "$name" ]] || alloy_die "internal: --cwd requires ALLOY_VALIDATE_RESOLVED_NAME"
+      run_validate "$name" "$kind" "$@"
+      ;;
+  esac
+
+  [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+  local name="$1"
+  local kind="$2"
+  shift 2
+  run_validate "$name" "$kind" "$@"
+}
+
+main "$@"

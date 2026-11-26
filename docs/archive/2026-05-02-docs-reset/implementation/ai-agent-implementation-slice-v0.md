@@ -22,7 +22,7 @@
 | **Config write** | **Only** `work_units.queue_definition` update for a row already in the caller’s org — via **validated** path (§7). |
 | **Validation stack** | Intent → policy → **shared** queue JSON schema validation (§6) — **server authoritative**. |
 | **Persistence minimum** | `proposal_id`, correlation id, **before/after** snapshot or hash for `queue_definition`, `user_id`, `org_id`, timestamps, terminal status (§5). |
-| **Access** | **Admin** session only (`getAdminContext()`), same as [`PATCH` work-units](../../web/app/api/admin/work-units/[id]/route.ts) today (`role === "admin"`). |
+| **Access** | **Admin** session only (`getAdminContext()`), same as [`PATCH` work-units](../../../../web/app/api/admin/work-units/[id]/route.ts) today (`role === "admin"`). |
 | **Feature flag** | Gate the **new** orchestration entry point + any persistence; safe fallback when off (§10). |
 
 ### 1.2 Out of scope (exactly)
@@ -158,7 +158,7 @@ Used for the **single** admin entry point (§4).
 
 | Rule | v0 decision |
 |------|-------------|
-| **Where orchestration runs** | **Server-only**: new handler e.g. `POST /api/admin/agent/v0/queue-definition-proposal` (exact path TBD) under `web/app/api/admin/`, using **`getAdminContext()`** — same as [work-units route](../../web/app/api/admin/work-units/[id]/route.ts). |
+| **Where orchestration runs** | **Server-only**: new handler e.g. `POST /api/admin/agent/v0/queue-definition-proposal` (exact path TBD) under `web/app/api/admin/`, using **`getAdminContext()`** — same as [work-units route](../../../../web/app/api/admin/work-units/[id]/route.ts). |
 | **Not in the client** | Browser sends **one** request; no multi-step PATCH orchestration from React. |
 | **Not model-to-database** | No LLM receives DB credentials; no Edge function that skips admin validation. |
 | **No raw SQL** | All writes via existing Supabase admin client patterns inside API routes ([Alloy System Overview](./ALLOY_SYSTEM_OVERVIEW.md) multi-tenant boundary). |
@@ -224,7 +224,7 @@ Used for the **single** admin entry point (§4).
 
 ### 7.1 Current state (evidence)
 
-- **`PATCH /api/admin/work-units/[id]`** accepts `queue_definition` as a **JSON object** with **no** schema validation and **no** version check ([route implementation](../../web/app/api/admin/work-units/[id]/route.ts) — `parseQueueDefinition` only checks object-ness).
+- **`PATCH /api/admin/work-units/[id]`** accepts `queue_definition` as a **JSON object** with **no** schema validation and **no** version check ([route implementation](../../../../web/app/api/admin/work-units/[id]/route.ts) — `parseQueueDefinition` only checks object-ness).
 
 **Conclusion:** v0 **cannot** ship “as-is” for AI-only safety without **tightening** the write path — humans benefit too.
 

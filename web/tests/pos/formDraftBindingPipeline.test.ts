@@ -32,7 +32,7 @@ describe("Document → Draft → Generated FormSchemaV1: field_source survives",
         expect(map[schema.fields[1].id]).toBe("customer_member.dob");
     });
 
-    it("auto-suggests a binding when the operator left it unbound but the label is recognizable", () => {
+    it("never invents a binding the operator left unbound, even for a recognizable label", () => {
         const draft = buildManualFormDraft({
             title: "Health",
             sourceDocumentId: null,
@@ -42,9 +42,11 @@ describe("Document → Draft → Generated FormSchemaV1: field_source survives",
         expect(draft.fields[0].field_source).toBeUndefined();
 
         const schema = draftFormToFormSchemaV1(draft);
-        // schema builder fills the canonical binding from the label
-        expect(fsOf(schema.fields[0])).toEqual({ entity_type: "customer_member", field_key: "dob" });
-        expect(fsOf(schema.fields[1])).toEqual({ entity_type: "person", field_key: "email" });
+        // The schema builder used to fill `customer_member.dob` / `person.email` from the label here; the
+        // Studio then showed it as Mapped and the next unrelated save persisted it. A recognisable label is
+        // a suggestion for the operator, not a destination.
+        expect(fsOf(schema.fields[0])).toBeNull();
+        expect(fsOf(schema.fields[1])).toBeNull();
     });
 
     it("packet-only / unrecognized fields stay unbound (no silent wrong binding)", () => {

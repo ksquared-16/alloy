@@ -1,0 +1,74 @@
+{
+  "capturedAt": "2026-09-14T21:04:24.798Z",
+  "deployedSha": "00d18eb95362e0747e2ebefdbe87edbc2d2c7a6d",
+  "organization": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+  "customerId": "fd000000-0000-4000-8000-0000000c0001",
+  "period": {
+    "key": "2026-09",
+    "start": "2026-09-01",
+    "end": "2026-09-30",
+    "label": "September 2026"
+  },
+  "reconciliation": {
+    "grossCents": 0,
+    "discountsCents": 0,
+    "fundingCents": 0,
+    "adjustmentsCents": 0,
+    "responsibilityCents": 0,
+    "paymentsCents": 0,
+    "balanceCents": 0,
+    "scheduledCents": 0,
+    "draftCents": 0
+  },
+  "collectible": {
+    "outstandingCents": 0,
+    "expectedSubsidyCents": 0,
+    "submittedClaimSuppressionCents": 0,
+    "actualSubsidyReceivedCents": 0,
+    "unresolvedVarianceCents": 0,
+    "currentlyCollectibleCents": 0
+  },
+  "responsibility": {
+    "parties": [],
+    "unassignedCents": 0,
+    "allocatedCents": 0,
+    "hasUnresolvedCharges": false
+  },
+  "expectedFunding": [],
+  "subjects": [
+    {
+      "customerMemberId": "fd000000-0000-4000-8000-0000000d0001",
+      "agreementId": "fd000000-0000-4000-8000-0000000a0001",
+      "displayName": "Ana Alvarez",
+      "agreementStatus": "active"
+    }
+  ],
+  "payers": [],
+  "counts": {
+    "rows": 0,
+    "reductions": 0,
+    "payments": 0
+  },
+  "chargeTemplates": [
+    {
+      "id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+      "label": "Field trip",
+      "amountCents": 4000
+    },
+    {
+      "id": "315d8b1d-9d1c-4613-97aa-22658a0cdb52",
+      "label": "Late pickup",
+      "amountCents": 2500
+    },
+    {
+      "id": "27055d7e-72a3-441a-a4dd-ae01fbf1f421",
+      "label": "Materials",
+      "amountCents": 1800
+    },
+    {
+      "id": "c03e638e-0f3e-49f0-9d41-696276c8fa21",
+      "label": "Registration fee",
+      "amountCents": 7500
+    }
+  ]
+}

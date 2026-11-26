@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
+import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 import {
     ActionPlacementValidationError,
     actionPlacementEditableInSettings,
@@ -13,9 +16,23 @@ import {
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden — admin role required" }, { status: 403 });
-    }
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * BUSINESS PROCESS AUTHORITY — an Action Placement decides WHICH actions are available at a
+     * process stage, and that configuration already has an owner on its other door.
+     *
+     * `business_process.configure` names "the actions matrix" in its own promoted contract, and
+     * `lifecycleActionsMatrix` — the module behind that capability-gated PUT — writes these very
+     * `action_placements` rows. So this Settings surface was a second door to configuration
+     * Business Process already owned, decided by a different rule.
+     *
+     * `ctx.role !== "admin"` stood here. It admitted an admin whose package withholds
+     * `business_process.configure` and refused a custom Process Configurer who holds it, which
+     * made the capability decorative on one door and absent on the other.
+     */
+    const capDenied = requireBusinessProcessCapability(access, BUSINESS_PROCESS_CONFIGURE);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     const placementId = id.trim();
@@ -93,6 +110,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     } catch {
         /* non-fatal */
     }
+    // B — bust the cached `act:` action projection so the Work Unit answer reflects the publish (see B5).
+    invalidateConfigReadCache(`act:${ctx.orgId}:`);
 
     return NextResponse.json({ placement: updated });
 }
@@ -101,9 +120,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden — admin role required" }, { status: 403 });
-    }
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * BUSINESS PROCESS AUTHORITY — an Action Placement decides WHICH actions are available at a
+     * process stage, and that configuration already has an owner on its other door.
+     *
+     * `business_process.configure` names "the actions matrix" in its own promoted contract, and
+     * `lifecycleActionsMatrix` — the module behind that capability-gated PUT — writes these very
+     * `action_placements` rows. So this Settings surface was a second door to configuration
+     * Business Process already owned, decided by a different rule.
+     *
+     * `ctx.role !== "admin"` stood here. It admitted an admin whose package withholds
+     * `business_process.configure` and refused a custom Process Configurer who holds it, which
+     * made the capability decorative on one door and absent on the other.
+     */
+    const capDenied = requireBusinessProcessCapability(access, BUSINESS_PROCESS_CONFIGURE);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     const placementId = id.trim();
@@ -138,6 +171,8 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     } catch {
         /* non-fatal */
     }
+    // B — bust the cached `act:` action projection so the Work Unit answer reflects the publish (see B5).
+    invalidateConfigReadCache(`act:${ctx.orgId}:`);
 
     return NextResponse.json({ ok: true });
 }

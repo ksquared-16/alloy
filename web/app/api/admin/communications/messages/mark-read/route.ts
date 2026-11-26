@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -9,8 +12,8 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
  * POST /api/admin/communications/messages/mark-read — per-user read receipts (inbound operator UX).
  */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

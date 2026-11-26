@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Actions / Workflows API
 
 **Domain size:** ~30 route handlers. Full list: [`api-index.md` → Actions / Workflows](api-index.md#actions--workflows).

@@ -1,0 +1,71 @@
+{
+  "trusted_host_action_id": "tha_1b93be971f3b7f",
+  "query_hash": "76f6554651bd88c6507ed5255ba46c288e440a6798749141eed59d6a4f3418e4",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T03:48:50.289Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1b93be971f3b7f",
+    "query_hash": "76f6554651bd88c6507ed5255ba46c288e440a6798749141eed59d6a4f3418e4",
+    "authorization_id": "grnt_da564a13749a4a68",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T03:48:51.138Z",
+    "question_ids": [
+      "catalog",
+      "grants",
+      "violations",
+      "coverage",
+      "ledger"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "work.configure ~ active=true ~ group=operations",
+          "work.operate ~ active=true ~ group=operations"
+        ]
+      },
+      "grants": {
+        "question_id": "grants",
+        "row_count": null,
+        "rows": [
+          "admin ~ work.configure ~ orgs=3",
+          "admin ~ work.operate ~ orgs=3",
+          "ops ~ work.operate ~ orgs=3"
+        ]
+      },
+      "violations": {
+        "question_id": "violations",
+        "row_count": null,
+        "rows": [
+          0,
+          0,
+          0
+        ]
+      },
+      "coverage": {
+        "question_id": "coverage",
+        "row_count": null,
+        "rows": [
+          3,
+          3
+        ]
+      },
+      "ledger": {
+        "question_id": "ledger",
+        "row_count": null,
+        "rows": [
+          20260916030000
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

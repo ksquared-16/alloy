@@ -1,0 +1,64 @@
+{
+  "url": "http://localhost:3015/a/EjkRN7JS",
+  "emailBody": "Hello Kelly,\n\nWe’d love to show your family around North Campus.\nNorth Campus — 123 Main Street, Bend OR 97701\n\nChoose a tour time:\nhttp://localhost:3015/a/EjkRN7JS\n\nWe look forward to meeting you.\n\nWarmly,\nFirefly Early Learning",
+  "prepJson": {
+    "ok": true,
+    "data": {
+      "execution_result": {
+        "invitation_id": "000089fd-39b5-46f9-a270-483732b2d273",
+        "option_count": 5,
+        "sent_channels": [],
+        "idempotent_replay": false,
+        "skipped": [
+          "prepare_only"
+        ],
+        "mode": "prepare",
+        "draft": {
+          "invitationId": "000089fd-39b5-46f9-a270-483732b2d273",
+          "recipientPersonId": "e5df3f17-d0ba-475a-bb37-73a8f1f899a0",
+          "recipientDisplayName": "Kelly Kurzman",
+          "recipientEmail": "kelly.kurzman@gmail.com",
+          "recipientPhone": "+16022904816",
+          "emailSubject": "Come visit North Campus — pick a time that works",
+          "emailBody": "Hello Kelly,\n\nWe’d love to show your family around North Campus.\nNorth Campus — 123 Main Street, Bend OR 97701\n\nChoose a tour time:\nhttp://localhost:3015/a/EjkRN7JS\n\nWe look forward to meeting you.\n\nWarmly,\nFirefly Early Learning",
+          "smsBody": "Hi Kelly, we'd love to show your family around North Campus. Pick a tour time: http://localhost:3015/a/EjkRN7JS",
+          "invitationActionUrl": "http://localhost:3015/a/EjkRN7JS"
+        }
+      },
+      "affected_id": "000089fd-39b5-46f9-a270-483732b2d273"
+    },
+    "correlation_id": "8fb3566b-7adb-4819-908b-c8beeed78d70"
+  },
+  "sendJson": {
+    "mode": "sent",
+    "results": [
+      {
+        "person_id": "e5df3f17-d0ba-475a-bb37-73a8f1f899a0",
+        "display_name": "Kelly Kurzman",
+        "thread_id": "b98d8f65-023e-41e6-b8fc-296bab311df3",
+        "communication_message_id": "db4bc328-f0c7-4c3b-a49c-10df83e5bd30",
+        "status": "sent",
+        "reason": null
+      }
+    ],
+    "summary": {
+      "requested": 1,
+      "ready": 0,
+      "sent": 1,
+      "blocked": 0,
+      "failed": 0
+    },
+    "contact_attempt_association": {
+      "associated": false,
+      "reason": "no_configured_sufficiency"
+    },
+    "meta": {
+      "customer_id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+      "channel": "email",
+      "confirm": true,
+      "consent_enforced": false,
+      "opportunity_id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+      "reply_to_thread_id": null
+    }
+  }
+}

@@ -46,12 +46,15 @@ function enrollmentDepartmentMetadata(): Record<string, unknown> {
                     primary_entity: "opportunity",
                     sort_order: 0,
                     is_active: true,
+                    // Real department metadata declares a grain per stage; these fixtures
+                    // did not, so the grain guard correctly refused to validate a move onto a
+                    // stage that says nothing about which journey it belongs to.
                     stages: [
-                        { id: "s1", key: "lead", label: "Lead", sort_order: 0, is_active: true },
-                        { id: "s2", key: "qualification", label: "Qualification", sort_order: 1, is_active: true },
-                        { id: "s3", key: "tour_scheduled", label: "Tour Scheduled", sort_order: 2, is_active: true },
-                        { id: "s4", key: "tour_completed", label: "Tour Completed", sort_order: 3, is_active: true },
-                        { id: "s5", key: "decision_pending", label: "Decision Pending", sort_order: 4, is_active: true },
+                        { id: "s1", key: "lead", label: "Lead", sort_order: 0, is_active: true, grain: "family" },
+                        { id: "s2", key: "qualification", label: "Qualification", sort_order: 1, is_active: true, grain: "family" },
+                        { id: "s3", key: "tour_scheduled", label: "Tour Scheduled", sort_order: 2, is_active: true, grain: "family" },
+                        { id: "s4", key: "tour_completed", label: "Tour Completed", sort_order: 3, is_active: true, grain: "family" },
+                        { id: "s5", key: "decision_pending", label: "Decision Pending", sort_order: 4, is_active: true, grain: "family" },
                     ],
                 },
             ],
@@ -90,7 +93,7 @@ describe("businessProcessRuntimeGoldenPath", () => {
         mockResolveDept.mockResolvedValue(departmentId);
     });
 
-    it("runs lead → qualification → tour with synchronized Current Work and outcome automation", async () => {
+    it("runs lead → tour → decision with synchronized Current Work and outcome automation", async () => {
         const departmentMetadata = enrollmentDepartmentMetadata();
         const leadToQualTransition = detectBuilderStageTransition({
             previousStatusKey: "new_inquiry",
@@ -107,13 +110,14 @@ describe("businessProcessRuntimeGoldenPath", () => {
         expect(tourTransition.nextBuilderStageKey).toBe("tour_scheduled");
 
         mockInstantiate
-            .mockResolvedValueOnce({ status: "created", work_id: "work-qual" })
             .mockResolvedValueOnce({ status: "created", work_id: "work-record-outcome" })
             .mockResolvedValueOnce({ status: "deduped", work_id: "work-record-outcome", reason: "bp_runtime_fingerprint" })
             .mockResolvedValueOnce({ status: "created", work_id: "work-next" });
 
         const supabase = makeSupabaseForStageEntry();
 
+        // Part 9: qualification folded into Lead — a legacy-configured qualification stage
+        // no longer carries a default operating plan, so entering it spawns no work.
         const qualSpawn = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
             orgId,
@@ -122,7 +126,7 @@ describe("businessProcessRuntimeGoldenPath", () => {
             previousStatusKey: "new_inquiry",
             nextStatusKey: "contacted",
         });
-        expect(qualSpawn.action).toBe("spawned");
+        expect(qualSpawn.action).toBe("skipped");
 
         const tourScheduledSpawn = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
@@ -156,8 +160,23 @@ describe("businessProcessRuntimeGoldenPath", () => {
 
         const tourPlan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
 
+        // S4: move_to_stage now persists stage_key via supabase.update — provide a chainable stub.
+        // Targets read their prior value first so the transaction has an inverse; answer it.
+        // The canonical stage-move guard reads department metadata to verify the target stage is
+        // configured, so `departments` must return the process that contains decision_pending.
+        const chainableUpdate = (table: string) => {
+            const chain: Record<string, unknown> = {};
+            chain.update = () => chain;
+            chain.select = () => chain;
+            chain.eq = () => chain;
+            chain.maybeSingle = async () =>
+                table === "departments"
+                    ? { data: { metadata: enrollmentDepartmentMetadata() }, error: null }
+                    : { data: { status_key: "tour_completed", close_reason_key: null, stage_key: "tour_completed" }, error: null };
+            return chain;
+        };
         const outcomeResult = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn() } as never,
+            supabase: { from: vi.fn((table: string) => chainableUpdate(table)) } as never,
             orgId,
             userId,
             departmentId,

@@ -7,7 +7,7 @@ import PrimaryButton from "@/components/PrimaryButton";
 import SecondaryButton from "@/components/SecondaryButton";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import type { IntakeQuickReviewCaseContext } from "@/lib/forms/intakeQuickReviewPresentation";
 import { buildIntakeQuickReviewViewModel } from "@/lib/forms/intakeQuickReviewPresentation";
@@ -58,7 +58,7 @@ export function SubmissionQuickReviewModal({
     caseContext,
 }: Props) {
     const { canMutate, role } = useAdminAuth();
-    const { openDrawer } = useAdminDrawer();
+    const focusRecord = useOperatorRecordFocus();
     const canConfirm = role === "admin" || role === "ops";
     const [confirmBusy, setConfirmBusy] = useState(false);
     const [confirmErr, setConfirmErr] = useState<string | null>(null);
@@ -117,8 +117,9 @@ export function SubmissionQuickReviewModal({
 
     const openLead = () => {
         if (!viewModel.opportunityId) return;
-        openDrawer({ type: "opportunities", id: viewModel.opportunityId, opportunityWorkspaceContext: null });
-        onClose();
+        void focusRecord({ entity_type: "opportunities", entity_id: viewModel.opportunityId }).then((moved) => {
+            if (moved) onClose();
+        });
     };
 
     const overlay = "fixed inset-0 z-[120] bg-black/20 backdrop-blur-[1px]";

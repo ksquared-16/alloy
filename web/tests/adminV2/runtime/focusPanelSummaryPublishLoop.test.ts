@@ -44,13 +44,43 @@ describe("Focus Panel Summary persistence service", () => {
     });
 
     it("saveDraft PATCHes an existing draft in place", async () => {
-        const calls = mockFetch(() => ({ id: "draft-1", version: 4, doc }));
-        const state: FocusPanelSummaryLayoutState = { draft: { id: "draft-1", version: 4, doc }, published: null };
+        const bodies: unknown[] = [];
+        const calls = mockFetch((_url, init) => {
+            if (init?.body) bodies.push(JSON.parse(String(init.body)));
+            return { id: "draft-1", version: 4, doc, updatedAt: "2026-07-28T12:00:00.000Z" };
+        });
+        const state: FocusPanelSummaryLayoutState = {
+            draft: { id: "draft-1", version: 4, doc, updatedAt: "2026-07-28T11:00:00.000Z" },
+            published: null,
+        };
         const saved = await saveFocusPanelSummaryDraft(state, doc);
         expect(saved.id).toBe("draft-1");
         expect(calls).toHaveLength(1);
         expect(calls[0]!.method).toBe("PATCH");
         expect(calls[0]!.url).toContain("/api/admin/entity-layouts/draft-1");
+        expect(bodies[0]).toMatchObject({ expectedUpdatedAt: "2026-07-28T11:00:00.000Z" });
+    });
+
+    it("saveDraft rejects when caller would send a stale expectedUpdatedAt (API contract)", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => ({
+                ok: false,
+                status: 409,
+                json: async () => ({
+                    error: "This surface was updated elsewhere. Reload to continue — your newer edits were not overwritten.",
+                    code: "STALE_LAYOUT_WRITE",
+                }),
+            }) as unknown as Response),
+        );
+        const state: FocusPanelSummaryLayoutState = {
+            draft: { id: "draft-1", version: 4, doc, updatedAt: "old" },
+            published: null,
+        };
+        await expect(saveFocusPanelSummaryDraft(state, doc)).rejects.toMatchObject({
+            message: expect.stringContaining("updated elsewhere"),
+            code: "STALE_LAYOUT_WRITE",
+        });
     });
 
     it("saveDraft forks a published row to a new draft (never mutates live in place)", async () => {

@@ -4,6 +4,8 @@ import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/dr
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
 import { scheduleDrawerVmPrewarm } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
+import { isOpportunityDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
+import { prefetchOpportunityStageWork } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 
 export const QUEUE_ROW_VM_WARM_CAP = 5;
 const QUEUE_ROW_WARM_OPEN_SOURCE = "queue_row_vm_warm";
@@ -46,6 +48,20 @@ export function warmQueueRowOpportunityVm(
     })
         .then((preload) => {
             if (preload?.entityType === "opportunities") {
+                // Warm the thin stage-work resource with the VM's authoritative stage key so a
+                // click's Tier-2 backfill reuses THIS entry (no duplicate stage-work request). Only
+                // the stage-work resource is warmed on row intent — never comms threads/activity.
+                if (isOpportunityDrawerViewModelPreload(preload.preload)) {
+                    const vm = preload.preload.viewModel;
+                    if (vm.workspace.stage_work?.status === "pending") {
+                        void prefetchOpportunityStageWork({
+                            opportunityId: vm.entity.id,
+                            departmentId: vm.workspace.department_id,
+                            stageKey: vm.workspace.lifecycle_rail?.current_stage_key ?? null,
+                            stageLabel: vm.workspace.stage_context?.stage_label ?? null,
+                        });
+                    }
+                }
                 logDrawerVmRuntimeDiagnostic("queue_row_vm_warm_ready", {
                     opportunity_id: id,
                     reason,

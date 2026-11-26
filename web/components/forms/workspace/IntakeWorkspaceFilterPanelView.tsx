@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import type { IntakeWorkspaceFilterItem, IntakeWorkspaceFilterPanel } from "@/lib/forms/intakeWorkspaceFilters";
 import { SubmissionQuickReviewModal } from "@/components/forms/workspace/SubmissionQuickReviewModal";
 import {
@@ -47,15 +47,15 @@ function caseRowTestId(item: IntakeWorkspaceFilterItem): string {
 /** Inline contextual workload panel — intake-case oriented rows. */
 export function IntakeWorkspaceFilterPanelView({ panel, viewerTz, onRefresh }: Props) {
     const [quickReviewRow, setQuickReviewRow] = useState<(typeof panel.items)[number] | null>(null);
-    const { openDrawer } = useAdminDrawer();
+    const focusRecord = useOperatorRecordFocus();
 
     const closeModal = useCallback(() => setQuickReviewRow(null), []);
 
     const openLead = useCallback(
         (opportunityId: string) => {
-            openDrawer({ type: "opportunities", id: opportunityId, opportunityWorkspaceContext: null });
+            void focusRecord({ entity_type: "opportunities", entity_id: opportunityId });
         },
-        [openDrawer]
+        [focusRecord]
     );
 
     return (

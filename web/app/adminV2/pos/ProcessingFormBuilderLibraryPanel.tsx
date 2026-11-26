@@ -1,0 +1,312 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
+import { SURFACE_COMPOSER_LIBRARY_ATTR } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
+import {
+    PROCESSING_BUILDER_CANONICAL_FIELDS,
+    PROCESSING_BUILDER_GROUP_LABELS,
+    PROCESSING_BUILDER_GROUP_ORDER,
+    resolveProcessingBuilderRegistryEntry,
+    type ProcessingBuilderCanonicalField,
+    type ProcessingBuilderLibraryGroup,
+} from "@/lib/forms/processingFormBuilderLibrary";
+import type {
+    ProcessingLibraryFieldOffer,
+    ProcessingLibraryGroupOffer,
+} from "@/lib/forms/processingFormFieldLibrary";
+import type { BuilderFieldType } from "@/lib/forms/formBuilderSchema";
+import type { PeopleGroupOption } from "@/lib/forms/relationshipCollectionGroup";
+
+export type QuestionTypeItem = { type: BuilderFieldType; label: string; meta: string; category: string };
+
+type LibraryTab = "question-types" | "alloy-fields";
+
+const TIER_BADGE: Record<"required" | "recommended", string> = {
+    required: "Required for this stage",
+    recommended: "Recommended for this stage",
+};
+
+export default function ProcessingFormBuilderLibraryPanel({
+    open,
+    sectionLabel,
+    questionTypes,
+    questionCategoryLabels,
+    onPickQuestionType,
+    onPickCanonicalField,
+    onPickLibraryField,
+    fieldLibrary,
+    peopleGroups,
+    onPickPeopleGroup,
+    onClose,
+}: {
+    open: boolean;
+    sectionLabel: string;
+    questionTypes: readonly QuestionTypeItem[];
+    questionCategoryLabels: Record<string, string>;
+    onPickQuestionType: (type: BuilderFieldType) => void;
+    onPickCanonicalField: (field: ProcessingBuilderCanonicalField) => void;
+    onPickLibraryField?: (offer: ProcessingLibraryFieldOffer) => void;
+    /**
+     * Stage-derived field library from the coverage payload — the same palette
+     * `/process → requirements` reads. When absent (stage not configured yet, or the fetch
+     * failed) the panel falls back to the curated static list so it is never empty.
+     */
+    fieldLibrary?: ProcessingLibraryGroupOffer[] | null;
+    /** Repeatable people groups, from the canonical relationship definitions. */
+    peopleGroups?: readonly PeopleGroupOption[];
+    onPickPeopleGroup?: (definitionKey: string) => void;
+    onClose: () => void;
+}) {
+    const [tab, setTab] = useState<LibraryTab>("alloy-fields");
+    const [search, setSearch] = useState("");
+
+    const questionCategories = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const byCat = new Map<string, QuestionTypeItem[]>();
+        for (const item of questionTypes) {
+            if (q && !item.label.toLowerCase().includes(q) && !item.meta.toLowerCase().includes(q)) continue;
+            const list = byCat.get(item.category) ?? [];
+            list.push(item);
+            byCat.set(item.category, list);
+        }
+        return [...byCat.entries()].map(([key, items]) => ({
+            key,
+            label: questionCategoryLabels[key] ?? key,
+            items,
+        }));
+    }, [questionTypes, questionCategoryLabels, search]);
+
+    /** Stage-derived library when available — everything the process can require. */
+    const derivedGroups = useMemo(() => {
+        if (!fieldLibrary?.length) return null;
+        const q = search.trim().toLowerCase();
+        return fieldLibrary
+            .map((g) => ({
+                group: g.group,
+                label: PROCESSING_BUILDER_GROUP_LABELS[g.group] ?? g.group,
+                items: q
+                    ? g.items.filter(
+                          (i) => i.label.toLowerCase().includes(q) || i.meta.toLowerCase().includes(q)
+                      )
+                    : g.items,
+            }))
+            .filter((g) => g.items.length > 0);
+    }, [fieldLibrary, search]);
+
+    /** Curated fallback — used only until a stage is configured or if coverage could not load. */
+    const alloyGroups = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const byGroup = new Map<ProcessingBuilderLibraryGroup, ProcessingBuilderCanonicalField[]>();
+        for (const field of PROCESSING_BUILDER_CANONICAL_FIELDS) {
+            if (q && !field.pickerLabel.toLowerCase().includes(q) && !field.pickerMeta.toLowerCase().includes(q)) continue;
+            if (!resolveProcessingBuilderRegistryEntry(field)) continue;
+            const list = byGroup.get(field.group) ?? [];
+            list.push(field);
+            byGroup.set(field.group, list);
+        }
+        return PROCESSING_BUILDER_GROUP_ORDER
+            .map((group) => ({ group, label: PROCESSING_BUILDER_GROUP_LABELS[group], items: byGroup.get(group) ?? [] }))
+            .filter((g) => g.items.length > 0);
+    }, [search]);
+
+    const visiblePeople = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return (peopleGroups ?? []).filter(
+            (g) => !q || g.label.toLowerCase().includes(q) || g.asks.some((a) => a.toLowerCase().includes(q)),
+        );
+    }, [peopleGroups, search]);
+
+    if (!open || typeof document === "undefined") return null;
+
+    // Portals to `document.body`, so it escapes the Processing BOS modal shell's stacking context and
+    // must clear the shell itself (panel 97 / backdrop 96). At the old z-[70] this panel opened BEHIND
+    // the shell: "+ Add question" set state and rendered, but nothing was ever visible or clickable.
+    // Same root cause as ProcessingAlloyDialog's z-[80] → z-[110] repair (395026bf8).
+    return createPortal(
+        <div
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
+            className="pointer-events-auto fixed inset-0 flex items-start justify-center bg-alloy-midnight/20 p-4 pt-16"
+            role="dialog"
+            aria-label="Add question"
+            {...{ [SURFACE_COMPOSER_LIBRARY_ATTR]: true }}
+            onClick={onClose}
+        >
+            <div
+                className="flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-xl"
+                data-testid="processing-form-builder-library"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <header className="shrink-0 border-b border-alloy-stone/10 px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-sm font-semibold text-alloy-midnight">{sectionLabel}</p>
+                            <p className="mt-0.5 text-[11px] text-alloy-midnight/50">Add a question type or pick an existing Alloy field.</p>
+                        </div>
+                        <button type="button" onClick={onClose} className="rounded p-1 text-alloy-midnight/40 hover:bg-alloy-stone/10" aria-label="Close library" data-library-close>
+                            ✕
+                        </button>
+                    </div>
+                    <div className="mt-3 flex gap-1 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.08] p-0.5">
+                        <button
+                            type="button"
+                            data-library-tab="alloy-fields"
+                            onClick={() => setTab("alloy-fields")}
+                            className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${tab === "alloy-fields" ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/55"}`}
+                        >
+                            Alloy fields
+                        </button>
+                        <button
+                            type="button"
+                            data-library-tab="question-types"
+                            onClick={() => setTab("question-types")}
+                            className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${tab === "question-types" ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/55"}`}
+                        >
+                            Answer types
+                        </button>
+                    </div>
+                </header>
+                <div className="shrink-0 border-b border-alloy-stone/10 px-4 py-2">
+                    <input
+                        type="search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search…"
+                        className="w-full rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-[12px]"
+                        data-testid="form-builder-library-search"
+                    />
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3" data-library-scroll>
+                    {tab === "alloy-fields" ? (
+                        derivedGroups ? (
+                            derivedGroups.length === 0 ? (
+                                <p className="px-2 py-4 text-[12px] text-alloy-midnight/45">No fields match your search.</p>
+                            ) : (
+                                derivedGroups.map((group) => (
+                                    <section key={group.group} className="mb-4" data-library-category={group.group}>
+                                        <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">{group.label}</p>
+                                        <ul className="space-y-0.5">
+                                            {group.items.map((item) =>
+                                                item.captureUnsupported ? (
+                                                    <li key={item.id}>
+                                                        <div
+                                                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left opacity-60"
+                                                            data-library-unavailable={item.id}
+                                                            title={item.meta}
+                                                        >
+                                                            <span className="text-[11px] text-alloy-stone/50">—</span>
+                                                            <span className="flex-1 text-[12px] text-alloy-midnight/55">{item.label}</span>
+                                                            <span className="shrink-0 text-[9px] text-alloy-midnight/40">Not form-capturable</span>
+                                                        </div>
+                                                    </li>
+                                                ) : (
+                                                    <li key={item.id}>
+                                                        <button
+                                                            type="button"
+                                                            data-library-item={`alloy-${item.id}`}
+                                                            data-library-item-tier={item.tier ?? undefined}
+                                                            onClick={() => onPickLibraryField?.(item)}
+                                                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-alloy-bend-pine/[0.06]"
+                                                        >
+                                                            <span className="text-[11px] text-alloy-bend-pine">+</span>
+                                                            <span className="flex-1 truncate text-[12px] text-alloy-midnight/80">{item.label}</span>
+                                                            {item.tier ? (
+                                                                <span
+                                                                    className={`shrink-0 rounded-full px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide ${
+                                                                        item.tier === "required"
+                                                                            ? "bg-alloy-ember/[0.10] text-alloy-ember"
+                                                                            : "bg-alloy-bend-pine/[0.10] text-alloy-bend-pine"
+                                                                    }`}
+                                                                    title={TIER_BADGE[item.tier]}
+                                                                >
+                                                                    {item.tier}
+                                                                </span>
+                                                            ) : null}
+                                                        </button>
+                                                    </li>
+                                                )
+                                            )}
+                                        </ul>
+                                    </section>
+                                ))
+                            )
+                        ) : alloyGroups.length === 0 ? (
+                            <p className="py-6 text-center text-[12px] text-alloy-midnight/45">No Alloy fields match your search.</p>
+                        ) : (
+                            alloyGroups.map((group) => (
+                                <section key={group.group} className="mb-4">
+                                    <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{group.label}</h3>
+                                    <ul className="space-y-1">
+                                        {group.items.map((item) => (
+                                            <li key={item.id}>
+                                                <button
+                                                    type="button"
+                                                    data-library-item={`alloy-${item.id}`}
+                                                    onClick={() => onPickCanonicalField(item)}
+                                                    className="flex w-full flex-col rounded-lg border border-alloy-stone/15 px-3 py-2 text-left hover:border-alloy-bend-pine/30 hover:bg-alloy-bend-pine/[0.04]"
+                                                >
+                                                    <span className="text-[12px] font-semibold text-alloy-midnight">{item.pickerLabel}</span>
+                                                    <span className="text-[10px] text-alloy-midnight/45">{item.pickerMeta}</span>
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            ))
+                        )
+                    ) : questionCategories.length === 0 && !visiblePeople.length ? (
+                        <p className="py-6 text-center text-[12px] text-alloy-midnight/45">No question types match your search.</p>
+                    ) : (
+                        <>
+                        {visiblePeople.length && onPickPeopleGroup ? (
+                            <section className="mb-4" data-library-category="people">
+                                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">People — repeatable</h3>
+                                <ul className="space-y-1">
+                                    {visiblePeople.map((g) => (
+                                        <li key={g.definitionKey}>
+                                            <button
+                                                type="button"
+                                                data-library-item={`people-${g.definitionKey}`}
+                                                onClick={() => onPickPeopleGroup(g.definitionKey)}
+                                                className="flex w-full flex-col rounded-lg border border-alloy-stone/15 px-3 py-2 text-left hover:border-alloy-bend-pine/30 hover:bg-alloy-bend-pine/[0.04]"
+                                            >
+                                                <span className="text-[12px] font-semibold text-alloy-midnight">{g.label}</span>
+                                                <span className="text-[10px] text-alloy-midnight/45">
+                                                    {g.repeats ? "+ Add another · " : ""}
+                                                    {g.asks.join(", ")}
+                                                </span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        ) : null}
+                        {questionCategories.map((cat) => (
+                            <section key={cat.key} className="mb-4">
+                                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{cat.label}</h3>
+                                <ul className="space-y-1">
+                                    {cat.items.map((item) => (
+                                        <li key={item.type}>
+                                            <button
+                                                type="button"
+                                                data-library-item={item.type}
+                                                onClick={() => onPickQuestionType(item.type)}
+                                                className="flex w-full flex-col rounded-lg border border-alloy-stone/15 px-3 py-2 text-left hover:border-alloy-bend-pine/30 hover:bg-alloy-bend-pine/[0.04]"
+                                            >
+                                                <span className="text-[12px] font-semibold text-alloy-midnight">{item.label}</span>
+                                                <span className="text-[10px] text-alloy-midnight/45">{item.meta}</span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        ))}
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+}

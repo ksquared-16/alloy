@@ -1,0 +1,67 @@
+{
+  "trusted_host_action_id": "tha_bfe5e23038bc1b",
+  "query_hash": "7bfba3b9199ef033c0b695704fbd76df6a97178e4d0277e22daf6ae1ecbf695e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-25T16:55:32.989Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_bfe5e23038bc1b",
+    "query_hash": "7bfba3b9199ef033c0b695704fbd76df6a97178e4d0277e22daf6ae1ecbf695e",
+    "authorization_id": "grnt_4185d51446e8467e",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-25T16:55:38.199Z",
+    "question_ids": [
+      "webhook_certification"
+    ],
+    "questions": {
+      "webhook_certification": {
+        "question_id": "webhook_certification",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "event_id_prefix": "evt_1UJbjOAN…",
+                "event_type": "account.updated",
+                "processor": "stripe",
+                "connected_account_prefix": "acct_1UIV5…",
+                "org_attributed": true,
+                "org_matches_merchant": true,
+                "disposition": "applied",
+                "disposition_detail": "merchant readiness is now restricted, bank restricted",
+                "received_at": "2026-09-25 16:12:15.020565+00",
+                "processed_at": "2026-09-25 16:12:15.7+00",
+                "provider_created_at": "2026-09-25 16:12:14+00"
+              },
+              {
+                "event_id_prefix": "evt_1UJbkKAN…",
+                "event_type": "account.updated",
+                "processor": "stripe",
+                "connected_account_prefix": "acct_1UIV5…",
+                "org_attributed": true,
+                "org_matches_merchant": true,
+                "disposition": "applied",
+                "disposition_detail": "merchant readiness is now ready, bank ready",
+                "received_at": "2026-09-25 16:13:12.41504+00",
+                "processed_at": "2026-09-25 16:13:12.883+00",
+                "provider_created_at": "2026-09-25 16:13:12+00"
+              }
+            ],
+            "distinct_event_ids": 2,
+            "total_rows": 2,
+            "max_rows_per_event_id": 1,
+            "merchant_readiness": "ready",
+            "merchant_checked_at": "2026-09-25 16:38:19.839+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

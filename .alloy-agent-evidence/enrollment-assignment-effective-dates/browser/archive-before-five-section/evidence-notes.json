@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-08-03T21:51:00.000Z",
+  "phase": "before_configuration_unblock",
+  "opportunityId": "df771481-841f-4329-b7bb-c0a03d9fb621",
+  "familyName": "Kurzman",
+  "url": "http://127.0.0.1:3013/workspace/work-unit/new-leads?subject_id=df771481-841f-4329-b7bb-c0a03d9fb621",
+  "hasAssignmentsCard": false,
+  "hasAssignmentSections": false,
+  "visibleCardKeys": ["current_work", "children", "household", "billing_preview"],
+  "missingCardKeys": ["scheduling"],
+  "blocker": "Firefly published Enrollment Focus Panel Summary parks scheduling/Assignments as Linked and omits it from visible layout areas. Published LayoutDoc overrides code defaults.",
+  "files": [
+    "00-before-authenticated-work-unit.png",
+    "00-before-assignments-linked-omitted.png",
+    "created-lead.json",
+    "focus-panel-dump.json"
+  ]
+}

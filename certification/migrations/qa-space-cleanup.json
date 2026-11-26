@@ -1,0 +1,141 @@
+{
+  "steps": [
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "afc5b822-1233-41c0-85eb-a26307718e78",
+      "room": "ba05df72-53db-4e56-89aa-d45d62a01027",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "8b78dbc7-f661-4b6b-b92b-5e2f2dd224ba",
+      "room": "92207313-d1cc-4141-b56b-118b3c3bc644",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "bfcb9447-2148-44e0-8986-bea5678cc2e3",
+      "room": "7e78c696-c93c-41fc-9373-12c24d76f50e",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "3ad703ac-75d9-4211-9ab7-6173e4ae57a4",
+      "room": "62a8916c-de49-43dd-8bce-2dd5441a1651",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "1b063af9-eb96-4110-812e-662acf7c6d13",
+      "room": "db53757a-9eab-44de-a2df-fd1466ea4957",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "64ffd96e-d3eb-4afa-81e9-847598452c48",
+      "room": "1d15889a-f6d4-4f03-9284-894def33c72a",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "64fd8013-7bb5-4121-89c8-38119c79fcc5",
+      "room": "e54a9d97-3c68-4a57-9ea3-530688f30eaf",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "capacity-rules",
+      "ruleId": "907409d4-ef46-4580-ae5b-68efb2477418",
+      "room": "1a1ad289-7d15-4178-8fb6-737e888f4211",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "ratio-rules",
+      "ruleId": "ea240f41-3c6b-4efe-857d-60ed5b69f56e",
+      "room": "62a8916c-de49-43dd-8bce-2dd5441a1651",
+      "status": 200
+    },
+    {
+      "step": "retire_rule",
+      "route": "ratio-rules",
+      "ruleId": "dd0f771b-9826-49db-ba07-23023fd28f04",
+      "room": "e54a9d97-3c68-4a57-9ea3-530688f30eaf",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "92207313-d1cc-4141-b56b-118b3c3bc644",
+      "label": "QA Toddler 73122",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "62a8916c-de49-43dd-8bce-2dd5441a1651",
+      "label": "QA Group A 58206",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "db53757a-9eab-44de-a2df-fd1466ea4957",
+      "label": "QA Group B 58206",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "e54a9d97-3c68-4a57-9ea3-530688f30eaf",
+      "label": "QA Group A 06000",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "1a1ad289-7d15-4178-8fb6-737e888f4211",
+      "label": "QA Group B 06000",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "ba05df72-53db-4e56-89aa-d45d62a01027",
+      "label": "QA Room 73122",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "50bceb7d-fed5-418d-9550-faa2fe5a549e",
+      "label": "QA Playground 73122",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "7e78c696-c93c-41fc-9373-12c24d76f50e",
+      "label": "QA Room 58206",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "6056e4f3-125a-46e4-94a5-01a4b00244b1",
+      "label": "QA Yard 58206",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "1d15889a-f6d4-4f03-9284-894def33c72a",
+      "label": "QA Room 06000",
+      "status": 200
+    },
+    {
+      "step": "deactivate",
+      "id": "88bdec35-446a-4115-9f02-57135baad1f8",
+      "label": "QA Yard 06000",
+      "status": 200
+    }
+  ],
+  "after": []
+}

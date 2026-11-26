@@ -72,6 +72,17 @@ function checkContext(action: RegisteredAction, invocation: ActionInvocation): A
     return null;
 }
 
+/** The registered action's own site authority, as an `ActionResult` refusal (403) or null. */
+export async function authorizeActionSites(
+    action: RegisteredAction,
+    deps: ActionHandlerDeps
+): Promise<ActionResult | null> {
+    if (!action.authorizeSites) return null;
+    const verdict = await action.authorizeSites(deps);
+    if (verdict.allowed) return null;
+    return contextError(403, verdict.message, verdict.code);
+}
+
 function buildDeps(
     supabase: SupabaseClient,
     ctx: ActionRuntimeContext,
@@ -152,6 +163,14 @@ export async function runRegisteredAction(
         };
     }
     const deps = buildDeps(supabase, ctx, invocation, validated.value);
+
+    /*
+     * SITE AUTHORITY, BEFORE ANYTHING READS OR WRITES ON THE CALLER'S BEHALF. An action that writes at a
+     * site declares how to resolve those sites; a restricted actor who does not hold every one is refused
+     * here — in preview as in execute — so no handler runs and nothing is written.
+     */
+    const siteFail = await authorizeActionSites(action, deps);
+    if (siteFail) return siteFail;
 
     if (mode === "preview") {
         const eligibility = await action.resolveEligibility(deps);

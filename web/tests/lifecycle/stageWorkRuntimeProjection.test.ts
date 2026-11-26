@@ -167,15 +167,16 @@ describe("filterResidualOperationalTasks", () => {
 });
 
 describe("buildStageWorkOutcomeAutomationPreview", () => {
-    it("projects outcome automation labels for review lead", () => {
+    it("projects outcome automation labels for Contact Family from operating plan", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead");
         expect(plan).not.toBeNull();
         const preview = buildStageWorkOutcomeAutomationPreview({
             plan: plan!,
-            templateKey: "review_lead",
+            templateKey: "contact_family",
         });
-        expect(preview.some((line) => line.outcome_label === "Qualified")).toBe(true);
-        expect(preview.some((line) => line.effect_label.toLowerCase().includes("qualification"))).toBe(true);
+        expect(preview.some((line) => line.outcome_label === "Reached Family")).toBe(true);
+        expect(preview.some((line) => line.outcome_key === "not_interested")).toBe(true);
+        expect(preview.some((line) => line.outcome_key === "interested")).toBe(true);
     });
 });
 
@@ -188,11 +189,24 @@ describe("buildQueueCurrentWorkSummary", () => {
         expect(summary?.state).toBe("open");
     });
 
+    it("formats queue current work line with progress hint", () => {
+        const line = formatQueueCurrentWorkLine({
+            label: "Review Lead",
+            state: "open",
+            due_label: null,
+            progress_hint: "1 of 3 complete",
+            blocker_hint: null,
+        });
+        expect(line).toBe("Review Lead · 1 of 3 complete");
+    });
+
     it("formats queue current work line", () => {
         const line = formatQueueCurrentWorkLine({
             label: "Review Lead",
             state: "open",
             due_label: "Due today",
+            progress_hint: null,
+            blocker_hint: null,
         });
         expect(line).toContain("Review Lead");
         expect(line).toContain("Open");
@@ -204,6 +218,8 @@ describe("buildQueueCurrentWorkSummary", () => {
             label: "Contact Family",
             state: "planned",
             due_label: null,
+            progress_hint: null,
+            blocker_hint: null,
         });
         expect(line).toContain("Contact Family");
         expect(line).toContain("Planned");
@@ -251,11 +267,18 @@ describe("buildQueueCurrentWorkSummary", () => {
 });
 
 describe("Work Runtime Convergence integration contracts", () => {
-    it("compose wires stage_work_runtime and filters follow-ups", () => {
+    it("compose wires stage_work_runtime and keeps stage-work in Activity Work Items", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("projectStageWorkRuntime");
+        const deferred = read("lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource.ts");
+        // Ownership moved: the stage-work projection is resolved through the thin shared slice
+        // (which internally runs projectStageWorkRuntime). Activity Work Items uses unfiltered
+        // tasks_raw so Contact Family shares identity with global Work Items.
+        expect(deferred).toContain("resolveOpportunityStageWorkSlice");
         expect(compose).toContain("stage_work_runtime");
-        expect(compose).toContain("filterResidualOperationalTasks");
+        expect(compose).toContain("tasks_raw");
+        expect(compose).not.toContain("filterResidualOperationalTasks");
+        const slice = read("lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice.ts");
+        expect(slice).toContain("projectStageWorkRuntime");
     });
 
     it("default lead layout uses Current Work widget", () => {
@@ -270,12 +293,6 @@ describe("Work Runtime Convergence integration contracts", () => {
         expect(planView).toContain('widgetKey === "current_work"');
         expect(planView).toContain("LayoutRuntimeCurrentWorkWidget");
         expect(planView).toContain("LayoutRuntimeFollowUpsWidget");
-    });
-
-    it("OpportunityDrawerOverviewBody delegates work to layout runtime widget", () => {
-        const body = read("components/admin/vmDrawer/OpportunityDrawerOverviewBody.tsx");
-        expect(body).not.toContain("WorkIntentRuntimeCard");
-        expect(body).toContain("DrawerLayoutRuntimeOverviewBody");
     });
 
     it("attention guidance resolves stage-plan reasons", () => {

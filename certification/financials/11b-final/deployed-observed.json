@@ -1,0 +1,57 @@
+{
+  "build": "deployed",
+  "buildInfo": {
+    "gitSha": "e29c223a8014e8dfccc5a013179fefcd793b9368",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1113 from ksquared-16/agent/financials-11a-regression-repair\n\nFinancials 11B — exception lifecycle repair (A-K closure)",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-mg4g7mde1-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_AiNurCNXYJ3aUdYXd5fKwGs8fRkX",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "accountingChapterOpen": true,
+  "accounting": {
+    "chapterBody": true,
+    "calendarPanel": true,
+    "glMappingPanel": true,
+    "summary": "CALENDAR Fiscal 2026 SHAPE Calendar month STATUS Active CURRENT PERIOD September 2026",
+    "periodTable": true,
+    "periodRowCount": 25,
+    "closeControls": 11,
+    "adoptOffered": false,
+    "lifecycleNote": "Closing a period is final — reopening one is not an action in Alloy. Posting into a closed period is already refused, and a period that has posted activity cannot have its dates changed.",
+    "mentionsCurrent": true,
+    "mentionsOpenClosed": true,
+    "headings": [
+      "GL Codes",
+      "Where each charge category posts",
+      "Accounting calendar"
+    ]
+  },
+  "accountingApi": {
+    "status": 200,
+    "calendars": 1,
+    "periods": 12,
+    "statuses": [
+      "open",
+      "closed"
+    ],
+    "today": "2026-09-20",
+    "current": 0
+  },
+  "generationPreview": {
+    "status": 200,
+    "ok": true,
+    "summary": null,
+    "changes": null,
+    "error": null
+  },
+  "prepaid": {
+    "cardPresent": true,
+    "availableShown": true,
+    "available": "$125.00",
+    "balance": "$1,412.87",
+    "separateFigures": true
+  }
+}

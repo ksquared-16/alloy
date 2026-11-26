@@ -11,6 +11,10 @@
  */
 
 import { isKnownActionKey, resolveActionKey } from "@/lib/adminV2/actions/actionRegistry";
+import {
+    isNonRunnableCatalogCapability,
+    tryResolvePlatformCapability,
+} from "@/lib/platform/commands/capabilityRegistry";
 import { isLogicalActionPlacement } from "@/lib/platform/commands/invocationContext";
 
 export type ConfiguredActionValidation = {
@@ -19,6 +23,8 @@ export type ConfiguredActionValidation = {
     /** "registered" = executable handler; "known_metadata_only" = catalog stub; "unknown" = invalid config. */
     resolution: "registered" | "known_metadata_only" | "unknown";
     reason?: string;
+    /** P0.S1 capability maturity when classified; absent when unknown to capability spine. */
+    capabilityMaturity?: string;
 };
 
 function isStrictEnv(): boolean {
@@ -29,15 +35,24 @@ function isStrictEnv(): boolean {
 /** Validate a single configured action key. */
 export function validateConfiguredActionKey(actionKey: string): ConfiguredActionValidation {
     const resolution = resolveActionKey(actionKey);
+    const capability = tryResolvePlatformCapability(actionKey);
+    const capabilityMaturity =
+        capability.status === "known" ? capability.capability.maturity : undefined;
+
     if (resolution.status === "unknown") {
         return {
             actionKey,
             ok: false,
             resolution: "unknown",
             reason: `Configured action references unknown key "${actionKey}".`,
+            capabilityMaturity,
         };
     }
-    return { actionKey, ok: true, resolution: resolution.status };
+
+    // Keep ok:true for historically known keys (including placeholders) so existing
+    // placements do not fail assertConfiguredActionKeys. Presentation uses
+    // partitionConfiguredActionKeys / catalog filters for runnable honesty.
+    return { actionKey, ok: true, resolution: resolution.status, capabilityMaturity };
 }
 
 /**
@@ -117,8 +132,13 @@ export function partitionConfiguredActionKeys(actionKeys: readonly string[]): {
     const renderable: string[] = [];
     const disabled: string[] = [];
     for (const key of actionKeys) {
-        if (isKnownActionKey(key)) renderable.push(key);
-        else disabled.push(key);
+        // Preserve adapted/legacy/executable production paths that are still "known".
+        // Only suppress identities the capability spine marks non-runnable, plus unknowns.
+        if (isKnownActionKey(key) && !isNonRunnableCatalogCapability(key)) {
+            renderable.push(key);
+        } else {
+            disabled.push(key);
+        }
     }
     return { renderable, disabled };
 }

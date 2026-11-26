@@ -21,9 +21,20 @@ const SITE_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const SITE_OPP = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const VERTICAL = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
+const CATEGORY_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+/** Minimal supabase stub — resolves location_program_categories key lookups to CATEGORY_ID. */
+function categoryLookupSupabase(found: boolean = true) {
+    const chain: Record<string, unknown> = {};
+    chain.eq = () => chain;
+    chain.maybeSingle = async () => ({ data: found ? { id: CATEGORY_ID } : null });
+    return { from: () => ({ select: () => chain }) } as never;
+}
+
 describe("resolveIntakeChildOcmFields", () => {
-    it("uses child site when provided", () => {
-        const r = resolveIntakeChildOcmFields({
+    it("uses child site when provided", async () => {
+        const r = await resolveIntakeChildOcmFields(categoryLookupSupabase(), {
+            orgId: "org-1",
             child: { first_name: "Amy", location_id: SITE_A, program_room_cohort_key: "infant" },
             opportunityLocationId: SITE_OPP,
             linkDefaultLocationId: SITE_B,
@@ -33,8 +44,9 @@ describe("resolveIntakeChildOcmFields", () => {
         expect(r.program_room_cohort_key).toBe("infant");
     });
 
-    it("falls back to opportunity location when child site missing", () => {
-        const r = resolveIntakeChildOcmFields({
+    it("falls back to opportunity location when child site missing", async () => {
+        const r = await resolveIntakeChildOcmFields(categoryLookupSupabase(), {
+            orgId: "org-1",
             child: { first_name: "Amy", program_room_cohort_key: "toddler" },
             opportunityLocationId: SITE_OPP,
             linkDefaultLocationId: SITE_B,
@@ -43,12 +55,36 @@ describe("resolveIntakeChildOcmFields", () => {
         expect(r.placement_scope.location_source).toBe("opportunity_fallback");
     });
 
-    it("does not copy cohort across children implicitly", () => {
-        const a = resolveIntakeChildOcmFields({
+    it("resolves an incoming program key to the category FK by org+site+key", async () => {
+        const r = await resolveIntakeChildOcmFields(categoryLookupSupabase(), {
+            orgId: "org-1",
+            child: { first_name: "Amy", location_id: SITE_A, program_key: "infant" },
+        });
+        expect(r.program_category_id).toBe(CATEGORY_ID);
+    });
+
+    it("passes a category uuid through and yields null when the key cannot resolve", async () => {
+        const direct = await resolveIntakeChildOcmFields(categoryLookupSupabase(false), {
+            orgId: "org-1",
+            child: { first_name: "Amy", location_id: SITE_A, program_key: CATEGORY_ID },
+        });
+        expect(direct.program_category_id).toBe(CATEGORY_ID);
+
+        const unresolved = await resolveIntakeChildOcmFields(categoryLookupSupabase(false), {
+            orgId: "org-1",
+            child: { first_name: "Amy", location_id: SITE_A, program_key: "not-configured" },
+        });
+        expect(unresolved.program_category_id).toBeNull();
+    });
+
+    it("does not copy cohort across children implicitly", async () => {
+        const a = await resolveIntakeChildOcmFields(categoryLookupSupabase(), {
+            orgId: "org-1",
             child: { first_name: "A", location_id: SITE_A, program_room_cohort_key: "infant" },
             opportunityLocationId: SITE_OPP,
         });
-        const b = resolveIntakeChildOcmFields({
+        const b = await resolveIntakeChildOcmFields(categoryLookupSupabase(), {
+            orgId: "org-1",
             child: { first_name: "B", location_id: SITE_B, program_room_cohort_key: "toddler" },
             opportunityLocationId: SITE_OPP,
         });
@@ -176,8 +212,9 @@ describe("placement candidate site from OCM", () => {
 });
 
 describe("buildOcmInsertFromIntakeChildFields", () => {
-    it("records placement_scope in metadata", () => {
-        const resolved = resolveIntakeChildOcmFields({
+    it("records placement_scope in metadata", async () => {
+        const resolved = await resolveIntakeChildOcmFields(categoryLookupSupabase(), {
+            orgId: "org",
             child: { first_name: "X", location_id: SITE_A },
             opportunityLocationId: SITE_OPP,
         });

@@ -8,6 +8,7 @@ import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
 import { nextQueueRecordBlockId, nextQueueRecordColumnId, nextQueueRecordFieldId } from "@/lib/layout/queueRecordLayoutIds";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
 import { queueRecordWidthToCss } from "@/lib/layout/queueRecordLayoutWidth";
+import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
 
 export type QueueRecordFieldDisplay =
     | "text"
@@ -36,6 +37,9 @@ export type QueueRecordScope =
 
 export type QueueRecordFieldEmphasis = "default" | "title";
 
+/** Name presentation for person / child / family name fields on queue rows. */
+export type QueueRecordNameDisplay = "full_name" | "first_name";
+
 export type QueueRecordFieldConfig = {
     id: string;
     fieldKey: string;
@@ -44,6 +48,10 @@ export type QueueRecordFieldConfig = {
     showLabel?: boolean;
     /** Title emphasis for household/primary identity fields in the row. */
     emphasis?: QueueRecordFieldEmphasis;
+    /** How to render resolved name values (full name vs first name only). */
+    nameDisplay?: QueueRecordNameDisplay;
+    /** Configurable collection presentation (children, future parents/siblings/etc.). */
+    collectionPresentation?: CollectionFieldPresentationConfig;
     icon?: LayoutAdornmentIcon;
     display: QueueRecordFieldDisplay;
     inlineWithPrevious?: boolean;
@@ -103,17 +111,146 @@ export type QueueRecordColumnConfig = {
      * queue row runtime renderer (deferred — runtime evaluation wired in V2).
      */
     visibleWhen?: LayoutCondition;
+    /**
+     * Stacked-section index within the condensed row (Presentation Runtime V3).
+     * Columns sharing a `rowIndex` render on the same horizontal line; higher
+     * indices stack below. **Back-compat: absent = 0** (single flat strip, the
+     * legacy behavior). The Queue Row Builder authors this; the live /work-unit
+     * runtime does not consume stacking yet (presentation-runtime-ready — see
+     * queue row platform doc), so the builder preview labels it accordingly.
+     */
+    rowIndex?: number;
+    /**
+     * Operator-assigned canvas slot (Primary / Secondary / Supporting / Right / Bottom).
+     * Runtime maps this onto the compact row anatomy; absent = legacy zone-default placement.
+     */
+    builderSlot?: "identity" | "groupCount" | "attention" | "status" | "work";
 };
 
 import type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";
 
 export type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";
 
+/**
+ * Queue Row Surface Variant — a configured presentation of the ONE Queue Row runtime for a
+ * specific operational context (Default / Tour / Waitlist / Enrolling / custom). A variant reuses
+ * the existing column model verbatim (so rowIndex stacking + per-column/field `visibleWhen` come
+ * for free); it adds only an applicability rule, an optional sort intent, and optional per-variant
+ * fixed controls. This is NOT a new persistence model — it extends V3. The top-level `columns` is
+ * the Default variant; `variants` holds the additional context-specific ones.
+ */
+export type QueueRowVariantGrain = "case" | "child" | "candidate";
+
+/**
+ * Applicability rule. Every PRESENT clause must match (AND); an absent clause is unconstrained; an
+ * absent/empty rule is a catch-all.
+ *
+ * `conditions` is **reserved** — path-based LayoutConditions for a future phase. They are **not**
+ * evaluated at runtime today (`queueRowVariantRuleMatches` ignores them) and are stripped on layout
+ * normalize/save so configs cannot imply behavior that does not exist.
+ */
+export type QueueRowVariantRule = {
+    stage_key?: string[];
+    status_key?: string[];
+    grain?: QueueRowVariantGrain[];
+    work_view_id?: string[];
+    work_view_key?: string[];
+    process_key?: string[];
+    row_type?: string[];
+    /** Reserved — not evaluated; stripped on normalize. */
+    conditions?: LayoutCondition[];
+};
+
+/**
+ * Which subject a variant anchors the row on (decoupled from grain). Drives the primary subject +
+ * supporting context the runtime feeds into the compact slots (see resolveQueueRowSubjectFocus).
+ * `household` = family/case; `active_child` = highlighted child; `placement_candidate_child` =
+ * waitlist candidate; `opportunity` = the case shell. Open string for custom/future foci.
+ */
+export type QueueRowSubjectFocus =
+    | "household"
+    | "active_child"
+    | "placement_candidate_child"
+    | "opportunity"
+    | (string & {});
+
+/**
+ * Server-owned sort intent — drives the Work View `sort_v1` query for the WHOLE queue (decision:
+ * server-driven sorting, never a page-local re-sort). Supplied by the queue-active variant.
+ */
+export type QueueRowVariantSort = {
+    key: string;
+    direction: "asc" | "desc";
+    nulls?: "first" | "last";
+};
+
+export type QueueRowVariantGroupBy =
+    | "none"
+    | "program"
+    | "room"
+    | "desired_start_date"
+    | "age_band"
+    | "location";
+
+/** Ordered queue grouping criterion (persisted on variant). */
+export type QueueRowVariantGroupCriterion = {
+    key: Exclude<QueueRowVariantGroupBy, "none">;
+};
+
+/** Ordered queue sort criterion (persisted on variant). */
+export type QueueRowVariantSortCriterion = {
+    key: string;
+    direction: "asc" | "desc";
+    nulls?: "first" | "last";
+};
+
+/** Waitlist placement ranking criterion — presentation config only. */
+export type QueueRowPlacementRankingCriterion = {
+    /** Stable catalog id (e.g. waitlist_rank). */
+    criterionId: string;
+    /** Registry field key when available. */
+    fieldKey: string;
+    enabled: boolean;
+    direction: "asc" | "desc";
+    /** Optional weight when scoring is supported for this signal. */
+    weight?: number;
+};
+
+export type QueueRowVariant = {
+    id: string;
+    label: string;
+    /** Lower priority is evaluated first; the first matching variant wins. */
+    priority: number;
+    /** Omitted/empty → always matches (catch-all). Default variant uses the top-level columns. */
+    appliesWhen?: QueueRowVariantRule;
+    /** Which subject the row anchors on. Omitted → resolves to "household". */
+    subjectFocus?: QueueRowSubjectFocus;
+    /** Server-owned sort intent for the queue (drives sort_v1). Legacy single value. */
+    sort?: QueueRowVariantSort;
+    /** Queue presentation grouping intent. Legacy single value. */
+    groupBy?: QueueRowVariantGroupBy;
+    /** Ordered grouping criteria (preferred over legacy `groupBy`). */
+    groupByCriteria?: QueueRowVariantGroupCriterion[];
+    /** Ordered sort criteria (preferred over legacy `sort`). */
+    sortCriteria?: QueueRowVariantSortCriterion[];
+    /** Waitlist placement ranking model — presentation only. */
+    placementRanking?: QueueRowPlacementRankingCriterion[];
+    columns: QueueRecordColumnConfig[];
+    fixedControls?: QueueRecordFixedControls;
+};
+
 export type QueueRecordLayoutConfigV3 = {
     variant: "operational-row";
     version: 3;
     columns: QueueRecordColumnConfig[];
     fixedControls: QueueRecordFixedControls;
+    /**
+     * Optional Queue Row Surface Variants. Absent → today's single-layout behavior (the top-level
+     * `columns` render for every row). Present → the runtime resolves the first matching variant
+     * per row (see resolveQueueRowVariant) and renders the SAME CondensedQueueRow with that
+     * variant's columns; no match falls back to the top-level Default.
+     */
+    variants?: QueueRowVariant[];
 };
 
 /** Editor and runtime share the same v3 document shape. */
@@ -558,19 +695,19 @@ export function defaultWaitlistQueueLayoutV3(): QueueRecordLayoutConfigV3 {
             },
             {
                 id: nextQueueRecordFieldId("wl-schedule"),
-                fieldKey: "inquiry_child.desired_schedule_type",
+                fieldKey: "inquiry_child.schedule_type",
                 label: "Schedule",
                 display: "muted",
                 showLabel: true,
-                visibleWhen: { type: "exists", path: "inquiry_child.desired_schedule_type" },
+                visibleWhen: { type: "exists", path: "inquiry_child.schedule_type" },
             },
             {
                 id: nextQueueRecordFieldId("wl-start-date"),
-                fieldKey: "child.desired_start_date",
+                fieldKey: "child.start_date",
                 label: "Desired start",
                 display: "date",
                 showLabel: true,
-                visibleWhen: { type: "exists", path: "child.desired_start_date" },
+                visibleWhen: { type: "exists", path: "child.start_date" },
             },
         ];
     }

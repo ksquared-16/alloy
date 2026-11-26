@@ -1,0 +1,72 @@
+{
+  "build": {
+    "gitSha": "00602d91657266d77f52cf2e95f9a6f6906f8c95",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1166 from ksquared-16/agent/config-organization\n\nGoverned Scheduled Work V1 — clock certification evidence and environment reload",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-mbk2h4nv6-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_5Le7b1xn6rmh4TEJG3vVTpCEeCkt",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "slice2Repair": "41a17c2a4aaef56fc4d81bf28f0ea448c9635bce",
+  "candidateRows": 21,
+  "openedOnRowIndex": 0,
+  "detailOpened": true,
+  "charge": {
+    "chargeId": "9329de06-80c2-4bc6-81e7-4d5124bc5512",
+    "label": "Late pickup",
+    "status": "Draft",
+    "attribution": "Certa Certhouse · Certhouse Family",
+    "gross": "Gross charge $25.00",
+    "net": "Net obligation $25.00",
+    "outstanding": "Outstanding $0.00",
+    "responsibilityParty": null,
+    "responsibilityUnassigned": null,
+    "expectedFundingLine": null,
+    "domArrangementShares": 1,
+    "fundingTypeControls": 1,
+    "fundingAgencyControls": 1,
+    "nativeSelectsInDetail": 0
+  },
+  "projection": {
+    "status": 200,
+    "chargeId": "9329de06-80c2-4bc6-81e7-4d5124bc5512",
+    "childName": "Certa Certhouse",
+    "chargeStatus": "draft",
+    "responsibilityParties": [],
+    "accountArrangementPresent": true,
+    "arrangementId": "fbe49182-2a41-4bbc-bac3-6bddc52842d2",
+    "arrangementEffectiveStart": "2026-09-20",
+    "arrangementShares": 1,
+    "shares": [
+      {
+        "id": "bb4aa5ca-d2e0-4c14-97dd-8903725a6a1b",
+        "name": "Cert Certhouse",
+        "method": "fixed",
+        "amountCents": 3300,
+        "percentBasisPoints": null,
+        "expectedFunding": []
+      }
+    ],
+    "topLevelExpectedFunding": []
+  },
+  "collapsed": {
+    "sharePanels": 1,
+    "noneLine": "Expected funding — none.",
+    "fundingRows": 0,
+    "manageButtons": 1
+  },
+  "openedEditor": true,
+  "classification": "RESOLVED_MOUNTED — shares exist and the controls render",
+  "fundingControls": {
+    "typeCanonical": true,
+    "typeOptions": [
+      "Government subsidy",
+      "Employer sponsorship",
+      "Scholarship",
+      "Corporate program",
+      "Private pay"
+    ]
+  }
+}

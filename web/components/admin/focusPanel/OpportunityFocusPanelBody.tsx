@@ -1,0 +1,395 @@
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
+
+import FocusPanelRenderErrorBoundary from "@/components/admin/focusPanel/FocusPanelRenderErrorBoundary";
+import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
+import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
+import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
+import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
+import { useAttentionCardFocus } from "@/lib/runtime/kernel/useAttentionCardFocus";
+import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
+import type { OperationalParticipantScope } from "@/lib/adminV2/runtime/operationalContext/types";
+import { focusPanelWorkModeModelFromProvisioningAnswer } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+import { overlayChildMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayChildMissionOntoSettledFocusModel";
+import { overlayContextMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayContextMissionOntoSettledFocusModel";
+import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { DrawerTabKey } from "@/lib/entityPresentation";
+import type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
+
+declare global {
+    interface Window {
+        __ALLOY_FOCUS_CHILD_MISSION_DIAG__?: Record<string, unknown>;
+    }
+}
+
+export type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
+
+/** Enriched (settled drawer VM) input — present once Settlement has resolved the record VM. */
+export type FocusPanelEnrichedInput = {
+    displayVm: OpportunityDrawerViewModel;
+    record: Record<string, unknown>;
+};
+
+type Props = {
+    mode: FocusPanelMode;
+    title: string;
+    statusLabel: string | null;
+    canMutate: boolean;
+    /** Enriched input wins when present; otherwise the commit-critical answer input is used. */
+    enriched: FocusPanelEnrichedInput | null;
+    commitCritical: FocusPanelCommitCriticalInput | null;
+    onSelectTab: (tab: DrawerTabKey) => void;
+    onHeaderAction?: (action: ResolvedActionForClient) => void;
+    /**
+     * The SETTLED participant scope, reported up so the header can show that child's identity.
+     *
+     * Reported rather than re-derived. `resolveParticipantScope` has already decided whether the
+     * carried participation id names somebody on THIS case, and it refuses to guess — so an id left
+     * over from the previous row resolves to nobody. Deriving child identity a second time in the
+     * header is exactly how a stale avatar leaks into the next case.
+     */
+    onSubjectScope?: (scope: OperationalParticipantScope | null) => void;
+    onModeChange?: (mode: FocusPanelMode) => void;
+};
+
+/**
+ * THE ONE Focus Panel body (A — atomic commit). It renders the SAME `OpportunityFocusPanelModeGrid`
+ * instance whether the model is commit-critical (from the provisioning answer) or enriched (from the
+ * drawer VM). Because it is one component in one slot, the pending → enriched transition is a model
+ * PROP CHANGE, not a remount: same grid, same published composition, same geometry — Settlement only
+ * fills reserved cells in place. There is ONE readiness boundary (the destination commit), no
+ * card-by-card assembly, and no resize.
+ */
+/**
+ * Value equality for a participant scope.
+ *
+ * Exhaustive by construction: every field of `OperationalParticipantScope` is a primitive, and
+ * adding one without adding it here is a type error rather than a silently missed comparison.
+ */
+export function sameParticipantScope(
+    a: OperationalParticipantScope | null,
+    b: OperationalParticipantScope | null,
+): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const keys: ReadonlyArray<keyof OperationalParticipantScope> = [
+        "participationId",
+        "customerMemberId",
+        "personId",
+        "displayName",
+        "imageUrl",
+        "stageKey",
+        "stageLabel",
+    ];
+    return keys.every((k) => a[k] === b[k]);
+}
+
+export default function OpportunityFocusPanelBody({
+    mode,
+    title,
+    statusLabel,
+    canMutate,
+    enriched,
+    commitCritical,
+    onSelectTab,
+    onHeaderAction,
+    onSubjectScope,
+    onModeChange,
+}: Props) {
+    const perspective = useActiveRuntimePerspective();
+
+    // ── THE CARD-FOCUS BRIDGE (inline surface) ──
+    //
+    // Card + item focus is ATTENTION — the kernel's ASPECT scope, finer than the Operational Subject
+    // and inheriting it. This body is the one the work-unit surface renders, and it previously passed
+    // no card request at all, which is why a Search click composed the right panel and then never
+    // elevated the card it was asked for.
+    //
+    // It is deliberately NOT read from `AdminDrawerContext`: the inline panel is not a drawer, and
+    // routing focus through `openDrawer` mounts the modal overlay this work removes. The grid stays
+    // source-agnostic — it receives a request and knows nothing about where it came from.
+    const attention = useAttentionCardFocus();
+    /**
+     * The child attention is CURRENTLY on — moves on the click, not when provisioning commits.
+     * The child-mission overlay uses it to refuse a mission built for a child the operator has
+     * already left; the family Settlement cards are untouched.
+     */
+    const attentionSubjectId = attention.subject;
+    const requestedCardFocus = useMemo(
+        () =>
+            attention.focus
+                ? {
+                      card_key: attention.focus.card_key,
+                      item_id: attention.focus.item_id,
+                      // Keyed on the Record of Attention: a rapid subject switch re-applies the card,
+                      // while an unrelated re-render does not fight an operator who has moved on.
+                      subject_key: attention.subject ?? "",
+                  }
+                : null,
+        [attention.focus, attention.subject],
+    );
+
+    const model = useMemo(() => {
+        if (enriched) {
+            const settled = focusPanelWorkModeModelFromDrawerVm({
+                /*
+                 * ATTENTION'S CURRENT SUBJECT IS THE CARRIER. For a child-grain lens the Work View
+                 * selects a participation, and that id rides here beside the case the panel still
+                 * composes against. The resolver decides whether it names somebody on THIS case, so
+                 * an id left over from the previous row resolves to nobody rather than to whoever
+                 * happens to be first.
+                 */
+                selectedParticipationId: attentionSubjectId ?? null,
+                mode,
+                displayVm: enriched.displayVm,
+                record: enriched.record,
+                title,
+                perspective,
+                statusLabel,
+                canMutate,
+                /*
+                 * THE DOCUMENT OWNS FIRST-ORDER PRODUCER TRUTH FOR THIS NAVIGATION.
+                 *
+                 * Measured: the drawer recomputed the same Financials answer and it arrived as an
+                 * identical rerender, and Attendance/Health were being recomputed too. The
+                 * producers run with the same authority against the same subject in either frame,
+                 * so the second run owns nothing new — while the settled context substituting its
+                 * own copy is what made the cards re-render at settlement.
+                 *
+                 * Stated only when the answer actually produced cards. If it did not, no opinion
+                 * is passed and the settled frame keeps its own, exactly as before.
+                 */
+                ...(commitCritical?.operationalProjection?.cards
+                    ? { firstOrderProducerCards: commitCritical.operationalProjection.cards }
+                    : {}),
+            });
+            // Child Attention must keep the child's published stage mission after Settlement
+            // loads the family opportunity VM (which carries the family's persisted Lead work).
+            if (commitCritical?.subjectGrain?.grain === "child") {
+                const overlaid = overlayChildMissionOntoSettledFocusModel(settled, commitCritical, {
+                    attentionSubjectId,
+                });
+                if (typeof window !== "undefined") {
+                    const settledCw = settled.cardModels.get("current_work");
+                    const overlaidCw = overlaid.cardModels.get("current_work");
+                    window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                        path: "enriched+overlay",
+                        subjectId: commitCritical.subjectId,
+                        subjectGrain: commitCritical.subjectGrain,
+                        situation: commitCritical.situation,
+                        primaryAction: commitCritical.primaryAction,
+                        actionAbsence: commitCritical.actionAbsence ?? null,
+                        stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                        stageWorkSummary: commitCritical.stageWorkRuntime
+                            ? {
+                                  stage_key: commitCritical.stageWorkRuntime.stage_key,
+                                  stage_label: commitCritical.stageWorkRuntime.stage_label,
+                                  journey_segment: commitCritical.stageWorkRuntime.journey_segment,
+                                  template_keys: commitCritical.stageWorkRuntime.template_keys,
+                                  primary_label: commitCritical.stageWorkRuntime.primary?.label ?? null,
+                                  primary_template_key:
+                                      commitCritical.stageWorkRuntime.primary?.template_key ?? null,
+                                  primary_work_id: commitCritical.stageWorkRuntime.primary?.work_id ?? null,
+                                  primary_attempt_count:
+                                      commitCritical.stageWorkRuntime.primary?.attempt_count ?? null,
+                              }
+                            : null,
+                        subjectIdentityTruth: commitCritical.subjectIdentityTruth,
+                        settledTitle: settled.title,
+                        overlaidTitle: overlaid.title,
+                        settledCurrentWorkTitle:
+                            settledCw && "title" in settledCw ? settledCw.title : null,
+                        overlaidCurrentWorkTitle:
+                            overlaidCw && "title" in overlaidCw ? overlaidCw.title : null,
+                    };
+                }
+                return overlaid;
+            }
+            // Case Attention: EPP-derived Mission from the provisioning answer must not be
+            // replaced by Settlement's raw shared-stage (Lead) Current Work.
+            if (commitCritical?.subjectGrain?.grain === "case") {
+                const overlaid = overlayContextMissionOntoSettledFocusModel(settled, commitCritical);
+                if (typeof window !== "undefined") {
+                    window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                        path: "enriched+context_mission_overlay",
+                        subjectId: commitCritical.subjectId,
+                        subjectGrain: commitCritical.subjectGrain,
+                        situation: commitCritical.situation,
+                        primaryAction: commitCritical.primaryAction,
+                        stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                        settledStage:
+                            settled.context.stageWorkRuntime?.stage_key
+                            ?? settled.context.businessProcess.stageKey,
+                        missionStage: commitCritical.situation?.stageKey ?? null,
+                    };
+                }
+                return overlaid;
+            }
+            if (typeof window !== "undefined") {
+                window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                    path: "enriched_no_overlay",
+                    subjectId: commitCritical?.subjectId ?? null,
+                    subjectGrain: commitCritical?.subjectGrain ?? null,
+                    settledTitle: settled.title,
+                    reason: "subjectGrain.grain not child or case",
+                };
+            }
+            return settled;
+        }
+        if (commitCritical) {
+            if (typeof window !== "undefined") {
+                window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                    path: "commitCritical_only",
+                    subjectId: commitCritical.subjectId,
+                    subjectGrain: commitCritical.subjectGrain,
+                    situation: commitCritical.situation,
+                    primaryAction: commitCritical.primaryAction,
+                    stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                };
+            }
+            return focusPanelWorkModeModelFromProvisioningAnswer({
+                mode,
+                subjectId: commitCritical.subjectId,
+                title,
+                statusLabel,
+                statusKey: commitCritical.statusKey,
+                canMutate,
+                perspective,
+                stageWorkRuntime: commitCritical.stageWorkRuntime,
+                operationalProjection: commitCritical.operationalProjection,
+                situation: commitCritical.situation,
+                primaryAction: commitCritical.primaryAction,
+                subjectIdentityTruth: commitCritical.subjectIdentityTruth,
+                // Configured lifecycle truth the composer already resolved — the rail and the
+                // process name, so the card states them at commit rather than after settlement.
+                businessProcessStages: commitCritical.businessProcessStages ?? null,
+                businessProcessName: commitCritical.businessProcessName ?? null,
+                /*
+                 * The answer's own resolved participation. Without it the builder cannot admit
+                 * Attendance, Health or Children at commit, and they wait for the drawer to name a
+                 * child the answer already named.
+                 */
+                resolvedParticipant: commitCritical.resolvedParticipant ?? null,
+                // R2 — forwarded, not decided. The builder reads this instead of hardcoding
+                // `grain: "case"` / `subject.type: "opportunity"`.
+                subjectGrain: commitCritical.subjectGrain,
+            });
+        }
+        return null;
+    }, [mode, title, statusLabel, canMutate, enriched, commitCritical, perspective]);
+    /*
+     * One report per settled model, including the report that CLEARS it.
+     *
+     * Passing the scope up only when one exists would leave the previous child's avatar in the
+     * header after switching to a case with no scoped child — the stale-scope leak this whole
+     * carrier exists to prevent. `null` is a value here, not an omission.
+     */
+    const reportedScopeRef = useRef<OperationalParticipantScope | null | undefined>(undefined);
+    useEffect(() => {
+        const next = model?.context?.participantScope ?? null;
+        /*
+         * REPORT A CHANGE OF SCOPE, NOT A CHANGE OF OBJECT.
+         *
+         * This effect closes a loop if it reports identity. The parent stores what it is given in
+         * state, and it builds `commitCritical` and `enriched` for this component while it renders.
+         * So: a report sets parent state -> the parent re-renders -> those two props are rebuilt ->
+         * `model` is a new object -> this effect fires -> it reports again. Nothing about the
+         * subject has changed at any point in that circuit; only references have.
+         *
+         * It ran continuously in production at roughly thirteen renders per second, and stayed
+         * invisible because React schedules the updates rather than blocking on them. It became
+         * visible the moment a Radix overlay mounted inside this subtree: the overlay's own
+         * commit-phase ref and focus updates nest INSIDE the ones already in flight, and the nested
+         * total crosses React's update-depth limit. The card then threw and dropped to its render
+         * boundary. That is why three unrelated menus — Tour, Recent activity, Manage — all failed
+         * identically, and why one outside this panel did not.
+         *
+         * `participantScope` is seven primitives, so equality here is exact and total, not a
+         * heuristic. Reporting `null` still counts as a change: clearing a scope is the report that
+         * stops the previous child's avatar from outliving them in the header.
+         */
+        if (reportedScopeRef.current !== undefined && sameParticipantScope(reportedScopeRef.current, next)) {
+            return;
+        }
+        reportedScopeRef.current = next;
+        onSubjectScope?.(next);
+    }, [model, onSubjectScope]);
+
+
+    // Timing boundary — fires only when the model identity changes (commit-critical arrival,
+    // per-card ready set, settlement), never per render frame. Dev/staging gated inside.
+    useEffect(() => {
+        if (model) markFocusPanelWorkModeModel(model);
+    }, [model]);
+
+    if (!model) return null;
+
+    // "NO CONFIGURED ACTION" IS RENDERED, NOT OMITTED — but only when Settlement has not filled
+    // the family chrome AND the child mission does not already own What's Next from templates.
+    // Child grain overlays keep commitCritical after Settlement; suppress the banner when the
+    // child's stage work is authoritative (avoids "no action" while What's Next shows work).
+    const childMissionOwnsWhatsNext = commitCritical?.subjectGrain?.grain === "child";
+    const absence =
+        childMissionOwnsWhatsNext || enriched
+            ? null
+            : commitCritical?.actionAbsence ?? null;
+
+    // TRUST RUNTIME V1, SLICE 1 — the consumer surface.
+    //
+    // The governed deterministic enrichment has always had exactly one operator-facing
+    // control, `OperationalAttentionEnhanceDraft`. It was reachable only from
+    // `OpportunityDrawerOverviewBody`, and Presentation Runtime V2 never mounts that body on
+    // work-unit surfaces (`AdminEntityDrawer` returns null there — the inline Focus Panel owns
+    // the record surface). The decision was therefore produced, persisted and audited while
+    // being invisible to the operator it was produced for.
+    //
+    // The component is reused VERBATIM — same copy, same visual treatment, same
+    // `data-drawer-slot` hooks the drawer QA already asserts. Only its mount point moves.
+    //
+    // It reads the same compat projection the drawer read (`_attention_suggestion` on the
+    // above-fold record) and self-suppresses when there is no draft body, so a subject with no
+    // deterministic draft renders exactly as it does today. Commit-critical renders carry no
+    // record, so nothing is shown until the VM settles — the pending → enriched transition
+    // stays a prop change, never a remount.
+    const attentionSuggestion = (enriched?.record?._attention_suggestion ?? null) as
+        | AttentionSuggestionV1
+        | null;
+
+    return (
+        <>
+        {attentionSuggestion ? (
+            <div className="mb-2" data-focus-panel-slot="trust_enhance_draft">
+                <OperationalAttentionEnhanceDraft suggestion={attentionSuggestion} />
+            </div>
+        ) : null}
+        {absence ?
+            <p
+                className="mb-3 rounded-md border border-dashed border-[var(--alloy-border-subtle,#d4d4d8)] px-3 py-2 text-sm text-[var(--alloy-text-secondary,#52525b)]"
+                data-focus-panel-no-action={absence.code}
+                role="note"
+            >
+                {absence.message}
+            </p>
+        : null}
+        {/*
+          * The composition is built inside the grid (published layout → plan → cards), so a
+          * malformed published Surface throws BEFORE any card renders and a per-card boundary
+          * never sees it. This is the outer floor: the panel reports it could not compose, and
+          * the Work Unit around it — header, queue, actions — keeps working.
+          */}
+        <FocusPanelRenderErrorBoundary scope="surface" label="focus-panel">
+            <OpportunityFocusPanelModeGrid
+                model={model}
+                requestedCardFocus={requestedCardFocus}
+                onSelectTab={onSelectTab}
+                onHeaderAction={onHeaderAction}
+                onModeChange={onModeChange}
+            />
+        </FocusPanelRenderErrorBoundary>
+        </>
+    );
+}

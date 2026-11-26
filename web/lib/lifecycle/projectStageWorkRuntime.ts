@@ -1,21 +1,55 @@
 /**
  * Project operating-plan stage work runtime for drawer / layout / queue surfaces.
+ *
+ * ## D-96 — which configuration governs this projection
+ *
+ * Almost everything this module produces is TRANSACTION-GOVERNING, not decoration:
+ *
+ *   - `activeLifecycleProcess(...).is_active` gates whether any stage work exists at all;
+ *   - `plan.work_templates` decides WHAT WORK the stage has;
+ *   - `plan.journey_segment` reconciled with `stageRecord.grain` decides the execution GRAIN, and a
+ *     contradiction between them suppresses the projection entirely;
+ *   - `outcomesForTemplate(...)` and `requires_outcome_picker` decide how work COMPLETES;
+ *   - `completionPolicyForTemplate(...)` carries min/max attempts;
+ *   - `buildStageWorkOutcomeAutomationPreview(...)` states what the outcome will DO;
+ *   - `resolvePrimaryWorkIntentForStage(...)` decides which action is offered first.
+ *
+ * Only `plan.purpose`, `stageRecord.label`, `template.label` and `template.description` are
+ * presentation.
+ *
+ * So when the caller knows the running instance's governing revision it MUST pass it. Reading live
+ * `departments.metadata.lifecycle_builder_v1` here while `resolvePublishedStageInputsForCurrentWork`
+ * reads the pinned revision would put revision N requirements next to revision N+1 execution
+ * behaviour in the same response — one journey, two configurations.
+ *
+ * Callers with no process instance (batch queue enrichment) pass nothing and keep reading live
+ * configuration, exactly as before.
  */
 
+import { childJourneyOfStageWork, childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
+import { runtimeCompletionOutcomeKey, templateDecidesParticipants } from "@/lib/lifecycle/participantDecisionCompletion";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
 import { parseOperationalWorkViewFromTaskRow } from "@/lib/admin/operationalWork/operationalWorkMetadata";
 import { buildStageWorkOutcomeAutomationPreview } from "@/lib/lifecycle/buildStageWorkOutcomeAutomationPreview";
 import {
+    LIFECYCLE_BUILDER_METADATA_KEY,
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import {
+    childParticipationIdentityFromWire,
+    namesAChild,
+    type ChildParticipationIdentity,
+} from "@/lib/lifecycle/childParticipationIdentity";
+import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
+import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { completionPolicySummary } from "@/lib/lifecycle/stageWorkCompletionPolicy";
-import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
+import { resolveWorkDefinitionKeyFromTemplate } from "@/lib/lifecycle/resolveWorkDefinitionKeyFromTemplate";
 import {
     type StageOperatingPlanV1,
     type StageWorkTemplateV1,
@@ -31,7 +65,7 @@ import type {
 
 export { primaryWorkIntentProjectionFromStageWork };
 
-type TaskDbRow = {
+export type TaskDbRow = {
     id: string;
     title: string;
     due_at: string;
@@ -102,34 +136,103 @@ function taskRowFromDb(row: TaskDbRow, orgId: string, opportunityId: string): Op
     };
 }
 
+function templateWorkDefinitionKey(
+    template: Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">,
+): string | null {
+    const resolved = resolveWorkDefinitionKeyFromTemplate(template);
+    if (resolved.ok) return resolved.work_definition_key;
+    return trimOrNull(template.work_definition_key);
+}
+
+/** Legacy spawn keys that resolve to the same platform work definition as a template. */
+function legacyIntentWorkDefinitionKey(workIntentKey: string | null): string | null {
+    if (!workIntentKey) return null;
+    if (workIntentKey === "make_contact") return "contact_family";
+    return null;
+}
+
+/**
+ * Stage the task was SPAWNED for — from durable provenance, not from fields that stage-move
+ * reconciliation may rewrite (`lifecycle_stage_key` / `operating_plan_template_key`).
+ *
+ * Live bug: Lead `Contact Family` rows were rewritten to `waitlist` + `review_waitlist_position`
+ * while provenance still encodes `:lead:contact_family`. Trust spawn provenance for matching.
+ */
+function spawnStageFromTaskProvenance(md: Record<string, unknown>): string | null {
+    const dedupe = trimOrNull(md.dedupe_key);
+    if (dedupe) {
+        const fromDedupe = dedupe.match(/:stage:([^|:]+)/i);
+        if (fromDedupe?.[1]) return fromDedupe[1].trim() || null;
+    }
+    const provenance = md.provenance;
+    if (provenance && typeof provenance === "object" && !Array.isArray(provenance)) {
+        const idem = trimOrNull((provenance as Record<string, unknown>).idempotency_key);
+        // lifecycle_intent:{orgId}:{opportunityId}:{stageKey}:{templateKey}[:child:{customerMemberId}]
+        // Read by position: a child's work appends a child segment after the template.
+        if (idem?.startsWith("lifecycle_intent:")) {
+            const parts = idem.split(":");
+            if (parts.length >= 5) {
+                const stage = parts[3]?.trim();
+                if (stage) return stage;
+            }
+        }
+    }
+    return null;
+}
+
 export function taskMatchesStageWorkTemplate(
     row: TaskDbRow,
     stageKey: string,
     template: Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">,
+    /**
+     * The stage's own template keys. When given, a task that names ANOTHER template on this stage is
+     * that template's work and never binds here through the shared work definition: a follow-up
+     * spawned from `follow_up_family` is not "First outreach" just because both are `contact_family`
+     * work. Omitted, the definition fallback is unconditional — the orphan reconciler asks "is this
+     * kind of work open at all", and must not respawn first outreach while its follow-up is open.
+     */
+    stageTemplateKeys?: ReadonlySet<string>,
 ): boolean {
     const templateKey = template.template_key;
     const md = row.metadata ?? {};
     const mdWorkIntent = trimOrNull(md.work_intent_key);
     const mdTemplateKey = trimOrNull(md.operating_plan_template_key) ?? mdWorkIntent;
 
-    if (mdTemplateKey === templateKey) return true;
-    if (mdWorkIntent === templateKey) return true;
-
     const mdStage = trimOrNull(md.lifecycle_stage_key);
     const work = parseOperationalWorkViewFromTaskRow(taskRowFromDb(row, "", ""));
     const snapshotStage = trimOrNull(work.context_snapshot?.lifecycle_stage_key);
-    const stage = mdStage ?? snapshotStage;
-    if (stage !== stageKey) return false;
+    const spawnStage = spawnStageFromTaskProvenance(md);
+    // Prefer spawn provenance over rewritten stage fields after cross-stage reconciliation.
+    const stage = spawnStage ?? mdStage ?? snapshotStage;
 
-    const templateDefinitionKey = trimOrNull(template.work_definition_key);
-    const rowDefinitionKey = trimOrNull(work.work_definition_key) ?? trimOrNull(md.work_definition_key);
-    if (
-        templateDefinitionKey &&
-        rowDefinitionKey === templateDefinitionKey &&
-        trimOrNull(md.lifecycle_provenance) === "lifecycle_template"
-    ) {
+    // Template-key identity still requires stage alignment when the task declares a stage.
+    // Otherwise Lead `contact_family` can bind onto a Waitlist plan that reuses the same key.
+    const templateKeyMatches =
+        (mdTemplateKey != null && mdTemplateKey === templateKey)
+        || (mdWorkIntent != null && mdWorkIntent === templateKey);
+    if (templateKeyMatches) {
+        // Spawned for a different stage → never bind, even if reconciliation rewrote template_key.
+        if (spawnStage && spawnStage !== stageKey) return false;
+        if (stage && stage !== stageKey) return false;
         return true;
     }
+    if (mdTemplateKey != null && stageTemplateKeys?.has(mdTemplateKey)) return false;
+
+    const templateDefinitionKey = templateWorkDefinitionKey(template);
+    const rowDefinitionKey =
+        trimOrNull(work.work_definition_key)
+        ?? trimOrNull(md.work_definition_key)
+        ?? legacyIntentWorkDefinitionKey(mdWorkIntent);
+
+    if (!templateDefinitionKey || !rowDefinitionKey || rowDefinitionKey !== templateDefinitionKey) {
+        return false;
+    }
+
+    // Same platform work definition — bind only when stage aligns.
+    // Do NOT treat missing stage as a wildcard: Lead `contact_family` tasks without
+    // lifecycle_stage_key were painting as Waitlist `review_waitlist_position`.
+    if (spawnStage && spawnStage !== stageKey) return false;
+    if (stage && stage === stageKey) return true;
 
     return false;
 }
@@ -137,14 +240,50 @@ export function taskMatchesStageWorkTemplate(
 function buildExecutionSubject(
     opportunityId: string,
     journeySegment: "family" | "child",
+    childIdentity: ChildParticipationIdentity | null,
 ): StageOutcomeExecutionSubject {
-    return {
+    const subject: StageOutcomeExecutionSubject = {
         journey_segment: journeySegment,
         opportunity_id: opportunityId,
     };
+    if (journeySegment !== "child" || !childIdentity) return subject;
+
+    if (childIdentity.subjectId) subject.customer_member_id = childIdentity.subjectId;
+    if (childIdentity.legacyOcmId) subject.opportunity_customer_member_id = childIdentity.legacyOcmId;
+    if (childIdentity.participationId) subject.process_instance_id = childIdentity.participationId;
+    return subject;
 }
 
-function outcomesForTemplate(plan: StageOperatingPlanV1, templateKey: string): WorkIntentRuntimeOutcome[] {
+/**
+ * The child this projection is about — EXPLICIT OR ABSENT.
+ *
+ * This used to fall back to scraping: if the caller named no child, it walked the family's open tasks
+ * and took the first one carrying any child id. That is wrong in the ordinary case, not the exotic
+ * one. `attachStageWorkRuntimeToQueueRows` groups tasks BY OPPORTUNITY and passes no explicit
+ * identity, so on a family with siblings the scrape picked an arbitrary child and stamped it as the
+ * execution subject for every work item in the projection — including items matched to a task
+ * belonging to a DIFFERENT sibling. The operator then recorded an outcome against a child they never
+ * chose, and every downstream guard passed, because the guards ask "is a child named?" and one was.
+ *
+ * Which sibling a family-grain surface means is a question that surface cannot answer. The configured
+ * mechanism for answering it is the stage's `subject_resolution_strategy` (single_anchor /
+ * ask_operator / …), which the scrape bypassed entirely. So the honest projection carries no child,
+ * says so via `subject_unresolved`, and the outcome path refuses — which it already does.
+ */
+function explicitChildIdentityForProjection(explicit: {
+    customer_member_id?: string | null;
+    opportunity_customer_member_id?: string | null;
+    process_instance_id?: string | null;
+}): ChildParticipationIdentity | null {
+    const identity = childParticipationIdentityFromWire(explicit);
+    return namesAChild(identity) ? identity : null;
+}
+
+function outcomesForTemplate(
+    plan: StageOperatingPlanV1,
+    template: StageWorkTemplateV1,
+): WorkIntentRuntimeOutcome[] {
+    const templateKey = template.template_key;
     const scoped = plan.outcomes
         .filter((o) => {
             const tplKey = o.work_template_key?.trim();
@@ -156,6 +295,15 @@ function outcomesForTemplate(plan: StageOperatingPlanV1, templateKey: string): W
             label: o.label,
             ...(o.successful === true ? { successful: true } : {}),
         }));
+    if (template.outcome_refs !== undefined) {
+        const order = template.outcome_refs.map((row) => row.outcome_ref.trim()).filter(Boolean);
+        const byKey = new Map(scoped.map((row) => [row.outcome_key, row]));
+        const filtered = order
+            .map((key) => byKey.get(key))
+            .filter((row): row is WorkIntentRuntimeOutcome => row != null);
+        return filtered;
+    }
+
     if (scoped.length) return scoped;
     return plan.outcomes.map((o) => ({
         outcome_key: o.outcome_key,
@@ -189,7 +337,10 @@ function buildWorkItemProjection(args: {
 }): StageWorkItemProjection {
     const { template, role, stageKey, plan, openRow, completedRow } = args;
     const policy = completionPolicyForTemplate(template);
-    const outcomes = outcomesForTemplate(plan, template.template_key);
+    // Per-child work: the plain completion is recorded by the runtime once every child has a path.
+    const decidesParticipants = templateDecidesParticipants(template);
+    const runtimeCompletion = runtimeCompletionOutcomeKey(plan, template);
+    const outcomes = outcomesForTemplate(plan, template).filter((o) => o.outcome_key !== runtimeCompletion);
     const automation = buildStageWorkOutcomeAutomationPreview({
         plan,
         templateKey: template.template_key,
@@ -199,13 +350,22 @@ function buildWorkItemProjection(args: {
         const md = openRow.metadata ?? {};
         const dueAt = String(openRow.due_at ?? "") || null;
         const status = trimOrNull(openRow.status) ?? "open";
+        // Prefer configured template label when the matched task carries a foreign template key
+        // (shared work_definition bindings must not rename Waitlist work to Lead titles).
+        const taskTemplateKey =
+            trimOrNull(md.operating_plan_template_key) ?? trimOrNull(md.work_intent_key);
+        const label =
+            taskTemplateKey && taskTemplateKey !== template.template_key
+                ? template.label
+                : (trimOrNull(openRow.title) ?? template.label);
         return {
             template_key: template.template_key,
-            label: trimOrNull(openRow.title) ?? template.label,
+            label,
             description: trimOrNull(template.description),
             role,
             state: "open",
-            requires_outcome_picker: outcomes.length > 0,
+            requires_outcome_picker: outcomes.length > 0 || decidesParticipants,
+            ...(decidesParticipants ? { decides_participants: true } : {}),
             work_id: String(openRow.id),
             due_at: dueAt,
             due_urgency: mapDueUrgency(dueAt, status),
@@ -282,10 +442,20 @@ export type ProjectStageWorkRuntimeSyncInput = {
     opportunityId: string;
     departmentId: string;
     departmentMetadata: unknown;
+    /**
+     * D-96. The pinned revision's payload. When present it REPLACES `lifecycle_builder_v1` for this
+     * projection, so stage execution, grain, outcomes and completion policy all come from the
+     * revision that governs the journey rather than from whatever is published right now.
+     */
+    governingBuilderPayload?: Record<string, unknown> | null;
     builderStageKey: string | null;
     stageLabel?: string | null;
     openRows?: TaskDbRow[];
     completedRows?: TaskDbRow[];
+    /** Child-grain Current Work — required for child journey outcomes; never inferred as family. */
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 };
 
 /** Synchronous projection from preloaded tasks — used by drawer and batch queue enrichment. */
@@ -295,12 +465,19 @@ export function projectStageWorkRuntimeSync(
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
 
-    const departmentMetadata =
+    const liveMetadata =
         params.departmentMetadata != null &&
         typeof params.departmentMetadata === "object" &&
         !Array.isArray(params.departmentMetadata)
             ? (params.departmentMetadata as Record<string, unknown>)
             : {};
+
+    // Total substitution, matching `resolvePublishedStageInputsForCurrentWork`. A per-section pin
+    // would be the split-brain D-96 forbids: the stage list from one revision and its outcomes from
+    // another is a configuration nobody authored.
+    const departmentMetadata = params.governingBuilderPayload
+        ? { ...liveMetadata, [LIFECYCLE_BUILDER_METADATA_KEY]: params.governingBuilderPayload }
+        : liveMetadata;
 
     const builder = lifecycleBuilderFromDepartmentMetadata(departmentMetadata);
     const process = activeLifecycleProcess(builder);
@@ -316,7 +493,18 @@ export function projectStageWorkRuntimeSync(
     const departmentId = trimOrNull(params.departmentId);
     if (!departmentId) return null;
 
-    const journeySegment = plan.journey_segment ?? "family";
+    // The stage's declared grain and the plan's journey segment are two vocabularies for the same
+    // thing, declared independently and — until now — never reconciled. A stage configured
+    // `grain: "child"` whose plan still said `family` projected family stage work, carrying a family
+    // subject; the tenant had changed the grain and not republished the plan.
+    const segment = resolveJourneySegment({
+        planSegment: plan.journey_segment,
+        stageGrain: stageRecord?.grain,
+    });
+    // A configuration that contradicts itself produces no projection. There is no correct surface to
+    // render for it, and picking one of the two declarations would be the silent default again.
+    if (!segment.ok) return null;
+    const journeySegment = segment.segment;
     const sortedTemplates = sortTemplatesForProjection(
         plan.work_templates,
         primaryIntent?.template_key ?? null,
@@ -324,14 +512,37 @@ export function projectStageWorkRuntimeSync(
 
     const openList = params.openRows ?? [];
     const completedList = params.completedRows ?? [];
+    const explicitChildIdentity =
+        journeySegment === "child"
+            ? explicitChildIdentityForProjection({
+                  customer_member_id: params.customerMemberId,
+                  opportunity_customer_member_id: params.opportunityCustomerMemberId,
+                  process_instance_id: params.processInstanceId,
+              })
+            : null;
 
+    const stageTemplateKeys = new Set(plan.work_templates.map((t) => t.template_key));
+    const matches = (row: TaskDbRow, template: StageWorkTemplateV1) =>
+        taskMatchesStageWorkTemplate(row, stageKey, template, stageTemplateKeys);
+    /*
+     * WHOSE WORK THIS IS. At a child stage each child owns their own item; a sibling's item is never
+     * this child's, however well it matches the template. Work from before items named their child
+     * carries no owner and is still found, after the child's own. Family subjects are unaffected.
+     */
+    const ownChildId = journeySegment === "child" ? trimOrNull(params.customerMemberId) : null;
+    const pick = (list: TaskDbRow[], template: StageWorkTemplateV1): TaskDbRow | null => {
+        if (!ownChildId) return list.find((row) => matches(row, template)) ?? null;
+        return (
+            list.find((row) => matches(row, template) && childOfStageWork(row.metadata) === ownChildId)
+            ?? list.find((row) => matches(row, template) && childOfStageWork(row.metadata) === null)
+            ?? null
+        );
+    };
+    const pickedOpenRows: TaskDbRow[] = [];
     const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
-        const openRow =
-            openList.find((row) => taskMatchesStageWorkTemplate(row, stageKey, template)) ?? null;
-        const completedRow =
-            !openRow
-                ? completedList.find((row) => taskMatchesStageWorkTemplate(row, stageKey, template)) ?? null
-                : null;
+        const openRow = pick(openList, template);
+        if (openRow) pickedOpenRows.push(openRow);
+        const completedRow = !openRow ? pick(completedList, template) : null;
         return buildWorkItemProjection({
             template,
             role: index === 0 ? "primary" : "secondary",
@@ -344,6 +555,20 @@ export function projectStageWorkRuntimeSync(
 
     const primary = items[0] ?? null;
     const additional = items.slice(1);
+
+    /*
+     * A FAMILY surface acting on a CHILD's work. With no child named by the caller (the family card
+     * after every child has a path, one offer still pending), the open work it projects is still
+     * stamped with its owner — and that owner is the subject the outcome must run for. Never a guess:
+     * only the work item's own child, and only when the caller named none.
+     */
+    const workOwner = !explicitChildIdentity && journeySegment === "child"
+        ? pickedOpenRows.map((row) => ({ child: childOfStageWork(row.metadata), journey: childJourneyOfStageWork(row.metadata) })).find((o) => o.child) ?? null
+        : null;
+    const childIdentity = explicitChildIdentity
+        ?? (workOwner
+            ? explicitChildIdentityForProjection({ customer_member_id: workOwner.child, process_instance_id: workOwner.journey })
+            : null);
 
     const requiresOutcomePicker =
         items.some((item) => item.state === "open" && item.requires_outcome_picker);
@@ -359,7 +584,13 @@ export function projectStageWorkRuntimeSync(
         execution: {
             department_id: departmentId,
             requires_outcome_picker: requiresOutcomePicker,
-            subject: buildExecutionSubject(params.opportunityId, journeySegment),
+            subject: buildExecutionSubject(params.opportunityId, journeySegment, childIdentity),
+            // A child-grain plan whose caller named no child. The subject is truthful — a family case
+            // and a grain — but it is not executable, and saying so beats letting a surface offer an
+            // action that can only fail at the guard.
+            ...(journeySegment === "child" && !childIdentity
+                ? { subject_unresolved: "child_identity_required" as const }
+                : {}),
         },
     };
 }
@@ -370,8 +601,13 @@ export async function projectStageWorkRuntime(params: {
     opportunityId: string;
     departmentId: string | null;
     departmentMetadata: unknown;
+    /** D-96. See {@link ProjectStageWorkRuntimeSyncInput.governingBuilderPayload}. */
+    governingBuilderPayload?: Record<string, unknown> | null;
     builderStageKey: string | null;
     stageLabel?: string | null;
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 }): Promise<StageWorkRuntimeProjection | null> {
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
@@ -386,28 +622,32 @@ export async function projectStageWorkRuntime(params: {
     }
     if (!departmentId) return null;
 
-    const { data: openRows, error: openErr } = await params.supabase
-        .from("operational_tasks")
-        .select("id, title, due_at, status, source, metadata, updated_at")
-        .eq("org_id", params.orgId)
-        .eq("entity_type", "opportunities")
-        .eq("entity_id", params.opportunityId)
-        .eq("status", "open")
-        .order("due_at", { ascending: true })
-        .limit(24);
-
+    // The open + completed task reads are INDEPENDENT — run them concurrently (was serial). Same two
+    // queries, same bounded semantics (24 each, distinct orders); only the ~1 round-trip of serial
+    // latency is removed from the commit-critical compose path.
+    const [openResult, completedResult] = await Promise.all([
+        params.supabase
+            .from("operational_tasks")
+            .select("id, title, due_at, status, source, metadata, updated_at")
+            .eq("org_id", params.orgId)
+            .eq("entity_type", "opportunities")
+            .eq("entity_id", params.opportunityId)
+            .eq("status", "open")
+            .order("due_at", { ascending: true })
+            .limit(24),
+        params.supabase
+            .from("operational_tasks")
+            .select("id, title, due_at, status, source, metadata, updated_at")
+            .eq("org_id", params.orgId)
+            .eq("entity_type", "opportunities")
+            .eq("entity_id", params.opportunityId)
+            .eq("status", "completed")
+            .order("updated_at", { ascending: false })
+            .limit(24),
+    ]);
+    const { data: openRows, error: openErr } = openResult;
     if (openErr) return null;
-
-    const { data: completedRows, error: completedErr } = await params.supabase
-        .from("operational_tasks")
-        .select("id, title, due_at, status, source, metadata, updated_at")
-        .eq("org_id", params.orgId)
-        .eq("entity_type", "opportunities")
-        .eq("entity_id", params.opportunityId)
-        .eq("status", "completed")
-        .order("updated_at", { ascending: false })
-        .limit(24);
-
+    const { data: completedRows, error: completedErr } = completedResult;
     if (completedErr) return null;
 
     return projectStageWorkRuntimeSync({
@@ -415,10 +655,14 @@ export async function projectStageWorkRuntime(params: {
         opportunityId: params.opportunityId,
         departmentId,
         departmentMetadata: params.departmentMetadata,
+        governingBuilderPayload: params.governingBuilderPayload,
         builderStageKey: stageKey,
         stageLabel: params.stageLabel,
         openRows: (openRows ?? []) as TaskDbRow[],
         completedRows: (completedRows ?? []) as TaskDbRow[],
+        customerMemberId: params.customerMemberId,
+        opportunityCustomerMemberId: params.opportunityCustomerMemberId,
+        processInstanceId: params.processInstanceId,
     });
 }
 

@@ -12,6 +12,7 @@ import type {
 import type { StageOperatingPlanEditorDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import { defaultAttentionRuleLabel, normalizeAttentionRuleKind } from "@/lib/lifecycle/stageAttentionRuleCatalog";
 import { stageOutcomeRuleSummary } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
+import { formatFollowUpDuePolicySummary } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
 
 export function resolveEffectivePrimaryWorkTemplate(
     plan: Pick<StageOperatingPlanV1, "work_templates"> | null | undefined,
@@ -103,7 +104,10 @@ export function normalizeOperatingPlanDraftForPersist(
 export function outcomeAutomationSummaries(
     outcomeKey: string,
     rules: StageOutcomeRuleV1[],
-    options?: { workTemplateLabelByKey?: Record<string, string> },
+    options?: {
+        workTemplateLabelByKey?: Record<string, string>;
+        transitionLabelByRef?: Record<string, string>;
+    },
 ): string[] {
     const matching = rules.filter((r) => r.when_outcome_key === outcomeKey);
     if (!matching.length) return [];
@@ -112,12 +116,17 @@ export function outcomeAutomationSummaries(
     for (const rule of matching) {
         for (const target of rule.targets) {
             if (target.kind === "no_movement") {
-                lines.push("Stay in current stage");
+                lines.push("Remain in current stage");
                 continue;
             }
-            if (target.kind === "move_to_stage" && target.stage_key) {
-                lines.push(`Move to ${target.stage_key.replace(/_/g, " ")}`);
-                continue;
+            if (target.kind === "move_to_stage") {
+                const transitionLabel =
+                    options?.transitionLabelByRef?.[target.transition_ref?.trim() ?? ""]
+                    ?? (target.stage_key ? `Move to ${target.stage_key.replace(/_/g, " ")}` : null);
+                if (transitionLabel) {
+                    lines.push(transitionLabel);
+                    continue;
+                }
             }
             if (target.kind === "update_family_case_status" && target.status_key) {
                 lines.push(`Update family status: ${target.status_key.replace(/_/g, " ")}`);
@@ -125,24 +134,36 @@ export function outcomeAutomationSummaries(
             }
             if (target.kind === "create_next_work" && target.template_key) {
                 const label =
-                    options?.workTemplateLabelByKey?.[target.template_key] ??
-                    target.template_key.replace(/_/g, " ");
+                    options?.workTemplateLabelByKey?.[target.template_key]
+                    ?? target.template_key.replace(/_/g, " ");
+                if (target.follow_up_due_policy) {
+                    lines.push(formatFollowUpDuePolicySummary(target.follow_up_due_policy, label));
+                    continue;
+                }
                 const due =
                     typeof target.due_days === "number" ?
                         ` in ${target.due_days} day${target.due_days === 1 ? "" : "s"}`
                     :   "";
-                lines.push(`Create next work: ${label}${due}`);
+                lines.push(`Create "${label}"${due} after outcome is recorded`);
                 continue;
             }
             if (target.kind === "reopen_work" && target.template_key) {
                 const label =
-                    options?.workTemplateLabelByKey?.[target.template_key] ??
-                    target.template_key.replace(/_/g, " ");
+                    options?.workTemplateLabelByKey?.[target.template_key]
+                    ?? target.template_key.replace(/_/g, " ");
+                if (target.follow_up_due_policy) {
+                    lines.push(formatFollowUpDuePolicySummary(target.follow_up_due_policy, label));
+                    continue;
+                }
                 const due =
                     typeof target.due_days === "number" ?
                         ` in ${target.due_days} day${target.due_days === 1 ? "" : "s"}`
                     :   "";
-                lines.push(`Repeat ${label}${due}`);
+                lines.push(`Continue "${label}"${due}`);
+                continue;
+            }
+            if (target.kind === "mark_stage_work_complete") {
+                lines.push("Complete current work");
                 continue;
             }
             if (target.kind === "create_needs_attention") {

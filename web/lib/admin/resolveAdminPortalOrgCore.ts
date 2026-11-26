@@ -3,60 +3,38 @@ import {
     chooseOrgAndRoleKeysFromMembershipRows,
     type ResolvedAdminAccessCore,
 } from "@/lib/admin/resolveAdminAccessCore";
+import { fetchPortalAdmission, isPortalAdmitted, type PortalAdmission } from "@/lib/admin/portalAdmission";
 
-const PORTAL_ROLES = new Set(["admin", "ops"]);
-
-async function fetchLegacyAdminOpsOrgAndRole(
-    supabase: SupabaseClient,
-    userId: string
-): Promise<{ orgId: string; role: "admin" | "ops" } | null> {
-    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", userId).maybeSingle();
-    const pr =
-        profile && typeof (profile as { role?: unknown }).role === "string"
-            ? ((profile as { role: string }).role as string).trim()
-            : "";
-    if (pr === "admin" || pr === "ops") {
-        const orgFromAu = await fetchOrgIdFromAppUsers(supabase, userId);
-        if (orgFromAu) return { orgId: orgFromAu, role: pr };
-    }
-
-    const { data: au } = await supabase.from("app_users").select("role, org_id").eq("id", userId).maybeSingle();
-    const auRow = au as { role?: unknown; org_id?: unknown } | null;
-    const ar = auRow && typeof auRow.role === "string" ? auRow.role.trim() : "";
-    const oid = auRow && typeof auRow.org_id === "string" ? auRow.org_id : "";
-    if ((ar === "admin" || ar === "ops") && oid) {
-        return { orgId: oid, role: ar };
-    }
-
-    const { data: au2 } = await supabase.from("app_users").select("role, org_id").eq("auth_user_id", userId).maybeSingle();
-    const au2Row = au2 as { role?: unknown; org_id?: unknown } | null;
-    const ar2 = au2Row && typeof au2Row.role === "string" ? au2Row.role.trim() : "";
-    const oid2 = au2Row && typeof au2Row.org_id === "string" ? au2Row.org_id : "";
-    if ((ar2 === "admin" || ar2 === "ops") && oid2) {
-        return { orgId: oid2, role: ar2 };
-    }
-
-    return null;
-}
-
-async function fetchOrgIdFromAppUsers(supabase: SupabaseClient, userId: string): Promise<string | null> {
-    const { data: au } = await supabase.from("app_users").select("org_id").eq("id", userId).maybeSingle();
-    const o = (au as { org_id?: string | null } | null)?.org_id ?? null;
-    if (typeof o === "string" && o.length > 0) return o;
-
-    const { data: auAuth } = await supabase.from("app_users").select("org_id").eq("auth_user_id", userId).maybeSingle();
-    const o2 = (auAuth as { org_id?: string | null } | null)?.org_id ?? null;
-    return typeof o2 === "string" && o2.length > 0 ? o2 : null;
-}
+/*
+ * `PORTAL_ROLES` STOOD HERE TOO, byte-for-byte, and that is the reason W-13 states its removal over
+ * every module rather than over the file where the literal was first written. `M2-5` is the
+ * precedent: `W-20` deleted the legacy fallback from `resolveAdminAccessCore` and this module's
+ * re-implementation went on serving `requireAdminOrOps`. A second copy of an admission predicate is
+ * not a duplicate — it is a second admission policy that nobody is watching.
+ */
 
 export type ResolvedAdminPortalOrgCore = Pick<
     ResolvedAdminAccessCore,
     "orgId" | "roleKeys" | "portalEligible"
->;
+> & {
+    /**
+     * Why `portalEligible` is false, preserved for the caller's diagnostics.
+     *
+     * `no-capability` and `unresolved` are both refusals and must not be collapsed: one is a
+     * decision about this principal's grants, the other is a failure to find out. The gate treats
+     * them the same — it must — and the log does not.
+     */
+    admission: PortalAdmission;
+};
 
 /**
  * Portal org + role_keys only — skips permission grants and department/site scope tables.
- * Same primary-org and legacy resolution rules as {@link resolveAdminAccessCore}.
+ *
+ * **W-20.** This module used to carry a byte-for-byte copy of the legacy fallback (`M2-5`): three
+ * reads of `user_profiles.role` and `app_users.role` that could make someone `admin` or `ops`
+ * without a membership row. It is gone, and `Q15-A1` is why it could go — on the deployed tenant no
+ * principal held authority through it, so deleting it locks nobody out. Membership is the single
+ * source: no `user_roles` row means no authority, here and in {@link resolveAdminAccessCore}.
  */
 export async function resolveAdminPortalOrgCore(
     supabase: SupabaseClient,
@@ -81,20 +59,30 @@ export async function resolveAdminPortalOrgCore(
           ) as { org_id: string; role: string }[]
         : [];
 
-    let orgId: string;
-    let roleKeys: string[];
-
+    // No membership is no authority. There is no second place to look.
     const picked = chooseOrgAndRoleKeysFromMembershipRows(rows);
-    if (picked) {
-        orgId = picked.orgId;
-        roleKeys = picked.roleKeys;
-    } else {
-        const legacy = await fetchLegacyAdminOpsOrgAndRole(supabase, userId);
-        if (!legacy) return null;
-        orgId = legacy.orgId;
-        roleKeys = [legacy.role];
-    }
+    if (!picked) return null;
 
-    const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));
-    return { orgId, roleKeys, portalEligible };
+    /*
+     * W-13 — the one place this resolver's "light" contract had to give.
+     *
+     * It skips the grant union and the scope tables deliberately: 22 count/summary routes pay for
+     * this call, and the union fetch is the expensive half. Capability admission needs a grant row
+     * nonetheless, so it reads ONE — a single indexed lookup for `portal.access` — rather than
+     * resolving the union it exists to avoid. The alternative was to leave this path on the role
+     * literal, which would make admission mean two different things in one product.
+     */
+    const admission = await fetchPortalAdmission(
+        supabase,
+        picked.orgId,
+        picked.roleKeys,
+        "resolveAdminPortalOrgCore",
+        userId
+    );
+    return {
+        orgId: picked.orgId,
+        roleKeys: picked.roleKeys,
+        portalEligible: isPortalAdmitted(admission),
+        admission,
+    };
 }

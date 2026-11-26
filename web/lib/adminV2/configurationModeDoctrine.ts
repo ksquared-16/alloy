@@ -17,7 +17,10 @@ export const CONFIGURATION_MODE_FORBIDDEN_STYLING_PATTERNS = [
     "slate selected",
 ] as const;
 
-/** Configuration queue sections for `/settings/processes` (Presentation lives in Work View setup). */
+/**
+ * Configuration queue sections for `/settings/processes` (Presentation lives in Work View setup).
+ * Participation is NOT a section — it's a compact process-definition card at the top of Stages.
+ */
 export const CONFIGURATION_PROCESS_QUEUE_SECTIONS = [
     "stages",
     "work-views",

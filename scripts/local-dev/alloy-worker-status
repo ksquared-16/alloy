@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-worker-status
+  alloy-worker-status --slots [--refresh]
+  alloy-worker-status <initiative-key> [task-id]
+
+With no args (or --slots): one compact authoritative table for all six slots
+(sprint, provider, worktree, branch, git, ahead/behind, agent lifecycle,
+server, port, auth, health).
+
+The table names the canonical root and the base ref that ahead/behind is
+measured against, including how stale that ref is. Counts are relative to a
+cached base; --refresh fetches the base first so they are current.
+
+With an initiative key: existing Engineering Runtime worker assignment view.
+EOF
+}
+
+show_initiative_workers() {
+  local key="$1" filter_task="${2:-}"
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local base
+  base="$(alloy_initiative_dir "$key")"
+
+  show_task() {
+    local task_id="$1"
+    local w
+    w="$(node -e "
+      const w = require('${base}/state.json').workers['${task_id}'];
+      if (!w) process.exit(1);
+      console.log(JSON.stringify(w));
+    " 2>/dev/null)" || { alloy_info "  $task_id: (unassigned)"; return; }
+
+    local name path pkg report task_status
+    name="$(node -e "console.log(JSON.parse(process.argv[1]).worktree_name)" "$w")"
+    path="$(node -e "console.log(JSON.parse(process.argv[1]).path)" "$w")"
+    task_status="$(alloy_engineering_task_status "$(alloy_engineering_task_path "$key" "$task_id")")"
+    pkg="missing"
+    [[ -f "$(alloy_engineering_worker_package_md_path "$path")" ]] && pkg="present"
+    report="missing"
+    [[ -f "$(alloy_engineering_report_path "$key" "$task_id")" ]] && report="present"
+
+    printf 'Task %s\n' "$task_id"
+    printf '  status:   %s\n' "$task_status"
+    printf '  slot:     %s\n' "$(node -e "console.log(JSON.parse(process.argv[1]).slot)" "$w")"
+    printf '  role:     %s\n' "$(node -e "console.log(JSON.parse(process.argv[1]).role)" "$w")"
+    printf '  worktree: %s\n' "$name"
+    printf '  package:  %s\n' "$pkg"
+    printf '  report:   %s\n' "$report"
+    if [[ -d "$path" ]]; then
+      printf '  git:      %s\n' "$(alloy_git_state_summary "$path")"
+    fi
+    echo
+  }
+
+  if [[ -n "$filter_task" ]]; then
+    show_task "$filter_task"
+  else
+    local tid
+    for tid in $(alloy_engineering_list_tasks "$key"); do
+      show_task "$tid"
+    done
+  fi
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+
+  alloy_load_config
+  alloy_ensure_sprint_ops_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  local refresh=0
+  local -a rest=()
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --refresh) refresh=1 ;;
+      *) rest+=("$arg") ;;
+    esac
+  done
+  set -- ${rest[@]+"${rest[@]}"}
+
+  if [[ $# -eq 0 || "${1:-}" == "--slots" ]]; then
+    if [[ "$refresh" -eq 1 ]]; then
+      alloy_refresh_base_ref || alloy_warn "could not refresh $(alloy_base_ref) — counts remain relative to the cached ref"
+    fi
+    alloy_worker_status_table
+    exit 0
+  fi
+
+  # Numeric slot → single-row context via full table filter would be overkill;
+  # show the full authoritative table when first arg is a bare slot number.
+  if [[ "$1" =~ ^[1-9][0-9]*$ ]] && [[ $# -eq 1 ]]; then
+    alloy_worker_status_table
+    exit 0
+  fi
+
+  show_initiative_workers "$@"
+}
+
+main "$@"

@@ -138,6 +138,7 @@ const JOB_PRICING_DISCOUNT_KEYS = new Set([
 ]);
 
 const TOUR_ENROLLMENT_WORKFLOW_KEYS = new Set([
+    // opportunity-level legacy field key — not the OCM column
     "desired_start_date",
     "tour_date",
     "tour_time",
@@ -322,6 +323,7 @@ export function resolveDrawerFieldPolicy(
         return {
             entityType,
             fieldKey,
+            // desired_start_date is the opportunity-level legacy field key — not the OCM column
             storage: fieldKey === "desired_start_date" || fieldKey === "tour_date" || fieldKey === "tour_time" ? "metadata" : "unknown",
             bodyKey: fieldKey,
             policyMode: "deferred",

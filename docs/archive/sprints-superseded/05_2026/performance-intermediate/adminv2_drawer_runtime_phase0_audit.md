@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-20  
 **Status:** Audit/design only (implementation gate)  
-**Canonical references:** [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md), [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) (AdminV2 Runtime Contract V1)
+**Canonical references:** [`adminv2_dept_runtime_closeout_handoff.md`](../../../../sprints/archive/05_2026/completed/adminv2_dept_runtime_closeout_handoff.md), [`adminv2_work_unit_runtime_cards_1_3_plan.md`](../../../../sprints/archive/05_2026/adminv2_work_unit_runtime_cards_1_3_plan.md) (AdminV2 Runtime Contract V1)
 
 **Scope:** Replicate proven `/dept` + `/work-unit` orchestration into drawer surfaces. **No implementation in this document.**
 
@@ -110,7 +110,7 @@ OPEN
 
 **Primary reveal is gated on full hydrate** for workflow opportunities (`opportunityFullHydratePending`). That makes T6 dominated by the **second full entity GET**, not drawer_visible — the largest divergence from workspace doctrine (oper reveal before heavy hydrate).
 
-**Perf instrumentation:** [`web/lib/perf/adminV2DrawerPerf.ts`](../../web/lib/perf/adminV2DrawerPerf.ts) — `row_click_to_drawer_visible`, `drawer_visible_to_primary_ready`, `drawer_visible_to_full_hydrated`.
+**Perf instrumentation:** [`web/lib/perf/adminV2DrawerPerf.ts`](../../../../../web/lib/perf/adminV2DrawerPerf.ts) — `row_click_to_drawer_visible`, `drawer_visible_to_primary_ready`, `drawer_visible_to_full_hydrated`.
 
 ---
 

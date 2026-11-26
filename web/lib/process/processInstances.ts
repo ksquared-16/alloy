@@ -1,0 +1,828 @@
+/**
+ * process_instances — the generic runtime primitive for a running operational journey.
+ *
+ * A Process Instance is a SUBJECT moving through a PROCESS within a CONTEXT. It owns the
+ * runtime position (`stage_key`), durable `state`, and domain participation payload (`metadata`).
+ * For Enrollment it REPLACES opportunity_customer_members (OCM) as the runtime owner of child
+ * participation. OCM is a temporary legacy data source only (see the OCM removal plan).
+ *
+ * Doctrine: Lead/opportunity is context; Child is subject; Process Instance is the journey;
+ * Work attaches to the instance; Outcomes move the instance; Work Views read instances.
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { stageEnteredAtNowIso } from "@/lib/lifecycle/operationalStateEnteredAt";
+import {
+    resolveCurrentEnrollmentBusinessProcessRevision,
+    type EnrollmentBusinessProcessRevision,
+    type EnrollmentRevisionPinOutcome,
+} from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
+
+export const PROCESS_INSTANCES_TABLE = "process_instances" as const;
+
+/** Enrollment subject/context vocabulary (generic table, enrollment binding). */
+export const ENROLLMENT_SUBJECT_TYPE = "child" as const;
+export const ENROLLMENT_CONTEXT_TYPE = "opportunity" as const;
+
+/**
+ * The context an Enrollment journey anchors to: its Enrollment Participation.
+ *
+ * `opportunity_customer_members` is the durable owner of a child's Enrollment state, and a journey
+ * needs that subject whether or not the family arrived through acquisition. The older shape put an
+ * OPPORTUNITY in the context pair, which cannot describe a legitimate context-free enrolment — and
+ * overloading `"opportunity"` with an OCM id would make `context_id` mean two different things
+ * depending on who wrote it.
+ *
+ * So this is a second, precise type on the SAME generic pair. `context_type` exists to discriminate;
+ * the column's own comment calls the context "generic, optional". New Enrollment journeys use this
+ * one; instances written under the older shape are still read (see
+ * `resolveEnrollmentJourneyContext`), which is what lets the two converge without a flag day.
+ */
+export const ENROLLMENT_PARTICIPATION_CONTEXT_TYPE = "enrollment_participation" as const;
+
+/** Durable enrollment process state (replaces OCM.outcome_status_key). null = in-process pre-outcome. */
+export type EnrollmentProcessState =
+    | "waitlisted"
+    | "enrolling"
+    | "enrolled"
+    | "withdrawn"
+    | "not_enrolling";
+
+export type ProcessInstanceRow = {
+    id: string;
+    org_id: string;
+    process_key: string;
+    subject_type: string;
+    subject_id: string;
+    context_type: string | null;
+    context_id: string | null;
+    stage_key: string | null;
+    /** When the instance entered its current stage_key (null before first stage write / backfill). */
+    stage_entered_at: string | null;
+    state: string | null;
+    close_reason_key: string | null;
+    metadata: Record<string, unknown>;
+    created_at: string;
+    updated_at: string | null;
+};
+
+/** Enrollment participation payload carried in metadata (canonical fields; no OCM dependency). */
+export type EnrollmentParticipationMetadata = {
+    /** Family preferred start timing (Requested Start) — never rewritten by commitment. */
+    start_date?: string | null;
+    schedule_type?: string | null;
+    program_category_id?: string | null;
+    location_id?: string | null;
+    program_room_cohort_key?: string | null;
+    notes?: string | null;
+    /**
+     * Requested care intensity before exact weekdays are known.
+     * Distinct from preferred weekdays (`weekdays`) and from committed schedule_assignments.
+     */
+    requested_days_per_week?: number | null;
+    /** Preferred weekdays (0=Sun…6=Sat) — intent only until a proposed/committed assignment exists. */
+    weekdays?: number[] | null;
+};
+
+/**
+ * Focus Panel truth bag: customer_member_id → process_instances.metadata.
+ * Lets Assignments card / buildAssignmentCardModelFromTruth read requested_days and quotes
+ * without inventing a parallel fetch.
+ */
+export function buildEnrollmentParticipationByMemberMap(
+    instances: Array<{ subject_id: string; metadata?: Record<string, unknown> | null }>,
+): Record<string, Record<string, unknown>> {
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const pi of instances) {
+        const subjectId = typeof pi.subject_id === "string" ? pi.subject_id.trim() : "";
+        if (!subjectId) continue;
+        const meta =
+            pi.metadata && typeof pi.metadata === "object" && !Array.isArray(pi.metadata)
+                ? { ...pi.metadata }
+                : {};
+        out[subjectId] = meta;
+    }
+    return out;
+}
+
+/**
+ * Build the insert row for an enrollment process instance.
+ *
+ * ── CONTEXT IS OPTIONAL, AS THE SCHEMA ALWAYS SAID ──
+ *
+ * `context_id` is nullable and the column's own comment calls the context "generic, optional".
+ * This helper nonetheless REQUIRED an opportunity, which made a code-level constraint look like a
+ * platform one — it is why Start Enrollment was previously judged impossible from a durable Child
+ * record. A child added to Records has no acquisition episode, and inventing an Opportunity to
+ * satisfy a helper would have manufactured an acquisition that never happened.
+ *
+ * When `contextId` is absent, `context_type` is omitted too: a context type naming nothing is a
+ * dangling label, and the pair is meaningful only together.
+ */
+export function buildEnrollmentProcessInstanceInsert(args: {
+    orgId: string;
+    /** child = customer_members.id */
+    subjectId: string;
+    /** The context id — an Enrollment Participation, or an Opportunity under the older shape. */
+    contextId?: string | null;
+    /**
+     * What `contextId` IS. Defaults to the older opportunity shape so existing callers are
+     * unchanged; Enrollment journeys pass the participation type.
+     */
+    contextType?: string | null;
+    /**
+     * The acquisition Opportunity this journey came from, when one exists.
+     *
+     * Separate from the context on purpose. The context says what the journey IS ANCHORED TO; this
+     * says where the family came from. They were the same value while Enrollment anchored to an
+     * Opportunity, and conflating them is exactly what would put an OCM id into an Opportunity
+     * lookup. Null for a context-free start, which is an ordinary answer.
+     */
+    acquisitionOpportunityId?: string | null;
+    /** Initial stage; a brand-new lead's child rides the family track → null until a decision. */
+    stageKey?: string | null;
+    /** Initial durable state; null at intake (no enrollment outcome yet). */
+    state?: EnrollmentProcessState | null;
+    participation?: EnrollmentParticipationMetadata;
+    /** Provenance. Defaults to `create_lead`, this helper's original and still-largest caller. */
+    source?: string;
+    /**
+     * D-96. The immutable Business Process revision that governs this journey, resolved by
+     * {@link createEnrollmentProcessInstance} and included in THIS insert.
+     *
+     * Part of the row rather than a follow-up UPDATE on purpose: between an insert and a patch the
+     * instance would exist unpinned, and anything reading it in that window would resolve live
+     * configuration — the exact drift the pin removes. The database also refuses the repoint, so a
+     * create-then-patch design would be racing a trigger built to stop it.
+     */
+    businessProcessRevisionId?: string | null;
+}): Record<string, unknown> {
+    const metadata: Record<string, unknown> = { source: args.source ?? "create_lead" };
+    for (const [k, v] of Object.entries(args.participation ?? {})) {
+        if (v !== undefined && v !== null && v !== "") metadata[k] = v;
+    }
+    const stageKey = args.stageKey ?? null;
+    const contextId = (args.contextId ?? "").trim() || null;
+    const revisionId = (args.businessProcessRevisionId ?? "").trim() || null;
+    return {
+        org_id: args.orgId,
+        process_key: ENROLLMENT_PROCESS_KEY,
+        subject_type: ENROLLMENT_SUBJECT_TYPE,
+        subject_id: args.subjectId,
+        ...(contextId
+            ? { context_type: (args.contextType ?? "").trim() || ENROLLMENT_CONTEXT_TYPE, context_id: contextId }
+            : {}),
+        stage_key: stageKey,
+        // Only stamp entry when the instance starts with an explicit stage membership.
+        ...(stageKey ? { stage_entered_at: stageEnteredAtNowIso() } : {}),
+        state: args.state ?? null,
+        // Omitted rather than sent as null when unresolved, so the column stays absent from the
+        // upsert's SET list and a re-run can never clear a pin the database already refuses to clear.
+        ...(revisionId ? { business_process_revision_id: revisionId } : {}),
+        metadata,
+    };
+}
+
+/**
+ * Create an enrollment process instance for a child. Idempotent.
+ *
+ * Two different idempotency mechanisms, because the database offers two:
+ *
+ *   • WITH a context — `ux_process_instances_scope` is a plain unique index, so the upsert's
+ *     conflict target matches and the duplicate is ignored. Unchanged.
+ *   • CONTEXT-FREE — that index cannot constrain NULL `context_id` (SQL treats NULLs as
+ *     distinct), so the guarantee comes from the partial index
+ *     `ux_process_instances_open_context_free`. PostgREST cannot name a partial index as an
+ *     `onConflict` target, so the open journey is looked up first and a lost race is recovered
+ *     from the unique violation rather than pretended away.
+ *
+ * ── D-96: THE GOVERNING REVISION IS PINNED IN THIS INSERT ──
+ *
+ * This is the sole production creator of an Enrollment journey, so it is the only place the pin has
+ * to be applied — Start Enrollment, Create Lead child persistence and the Processing identity ports
+ * all inherit it without passing anything. The revision id is resolved BEFORE the insert and rides
+ * the same statement; there is deliberately no create-then-patch, because an instance that exists
+ * unpinned for even one statement resolves live configuration in that window.
+ *
+ * When no revision can be resolved the instance is still created — a tenant that has never published
+ * an Enrollment configuration has nothing to pin, and refusing to start their journeys would be a
+ * far worse failure. It is never SILENT: the result carries `revisionPinOutcome` naming why.
+ */
+export async function createEnrollmentProcessInstance(
+    supabase: SupabaseClient,
+    args: Parameters<typeof buildEnrollmentProcessInstanceInsert>[0],
+): Promise<{
+    id: string | null;
+    error?: string;
+    reused?: boolean;
+    /** D-96. Always reported, so "created unpinned" can never pass unnoticed. */
+    revisionPinOutcome?: EnrollmentRevisionPinOutcome;
+    businessProcessRevisionId?: string | null;
+}> {
+    // An explicit id from the caller wins — the certification harness pins deliberately — otherwise
+    // the org's currently authoritative published Enrollment revision is resolved here.
+    /*
+     * The Opportunity this journey came from, if any — distinct from the journey's context.
+     * Callers that still anchor to an Opportunity get it from the context, unchanged.
+     */
+    const acquisitionOpportunityId =
+        (args.acquisitionOpportunityId ?? "").trim() ||
+        ((args.contextType ?? "").trim() === ENROLLMENT_PARTICIPATION_CONTEXT_TYPE
+            ? null
+            : ((args.contextId ?? "").trim() || null));
+
+    const pin =
+        args.businessProcessRevisionId !== undefined
+            ? ({
+                  revisionId: (args.businessProcessRevisionId ?? "").trim() || null,
+                  departmentId: null,
+                  outcome: args.businessProcessRevisionId
+                      ? "pinned"
+                      : "no_published_enrollment_configuration",
+                  selector: "none",
+                  candidateDepartmentIds: [],
+              } satisfies EnrollmentBusinessProcessRevision)
+            : await resolveCurrentEnrollmentBusinessProcessRevision(supabase, args.orgId, {
+                  /*
+                   * Gate 0B. The journey's own Opportunity selects the department canonically
+                   * (Org -> Department -> Work unit -> Record), so a multi-department org pins
+                   * correctly instead of refusing. Absent for a context-free start, which then
+                   * falls back to "exactly one Enrollment department, or refuse".
+                   *
+                   * Read from the ACQUISITION, never from `context_id`. Once the journey anchors to
+                   * its Enrollment Participation the context id is an OCM id, and passing it here
+                   * would look up an Opportunity that cannot exist — silently demoting every
+                   * multi-department org to the refusal path, with only a D-96 warning to show for
+                   * it.
+                   */
+                  opportunityId: acquisitionOpportunityId,
+              });
+
+    if (pin.outcome !== "pinned") {
+        // Observable, not swallowed. A journey running on live configuration is a governance fact
+        // an operator may have to explain later, so it is stated at the moment it happens.
+        console.warn(
+            `[D-96] enrollment process instance created WITHOUT a governing revision pin (org=${args.orgId}, subject=${args.subjectId}, reason=${pin.outcome})`,
+        );
+    }
+
+    const row = buildEnrollmentProcessInstanceInsert({
+        ...args,
+        businessProcessRevisionId: pin.revisionId,
+    });
+    const contextId = (args.contextId ?? "").trim() || null;
+    const pinResult = {
+        revisionPinOutcome: pin.outcome,
+        businessProcessRevisionId: pin.revisionId,
+    };
+
+    if (!contextId) {
+        const existing = await findOpenContextFreeEnrollmentInstance(supabase, args.orgId, args.subjectId);
+        // A reused journey keeps ITS OWN pin. Re-reporting the freshly resolved one would claim a
+        // governance fact that is not true of that instance.
+        if (existing) return { id: existing, reused: true };
+
+        /*
+         * Creation INITIALIZES the opportunity's maintained facts in the SAME transaction as the
+         * insert. A post-create UPDATE would be a second lifecycle writer — exactly what the previous
+         * slice removed — and between the two statements the journey would exist unmaintained, which
+         * is the window a retired enrichment read can no longer cover for.
+         *
+         * TypeScript keeps the reuse and race decisions; the function does not invent a row.
+         */
+        const { data, error } = await supabase.rpc(
+            "insert_enrollment_participation_and_maintain_facts",
+            { p_org_id: args.orgId, p_row: row, p_ignore_duplicates: false },
+        );
+        if (error) {
+            // The partial index did its job against a concurrent writer.
+            if (error.code === "23505") {
+                const raced = await findOpenContextFreeEnrollmentInstance(
+                    supabase,
+                    args.orgId,
+                    args.subjectId,
+                );
+                if (raced) return { id: raced, reused: true };
+            }
+            return { id: null, error: error.message };
+        }
+        const created = (data ?? {}) as { id?: string | null };
+        return { id: created.id ? String(created.id) : null, ...pinResult };
+    }
+
+    /*
+     * A journey written under the OLDER shape is still this child's journey.
+     *
+     * Checked before the upsert, because the upsert can only conflict on an identical `context_id`.
+     * Without this, converging the anchor would have quietly created a second live journey for every
+     * child who already had one — the worst possible failure here, since both would look valid.
+     */
+    if ((args.contextType ?? "").trim() === ENROLLMENT_PARTICIPATION_CONTEXT_TYPE) {
+        const priorShape = await findOpenEnrollmentInstance(supabase, args.orgId, args.subjectId);
+        if (priorShape) return { id: priorShape, reused: true };
+    }
+
+    const { data, error } = await supabase.rpc(
+        "insert_enrollment_participation_and_maintain_facts",
+        { p_org_id: args.orgId, p_row: row, p_ignore_duplicates: true },
+    );
+    if (error) return { id: null, error: error.message };
+    const upserted = (data ?? {}) as { id?: string | null };
+    if (upserted.id) return { id: String(upserted.id), ...pinResult };
+
+    /**
+     * `ignoreDuplicates` means a conflict returns NO ROW. That is not a failure — the journey this
+     * call asked for already exists — but returning `{ id: null }` made it indistinguishable from
+     * one, and every caller treats a null id as "could not start the enrollment process". Pressing
+     * Start Enrollment twice therefore produced a red error on a child whose journey was fine, which
+     * is exactly what live QA saw.
+     *
+     * So the existing row is resolved and reported as a REUSE, the same shape the context-free
+     * branch above has always returned. The two branches now answer the same question the same way.
+     *
+     * No pin is reported, deliberately: nothing was created, so the freshly resolved revision does
+     * NOT govern this instance. Claiming it would assert a governance fact that is not true of the
+     * journey the caller just got back.
+     */
+    const { data: existingRow, error: existingError } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("id")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("subject_id", args.subjectId)
+        .eq("context_id", contextId)
+        .maybeSingle();
+    if (existingError) return { id: null, error: existingError.message };
+    if (existingRow) return { id: String((existingRow as { id: string }).id), reused: true };
+
+    // Conflict reported, yet nothing to reuse. Rather than return a bare null the caller would
+    // render as "could not start", say what happened.
+    return { id: null, error: "The enrollment journey could not be created or resolved for this child." };
+}
+
+/**
+ * The child's OPEN context-free enrollment journey, if one exists.
+ *
+ * "Open" matches the partial index exactly: concluded journeys are excluded so a later
+ * re-enrollment episode is legal rather than blocked by the child's own history.
+ */
+export async function findOpenContextFreeEnrollmentInstance(
+    supabase: SupabaseClient,
+    orgId: string,
+    subjectId: string,
+): Promise<string | null> {
+    return findOpenEnrollmentInstance(supabase, orgId, subjectId, { contextFreeOnly: true });
+}
+
+/**
+ * The child's OPEN enrollment journey, under ANY context shape.
+ *
+ * The bridge that lets the participation anchor land without a flag day. Reuse used to key on the
+ * literal `context_id`, so once Start Enrollment began writing a participation id, a journey already
+ * running under the older opportunity shape stopped matching — and pressing Start Enrollment on that
+ * child would have opened a SECOND live journey for them. The backfill closes the gap in the data;
+ * this closes it in the code, so the two are not required to land together.
+ *
+ * "Open" is the same predicate everywhere: concluded journeys are excluded, so a later episode is
+ * still legal. Within an episode a child has one journey, which is the grain the participation
+ * already has.
+ */
+export async function findOpenEnrollmentInstance(
+    supabase: SupabaseClient,
+    orgId: string,
+    subjectId: string,
+    opts?: { contextFreeOnly?: boolean },
+): Promise<string | null> {
+    const base = supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("id, state, context_id")
+        .eq("org_id", orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("subject_id", subjectId);
+    const { data, error } = await (opts?.contextFreeOnly ? base.is("context_id", null) : base);
+    if (error) throw new Error(error.message);
+    const open = ((data ?? []) as { id: string; state: string | null }[]).find(
+        (r) => !CONCLUDED_ENROLLMENT_PROCESS_STATES.includes((r.state ?? "").trim().toLowerCase()),
+    );
+    return open ? String(open.id) : null;
+}
+
+/**
+ * Journey-ending states. Must stay in step with the predicate of
+ * `ux_process_instances_open_context_free` — if they drift, the code and the database disagree
+ * about what "already running" means and one of them starts losing.
+ */
+export const CONCLUDED_ENROLLMENT_PROCESS_STATES: readonly string[] = [
+    "enrolled",
+    "withdrawn",
+    "not_enrolling",
+];
+
+/**
+ * THE ONE LIFECYCLE AUTHORITY, CALLED.
+ *
+ * Every function below that changes `stage_key`, `state` or `close_reason_key` goes through this and
+ * writes no column itself. They used to issue bare UPDATEs, and because this module uses the table
+ * constant it exports rather than the string literal, the single-writer gate never saw them — the
+ * invariant P0-7.6 Step 2 depends on was reported as held while five lifecycle writes sat here.
+ *
+ * The RPC is one transaction, so when Step 2 adds the maintained opportunity fact beside the
+ * participation UPDATE, every caller here inherits that maintenance instead of each having to
+ * remember it. That inheritance IS the point of converging.
+ *
+ * `stage_entered_at` is stamped by the RPC when `stage_key` is supplied, which is exactly what these
+ * callers did by hand; nothing about the transition's meaning changes.
+ */
+async function applyParticipationLifecycle(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        instanceId: string;
+        stageKey?: string | null;
+        state?: EnrollmentProcessState | null;
+        closeReasonKey?: string | null;
+        /** Present only when the caller holds a version to guard against. */
+        expectedVersion?: string | null;
+    },
+): Promise<{ applied: boolean; error?: string }> {
+    const setStage = Object.prototype.hasOwnProperty.call(args, "stageKey");
+    const setState = Object.prototype.hasOwnProperty.call(args, "state");
+    // `null` means SET NULL and absent means LEAVE ALONE — the flag carries the distinction, which a
+    // single nullable argument cannot express.
+    const setClose = Object.prototype.hasOwnProperty.call(args, "closeReasonKey");
+
+    const { data, error } = await supabase.rpc("update_participation_and_maintain_facts", {
+        p_org_id: args.orgId,
+        p_participation_id: args.instanceId,
+        p_expected_version: args.expectedVersion ?? null,
+        p_set_stage_key: setStage,
+        p_stage_key: setStage ? (args.stageKey ?? null) : null,
+        p_set_state: setState,
+        p_state: setState ? (args.state ?? null) : null,
+        p_set_close_reason_key: setClose,
+        p_close_reason_key: setClose ? (args.closeReasonKey ?? null) : null,
+    });
+    if (error) return { applied: false, error: error.message };
+    const result = (data ?? {}) as { ok?: boolean; error?: string };
+    // Not-found and stale are ONE outcome, as they have always been on this path: the predicate
+    // cannot tell them apart and no caller depended on the difference.
+    if (result.ok === true && setStage && args.stageKey) {
+        await recordStagePathEntry(supabase, { orgId: args.orgId, instanceId: args.instanceId, stageKey: args.stageKey });
+    }
+    return result.ok === true ? { applied: true } : { applied: false };
+}
+
+/**
+ * THE STAGES A JOURNEY ACTUALLY ENTERED — `metadata.stage_path_v1`, appended by the one stage writer.
+ *
+ * A branching process (Decision → Offered → Enrolling, or Decision → Waitlist) cannot be read off
+ * configured stage ORDER: a child offered a spot was never waitlisted, yet Waitlist sits earlier on the
+ * rail. The stepper marks a child-track stage complete only when it is on this path. Additive and
+ * best-effort: a journey with no entry (older journeys, or a failed append) shows the stage blank —
+ * never inferred as traversed. The move itself has already been written by the canonical RPC.
+ */
+export const STAGE_PATH_METADATA_KEY = "stage_path_v1";
+
+async function recordStagePathEntry(
+    supabase: SupabaseClient,
+    args: { orgId: string; instanceId: string; stageKey: string },
+): Promise<void> {
+    try {
+        const { data } = await supabase
+            .from("process_instances")
+            .select("metadata")
+            .eq("org_id", args.orgId)
+            .eq("id", args.instanceId)
+            .maybeSingle();
+        const metadata = ((data as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? {}) as Record<string, unknown>;
+        const path = Array.isArray(metadata[STAGE_PATH_METADATA_KEY]) ? (metadata[STAGE_PATH_METADATA_KEY] as Array<{ stage_key?: string }>) : [];
+        if (path.length && path[path.length - 1]?.stage_key === args.stageKey) return;
+        const next = { ...metadata, [STAGE_PATH_METADATA_KEY]: [...path, { stage_key: args.stageKey, entered_at: new Date().toISOString() }].slice(-50) };
+        await supabase.from("process_instances").update({ metadata: next }).eq("org_id", args.orgId).eq("id", args.instanceId);
+    } catch {
+        // The path is evidence for presentation; a lost entry shows a blank step, never a wrong one.
+    }
+}
+
+/** Stage keys a journey actually entered, from `metadata.stage_path_v1`. Empty when unrecorded. */
+export function traversedStageKeysFromMetadata(metadata: unknown): string[] {
+    const raw = (metadata as Record<string, unknown> | null)?.[STAGE_PATH_METADATA_KEY];
+    if (!Array.isArray(raw)) return [];
+    return [...new Set(raw.map((e) => (e as { stage_key?: unknown })?.stage_key).filter((k): k is string => typeof k === "string" && k.trim() !== ""))];
+}
+
+/** Move a process instance's stage (outcome execution is the only caller). */
+export async function moveProcessInstanceStage(
+    supabase: SupabaseClient,
+    args: { orgId: string; instanceId: string; stageKey: string },
+): Promise<{ error?: string }> {
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: args.instanceId,
+        stageKey: args.stageKey,
+    });
+    return r.error ? { error: r.error } : {};
+}
+
+/** Set a process instance's durable state (+ optional close reason). Outcome execution only. */
+export async function setProcessInstanceState(
+    supabase: SupabaseClient,
+    args: { orgId: string; instanceId: string; state: EnrollmentProcessState; closeReasonKey?: string | null },
+): Promise<{ error?: string }> {
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: args.instanceId,
+        state: args.state,
+        // Forwarded only when the caller supplied it, so "leave the close reason alone" survives.
+        ...(args.closeReasonKey !== undefined ? { closeReasonKey: args.closeReasonKey } : {}),
+    });
+    return r.error ? { error: r.error } : {};
+}
+
+/**
+ * THE CHILD'S ENROLLMENT JOURNEY, UNDER WHICHEVER ANCHOR IT CARRIES.
+ *
+ * ── THE DEFECT THIS CLOSES ──
+ *
+ * Every `*ByScope` helper below matched the journey with `.eq("context_id", opportunityId)`. That
+ * was exact while an Enrollment journey could only anchor to an Opportunity. It is no longer:
+ *
+ *     context_type = enrollment_participation
+ *     context_id   = the exact OCM id
+ *
+ * So for every journey the participation anchor created — which is now every NEW journey — those
+ * helpers compared an Opportunity id against an OCM id and matched NOTHING. The state write moved
+ * zero rows, the stage write moved zero rows, and the reads returned null. The convergence commit
+ * that taught the rest of Enrollment to read either anchor never reached this module.
+ *
+ ── WHY RESOLVE AN ID RATHER THAN WIDEN THE PREDICATE ──
+ *
+ * Matching on `subject_id` alone would match EVERY episode the child has ever had, including last
+ * year's concluded one — turning a precise single-row write into a multi-row one. The participation
+ * lifecycle makes that a real shape: a re-enrolling child legitimately holds two journeys.
+ *
+ * So the journey is resolved to ONE id and the writers act on that id. `ambiguous` is reported as a
+ * multi-row write so the caller's existing single-write assertion still refuses a duplicate track —
+ * collapsing that case into a silent `moved: 0` would read as "no journey" and lose the signal.
+ *
+ * Each writer also RETURNS the id it acted on, so a compensation names that row instead of
+ * re-deriving it: by the time an undo runs the journey is concluded and a fresh lookup would no
+ * longer find it as the child's open one.
+ *
+ * ── AMBIGUITY IS REPORTED, NEVER GUESSED ──
+ *
+ * Two open journeys for one child is a data defect. Picking one would write a durable enrollment
+ * outcome onto a coin flip, so this returns `ambiguous` and lets the caller's single-write assertion
+ * refuse.
+ */
+export type EnrollmentInstanceScope = {
+    orgId: string;
+    customerMemberId: string;
+    /** Legacy acquisition anchor. Optional: a context-free journey has none. */
+    opportunityId?: string | null;
+    /** Most specific identity. When present nothing is resolved. */
+    processInstanceId?: string | null;
+};
+
+export type ResolvedEnrollmentInstance = {
+    id: string | null;
+    /** True when several journeys matched and none could be preferred. Never guessed. */
+    ambiguous: boolean;
+};
+
+export async function resolveEnrollmentInstanceIdForScope(
+    supabase: SupabaseClient,
+    args: EnrollmentInstanceScope,
+): Promise<ResolvedEnrollmentInstance> {
+    const direct = (args.processInstanceId ?? "").trim();
+    if (direct) return { id: direct, ambiguous: false };
+
+    const subjectId = (args.customerMemberId ?? "").trim();
+    if (!subjectId) return { id: null, ambiguous: false };
+
+    const { data, error } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("id, context_id, context_type, state")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("subject_id", subjectId);
+    if (error) return { id: null, ambiguous: false };
+
+    const rows = (data ?? []) as {
+        id: string;
+        context_id: string | null;
+        context_type: string | null;
+        state: string | null;
+    }[];
+    if (!rows.length) return { id: null, ambiguous: false };
+    if (rows.length === 1) return { id: rows[0].id, ambiguous: false };
+
+    const opportunityId = (args.opportunityId ?? "").trim();
+    if (opportunityId) {
+        const legacy = rows.filter((r) => (r.context_id ?? "") === opportunityId);
+        if (legacy.length === 1) return { id: legacy[0].id, ambiguous: false };
+        if (legacy.length > 1) return { id: null, ambiguous: true };
+    }
+
+    const open = rows.filter(
+        (r) => !CONCLUDED_ENROLLMENT_PROCESS_STATES.includes((r.state ?? "").trim().toLowerCase()),
+    );
+    if (open.length === 1) return { id: open[0].id, ambiguous: false };
+    if (open.length > 1) return { id: null, ambiguous: true };
+
+    return { id: null, ambiguous: rows.length > 1 };
+}
+
+/**
+ * Move a child's enrollment instance stage. Resolves the journey under EITHER anchor, then writes
+ * by id, so a participation-anchored journey is targeted exactly and siblings are untouched.
+ */
+export async function moveEnrollmentInstanceStageByScope(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        opportunityId?: string | null;
+        customerMemberId: string;
+        stageKey: string;
+        processInstanceId?: string | null;
+    },
+): Promise<{ moved: number; error?: string; instanceId?: string | null }> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    // Duplicate journeys are an INTEGRITY failure, not "no journey". Reported as a multi-row write
+    // so the caller's single-write assertion refuses it and the transaction unwinds.
+    if (resolved.ambiguous) return { moved: 2, instanceId: null };
+    if (!resolved.id) return { moved: 0, instanceId: null };
+
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: resolved.id,
+        stageKey: args.stageKey,
+    });
+    if (r.error) return { moved: 0, error: r.error, instanceId: resolved.id };
+    // `moved` keeps its exact meaning for `assertSingleParticipantWrite`: the RPC writes one row or
+    // none, and "none" is the same not-found outcome the row count reported before.
+    return { moved: r.applied ? 1 : 0, instanceId: resolved.id };
+}
+
+/** Set a child's enrollment instance durable state (+ close reason) by scope (opportunity + child). */
+export async function setEnrollmentInstanceStateByScope(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        opportunityId?: string | null;
+        customerMemberId: string;
+        state: EnrollmentProcessState;
+        closeReasonKey?: string | null;
+        processInstanceId?: string | null;
+    },
+): Promise<{ moved: number; error?: string; instanceId?: string | null }> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    // Duplicate journeys are an INTEGRITY failure, not "no journey". Reported as a multi-row write
+    // so the caller's single-write assertion refuses it and the transaction unwinds.
+    if (resolved.ambiguous) return { moved: 2, instanceId: null };
+    if (!resolved.id) return { moved: 0, instanceId: null };
+
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: resolved.id,
+        state: args.state,
+        // State and close reason move together — closing a journey is ONE transition, which is why
+        // close_reason_key had to join the lifecycle contract rather than stay a second write.
+        ...(args.closeReasonKey !== undefined ? { closeReasonKey: args.closeReasonKey } : {}),
+    });
+    if (r.error) return { moved: 0, error: r.error, instanceId: resolved.id };
+    return { moved: r.applied ? 1 : 0, instanceId: resolved.id };
+}
+
+/** Resolve a child's enrollment process-instance id by scope (opportunity + child). */
+export async function getEnrollmentInstanceIdByScope(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId?: string | null; customerMemberId: string; processInstanceId?: string | null },
+): Promise<string | null> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    return resolved.ambiguous ? null : resolved.id;
+}
+
+/** Read a child's current enrollment instance state by scope (for transition events). */
+export async function readEnrollmentInstanceState(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId?: string | null; customerMemberId: string; processInstanceId?: string | null },
+): Promise<string | null> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    if (resolved.ambiguous || !resolved.id) return null;
+    const { data } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("state")
+        .eq("org_id", args.orgId)
+        .eq("id", resolved.id)
+        .maybeSingle();
+    return (data as { state?: string | null } | null)?.state ?? null;
+}
+
+/**
+ * Read a child's current enrollment instance stage by scope. Captured before a stage move so
+ * the Platform Transaction Contract has an inverse to compensate with.
+ */
+export async function readEnrollmentInstanceStageKey(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId?: string | null; customerMemberId: string; processInstanceId?: string | null },
+): Promise<string | null> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    if (resolved.ambiguous || !resolved.id) return null;
+    const { data } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("stage_key")
+        .eq("org_id", args.orgId)
+        .eq("id", resolved.id)
+        .maybeSingle();
+    return (data as { stage_key?: string | null } | null)?.stage_key ?? null;
+}
+
+/** Read enrollment process instances for a lead (Work View / drawer child list). */
+export async function listEnrollmentInstancesForLead(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string },
+): Promise<ProcessInstanceRow[]> {
+    /*
+     * THE SAME ANSWER AS THE STRICT READER, ONLY LENIENT ON FAILURE.
+     *
+     * This matched `context_id = opportunity` alone, which is the legacy anchor. A child added
+     * through the operator's Add Child has a journey anchored to its Enrollment Participation, so
+     * every display reader built on this (the Decision surface's per-child paths among them) saw a
+     * two-child family as having no children — deployed: "Review each child's path" rendered no
+     * rows and no child could be offered, waitlisted or enrolled from Decision. The strict reader
+     * already widens to both anchors; this now asks it, and keeps answering `[]` when it cannot.
+     */
+    const read = await readEnrollmentInstancesForLead(supabase, args);
+    return read.ok ? read.rows : [];
+}
+
+export type EnrollmentInstanceReadResult =
+    | { ok: true; rows: ProcessInstanceRow[] }
+    | { ok: false; error: string };
+
+/**
+ * Read outcome for callers that must tell "no children" apart from "could not read".
+ *
+ * `listEnrollmentInstancesForLead` answers a failed query with `[]`. That is fine for a display
+ * surface — an empty list renders as nothing. It is NOT fine for a decision: a guard that blocks
+ * closing a family while children are active would read a database failure as "this family has no
+ * children" and permit the very close it exists to prevent. Failing open is the one thing such a
+ * guard must never do.
+ *
+ * Display callers keep the lenient function. Anything that DECIDES uses this one.
+ */
+export async function readEnrollmentInstancesForLead(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string },
+): Promise<EnrollmentInstanceReadResult> {
+    const opportunityId = args.opportunityId?.trim();
+    if (!opportunityId) return { ok: false, error: "opportunity id required" };
+
+    try {
+        /*
+         * BOTH TRACK SHAPES. A journey now anchors to the child's Enrollment Participation
+         * (`context_type = enrollment_participation`), so the Opportunity id is not in its
+         * `context_id` at all — the certified Add Child → Waitlist shape. Matching the Opportunity
+         * id alone returned FEWER rows and no error, so this guard read a family with waitlisted
+         * children as having none and allowed the close it exists to refuse. The journey owner's
+         * widening is the one answer to "which journeys belong to this Opportunity" (imported at
+         * call time: that module already imports this one's constants).
+         */
+        const { enrollmentContextIdsForOpportunities } = await import(
+            "@/lib/enrollment/completion/resolveEnrollmentJourneyContext"
+        );
+        const { contextIds } = await enrollmentContextIdsForOpportunities(supabase, args.orgId, [opportunityId]);
+        const { data, error } = await supabase
+            .from(PROCESS_INSTANCES_TABLE)
+            .select("*")
+            .eq("org_id", args.orgId)
+            .eq("process_key", ENROLLMENT_PROCESS_KEY)
+            .in("context_id", contextIds);
+        if (error) return { ok: false, error: error.message };
+        // `null` data with no error is not "zero rows" — it is a response this code cannot vouch
+        // for, and the caller is about to make an irreversible decision with it.
+        if (!Array.isArray(data)) {
+            return { ok: false, error: "enrollment process instances unreadable" };
+        }
+        return { ok: true, rows: data as ProcessInstanceRow[] };
+    } catch (cause) {
+        return { ok: false, error: cause instanceof Error ? cause.message : "enrollment read failed" };
+    }
+}
+
+/** Read enrollment process instances in a stage (child-grain Work View membership). */
+export async function listEnrollmentInstancesForStage(
+    supabase: SupabaseClient,
+    args: { orgId: string; stageKey: string },
+): Promise<ProcessInstanceRow[]> {
+    const { data, error } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("*")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("stage_key", args.stageKey);
+    if (error) return [];
+    return (data ?? []) as ProcessInstanceRow[];
+}

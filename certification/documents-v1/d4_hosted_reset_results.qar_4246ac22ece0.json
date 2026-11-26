@@ -1,0 +1,42 @@
+{
+  "unlink_outside": 404,
+  "doc_hh": [
+    404,
+    404
+  ],
+  "doc_a1": [
+    404,
+    404
+  ],
+  "doc_a2": [
+    404,
+    404
+  ],
+  "doc_c1": [
+    404,
+    404
+  ],
+  "doc_c2": [
+    404,
+    404
+  ],
+  "doc_case": [
+    404,
+    404
+  ],
+  "doc_med": [
+    404,
+    404
+  ],
+  "doc_shared": [
+    404,
+    404
+  ],
+  "doc_held": [
+    200,
+    404
+  ],
+  "lead_delete": 200,
+  "library_after": 404,
+  "household_after": 404
+}

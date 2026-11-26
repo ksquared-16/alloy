@@ -20,6 +20,24 @@ import type { ConfigLayoutAssistProposalState } from "./configurationProposalSta
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/*
+ * THE KEYS, NAMED LITERALLY WHERE THE GATE IS EXPRESSED.
+ *
+ * The route-capability checker binds a declaration with three joins: the handler must call the
+ * named helper, the helper's verdict must be returned, and THE MODULE DEFINING THE HELPER must
+ * name the declared key on an executable line. These gates satisfied the first two and failed the
+ * third, because the key constants live in `configurationProposalAccess.ts` and arrived here only
+ * as imported identifiers — so five handlers the server has always gated could not be declared,
+ * and the inventory went on understating the server.
+ *
+ * The annotation is the guard against the obvious hazard of writing a key twice: each is typed as
+ * the constant it must equal, so a drift between the two spellings is a compile error rather than
+ * a silently decorative declaration.
+ */
+const GENERATE_KEY: typeof CONFIG_ASSIST_PERMISSION_GENERATE = "config_assist.generate";
+const REVIEW_KEY: typeof CONFIG_ASSIST_PERMISSION_REVIEW = "config_assist.review";
+const APPLY_KEY: typeof CONFIG_ASSIST_PERMISSION_APPLY = "config_assist.apply";
+
 export function isConfigLayoutAssistProposalId(id: string): boolean {
     return UUID_RE.test(id.trim());
 }
@@ -58,7 +76,7 @@ export async function loadConfigLayoutAssistAdminContext(): Promise<
 export function forbidUnlessGeneratePermission(
     access: Pick<{ permissionKeys: string[]; roleKeys: string[] }, "permissionKeys" | "roleKeys">
 ): NextResponse | null {
-    if (!hasConfigLayoutAssistPermission(access, CONFIG_ASSIST_PERMISSION_GENERATE)) {
+    if (!hasConfigLayoutAssistPermission(access, GENERATE_KEY)) {
         return NextResponse.json(
             { ok: false, error: "FORBIDDEN", message: "config_assist.generate required." },
             { status: 403 }
@@ -88,7 +106,7 @@ export function forbidUnlessTransitionPermission(
 export function forbidUnlessReviewPermission(
     access: Pick<{ permissionKeys: string[]; roleKeys: string[] }, "permissionKeys" | "roleKeys">
 ): NextResponse | null {
-    if (!hasConfigLayoutAssistPermission(access, CONFIG_ASSIST_PERMISSION_REVIEW)) {
+    if (!hasConfigLayoutAssistPermission(access, REVIEW_KEY)) {
         return NextResponse.json(
             { ok: false, error: "FORBIDDEN", message: "config_assist.review required." },
             { status: 403 }
@@ -100,7 +118,7 @@ export function forbidUnlessReviewPermission(
 export function forbidUnlessApplyPermission(
     access: Pick<{ permissionKeys: string[]; roleKeys: string[] }, "permissionKeys" | "roleKeys">
 ): NextResponse | null {
-    if (!hasConfigLayoutAssistPermission(access, CONFIG_ASSIST_PERMISSION_APPLY)) {
+    if (!hasConfigLayoutAssistPermission(access, APPLY_KEY)) {
         return NextResponse.json(
             { ok: false, error: "FORBIDDEN", message: "config_assist.apply required." },
             { status: 403 }

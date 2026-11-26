@@ -1,0 +1,794 @@
+{
+  "trusted_host_action_id": "tha_dd10fb434ea854",
+  "query_hash": "cd8ebff225517181422ed7f669cbdfe33238c707718887d1fd4f2b6013e49125",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-15T20:17:48.645Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_dd10fb434ea854",
+    "query_hash": "cd8ebff225517181422ed7f669cbdfe33238c707718887d1fd4f2b6013e49125",
+    "authorization_id": "grnt_faec8a6644a648e4",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-15T20:17:53.197Z",
+    "question_ids": [
+      "assignment",
+      "program",
+      "w7block"
+    ],
+    "questions": {
+      "assignment": {
+        "question_id": "assignment",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "certhouse_monthly_assignment",
+            "ocm_stage": null,
+            "ocm_outcome": null,
+            "ocm_schedule_type": "full_time",
+            "ocm_location_is_north": true,
+            "ocm_has_program": true,
+            "ocm_start": "2026-09-01",
+            "ocm_metadata_keys": null,
+            "opp_stage": "lead",
+            "opp_status": "new_inquiry",
+            "opp_has_work_unit": true,
+            "opp_source": null,
+            "agreement_status": "active",
+            "agreement_source": "thread_11a_recurring_certification",
+            "agreement_start": "2026-09-01"
+          }
+        ]
+      },
+      "program": {
+        "question_id": "program",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "infant",
+            "category_label": "Infant",
+            "active": true,
+            "at_north": true,
+            "offerings": [
+              {
+                "attendance": "part_time",
+                "active": true,
+                "status": "active",
+                "variants": [
+                  {
+                    "qty_type": null,
+                    "qty": null,
+                    "active": true,
+                    "rates": null
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 1,
+                    "active": true,
+                    "rates": null
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 2,
+                    "active": true,
+                    "rates": null
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 3,
+                    "active": true,
+                    "rates": null
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 4,
+                    "active": true,
+                    "rates": null
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 5,
+                    "active": true,
+                    "rates": null
+                  }
+                ]
+              },
+              {
+                "attendance": "full_time",
+                "active": true,
+                "status": "active",
+                "variants": [
+                  {
+                    "qty_type": "days",
+                    "qty": 5,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "weekly",
+                        "payer": "private_pay",
+                        "cents": 10000,
+                        "loc": "north",
+                        "active": true,
+                        "start": null,
+                        "end": null
+                      },
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 150000,
+                        "loc": "north",
+                        "active": true,
+                        "start": null,
+                        "end": null
+                      },
+                      {
+                        "cadence": "weekly",
+                        "payer": "private_pay",
+                        "cents": 25000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-22",
+                        "end": null
+                      },
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 185000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-08-01",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 4,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "weekly",
+                        "payer": "private_pay",
+                        "cents": 22500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-22",
+                        "end": null
+                      },
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 165000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-08-01",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 3,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "weekly",
+                        "payer": "private_pay",
+                        "cents": 21500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-22",
+                        "end": null
+                      },
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 132500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-08-01",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 2,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "weekly",
+                        "payer": "private_pay",
+                        "cents": 20000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-22",
+                        "end": null
+                      },
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 95000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-08-01",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 1,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 52500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "label": "school_age",
+            "category_label": "School Age",
+            "active": true,
+            "at_north": true,
+            "offerings": [
+              {
+                "attendance": "before_school",
+                "active": true,
+                "status": "active",
+                "variants": [
+                  {
+                    "qty_type": null,
+                    "qty": null,
+                    "active": true,
+                    "rates": null
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 1,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 12500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 2,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 22500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 3,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 31500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 4,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 39000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 5,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 45000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "attendance": "full_time",
+                "active": true,
+                "status": "active",
+                "variants": [
+                  {
+                    "qty_type": null,
+                    "qty": null,
+                    "active": true,
+                    "rates": null
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 1,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 17500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 2,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 32500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 3,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 45000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 4,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 56000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 5,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 65000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "attendance": "custom",
+                "active": true,
+                "status": "active",
+                "variants": [
+                  {
+                    "qty_type": null,
+                    "qty": null,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "weekly",
+                        "payer": "private_pay",
+                        "cents": 18500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-09-01",
+                        "end": null
+                      },
+                      {
+                        "cadence": "weekly",
+                        "payer": "private_pay",
+                        "cents": 19500,
+                        "loc": "north",
+                        "active": true,
+                        "start": "2026-09-01",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 1,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 25000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 2,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 45000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 3,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 62500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 4,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 78000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 5,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 90000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "label": "preschool",
+            "category_label": "Preschool",
+            "active": true,
+            "at_north": true,
+            "offerings": [
+              {
+                "attendance": "full_time",
+                "active": true,
+                "status": "active",
+                "variants": [
+                  {
+                    "qty_type": null,
+                    "qty": null,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 145000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-01",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 1,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 42500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 2,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 77500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 3,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 107500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 4,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 135000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 5,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 155000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "label": "pre_k",
+            "category_label": "Pre-K",
+            "active": true,
+            "at_north": true,
+            "offerings": null
+          },
+          {
+            "label": "kindergarten",
+            "category_label": "Kindergarten",
+            "active": true,
+            "at_north": true,
+            "offerings": null
+          },
+          {
+            "label": "toddler",
+            "category_label": "Toddler",
+            "active": true,
+            "at_north": true,
+            "offerings": [
+              {
+                "attendance": "full_time",
+                "active": true,
+                "status": "active",
+                "variants": [
+                  {
+                    "qty_type": "days",
+                    "qty": 1,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 47500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 2,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 87500,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 3,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 120000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 4,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 150000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  },
+                  {
+                    "qty_type": "days",
+                    "qty": 5,
+                    "active": true,
+                    "rates": [
+                      {
+                        "cadence": "monthly",
+                        "payer": "private_pay",
+                        "cents": 170000,
+                        "loc": "org_default",
+                        "active": true,
+                        "start": "2026-07-28",
+                        "end": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "label": "stage4_ok3_w9k7sx",
+            "category_label": "Stage4 OK3 w9k7sx",
+            "active": false,
+            "at_north": true,
+            "offerings": null
+          }
+        ]
+      },
+      "w7block": {
+        "question_id": "w7block",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "w7_tuition_ids_free",
+            "customers": 0,
+            "categories_w7": 0,
+            "offerings_w7": 0
+          }
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}

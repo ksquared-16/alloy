@@ -28,7 +28,9 @@ import type {
     LayoutFieldAdornment,
     LayoutItem,
     LayoutRenderHint,
+    LayoutSurface,
 } from "@/lib/layout/layoutV2";
+import { asRecordLayoutSurface } from "@/lib/layout/layoutV2";
 import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
 import { inferLayoutAdornmentIdPath } from "@/lib/layout/inferLayoutAdornmentIdPath";
 import {
@@ -86,7 +88,7 @@ const QUEUE_ZONE_LABEL: Record<string, string> = {
 type LayoutGroup = {
     key: string;
     entityType: string;
-    surface: "drawer" | "queue";
+    surface: LayoutSurface;
     layoutKey: string;
     isDefault: boolean;
     primary: EntityLayoutRecord;
@@ -918,7 +920,7 @@ export default function LayoutConfigClient({
             {picker && catalog && (
                 <LayoutFieldPickerOverlay
                     catalog={catalog}
-                    surface={workingDoc?.surface ?? "drawer"}
+                    surface={asRecordLayoutSurface(workingDoc?.surface ?? "drawer")}
                     tab={pickerTab}
                     setTab={setPickerTab}
                     group={pickerGroup}

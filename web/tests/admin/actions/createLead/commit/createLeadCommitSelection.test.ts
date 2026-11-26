@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
     buildCreateLeadCommitSelection,
+    createEmptyCreateLeadCommitSelection,
     patchCreateLeadCommitRecord,
     toggleCreateLeadCommitInclusion,
     syncCreateLeadValuesFromCommitSelection,
@@ -15,6 +16,10 @@ import {
     __resetHouseholdCandidateCounterForTests,
     groupFactsIntoHouseholdCandidates,
 } from "@/lib/intake/group/groupFactsIntoHouseholdCandidates";
+import { summarizeCommitChildren } from "@/lib/bos/commandSession/createLeadRepeaterDraft";
+import { buildCreateLeadSectionModels } from "@/lib/bos/commandSession/createLeadSectionPresentation";
+import { emptyBosCommandDraft } from "@/lib/bos/commandSession";
+import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 
 const TWO_BY_TWO_PASTE = [
     "Sarah & Rudy Emerson 1222344321 sarah@emerson.net",
@@ -74,6 +79,150 @@ describe("buildCreateLeadCommitSelection", () => {
             values: { location_id: "site-1" },
         });
         expect(result.ok).toBe(false);
+    });
+
+    it("restores include_in_commit when a Form row becomes valid after mid-edit", () => {
+        let selection = createEmptyCreateLeadCommitSelection();
+        const primary = selection.parents[0]!;
+        expect(primary.include_in_commit).toBe(true);
+
+        // First incomplete keystroke clears include (historical bug path).
+        selection = patchCreateLeadCommitRecord(selection, primary.candidate_id, {
+            first_name: "J",
+        });
+        expect(selection.parents[0]?.include_in_commit).toBe(false);
+        expect(selection.parents[0]?.validation_state).toBe("invalid");
+
+        // Completing required identity must re-include so Review readiness can sync flats.
+        selection = patchCreateLeadCommitRecord(selection, primary.candidate_id, {
+            first_name: "Jenn",
+            last_name: "Chapman",
+            email: "jenn@chapman.com",
+            phone: "4458589989",
+        });
+        expect(selection.parents[0]?.validation_state).toBe("valid");
+        expect(selection.parents[0]?.include_in_commit).toBe(true);
+
+        const flats = syncCreateLeadValuesFromCommitSelection({}, selection);
+        expect(flats.first_name).toBe("Jenn");
+        expect(flats.last_name).toBe("Chapman");
+        expect(flats.email).toBe("jenn@chapman.com");
+        expect(flats.phone).toBe("4458589989");
+    });
+
+    it("syncs flat draft values from primary even while include_in_commit is false mid-edit", () => {
+        let selection = createEmptyCreateLeadCommitSelection();
+        const primary = selection.parents[0]!;
+        selection = patchCreateLeadCommitRecord(selection, primary.candidate_id, {
+            first_name: "Jenn",
+            last_name: "Chapman",
+            email: "jenn@chapman.com",
+        });
+        // Force the mid-edit exclude state that used to clear flats.
+        selection = {
+            ...selection,
+            parents: selection.parents.map((p) =>
+                p.candidate_id === primary.candidate_id ? { ...p, include_in_commit: false } : p
+            ),
+        };
+        const flats = syncCreateLeadValuesFromCommitSelection({}, selection);
+        expect(flats.first_name).toBe("Jenn");
+        expect(flats.last_name).toBe("Chapman");
+        expect(flats.email).toBe("jenn@chapman.com");
+    });
+});
+
+describe("Create Lead summary date display", () => {
+    it("formats child DOB with platform display dates (not raw ISO)", () => {
+        const selection = createEmptyCreateLeadCommitSelection();
+        selection.children = [
+            {
+                candidate_id: "child:1",
+                entity_type: "child",
+                role: "child",
+                first_name: "Billie",
+                last_name: "Chapman",
+                email: "",
+                phone: "",
+                dob: "2025-02-25",
+                age_display: null,
+                program_interest: "Infant",
+                start_date: null,
+                program_room_cohort_key: null,
+                schedule_type: null,
+                extra_payload_values: {},
+                include_in_commit: true,
+                primary: true,
+                validation_state: "valid",
+                commit_blockers: [],
+                source_fact_ids: [],
+            },
+        ];
+        const lines = summarizeCommitChildren(selection);
+        expect(lines[0]).toContain("Billie Chapman");
+        expect(lines[0]).toContain("Infant");
+        expect(lines[0]).toMatch(/Born Feb 25, 2025/);
+        expect(lines[0]).not.toContain("2025-02-25");
+    });
+
+    it("formats flat child section summary dates the same way", () => {
+        const fields: ActionWorkspaceGatherField[] = [
+            {
+                payload_key: "child_first_name",
+                field_label: "Child first name",
+                section: "child",
+                section_label: "Child",
+                tier: "optional",
+                value_kind: "text",
+            },
+            {
+                payload_key: "child_last_name",
+                field_label: "Child last name",
+                section: "child",
+                section_label: "Child",
+                tier: "optional",
+                value_kind: "text",
+            },
+            {
+                payload_key: "child_date_of_birth",
+                field_label: "Date of birth",
+                section: "child",
+                section_label: "Child",
+                tier: "optional",
+                value_kind: "date",
+            },
+        ];
+        const draft = emptyBosCommandDraft();
+        draft.values = [
+            {
+                fieldKey: "child_first_name",
+                value: "Billie",
+                state: "operator_entered",
+                evidence: [],
+                optionResolved: false,
+            },
+            {
+                fieldKey: "child_last_name",
+                value: "Chapman",
+                state: "operator_entered",
+                evidence: [],
+                optionResolved: false,
+            },
+            {
+                fieldKey: "child_date_of_birth",
+                value: "2025-02-25",
+                state: "operator_entered",
+                evidence: [],
+                optionResolved: false,
+            },
+        ];
+        const models = buildCreateLeadSectionModels({
+            sections: [{ key: "child", label: "Child", fields }],
+            draft,
+            requiredPayloadKeys: [],
+        });
+        expect(models[0]!.summaryLines[0]).toMatch(/Born Feb 25, 2025/);
+        expect(models[0]!.summaryLines[0]).not.toContain("2025-02-25");
     });
 });
 

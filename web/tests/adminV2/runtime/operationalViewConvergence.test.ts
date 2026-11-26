@@ -122,11 +122,10 @@ describe("Configuration Runtime Phase 3A convergence", () => {
     it("buildOperationalViewPreviewRuntimeHref includes queue param", () => {
         expect(
             buildOperationalViewPreviewRuntimeHref({
-                departmentId: "dept-1",
-                workUnitId: "wu-1",
+                workUnitKey: "enrollment_pipeline",
                 queueKey: "tours",
             }),
-        ).toBe("/adminV2/workspace/dept/dept-1/work-unit/wu-1?queue=tours");
+        ).toBe("/workspace/work-unit/enrollment-pipeline?queue=tours");
     });
 
     it("deriveOperationalViewsFromQueueDefinition maps queue lanes", () => {

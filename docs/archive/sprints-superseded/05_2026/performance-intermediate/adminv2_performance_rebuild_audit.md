@@ -301,7 +301,7 @@ Do **not** reintroduce blindly:
 - `web/components/admin/workspace/DepartmentPairedOperQueuesSkeleton.tsx`
 - `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx`
 - `web/tests/admin/adminV2DrawerLoadingCoherence.test.ts` (new)
-- `docs/sprints/05_2026/adminv2_performance_rebuild_audit.md`
+- `docs/sprints/archive/05_2026/adminv2_performance_rebuild_audit.md`
 
 ### Navigation contracts preserved
 

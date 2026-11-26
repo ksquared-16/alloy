@@ -1,0 +1,70 @@
+{
+  "customerId": "29944d3e-8267-45b7-8dcb-7405060e2573",
+  "assignments": [
+    "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+    "79f8011d-a236-4054-bee7-af10f1dbc632"
+  ],
+  "acceptedTermsPresent": true,
+  "forecasts": [
+    {
+      "id": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "status": 200,
+      "gross": 145000,
+      "outcomes": [
+        {
+          "kind": "expected",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyKind": "discount",
+          "label": "discount",
+          "amountCents": -14500,
+          "explanation": "discount · 10% of $1450.00"
+        }
+      ],
+      "liveExceptions": 1,
+      "exceptionReasons": [
+        "H/I — excluded for the next period, to prove no row is writt",
+        "H/I — excluded for the next period, to prove no row is writt",
+        "A-K final — excluded for the whole period",
+        "A-K — second, same start, must be refused or supersede",
+        "A-K — first of a duplicate pair",
+        "A-K — a window that closed before this period",
+        "A-K final — a window that closed before this period"
+      ]
+    },
+    {
+      "id": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "status": 200,
+      "gross": 18500,
+      "outcomes": [
+        {
+          "kind": "not_expected",
+          "reason": "excluded_by_exception"
+        }
+      ],
+      "liveExceptions": 0,
+      "exceptionReasons": [
+        "A-K final — mounted authoring on the repaired build",
+        "11B promotion proof — board waived this policy for this fami",
+        "A-K final — mounted authoring on the repaired deployed build",
+        "A-K final — re-authored the same combination after ending",
+        "A-K final — mounted authoring on the repaired deployed build",
+        "A-K final — re-authored the same combination after ending",
+        "§12 — governed this period, and already ended",
+        "11B promotion proof — excluded for the whole period",
+        "A-K final — excluded for the whole period",
+        "H/I — moved out of the way of the next period",
+        "H/I — moved out of the way of the next period",
+        "A-K final — a window that closed before this period",
+        "F — retired to a long-closed window so the period is ungover"
+      ]
+    }
+  ],
+  "accountingCalendars": 1,
+  "accountingPeriods": 12,
+  "accountingActive": 1,
+  "responsibilityShares": 0,
+  "prepaidAvailableCents": 12500,
+  "prepaidHeldCents": 0,
+  "reductions": 51,
+  "subjects": 2
+}

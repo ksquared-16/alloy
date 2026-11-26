@@ -1,0 +1,68 @@
+[
+  {
+    "row": "F1",
+    "what": "Add opens as the unified command",
+    "ok": true,
+    "observed": "add_charge overlay"
+  },
+  {
+    "row": "F2",
+    "what": "a child-grain type exposes the eligible sibling",
+    "ok": true,
+    "observed": "1 sibling checkbox(es)"
+  },
+  {
+    "row": "F3",
+    "what": "the amount is stated PER CHILD with the count",
+    "ok": true,
+    "observed": "$75.00 per child · 2 children · each receives their own charge"
+  },
+  {
+    "row": "F4",
+    "what": "the canonical writer reports one obligation per selected child",
+    "ok": false,
+    "observed": "children_selected=undefined created=undefined failed=undefined"
+  },
+  {
+    "row": "F5",
+    "what": "the payload's subject grain matches the stated selection, with no household aggregation",
+    "ok": false,
+    "observed": "[]"
+  },
+  {
+    "row": "F6",
+    "what": "retrying an already-billed child converges instead of duplicating",
+    "ok": false,
+    "observed": "new ledger rows=1 for 0 children"
+  },
+  {
+    "row": "F7",
+    "what": "resulting obligations stay child-attributed",
+    "ok": true,
+    "observed": "[\"Certa Certhouse\"]"
+  },
+  {
+    "row": "F8",
+    "what": "responsibility stays per obligation, not one household answer",
+    "ok": true,
+    "observed": "[\"not-allocated\"]"
+  },
+  {
+    "row": "G1",
+    "what": "available prepaid is visible and positive",
+    "ok": true,
+    "observed": "available=200.00 testid=Available $200.00"
+  },
+  {
+    "row": "G2",
+    "what": "current balance and available prepaid are separate figures",
+    "ok": true,
+    "observed": "balance=$37.87 available=200.00"
+  },
+  {
+    "row": "G3",
+    "what": "prepaid is not netted into the balance",
+    "ok": true,
+    "observed": "balance stands on its own: $37.87"
+  }
+]

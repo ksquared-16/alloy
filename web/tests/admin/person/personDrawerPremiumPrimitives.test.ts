@@ -10,25 +10,12 @@ function read(rel: string): string {
 }
 
 describe("Person drawer premium primitives", () => {
-    it("uses Opportunity-parity header composition with pills on title rail", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerHeaderMetadata");
-        expect(drawer).toContain("personHeaderTitleRailRight");
-        expect(drawer).toContain("PersonDrawerProfileBadges");
-        expect(drawer).toMatch(/personHeaderTitleRailRight[\s\S]*PersonDrawerProfileBadges/);
-    });
 
     it("PersonDrawerHeaderMetadata renders compact record number without Person prefix", () => {
         expect(formatPersonDrawerRecordNumber({ person_number: 67 })).toBe("#67");
         const meta = read("components/admin/entity/PersonDrawerHeaderMetadata.tsx");
         expect(meta).not.toContain("Person #");
         expect(meta).toContain("data-record-drawer-back-link");
-    });
-
-    it("person drawer retires quick links — household section owns navigation", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toContain("PersonDrawerContextPanel");
-        expect(drawer).toContain("PersonDrawerHouseholdSection");
     });
 
     it("PersonDrawerProfileBadges use substantial title-rail role pills", () => {
@@ -42,8 +29,4 @@ describe("Person drawer premium primitives", () => {
         expect(meta).toContain("data-record-drawer-back-link");
     });
 
-    it("uses premium section surface for adminV2 person drawer", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toMatch(/sectionSurface=\{[\s\S]*drawer\.type === "persons"/);
-    });
 });

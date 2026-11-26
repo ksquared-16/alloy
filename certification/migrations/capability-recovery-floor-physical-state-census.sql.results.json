@@ -1,0 +1,59 @@
+{
+  "trusted_host_action_id": "tha_e0c53a9842842c",
+  "query_hash": "43c71c7fbf3368dc3d4a49c3ab6574ed72215619f31c877fc8e134b61e3438a6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T18:19:01.101Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e0c53a9842842c",
+    "query_hash": "43c71c7fbf3368dc3d4a49c3ab6574ed72215619f31c877fc8e134b61e3438a6",
+    "authorization_id": "grnt_dfa342e56c1b4bca",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T18:19:02.049Z",
+    "question_ids": [
+      "m915170000",
+      "ledger_version",
+      "ledger_head"
+    ],
+    "questions": {
+      "m915170000": {
+        "question_id": "m915170000",
+        "row_count": null,
+        "rows": [
+          "recovery_floor ~ installed ~ owner_exists ~ true",
+          "recovery_floor ~ boundary ~ owner_not_client_executable ~ true",
+          "recovery_floor ~ boundary ~ owner_keeps_service_role ~ true",
+          "recovery_floor ~ boundary ~ scan_is_structural_and_covers_more ~ true",
+          "recovery_floor ~ boundary ~ nothing_open_to_clients ~ true",
+          "recovery_floor ~ preconditions ~ refuses_memberless_target ~ true",
+          "recovery_floor ~ preconditions ~ refuses_when_a_holder_exists ~ true",
+          "recovery_floor ~ preconditions ~ refuses_inactive_capability ~ true",
+          "recovery_floor ~ preconditions ~ asserts_a_holder_results ~ true",
+          "recovery_floor ~ regression ~ w18_grant_ceiling_intact ~ true",
+          "recovery_floor ~ regression ~ assignment_ceiling_intact ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260915170000 ~ registered ~ present ~ true"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260915170000
+        ]
+      }
+    },
+    "row_count": 13
+  }
+}

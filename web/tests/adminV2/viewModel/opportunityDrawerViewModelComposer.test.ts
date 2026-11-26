@@ -62,7 +62,6 @@ const gate = {
     roleKeys: ["admin"],
     access: {} as never,
     dim: {} as never,
-    dimRaw: {} as never,
 };
 
 function makeSupabase(oppRow: Record<string, unknown> | null) {

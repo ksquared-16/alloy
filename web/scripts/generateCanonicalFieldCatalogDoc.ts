@@ -1,5 +1,5 @@
 /**
- * Emit docs/canonical-field-catalog.md from source registries.
+ * Emit docs/platform/core/data/field-catalog.md from source registries.
  *
  * Usage: cd web && npx tsx scripts/generateCanonicalFieldCatalogDoc.ts
  */
@@ -13,6 +13,6 @@ import {
 
 const rows = buildCanonicalFieldCatalogRows();
 const markdown = formatCanonicalFieldCatalogMarkdown(rows);
-const outPath = resolve(__dirname, "../../docs/canonical-field-catalog.md");
+const outPath = resolve(__dirname, "../../docs/platform/core/data/field-catalog.md");
 writeFileSync(outPath, markdown, "utf8");
 console.log(`Wrote ${rows.length} rows to ${outPath}`);

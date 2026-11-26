@@ -28,6 +28,7 @@ export const OPPORTUNITY_DRAWER_WORKFLOW_V1_FIRST_PAINT_DEPENDENCIES: readonly O
         "tasks_preview",
         "scheduled_sends",
         "inquiry_children",
+        "scheduling_projection",
     ];
 
 export type OpportunityFirstViewportPlan = {
@@ -78,8 +79,11 @@ export function buildOpportunityFirstViewportPlan(input: OpportunityFirstViewpor
     if (inquiryChildrenInFirstViewport(input.shell)) {
         viewport_slots.push("inquiry_children");
     } else {
-        const idx = dependencies.indexOf("inquiry_children");
-        if (idx >= 0) dependencies.splice(idx, 1);
+        // No children in view → drop both the children list and their scheduling projection.
+        for (const key of ["inquiry_children", "scheduling_projection"] as const) {
+            const idx = dependencies.indexOf(key);
+            if (idx >= 0) dependencies.splice(idx, 1);
+        }
     }
 
     return { viewport_slots, dependencies };
@@ -91,9 +95,9 @@ export function opportunityFirstPaintDependencySatisfiedFromRecord(
     record: Record<string, unknown>
 ): boolean {
     if (key === "record_visible") return true;
-    if (key === "tour_bookings") {
-        return opportunityInquiryTourDisplayFromPrimaryMetadata(record);
-    }
+    // Metadata may warm Tour *display*, but never satisfies authoritative tour_bookings.
+    // Emptying bookings when metadata has tour_date/time left Current Work stuck on Schedule Tour.
+    if (key === "tour_bookings") return false;
     if (key === "inquiry_children") {
         return Array.isArray(record._inquiry_children);
     }
@@ -104,8 +108,9 @@ export function opportunityFirstPaintDependencySatisfiedFromRecord(
     return false;
 }
 
-export function opportunityTourBookingsFetchRequired(record: Record<string, unknown>): boolean {
-    return !opportunityInquiryTourDisplayFromPrimaryMetadata(record);
+/** Always fetch active tour_bookings — command eligibility depends on authoritative rows. */
+export function opportunityTourBookingsFetchRequired(_record: Record<string, unknown>): boolean {
+    return true;
 }
 
 export type TourSlotDisplaySource = "metadata" | "bookings" | "none";

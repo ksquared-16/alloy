@@ -1,11 +1,14 @@
 import { findDateInText, INTAKE_US_DATE_RE, parseFlexibleDate } from "@/lib/intake/normalize/date";
 import { splitPersonName } from "@/lib/intake/normalize/personName";
+import { stripGenderFromName, type ParsedGender } from "@/lib/intake/normalize/gender";
+import { stripNameFieldTerminators } from "@/lib/intake/normalize/nameFieldTerminators";
 
 export type ParsedChildBlockEntry = {
     first_name: string;
     last_name: string | null;
     dob: string | null;
     raw_name: string;
+    gender: ParsedGender;
 };
 
 const CHILD_BLOCK_HEADER_RE =
@@ -73,17 +76,31 @@ function stripDateTokensFromFragment(fragment: string): string {
         .trim();
 }
 
-function parseNameFromFragment(fragment: string): { first_name: string; last_name: string | null; raw_name: string } | null {
+function parseNameFromFragment(fragment: string): { first_name: string; last_name: string | null; raw_name: string; gender: ParsedGender } | null {
     const trimmed = fragment.trim();
     if (!trimmed) return null;
 
-    const withoutDates = stripDateTokensFromFragment(trimmed);
+    // Field labels (Gender, DOB, Program, …) terminate the name span before any split — otherwise
+    // "Wrigley Gender Female" becomes first=Wrigley last=Gender and blocks surname inheritance.
+    const terminated = stripNameFieldTerminators(trimmed);
+    let working = terminated.name;
+    let gender: ParsedGender = terminated.gender;
+
+    // Strip bare gender VALUE tokens (girl/boy/…) that remain without a Gender/Sex label —
+    // "Caitlyn Girl" → first "Caitlyn"; surname inferred downstream. Do this before date strip
+    // so trailing "Girl" is not swallowed by the greedy "DOB …" date strip.
+    const strippedGender = stripGenderFromName(working);
+    working = strippedGender.name;
+    gender = gender ?? strippedGender.gender;
+
+    const withoutDates = stripDateTokensFromFragment(working);
     const split = splitPersonName(withoutDates);
     if (split) {
         return {
             first_name: split.first,
             last_name: split.last,
             raw_name: `${split.first} ${split.last}`.trim(),
+            gender,
         };
     }
 
@@ -93,6 +110,7 @@ function parseNameFromFragment(fragment: string): { first_name: string; last_nam
             first_name: firstOnly[1],
             last_name: null,
             raw_name: firstOnly[1],
+            gender,
         };
     }
 
@@ -116,6 +134,7 @@ export function parseChildBlockEntries(line: string): ParsedChildBlockEntry[] {
             last_name: name.last_name,
             dob: parseDobFromFragment(fragment),
             raw_name: name.raw_name,
+            gender: name.gender,
         });
     }
 

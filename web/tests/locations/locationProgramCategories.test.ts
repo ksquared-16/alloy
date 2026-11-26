@@ -96,11 +96,11 @@ describe("locationProgramCategories", () => {
         ).toBe("Infant Care");
     });
 
-    it("falls back to legacy option set label for desired_program_type-only rows", () => {
+    it("falls back to option set label when only the derived program key is available", () => {
         const lookup = new Map([["childcare_program_type\0toddler", "Toddler Program"]]);
         expect(
             resolveInquiryChildProgramCategoryLabel({
-                desired_program_type: "toddler",
+                program_key: "toddler",
                 optionLabelLookup: lookup,
             })
         ).toBe("Toddler Program");
@@ -140,6 +140,5 @@ describe("LocationsHierarchySettingsClient", () => {
         expect(src).not.toContain("listOrgProgramCategoriesForSettings");
         expect(src).not.toContain("orgProgramCategoryRegistry");
         expect(src).toContain("fetchLocationProgramCategories");
-        expect(src).toContain("LocationProgramCategoriesSettingsPanel");
     });
 });

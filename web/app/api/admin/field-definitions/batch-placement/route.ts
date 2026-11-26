@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FIELDS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { logAdminAudit } from "@/lib/adminAuth";
 import {
     validateFieldPlacementBatch,
@@ -25,9 +26,8 @@ export async function PATCH(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, FIELDS_MANAGE);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

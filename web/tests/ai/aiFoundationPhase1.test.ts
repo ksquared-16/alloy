@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
     AI_POLICY_METADATA_KEY,
-    createAiProviderForPolicy,
     createDisabledAiProvider,
     NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
     parseAiPolicyFromMetadata,
@@ -11,7 +10,6 @@ import {
     aiUsageTelemetryPayloadV1ToJson,
     aiEnrichmentEnvelopeV1ToJson,
 } from "@/lib/ai";
-import type { AttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/enrichmentContracts";
 import type { AiStructuredRequestV1 } from "@/lib/ai/providerTypes";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 
@@ -114,19 +112,37 @@ describe("createDisabledAiProvider", () => {
     });
 });
 
-describe("createAiProviderForPolicy", () => {
+/**
+ * Phase 2.8 Gate D deleted `createAiProviderForPolicy` and everything it could
+ * resolve. This block used to prove that the resolver returned the ungoverned
+ * OpenAI-compatible provider under strict mode with credentials — which is now
+ * the opposite of what must be true, because that provider no longer exists.
+ *
+ * The proof that replaced it is architectural rather than behavioural and lives
+ * in `tests/trust/ungovernedEgressRetired.test.ts`: no module outside the
+ * governed adapter can reach a reasoning provider at all. A behavioural test
+ * could only show that one particular caller does not; a structural scan shows
+ * that no caller could.
+ *
+ * What survives here is the part that never depended on egress: a disabled
+ * provider still refuses.
+ */
+describe("structured provider surface after Gate D", () => {
     beforeEach(() => vi.unstubAllEnvs());
     afterEach(() => {
         vi.unstubAllEnvs();
         vi.unstubAllGlobals();
     });
 
-    it("returns disabled for openai policy without strict live options", async () => {
-        const policy = parseAiPolicyFromMetadata({
-            [AI_POLICY_METADATA_KEY]: { enabled: true, provider: "openai", allowed_features: ["draft_enrichment"] },
-        });
-        const prov = createAiProviderForPolicy(policy);
-        const res = await prov.completeStructured({
+    it("an org policy naming a provider can no longer resolve one — the barrel exports no resolver", async () => {
+        const barrel: Record<string, unknown> = await import("@/lib/ai");
+        expect(barrel.createAiProviderForPolicy).toBeUndefined();
+        expect(barrel.resolveStructuredAiProviderForPolicy).toBeUndefined();
+        expect(barrel.enrichAttentionSuggestionStubEnvelope).toBeUndefined();
+    });
+
+    it("the disabled provider still refuses, unchanged", async () => {
+        const res = await createDisabledAiProvider().completeStructured({
             schema_version: 1,
             request_id: "r1",
             correlation_id: "c1",
@@ -136,49 +152,7 @@ describe("createAiProviderForPolicy", () => {
             requested_at_iso: "2026-05-13T12:00:00.000Z",
         });
         expect(res.outcome).toBe("disabled");
-    });
-
-    it("resolves OpenAI-compatible provider when strict mode, credentials, and live flag are set", async () => {
-        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
-        vi.stubEnv("OPENAI_API_KEY", "sk-test");
-        vi.stubEnv("OPENAI_MODEL", "gpt-test");
-        const fetchMock = vi.fn().mockResolvedValue(
-            new Response(
-                JSON.stringify({
-                    choices: [
-                        {
-                            message: {
-                                content: JSON.stringify({
-                                    version: 1,
-                                    agent_key: "needs_attention_suggestion_enrichment",
-                                    generated_at_iso: "2026-05-13T12:00:00.000Z",
-                                    provider_report: { provider_key: "openai", execution_mode: "live" },
-                                }),
-                            },
-                        },
-                    ],
-                }),
-                { status: 200, headers: { "Content-Type": "application/json" } },
-            ),
-        );
-        vi.stubGlobal("fetch", fetchMock);
-
-        const policy = parseAiPolicyFromMetadata({
-            [AI_POLICY_METADATA_KEY]: { enabled: true, provider: "openai", allowed_features: ["draft_enrichment"] },
-        });
-        const prov = createAiProviderForPolicy(policy, { openai_live_invocation_permitted: true });
-        expect(prov.key).toBe("openai");
-        const res = await prov.completeStructured<AttentionSuggestionAiEnrichmentV1>({
-            schema_version: 1,
-            request_id: "r1",
-            correlation_id: "c1",
-            feature: NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
-            org_id: "o1",
-            payload: { next_action_key: "k", primary_reason_code: "r" },
-            requested_at_iso: "2026-05-13T12:00:00.000Z",
-        });
-        expect(res.outcome).toBe("ok");
-        expect(res.data?.provider_report.provider_key).toBe("openai");
+        expect(res.data).toBeUndefined();
     });
 });
 

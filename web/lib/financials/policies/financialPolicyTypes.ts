@@ -10,8 +10,15 @@
  */
 
 import type { ConfigRuleEffectiveColumns } from "@/lib/childcareOperational/config/configRuleTypes";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
-export const FINANCIAL_POLICY_SCOPE_TYPES = ["org", "location", "service", "rate_plan"] as const;
+/*
+ * `customer` is the ACCOUNT scope, and it is a different dimension from the three that precede it.
+ * org/location/service/rate_plan narrow by what is being SOLD; customer narrows by WHOSE ACCOUNT it
+ * is. It is most-specific because an explicit account-level answer must beat an inherited default —
+ * a household whose children attend two locations has no single location to inherit from.
+ */
+export const FINANCIAL_POLICY_SCOPE_TYPES = ["org", "location", "service", "rate_plan", "customer"] as const;
 export type FinancialPolicyScopeType = (typeof FINANCIAL_POLICY_SCOPE_TYPES)[number];
 
 export const POLICY_SCOPE_LABEL: Record<FinancialPolicyScopeType, string> = {
@@ -19,13 +26,14 @@ export const POLICY_SCOPE_LABEL: Record<FinancialPolicyScopeType, string> = {
     location: "Location",
     service: "Service",
     rate_plan: "Rate Plan",
+    customer: "This account",
 };
 
 /** A typed value field for a policy type. `control` drives the UI input. */
 export type PolicyValueField = {
     key: string;
     label: string;
-    control: "select" | "number" | "money" | "yesno";
+    control: "select" | "number" | "money" | "yesno" | "date";
     options?: { value: string; label: string }[];
     /** Suffix shown in display (e.g. "days"). */
     suffix?: string;
@@ -47,8 +55,109 @@ export const FINANCIAL_POLICY_TYPES = [
     "deposit",
     "refund",
     "posting_review",
+    /*
+     * The database has permitted this since `20260704120000_financial_policies.sql`
+     * and the application model never caught up: no entry here, no registry
+     * definition, no validator, so it could be neither created through the policy
+     * service nor resolved through `resolveFinancialPolicy`. The consumption path
+     * filled the gap by reading a boolean off the operational fact instead, which
+     * put commercial authority in the wrong place entirely. Adding the type is
+     * what lets policy answer the commercial question.
+     */
+    "vacation_credit",
+    /*
+     * WHEN PAYMENT IS EXPECTED. The one date in the billing chain that had no configured rule:
+     * `billable_on_strategy` already configures when a charge is ISSUED, and `grace_period`
+     * configures how long AFTER due before lateness applies, but the due date itself was supplied
+     * by whichever caller happened to create the charge. An organisation could not state its own
+     * terms, and recurring generation had no rule to follow.
+     */
+    "due_date",
+    /*
+     * THE CUSTOMER'S COMMERCIAL BILLING CALENDAR — cadence, and the anchor the anchor-sensitive
+     * cadences tile from.
+     *
+     * Deliberately NOT `billing_cadence`, which looks like the obvious seat and is not available:
+     * `billing_cadence` is consumed by `consumptionService`, so authoring location-scoped rows there
+     * to configure billing periods would change tuition generation as a side effect. This type is
+     * consumed by the billing-period authority alone.
+     *
+     * Its cadence vocabulary is `BillingCadence` from `billingPeriod.ts` — the authority that
+     * actually tiles periods — and NOT the older `CADENCES` menu that `billing_cadence` offers. The
+     * two disagree: `CADENCES` offers `semi_monthly` and `term`, which nothing can tile, and omits
+     * `daily` and `annual`, which `billingPeriod.ts` supports. A calendar that could be configured
+     * to a cadence the period authority cannot produce would be configuration that fails at use.
+     */
+    "billing_calendar",
+    /*
+     * WHEN THE ORGANISATION BILLS — the invoice date, as a rule relative to the billing period.
+     *
+     * It used to exist only as a charge-template column (`billable_on_strategy`), so the answer to
+     * "when does this organisation bill?" was scattered across every template and could not say
+     * "seven days before the period begins" at all. It is now a scoped, effective-dated policy —
+     * org default, location override — and a template carries an exception only where a charge
+     * kind genuinely bills differently. It writes the same column (`billable_on`); there is still
+     * one invoice date and one engine that computes it (`resolveChargeDateChain`).
+     */
+    "invoice_timing",
 ] as const;
 export type FinancialPolicyType = (typeof FINANCIAL_POLICY_TYPES)[number];
+
+/**
+ * ── WHAT AN OPERATOR MAY AUTHOR TODAY — the types something actually CONSUMES ────────────────
+ *
+ * CONFIGURABLE IS NOT CAPABILITY. Four of the types above are resolvable, storable and offered by
+ * the configuration surface, and NOTHING in the runtime reads them: `late_fee`, `nsf_fee`,
+ * `refund` and `deposit` have no `resolveFinancialPolicy` call site anywhere. An operator
+ * configuring one is being invited to state terms the product will ignore — worse than an absent
+ * control, because it looks like a capability and will be believed.
+ *
+ * Every type here was traced to a real consumer:
+ *   proration        → generateTuitionCharges, previewTuitionGeneration, consumptionService
+ *   billing_cadence  → consumptionService
+ *   grace_period     → consumptionService
+ *   posting_review   → chargeLifecycleService (the write path), buildFinancialsCardVM
+ *   vacation_credit  → policyReductionService
+ *   due_date         → chargeLifecycleService, since the wiring that made it real
+ *
+ * The full list above is UNTOUCHED: the schema still permits every type, the registry still
+ * describes them, the validator still accepts them, and historical rows still resolve. This governs
+ * only what the authoring surface OFFERS, so the four can be restored the day they gain a consumer.
+ */
+export const OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES = [
+    "proration",
+    "billing_cadence",
+    "grace_period",
+    "posting_review",
+    "vacation_credit",
+    "due_date",
+    /*
+     * The two billing-period rules the date chain consumes. `billing_calendar` is consumed by the
+     * billing-period binder; `invoice_timing` by `resolveChargeDateChain`. Both were resolvable and
+     * unauthorable, which is how a tenant's calendar came to be configured only by fixture scripts.
+     */
+    "billing_calendar",
+    "invoice_timing",
+] as const satisfies readonly FinancialPolicyType[];
+
+/** Offered by the configuration surface, or held back until a runtime consumer exists. */
+export function isOperatorAuthorablePolicyType(value: string): boolean {
+    return (OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES as readonly string[]).includes(value);
+}
+
+
+/**
+ * The closed commercial positions on a vacation absence. `no_credit` is stated
+ * explicitly rather than left to absence, so an organisation that has decided
+ * "tuition is flat regardless" can say so and have that survive a later default
+ * changing underneath it.
+ */
+export const VACATION_TREATMENTS = [
+    { value: "credit", label: "Credit the vacation" },
+    { value: "no_credit", label: "No credit" },
+] as const;
+
+export type VacationTreatment = (typeof VACATION_TREATMENTS)[number]["value"];
 
 const PRORATION_METHODS = [
     { value: "none", label: "No proration" },
@@ -63,6 +172,68 @@ const CADENCES = [
     { value: "weekly", label: "Weekly" },
     { value: "term", label: "Term" },
 ];
+
+/*
+ * The cadences the PERIOD authority can actually tile. Mirror of `BillingCadence` in
+ * `web/lib/financials/billingPeriod.ts`; `isPeriodBillableCadence` there is the runtime guard.
+ */
+const BILLING_CALENDAR_CADENCES = [
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "biweekly", label: "Biweekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "annual", label: "Annual" },
+];
+
+/**
+ * HOW A DUE DATE IS REACHED — four strategies, and the reason there are only four.
+ *
+ * Each one is expressible from a date the charge already carries, so none of them needs a new
+ * column or a new authority:
+ *
+ *   on_invoice               due = the invoice/bill date (`billable_on`)
+ *   days_after_invoice       due = billable_on + N          — the `offset_days` grammar templates
+ *                                                             already use for billable_on itself
+ *   on_period_start          due = the commercial period's first day
+ *   days_after_period_start  due = period start + N
+ *
+ * ── WHAT WAS EVALUATED AND DELIBERATELY LEFT OUT ──
+ *
+ * "Fixed day of the month" — due on the 1st, due on the 15th. It reads as the obvious fifth option
+ * and it is a month-shaped idea: it has no meaning for a weekly or biweekly organisation, whose
+ * period may not contain a 15th at all, and it would silently mean something different for every
+ * cadence. `days_after_period_start` expresses the same intent for EVERY cadence — "due on the
+ * first day of the period" is offset 0 — so adding it would be a second way to say one thing, with
+ * one of the two wrong for most tenants.
+ *
+ * "Days BEFORE the period starts" — expressible as a negative offset, and refused for now because a
+ * due date preceding the invoice date is a term nobody in this domain has asked for and would make
+ * past-due arithmetic answer questions about money not yet billed.
+ */
+export const DUE_DATE_STRATEGIES = [
+    { value: "on_invoice", label: "On the invoice date" },
+    { value: "days_after_invoice", label: "Days after the invoice date" },
+    { value: "on_period_start", label: "On the first day of the billing period" },
+    { value: "days_after_period_start", label: "Days after the billing period starts" },
+];
+
+/**
+ * HOW AN INVOICE DATE IS REACHED, relative to the billing period the obligation belongs to.
+ *
+ *   days_before_period_start   invoice = period start − N     (N = 0 is "on the first day")
+ *   on_service_date            invoice = the service date     (the historical "immediate")
+ *
+ * Either way the invoice date never precedes the day the charge is created: a charge added late
+ * is invoiced the day it exists. That clamp is applied by the date chain, not configured here.
+ */
+export const INVOICE_TIMING_STRATEGIES = [
+    { value: "days_before_period_start", label: "Days before the billing period begins" },
+    { value: "on_service_date", label: "On the service date" },
+];
+
+export type InvoiceTimingStrategy = "days_before_period_start" | "on_service_date";
+
+export type DueDateStrategy = "on_invoice" | "days_after_invoice" | "on_period_start" | "days_after_period_start";
 
 /** The registry: one definition per policy type, with its typed value fields. */
 export const POLICY_TYPE_REGISTRY: Record<FinancialPolicyType, PolicyTypeDef> = {
@@ -114,11 +285,66 @@ export const POLICY_TYPE_REGISTRY: Record<FinancialPolicyType, PolicyTypeDef> = 
         description: "Window in which a charge may be refunded.",
         fields: [{ key: "window_days", label: "Refund window", control: "number", suffix: "days" }],
     },
+    due_date: {
+        key: "due_date",
+        label: "Due date",
+        description: "When payment is expected, relative to the invoice date or the billing period.",
+        fields: [
+            { key: "strategy", label: "Due", control: "select", options: DUE_DATE_STRATEGIES },
+            { key: "offset_days", label: "Offset", control: "number", suffix: "days" },
+        ],
+    },
+    invoice_timing: {
+        key: "invoice_timing",
+        label: "Invoice timing",
+        description:
+            "When an obligation is invoiced, relative to the billing period it belongs to. A charge created after that date is invoiced the day it is created.",
+        fields: [
+            { key: "strategy", label: "Invoice", control: "select", options: INVOICE_TIMING_STRATEGIES },
+            { key: "offset_days", label: "Lead", control: "number", suffix: "days" },
+        ],
+    },
+    billing_calendar: {
+        key: "billing_calendar",
+        label: "Billing calendar",
+        description:
+            "The commercial period this account is billed for. Monthly is the calendar month and needs no anchor; every other cadence tiles from the anchor date.",
+        fields: [
+            { key: "cadence", label: "Cadence", control: "select", options: BILLING_CALENDAR_CADENCES },
+            { key: "anchor_on", label: "Anchor", control: "date" },
+        ],
+    },
     posting_review: {
         key: "posting_review",
         label: "Posting review",
         description: "Whether draft charges require review before they can be posted.",
         fields: [{ key: "required", label: "Review required", control: "yesno" }],
+    },
+    /*
+     * WHAT THIS POLICY DECIDES, AND WHAT IT MUST NOT.
+     *
+     * It answers one commercial question: when a child is operationally away on
+     * approved vacation, does that condition carry a financial consequence here?
+     * It does NOT decide whether the absence was a vacation — that is operational
+     * truth, and a policy that could invent it would let commercial configuration
+     * rewrite what happened.
+     *
+     * `treatment` is a closed two-value select rather than a yes/no, because
+     * "credit" and "no_credit" are both DELIBERATE commercial positions an
+     * organisation states, and an operator reading a policy list should see which
+     * one was chosen rather than an unticked box. The absence of a policy is a
+     * third, different answer — see `resolveFinancialPolicy`, which reports
+     * `no_policy` — and it means no automatic credit.
+     *
+     * Amount is deliberately absent. What a credit is worth is a valuation
+     * question owned downstream; putting a number here would make this policy the
+     * second place money is decided.
+     */
+    vacation_credit: {
+        key: "vacation_credit",
+        label: "Vacation credit",
+        description: "Whether an approved vacation absence earns a credit. Absent policy means no automatic credit.",
+        fields: [{ key: "treatment", label: "Vacation treatment", control: "select", options: [...VACATION_TREATMENTS] }],
     },
 };
 
@@ -134,6 +360,7 @@ export type FinancialPolicyRow = ConfigRuleEffectiveColumns & {
     location_id: string | null;
     service_id: string | null;
     rate_plan_id: string | null;
+    customer_id: string | null;
     policy_type: FinancialPolicyType;
     label: string | null;
     description: string | null;
@@ -172,6 +399,21 @@ export function validatePolicyValue(
                 return { ok: false, error: { code: "invalid_input", message: `${field.label} must be a non-negative integer` } };
             }
             out[field.key] = n;
+        } else if (field.control === "date") {
+            /*
+             * Monthly is anchor-free by construction, so an absent anchor is a legitimate value
+             * rather than a missing one — the database says the same thing in
+             * `financial_billing_periods_anchor_shape_chk`. What is refused is a value that is
+             * present and not a date, which would otherwise have reached the yesno branch below
+             * and been silently coerced to `false`.
+             */
+            if (v == null || v === "") {
+                out[field.key] = null;
+            } else if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) {
+                out[field.key] = v.trim();
+            } else {
+                return { ok: false, error: { code: "invalid_input", message: `${field.label} must be a date (YYYY-MM-DD)` } };
+            }
         } else {
             out[field.key] = v === true || v === "true" || v === "yes";
         }
@@ -191,6 +433,8 @@ export function policyValueSummary(policyType: FinancialPolicyType, value: Recor
                 const opt = (f.options ?? []).find((o) => o.value === v);
                 return `${f.label}: ${opt?.label ?? String(v ?? "—")}`;
             }
+            // A date field reads as a date an operator reads, never year-first ISO (W7-F011).
+            if (f.control === "date") return `${f.label}: ${v ? humanDay(String(v)) : "—"}`;
             return `${f.label}: ${v ?? "—"}${f.suffix ? ` ${f.suffix}` : ""}`;
         })
         .join(" · ");

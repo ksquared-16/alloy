@@ -1,0 +1,712 @@
+/**
+ * One Host Steward cycle, end to end.
+ *
+ * This is the only module that both observes and mutates, and it does the
+ * mutating exclusively by calling owners certified elsewhere. Its own
+ * contribution is sequencing, locking, verification and audit.
+ *
+ * EVERY RESOURCE IS ISOLATED. A resource whose observation throws, whose owner
+ * is missing, or whose postcondition fails stops work on THAT resource and the
+ * cycle continues. A health loop that aborts on its first bad resource stops
+ * observing exactly when observation matters most.
+ */
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir, loadavg, cpus } from "node:os";
+import { join } from "node:path";
+import {
+  acquireCycleLock, releaseCycleLock, buildCyclePlan, recordAction, resourceKey,
+  classifyHostAdmission, hygieneDue, recordHygieneCycle, recordStageOutcome,
+} from "./host-steward-cycle.mjs";
+import { residualHeavyCommands, asStewardResource } from "./heavy-command-registry.mjs";
+import { applyStewardPlan } from "./host-steward-execute.mjs";
+import { executionRunStorePath } from "./execution-run.mjs";
+
+/** Read host memory/load signals for Host Admission V2. Unreadable stays null. */
+export function observeHostSignals({ exec = defaultExec } = {}) {
+  const vm = exec("/usr/bin/vm_stat", []);
+  const page = Number((vm.match(/page size of (\d+)/) || [])[1] || 16384);
+  const pages = (k) => { const m = vm.match(new RegExp(`${k}:\\s+(\\d+)`)); return m ? Number(m[1]) * page : null; };
+  const swap = exec("/usr/sbin/sysctl", ["-n", "vm.swapusage"]);
+  const mb = (k) => { const m = swap.match(new RegExp(`${k} = ([0-9.]+)M`)); return m ? Number(m[1]) * 1048576 : null; };
+  const total = Number(String(exec("/usr/sbin/sysctl", ["-n", "hw.memsize"])).trim()) || null;
+  const free = pages("Pages free");
+  const inactive = pages("Pages inactive");
+  return {
+    totalBytes: total,
+    freeBytes: free,
+    availableBytes: free != null
+      ? free + (pages("Pages speculative") || 0) + (pages("Pages purgeable") || 0) + (inactive || 0) * 0.5
+      : null,
+    compressorBytes: pages("Pages occupied by compressor"),
+    swapTotalBytes: mb("total"),
+    swapUsedBytes: mb("used"),
+    loadAvg: loadavg(),
+    cores: cpus().length,
+  };
+}
+
+function defaultExec(cmd, args) {
+  try { return execFileSync(cmd, args, { encoding: "utf8", timeout: 15000 }); } catch { return ""; }
+}
+
+/** Run states by id, or null when the store cannot be read — null is never "no owner". */
+export function readRunStates(root) {
+  try {
+    const p = executionRunStorePath(root);
+    if (!existsSync(p)) return null;
+    const j = JSON.parse(readFileSync(p, "utf8"));
+    const byId = new Map();
+    for (const v of Object.values(j.lanes || {})) {
+      const rs = Array.isArray(v) ? v : (v.runs || Object.values(v).find(Array.isArray) || []);
+      for (const r of rs) if (r?.run_id) byId.set(r.run_id, r.state);
+    }
+    return byId;
+  } catch { return null; }
+}
+
+const defaultGroupAlive = (pgid) => { try { process.kill(-Number(pgid), 0); return true; } catch { return false; } };
+
+/**
+ * Execute one cycle.
+ *
+ * `dryRun` observes and plans without mutating — the same planner, so a preview
+ * and a real cycle can never disagree about what would happen.
+ */
+export function runStewardCycle({
+  root,
+  nowMs = Date.now(),
+  dryRun = false,
+  groupAlive = defaultGroupAlive,
+  exec = defaultExec,
+  stopDevServer = null,
+} = {}) {
+  const startedMs = nowMs;
+  const wallStart = Date.now();
+  const lock = dryRun ? { ok: true, cycle_id: "hsc_dryrun" } : acquireCycleLock({ root, nowMs });
+  if (!lock.ok) return { ok: false, error: lock.error, running: lock.running };
+
+  const cycleId = lock.cycle_id;
+  const problems = [];
+  let resources = [];
+  let admissionBefore = null;
+
+  // ── Observe. Each observation is independently fallible.
+  try {
+    const states = readRunStates(root);
+    const residual = residualHeavyCommands({
+      root,
+      runStateFor: (id) => (states ? states.get(id) ?? null : null),
+      groupAlive,
+      nowMs,
+    });
+    // A run store we could not read means ownership is UNKNOWN, and unknown
+    // ownership must reach the classifier as unknown — not as "no owner".
+    // NOTE: residualHeavyCommands already yields owning_runs === null when no
+    // state resolves, so unknown ownership reaches the classifier as unknown
+    // without a second guard here. A redundant guard that no mutation can kill
+    // is dead code pretending to be safety.
+    resources = residual.map((r) => asStewardResource(r));
+  } catch (e) { problems.push({ stage: "observe_residual", error: String(e?.message || e) }); }
+
+  try { admissionBefore = classifyHostAdmission(observeHostSignals({ exec })); }
+  catch (e) { problems.push({ stage: "observe_admission", error: String(e?.message || e) }); }
+
+  const plan = buildCyclePlan({ cycleId, resources, admission: admissionBefore, root: dryRun ? null : root, nowMs });
+
+  if (dryRun) {
+    return { ok: true, dry_run: true, cycle_id: cycleId, plan, admission_before: admissionBefore, problems };
+  }
+
+  // ── Execute, one resource at a time, through canonical owners only.
+  const executed = [];
+  const refused = [];
+  for (const entry of plan.proposed) {
+    try {
+      if (entry.action === "terminate_terminal_test_process") {
+        const stewardPlan = {
+          fingerprint: plan.plan_fingerprint,
+          autonomous: [{
+            id: entry.resource_id ?? null,
+            action: entry.action,
+            ownership: entry.ownership,
+            resource_class: entry.resource_class,
+            evidence: entry.evidence,
+          }],
+        };
+        const out = applyStewardPlan({ plan: stewardPlan, root, nowMs, stopDevServer });
+        const ok = out.ok && out.applied_count === 1;
+        // Verify the postcondition rather than trusting the executor.
+        const gone = entry.evidence?.pgid != null ? !groupAlive(entry.evidence.pgid) : null;
+        const verified = ok && gone === true;
+        recordAction({ root, resourceKey: entry.resource_key, action: entry.action, result: { ok: verified }, nowMs });
+        (verified ? executed : refused).push({
+          ...entry, ok: verified,
+          postcondition_verified: gone,
+          detail: verified ? null : (out.refused?.[0]?.error || "postcondition not verified"),
+        });
+        continue;
+      }
+      // Owners that exist but are invoked by their own subsystem: recorded as
+      // proposed-and-delegated rather than silently performed here.
+      refused.push({ ...entry, ok: false, detail: `delegated to ${entry.owner}` });
+    } catch (e) {
+      // One bad resource must not abort the loop.
+      problems.push({ stage: "execute", resource: entry.resource_key, error: String(e?.message || e) });
+      refused.push({ ...entry, ok: false, detail: String(e?.message || e) });
+    }
+  }
+
+  let admissionAfter = null;
+  if (executed.length) {
+    try { admissionAfter = classifyHostAdmission(observeHostSignals({ exec })); }
+    catch (e) { problems.push({ stage: "remeasure", error: String(e?.message || e) }); }
+  }
+
+  // Duration is measured on the WALL clock; every recorded timestamp uses the
+  // cycle's own clock. Mixing them made the cycle untestable: a caller could
+  // inject a clock for the decisions and still get real-time audit rows, so a
+  // freshly-run cycle read as stale.
+  const wallEnd = Date.now();
+  const record = {
+    cycle_id: cycleId,
+    started_at: new Date(startedMs).toISOString(),
+    duration_ms: Math.max(0, wallEnd - wallStart),
+    admission_before: admissionBefore?.state ?? null,
+    admission_after: admissionAfter?.state ?? admissionBefore?.state ?? null,
+    observed: plan.classifications,
+    proposed: plan.proposed.map((p) => ({ resource_key: p.resource_key, action: p.action, owner: p.owner })),
+    executed: executed.map((e) => ({ resource_key: e.resource_key, action: e.action, owner: e.owner, ok: e.ok, postcondition_verified: e.postcondition_verified })),
+    refused: refused.map((e) => ({ resource_key: e.resource_key, action: e.action, detail: e.detail })),
+    suppressed: plan.suppressed.map((s) => ({ resource_key: s.resource_key, action: s.action, suppressed_because: s.suppressed_because })),
+    problems,
+  };
+  releaseCycleLock({ root, cycleId, record, nowMs });
+
+  return {
+    ok: true,
+    cycle_id: cycleId,
+    plan,
+    executed, refused, problems,
+    admission_before: admissionBefore,
+    admission_after: admissionAfter,
+    record,
+  };
+}
+
+/**
+ * One Steward cycle plus, when it is due, one hygiene cycle.
+ *
+ * WHY A SEPARATE ENTRY POINT RATHER THAN A STAGE INSIDE `runStewardCycle`.
+ * `runStewardCycle` is synchronous and ten call sites depend on that; hygiene
+ * reclamation is asynchronous. Making the existing function async to add a
+ * stage would change every caller's contract to gain nothing, so the async part
+ * wraps the sync part instead.
+ *
+ * WHY NOT A SECOND DAEMON. §13 is explicit. There is one resident loop on this
+ * host and hygiene is a stage of it, gated on its own far slower cadence
+ * because a hygiene observation costs a `du` over ~100 toolkit directories and
+ * an `lsof` per log — real work to reclaim bytes that were equally reclaimable
+ * six hours ago.
+ *
+ * HYGIENE NEVER FAILS THE STEWARD CYCLE. Its result is attached and its
+ * failures are recorded; the host's own health does not depend on it.
+ */
+export async function runStewardCycleWithHygiene({
+  root, nowMs = Date.now(), dryRun = false, groupAlive = defaultGroupAlive, exec = defaultExec,
+  stopDevServer = null, hygiene = true, forceHygiene = false, hygieneOptions = null,
+  recoveryStage = true,
+  // Injected like `exec` and `groupAlive` above it, for the same reason: the
+  // scheduling stage is the one async region with no catch of its own, so a
+  // test cannot certify the outer recorder without being able to make it fail.
+  dispatchStage = runSchedulerDispatchStage,
+} = {}) {
+  const steward = runStewardCycle({ root, nowMs, dryRun, groupAlive, exec, stopDevServer });
+  try {
+    return await asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage });
+  } catch (err) {
+    // The server swallows this to stay up, which is right. Recording it is what
+    // makes the difference between a protected process and a silent one.
+    const detail = String(err?.stack || err?.message || err).slice(0, 600);
+    if (!dryRun) recordStageOutcome({ root, nowMs, outcome: { ok: false, threw: true, detail } });
+    return { ...steward, recovery: null, hygiene: { error: "stage_threw", detail }, dispatch: null };
+  }
+}
+
+
+/**
+ * Evaluate the report cadence and write whatever is due.
+ *
+ * Kept here rather than inside the report module so the report generator stays
+ * a pure derivation with no idea that a clock exists.
+ */
+async function runOperatingReportStage({ root, nowMs }) {
+  const { runDueOperatingReports, buildOperatingReport, operatingReportWindow } = await import("./operating-report.mjs");
+  const { mkdirSync, writeFileSync, readFileSync, existsSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const base = join(root, "vacilando");
+  const readJson = (p, fallback) => {
+    try { return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : fallback; } catch { return fallback; }
+  };
+  return runDueOperatingReports({
+    now: new Date(nowMs),
+    build: (kind) => {
+      /*
+       * THE WINDOW COMES FROM THE ZONE THE CADENCE IS ON, not from UTC.
+       * This used to derive the day here, in UTC, while the cadence fired at
+       * 18:30 Pacific - so the report was keyed to tomorrow and covered the
+       * ninety minutes since 17:00. The zone was always configured; nothing
+       * carried it this far.
+       */
+      const win = operatingReportWindow(kind, new Date(nowMs));
+      if (!win) throw new Error("report_window_unresolved");
+      const { windowStart, windowEnd, timezone, day } = win;
+      const requests = readJson(join(base, "governed-actions", "requests.json"), { requests: [] }).requests || [];
+      const runStore = readJson(join(base, "execution-runs", "runs.json"), { lanes: {} }).lanes || {};
+      const runs = Object.values(runStore).flatMap((e) => e.runs || []);
+      const laneStore = readJson(join(base, "lanes", "lanes.json"), { lanes: {} }).lanes || {};
+      const notifStore = readJson(join(base, "notifications.json"), { notifications: [] });
+      const notifications = Array.isArray(notifStore) ? notifStore : (notifStore.notifications || []);
+      return buildOperatingReport({
+        kind, windowStart, windowEnd, timezone, day, requests, runs,
+        lanes: Object.values(laneStore), notifications,
+      });
+    },
+    write: (report) => {
+      const dir = join(base, "operating-reports");
+      mkdirSync(dir, { recursive: true });
+      // Idempotent BY WINDOW: the same day rewrites the same file, never a second.
+      const file = join(dir, `${report.report_id}.json`);
+      writeFileSync(file, JSON.stringify(report, null, 2));
+      return file;
+    },
+  });
+}
+
+async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage }) {
+  /*
+   * RECOVERY FIRST. A host that needs repairing must not spend its cycle
+   * tidying, and a control plane at RECOVERY_REQUIRED must not be handing work
+   * to a scheduler. Failures here are attached and never abort the cycle.
+   */
+  let recovery = null;
+  if (root && recoveryStage !== false) {
+    try { recovery = await runResidentRecoveryStage({ root, nowMs, dryRun }); }
+    catch (e) { recovery = { ok: false, error: "recovery_stage_threw", detail: String(e?.message || e) }; }
+  }
+  const recoveryBlocking = recovery?.failure_class && recovery.failure_class !== "HEALTHY" && !recovery.verified;
+
+  /*
+   * THE REPORT CADENCE SITS ABOVE EVERY GATE THAT IS NOT ITS OWN.
+   *
+   * I have now put this stage in the wrong place twice. First outside
+   * `recordStageOutcome`, so it left no evidence. Then behind the hygiene-due
+   * branch, so it ran every six hours instead of every five minutes. Both times
+   * the stage existed, was imported, and was tested.
+   *
+   * Two more gates sat above it: `hygiene: false`, and a control plane that is
+   * not healthy. §13 gates hygiene and scheduling for a good reason - they hand
+   * out work and mutate the host, and a broken control plane must not do
+   * either. A daily report does neither. It is a clock comparison, and once a
+   * day a read-only derivation of state that is already written down.
+   *
+   * An operator wants the report MOST on the day the control plane was unwell.
+   * Gating it on health would have made it disappear exactly then.
+   *
+   * Its own contract needs a runtime root and nothing else, so that is the only
+   * thing it is gated on.
+   */
+  let reports = null;
+  if (root && !dryRun) {
+    try { reports = await runOperatingReportStage({ root, nowMs }); }
+    catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
+  }
+
+  if (!hygiene || !root) return { ...steward, recovery, hygiene: null, reports };
+  if (recoveryBlocking) {
+    // §13: recovery outranks ordinary work. Hygiene and scheduling wait for a
+    // control plane that is not currently broken.
+    if (!dryRun) {
+      recordStageOutcome({ root, nowMs, outcome: {
+        ok: true, recovery: recovery.failure_class, hygiene: "skipped_control_plane_not_healthy", dispatch: null,
+        reports: reportsSummary(reports),
+      } });
+    }
+    return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class }, reports };
+  }
+
+  const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
+  // Carry the recovery result on EVERY return path. Dropping it on the
+  // hygiene-not-due branch made the resident stage look like it had not run.
+  if (!due.due) {
+    /*
+     * SCHEDULING IS NOT ON HYGIENE'S CADENCE.
+     *
+     * THE DEFECT THIS FIXES, found by watching 50 real Steward cycles produce
+     * zero scheduling decisions. The dispatch stage was called only on the path
+     * where hygiene had actually run, so an ordinary five-minute tick returned
+     * here and never reached it. Hygiene is due every six hours; scheduling was
+     * therefore attempted at most four times a day, and only when hygiene
+     * happened to be due in the same tick.
+     *
+     * It is the same shape as every other "wired but never called" defect this
+     * programme has found — an evidence collector that existed and was not
+     * invoked, a recovery model that was certified and never driven. Building
+     * the stage is not the same as reaching it.
+     *
+     * Hygiene is expensive and rare. Scheduling is cheap and should happen every
+     * tick, which is what a five-minute cadence is for.
+     */
+    const dispatchOnly = await dispatchStage({ root, nowMs, dryRun });
+    if (!dryRun) {
+      recordStageOutcome({ root, nowMs, outcome: {
+        ok: true, recovery: recovery?.failure_class ?? null, hygiene: "not_due",
+        dispatch: dispatchSummary(dispatchOnly),
+        reports: reportsSummary(reports),
+      } });
+    }
+    return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly, reports };
+  }
+
+  let result = null;
+  try {
+    const { runHygieneCycle } = await import("./hygiene-cycle.mjs");
+    result = await runHygieneCycle({
+      root, nowMs, dryRun,
+      // Sizes cost a `du` over a 29 GB estate and no DECISION depends on them;
+      // only the scoreboard does, and that is what `vac hygiene` is for.
+      withBytes: false,
+      ...(hygieneOptions || {}),
+    });
+  } catch (e) {
+    result = { ok: false, error: "hygiene_cycle_threw", detail: String(e?.message || e) };
+  }
+  if (!dryRun) {
+    recordHygieneCycle({
+      root, nowMs,
+      summary: {
+        ok: result?.ok === true,
+        executed: result?.executed?.length ?? 0,
+        failed: result?.failed?.length ?? 0,
+        bytes_reclaimed: result?.bytes_reclaimed ?? 0,
+        error: result?.ok === false ? (result.error ?? null) : null,
+      },
+    });
+  }
+  const dispatch = await dispatchStage({ root, nowMs, dryRun });
+  /*
+   * THE OPERATING REPORTS RIDE THIS LOOP, AND ARE RECORDED WITH IT.
+   *
+   * The host has one launchd entry and it is a KeepAlive daemon with no
+   * schedule, so there is no host timer to add a line to. This cycle is the
+   * periodic owner that already exists, and the steward's own doctrine is that
+   * it uses the timers this server owns "rather than a second scheduler".
+   *
+   * It runs HERE, inside the stage set, rather than in the wrapper around it:
+   * the wrapper runs after `recordStageOutcome`, so a report written, skipped
+   * or failed there left no trace in the state file at all. The cadence would
+   * have been correct and unobservable, which for a thing that runs once a day
+   * unattended is nearly the same as not working.
+   *
+   * NOT_DUE is the answer 287 cycles in 288, and is recorded as an outcome
+   * rather than a fault. A failure is attached, never thrown: an end-of-day
+   * report that could not be written must not interrupt anyone's development.
+   */
+  if (!dryRun) {
+    recordStageOutcome({ root, nowMs, outcome: {
+      ok: true, recovery: recovery?.failure_class ?? null, hygiene: result?.ok === true ? "ran" : "failed",
+      dispatch: dispatchSummary(dispatch),
+      reports: reportsSummary(reports),
+    } });
+  }
+  return { ...steward, recovery, hygiene: result, dispatch, reports };
+}
+
+/**
+ * What the state file keeps about a cadence evaluation.
+ *
+ * Bounded like `dispatchSummary` beside it: the reason and the report id, never
+ * the report. "not due" is the normal entry and must stay cheap to write.
+ */
+function reportsSummary(r) {
+  if (!r) return null;
+  if (r.ok === false) return { ok: false, error: r.error ?? null, detail: r.detail ?? null };
+  return {
+    ok: true,
+    results: (r.results || []).map((x) => ({
+      kind: x.kind, ran: Boolean(x.ran), reason: x.reason ?? null,
+      report_id: x.report_id ?? null, error: x.error ?? null,
+    })),
+  };
+}
+
+/** A bounded shape for the state file: counts and refusals, never whole records. */
+function dispatchSummary(d) {
+  if (!d) return null;
+  if (d.enabled === false) return { enabled: false };
+  return {
+    enabled: true,
+    considered: d.considered ?? 0,
+    dispatched: (d.dispatched || []).map((x) => x.lane_id),
+    refused: (d.refused || []).map((x) => ({ lane_id: x.lane_id, refusal: x.refusal })),
+    error: d.error ?? null,
+  };
+}
+
+/**
+ * THE SCHEDULING STAGE — bounded, last, and off unless enabled.
+ *
+ * Last on purpose. Recovery and hygiene both run first, because a host that
+ * needs repairing or tidying should not be handed new work, and §13 requires
+ * safety to outrank scheduling pressure.
+ *
+ * It selects through the planner and starts through the canonical admission
+ * chain. It holds no policy of its own: every gate is re-derived inside
+ * `dispatchCandidate` from live truth at the moment of acting, so a plan that
+ * has gone stale between planning and dispatching refuses rather than acts.
+ */
+export async function runSchedulerDispatchStage({
+  root, nowMs = Date.now(), dryRun = false, maxDispatch = 1, liveTruth = null,
+} = {}) {
+  const { dispatchEnabled, dispatchCandidate } = await import("./work-scheduler-dispatch.mjs");
+  if (!dispatchEnabled()) return { enabled: false, dispatched: [], considered: 0 };
+
+  const { observeScheduling } = await import("./work-scheduler-observe.mjs");
+  const truth = liveTruth || (await liveSchedulingTruth(root));
+  let view = null;
+  try { view = observeScheduling({ root, now: nowMs, liveTruth: truth, withBytes: false }); }
+  catch (e) { return { enabled: true, error: "observation_failed", detail: String(e?.message || e), dispatched: [] }; }
+
+  // The planner's own choice, not a re-derivation. `scheduled_next` is the
+  // highest-ranked eligible candidate; anything else would be a second policy.
+  const plan = view.scheduled_next ? [view.scheduled_next] : [];
+  if (dryRun) return { enabled: true, dry_run: true, considered: plan.length, planned: plan, dispatched: [] };
+
+  const dispatched = [];
+  const refused = [];
+  for (const laneId of plan.slice(0, Math.max(0, maxDispatch))) {
+    let out = null;
+    try { out = await dispatchCandidate({ laneId, root, nowMs, liveTruth: truth }); }
+    catch (e) { out = { ok: false, refusal: "dispatch_threw", detail: String(e?.message || e) }; }
+    (out?.dispatched ? dispatched : refused).push({ lane_id: laneId, ...out });
+  }
+  return { enabled: true, considered: plan.length, dispatched, refused };
+}
+
+/** The live facts authorization revalidation needs. Absent stays absent, never assumed. */
+async function liveSchedulingTruth(root) {
+  const truth = { dependency_states: {}, finding_statuses: {} };
+  try {
+    const { listFindings } = await import("./operational-findings.mjs");
+    truth.finding_statuses = Object.fromEntries((listFindings(root) || []).map((f) => [f.id, f.status]));
+  } catch { /* unmeasured stays unmeasured */ }
+  try {
+    const { execFileSync } = await import("node:child_process");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    truth.staging_sha = execFileSync("git", ["rev-parse", "origin/staging"], {
+      cwd: join(homedir(), "Alloy"), encoding: "utf8", timeout: 15_000,
+    }).trim();
+  } catch { /* leaving it undefined makes revalidation unmeasurable, which blocks */ }
+  return truth;
+}
+
+/**
+ * THE RESIDENT RECOVERY STAGE — the second of Phase 7's two narrow blockers.
+ *
+ * `control-plane-recovery` has been certified since Phase 3 and was never
+ * called by anything on a cadence. That is why `director-forced-to-mac-mini`
+ * stayed MITIGATED for four phases: the decision model existed, and nothing
+ * drove it. Recovery code existing is not evidence that recovery happens.
+ *
+ * WHAT THIS STAGE OWNS: sequencing. Nothing else. The classification is
+ * `control-plane-recovery.classifyControlPlane`, the decision is `planRecovery`,
+ * the repair is whichever owner the policy names, and the episode memory is the
+ * recovery module's. No recovery rule is written here, because a rule written
+ * in the caller is a rule the decision owner cannot be tested against.
+ *
+ * ORDER: recovery runs BEFORE hygiene and before scheduling. A host that needs
+ * repairing must not spend the cycle tidying, and §13 requires safety to outrank
+ * scheduling pressure.
+ *
+ * THE HONEST LIMIT, stated because it decides what this can ever certify. The
+ * Steward runs INSIDE the Gateway process. If that process dies, this stage
+ * dies with it, so PROCESS_DEAD is not recoverable from here — launchd's
+ * KeepAlive owns that, and it is the independent execution path §14 asks about.
+ * What this stage adds is the class launchd cannot see: a Gateway that is alive
+ * and not serving, which is exactly the condition
+ * `director-forced-to-mac-mini` was opened for.
+ */
+/**
+ * PROBE THE LOOPBACK WITHOUT BLOCKING THE LOOP THAT HAS TO ANSWER IT.
+ *
+ * THE DEFECT THIS EXISTS FOR, measured on the live host rather than reasoned
+ * about. `observeControlPlane` measures loopback health with a synchronous
+ * `curl --max-time 8` against 127.0.0.1:3030. That is correct for an external
+ * observer such as the CLI. It cannot work for the resident Steward, because
+ * the Steward runs INSIDE the Gateway: `execFileSync` blocks the single event
+ * loop, the kernel accepts curl's connection into the listen backlog, and
+ * nothing ever dequeues it. curl waits its full eight seconds, exits non-zero,
+ * and the guard reports the loopback as UNMEASURED.
+ *
+ * The classifier then does exactly the right thing with that: unmeasured is
+ * UNKNOWN, UNKNOWN is not HEALTHY, and recovery outranks ordinary work — so the
+ * cycle returns before hygiene and before scheduling. Every tick. Silently, with
+ * no exception to log and no stage left half-done.
+ *
+ * The cost of the confusion, measured: this Gateway had been up 7.5 hours and
+ * ~90 ticks without once reaching hygiene or scheduling. `hygiene_last` was 13.4
+ * hours stale against a six-hour cadence, and Backend sat unoccupied and
+ * eligible for 33 minutes across eight ticks without being dispatched. An
+ * external poll during a tick returned 200 after 8064 ms — the event loop
+ * unblocking — while the in-process probe had already given up at 8000 ms. Those
+ * 64 milliseconds were the whole difference between a scheduler and a host that
+ * had done nothing all day.
+ *
+ * The module's own doctrine still holds and is preserved here: a service that
+ * did not answer is a measurement, not a blind spot. A refusal or a timeout is
+ * `false`. Only being unable to attempt the probe at all is `null`.
+ */
+export async function probeLoopbackInProcess({ root, timeoutMs = 5_000, port = 3030 } = {}) {
+  let token = "";
+  try {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    token = readFileSync(join(root, "vacilando", "api-token"), "utf8").trim();
+  } catch { /* an unreadable token still lets the probe run and be refused */ }
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/control-plane/health`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.status === 200;
+  } catch (e) {
+    // Refused, reset, or timed out: the Gateway did not answer, and that is an
+    // answer. `fetch` only throws for reasons that mean exactly that.
+    if (e?.name === "AbortError" || e?.name === "TimeoutError" || e instanceof TypeError) return false;
+    return null;
+  }
+}
+
+export async function runResidentRecoveryStage({
+  root,
+  nowMs = Date.now(),
+  dryRun = false,
+  observe = null,
+  repair = null,
+} = {}) {
+  if (!root) return { ok: false, error: "missing_runtime_root" };
+  const R = await import("./control-plane-recovery.mjs");
+
+  let observation = null;
+  try {
+    observation = observe ? await observe()
+      : await R.observeControlPlane({ root, nowMs, probeLoopback: () => probeLoopbackInProcess({ root }) });
+  } catch (e) {
+    return { ok: false, error: "observation_failed", detail: String(e?.message || e) };
+  }
+
+  // An episode is closed by EVIDENCE that the condition is gone, whoever
+  // removed it. Without this, only a Steward-performed repair could ever end
+  // one, so a drift fixed by a governed install stayed "active" indefinitely.
+  try { R.reconcileEpisodeAgainstObservation(observation, { root, nowMs }); } catch { /* posture is not worth failing a cycle for */ }
+
+  const plan = R.planRecovery(observation, { root, nowMs });
+  const base = {
+    ok: true,
+    failure_class: plan.failure_class,
+    level: plan.level,
+    reason: plan.reason,
+    escalate: Boolean(plan.escalate),
+    action: plan.action ?? null,
+    owner: plan.owner ?? null,
+  };
+
+  if (plan.failure_class === "HEALTHY") return { ...base, acted: false, why: "nothing to repair" };
+  // No action means the decision owner has said this is not ours to fix —
+  // Tailscale, an unreachable host, or authority already exhausted. Escalation
+  // is the outcome, and it is already on the plan.
+  if (!plan.action) {
+    // Carry the decision owner's own explanation. Replacing it with a generic
+    // word here is how "within attempt cooldown; a faster retry would be a loop"
+    // became the unhelpful "waiting".
+    return {
+      ...base,
+      acted: false,
+      waiting: Boolean(plan.waiting),
+      why: plan.reason || (plan.escalate ? "escalated; no autonomous action applies" : "waiting"),
+    };
+  }
+  if (dryRun) return { ...base, acted: false, dry_run: true, why: "dry run" };
+
+  // The attempt is recorded BEFORE the action, because the action may kill the
+  // process holding the memory.
+  const episode = R.recordAttempt(plan.episode, { action: plan.action, nowMs, root });
+
+  let performed = null;
+  try {
+    if (repair) performed = await repair(plan);
+    else if (plan.action === "restart_owned_gateway") {
+      const H = await import("./control-plane-health.mjs");
+      performed = await H.recoverOwnedVacilandoProcess({ root, nowMs });
+    } else if (plan.action === "converge_toolkit_then_restart") {
+      /*
+       * THE SECOND STEP OF AN INSTALL, FINALLY OWNED.
+       *
+       * The installer flips the symlink and deliberately does not restart the
+       * Gateway from inside the Gateway. Nothing owned what came next, so a
+       * verified install sat unused while `planToolkitConvergence` reported
+       * `converged` — that plan compares installed against promoted and never
+       * consults what is actually running. TOOLKIT_DRIFT has been classified,
+       * with a ceiling, a cooldown and a verification list, since Phase 3; the
+       * repair was simply never supplied and every tick reported "no wired
+       * repair owner".
+       *
+       * The requirements are re-measured HERE rather than trusted from the
+       * observation, so the thing that restarts the host is reading the same
+       * evidence the gate does: provenance valid, a retained rollback target,
+       * and a real difference between installed and running.
+       */
+      const C = await import("./toolkit-convergence.mjs");
+      const ev = C.measureToolkitConvergence({});
+      const gw = C.observeGatewayExecution ? C.observeGatewayExecution({}) : { executing_sha: null };
+      performed = R.restartGatewayForConvergence({
+        installedSha: ev.installed_toolkit_sha,
+        runningSha: gw.executing_sha,
+        provenanceValid: ev.artifact_provenance_valid,
+        rollbackRetained: ev.previous_toolkit_retained,
+      });
+    } else {
+      // An action with no wired owner is REPORTED, never improvised. The wt1
+      // dev server proved what ad hoc signalling costs.
+      return { ...base, acted: false, episode, why: `no wired repair owner for ${plan.action}`, escalate: true };
+    }
+  } catch (e) {
+    performed = { ok: false, error: String(e?.message || e) };
+  }
+
+  // Verify by RE-OBSERVING, never by trusting the repair's own return value.
+  let after = null;
+  try {
+    after = observe ? await observe()
+      : await R.observeControlPlane({ root, nowMs: Date.now(), probeLoopback: () => probeLoopbackInProcess({ root }) });
+  }
+  catch { after = null; }
+  const verdict = after ? R.classifyControlPlane({ ...after, now_ms: Date.now() }) : null;
+  const recovered = verdict?.failure_class === "HEALTHY";
+  const finalEpisode = R.recordVerification(episode, {
+    ok: recovered,
+    detail: verdict ? verdict.why : "the control plane could not be re-observed after the attempt",
+    nowMs: Date.now(),
+    root,
+  });
+
+  return {
+    ...base,
+    acted: true,
+    performed,
+    verified: recovered,
+    after_class: verdict?.failure_class ?? null,
+    episode: finalEpisode,
+  };
+}

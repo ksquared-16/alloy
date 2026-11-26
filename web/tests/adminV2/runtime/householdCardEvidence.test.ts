@@ -4,6 +4,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
+import {
+    defaultNestedSurfaceConfig,
+    HOUSEHOLD_SURFACE_ID,
+    reconcileNestedSurfaceConfig,
+    setNestedGroupEnabled,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { moveSectionInNestedConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceSectionOrder";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 /** Minimal Operational Context wrapper for the pure evidence assembly. */
@@ -17,7 +24,7 @@ function ctx(truth: Record<string, unknown>, label = "Household"): OperationalCo
         signals: {
             work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-            tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
             communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
             billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
         },
@@ -64,6 +71,24 @@ describe("buildHouseholdCardEvidence", () => {
         expect(ev.missingCriticalWarning).toBeNull();
     });
 
+    it("carries profile photo URLs on contacts and children when present", () => {
+        const record = baseRecord();
+        (record._opportunity_persons as Record<string, unknown>[])[0]!.photo_url =
+            "https://cdn.example/sarah.jpg";
+        (record._opportunity_persons as Record<string, unknown>[])[1]!.photo_url =
+            "https://cdn.example/mike.jpg";
+        (record._inquiry_children as Record<string, unknown>[])[0]!.photo_url =
+            "https://cdn.example/emma.jpg";
+
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.primaryContact?.imageUrl).toBe("https://cdn.example/sarah.jpg");
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        expect(otherParent?.contacts[0]?.imageUrl).toBe("https://cdn.example/mike.jpg");
+        const children = ev.groups.find((g) => g.key === "children");
+        expect(children?.children[0]?.imageUrl).toBe("https://cdn.example/emma.jpg");
+        expect(children?.children[1]?.imageUrl ?? null).toBeNull();
+    });
+
     it("classifies evidence groups by relationship role", () => {
         const ev = buildHouseholdCardEvidence(ctx(baseRecord()));
         const keys = ev.groups.map((g) => g.key);
@@ -96,6 +121,102 @@ describe("buildHouseholdCardEvidence", () => {
         expect(otherParent?.contacts.some((c) => c.name === "Sarah Johnson")).toBe(false);
     });
 
+    it("surfaces create-lead family_member secondary as Other Parent (not Additional)", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [
+            {
+                person_id: "p-sarah",
+                role_type: "primary_contact",
+                name: "Sarah Johnson",
+                phone: "555-123-4567",
+                email: "sarah@example.com",
+            },
+            {
+                person_id: "p-mike",
+                role_type: "family_member",
+                name: "Michael Johnson",
+                phone: "555-111-2222",
+            },
+        ];
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        // Stale Additional criteria that historically claimed family_member via "member".
+        config = {
+            ...config,
+            groups: config.groups.map((group) => {
+                if (group.key === "other_parent_guardian") {
+                    return {
+                        ...group,
+                        relationshipCriteria: {
+                            roleKeys: ["parent", "guardian"],
+                            excludeRoleKeys: ["emergency", "pickup", "billing"],
+                        },
+                    };
+                }
+                if (group.key === "household_members") {
+                    return {
+                        ...group,
+                        enabled: true,
+                        relationshipCriteria: {
+                            roleKeys: ["additional", "contact", "member"],
+                        },
+                    };
+                }
+                return group;
+            }),
+        };
+        const ev = buildHouseholdCardEvidence(ctx(record), { nestedConfig: config });
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        const additional = ev.groups.find((g) => g.key === "household_members");
+        expect(otherParent?.contacts.map((c) => c.name)).toEqual(["Michael Johnson"]);
+        expect(additional?.contacts.some((c) => c.name === "Michael Johnson") ?? false).toBe(false);
+    });
+
+    it("a child's physician or dentist is never a parent or a household adult (Lil' Sunshine defect)", () => {
+        const record = baseRecord();
+        // Exactly the deployed shape: the participant runtime linked the physician to the household,
+        // and no second parent was on file — so the fallback took "any named adult" as the parent.
+        record._opportunity_persons = [
+            { person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567" },
+            { person_id: "p-dr", role_type: "physician", name: "Dr. Lee Park", phone: "503-555-0200" },
+            { person_id: "p-dds", role_type: "dentist", name: "Dr. Ana Molina" },
+            { person_id: "p-gran", role_type: "emergency_contact", name: "Grandma Mary", phone: "555-333-4444" },
+        ];
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.otherParentGuardianCount).toBe(0);
+        const names = JSON.stringify(ev);
+        expect(names).not.toMatch(/Dr\. Lee Park[^}]*Parent/);
+        expect(names).not.toContain("Dr. Lee Park");
+        expect(names).not.toContain("Dr. Ana Molina");
+    });
+
+    it("an emergency contact is not promoted to second parent when no parent is on file", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [
+            { person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567" },
+            { person_id: "p-gran", role_type: "emergency_contact", name: "Grandma Mary", phone: "555-333-4444" },
+            { person_id: "p-tom", role_type: "authorized_pickup", name: "Uncle Tom" },
+        ];
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.otherParentGuardianCount).toBe(0);
+    });
+
+    it("counts authorized pick-ups from the children's relationships, once per person (ZZQALM234600)", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [{ person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567" }];
+        const dana = (memberId: string, id: string) => ({
+            id, org_id: "org", customer_id: "cust-1", customer_member_id: memberId, person_id: "p-dana", relationship_type: "family_friend",
+            priority: 1, status: "active", operational_roles: ["authorized_pickup"], person: { id: "p-dana", display_name: "Dana Friend", phone: "5035550177" },
+        });
+        record._person_child_relationships_by_member = [
+            { customer_member_id: "c1", customer_id: "cust-1", items: [dana("c1", "r1")] },
+            { customer_member_id: "c2", customer_id: "cust-1", items: [dana("c2", "r2")] },
+        ];
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.authorizedPickupCount).toBe(1);
+        expect(JSON.stringify(ev)).toContain("Dana Friend");
+        expect(ev.otherParentGuardianCount).toBe(0);
+    });
+
     it("does not duplicate the primary person in Other Parent / Guardian", () => {
         const record = baseRecord();
         record._opportunity_persons = [
@@ -126,7 +247,9 @@ describe("buildHouseholdCardEvidence", () => {
         expect(children?.count).toBe(1);
         const child = children?.children[0];
         expect(child?.name).toBe("Emma Johnson");
-        expect(Object.keys(child ?? {}).sort()).toEqual(["id", "name"]);
+        // Belonging-only: name (+ optional identity photo). No operational child fields.
+        expect(Object.keys(child ?? {}).sort()).toEqual(["id", "imageUrl", "name"]);
+        expect(child?.imageUrl ?? null).toBeNull();
         const serialized = JSON.stringify(ev.groups);
         expect(serialized).not.toContain("Age 6");
         expect(serialized).not.toContain("Preschool");
@@ -175,6 +298,55 @@ describe("buildHouseholdCardEvidence", () => {
         expect(buildHouseholdCardEvidence(ctx(withPref)).preferredContactMethod).toBe("Text");
         expect(buildHouseholdCardEvidence(ctx(baseRecord())).preferredContactMethod).toBeNull();
     });
+
+    it("keeps required household sections when only emergency is enabled in published config", () => {
+        const loaded = {
+            surfaceId: HOUSEHOLD_SURFACE_ID,
+            groups: [
+                {
+                    key: "emergency_contacts",
+                    selectedFieldKeys: ["person.phone"],
+                    enabled: true,
+                },
+            ],
+        };
+        const config = reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, loaded);
+        const ev = buildHouseholdCardEvidence(ctx(baseRecord()), { nestedConfig: config });
+        const keys = ev.groups.map((g) => g.key);
+        expect(keys).toContain("primary_contact");
+        expect(keys).toContain("other_parent_guardian");
+        expect(keys).toContain("children");
+        expect(keys).toContain("emergency_contacts");
+        expect(keys.indexOf("other_parent_guardian")).toBeGreaterThan(keys.indexOf("primary_contact"));
+    });
+
+    it("projects secondary parent from scalar contact fields when family rows omit them", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [
+            { person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567", email: "sarah@example.com" },
+        ];
+        record["person.secondary_contact_name"] = "Michael Johnson";
+        record["person.secondary_phone"] = "555-111-2222";
+        record["person.secondary_email"] = "mike@example.com";
+
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        expect(otherParent?.count).toBe(1);
+        expect(otherParent?.contacts[0]?.name).toBe("Michael Johnson");
+        expect(otherParent?.contacts[0]?.phone).toBe("(555) 111-2222");
+    });
+
+    it("orders children before emergency when published config says so", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = setNestedGroupEnabled(config, "emergency_contacts", true);
+        const childrenIdx = config.groups.findIndex((g) => g.key === "children");
+        const emergencyIdx = config.groups.findIndex((g) => g.key === "emergency_contacts");
+        expect(childrenIdx).toBeGreaterThan(emergencyIdx);
+        config = moveSectionInNestedConfig(config, "children", emergencyIdx - childrenIdx);
+        const ev = buildHouseholdCardEvidence(ctx(baseRecord()), { nestedConfig: config });
+        const keys = ev.groups.map((g) => g.key);
+        expect(keys.indexOf("children")).toBeLessThan(keys.indexOf("emergency_contacts"));
+    });
 });
 
 describe("HouseholdCard component — Operational Context boundary purity", () => {
@@ -198,6 +370,20 @@ describe("HouseholdCard component — Operational Context boundary purity", () =
         for (const token of forbidden) {
             expect(source, `HouseholdCard must not reference "${token}"`).not.toContain(token);
         }
-        expect(source).not.toMatch(/record\s*:/);
+        // Allow identity VM prop types; forbid drawer-style record object literals.
+        const withoutIdentityVmProps = source.replace(/record:\s*IdentityRecordVM/g, "");
+        expect(withoutIdentityVmProps).not.toMatch(/record\s*:/);
+    });
+});
+
+describe("Household card lastUpdatedLabel presentation", () => {
+    it("formats updated_at with Focus Panel display doctrine (not ISO YYYY-MM-DD)", () => {
+        const src = readFileSync(
+            path.join(process.cwd(), "lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence.ts"),
+            "utf8",
+        );
+        expect(src).toContain("formatFocusPanelDate");
+        expect(src).toContain("`Updated ${formatted}`");
+        expect(src).not.toContain("updated.slice(0, 10)");
     });
 });

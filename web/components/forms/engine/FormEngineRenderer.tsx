@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, type FormEvent } from "react";
+import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
 import clsx from "clsx";
+import PhoneInput from "@/components/ui/PhoneInput";
+import { formatPhoneDisplay, isPhoneField } from "@/lib/phone/phonePresentation";
 import { InlineFieldTokenText } from "@/components/forms/inline/InlineFieldTokenText";
 import { sortDocumentBlocks, type DocumentBlock } from "@/lib/forms/documentComposition";
 import { fieldById as schemaFieldById, resolveDocumentComposition } from "@/lib/forms/documentCompositionAuthoring";
@@ -15,10 +17,18 @@ import type {
     NormalizedValidationError,
 } from "@/lib/forms/validateSubmission";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
-import { chunkFieldsForHalfRowLayout } from "@/lib/forms/fieldLayoutChunks";
+import { isPlacementOnlyForParticipant } from "@/lib/forms/placementOnlyFields";
+import { composeRuntimeRows, RUNTIME_FORM_CONTAINER_CLASS, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentation";
 import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
-import { emptyPayload, ensureGroupRows, setSignature, setTopLevelValue } from "./formEnginePayload";
+import { emptyPayload, ensureGroupRows, newRespondentAddedCollectionRow, setSignature, setTopLevelValue } from "./formEnginePayload";
+import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
+import {
+    resolveMarketingConsentLanguage,
+    type IntakeMarketingConsentChoice,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+import { MarketingConsentControl } from "./MarketingConsentControl";
 
 export type FormEngineOptionChoice = { value: string; label: string };
 
@@ -33,6 +43,16 @@ export type FormEngineRendererProps = {
     variant?: "default" | "embed";
     /** When set (e.g. after submit), matching messages are shown next to groups and signatures. */
     validationErrors?: NormalizedValidationError[];
+    /**
+     * The family's answer to a Marketing consent question. It never lives in `values`: the owner sends
+     * it as the consent evidence on submit. Absent (Studio Preview), the boxes keep a local answer that
+     * is never sent anywhere.
+     */
+    marketingConsent?: {
+        value: IntakeMarketingConsentChoice;
+        onChange: (next: IntakeMarketingConsentChoice) => void;
+        disabled?: boolean;
+    };
 };
 
 function fieldById(fields: FormField[], id: string): FormField | undefined {
@@ -57,8 +77,8 @@ function fieldUsesEmailShape(field: FormField & { type: "text" }): boolean {
 }
 
 function fieldUsesPhoneShape(field: FormField & { type: "text" }): boolean {
-    const id = field.id.toLowerCase();
-    return id.includes("phone") || id.includes("mobile") || id.includes("tel");
+    const p = field.validate?.pattern;
+    return isPhoneField({ id: field.id, pattern: typeof p === "string" ? p : null });
 }
 
 function titlesEquivalent(a: string, b: string): boolean {
@@ -88,9 +108,38 @@ export function FormEngineRenderer({
     optionChoicesByFieldId,
     variant = "default",
     validationErrors,
+    marketingConsent,
 }: FormEngineRendererProps) {
     const readonly = mode === "readonly";
+    const [localConsent, setLocalConsent] = useState<IntakeMarketingConsentChoice>({ email: false, sms: false });
+
+    /**
+     * Show a field when the schema's own conditions say so AND it is not a placement-only
+     * destination. Review keeps everything: a reviewer is reading the DOCUMENT, not filling it.
+     */
+    const shows = useCallback(
+        (field: FormField) =>
+            evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]) &&
+            (readonly || !isPlacementOnlyForParticipant(field, payload.values)),
+        [schema, payload.values, readonly],
+    );
     const loose = variant === "embed";
+    // Label ↔ control association (P1-close): unique per renderer instance and per group row.
+    const controlIdBase = useId();
+
+    /*
+     * CALCULATED ANSWERS ARE SHOWN, NOT ASKED.
+     *
+     * A field the schema declares `derived` (an age from a date of birth, the date the form is signed) is
+     * filled by the platform — the submit path resolves it before validation. Rendering it as an input
+     * asked the family for a number Alloy works out itself. It renders read-only here, with the value as
+     * far as it can be known while the family is still answering. Nothing is written to the payload: the
+     * submit path remains the one writer.
+     */
+    const derivedPreview = useMemo(
+        () => resolveFormDerivedValues(schema, payload.values ?? {}, {}),
+        [schema, payload.values],
+    );
 
     const sectionModels = useMemo(() => {
         return schema.sections.map((s) => ({
@@ -107,12 +156,40 @@ export function FormEngineRenderer({
             errorPathPrefix?: string[]
         ) => {
             if (field.type === "group" || field.type === "signature") return null;
+            if (field.type === "marketing_consent") {
+                const language = resolveMarketingConsentLanguage(field);
+                if (readonly) {
+                    return (
+                        <div className="space-y-1" data-form-field-marketing-consent={field.id}>
+                            <p className="block text-sm font-medium text-neutral-800">{language.heading}</p>
+                            <p className="text-xs text-neutral-600">
+                                Answered as marketing consent ({language.version}) — recorded on the Processing case, not here.
+                            </p>
+                        </div>
+                    );
+                }
+                return (
+                    <MarketingConsentControl
+                        className=""
+                        language={language}
+                        value={marketingConsent?.value ?? localConsent}
+                        onChange={marketingConsent?.onChange ?? setLocalConsent}
+                        disabled={marketingConsent?.disabled === true}
+                    />
+                );
+            }
             const raw = cell[field.id];
             const fieldErrors = errorPathPrefix?.length
                 ? errorsUnderPrefix(validationErrors, errorPathPrefix)
                 : [];
+            // One focusable control per field for these types: its label names it (screen readers, click-to-focus).
+            const labelsControl = !readonly && !field.derived && ["text", "number", "date", "select"].includes(field.type);
+            const controlId = `${controlIdBase}-${[...(errorPathPrefix ?? []), field.id].join("-")}`.replace(/[^A-Za-z0-9_-]/g, "_");
             const commonLabel = (
-                <label className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}>
+                <label
+                    className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}
+                    htmlFor={labelsControl ? controlId : undefined}
+                >
                     {field.label}
                     {field.required ? <span className="text-red-600"> *</span> : null}
                 </label>
@@ -122,13 +199,35 @@ export function FormEngineRenderer({
                 <p className={clsx("text-xs text-neutral-600", loose && "text-[12px]")}>{desc}</p>
             ) : null;
 
+            if (field.derived && !readonly) {
+                const value = derivedPreview[field.id];
+                const pending =
+                    field.derived.kind === "execution_date"
+                        ? "Filled in when you sign and submit."
+                        : "Calculated once the dates it depends on are answered.";
+                return (
+                    <div className="space-y-1" data-form-field-calculated={field.id}>
+                        <label className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}>
+                            {field.label}
+                        </label>
+                        {helpText}
+                        <div className="rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-sm text-neutral-800">
+                            {value ?? <span className="text-neutral-500">{pending}</span>}
+                        </div>
+                        <p className="text-[11px] text-neutral-500">Calculated automatically.</p>
+                    </div>
+                );
+            }
+
             if (readonly) {
                 const display =
                     field.type === "multiselect" && Array.isArray(raw)
                         ? raw.join(", ")
                         : raw === undefined || raw === null || raw === ""
                           ? "—"
-                          : String(raw);
+                          : field.type === "text" && fieldUsesPhoneShape(field)
+                            ? formatPhoneDisplay(String(raw))
+                            : String(raw);
                 const preWrap = field.type === "text" && (field as { multiline?: boolean }).multiline;
                 return (
                     <div className="space-y-1">
@@ -167,8 +266,20 @@ export function FormEngineRenderer({
                         <div className="space-y-1">
                             {commonLabel}
                             {helpText}
-                            {field.multiline && !emailLike ?
+                            {phoneLike && !field.multiline ?
+                                <PhoneInput
+                                    id={controlId}
+                                    className={clsx(
+                                        "w-full rounded border px-2 py-1.5 text-sm",
+                                        fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
+                                    )}
+                                    value={strVal}
+                                    placeholder={ph ?? "(555) 555-5555"}
+                                    onChange={(next) => onCellChange(field.id, next)}
+                                />
+                            : field.multiline && !emailLike ?
                                 <textarea
+                                    id={controlId}
                                     rows={5}
                                     className={clsx(
                                         "w-full rounded border px-2 py-1.5 text-sm",
@@ -180,6 +291,7 @@ export function FormEngineRenderer({
                                     {...(embedAutofillFix as object)}
                                 />
                             :   <input
+                                    id={controlId}
                                     type={inputType}
                                     autoComplete={autoComplete}
                                     className={clsx(
@@ -216,6 +328,7 @@ export function FormEngineRenderer({
                             {commonLabel}
                             {helpText}
                             <input
+                                id={controlId}
                                 type="number"
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
                                 value={raw === undefined || raw === null || raw === "" ? "" : Number(raw)}
@@ -232,6 +345,7 @@ export function FormEngineRenderer({
                             {commonLabel}
                             {helpText}
                             <input
+                                id={controlId}
                                 type="date"
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
                                 value={typeof raw === "string" ? raw : ""}
@@ -270,6 +384,7 @@ export function FormEngineRenderer({
                             {commonLabel}
                             {helpText}
                             <select
+                                id={controlId}
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
                                 value={typeof raw === "string" ? raw : ""}
                                 onChange={(e) => onCellChange(field.id, e.target.value)}
@@ -328,7 +443,7 @@ export function FormEngineRenderer({
                     return null;
             }
         },
-        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors]
+        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors, derivedPreview, controlIdBase, marketingConsent, localConsent]
     );
 
     const renderSignatureControl = useCallback(
@@ -492,7 +607,7 @@ export function FormEngineRenderer({
         (field: FormField & { type: "group" }) => {
             const rep = field.repeat ?? { min: 0, max: undefined };
             const rows = payload.groups?.[field.id] ?? [];
-            const vis = evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]);
+            const vis = shows(field);
             if (!vis) return null;
 
             const groupInlineErrors = errorsUnderPrefix(validationErrors, [field.id]);
@@ -534,7 +649,7 @@ export function FormEngineRenderer({
                                 {child.fields.map((nf) => {
                                     const getVal = (fid: string) =>
                                         fid in nr.values ? nr.values[fid] : payload.values[fid];
-                                    if (!evaluateFieldVisibility(nf.id, schema, getVal)) return null;
+                                    if (!shows(nf)) return null;
                                     if (nf.type === "signature") {
                                         const sig = nr.signatures?.[nf.id];
                                         const sigErrPrefix = [field.id, String(rowIdx), child.id, String(j), "signatures", nf.id];
@@ -633,10 +748,11 @@ export function FormEngineRenderer({
                             <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                                 {field.label} #{idx + 1}
                             </div>
-                            {field.fields.map((child) => {
+                            {composeRuntimeRows(field.fields.filter((child) => shows(child))).map((childRow) => (
+                            <div key={childRow.map((c) => c.id).join("|")} className={runtimeRowClass(childRow)}>
+                            {childRow.map((child) => {
                                 const getVal = (fid: string) =>
                                     fid in row.values ? row.values[fid] : payload.values[fid];
-                                if (!evaluateFieldVisibility(child.id, schema, getVal)) return null;
                                 if (child.type === "group") {
                                     return renderNestedGroup(child, row, idx, rows);
                                 }
@@ -644,7 +760,7 @@ export function FormEngineRenderer({
                                     const sig = row.signatures?.[child.id];
                                     const sigErrPrefix = [field.id, String(idx), "signatures", child.id];
                                     return (
-                                        <div key={child.id}>
+                                        <div key={child.id} className={childRow.length > 1 ? runtimeCellSpanClass(child) : undefined}>
                                             {renderSignatureControl(child, sig, (nextSig) => {
                                                 const next = [...rows];
                                                 next[idx] = {
@@ -657,7 +773,7 @@ export function FormEngineRenderer({
                                     );
                                 }
                                 return (
-                                    <div key={child.id}>
+                                    <div key={child.id} className={childRow.length > 1 ? runtimeCellSpanClass(child) : undefined}>
                                         {renderScalarControl(
                                             child,
                                             row.values,
@@ -671,6 +787,8 @@ export function FormEngineRenderer({
                                     </div>
                                 );
                             })}
+                            </div>
+                            ))}
                             {!readonly && rows.length > rep.min ? (
                                 <button
                                     type="button"
@@ -689,12 +807,14 @@ export function FormEngineRenderer({
                             onClick={() =>
                                 updateRows([
                                     ...rows,
-                                    {
-                                        instance_key: randomInstanceKey(),
-                                        values: {},
-                                        groups: {},
-                                        signatures: {},
-                                    },
+                                    groupFieldHasCollectionBinding(field) && field.collection_binding
+                                        ? newRespondentAddedCollectionRow(field.collection_binding)
+                                        : {
+                                              instance_key: randomInstanceKey(),
+                                              values: {},
+                                              groups: {},
+                                              signatures: {},
+                                          },
                                 ])
                             }
                         >
@@ -719,12 +839,12 @@ export function FormEngineRenderer({
 
     const renderFieldList = useCallback(
         (fields: FormField[]) =>
-            chunkFieldsForHalfRowLayout(
-                fields.filter((field) => evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]))
+            composeRuntimeRows(
+                fields.filter((field) => shows(field))
             ).map((row, ri) => (
                 <div
                     key={`row-${ri}-${row.map((f) => f.id).join("-")}`}
-                    className={row.length === 2 ? "grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6" : "block"}
+                    className={runtimeRowClass(row)}
                 >
                     {row.map((field) => {
                         if (field.type === "group") {
@@ -741,7 +861,7 @@ export function FormEngineRenderer({
                             );
                         }
                         return (
-                            <div key={field.id}>
+                            <div key={field.id} className={row.length > 1 ? runtimeCellSpanClass(field) : undefined}>
                                 {renderScalarControl(
                                     field,
                                     payload.values,
@@ -811,9 +931,7 @@ export function FormEngineRenderer({
                     const fields = block.field_ids
                         .map((fid) => schemaFieldById(schema, fid))
                         .filter(Boolean) as FormField[];
-                    const visibleFields = fields.filter((field) =>
-                        evaluateFieldVisibility(field.id, schema, (id) => payload.values[id])
-                    );
+                    const visibleFields = fields.filter((field) => shows(field));
                     const regionTitle = block.title?.trim() ?? "";
                     const showRegionTitle =
                         Boolean(regionTitle) && !titlesEquivalent(regionTitle, schema.title ?? "");
@@ -933,7 +1051,7 @@ export function FormEngineRenderer({
                 titlesEquivalent(block.content, schema.title ?? "")
         );
         return (
-            <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
+            <div className={clsx(RUNTIME_FORM_CONTAINER_CLASS, "mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
                 {!compositionHasTitleHeading ?
                     <header>
                         <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>
@@ -960,7 +1078,7 @@ export function FormEngineRenderer({
     }
 
     return (
-        <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
+        <div className={clsx(RUNTIME_FORM_CONTAINER_CLASS, "mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
             <header>
                 <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>{schema.title}</h1>
             </header>

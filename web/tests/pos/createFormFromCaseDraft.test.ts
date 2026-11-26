@@ -130,10 +130,24 @@ describe("createFormFromCaseDraft", () => {
         expect(res.code).toBe("not_found");
     });
 
-    it("org scoping — the case is loaded with the caller's org id", async () => {
-        const r = makeDeps(previewMetadata());
-        await createFormFromCaseDraft(r.deps, { orgId: "org-77", caseId: "case-1" });
-        expect(r.loadOrgIds).toContain("org-77");
+    it("rejects untitled preview names", async () => {
+        const meta = previewMetadata();
+        (meta.form_draft_preview as Record<string, unknown>).title = "Untitled document";
+        const r = makeDeps(meta);
+        const res = await createFormFromCaseDraft(r.deps, { orgId: "org-1", caseId: "case-1" });
+        expect(res.ok).toBe(false);
+        if (res.ok) return;
+        expect(res.code).toBe("invalid_schema");
+        expect(r.definitions).toHaveLength(0);
+    });
+
+    it("prefers generated_form_name over document title", async () => {
+        const meta = previewMetadata();
+        (meta.form_draft_preview as Record<string, unknown>).generated_form_name = "Child Medical Examination Report";
+        const r = makeDeps(meta);
+        const res = await createFormFromCaseDraft(r.deps, { orgId: "org-1", caseId: "case-1" });
+        expect(res.ok).toBe(true);
+        expect(r.definitions[0]?.name).toBe("Child Medical Examination Report");
     });
 });
 

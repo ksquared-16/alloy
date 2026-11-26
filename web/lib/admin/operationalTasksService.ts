@@ -331,25 +331,130 @@ export async function summarizeOperationalTaskCounts(params: {
     | { ok: true; open: number; due_soon: number; overdue: number }
     | { ok: false; error: string; message: string }
 > {
-    const listed = await listOperationalTasksForWorkspace({
-        supabase: params.supabase,
-        orgId: params.orgId,
-        userId: "",
-        filter: "open",
-        limit: 200,
-    });
-    if (!listed.ok) return listed;
-    const now = Date.now();
-    const soonCutoff = now + 24 * 60 * 60 * 1000;
-    let due_soon = 0;
-    let overdue = 0;
-    for (const r of listed.rows) {
-        const t = Date.parse(r.due_at);
-        if (Number.isNaN(t)) continue;
-        if (t < now) overdue += 1;
-        else if (t <= soonCutoff) due_soon += 1;
+    /*
+     * COUNTED IN THE DATABASE, NOT OVER A PAGE.
+     *
+     * These counts were derived by listing open tasks with `limit: 200` and measuring the array. That
+     * makes 200 the silent ceiling of `open`, and makes `overdue` / `due_soon` counts of whatever
+     * happened to fit on that page ordered by due date — so an org with more than 200 open work items
+     * would be told a number that is wrong and looks plausible. A badge is a denominator claim; it has
+     * to be counted, not sampled.
+     */
+    const now = new Date();
+    const soonCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const base = () =>
+        params.supabase
+            .from("operational_tasks")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", params.orgId)
+            .eq("status", "open");
+
+    const [openRes, overdueRes, dueSoonRes] = await Promise.all([
+        base(),
+        base().lt("due_at", now.toISOString()),
+        base().gte("due_at", now.toISOString()).lte("due_at", soonCutoff.toISOString()),
+    ]);
+
+    const failed = [openRes, overdueRes, dueSoonRes].find((r) => r.error);
+    if (failed?.error) {
+        return { ok: false, error: "DB_COUNT_FAILED", message: failed.error.message };
     }
-    return { ok: true, open: listed.rows.length, due_soon, overdue };
+
+    return {
+        ok: true,
+        open: openRes.count ?? 0,
+        due_soon: dueSoonRes.count ?? 0,
+        overdue: overdueRes.count ?? 0,
+    };
+}
+
+/**
+ * BP V2 S7 — which departments and sites a Work Items summary may count, decided from the SERVER-resolved
+ * actor. Requested departments outside a restricted actor's access are dropped (not answered), and the
+ * sites are the actor's ∩ the workspace selection (null = org scope). Never from the client's word alone.
+ */
+export function resolveTaskSummaryScope(
+    dims: { departmentScope?: string | null; allowedDepartmentIds?: readonly string[] | null; siteScope?: string | null; allowedSiteLocationIds?: readonly string[] | null },
+    requestedDepartmentIds: readonly string[],
+    selectedSiteId: string | null,
+): { departmentIds: string[]; siteIds: string[] | null } {
+    const allowedDepts = (dims.allowedDepartmentIds ?? []).map(String);
+    const departmentIds = [...new Set(requestedDepartmentIds.map((d) => d.trim()).filter(Boolean))].filter(
+        (d) => dims.departmentScope !== "restricted" || allowedDepts.includes(d),
+    );
+    const selected = (selectedSiteId ?? "").trim() || null;
+    const allowedSites = (dims.allowedSiteLocationIds ?? []).map(String);
+    const siteIds =
+        dims.siteScope === "restricted"
+            ? selected
+                ? allowedSites.filter((s) => s === selected)
+                : allowedSites
+            : selected
+              ? [selected]
+              : null;
+    return { departmentIds, siteIds };
+}
+
+/** BP V2 S7 — at most this many departments are summarized per request (one tile each). */
+export const OPERATIONAL_TASK_DEPARTMENT_SUMMARY_LIMIT = 20;
+
+export type OperationalTaskDepartmentCounts = { open: number; overdue: number };
+
+/**
+ * OPEN AND OVERDUE WORK ITEMS PER DEPARTMENT — the /workspace process tiles' work line (BP V2 S7).
+ *
+ * The SAME counts `summarizeOperationalTaskCounts` makes (open = `status='open'`; overdue = open with
+ * `due_at` before now — the Work Items KPI strip's and nav badge's rule), narrowed to the tasks a
+ * process can actually claim: `metadata.department_id` is the ONLY attribution a task carries (stamped by
+ * lifecycle stage work). Tasks without it are counted apart as unattributed, never assigned to a process.
+ *
+ * Scope is decided by the caller from the server-resolved actor: `departmentIds` must already be the
+ * departments the actor may see, and `siteIds` is null for org scope or the effective sites. With sites,
+ * a task counts only through its linked opportunity's location (an unlinked task has no site and is not
+ * shown to a site-scoped view). Counted in the database (`count: exact`), never over a page.
+ */
+export async function summarizeOperationalTaskCountsByDepartment(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    departmentIds: readonly string[];
+    siteIds: readonly string[] | null;
+}): Promise<
+    | { ok: true; byDepartment: Record<string, OperationalTaskDepartmentCounts>; unattributed: { open: number } | null }
+    | { ok: false; error: string; message: string }
+> {
+    const now = new Date().toISOString();
+    const departmentIds = [...new Set(params.departmentIds.map((d) => d.trim()).filter(Boolean))].slice(0, OPERATIONAL_TASK_DEPARTMENT_SUMMARY_LIMIT);
+    const sites = params.siteIds ? [...new Set(params.siteIds)] : null;
+    const base = () => {
+        const q = sites
+            ? params.supabase
+                  .from("operational_tasks")
+                  .select("id, opportunities!inner(location_id)", { count: "exact", head: true })
+                  .eq("org_id", params.orgId)
+                  .eq("status", "open")
+                  .in("opportunities.location_id", sites.length ? sites : ["00000000-0000-0000-0000-000000000000"])
+            : params.supabase
+                  .from("operational_tasks")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", params.orgId)
+                  .eq("status", "open");
+        return q;
+    };
+    const perDepartment = departmentIds.map((departmentId) => {
+        const scoped = () => base().filter("metadata->>department_id", "eq", departmentId);
+        return Promise.all([scoped(), scoped().lt("due_at", now)]);
+    });
+    // Unattributed is an org-scope fact; a site-scoped view cannot see unlinked tasks at all.
+    const unattributedP = sites ? null : base().is("metadata->>department_id", null);
+    const [results, unattributedRes] = await Promise.all([Promise.all(perDepartment), unattributedP]);
+    const failed = results.flat().find((r) => r.error) ?? (unattributedRes?.error ? unattributedRes : null);
+    if (failed?.error) return { ok: false, error: "DB_COUNT_FAILED", message: failed.error.message };
+    const byDepartment: Record<string, OperationalTaskDepartmentCounts> = {};
+    departmentIds.forEach((departmentId, i) => {
+        const [open, overdue] = results[i]!;
+        byDepartment[departmentId] = { open: open.count ?? 0, overdue: overdue.count ?? 0 };
+    });
+    return { ok: true, byDepartment, unattributed: unattributedRes ? { open: unattributedRes.count ?? 0 } : null };
 }
 
 export async function getOperationalTaskById(params: {

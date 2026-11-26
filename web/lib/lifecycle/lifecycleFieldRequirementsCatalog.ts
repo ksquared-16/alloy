@@ -65,6 +65,19 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
         runtime_enforced: false,
     },
     {
+        /*
+         * A child's gender was a destination the platform could already WRITE — `customer_member_field`
+         * has declared it all along — and one the picker could never OFFER, because the catalog had no
+         * rule for it. So "Child → Gender" was absent from every authoring surface while the storage sat
+         * there waiting. Added as a catalog rule rather than as a special case in the picker, so every
+         * consumer of the field authority gains it at once.
+         */
+        rule_id: "child:gender",
+        entity: "child",
+        field_label: "Gender",
+        runtime_enforced: false,
+    },
+    {
         rule_id: "child:age_group",
         entity: "child",
         field_label: "Age Group",
@@ -83,7 +96,7 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
         runtime_enforced: true,
     },
     {
-        rule_id: "child:desired_start_date",
+        rule_id: "child:start_date",
         entity: "child",
         field_label: "Desired Start Date",
         runtime_enforced: true,
@@ -119,7 +132,31 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
     {
         rule_id: "child:start_date",
         entity: "child",
-        field_label: "Start Date",
+        field_label: "Requested Start",
+        runtime_enforced: true,
+    },
+    {
+        rule_id: "child:requested_days_per_week",
+        entity: "child",
+        field_label: "Requested days per week",
+        runtime_enforced: true,
+    },
+    {
+        rule_id: "child:preferred_weekdays",
+        entity: "child",
+        field_label: "Preferred days",
+        runtime_enforced: true,
+    },
+    {
+        rule_id: "child:tuition_plan",
+        entity: "child",
+        field_label: "Tuition plan",
+        runtime_enforced: true,
+    },
+    {
+        rule_id: "child:quote_accepted",
+        entity: "child",
+        field_label: "Quote accepted",
         runtime_enforced: true,
     },
     {
@@ -168,10 +205,16 @@ export const OBJECT_LABEL_TO_FIELD_RULES: Record<string, readonly string[]> = {
     Program: ["child:program_interest"],
     "Desired Schedule": ["child:desired_schedule"],
     Schedule: ["child:desired_schedule"],
-    "Desired Start Date": ["child:desired_start_date"],
-    "Enrollment Start Date": ["child:desired_start_date"],
+    "Desired Start Date": ["child:start_date"],
+    "Enrollment Start Date": ["child:start_date"],
+    "Requested Start": ["child:start_date"],
     "Start Date": ["child:start_date"],
+    "Requested days per week": ["child:requested_days_per_week"],
+    "Preferred days": ["child:preferred_weekdays"],
+    "Tuition plan": ["child:tuition_plan"],
+    "Quote accepted": ["child:quote_accepted"],
     Classroom: ["child:classroom"],
+    Room: ["child:classroom"],
     "Tour Date and Time": ["opportunity:tour_date", "opportunity:tour_time"],
     "Tour Outcome": ["opportunity:tour_outcome"],
     "Enrollment Date": ["opportunity:enrollment_date"],

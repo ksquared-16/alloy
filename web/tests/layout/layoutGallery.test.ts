@@ -107,8 +107,8 @@ describe("layouts settings gallery wiring", () => {
         expect(router).toContain("QueueRecordLayoutVisualEditor");
     });
 
-    it("canonical surfaces gallery href is /settings/surfaces", () => {
-        expect(LAYOUTS_SETTINGS_HREF).toBe("/settings/surfaces");
+    it("canonical surfaces gallery href is /organization/surfaces", () => {
+        expect(LAYOUTS_SETTINGS_HREF).toBe("/organization/surfaces");
         const nextConfig = readFileSync(resolve(root, "next.config.ts"), "utf8");
         expect(nextConfig).toContain('source: "/admin/:path*"');
         expect(nextConfig).toContain('destination: "/adminV2/:path*"');

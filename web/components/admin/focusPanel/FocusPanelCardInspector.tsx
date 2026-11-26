@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
+import { UNIVERSAL_CARD_ICON_BY_NAME } from "@/components/admin/focusPanel/UniversalCardIcon";
 import {
     FOCUS_PANEL_COLLECTION_RENDERERS,
     FOCUS_PANEL_COLLECTION_RENDERER_LABELS,
@@ -51,16 +52,26 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
-    conceptOptionsForCard,
     defaultCardExpansion,
     defaultCardFields,
     getFocusPanelCardReference,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReference";
+import { availableFieldsForFocusPanelCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardFieldPicker";
+import { legacyConceptToRefKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCompat";
+import { categoryDisplayLabel } from "@/lib/fields/fieldCatalogForSettings";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
+import type { AvailableField } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import {
     CONCEPT_TREE,
     buildConceptPath,
     parseConceptPath,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
+import {
+    currentPlacementVariant,
+    defaultColumnsForCard,
+    placementVariantsFor,
+    SURFACE_SPAN_CHOICES,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
@@ -151,6 +162,19 @@ type Props = {
     onDuplicate?: () => void;
     onRemove?: () => void;
     history: HistoryInfo;
+    /** Drill-in mode: hide presentation/evidence field authoring — those live inline on the runtime. */
+    metadataOnly?: boolean;
+    /**
+     * Switch a card between the presentations it actually implements. Present only
+     * for a card that declares more than one; the host applies both halves of the
+     * choice — the appearance density and the placement span — because a Compact
+     * choice rendered at Summary width is not a choice.
+     */
+    onPresentationChange?: (card: FocusPanelCardKey, variantLabel: string) => void;
+    /** The span this SURFACE authored for the card, when it is placed on the canvas. */
+    authoredColumns?: number | null;
+    /** Change the span for this surface only — never the card's own default. */
+    onSpanChange?: (card: FocusPanelCardKey, columns: number) => void;
 };
 
 const FIELD = "config-runtime-input";
@@ -166,12 +190,39 @@ export default function FocusPanelCardInspector({
     onDuplicate,
     onRemove,
     history,
+    metadataOnly = false,
+    onPresentationChange,
+    authoredColumns = null,
+    onSpanChange,
 }: Props) {
-    const [tab, setTab] = useState<InspectorTab>("question");
+    const visibleTabs = useMemo(
+        () =>
+            metadataOnly
+                ? (["question", "conditions", "actions", "ai", "behavior"] as const)
+                : INSPECTOR_TABS,
+        [metadataOnly],
+    );
+    const [tab, setTab] = useState<InspectorTab>(metadataOnly ? "question" : "question");
     const reference = getFocusPanelCardReference(baseModel.key);
+    const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
+    const cardFieldOptions = useMemo(
+        () => availableFieldsForFocusPanelCard(baseModel.key, tenantFieldDefinitions),
+        [baseModel.key, tenantFieldDefinitions],
+    );
 
     const appearance = config.appearance ?? {};
     const effectiveTitle = appearance.titleOverride?.trim() || baseModel.title;
+    const placementVariants = useMemo(() => placementVariantsFor(baseModel.key), [baseModel.key]);
+    /*
+     * WIDTH IS THIS SURFACE'S ANSWER, NOT THE CARD'S.
+     *
+     * The card states a recommended default; the composition decides. Precedence
+     * is surface-authored → card default → platform fallback, and the authored
+     * value is read from the grid area this surface persisted, so a published
+     * layout keeps exactly the width it was saved with.
+     */
+    const effectiveColumns = authoredColumns ?? defaultColumnsForCard(baseModel.key);
+    const currentVariant = currentPlacementVariant(baseModel.key, appearance.density ?? baseModel.density);
 
     // Edit against a config that always carries explicit evidence groups: when a card
     // has no fields yet, seed a default "Details" group from the reference so authoring
@@ -187,7 +238,10 @@ export default function FocusPanelCardInspector({
     const fields = useMemo(() => configFields(editingConfig), [editingConfig]);
     const expansion = config.expansion ?? defaultCardExpansion(baseModel.key);
     const conditions = config.conditions ?? [];
-    const conceptOptions = conceptOptionsForCard(baseModel.key);
+    const conceptOptions = useMemo(
+        () => cardFieldOptions.map((field) => field.key),
+        [cardFieldOptions],
+    );
 
     // Ownership-aware validation (binding, renderer, group names, edit-only-on-owner).
     const validation = useMemo(() => validateFocusPanelCardConfig(editingConfig, baseModel.key), [editingConfig, baseModel.key]);
@@ -229,8 +283,9 @@ export default function FocusPanelCardInspector({
                   }
                 : {
                       id: `custom_${n}`,
-                      label: "New field",
-                      concept: conceptOptions[0] ?? "Enrollment → Primary Contact → Name",
+                      label: cardFieldOptions[0]?.label ?? "New field",
+                      refKey: cardFieldOptions[0]?.key ?? "person.primary_contact_name",
+                      concept: legacyConceptToRefKey(cardFieldOptions[0]?.key ?? "") ?? cardFieldOptions[0]?.key ?? "",
                       renderer: "text",
                       kind: "field",
                       placement: expansion.default,
@@ -275,7 +330,7 @@ export default function FocusPanelCardInspector({
             </header>
 
             <div role="tablist" aria-label="Card inspector" className="flex flex-wrap gap-1 border-b border-alloy-stone/30 px-3 py-2">
-                {INSPECTOR_TABS.map((t) => {
+                {visibleTabs.map((t) => {
                     const active = t === tab;
                     return (
                         <button
@@ -334,6 +389,23 @@ export default function FocusPanelCardInspector({
                                 placeholder={baseModel.title}
                                 onChange={(e) => patchAppearance({ titleOverride: e.target.value })}
                             />
+                        </Labeled>
+                        <Labeled label="Card icon">
+                            <select
+                                data-testid="inspector-icon"
+                                className={FIELD}
+                                value={appearance.iconName ?? ""}
+                                onChange={(e) =>
+                                    patchAppearance({ iconName: e.target.value.trim() || null })
+                                }
+                            >
+                                <option value="">Default ({baseModel.iconName ?? "LayoutGrid"})</option>
+                                {Object.keys(UNIVERSAL_CARD_ICON_BY_NAME).map((name) => (
+                                    <option key={name} value={name}>
+                                        {name}
+                                    </option>
+                                ))}
+                            </select>
                         </Labeled>
                         <Labeled label="Supporting description">
                             <textarea
@@ -422,7 +494,7 @@ export default function FocusPanelCardInspector({
                                         field={field}
                                         canUp={index > 0}
                                         canDown={index < group.fields.length - 1}
-                                        conceptOptions={conceptOptions}
+                                        availableFields={cardFieldOptions}
                                         groups={groups.map((g) => ({ id: g.id, label: g.label }))}
                                         currentGroupId={group.id}
                                         onUp={() => moveFieldUpDown(field.id, -1)}
@@ -442,21 +514,66 @@ export default function FocusPanelCardInspector({
                     </div>
                 ) : tab === "presentation" ? (
                     <div className="space-y-3">
-                        <Labeled label="Size">
-                            <select
-                                data-testid="inspector-density"
-                                className={FIELD}
-                                value={appearance.density ?? baseModel.density}
-                                onChange={(e) => patchAppearance({ density: e.target.value as FocusPanelCardDensity })}
-                            >
-                                {DENSITIES.map((d) => (
-                                    <option key={d} value={d}>
-                                        {d[0]!.toUpperCase() + d.slice(1)}
-                                    </option>
-                                ))}
-                            </select>
-                        </Labeled>
-                        <p className="config-typo-meta">Size applies live to the published workspace — the runtime computes exact spacing.</p>
+                        {/*
+                          * A CARD WITH REAL PRESENTATIONS IS CHOSEN BY NAME, NOT BY SIZE.
+                          *
+                          * Financials is one identity and one read model with two implemented
+                          * presentations. Offering that as "Compact / Standard" made the operator
+                          * pick a density and hope; offering it as Summary / Compact names the two
+                          * cards they can actually see. The span travels with the choice — it is
+                          * how the platform places the card, not what is being chosen.
+                          */}
+                        {onSpanChange ?
+                            <Labeled label="Width">
+                                <select
+                                    data-testid="inspector-span"
+                                    className={FIELD}
+                                    value={String(effectiveColumns)}
+                                    onChange={(e) => onSpanChange(baseModel.key, Number(e.target.value))}
+                                >
+                                    {SURFACE_SPAN_CHOICES.map((choice) => (
+                                        <option key={choice.columns} value={String(choice.columns)}>
+                                            {choice.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Labeled>
+                        :   null}
+                        {placementVariants.length > 1 ?
+                            <Labeled label="Presentation">
+                                <select
+                                    data-testid="inspector-presentation"
+                                    className={FIELD}
+                                    value={currentVariant ?? placementVariants[0]!.variantLabel}
+                                    onChange={(e) => onPresentationChange?.(baseModel.key, e.target.value)}
+                                >
+                                    {placementVariants.map((v) => (
+                                        <option key={v.variantLabel} value={v.variantLabel}>
+                                            {v.variantLabel}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Labeled>
+                        :   <Labeled label="Size">
+                                <select
+                                    data-testid="inspector-density"
+                                    className={FIELD}
+                                    value={appearance.density ?? baseModel.density}
+                                    onChange={(e) => patchAppearance({ density: e.target.value as FocusPanelCardDensity })}
+                                >
+                                    {DENSITIES.map((d) => (
+                                        <option key={d} value={d}>
+                                            {d[0]!.toUpperCase() + d.slice(1)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Labeled>
+                        }
+                        <p className="config-typo-meta">
+                            {placementVariants.length > 1
+                                ? "Both presentations are the same card and the same account — only how much of it this placement shows."
+                                : "Size applies live to the published workspace — the runtime computes exact spacing."}
+                        </p>
                     </div>
                 ) : tab === "behavior" ? (
                     <div className="space-y-3" data-focus-panel-inspector-behavior={effectiveWeight} data-focus-panel-composition-depth={effectiveDepth}>
@@ -646,7 +763,7 @@ function FieldRow({
     field,
     canUp,
     canDown,
-    conceptOptions,
+    availableFields,
     groups,
     currentGroupId,
     onUp,
@@ -658,7 +775,7 @@ function FieldRow({
     field: FocusPanelCardField;
     canUp: boolean;
     canDown: boolean;
-    conceptOptions: string[];
+    availableFields: AvailableField[];
     groups: { id: string; label: string }[];
     currentGroupId: string;
     onUp: () => void;
@@ -678,7 +795,12 @@ function FieldRow({
                     <button type="button" aria-label="Remove field" data-focus-panel-field-remove={field.id} onClick={onRemove} className="rounded-md border border-red-300 px-1.5 py-1 text-xs text-red-600 hover:bg-red-50">✕</button>
                 </div>
             </div>
-            <ConceptPicker label={`${field.label} concept`} value={field.concept} onChange={(concept) => onChange({ concept })} extraOptions={conceptOptions} />
+            <CanonicalRefFieldPicker
+                label={`${field.label} field`}
+                field={field}
+                availableFields={availableFields}
+                onChange={onChange}
+            />
             {isCollection ? (
                 <>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -721,7 +843,58 @@ function FieldRow({
     );
 }
 
-/** Cascading business-concept picker: branch → attribute → path (no raw columns). */
+/** Canonical refKey picker — same provider source as nested Identity Builder. */
+function CanonicalRefFieldPicker({
+    label,
+    field,
+    availableFields,
+    onChange,
+}: {
+    label: string;
+    field: FocusPanelCardField;
+    availableFields: AvailableField[];
+    onChange: (patch: Partial<FocusPanelCardField>) => void;
+}) {
+    const selected =
+        field.refKey?.trim()
+        ?? legacyConceptToRefKey(field.concept)
+        ?? availableFields[0]?.key
+        ?? "";
+    const categories = [...new Set(availableFields.map((entry) => entry.categoryKey ?? "general"))].sort((a, b) =>
+        categoryDisplayLabel(a).localeCompare(categoryDisplayLabel(b)),
+    );
+    return (
+        <select
+            aria-label={label}
+            className={FIELD}
+            data-focus-panel-canonical-ref-picker={field.id}
+            value={selected}
+            onChange={(e) => {
+                const refKey = e.target.value;
+                const match = availableFields.find((entry) => entry.key === refKey);
+                onChange({
+                    refKey,
+                    concept: field.concept,
+                    label: match?.label ?? field.label,
+                });
+            }}
+        >
+            {categories.map((categoryKey) => (
+                <optgroup key={categoryKey} label={categoryDisplayLabel(categoryKey)}>
+                    {availableFields
+                        .filter((entry) => (entry.categoryKey ?? "general") === categoryKey)
+                        .map((entry) => (
+                            <option key={entry.key} value={entry.key}>
+                                {entry.label}
+                            </option>
+                        ))}
+                </optgroup>
+            ))}
+        </select>
+    );
+}
+
+/** Legacy condition concept picker (conditions still use concept record paths). */
 function ConceptPicker({
     label,
     value,

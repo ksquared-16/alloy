@@ -44,23 +44,6 @@ describe("buildSubjectManageMenuFromResolvedActions", () => {
 });
 
 describe("opportunity Manage menu wiring", () => {
-    it("does not render placeholder Duplicate/Merge/Transfer lead actions", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const focusHeader = read("components/admin/focusPanel/OpportunityFocusPanelHeader.tsx");
-        expect(runtime).not.toContain("buildRecordManageMenuForEntity");
-        expect(runtime).not.toContain("Duplicate Lead");
-        expect(focusHeader).toContain("buildSubjectManageMenuFromResolvedActions");
-        expect(focusHeader).toContain("displayVm.actions.header_menu");
-    });
-
-    it("uses registry actions for Manage menu only — not the workspace command rail", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("subjectManageActions");
-        expect(runtime).toContain("displayVm?.actions.header_menu");
-        expect(runtime).toContain("onSubjectManageActionSelect={onActionSelect}");
-        expect(runtime).not.toContain("DrawerCommandRailActionsRegistrar");
-        expect(runtime).toContain("displayVm.actions.header_menu");
-    });
 
     it("Manage menu supports registry mode with empty disabled state", () => {
         const menu = read("components/admin/drawer/record/RecordDrawerManageMenu.tsx");

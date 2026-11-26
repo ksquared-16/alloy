@@ -1,0 +1,149 @@
+{
+  "catsStatus": 200,
+  "categories": [
+    {
+      "id": "4a77ea9e-8641-4d05-97dd-a4f91651b07a",
+      "label": "Infant",
+      "key": "infant",
+      "site": "ae34d822-60ef-4f82-81eb-8f3513059627"
+    },
+    {
+      "id": "80723acb-4884-4da9-a862-b4748e19a8b4",
+      "label": "Infant",
+      "key": "infant",
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    },
+    {
+      "id": "237c9769-3b78-4265-8836-3e4d09e86b34",
+      "label": "Infant",
+      "key": "infant",
+      "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+    },
+    {
+      "id": "b9fa2703-3a3c-4ac6-a6b3-3e4e262527a2",
+      "label": "Toddler",
+      "key": "toddler",
+      "site": "ae34d822-60ef-4f82-81eb-8f3513059627"
+    },
+    {
+      "id": "d65c987d-7d6b-4ac7-8647-f2c94d22fd8f",
+      "label": "Toddler",
+      "key": "toddler",
+      "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+    },
+    {
+      "id": "08e30247-4aeb-4bb8-890d-cdbb54979b6f",
+      "label": "Toddler",
+      "key": "toddler",
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    },
+    {
+      "id": "923d7789-b86c-4f0d-bb04-8a9e58dceb83",
+      "label": "Preschool",
+      "key": "preschool",
+      "site": "ae34d822-60ef-4f82-81eb-8f3513059627"
+    },
+    {
+      "id": "2147d374-8112-4e88-8342-b49c9b95fc7b",
+      "label": "Preschool",
+      "key": "preschool",
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    },
+    {
+      "id": "cf8f7031-1657-46dd-8b59-df1abf9f4627",
+      "label": "Preschool",
+      "key": "preschool",
+      "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+    },
+    {
+      "id": "5e6856e4-8b3d-4a6c-abea-ac7ad8b49c2c",
+      "label": "Pre-K",
+      "key": "pre_k",
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    },
+    {
+      "id": "963a3bd0-3a98-499e-ac11-6384b8795030",
+      "label": "Pre-K",
+      "key": "pre_k",
+      "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+    },
+    {
+      "id": "aed7556e-14bd-48bb-a9a2-4a94eb47c0ac",
+      "label": "Pre-K",
+      "key": "pre_k",
+      "site": "ae34d822-60ef-4f82-81eb-8f3513059627"
+    },
+    {
+      "id": "8c794d51-1081-4a26-b77e-f13ed128e2ea",
+      "label": "Kindergarten",
+      "key": "kindergarten",
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    },
+    {
+      "id": "31287001-09db-4d42-9d58-483767bd83c9",
+      "label": "School Age",
+      "key": "school_age",
+      "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+    },
+    {
+      "id": "50a71b79-8be5-488f-b3bc-2d9102c77568",
+      "label": "School Age",
+      "key": "school_age",
+      "site": "ae34d822-60ef-4f82-81eb-8f3513059627"
+    },
+    {
+      "id": "5e9e715a-eb8f-4534-bcfe-a8a74ed883d9",
+      "label": "School Age",
+      "key": "school_age",
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    },
+    {
+      "id": "38472624-1193-4583-84dd-69ee79be4940",
+      "label": "Stage4 OK3 w9k7sx",
+      "key": "stage4_ok3_w9k7sx",
+      "site": "ae34d822-60ef-4f82-81eb-8f3513059627"
+    },
+    {
+      "id": "29b6d0c7-ca8f-4ff7-bf52-77552b5e7f61",
+      "label": "Stage4 OK3 w9k7sx",
+      "key": "stage4_ok3_w9k7sx",
+      "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+    },
+    {
+      "id": "3f087047-76da-43fa-b256-b704dd2debc0",
+      "label": "Stage4 OK3 w9k7sx",
+      "key": "stage4_ok3_w9k7sx",
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    }
+  ],
+  "chosenCategory": {
+    "id": "31287001-09db-4d42-9d58-483767bd83c9",
+    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+    "location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+    "key": "school_age",
+    "label": "School Age",
+    "sort_order": 50,
+    "is_active": true,
+    "metadata": {
+      "age_range_to": "12",
+      "age_range_from": "5",
+      "age_range_unit": "years"
+    },
+    "program_id": "3cd5840c-e3da-466f-913b-d20d2af93bad",
+    "program_revision_id": null,
+    "configuration_consumption_id": null,
+    "local_description_override": null,
+    "local_authorization_evidence": null,
+    "local_display_name": null,
+    "available_from": null,
+    "available_through": null,
+    "created_at": "2026-06-11T23:13:40.204448+00:00",
+    "updated_at": "2026-07-17T21:31:42.426+00:00"
+  },
+  "locsStatus": 200,
+  "locSample": "{\"locations\":[{\"id\":\"75f44c2c-21b4-4ef0-817f-5978624abc31\",\"location_number\":19,\"label\":\"Bears\",\"address1\":null,\"city\":null,\"state\":null,\"postal_code\":null,\"customer_id\":null,\"is_primary\":false,\"is_active\":true,\"location_type\":\"unit\",\"parent_location_id\":\"e9ed1883-d6a5-463d-bda0-b765e15c6214\",\"unit_role\":\"operational_group\",\"metadata\":{\"capacity\":\"10\",\"category\":\"toddler\",\"seed_key\":\"site_south_campus:room:2:toddler_1\",\"campus_room\":true,\"seed_source\":\"staging_demo_reset\",\"age_range_to\":\"30\",\"is_demo_data\":true,\"semantic_kind\":\"classroom\",\"age_range_from\":\"18\",\"age_range_unit\":\"months\",\"demo_seed_package\":\"staging_realistic_childcare_seed_v1\",\"student_teacher_ratio\":\"1:6\"},\"updated_at\":\"2026-07-17T21:33:05.495667+00:00\",\"status_key\":null,\"_customer_name\":null,\"_status_display\":null},{\"id\":\"96411dc0-7370-4072-81f6-921cce5b4d7b\",\"location_number\":21,\"label\":\"Giraffe\",\"address1\":null,\"city\"",
+  "agreement": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+  "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+  "opp": "ebe6cb44-957b-48f0-9a6d-603670443ec2",
+  "ocm": "e9965c7c-608e-4f68-a15b-2475374e2ecf"
+}

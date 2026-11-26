@@ -50,10 +50,10 @@ type ChildRow = {
     id: string;
     customer_member_id: string;
     person_id?: string | null;
-    desired_program_type?: string | null;
+    program_category_id?: string | null;
     program_room_cohort_key?: string | null;
-    desired_schedule_type?: string | null;
-    desired_start_date?: string | null;
+    schedule_type?: string | null;
+    start_date?: string | null;
 };
 
 function waitlistDef() {
@@ -143,7 +143,7 @@ function buildSupabaseForLifecycle(input: {
                                         customer_id: "cust-1",
                                         primary_person_id: "parent-1",
                                         location_id: "loc-1",
-                                        desired_program_type: "infant",
+                                        program_type: "infant",
                                         metadata: input.existingMetadata ?? {},
                                         work_unit_id: "wu-1",
                                     },
@@ -164,10 +164,10 @@ function buildSupabaseForLifecycle(input: {
                                     id: c.id,
                                     customer_member_id: c.customer_member_id,
                                     location_id: "loc-1",
-                                    desired_program_type: c.desired_program_type ?? null,
+                                    program_category_id: c.program_category_id ?? null,
                                     program_room_cohort_key: c.program_room_cohort_key ?? null,
-                                    desired_schedule_type: c.desired_schedule_type ?? null,
-                                    desired_start_date: c.desired_start_date ?? null,
+                                    schedule_type: c.schedule_type ?? null,
+                                    start_date: c.start_date ?? null,
                                     outcome_status_key: null,
                                 })),
                                 error: null,
@@ -192,6 +192,40 @@ function buildSupabaseForLifecycle(input: {
                             eq: vi.fn().mockReturnValue({
                                 maybeSingle: vi.fn().mockResolvedValue({
                                     data: { department_id: "dept-1" },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "departments") {
+                return {
+                    select: vi.fn().mockReturnValue({
+                        eq: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                maybeSingle: vi.fn().mockResolvedValue({
+                                    data: { metadata: {} },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "persons") {
+                return {
+                    select: vi.fn().mockReturnValue({
+                        eq: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                maybeSingle: vi.fn().mockResolvedValue({
+                                    data: {
+                                        id: "parent-1",
+                                        first_name: "Pat",
+                                        last_name: "Parent",
+                                        email: "pat@example.com",
+                                        phone: "555-0100",
+                                    },
                                     error: null,
                                 }),
                             }),
@@ -224,7 +258,7 @@ describe("lifecycle actions runtime preflight", () => {
                     id: "ocm-1",
                     customer_member_id: "cm-1",
                     person_id: "person-1",
-                    desired_program_type: null,
+                    program_category_id: null,
                     program_room_cohort_key: null,
                 },
             ],
@@ -243,7 +277,9 @@ describe("lifecycle actions runtime preflight", () => {
         expect(result.ok).toBe(false);
         if (result.ok) return;
         expect(result.action_preflight?.action_key).toBe("move_to_waitlist");
-        expect(result.completion_requirements?.blocking.some((v) => v.label === "Program")).toBe(true);
+        expect(
+            result.completion_requirements?.blocking.some((v) => v.field_key === "program_category_id")
+        ).toBe(true);
         expect(emitStatusChangedEvent).not.toHaveBeenCalled();
         expect(emitEvent).not.toHaveBeenCalled();
         expect(supabase.oppUpdateFn).not.toHaveBeenCalled();
@@ -259,9 +295,9 @@ describe("lifecycle actions runtime preflight", () => {
                     id: "ocm-1",
                     customer_member_id: "cm-1",
                     person_id: "person-1",
-                    desired_program_type: "infant",
-                    desired_schedule_type: "full_time",
-                    desired_start_date: "2026-09-01",
+                    program_category_id: "cat-infant",
+                    schedule_type: "full_time",
+                    start_date: "2026-09-01",
                 },
             ],
         });
@@ -277,6 +313,7 @@ describe("lifecycle actions runtime preflight", () => {
         );
 
         vi.useRealTimers();
+        if (!result.ok) expect(JSON.stringify(result).slice(0, 1200)).toBe("__dump__");
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(emitStatusChangedEvent).toHaveBeenCalled();
@@ -314,7 +351,14 @@ describe("lifecycle actions runtime preflight", () => {
     it("record_tour_outcome executes when outcome is provided", async () => {
         const supabase = buildSupabaseForLifecycle({
             actionKey: "record_tour_outcome",
-            children: [{ id: "ocm-1", customer_member_id: "cm-1", person_id: "person-1" }],
+            children: [
+                {
+                    id: "ocm-1",
+                    customer_member_id: "cm-1",
+                    person_id: "person-1",
+                    program_category_id: "cat-infant",
+                },
+            ],
         });
 
         const result = await executeAdminAction(

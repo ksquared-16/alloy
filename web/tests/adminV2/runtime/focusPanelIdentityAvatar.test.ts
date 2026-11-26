@@ -35,6 +35,10 @@ describe("identity avatar evidence model", () => {
         expect(a).toBe(b);
         expect(a).toBeGreaterThanOrEqual(0);
         expect(a).toBeLessThan(6);
-        expect(resolveIdentityAvatar("Sarah Johnson").tone).toBe(a);
+        // Semantic contact role uses the neutral token; name hash remains available for children.
+        expect(resolveIdentityAvatar("Sarah Johnson").role).toBe("contact");
+        expect(resolveIdentityAvatar("Sarah Johnson", null, { role: "child", recordId: "x" }).tone).toBe(
+            resolveIdentityAvatar("Sarah Johnson", null, { role: "child", recordId: "x" }).tone,
+        );
     });
 });

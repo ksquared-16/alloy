@@ -1,3 +1,5 @@
+import { normalizePhoneDigitsCompat } from "@/lib/identity";
+
 export const INTAKE_PHONE_BARE_RE = /\b\d{10}\b/;
 
 export const INTAKE_PHONE_FORMATTED_RE =
@@ -5,9 +7,7 @@ export const INTAKE_PHONE_FORMATTED_RE =
 
 /** Normalize to digits-only; strips leading US country code 1 when 11 digits. */
 export function normalizePhoneDigits(raw: string): string {
-    const digits = raw.replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
-    return digits;
+    return normalizePhoneDigitsCompat(raw);
 }
 
 export function isValidPhone(raw: string): boolean {

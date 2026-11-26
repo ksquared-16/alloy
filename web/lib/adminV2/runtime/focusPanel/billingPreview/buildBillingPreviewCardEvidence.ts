@@ -25,6 +25,13 @@ import type { FinancialConfigEnrollment } from "@/lib/adminV2/runtime/focusPanel
 
 export type BillingPreviewReadinessItem = {
     label: string;
+    /**
+     * Has an AUTHORITATIVE SOURCE answered for this item? `false` means unresolved — the platform
+     * has not been told, which is NOT the same as "the operator has not configured it". An
+     * unresolved item never counts as missing and never contributes a blocked verdict.
+     */
+    resolved: boolean;
+    /** Only meaningful when `resolved`. */
     met: boolean;
     detail: string | null;
 };
@@ -112,21 +119,46 @@ export function buildBillingPreviewCardEvidence(
     // Payer/responsibility: not yet projected into truth — missing-state until write path built.
     const responsibilityConfigured = Boolean(context.truth["billing_responsibility_configured"]);
 
+    // DEFERRED SOURCE (Runtime law: unresolved must never fabricate business truth).
+    //
+    // Tuition configuration has NO truth-key writer anywhere in the platform — `tuition_rate_label`
+    // and `billing_configured` are read here and in `buildOperationalContext`, and written NOWHERE
+    // (no migration, no composer, no adapter). Their authoritative source is the financial-config
+    // API (`useFinancialConfig` -> `enrollments`), which is fetched only when the card is OPENED.
+    // So while `enrollments` is null the tuition answer is UNRESOLVED, not "missing": reporting it
+    // as missing manufactured a `blocked` verdict — "N items missing" — out of unwired plumbing,
+    // on every record, forever. Same defect class as the Milestones fabrication (Step 1).
+    //
+    // The billing CONTACT is different: it resolves from `person.billing_contact_*`, a real field
+    // ref the org can configure, so its absence is a genuine answer.
+    const tuitionRateFromSource =
+        enrollments?.find((e) => e.resolvedRate != null)?.resolvedRate?.rateLabel ?? null;
+    const resolvedTuitionLabel = tuitionRateLabel ?? tuitionRateFromSource;
+    // Resolved when SOME authoritative source has spoken: the financial-config API answered
+    // (`enrollments` non-null, even if it found no rate), or the truth key actually carries a value.
+    // Neither speaking = unresolved. (In production today only the API can ever resolve it.)
+    const tuitionResolved = enrollments != null || tuitionRateLabel != null;
+
     const readinessItems: BillingPreviewReadinessItem[] = [
         {
             label: "Billing contact",
+            resolved: true,
             met: billingContactName != null,
             detail: billingContactName ?? billingContactEmail,
         },
         {
             label: "Tuition rate",
-            met: tuitionRateLabel != null,
-            detail: tuitionRateLabel,
+            resolved: tuitionResolved,
+            met: tuitionResolved && resolvedTuitionLabel != null,
+            detail: resolvedTuitionLabel,
         },
     ];
 
-    const isConfigured = billingConfigured || (billingContactName != null && tuitionRateLabel != null);
-    const unmetCount = readinessItems.filter((i) => !i.met).length;
+    const isConfigured =
+        billingConfigured || (billingContactName != null && tuitionResolved && resolvedTuitionLabel != null);
+    // Only a RESOLVED item can be missing. Unresolved items are held, never counted.
+    const unmetCount = readinessItems.filter((i) => i.resolved && !i.met).length;
+    const unresolvedCount = readinessItems.filter((i) => !i.resolved).length;
 
     let answerLine: string;
     let supportingLine: string | null;
@@ -135,9 +167,15 @@ export function buildBillingPreviewCardEvidence(
 
     if (isConfigured) {
         answerLine = "Billing configured";
-        supportingLine = tuitionRateLabel ?? "Tuition rate on file";
+        supportingLine = resolvedTuitionLabel ?? "Tuition rate on file";
         statusChip = "Configured";
         statusTone = "ready";
+    } else if (unresolvedCount > 0) {
+        // HOLD — no verdict. State only what an authoritative source actually answered.
+        answerLine = billingContactName ?? "";
+        supportingLine = billingContactName != null ? "Billing contact" : null;
+        statusChip = null;
+        statusTone = "neutral";
     } else if (unmetCount > 0) {
         answerLine = `${unmetCount} item${unmetCount === 1 ? "" : "s"} missing`;
         supportingLine = "Billing contact or tuition rate not yet configured";
@@ -154,7 +192,7 @@ export function buildBillingPreviewCardEvidence(
         isConfigured,
         billingContactName,
         billingContactEmail,
-        tuitionRateLabel,
+        tuitionRateLabel: resolvedTuitionLabel,
         balanceLabel,
         readinessItems,
         placementFacts,
@@ -164,6 +202,7 @@ export function buildBillingPreviewCardEvidence(
         supportingLine,
         statusChip,
         statusTone,
-        isEmpty: !isConfigured && unmetCount === 0,
+        // "Empty" means resolved-and-nothing-there. An unresolved card is HELD, not empty.
+        isEmpty: !isConfigured && unmetCount === 0 && unresolvedCount === 0,
     };
 }

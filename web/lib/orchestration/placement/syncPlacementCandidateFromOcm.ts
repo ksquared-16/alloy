@@ -4,7 +4,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { normalizeCustomerMemberNested } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
+import {
+    firstNestedRecord,
+    normalizeCustomerMemberNested,
+} from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 import { resolvePlacementCandidateSiteId } from "@/lib/orchestration/placement/resolvePlacementCandidateSiteId";
 
@@ -55,7 +58,7 @@ export async function syncPlacementCandidateFromOcm(
     let ocmQuery = supabase
         .from("opportunity_customer_members")
         .select(
-            "id, org_id, opportunity_id, location_id, program_room_cohort_key, desired_program_type, metadata, customer_members(first_name, last_name, display_name, metadata, persons(date_of_birth))"
+            "id, org_id, opportunity_id, location_id, program_room_cohort_key, program_category_id, location_program_categories(key), metadata, customer_members(first_name, last_name, display_name, metadata, persons(date_of_birth))"
         )
         .eq("id", ocmId)
         .eq("org_id", orgId);
@@ -72,10 +75,15 @@ export async function syncPlacementCandidateFromOcm(
         opportunity_id: string;
         location_id?: string | null;
         program_room_cohort_key?: string | null;
-        desired_program_type?: string | null;
+        program_category_id?: string | null;
+        location_program_categories?: { key?: string | null } | Array<{ key?: string | null }> | null;
         metadata?: Record<string, unknown> | null;
         customer_members?: unknown;
     };
+    const ocmProgramKey =
+        (typeof firstNestedRecord(ocmRow.location_program_categories)?.key === "string"
+            ? String(firstNestedRecord(ocmRow.location_program_categories)?.key).trim()
+            : "") || null;
     const ocm = {
         ...ocmRow,
         customer_members: normalizeCustomerMemberNested(ocmRow.customer_members),
@@ -126,7 +134,7 @@ export async function syncPlacementCandidateFromOcm(
     const cohort = resolvePlacementCandidateCohortFromMember({
         ocmMetadata: safeMeta(ocm.metadata),
         candidateMetadata: safeMeta(candidate.metadata),
-        desiredProgramType: ocm.desired_program_type ?? null,
+        programKey: ocmProgramKey,
         programRoomCohortKey: ocm.program_room_cohort_key ?? null,
         dateOfBirth: readMemberDob(ocm.customer_members),
     });

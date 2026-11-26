@@ -1,0 +1,56 @@
+{
+  "out": [
+    {
+      "step": "schedule_patterns",
+      "status": 200,
+      "sample": "{\"patterns\":[{\"id\":\"07a0ac51-82de-467a-8a26-1378884eaadd\",\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"site_location_id\":\"1a5644a7-45c4-413b-9021-5f556118b6e2\",\"key\":\"full_day\",\"label\":\"Full Day\",\"schedule_type_key\":\"full_day\",\"weekdays\":[1,2,3,4,5],\"sort_order\":10,\"is_active\":true,\"metadata\":{\"source\":\"golden_path_config\"},\"created_at\":\"2026-07-03T15:37:37.048449+00:00\",\"updated_at\":null},{\"id\":\"ba96dc9c-f9a4-44af-95b6-3a6a29f7ffd6\",\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"site_location_id\":\"ae34d822-60ef-4f82-81eb-8f3513059627\",\"key\":\"full_day\",\"label\":\"Full Day\",\"schedule_type_key\":\"full_day\",\"weekdays\":[1,2,3,4,5],\"sort_order\":10,\"is_active\":true,\"metadata\":{\"source\":\"golden_"
+    },
+    {
+      "step": "create_agreement",
+      "status": 201,
+      "body": "{\"agreement\":{\"id\":\"9134bf85-e00f-4bc6-8917-a02cda58395f\",\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"opportunity_id\":\"ebe6cb44-957b-48f0-9a6d-603670443ec2\",\"opportunity_customer_member_id\":\"e9965c7c-608e-4f68-a15b-2475374e2ecf\",\"customer_member_id\":\"7ebf342f-b43d-4547-9c8a-43c0a96391ae\",\"customer_id\":\"fcaa839f-6960-4b09-b663-b247b99ea9d9\",\"person_id\":null,\"site_location_id\":\"1a5644a7-45c4-413b-9021-5f556118b6e2\",\"status\":\"active\",\"start_date\":\"2026-09-01\",\"end_date\":null,\"activation_policy"
+    },
+    {
+      "step": "schedule_assignment",
+      "patternId": "07a0ac51-82de-467a-8a26-1378884eaadd",
+      "result": "{\"status\":201,\"json\":{\"assignment\":{\"id\":\"e67c62b7-fcae-4aca-858f-87f03067e10e\",\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"enrollment_agreement_id\":\"9134bf85-e00f-4bc6-8917-a02cda58395f\",\"schedule_pattern_id\":\"07a0ac51-82de-467a-8a26-1378884eaadd\",\"customer_member_id\":\"7ebf342f-b43d-4547-9c8a-43c0a96391ae\",\"start_date\":\"2026-09-01\",\"end_date\":null,\"status\":\"active\",\"assignment_kind\":\"base\",\"source_key\":\"periodic_billing_certification\",\"supersedes_assignment_id\":null,\"metadata\":{},\"created_by\":\"a92a0f18-6efb-40d0-b74f-52708e96fb03\",\"updated_by\":\"a92a0f18-6efb-40d0-b74f-52708e96fb03\",\"crea"
+    },
+    {
+      "step": "resolve_tuition",
+      "status": 200,
+      "assignment": "{\"opportunityCustomerMemberId\":\"e9965c7c-608e-4f68-a15b-2475374e2ecf\",\"customerMemberId\":\"7ebf342f-b43d-4547-9c8a-43c0a96391ae\",\"childLabel\":\"Pathb Certopp\",\"enrollmentAgreementId\":\"9134bf85-e00f-4bc6-8917-a02cda58395f\",\"facts\":{\"programKey\":null,\"attendanceType\":null,\"daysPerWeek\":5,\"locationId\":null,\"payerType\":\"private_pay\",\"cadenceKey\":null,\"asOf\":\"2026-09-22\"},\"factSources\":{\"programKey\":\"none\",\"daysPerWeek\":\"committed_schedule\",\"locationId\":\"none\",\"asOf\":\"today\"},\"resolutionKey\":\"2b601590\",\"configVersion\":\"cd09fdc8\",\"state\":\"no_match\",\"recommended\":null,\"tied\":[],\"applicable\":[],\"rejected\":[],\"noMatchReason\":\"missing_required_input\",\"accepted\":null,\"acceptedIsStale\":false}"
+    }
+  ],
+  "agreementId": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+  "mine": {
+    "opportunityCustomerMemberId": "e9965c7c-608e-4f68-a15b-2475374e2ecf",
+    "customerMemberId": "7ebf342f-b43d-4547-9c8a-43c0a96391ae",
+    "childLabel": "Pathb Certopp",
+    "enrollmentAgreementId": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+    "facts": {
+      "programKey": null,
+      "attendanceType": null,
+      "daysPerWeek": 5,
+      "locationId": null,
+      "payerType": "private_pay",
+      "cadenceKey": null,
+      "asOf": "2026-09-22"
+    },
+    "factSources": {
+      "programKey": "none",
+      "daysPerWeek": "committed_schedule",
+      "locationId": "none",
+      "asOf": "today"
+    },
+    "resolutionKey": "2b601590",
+    "configVersion": "cd09fdc8",
+    "state": "no_match",
+    "recommended": null,
+    "tied": [],
+    "applicable": [],
+    "rejected": [],
+    "noMatchReason": "missing_required_input",
+    "accepted": null,
+    "acceptedIsStale": false
+  }
+}

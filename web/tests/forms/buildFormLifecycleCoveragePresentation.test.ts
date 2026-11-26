@@ -83,7 +83,16 @@ describe("buildFormLifecycleCoveragePresentation", () => {
         });
 
         expect(presentation.status).toBe("missing_required");
-        expect(presentation.status_message).toContain("cannot create a Lead yet");
+        // The copy now leads with what IS still possible (publish was never blocked — only
+        // record-creating share links are) and names the gaps instead of leaving them unstated.
+        expect(presentation.status_message).toContain("can be saved and published");
+        expect(presentation.status_message).toContain("cannot create a Lead");
+        expect(presentation.missing_required_labels.length).toBeGreaterThan(0);
+        for (const label of presentation.missing_required_labels) {
+            expect(presentation.status_message).toContain(label);
+            // Constraint sentences are reduced to field names for the inline list.
+            expect(label).not.toMatch(/\s+(is|are)\s+required$/i);
+        }
     });
 
     it("shows requirement levels on coverage rows when department metadata is provided", () => {

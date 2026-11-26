@@ -1,0 +1,36 @@
+{
+  "build": {
+    "gitSha": "486ea3eb9660ebf6a014072a5a7d391d06644b35",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1182 from ksquared-16/agent/p076-composition-diag\n\nrevert(runtime): retire the shared child acquisition, add critical-path interval instrumentation",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-kjq6fpu46-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_G3f3fSqQeGJfwA15wSzqqkZdHzKR",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "before": {
+    "automatic_billing_active": false,
+    "schedule_exists": false,
+    "next_evaluation_at": null,
+    "automatic_catch_up_period_limit": 2
+  },
+  "activation": {
+    "status": 200,
+    "body": {
+      "activated": true,
+      "created": true,
+      "schedule_id": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+      "next_evaluation_at": "2026-09-22T01:13:18.353+00:00",
+      "activated_at": "2026-09-22T01:13:18.353Z"
+    }
+  },
+  "after": {
+    "automatic_billing_active": true,
+    "schedule_exists": true,
+    "next_evaluation_at": "2026-09-22T01:13:18.353+00:00",
+    "automatic_catch_up_period_limit": 2
+  },
+  "flag": "true",
+  "claim": "Recurring tuition is billed automatically for this organization. Generate Tuition remains available for periods automation left outstanding."
+}

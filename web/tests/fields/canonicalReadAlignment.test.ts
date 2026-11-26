@@ -39,7 +39,7 @@ describe("canonical read alignment — child profile", () => {
                         customer_member_id: "cm-1",
                         first_name: "Ava",
                         last_name: "Lee",
-                        desired_program_type: null,
+                        program_category_id: null,
                     },
                 ],
             },
@@ -80,7 +80,7 @@ describe("canonical read alignment — child profile", () => {
     it("lifecycle evaluator still reads enrollment fields from inquiry_child grain", () => {
         const metadata = buildLifecycleFieldRulesOverridePatch({
             stage: "waitlist",
-            required_rule_ids: ["child:desired_start_date"],
+            required_rule_ids: ["child:start_date"],
             recommended_rule_ids: [],
             existingMetadata: {},
         });
@@ -92,12 +92,12 @@ describe("canonical read alignment — child profile", () => {
             values: {},
             related: {
                 department_metadata: metadata,
-                inquiry_children: [{ id: "ocm-1", desired_start_date: "2026-09-01", first_name: "Ava" }],
+                inquiry_children: [{ id: "ocm-1", start_date: "2026-09-01", first_name: "Ava" }],
             },
         };
         expect(
             evaluateFieldRulesForStage(filled, "waitlist", {
-                required_rule_ids: ["child:desired_start_date"],
+                required_rule_ids: ["child:start_date"],
                 recommended_rule_ids: [],
             })
         ).toHaveLength(0);
@@ -106,11 +106,11 @@ describe("canonical read alignment — child profile", () => {
             ...filled,
             related: {
                 ...filled.related,
-                inquiry_children: [{ id: "ocm-1", first_name: "Ava", desired_start_date: null }],
+                inquiry_children: [{ id: "ocm-1", first_name: "Ava", start_date: null }],
             },
         };
         const violations = evaluateFieldRulesForStage(empty, "waitlist", {
-            required_rule_ids: ["child:desired_start_date"],
+            required_rule_ids: ["child:start_date"],
             recommended_rule_ids: [],
         });
         expect(violations.some((v) => v.entity_type === "inquiry_child")).toBe(true);

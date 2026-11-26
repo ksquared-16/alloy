@@ -1,0 +1,366 @@
+"use client";
+
+/**
+ * PAYMENTS — can this organization accept payments, what can it accept, and does anything need
+ * attention.
+ *
+ * Three questions, in that order, because that is the order an operator asks them. Everything on
+ * this surface is derived from the canonical Provider Merchant through the server; nothing about
+ * provider state is decided, cached or inferred in React. A second provider-state cache here would
+ * be a second answer to whether a family can be charged.
+ *
+ * ── OPERATOR LANGUAGE, NOT PROVIDER LANGUAGE ──
+ *
+ * "Connect payment provider", "Finish setup", "Card payments", "Bank payments". The words
+ * `Account`, `Account Link`, `capability`, `PaymentIntent` and `acct_` are the adapter's, and an
+ * operator should never need to learn them to run a childcare business. The account reference is
+ * shown once, quietly, because it is genuinely useful when somebody is on the phone to support.
+ *
+ * ── AND NO CONTROL THAT OPENS ONTO NOTHING ──
+ *
+ * Every button here maps to a registered action the caller may actually execute. When the provider
+ * is ready there is nothing to connect, so no Connect button is offered.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import { Banknote, RefreshCw } from "lucide-react";
+
+import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { executeProviderCommand } from "@/lib/financials/payments/providerCommands";
+import PaymentMethodsSettings from "@/components/adminV2/settings/financials/PaymentMethodsSettings";
+
+type ProviderState = {
+    connected: boolean;
+    processor: string | null;
+    readiness: string;
+    achReadiness: string | null;
+    cardAvailable: boolean;
+    bankAvailable: boolean;
+    readinessCheckedAt: string | null;
+    attention: string | null;
+    merchantId: string | null;
+};
+
+/** The six states the chapter must be able to say out loud. */
+function headline(state: ProviderState | null): { label: string; tone: "neutral" | "attention" | "ready" } {
+    if (!state || !state.connected) return { label: "Not connected", tone: "neutral" };
+    if (state.readiness === "ready") {
+        return state.bankAvailable
+            ? { label: "Ready — card and bank payments", tone: "ready" }
+            : { label: "Ready — card payments", tone: "ready" };
+    }
+    if (state.readiness === "restricted") return { label: "Needs attention", tone: "attention" };
+    return { label: "Setup in progress", tone: "attention" };
+}
+
+function when(iso: string | null): string {
+    if (!iso) return "Never";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "Never" : d.toLocaleString();
+}
+
+export default function PaymentsProviderChapter({ organizationName }: { organizationName?: string | null }) {
+    const [state, setState] = useState<ProviderState | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
+    const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
+    /* Only ever true while a provider read is actually in flight. */
+    const [refreshing, setRefreshing] = useState(false);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await fetch("/api/admin/financials/provider", { credentials: "include" });
+            const json = (await res.json()) as { ok?: boolean; state?: ProviderState; error?: string };
+            if (!res.ok || !json.state) {
+                setError(json.error || "The payment provider state could not be read.");
+                setState(null);
+            } else {
+                setError(null);
+                setState(json.state);
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "The payment provider state could not be read.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    /*
+     * RETURNING FROM THE PROVIDER PROVES NOTHING — the operator may have saved for later. So the
+     * arrival back on this chapter asks the provider what is actually true, rather than assuming the
+     * redirect means success.
+     */
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const returned = params.get("provider");
+        if (returned === "returned" || returned === "retry") {
+            /*
+             * "Checking…" IS TRANSIENT, AND IT USED NOT TO BE.
+             *
+             * The notice was set and never cleared, so the chapter showed "Checking with the payment
+             * provider…" ALONGSIDE the resolved state it had already finished computing — two
+             * statuses at once, one of them stale. An operator returning from provider onboarding
+             * read both and could not tell which was now.
+             *
+             * The expired-link notice is different: it is a RESULT, not a progress report, so it
+             * survives the refresh and tells the operator why they are back here.
+             */
+            const expired = returned === "retry";
+            if (expired) {
+                setNotice("That setup link had expired. Continue setup to get a new one.");
+            } else {
+                setRefreshing(true);
+            }
+            void executeProviderCommand("refresh")
+                .then((r) => {
+                    if (!r.ok) setError(r.error);
+                    return load();
+                })
+                .catch(() => setError("The payment provider could not be reached. Refresh status to try again."))
+                .finally(() => setRefreshing(false));
+            return;
+        }
+        void load();
+    }, [load]);
+
+    const run = useCallback(
+        async (command: "connect" | "refresh" | "disconnect", payload: Record<string, unknown> = {}) => {
+            setBusy(command);
+            setError(null);
+            setNotice(null);
+            try {
+                const result = await executeProviderCommand(command, payload);
+                if (!result.ok) {
+                    setError(result.error);
+                    setBusy(null);
+                    await load();
+                    return;
+                }
+                const url = typeof result.detail.onboarding_url === "string" ? result.detail.onboarding_url : "";
+                if (url) {
+                    /*
+                     * The provider's own flow, in its own page. Alloy never renders it.
+                     *
+                     * BUSY IS DELIBERATELY LEFT SET while the browser leaves the page — but only
+                     * briefly. A navigation that does not happen used to strand the operator on
+                     * "Opening…" for good, with nothing to press and nothing said. If we are still
+                     * here after the handoff should have taken, the loading state is cleared and the
+                     * operator is told something true and actionable.
+                     */
+                    window.location.assign(url);
+                    window.setTimeout(() => {
+                        setBusy(null);
+                        setError(
+                            "The payment provider's setup page did not open. Check that pop-ups and "
+                            + "redirects are allowed for this site, then try Continue setup again.",
+                        );
+                    }, 4000);
+                    return;
+                }
+                if (command === "connect") {
+                    /*
+                     * A successful connect ALWAYS carries a link. Arriving here means the server
+                     * answered without one, and saying nothing is what made this defect invisible.
+                     */
+                    setError(
+                        "The payment provider did not return a setup link. Nothing was changed — "
+                        + "press Continue setup to ask for a new one.",
+                    );
+                }
+                if (command === "disconnect") {
+                    setNotice("Disconnected. Payments already received are unchanged.");
+                }
+                setBusy(null);
+                await load();
+            } catch (e) {
+                /* Nothing may leave this handler still reading "Opening…". */
+                setError(e instanceof Error ? e.message : "That could not be completed.");
+                setBusy(null);
+            }
+        },
+        [load],
+    );
+
+    const status = headline(state);
+    const connected = Boolean(state?.connected);
+    const ready = state?.readiness === "ready";
+
+    return (
+        <ConfigWorkspaceCard
+            title="Payments"
+            description="How this organization takes money: the payment provider for card and bank, which methods staff can use, and the account each one lands in."
+            testId="financials-chapter-payments"
+        >
+            <div className="space-y-4 py-1" data-testid="payments-provider-chapter" data-provider-connected={connected}>
+                {error ? (
+                    <p
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                        role="alert"
+                        data-testid="payments-provider-error"
+                    >
+                        {error}
+                    </p>
+                ) : null}
+                {notice ? (
+                    <p className="rounded-lg border border-alloy-stone/30 bg-alloy-cloud/40 px-3 py-2 text-sm text-alloy-midnight/75">
+                        {notice}
+                    </p>
+                ) : null}
+                {refreshing ? (
+                    <p
+                        className="flex items-center gap-2 text-sm text-alloy-midnight/55"
+                        data-testid="payments-provider-refreshing"
+                    >
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} />
+                        Checking with the payment provider…
+                    </p>
+                ) : null}
+
+                {/* ── CAN WE ACCEPT PAYMENTS? ───────────────────────────────────────────────── */}
+                <div className="flex items-start gap-3">
+                    <Banknote className="mt-0.5 h-5 w-5 shrink-0 text-alloy-midnight/60" strokeWidth={1.75} />
+                    <div className="min-w-0">
+                        <p
+                            className="text-sm font-semibold text-alloy-midnight"
+                            data-testid="payments-provider-status"
+                            data-provider-readiness={state?.readiness ?? "not_connected"}
+                        >
+                            {loading ? "Checking…" : status.label}
+                        </p>
+                        <p className="text-sm text-alloy-midnight/65">
+                            {connected
+                                ? "Stripe is this organization's payment provider."
+                                : "No payment provider is connected, so card and bank payments are unavailable."}
+                        </p>
+                        {state?.attention ? (
+                            <p
+                                className="mt-1 text-sm text-alloy-midnight/75"
+                                data-testid="payments-provider-attention"
+                            >
+                                {state.attention}
+                            </p>
+                        ) : null}
+                    </div>
+                </div>
+
+                {/*
+                  * ── WHAT CAN WE ACCEPT, AND WHERE DOES IT LAND? (W7-F047) ────────────────────
+                  *
+                  * The two rail cards that stood here said only whether card and bank were available.
+                  * The methods table says that for every method — card, bank, cash, check, money
+                  * order, external — beside whether the organization accepts it and the asset
+                  * account it lands in. One place for "how do we take money".
+                  */}
+                <PaymentMethodsSettings
+                    providerConnected={connected}
+                    cardAvailable={Boolean(state?.cardAvailable)}
+                    bankAvailable={Boolean(state?.bankAvailable)}
+                />
+
+                <p className="text-xs text-alloy-midnight/50" data-testid="payments-provider-checked-at">
+                    Provider status last checked · {when(state?.readinessCheckedAt ?? null)}
+                </p>
+
+                {/* ── WHAT DO I DO NEXT? ─────────────────────────────────────────────────────── */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {!connected ? (
+                        <button
+                            type="button"
+                            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-45"
+                            disabled={busy != null || loading}
+                            onClick={() => void run("connect", { display_name: organizationName || "This organization" })}
+                            data-testid="payments-provider-connect"
+                        >
+                            {busy === "connect" ? "Opening…" : "Connect payment provider"}
+                        </button>
+                    ) : !ready ? (
+                        <button
+                            type="button"
+                            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-45"
+                            disabled={busy != null || loading}
+                            onClick={() => void run("connect", { display_name: organizationName || "This organization" })}
+                            data-testid="payments-provider-continue"
+                        >
+                            {busy === "connect" ? "Opening…" : "Continue setup"}
+                        </button>
+                    ) : null}
+
+                    {connected ? (
+                        <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight hover:bg-alloy-cloud/50 disabled:opacity-45"
+                            disabled={busy != null || loading}
+                            onClick={() => void run("refresh")}
+                            data-testid="payments-provider-refresh"
+                        >
+                            <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
+                            {busy === "refresh" ? "Checking…" : "Refresh status"}
+                        </button>
+                    ) : null}
+
+                    {connected && !confirmingDisconnect ? (
+                        <button
+                            type="button"
+                            className="rounded-md border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight/75 hover:bg-alloy-cloud/50 disabled:opacity-45"
+                            disabled={busy != null || loading}
+                            onClick={() => setConfirmingDisconnect(true)}
+                            data-testid="payments-provider-disconnect"
+                        >
+                            Disconnect
+                        </button>
+                    ) : null}
+                </div>
+
+                {confirmingDisconnect ? (
+                    <div
+                        className="rounded-lg border border-alloy-stone/30 bg-alloy-cloud/30 px-3 py-2"
+                        data-testid="payments-provider-disconnect-confirm"
+                    >
+                        <p className="text-sm font-medium text-alloy-midnight">
+                            Stop taking card and bank payments?
+                        </p>
+                        <p className="text-sm text-alloy-midnight/70">
+                            New card and bank payments become unavailable. Payments already received, and the account
+                            that collected them, are unchanged.
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                            <button
+                                type="button"
+                                className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                disabled={busy != null}
+                                onClick={() => {
+                                    setConfirmingDisconnect(false);
+                                    void run("disconnect");
+                                }}
+                                data-testid="payments-provider-disconnect-confirmed"
+                            >
+                                {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded-md border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight hover:bg-alloy-cloud/50"
+                                onClick={() => setConfirmingDisconnect(false)}
+                            >
+                                Keep it connected
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
+                {/*
+                  * NO PROVIDER REFERENCE HERE, AND NO DISCLOSURE EITHER.
+                  *
+                  * `acct_…` was moved behind a "Technical details" summary and that was still the
+                  * wrong surface for it. This chapter is an operator configuration page, not an
+                  * integration debugger: the account identifier, capability names and raw provider
+                  * states answer none of the questions somebody opens it with. They remain readable
+                  * through the canonical diagnostics and audit authorities, which is where
+                  * engineering should be looking for them.
+                  */}
+            </div>
+        </ConfigWorkspaceCard>
+    );
+}

@@ -15,6 +15,8 @@
 import type { DocumentStructureCandidate, StructureFieldType } from "../structure/types";
 import type { DraftFormField, DraftFormFieldType, DraftFormSection, StoredFormDraftPreview } from "./types";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
+import { safeImportMappings } from "@/lib/pos/formDraft/resolveFieldMapping";
+import { isDocumentPlumbingField, plumbingWarning } from "@/lib/pos/formDraft/documentPlumbingFields";
 
 export const FORM_DRAFT_GENERATOR_VERSION = "fp12.0";
 
@@ -32,8 +34,9 @@ function mapType(t: StructureFieldType): { type: DraftFormFieldType; warning?: s
         case "file":
             return { type: "file_ref" };
         case "select":
-            // No options are known from the document — keep as text and flag for the builder.
-            return { type: "text", warning: "choice" };
+            // Resolved by the caller: a choice WITH declared options drafts as a choice; without
+            // them it stays text and is flagged, because inventing options would be worse.
+            return { type: "select" };
         case "text":
         case "unknown":
         default:
@@ -52,6 +55,12 @@ export interface BuildFormDraftInput {
     fileName?: string | null;
     classificationKey?: string | null;
     extractedTextAvailable: boolean;
+    /**
+     * Page dimensions from native-layout extraction. Required to place a field box on a page — the
+     * AcroForm path has always supplied this; the layout path never did, so its drafts could not be
+     * drawn even once the fields carried a bbox.
+     */
+    pdfPages?: StoredFormDraftPreview["pdf_pages"];
 }
 
 export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredFormDraftPreview {
@@ -66,14 +75,30 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
     const sections: DraftFormSection[] = [];
     let fieldCounter = 0;
     let choiceFlagged = false;
+    const plumbingDropped: string[] = [];
 
     input.structure.sections.forEach((sec, si) => {
         const sectionId = slugId("section", si + 1);
         const fieldIds: string[] = [];
         for (const f of sec.fields) {
+            /*
+             * The page's own plumbing is not one of its questions. A control the reader could find no
+             * label for, whose entire prompt is its own machine name, is how the page works — asking a
+             * family to fill in an email subject line is not something the document ever asked.
+             */
+            if (isDocumentPlumbingField(f)) {
+                plumbingDropped.push(f.label.trim());
+                continue;
+            }
             fieldCounter += 1;
             const id = slugId("field", fieldCounter);
-            const mapped = mapType(f.suggested_type);
+            const declaredOptions = f.options?.filter((o) => o.trim().length > 0) ?? [];
+            const mappedRaw = mapType(f.suggested_type);
+            // A choice without options is not a choice we can publish — keep it text and say so.
+            const mapped =
+                mappedRaw.type === "select" && declaredOptions.length === 0
+                    ? { type: "text" as const, warning: "choice" }
+                    : mappedRaw;
             if (mapped.warning === "choice" && !choiceFlagged) {
                 warnings.push("Some fields look like choices (select). They were drafted as text — add options in the builder.");
                 choiceFlagged = true;
@@ -86,14 +111,54 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
                 description: f.evidence ? undefined : undefined,
                 confidence: f.confidence === "invalid" ? "low" : f.confidence,
                 evidence: f.evidence,
+                ...(declaredOptions.length ? { options: declaredOptions } : {}),
+                ...(f.validate ? { validate: f.validate } : {}),
+                ...(typeof f.page === "number" ? { page: f.page } : {}),
+                // Geometry the native-layout detector recovered. Without it the review canvas has
+                // nothing to place, which is why Detailed Questions rendered an empty document.
+                ...(Array.isArray(f.bbox) ? { bbox: f.bbox } : {}),
             });
             fieldIds.push(id);
         }
-        sections.push({ id: sectionId, title: sec.title || `Section ${si + 1}`, field_ids: fieldIds });
+        // Carry the native-layout detector's geometric section classification (signature block,
+        // consent/legal prose, output copy) + preserved static text straight onto the draft section,
+        // so it drives the operator-facing disposition instead of the label-text heuristic.
+        sections.push({
+            id: sectionId,
+            title: sec.title || `Section ${si + 1}`,
+            field_ids: fieldIds,
+            ...(sec.disposition ? { disposition: sec.disposition } : {}),
+            ...(sec.static_text ? { static_text: sec.static_text } : {}),
+        });
     });
 
     if (fields.length === 0) {
         warnings.push("No fields were drafted — the document had no detectable labelled prompts.");
+    }
+    // Never silent: a control left out is reported, so the operator can disagree.
+    const plumbingNote = plumbingWarning(plumbingDropped);
+    if (plumbingNote) warnings.push(plumbingNote);
+
+    /*
+     * APPLY THE MAPPINGS ALLOY CAN ALREADY MAKE SAFELY.
+     *
+     * Until now detection and binding were separate: the resolver knew perfectly well that "Child's
+     * Date of Birth" is the child's date of birth, and said so only inside concept review. An operator
+     * who never opened that queue was handed a form where nothing was mapped and asked to place every
+     * field by hand — which is the opposite of what importing a document is for.
+     *
+     * So the draft is born with the destinations the existing resolver can establish safely, and with
+     * nothing else. An uncertain destination stays a suggestion the operator can see and accept; it is
+     * NOT written here. @see resolveFieldMapping — the safety law lives there, once.
+     */
+    const sectionTitleByFieldId = new Map<string, string>();
+    for (const section of sections) {
+        for (const id of section.field_ids) sectionTitleByFieldId.set(id, section.title);
+    }
+    const applied = safeImportMappings(fields, sectionTitleByFieldId);
+    for (const field of fields) {
+        const destination = applied.get(field.id);
+        if (destination) field.field_source = destination;
     }
 
     const text = (input.extractedText ?? "").trim();
@@ -113,6 +178,7 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
             section_count: sections.length,
             field_count: fields.length,
         },
+        ...(input.pdfPages && input.pdfPages.length > 0 ? { pdf_pages: input.pdfPages } : {}),
         generator_version: FORM_DRAFT_GENERATOR_VERSION,
         generated_at: "", // stamped by the store layer
     };

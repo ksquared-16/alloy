@@ -1,5 +1,7 @@
 "use client";
 
+/** @deprecated Compatibility layer — Work Items V3 uses WorkItemCreateModal + WorkItemDraftV1 runtime. */
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAdminAuth } from "@/contexts/AdminAuthContext";

@@ -1,0 +1,10 @@
+{
+  "id": "db4bc328-f0c7-4c3b-a49c-10df83e5bd30",
+  "status": "sent",
+  "body": "Hello Kelly,\n\nWe\u2019d love to show your family around North Campus.\nNorth Campus \u2014 123 Main Street, Bend OR 97701\n\nChoose a tour time:\nChoose a tour time http://localhost:3015/a/EjkRN7JS\n\nWe look forward to meeting you.\n\nWarmly,\nFirefly Early Learning",
+  "html": "Hello Kelly,<br><br>We\u2019d love to show your family around North Campus.<br>North Campus \u2014 123 Main Street, Bend OR 97701<br><br>Choose a tour time:<br><a href=\"http://localhost:3015/a/EjkRN7JS\" style=\"color:#1f4d3a;text-decoration:underline;font-weight:600;\">Choose a tour time</a><br><br>We look forward to meeting you.<br><br>Warmly,<br>Firefly Early Learning",
+  "text": "Hello Kelly,\n\nWe\u2019d love to show your family around North Campus.\nNorth Campus \u2014 123 Main Street, Bend OR 97701\n\nChoose a tour time:\nChoose a tour time http://localhost:3015/a/EjkRN7JS\n\nWe look forward to meeting you.\n\nWarmly,\nFirefly Early Learning",
+  "provider_message_id": "91d3bf43-6562-4c6b-8482-bf2a64d9638d",
+  "body_has_http": true,
+  "html_has_href_anchor": true
+}

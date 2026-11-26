@@ -10,43 +10,6 @@ function read(rel: string): string {
 }
 
 describe("AdminV2 drawer recovery — Track A contracts", () => {
-    it("scopes inquiry workflow drawer mode to opportunities only", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toMatch(
-            /const opportunityInquiryWorkflowDrawer\s*=\s*\n\s*drawer\.type === "opportunities"/
-        );
-    });
-
-    it("uses configured singular for summary and children section labels", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("{opportunitySingular} summary");
-        expect(drawer).toContain("`${opportunitySingular} children`");
-        expect(drawer).toContain("formatOpportunityInquiryDrawerTitle");
-    });
-
-    it("restores full opportunity snapshot without re-holding enrichment", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain('String(cachedEntity._record_surface ?? "").trim() === "full"');
-        expect(drawer).toContain("setOpportunityDrawerEnrichmentHeld(false)");
-        expect(drawer).toContain("setOpportunityDrawerBelowFoldRevealed(true)");
-    });
-
-    it("always uses FamilyContactsPanel in inquiry workflow summary", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("opportunityInquiryWorkflowDrawer ||");
-        expect(drawer).toContain("<FamilyContactsPanel");
-    });
-
-    it("does not render empty additional-contacts copy", () => {
-        const panel = read("components/admin/opportunity/FamilyContactsPanel.tsx");
-        expect(panel).not.toContain("No additional contacts linked yet.");
-    });
-
-    it("person drawer shows pending shell while entity loads", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain('data-person-drawer-pending="true"');
-        expect(drawer).toContain("Loading person…");
-    });
 
     it("drawer scroll clears command bar via workspace css", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");

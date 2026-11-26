@@ -1,8 +1,15 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Queue Record Doctrine
 
 **Path:** `docs/system/queue-record-doctrine.md`  
 **Status:** Locked — operational queue row contract (June 2026)  
-**Related:** `docs/system/workspace-system.md` (queue truth boundary), `docs/system/configuration-system.md` (Layouts four-plane), `docs/system/drawer-operating-model-v1.md` (linked drawer dispatch), `docs/system/adminv2-runtime-performance-doctrine.md` (reveal gates — do not weaken for row UI)
+**Related:** `docs/archive/2026-06-superseded-system/workspace-system.md` (queue truth boundary), `docs/system/configuration-system.md` (Layouts four-plane), `docs/system/drawer-operating-model-v1.md` (linked drawer dispatch), `docs/system/adminv2-runtime-performance-doctrine.md` (reveal gates — do not weaken for row UI)
 
 ## Purpose
 
@@ -171,6 +178,8 @@ If time exists on the source value:
 Configured field labels prefix the value: **`Created Jan 15`**, **`Tour Jun 22`**, **`Start Aug 1`**.
 
 No queue row should show **`YYYY-MM-DD`** or **`MM-DD-YYYY`** as read-only display unless the user specifically configures raw value display.
+
+**Child DOB exception:** Date of Birth fields pair numeric date with compact age — **`1/1/2026 (7m)`**, **`3/3/2020 (6y4m)`** — via `formatFocusPanelDobAgeLine`. Standalone age next to child name uses the same compact age (`2y2m`, `6m`) from `inquiryChildAgeLabelFromDob` / `years_months`.
 
 Formatter: **`formatQueueRecordDateDisplay`** (`web/lib/presentation/presentationDateFormat.ts`, re-exported from `web/lib/adminFormatters.ts`); field-key detection: **`isQueueRecordDateFieldKey`** (`web/lib/layout/runtime/queueRecordScopedResolve.ts`).
 

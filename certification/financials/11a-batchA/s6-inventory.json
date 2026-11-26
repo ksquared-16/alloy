@@ -1,0 +1,212 @@
+{
+  "tuition": {
+    "headings": [
+      "Financials",
+      "Tuition Plans",
+      "Financial setup"
+    ],
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "+ New Tuition Plan",
+      "Infant Active Infant · Full Time Monthly · $525–$1,850",
+      "Part Time Active Infant · Part Time Semi-Annual · Needs GL · No prices",
+      "Preschool Active Preschool · Full Time Monthly · $425–$1,550",
+      "After School Active School Age · Full Time Monthly · $175–$650",
+      "Before & After Active School Age · Custom Monthly · $250–$900",
+      "Before School Active School Age · Before School Monthly · $125–$450",
+      "Full Day Active Toddler · Full Time Monthly · $475–$1,700",
+      "New Tuition Plan",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working chan",
+      "Review configuration attention Identify setup, publication, or assignm",
+      "Review unpublished changes Explain what remains private to Organizatio"
+    ],
+    "selects": 2,
+    "inputs": 2,
+    "textLen": 1441,
+    "text": "⌘K\nQS\nOrganization\nfinancials\nFinancials\n\nTuition Plans, enrollment commitments, organization pricing, and location overrides.\n\nTuition\nCatalog\nPolicies\nAccounting\nSimulator\nFunding\nPlans\nEnrollment Commitments\nBilling Frequencies\n+ New Tuition Plan\nTuition Plans\n\n7 Plans · Active\n\nSearch Tuition Plans\nStatus\nActive\nArchived\nAll\nInfant\nActive\nInfant · Full Time\nMonthly · $525–$1,850\nPart Time\nActive\nInfant · Part Time\nSemi-Annual ·\nNeeds GL\n·\nNo prices\nPreschool\nActive\nPreschool · Full Time\nMonthly · $425–$1,550\nAfter School\nActive\nSchool Age · Full Time\nMonthly · $175–$650\nBefore & After\nActive\nSchool Age · Custom\nMonthly · $250–$900\nBefore School\nActive\nSchool Age · Before School\nMonthly · $125–$450\nFull Day\nActive\nToddler · Full Time\nMonthly · $475–$1,700\nTuition Plans\n\nSelect a Tuition Plan from the list, or create a new one.\n\nNew Tuition Plan\n\nFinancial Setup · foundations configured\n\nFinancial setup\nGL Codes\nBilling Frequencies\nEnrollment Commitments\n\n1 Tuition Plan need accounting assignments.\n\nReview GL Codes →\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nExplain this configuration\nSummarize the active state and working changes\nReview configuration attention\nIdentify setup, publication, or assignment issues\nReview unpublished changes\nExplain what remains private to Organization\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+  },
+  "catalog": {
+    "headings": [
+      "Financials",
+      "Catalog"
+    ],
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "New Catalog Item",
+      "Activity Fee Fee $25 · All locations",
+      "Annual Supply Fee Fee $200 · All locations",
+      "Enrollment Fee Fee $150 · All locations",
+      "Registration Fee Fee $100 · All locations",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working chan",
+      "Review configuration attention Identify setup, publication, or assignm",
+      "Review unpublished changes Explain what remains private to Organizatio"
+    ],
+    "selects": 0,
+    "inputs": 2,
+    "textLen": 1007,
+    "text": "⌘K\nQS\nOrganization\nfinancials\nFinancials\n\nFees, optional services, and other chargeable offerings outside recurring tuition.\n\nTuition\nCatalog\nPolicies\nAccounting\nSimulator\nFunding\nItems\nCategories\n\nFees, optional services, and other chargeable offerings outside recurring Tuition Plans.\n\nNew Catalog Item\nCatalog\n\n4 items\n\nActivity Fee\nFee\n$25 · All locations\nAnnual Supply Fee\nFee\n$200 · All locations\nEnrollment Fee\nFee\n$150 · All locations\nRegistration Fee\nFee\n$100 · All locations\n\nSelect a catalog item\n\nFees, add-ons, and deposits appear here once configured. Tuition Plans stay under Tuition.\n\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nExplain this configuration\nSummarize the active state and working changes\nReview configuration attention\nIdentify setup, publication, or assignment issues\nReview unpublished changes\nExplain what remains private to Organization\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+  },
+  "policies": {
+    "headings": [
+      "Financials",
+      "Policies",
+      "Financial execution policies",
+      "Financial Policies",
+      "Resolved (org default)"
+    ],
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "New Policy",
+      "Sibling discount (QA specimen) Pricing · Discount Active · from 2026-0",
+      "New policy",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working chan",
+      "Review configuration attention Identify setup, publication, or assignm",
+      "Review unpublished changes Explain what remains private to Organizatio"
+    ],
+    "selects": 0,
+    "inputs": 2,
+    "textLen": 1975,
+    "text": "⌘K\nQS\nOrganization\nfinancials\nFinancials\n\nHow operational events affect financial execution.\n\nTuition\nCatalog\nPolicies\nAccounting\nSimulator\nFunding\n\nPolicies are named rules that modify commercial pricing and billing behavior. Commercial products reference them — they do not embed duplicated logic. Prefer names like “Registration Fee Waiver,” not “Registration Fee Policy.”\n\nNew Policy\nPolicies\n\n1 policies\n\nSibling discount (QA specimen)\nPricing · Discount\nActive · from 2026-01-01\n\nSelect a policy\n\nDiscount, deposit, and billing rules configured for your organization.\n\nFinancial execution policies\n\nHow this organisation runs billing: proration, billing cadence, when payment is due, posting review and deposits. These are resolved by charge generation and the charge lifecycle — distinct from the commercial discount rules above.\n\nFinancial Policies\n\nHow should the organization handle money rules — proration, fees, refunds, deposits?\n\nNew policy\nRead-only\nPolicies are scoped, effective-dated configuration. They are consumed later by resolution and posting, but configuring a policy does not post money.\nResolved (org default)\n\nWhat resolves at org scope today. A more specific Location / Service / Rate Plan policy overrides it.\n\nProration\nno policy — fallback\nBilling cadence\nno policy — fallback\nGrace period\nno policy — fallback\nLate fee\nno policy — fallback\nNSF fee\nno policy — fallback\nDeposit\nno policy — fallback\nRefund policy\nno policy — fallback\nPosting review\nno policy — fallback\nVacation credit\nno policy — fallback\nDue date\nno policy — fallback\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nExplain this configuration\nSummarize the active state and working changes\nReview configuration attention\nIdentify setup, publication, or assignment issues\nReview unpublished changes\nExplain what remains private to Organization\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+  },
+  "accounting": {
+    "headings": [
+      "Financials",
+      "GL Codes",
+      "Where each charge category posts",
+      "Accounting calendar"
+    ],
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "New GL Code",
+      "4000 Tuition Revenue Active · Used by 6",
+      "4010 Registration Fees Active · Used by 2",
+      "4020 Activity Fees Active · Used by 1",
+      "4030 Supply Fees Active · Used by 1",
+      "4040 Late Pickup Fees Active",
+      "4050 NSF / Returned Payments Active",
+      "4070 Subsidy Revenue Active",
+      "4080 Meal Program Revenue Active",
+      "4090 Other Income Active",
+      "4060 Discounts & Credits Active",
+      "4000 · Tuition Revenue ▾",
+      "4090 · Other Income ▾",
+      "4030 · Supply Fees ▾",
+      "4040 · Late Pickup Fees ▾",
+      "4060 · Discounts & Credits ▾",
+      "4010 · Registration Fees ▾",
+      "4070 · Subsidy Revenue ▾",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working chan"
+    ],
+    "selects": 0,
+    "inputs": 2,
+    "textLen": 2160,
+    "text": "⌘K\nQS\nOrganization\nfinancials\nFinancials\n\nGL Codes, revenue mappings, and where tuition and fees post.\n\nTuition\nCatalog\nPolicies\nAccounting\nSimulator\nFunding\n\nAccount Types are labels on GL Codes (Revenue, Expense, Asset, Liability, Equity) — not a separate create flow. Commercial products reference GL Codes.\n\nNew GL Code\nGL Codes\n\nGrouped by Account Type · 10 codes\n\nREVENUE\n\n4000\nTuition Revenue\nActive · Used by 6\n4010\nRegistration Fees\nActive · Used by 2\n4020\nActivity Fees\nActive · Used by 1\n4030\nSupply Fees\nActive · Used by 1\n4040\nLate Pickup Fees\nActive\n4050\nNSF / Returned Payments\nActive\n4070\nSubsidy Revenue\nActive\n4080\nMeal Program Revenue\nActive\n4090\nOther Income\nActive\n\nEXPENSE\n\n4060\nDiscounts & Credits\nActive\n\nSelect a GL Code\n\nChoose an account from the list to review mapping and usage.\n\nWhere each charge category posts\n\nCharge categories are fixed by the platform. Choose the GL account each one posts to.\n\nAll categories mapped\nTuition\ntuition_revenue\n4000 · Tuition Revenue\n▾\nDeposit\ndeposit_liability\n4090 · Other Income\n▾\nConsumable fee\nconsumable_revenue\n4030 · Supply Fees\n▾\nLate pickup\nlate_fee_revenue\n4040 · Late Pickup Fees\n▾\nOne-time charge\nother_revenue\n4090 · Other Income\n▾\nDiscount\ndiscount_contra_revenue\n4060 · Discounts & Credits\n▾\nCredit\ncredit_liability\n4060 · Discounts & Credits\n▾\nAdjustment\nadjustment_revenue\n4060 · Discounts & Credits\n▾\nFee\nfee_revenue\n4010 · Registration Fees\n▾\nSubsidy offset\nsubsidy_offset_revenue\n4070 · Subsidy Revenue\n▾\nAccounting calendar\n\nThe periods posted financial activity is attributed to. Separate from the billing period a charge is billed in.\n\nThis organization has no accounting calendar. Financial activity cannot be attributed to an accounting period until one exists.\n\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nExplain this configuration\nSummarize the active state and working changes\nReview configuration attention\nIdentify setup, publication, or assignment issues\nReview unpublished changes\nExplain what remains private to Organization\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+  },
+  "simulator": {
+    "headings": [
+      "Financials",
+      "Commercial simulator",
+      "Simulator"
+    ],
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "Preview pricing",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working chan",
+      "Review configuration attention Identify setup, publication, or assignm",
+      "Review unpublished changes Explain what remains private to Organizatio"
+    ],
+    "selects": 5,
+    "inputs": 2,
+    "textLen": 1232,
+    "text": "⌘K\nQS\nOrganization\nfinancials\nFinancials\n\nPreview how commercial execution resolves for a Program and schedule.\n\nTuition\nCatalog\nPolicies\nAccounting\nSimulator\nFunding\nCommercial simulator\n\nPreview how commercial execution resolves for a Program and schedule.\n\nSimulator\n\nSee exactly what a family will pay, using your current configuration.\n\nProgram\nSelect a program…\nInfant\nToddler\nPreschool\nPre-K\nKindergarten\nSchool Age\nStage4 OK3 w9k7sx\nOffering\nSelect a program first\nSchedule\nSelect an offering first\nBilling frequency\nSemi-Annual\nWeekly\nBi-weekly\nMonthly\nAnnual\nDaily\nHourly\nPer Session\nPayer\nPrivate pay\nSubsidy\nCorporate\nStarting\nPreview pricing\n\nPick a program, offering, and schedule to preview.\n\nChoose a program and schedule, then preview to see what the family pays — and any warnings about your configuration.\n\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nExplain this configuration\nSummarize the active state and working changes\nReview configuration attention\nIdentify setup, publication, or assignment issues\nReview unpublished changes\nExplain what remains private to Organization\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+  },
+  "funding": {
+    "headings": [
+      "Financials",
+      "Funding"
+    ],
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working chan",
+      "Review configuration attention Identify setup, publication, or assignm",
+      "Review unpublished changes Explain what remains private to Organizatio"
+    ],
+    "selects": 0,
+    "inputs": 1,
+    "textLen": 867,
+    "text": "⌘K\nQS\nOrganization\nfinancials\nFinancials\n\nWho pays remains owned by Processing — this chapter documents the boundary.\n\nTuition\nCatalog\nPolicies\nAccounting\nSimulator\nFunding\nFunding\n\nPayment responsibility stays in Processing.\n\nFunding is managed in Processing\n\nWho pays — private pay, subsidies, employer sponsorship, and splits — is configured through the Processing Platform. Programs and Financials set price and catalog; Processing decides responsibility.\n\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nExplain this configuration\nSummarize the active state and working changes\nReview configuration attention\nIdentify setup, publication, or assignment issues\nReview unpublished changes\nExplain what remains private to Organization\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+  },
+  "policyTypeOptions": [
+    "Select…",
+    "Percentage off",
+    "Fixed amount off",
+    "Select…",
+    "Tuition only",
+    "Fees & add-ons",
+    "Everything",
+    "Whole organization",
+    "One program",
+    "One Tuition Plan",
+    "One Enrollment Commitment"
+  ]
+}

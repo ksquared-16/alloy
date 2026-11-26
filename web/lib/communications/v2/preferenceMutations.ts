@@ -5,7 +5,7 @@
  * both in one transaction (guaranteeing "audit always written"). No DB execution here.
  */
 import type { PreferenceCategory, PreferenceState } from "@/lib/communications/v2/preferences";
-import { SMS_KEYWORD_CATEGORIES, keywordTargetState, type SmsKeyword } from "@/lib/communications/v2/smsKeywords";
+import { categoriesForSmsKeyword, keywordTargetState, type SmsKeyword } from "@/lib/communications/v2/smsKeywords";
 
 export type PreferenceChangeRequest = {
     orgId: string;
@@ -16,6 +16,8 @@ export type PreferenceChangeRequest = {
     source?: string | null;
     method?: string | null;
     actorUserId?: string | null;
+    /** Evidence for the audit event (consent wording version, form / case ids, outcome). Never on the state row. */
+    metadata?: Record<string, unknown> | null;
 };
 
 export type PreferenceUpsertRow = {
@@ -37,6 +39,7 @@ export type PreferenceEventRow = {
     source: string | null;
     method: string | null;
     actor_user_id: string | null;
+    metadata?: Record<string, unknown>;
 };
 
 /** Build the paired upsert + audit event for a single preference change. */
@@ -63,18 +66,19 @@ export function buildPreferenceChange(req: PreferenceChangeRequest): {
             source: req.source ?? null,
             method: req.method ?? null,
             actor_user_id: req.actorUserId ?? null,
+            ...(req.metadata ? { metadata: req.metadata } : {}),
         },
     };
 }
 
-/** Expand an SMS keyword into the set of preference changes it implies (STOP/START → both SMS categories). */
+/** Expand an SMS keyword into the preference changes it implies (STOP ≠ START categories). */
 export function expandSmsKeywordChanges(
     keyword: SmsKeyword,
     ctx: { orgId: string; personId: string; source?: string | null; method?: string | null; actorUserId?: string | null }
 ): ReturnType<typeof buildPreferenceChange>[] {
     const toState = keywordTargetState(keyword);
     if (!toState) return [];
-    return SMS_KEYWORD_CATEGORIES.map((category) =>
+    return categoriesForSmsKeyword(keyword).map((category) =>
         buildPreferenceChange({
             orgId: ctx.orgId,
             personId: ctx.personId,

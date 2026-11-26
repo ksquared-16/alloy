@@ -92,8 +92,8 @@ export function mergeChildLayoutRuntimeWidgetRecord(
     for (const scalarKey of [
         "child.status",
         "child.program",
-        "inquiry_child.desired_program_type",
-        "inquiry_child.desired_start_date",
+        "inquiry_child.program_category_id",
+        "inquiry_child.start_date",
         "inquiry_child.outcome_status_key",
         "customer.household_name",
         "location.household_address",

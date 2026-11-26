@@ -1,3 +1,4 @@
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MetricEvaluationResult, MetricRollupRow } from "@/lib/metrics/platform/types";
 import type { MetricEvaluationContext } from "@/lib/metrics/platform/types";
@@ -48,6 +49,8 @@ export async function computeMetricRollup(params: {
     supabase: SupabaseClient;
     rollup: MetricRollupRow;
     ctx: MetricEvaluationContext;
+    /** WS0-A — the caller's scope; child metrics are never evaluated wider than it. */
+    accessScope: AdminAccessScopeDimensions;
 }): Promise<RollupResult> {
     const childConfig = params.rollup.child_metric_config as {
         version?: number;
@@ -59,6 +62,7 @@ export async function computeMetricRollup(params: {
         supabase: params.supabase,
         definitions,
         ctx: params.ctx,
+        accessScope: params.accessScope,
     });
 
     const values = evaluations.map((e) => e.value).filter((v): v is number => v != null);

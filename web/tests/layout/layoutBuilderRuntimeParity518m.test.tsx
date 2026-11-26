@@ -61,7 +61,7 @@ describe("layoutBuilderRuntimeParity 5.18M", () => {
 
         const located = findRelatedListItemInSection(doc.sections.find((s) => s.key === "children_enrollment")!)!;
         doc = patchLayoutEditorRelatedListConfig(doc, "children_enrollment", {
-            primaryRow: { fields: ["child.name", "child.dob_age", "child.desired_start_date"] },
+            primaryRow: { fields: ["child.name", "child.dob_age", "child.start_date"] },
             secondaryRow: { fields: ["child.program", "child.room"] },
         });
 

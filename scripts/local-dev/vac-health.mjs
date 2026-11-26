@@ -1,0 +1,591 @@
+#!/usr/bin/env node
+/**
+ * vac health — bounded, read-only health for the host and the Vacilando runtime.
+ *
+ *   vac health              compact report for an incident
+ *   vac health --json       the full structured record
+ *   vac health --check <n>  one check only
+ *   vac health --quiet      verdict line only
+ *
+ * exit 0 healthy · 1 watch · 2 problem
+ *
+ * Observation only. This command changes nothing: it does not correct
+ * registries, cap workers, reclaim seats or terminate anything.
+ */
+import os from "node:os";
+import { createRequire } from "node:module";
+const nodeRequire = createRequire(import.meta.url);
+import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
+import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
+
+import { CHECKS, measuredHardware, thresholdsFor, composeReport } from "./lib/vacilando/health.mjs";
+import {
+  probeLoad, probeMemory, probeDisk, probeGateway, probeProcessTable,
+  probeTmuxPanes, looksLikeValidation, withBudget,
+} from "./lib/vacilando/health-probes.mjs";
+import { attributionReport, parseProcessTable } from "./lib/vacilando/process-attribution.mjs";
+import { classifyWorkload } from "./lib/vacilando/workload-classification.mjs";
+import { concurrentWeightedCost } from "./lib/vacilando/workload-observation.mjs";
+import { hostCapability, computeCapacityPolicy } from "./lib/vacilando/capacity-policy.mjs";
+import { capacityStatus, CAPACITY_NAMES } from "./lib/vacilando/capacity-precedence.mjs";
+import { stewardStatus } from "./lib/vacilando/host-steward-cycle.mjs";
+import { gatewayStateRoot, stateRoot } from "./lib/vacilando/runtime-roots.mjs";
+
+function usage(code = 2) {
+  process.stderr.write(`Usage: vac health [--json] [--check <name>] [--quiet]
+
+Checks: ${CHECKS.join(", ")}
+
+Read-only. Reports; never corrects, caps, reclaims or kills.
+`);
+  process.exit(code);
+}
+
+const argv = process.argv.slice(2);
+let asJson = false;
+let quiet = false;
+let only = null;
+while (argv.length) {
+  const a = argv.shift();
+  if (a === "--json") asJson = true;
+  else if (a === "--quiet") quiet = true;
+  else if (a === "--check") only = argv.shift() || "";
+  else if (a.startsWith("--check=")) only = a.slice(8);
+  else if (a === "-h" || a === "--help") usage(0);
+  else usage();
+}
+if (only && !CHECKS.includes(only)) {
+  process.stderr.write(`vac health: unknown check "${only}"\n  known: ${CHECKS.join(", ")}\n`);
+  process.exit(2);
+}
+
+const startedAt = new Date().toISOString();
+const hw = measuredHardware({ os });
+const thresholds = thresholdsFor(hw);
+
+/** Everything below is bounded; a miss yields null and an INCOMPLETE finding. */
+const [memory, gateway, psText, panes] = await Promise.all([
+  withBudget(probeMemory({ os }), 3500, null),
+  withBudget(probeGateway({}), 20000, { status: "down", retried: true, retry_ok: false }),
+  withBudget(probeProcessTable({}), 5000, null),
+  withBudget(probeTmuxPanes({}), 3000, null),
+]);
+const load = probeLoad({ os });
+const disk = probeDisk({});
+
+/** Vacilando state, each read isolated so one failure cannot end the report. */
+async function safely(fn, fallback) {
+  try { return await fn(); } catch { return fallback; }
+}
+
+const lanesRaw = await safely(async () => {
+  const { listDurableLanes } = await import("./lib/vacilando/development-lane.mjs");
+  return listDurableLanes();
+}, []);
+
+// The bootstrap inventory is a READ. It resolves each lane's baseline from the
+// owners that already hold it and acquires nothing — no slot, no server, no
+// browser, no provider — so asking "are my lanes consistent?" costs none of the
+// resources it is asking about. `safely` keeps a failure here from taking the
+// rest of the report down; the check reports INCOMPLETE instead.
+// Freshness, like bootstrap, is a READ. It runs git plumbing against each
+// lane's worktree and acquires no slot, server, browser or provider.
+// Knowledge coverage, a READ over the existing lane-memory store.
+// Resilience posture, composed from what is registered. On a single-host
+// installation this correctly reports that no standby exists.
+const resilience = await safely(async () => {
+  const { resilienceProjection, hostIdentity, ROLE } = await import("./lib/vacilando/control-plane-resilience.mjs");
+  const { currentRuntimeGeneration } = await import("./lib/vacilando/control-plane-health.mjs");
+  const r = gatewayStateRoot();
+  const { existsSync: ex, readFileSync: rf } = await import("node:fs");
+  const leasePath = join(r, "vacilando", "resilience", "lease.json");
+  const snapPath = join(r, "vacilando", "resilience", "snapshot.json");
+  return resilienceProjection({
+    primary: hostIdentity({ hostId: os.hostname(), role: ROLE.PRIMARY, runtimeGeneration: currentRuntimeGeneration() }),
+    standby: null,
+    lease: ex(leasePath) ? JSON.parse(rf(leasePath, "utf8")) : null,
+    snapshot: ex(snapPath) ? JSON.parse(rf(snapPath, "utf8")) : null,
+  });
+}, null);
+
+// Toolchain activation state, a pure READ of one small record. Absent on a host
+// that has never activated anything through the canary path, which is healthy.
+const activationState = await safely(async () => {
+  const { readFileSync: rf, existsSync: ex } = await import("node:fs");
+  const r = gatewayStateRoot();
+  const p = join(r, "vacilando", "toolchain-canary", "activation.json");
+  return ex(p) ? JSON.parse(rf(p, "utf8")) : null;
+}, null);
+
+// The agent configuration audit, read-only. It calls the SAME collector
+// `vac config-audit` uses, so the health verdict and the CLI cannot disagree.
+const configAudit = await safely(async () => {
+  const { collectConfigurationAudit } = await import("./vac-config-audit.mjs");
+  return collectConfigurationAudit().audit;
+}, null);
+
+// Maintenance state, a pure READ of one small record plus the steward's own
+// cadence field. No window exists on a host that has never run maintenance, and
+// that is reported as healthy rather than missing.
+const maintenanceWindow = await safely(async () => {
+  const { readMaintenanceWindow } = await import("./lib/vacilando/host-maintenance.mjs");
+  const r = gatewayStateRoot();
+  return readMaintenanceWindow({ root: r }) || { phase: "NORMAL" };
+}, null);
+
+const maintenanceCadence = await safely(async () => {
+  const { maintenanceCadenceDue } = await import("./lib/vacilando/host-steward-cycle.mjs");
+  const r = gatewayStateRoot();
+  return maintenanceCadenceDue({ root: r });
+}, null);
+
+// The promotion gate contract, a pure READ over declarations. No network, no
+// GitHub, no database: it audits what the gates say about themselves.
+const promotionGates = await safely(async () => {
+  const { auditPromotionGates } = await import("./lib/vacilando/promotion-gate-contract.mjs");
+  return auditPromotionGates();
+}, null);
+
+const laneKnowledge = await safely(async () => {
+  const { inventoryLaneKnowledge } = await import("./lib/vacilando/lane-knowledge.mjs");
+  return inventoryLaneKnowledge({ lanes: lanesRaw });
+}, null);
+
+const laneFreshness = await safely(async () => {
+  const { inventoryLaneFreshness } = await import("./lib/vacilando/lane-freshness.mjs");
+  return inventoryLaneFreshness({ lanes: lanesRaw });
+}, null);
+
+const laneBootstrap = await safely(async () => {
+  const { inventoryLaneBootstrap } = await import("./lib/vacilando/lane-bootstrap.mjs");
+  return inventoryLaneBootstrap({ lanes: lanesRaw });
+}, null);
+
+const runFor = await safely(async () => {
+  const { activeRunForLane } = await import("./lib/vacilando/execution-run.mjs");
+  return (laneId) => activeRunForLane(laneId);
+}, () => null);
+
+const seats = await safely(async () => {
+  if (!panes) return [];
+  const { correlateProviderProcesses } = await import("./lib/vacilando/provider-capacity.mjs");
+  return correlateProviderProcesses({
+    panes, lanes: lanesRaw, sessions: [],
+    runStateFor: (id) => runFor(id)?.state || null,
+  });
+}, []);
+
+const configuredMax = await safely(async () => {
+  const { configuredProviderCeiling } = await import("./lib/vacilando/provider-capacity.mjs");
+  return configuredProviderCeiling(process.env);
+}, null);
+
+const repositories = await safely(async () => {
+  const { readRepositoryStore } = await import("./lib/vacilando/repository-registry.mjs");
+  return Object.values(readRepositoryStore().repositories || {});
+}, []);
+
+// ── S1 is the canonical attribution source. Health never re-derives ancestry. ─
+const processes = psText ? parseProcessTable(psText) : [];
+
+/*
+ * Worktree lifecycle and slot ownership, both READS.
+ *
+ * The evaluations come from the EXISTING retirement observer, and disk from the
+ * EXISTING cached sizes — `peek`, never `collect`, so a health report can never
+ * become the reason a fleet-wide `du` runs. An absent size reads as unknown.
+ */
+const worktreeLifecycle = await safely(async () => {
+  const { observeReconciliation } = await import("./lib/vacilando/reconciliation-observe.mjs");
+  const { observeRetirementCandidates } = await import("./lib/vacilando/worktree-retirement-observe.mjs");
+  const { inventoryWorktreeLifecycle } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  const { peekWorktreeDiskCache } = await import("./lib/vacilando/resources.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const wtRoot = gatewayStateRoot();
+  const worktreeParent = join(homedir(), "Code", "alloy-worktrees");
+  // The same inputs `vac worktree-retire` assembles, so the health projection and
+  // the retirement preview cannot disagree about which worktrees exist.
+  let gitWorktrees = null;
+  try {
+    gitWorktrees = execFileSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: join(homedir(), "Alloy"), encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "ignore"],
+    }).split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
+  } catch { /* absent git worktree list is reported as an incomplete check */ }
+  const s7 = observeReconciliation({ root: wtRoot, processes, worktreeParent, gitWorktrees });
+  const evaluations = observeRetirementCandidates({
+    root: wtRoot, s7Worktrees: s7?.worktrees || [], processes, worktreeParent,
+    // Same as `vac worktree-retire`. Without it `not_self_retirement` is
+    // UNMEASURED, and an unmeasured gate blocks — so every worktree would read
+    // as blocked for a reason that is an input gap rather than a fact about it.
+    requestingWorktree: process.env.ALLOY_WORKTREE || process.cwd(),
+  });
+  return inventoryWorktreeLifecycle({ evaluations, diskSizes: peekWorktreeDiskCache().sizes || {} });
+}, null);
+
+const slotOwnership = await safely(async () => {
+  const { detectSlotOwnershipConflicts } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  // The REGISTRY is the slot authority; a lane's binding.slot is its cache.
+  const { listRegisteredWorktrees } = await import("./lib/vacilando/worktree-registration.mjs");
+  const registrySlots = {};
+  const regRoot = gatewayStateRoot();
+  for (const r of listRegisteredWorktrees({ root: regRoot }) || []) {
+    const slot = Number(r?.slot);
+    if (Number.isInteger(slot) && r?.name) registrySlots[slot] = r.name;
+  }
+  return detectSlotOwnershipConflicts({ lanes: lanesRaw, registrySlots });
+}, null);
+
+const attribution = psText
+  ? attributionReport({
+    seats, processes, lanes: lanesRaw, repositories, runFor,
+    interesting: (r) => looksLikeValidation(r.command) || seats.some((s) => s.pid === r.pid),
+  })
+  : null;
+
+// S3: classify every attributed process. looksLikeValidation only SELECTS
+// candidates; the class and weight come from the classifier, which reads scope.
+const workloads = (attribution?.records || [])
+  .filter((r) => looksLikeValidation(r.command))
+  .map((r) => classifyWorkload({ command: r.command, pid: r.pid, attribution: r }))
+  .filter((w) => w.workload_class);
+const workloadCost = concurrentWeightedCost(workloads);
+
+// ── S4: the canonical capacity policy. Health reads it; it never recomputes. ─
+const sysctlRead = (key) => {
+  try {
+    const { execFileSync } = nodeRequire("node:child_process");
+    return String(execFileSync("sysctl", ["-n", key], { encoding: "utf8", timeout: 1500 })).trim();
+  } catch { return null; }
+};
+const devServerCount = (() => {
+  try {
+    const root = gatewayStateRoot();
+    const pidDir = join(root, "pids");
+    if (!existsSync(pidDir)) return 0;
+    return readdirSync(pidDir).filter((f) => f.endsWith(".pid")).filter((f) => {
+      const pid = Number(readFileSync(join(pidDir, f), "utf8").trim());
+      try { process.kill(pid, 0); return true; } catch { return false; }
+    }).length;
+  } catch { return 0; }
+})();
+
+const capability = hostCapability({
+  os, disk, memory, load, seats, devServers: devServerCount, workloads, sysctl: sysctlRead,
+});
+const capacity = computeCapacityPolicy(capability);
+
+// S5 enforcement state: what is actually held, queued, or running unbrokered.
+let enforcement = null;
+try {
+  const VA = await import("./lib/vacilando/validation-admission.mjs");
+  const store = VA.readClaimStore({});
+  const un = VA.unbrokeredPressure({ workloads, claims: store.claims });
+  const eff = VA.effectiveRemaining({ capacity, store, unbrokeredWeight: un.unbrokered_weight });
+  enforcement = {
+    ...eff,
+    queued: (store.queue || []).length,
+    reaped: (store.reaped || []).length,
+    worker_cap_drift: 0,
+    unbrokered_workloads: un.workloads,
+  };
+} catch { enforcement = null; }
+
+const lanes = lanesRaw.map((l) => ({
+  lane_id: l.lane_id,
+  name: l.name || l.label || null,
+  run_state: runFor(l.lane_id)?.state || null,
+}));
+
+const runs = lanesRaw.map((l) => {
+  const r = runFor(l.lane_id);
+  if (!r) return null;
+  const at = Date.parse(r.updated_at || r.created_at || "") || null;
+  return {
+    run_id: r.run_id,
+    state: r.state,
+    state_reason: r.state_reason || null,
+    terminal: ["COMPLETE", "FAILED", "ABANDONED"].includes(r.state),
+    age_ms: at ? Date.now() - at : null,
+  };
+}).filter(Boolean);
+
+/**
+ * Bounds that exist TODAY. A waiting reason absent from this table is exactly
+ * the doctrine's "unbounded state" problem, and runs.stale reports it as such
+ * rather than inventing a deadline.
+ */
+// S6: express every non-terminal run's wait in the canonical contract.
+let waits = null;
+try {
+  const RW = await import("./lib/vacilando/run-wait.mjs");
+  const VA = await import("./lib/vacilando/validation-admission.mjs");
+  const descriptors = [];
+  // Only genuinely WAITING states produce a wait. An EXECUTING run with reason
+  // `instruction_delivered` is working, not waiting — treating its reason as a
+  // wait reason reported three healthy runs as invalid on the first live run.
+  const WAITING_STATES = new Set(["QUEUED", "NEEDS_INPUT", "WAITING_RESOURCE", "RECOVERING"]);
+  for (const l of lanesRaw) {
+    const r = runFor(l.lane_id);
+    if (!r || !WAITING_STATES.has(r.state)) continue;
+    const since = Date.parse(r.updated_at || r.created_at || "") || Date.now();
+    const reason = r.state === "NEEDS_INPUT" ? "needs_operator_input"
+      : r.state === "RECOVERING" ? "recovering"
+      : (r.state_reason || null);
+    descriptors.push(RW.describeWait({
+      reason, resource_id: r.run_id, waiting_since: since,
+      context: { no_session_binding: !l.binding?.worktree_path },
+    }));
+  }
+  for (const e of VA.readClaimStore({}).queue || []) {
+    const d = RW.waitFromValidationQueueEntry(e);
+    if (d) descriptors.push(d);
+  }
+  waits = RW.summarizeWaits(descriptors);
+} catch { waits = null; }
+
+// ── S8: canonical provider seat state ────────────────────────────────────────
+//
+// Read-only, like everything else here. `vac health` classifies seats and says
+// what would be reclaimable; it never reclaims one. The reclaim lives on the
+// admission path, where a real waiting admission exists to justify it.
+let seatStates = [];
+let seatSummary = null;
+let idleGracePolicy = null;
+let providerCapacityWaits = [];
+try {
+  const PC = await import("./lib/vacilando/provider-capacity.mjs");
+  const SS = await import("./lib/vacilando/provider-seat-state.mjs");
+  idleGracePolicy = SS.IDLE_GRACE_POLICY_V1;
+  seatStates = await PC.observeLiveSeats({});
+  seatSummary = SS.summarizeSeats(seatStates);
+  providerCapacityWaits = runs.filter((r) =>
+    r.state === "QUEUED" && r.state_reason === SS.PROVIDER_CAPACITY_WAIT_REASON);
+} catch { seatStates = []; seatSummary = null; }
+
+// A reclaim is in flight when a lane has been chosen but the provider has not
+// gone down yet. Nothing writes this today beyond the reclaim itself, so an
+// empty list is the honest answer rather than an assumed zero.
+const reclaimsInFlight = seatStates.filter((s) => s.reclaim_in_progress === true);
+
+// ── Validation routing: did heavy work go through the single authority? ─────
+let validationRouting = null;
+let validationBypasses = [];
+try {
+  const VR = await import("./lib/vacilando/validation-routing.mjs");
+  const VA = await import("./lib/vacilando/validation-admission.mjs");
+  const claims = VA.readClaimStore({}).claims || [];
+  const unbrokered = VR.classifyUnbrokered(workloads, { claims });
+  const bypassPath = join(gatewayStateRoot(),
+    "vacilando", "validation-bypass", "events.jsonl");
+  if (existsSync(bypassPath)) {
+    // Bounded: only today's tail matters for a health verdict.
+    validationBypasses = readFileSync(bypassPath, "utf8").trim().split("\n").slice(-200)
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  }
+  validationRouting = VR.summarizeRouting({ claims, unbrokered, bypasses: validationBypasses });
+} catch { validationRouting = null; }
+
+const RUN_BOUNDS = {
+  instruction_delivered: 6 * 60 * 60 * 1000,
+  admission_delivered: 6 * 60 * 60 * 1000,
+  operator_follow_up: 6 * 60 * 60 * 1000,
+};
+
+const ports = await safely(async () => {
+  const root = gatewayStateRoot();
+  const out = [];
+  const metaDir = join(root, "metadata");
+  const registered = new Map();
+  if (existsSync(metaDir)) {
+    for (const f of readdirSync(metaDir)) {
+      if (!f.endsWith(".env")) continue;
+      const name = f.replace(/\.env$/, "");
+      const body = readFileSync(join(metaDir, f), "utf8");
+      const m = body.match(/PORT="?(\d+)"?/);
+      if (m) registered.set(Number(m[1]), name);
+    }
+  }
+  for (const port of [3011, 3012, 3013, 3014, 3015, 3016]) {
+    const owner = registered.get(port) || null;
+    const pidFile = owner ? join(root, "pids", `${owner}.pid`) : null;
+    const recorded = pidFile && existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8").trim()) : null;
+    const alive = recorded ? (() => { try { process.kill(recorded, 0); return true; } catch { return false; } })() : false;
+    // Which process actually holds it, by ancestry/command — lsof is absent here.
+    const serving = processes.find((p) => new RegExp(`-p\\s+${port}\\b`).test(p.command || ""));
+    let verdict;
+    if (serving && owner && alive) verdict = "matched";
+    else if (serving && (!owner || !alive)) verdict = "unregistered-server";
+    else if (!serving && owner && !alive) verdict = "stale-record";
+    else if (!serving && !owner) verdict = "free";
+    else verdict = "matched";
+    out.push({ port, registered: owner, recorded_pid: recorded, alive, serving: serving ? `pid ${serving.pid}` : null, verdict });
+  }
+  return out;
+}, []);
+
+const worktrees = await safely(async () => {
+  const root = gatewayStateRoot();
+  const parent = join(homedir(), "Code", "alloy-worktrees");
+  const onDisk = existsSync(parent)
+    ? readdirSync(parent, { withFileTypes: true }).filter((d) => d.isDirectory() && /^wt/.test(d.name)).map((d) => d.name)
+    : [];
+  // Registration comes from the OWNER, not from scanning slot metadata.
+  // Health and reconciliation must answer "does Vacilando know this worktree"
+  // the same way, or adoption improves one and not the other.
+  const { listRegisteredWorktrees } = await import("./lib/vacilando/worktree-registration.mjs");
+  const known = listRegisteredWorktrees({ root });
+  const byName = new Map(known.map((k) => [k.name, k]));
+  const managed = onDisk.filter((n) => byName.get(n)?.managed === true);
+  const discovered = onDisk.filter((n) => byName.get(n)?.provenance === "discovered");
+  const unknown = onDisk.filter((n) => !byName.has(n));
+  return {
+    onDisk: onDisk.length,
+    registered: managed.length + discovered.length,
+    managed: managed.length, discovered: discovered.length,
+    unmanaged: unknown,
+  };
+}, { onDisk: 0, registered: 0, unmanaged: [] });
+
+// ── S9: toolkit retention, from the canonical owner ──────────────────────────
+//
+// Health does NOT count directories any more. It asks the retention owner for a
+// plan and reports what the plan says. A second opinion about what may be
+// deleted is exactly the drift this consolidates away — and `vac health` never
+// prunes, whatever severity it reports.
+const toolkitState = await safely(async () => {
+  const { execFileSync } = nodeRequire("node:child_process");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const impl = join(here, "vac-toolkit-prune.mjs");
+  if (!existsSync(impl)) return null;
+  const out = execFileSync(process.execPath, [impl, "--json", "--quiet"], {
+    encoding: "utf8", timeout: 90_000, maxBuffer: 32 * 1024 * 1024,
+  });
+  return JSON.parse(out);
+}, null);
+
+const toolkitSeverity = await safely(async () => {
+  if (!toolkitState) return null;
+  const { retentionSeverity } = await import("./lib/vacilando/toolkit-retention.mjs");
+  return retentionSeverity(toolkitState, { diskPressure: Boolean(disk && disk.free_pct != null && disk.free_pct < 10) });
+}, null);
+
+const report = composeReport({
+  hw, thresholds, only, startedAt,
+  endedAt: new Date().toISOString(),
+  probeResults: {
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence, configAudit, activationState, resilience,
+    run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
+    ports, worktrees, configured_max: configuredMax,
+    validation_routing: validationRouting, validation_bypasses: validationBypasses,
+    toolkit_plan: toolkitState, toolkit_severity: toolkitSeverity,
+    // Read from the steward's own status; health never infers whether it ran.
+    steward_status: (() => {
+      try {
+        return stewardStatus({
+          root: gatewayStateRoot(),
+        });
+      } catch { return null; }
+    })(),
+    disk_pressure: Boolean(disk && disk.free_pct != null && disk.free_pct < 10),
+    seat_states: seatStates, seat_summary: seatSummary, idle_grace_policy: idleGracePolicy,
+    provider_capacity_waits: providerCapacityWaits, reclaims_in_flight: reclaimsInFlight,
+  },
+});
+
+if (asJson) {
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  process.exit(report.exit_code);
+}
+
+const MARK = { healthy: "OK  ", watch: "WATCH", problem: "PROB" };
+const verdictLine = report.verdict === "healthy" ? "HEALTHY"
+  : report.verdict === "watch" ? "HEALTHY WITH WATCH ITEMS" : "PROBLEMS FOUND";
+
+if (quiet) {
+  process.stdout.write(`${verdictLine}${report.incomplete ? " (partial)" : ""}\n`);
+  process.exit(report.exit_code);
+}
+
+const w = (s) => process.stdout.write(s);
+w(`\n${verdictLine}${report.incomplete ? "  ·  PARTIAL REPORT" : ""}\n`);
+w(`${"─".repeat(64)}\n`);
+w(`host       ${hw.hostname} · ${hw.cores} cores · ${hw.memory_gb} GB · up ${Math.floor((hw.uptime_seconds || 0) / 86400)}d\n`);
+if (load) w(`load       ${load.one.toFixed(2)} / ${load.five.toFixed(2)} / ${load.fifteen.toFixed(2)}   (watch ≥ ${thresholds.load_watch}, problem > ${thresholds.load_problem})\n`);
+if (memory) w(`memory     ${memory.free_gb} GB free (${memory.free_pct.toFixed(1)}%) · compressor ${memory.compressor_gb} GB\n`);
+if (disk) w(`disk       ${disk.free_gb} GB free of ${disk.total_gb} GB (${disk.free_pct.toFixed(1)}%)\n`);
+w(`vacilando  ${seats.length} provider seats · ${lanes.length} lanes · ${attribution ? attribution.attributed_count : "?"} attributed processes\n`);
+if (seatSummary) {
+  const c = seatSummary.counts;
+  w(`seats      ${c.active} active · ${c.attentive} attentive · ${c.idle} idle (${seatSummary.idle_reclaimable} reclaimable) · ${c.blocked} blocked · ${c.dormant} dormant   (grace ${Math.round((idleGracePolicy?.grace_ms || 0) / 60000)}m, policy ${idleGracePolicy?.version})\n`);
+}
+const A = capacity.axes;
+/*
+ * ONE ANSWER TO "HOW MANY AGENTS MAY WORK AT ONCE?".
+ *
+ * This line used to print `providers ${current}/${provider_capacity.ceiling}`,
+ * which is the HARDWARE ADVISORY — what the machine could carry. On this host
+ * that read 4 while the enforced ceiling was 8 and eight providers were live,
+ * so the first capacity number an operator saw was one nothing enforces, and
+ * the `enforced` line below then said something different.
+ *
+ * The enforced ceiling is now the answer, with its source, and the hardware
+ * estimate stays beside it explicitly marked advisory. Dev servers keep the
+ * axis ceiling because for them the axis IS slot-bounded and enforced.
+ */
+const enforced = capacityStatus({ derived: capacity });
+const providerLimit = enforced.limits.ALLOY_MAX_ACTIVE_PROVIDERS;
+w(`capacity   providers ${A.provider_capacity.current}/${providerLimit.value} enforced (${providerLimit.source}) · hw advisory ${A.provider_capacity.ceiling} (by ${A.provider_capacity.bounded_by}) · tokens ${A.validation_capacity.used}/${A.validation_capacity.tokens} (by ${A.validation_capacity.bounded_by}) · workers ≤${A.validation_capacity.worker_ceiling} · dev servers ${A.dev_server_capacity.current}/${A.dev_server_capacity.ceiling}\n`);
+w(`reserves   memory ${A.memory_capacity.free_gb ?? "?"} GB free / ${A.memory_capacity.reserve_gb} GB reserve · disk ${A.disk_headroom.free_gb ?? "?"} GB free / ${A.disk_headroom.reserve_gb} GB reserve · policy ${capacity.policy_version}\n`);
+if (capacity.constrained_axes.length) w(`constrained ${capacity.constrained_axes.map((c) => c.value).join(", ")}\n`);
+
+// DERIVED IS NOT ENFORCED, AND HEALTH MUST NOT CONFLATE THEM.
+//
+// The axes report what this host could safely OFFER. What the toolkit actually
+// refuses at comes from the host config, and the two are routinely different.
+// Printing only the derived ceiling is how a capacity experiment came to believe
+// it had four slots of headroom it was never going to be given. Both numbers,
+// always, and the reason each one is what it is.
+w(`enforced   ${CAPACITY_NAMES.map((n) => {
+  const r = enforced.limits[n];
+  return `${n.replace("ALLOY_MAX_", "").toLowerCase()} ${r.value} (${r.source})`;
+}).join(" · ")}\n`);
+if (enforced.override_active) {
+  w(`override   ACTIVE ${Object.entries(enforced.override_applied).map(([k, v]) => `${k}=${v}`).join(" ")} — ${enforced.override_reason}\n`);
+}
+for (const r of enforced.override_refused) {
+  w(`override   REFUSED ${r.entry} (${r.error})\n`);
+}
+const gaps = Object.entries(enforced.derived_exceeds_enforced);
+if (gaps.length) {
+  w(`headroom   ${gaps.map(([k, g]) => `${k.replace("ALLOY_MAX_", "").toLowerCase()} enforced ${g.enforced}, host could offer ${g.derived}`).join(" · ")}\n`);
+}
+w(`checks     ${report.counts.problem} problem · ${report.counts.watch} watch · ${report.counts.healthy} healthy   (${report.duration_ms} ms)\n`);
+
+const section = (title, sev) => {
+  const rows = report.findings.filter((f) => f.severity === sev);
+  if (!rows.length) return;
+  w(`\n${title}\n`);
+  for (const f of rows) {
+    w(`  ${MARK[f.severity]}  ${f.check}${f.incomplete ? "  (incomplete)" : ""}${f.confidence !== "measured" ? `  [${f.confidence}]` : ""}\n`);
+    w(`        ${f.explanation}\n`);
+    for (const e of f.evidence.slice(0, 3)) {
+      w(`        · ${typeof e === "string" ? e : JSON.stringify(e)}\n`);
+    }
+  }
+};
+section("PROBLEMS", "problem");
+section("WATCH", "watch");
+
+const healthy = report.findings.filter((f) => f.severity === "healthy").map((f) => f.check);
+if (healthy.length) w(`\nHEALTHY\n  ${healthy.join(", ")}\n`);
+
+const actions = report.findings.filter((f) => f.suggested_action).map((f) => `${f.check}: ${f.suggested_action}`);
+if (actions.length) {
+  w(`\nRECOMMENDED OPERATOR ACTIONS  (none performed)\n`);
+  for (const a of actions) w(`  · ${a}\n`);
+}
+w("\n");
+process.exit(report.exit_code);

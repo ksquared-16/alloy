@@ -51,9 +51,23 @@ describe("validateStageTransitionReconciliationPayload", () => {
                 due_at: null,
             },
         ],
+        openWorkConflicts: [
+            {
+                work_id: "work-1",
+                title: "Gather Enrollment Information",
+                lifecycle_stage_key: "qualification",
+                stage_label: "Qualification",
+                template_key: "gather_enrollment_information",
+                work_definition_key: "collect_missing_information",
+                due_at: null,
+            },
+        ],
         has_attention: true,
         attention_reason: "Missing qualification information",
         wait_bucket: "waiting_on_staff",
+        missingRequirements: [],
+        blockingRequirements: [],
+        canProceed: false,
     };
 
     it("requires every open work item and attention resolution", () => {

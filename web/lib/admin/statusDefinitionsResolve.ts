@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 
-const STATUS_EFFECTIVE_CACHE = new Map<string, { at: number; rows: StatusDefinitionRow[]; ttlMs: number }>();
+const STATUS_EFFECTIVE_CACHE = processMap<string, { at: number; rows: StatusDefinitionRow[]; ttlMs: number }>("status_effective");
 /** Process + upstream data cache TTL; overlaps with Next `unstable_cache` revalidate below. */
 const STATUS_EFFECTIVE_TTL_MS = 90_000;
 const STATUS_EFFECTIVE_CACHE_ENABLED = process.env.NODE_ENV !== "test";
@@ -98,6 +98,7 @@ export {
     parseLifecycleStageFromMetadata,
     type OpportunityLifecycleStage,
 } from "@/lib/admin/statusDefinitionLifecycle";
+import { processMap } from "@/lib/perf/processCache";
 
 const STATUS_DEF_COLUMNS =
     "id, org_id, industry_key, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata";
@@ -426,6 +427,30 @@ export async function fetchEffectiveStatusDefinitions(
 /** Build a map from pre-fetched effective definitions (batch list enrichment). */
 export function displayLabelsFromDefinitions(defs: StatusDefinitionRow[]): Map<string, string> {
     return new Map(defs.map((d) => [d.status_key, (d.status_label?.trim() || d.status_key) as string]));
+}
+
+/**
+ * The configured default-on-create status for an entity, if the status configuration designates
+ * one. Config point: a `status_definitions` row whose `metadata.default_on_create === true`. This
+ * is how the opportunity status configuration OWNS the Create Lead status — Create Lead reads this
+ * rather than hardcoding a status key. Returns null when no status is flagged (caller falls back to
+ * the canonical durable default, never to a hardcoded pipeline key). When multiple rows are flagged
+ * (misconfiguration) the lowest sort_order wins, matching the configured display order.
+ */
+export function resolveConfiguredDefaultCreateStatusKey(defs: StatusDefinitionRow[]): string | null {
+    const flagged = defs.filter((d) => {
+        const md = d.metadata;
+        return (
+            md != null &&
+            typeof md === "object" &&
+            (md as { default_on_create?: unknown }).default_on_create === true &&
+            typeof d.status_key === "string" &&
+            d.status_key.trim() !== ""
+        );
+    });
+    if (!flagged.length) return null;
+    const winner = sortDefs(flagged)[0];
+    return winner ? winner.status_key.trim() : null;
 }
 
 export function resolveDisplayFromLabelMap(

@@ -47,30 +47,40 @@ describe("Right rail persistence doctrine", () => {
         expect(registrar).not.toContain("unregister");
     });
 
-    it("always renders Actions, Workflow Telemetry, and BOS slots in persistent rail", () => {
+    it("persistent assistant column hosts BOS; Actions live in workspace header chrome", () => {
         const rail = read("app/adminV2/components/AdminV2PersistentCommandRail.tsx");
-        expect(rail).toContain("CommandRailDefaultEmptyActions");
-        expect(rail).toContain("CommandRailDefaultEmptyTelemetry");
         expect(rail).toContain("WorkspaceCommandRailShell");
+        expect(rail).toContain("BOS host only");
+        expect(rail).not.toContain("CommandRailDefaultEmptyActions");
+        const wuActions = read("components/presentation/rightRail/WorkUnitRightRailActions.tsx");
+        expect(wuActions).toContain("data-workspace-actions-chrome");
+        expect(wuActions).toContain('actionsPlacementSurface="work_unit"');
+        const header = read("components/presentation/workspace/WorkspaceHeader.tsx");
+        expect(header).toContain("actionsSlot");
+        expect(header).toContain("data-workspace-header-control-band");
     });
 
-    it("does not hide workspace root actions when count is zero", () => {
-        const rootRail = read("app/adminV2/components/workspace/WorkspaceRootActionsRail.tsx");
-        expect(rootRail).not.toContain("if (settled && (actionCount ?? 0) === 0) return null");
+    it("documents Actions ownership independent of BOS in navigation doctrine", () => {
+        const doctrine = readFileSync(
+            join(webRoot, "../docs/platform/core/navigation-and-workspace-doctrine.md"),
+            "utf8",
+        );
+        expect(doctrine).toContain("Actions — operational chrome");
+        expect(doctrine).toContain("BOS assistant region");
     });
 
     it("documents persistent command surface in workspace doctrine", () => {
-        const workspaceDoc = readFileSync(join(webRoot, "../docs/system/workspace-system.md"), "utf8");
+        const workspaceDoc = readFileSync(join(webRoot, "../docs/archive/2026-06-superseded-system/workspace-system.md"), "utf8");
         const wuDoc = readFileSync(join(webRoot, "../docs/system/work-unit-layout-doctrine.md"), "utf8");
         expect(workspaceDoc).toContain("persistent command surface");
         expect(wuDoc).toContain("persistent command surface");
     });
 
-    it("work unit actions rail registration is memoized against parent re-renders", () => {
-        const wu = read("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
-        expect(wu).toContain("commandRailActions");
-        expect(wu).toContain("useMemo");
-        expect(wu).toContain("WorkUnitAboveFoldActionsRail");
+    it("work unit surface places Actions in the header control band", () => {
+        const surface = read("components/presentation/workUnit/WorkUnitSurface.tsx");
+        expect(surface).toContain("WorkUnitRightRailActions");
+        expect(surface).toContain("actionsSlot");
+        expect(surface).toContain("WorkUnitHeader");
     });
 
     it("persistent command rail shares shell-level AdminDrawerProvider with registered actions", () => {

@@ -19,7 +19,7 @@ export const CONFIG_LAYOUT_ASSIST_READY_TYPE_LABEL = "Ready to review";
 export const CONFIG_LAYOUT_ASSIST_PROPOSAL_SOURCE_LABEL = "Config Assist";
 
 export const CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY =
-    "Same proposal as Settings → Config proposals. Use advanced review for full lifecycle and apply controls.";
+    "Same proposal as Configuration → Config proposals. Use advanced review for full lifecycle and apply controls.";
 
 export const CONFIG_LAYOUT_ASSIST_MUTATION_BOUNDARY_COPY = MUTATION_BOUNDARY_CONFIG_NOT_LIVE;
 

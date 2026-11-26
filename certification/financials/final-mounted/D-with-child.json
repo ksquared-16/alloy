@@ -1,0 +1,23 @@
+{
+  "present": true,
+  "full": "ADD Charge Adjustment CHARGE TYPEREQUIRED Field trip ▾ 5 configured types CHARGE APPLIES TOREQUIRED Certa Certhouse ▾ Household ✓ Certa Certhouse Certb Certhouse Certa Certhouse AMOUNT $40.00 NOTE DATES SERVICE DATEREQUIRED BILLING PERIOD Oct 1, 2026 DUE Configured policy CHARGE TO Certt Certhouse $18.00 · household responsibilityChange → DISCOUNT Sibling discount (QA specimen) · 10% ▾ PREVIEW Field trip +$40.00 Discount Sibling discount (QA specimen) · 10% Current balance $536.00 AFTER POSTING $536.00 Add charge Cancel",
+  "previewBlock": null,
+  "ledgerInsidePreview": null,
+  "natives": [
+    {
+      "tag": "INPUT",
+      "type": "date",
+      "label": ""
+    }
+  ],
+  "discountControl": [
+    {
+      "t": "Sibling discount (QA specimen) · 10%▾",
+      "aria": "Discount"
+    }
+  ],
+  "appliesToValue": "Certa Certhouse▾",
+  "afterPosting": "AFTER POSTING $536.00",
+  "currentBalance": "Current balance $536.00",
+  "chargeLine": "+$40.00"
+}

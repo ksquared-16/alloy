@@ -1,0 +1,99 @@
+{
+  "trusted_host_action_id": "tha_c9c416555a8c3c",
+  "query_hash": "87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-06T20:27:42.940Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c9c416555a8c3c",
+    "query_hash": "87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd",
+    "authorization_id": "grnt_ffbcf71c3a364b98",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-06T20:27:45.395Z",
+    "question_ids": [
+      "r5sc_00",
+      "r5sc_households",
+      "r5sc_children",
+      "r5sc_participations",
+      "r5sc_leads_work_units",
+      "r5sc_submissions_on_fixture_subjects",
+      "r5sc_documents_on_fixture_subjects",
+      "r5sc_retained_audit"
+    ],
+    "questions": {
+      "r5sc_00": {
+        "question_id": "r5sc_00",
+        "row_count": null,
+        "rows": [
+          {
+            "fixture": "qa_documents_shared_child",
+            "namespace": "ac000000-",
+            "qa_shared": "4acc9386-c485-486f-aa1f-05d83499d142",
+            "cleanup": "zero_residue"
+          }
+        ]
+      },
+      "r5sc_households": {
+        "question_id": "r5sc_households",
+        "row_count": null,
+        "rows": [
+          "customers ~ ac000000_fixture ~ zero ~ true"
+        ]
+      },
+      "r5sc_children": {
+        "question_id": "r5sc_children",
+        "row_count": null,
+        "rows": [
+          "customer_members ~ ac000000_fixture ~ zero ~ true"
+        ]
+      },
+      "r5sc_participations": {
+        "question_id": "r5sc_participations",
+        "row_count": null,
+        "rows": [
+          "opportunity_customer_members ~ ac000000_fixture ~ zero ~ true"
+        ]
+      },
+      "r5sc_leads_work_units": {
+        "question_id": "r5sc_leads_work_units",
+        "row_count": null,
+        "rows": [
+          "opportunities_work_units ~ ac000000_fixture ~ zero ~ true"
+        ]
+      },
+      "r5sc_submissions_on_fixture_subjects": {
+        "question_id": "r5sc_submissions_on_fixture_subjects",
+        "row_count": null,
+        "rows": [
+          "form_submissions ~ names_ac000000_subject ~ zero ~ true"
+        ]
+      },
+      "r5sc_documents_on_fixture_subjects": {
+        "question_id": "r5sc_documents_on_fixture_subjects",
+        "row_count": null,
+        "rows": [
+          "documents ~ entity_ac000000 ~ zero ~ true"
+        ]
+      },
+      "r5sc_retained_audit": {
+        "question_id": "r5sc_retained_audit",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "lead deletion audit history",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "qa_shared_mutation_event_rows": 637
+          }
+        ]
+      }
+    },
+    "row_count": 8
+  }
+}

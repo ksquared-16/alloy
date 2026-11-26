@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alloy.local/contracts/vacilando-v1/snapshot.json",
+  "title": "Vacilando Runtime — snapshot & event contracts (v1)",
+  "schema_version": "vacilando.snapshot.v1",
+  "description": "Stable, delivery-adapter-independent contract for the Command Center snapshot produced by lib/vacilando/compose.mjs and served by lib/vacilando-server.mjs. The snapshot is a PROJECTION of authoritative toolkit state (alloy-ro + git + ~/.local/state/alloy-dev); it is never a parallel store. Every field maps to a source (see docs/platform/planning/vacilando-os/RUNTIME-PHASE-1.md §3). Missing sources become entries in `gaps`, never fabricated values. Time is injected at compose so a snapshot is a deterministic function of state + one clock reading.",
+  "snapshot": {
+    "required": ["schema_version", "generated_at", "sources", "project", "headline", "sprints", "workers", "repository", "approvals", "activity", "gaps"],
+    "fields": {
+      "schema_version": "Always \"vacilando.snapshot.v1\" for this generation.",
+      "generated_at": "ISO-8601 UTC, injected by the emitter (projections never read the wall clock).",
+      "sources": "Per-source health {worker_status, agent_status, dev_status, runtime_paths} → {ok, error}.",
+      "project": "Project Runtime: {key, name, root, base_ref, base_sha, sprint_keys[], epics[], projects_available[], gaps[]}.",
+      "headline": "Metric strip: {active_sprints, workers_running:{running,total}, questions_pending, prs_ready, tests_passing:{value,gap}, staging_sync, needs_you}.",
+      "sprints": "Sprint Runtime[]: {slot, key, title, objective, glyph, provider, status, lifecycle, initiative_key, stage, phase:{label,index,total}, progress:{value,derived,source,note}, git:{state,ahead,behind}, server, port, branch, questions[], question_count, evidence_count, updated_at_ms}.",
+      "workers": "Worker Runtime[]: {id, provider, slot, glyph, role, lifecycle, agent_status, health, current_sprint, ownership:{worktree_path,session_id,opened_at,created_at}, server, port, last_activity_ms, last_commit}.",
+      "repository": "Repository Runtime: {canonical, base_ref, base_sha, worktrees[]:{slot,worktree,branch,branch_expected,branch_drift,ahead,behind,dirty,server,port,merge_readiness,pr}, counts}.",
+      "approvals": "Approval Runtime: {total, questions[], reviews[], merges[], promotions[], counts}. Project-wide over ALL initiatives, not just slots.",
+      "activity": "Activity Runtime[]: {at_ms, at, kind, actor, sprint, summary, detail, source}. Projected from git log + metadata timestamps + evidence mtimes; time-ordered desc.",
+      "gaps": "[]{field, reason, would_need} — everything a widget wants that no authoritative source yields yet. Surfaced, never invented."
+    }
+  },
+  "events": {
+    "schema_version": "vacilando.event.v1",
+    "transport": "Server-Sent Events at GET /api/events; adapter-independent (WebSocket/push/mobile may be added without changing shapes).",
+    "frames": {
+      "hello": "Sent once on connect: {ok:true}.",
+      "snapshot": "The full snapshot object above; sent on connect and on each server tick. A read-only stream in Phase 1 — no command frames exist yet."
+    },
+    "future_event_types": [
+      "sprint.started", "sprint.paused", "worker.completed", "decision.required",
+      "review.ready", "merge.ready", "promotion.required",
+      "These land when a durable runtime event log exists (Phase 2); the snapshot contract above is stable regardless."
+    ]
+  },
+  "invariants": [
+    "Read-only: this contract is produced by projection; no field is a command result.",
+    "No parallel model: every field resolves to alloy-ro, git, or an authoritative state file.",
+    "Deterministic: same state + same injected time → byte-identical snapshot (stable ids/order).",
+    "Fail soft: a missing source yields sources[].ok=false plus a gaps[] entry; the server serves last-good.",
+    "No secrets: projections never carry credential/env values (enforced by test)."
+  ]
+}

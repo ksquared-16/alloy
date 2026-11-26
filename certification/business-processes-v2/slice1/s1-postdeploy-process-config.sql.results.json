@@ -1,0 +1,160 @@
+{
+  "trusted_host_action_id": "tha_d83733bdbfdab3",
+  "query_hash": "87fea6e925c9474b6eb9c97836efa572624875a9ac065e47ee34ef1573352592",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-20T19:52:32.796Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d83733bdbfdab3",
+    "query_hash": "87fea6e925c9474b6eb9c97836efa572624875a9ac065e47ee34ef1573352592",
+    "authorization_id": "grnt_f5e246cda6674f63",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-20T19:52:43.614Z",
+    "question_ids": [
+      "bp_v2_s1_deployed_process_config"
+    ],
+    "questions": {
+      "bp_v2_s1_deployed_process_config": {
+        "question_id": "bp_v2_s1_deployed_process_config",
+        "row_count": null,
+        "rows": [
+          {
+            "departments_total": 5,
+            "departments_with_builder": 1,
+            "processes": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+                "department_key": "lead_management",
+                "department_name": "Enrollment",
+                "department_active": true,
+                "active_process_id": "42be9074-443f-4047-bece-d68cd1d22788",
+                "process_id": "42be9074-443f-4047-bece-d68cd1d22788",
+                "process_key": "enrollment",
+                "process_name": "Enrollment",
+                "primary_entity": "opportunity",
+                "process_active": "true",
+                "stage_count": 7,
+                "work_view_count": 8,
+                "has_tracks_v1": true,
+                "keys": [
+                  "command_set_v1",
+                  "entry_points_v1",
+                  "id",
+                  "is_active",
+                  "key",
+                  "manual_status_transition_policy_v1",
+                  "name",
+                  "primary_entity",
+                  "sort_order",
+                  "stages",
+                  "tracks_v1",
+                  "work_views_v1"
+                ],
+                "latest_revision": 52,
+                "latest_published_at": "2026-10-20T17:51:13.014826+00:00"
+              }
+            ],
+            "layouts": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "opportunities",
+                "surface": "drawer",
+                "layout_key": "default",
+                "versions": 44,
+                "max_version": 44
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "person",
+                "surface": "drawer",
+                "layout_key": "default",
+                "versions": 22,
+                "max_version": 22
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "child",
+                "surface": "drawer",
+                "layout_key": "default",
+                "versions": 2,
+                "max_version": 2
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "opportunities",
+                "surface": "drawer",
+                "layout_key": "focus_panel_summary",
+                "versions": 164,
+                "max_version": 164
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "opportunities",
+                "surface": "queue",
+                "layout_key": "default",
+                "versions": 55,
+                "max_version": 55
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "opportunities",
+                "surface": "queue",
+                "layout_key": "pipeline_queue_row",
+                "versions": 1,
+                "max_version": 1
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "opportunities",
+                "surface": "queue",
+                "layout_key": "queue_row_enrollment",
+                "versions": 2,
+                "max_version": 2
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "placement_candidate",
+                "surface": "queue",
+                "layout_key": "waitlist_candidate_card",
+                "versions": 5,
+                "max_version": 5
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "workspace",
+                "surface": "workspace",
+                "layout_key": "work_unit_header",
+                "versions": 1,
+                "max_version": 1
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "workspace",
+                "surface": "workspace",
+                "layout_key": "workspace_header",
+                "versions": 1,
+                "max_version": 1
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "entity_type": "workspace",
+                "surface": "workspace",
+                "layout_key": "workspace_processes",
+                "versions": 4,
+                "max_version": 4
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

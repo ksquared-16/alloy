@@ -1,0 +1,60 @@
+{
+  "trusted_host_action_id": "tha_5aee94f1ddf2d8",
+  "query_hash": "c107ce0a622135f98d7a1ed12542f12bc3fee193a50df64d066dbe6d97a12e8a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-30T01:39:08.847Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5aee94f1ddf2d8",
+    "query_hash": "c107ce0a622135f98d7a1ed12542f12bc3fee193a50df64d066dbe6d97a12e8a",
+    "authorization_id": "grnt_6d7a766c42ca4f66",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-30T01:39:14.617Z",
+    "question_ids": [
+      "k1_same_key",
+      "k2_same_name_rows",
+      "r1_financial_snippets",
+      "r2_fee_key_mentions"
+    ],
+    "questions": {
+      "k1_same_key": {
+        "question_id": "k1_same_key",
+        "row_count": null,
+        "rows": [
+          "1 packets with key bp_rev_a32816b4…_enrolling"
+        ]
+      },
+      "k2_same_name_rows": {
+        "question_id": "k2_same_name_rows",
+        "row_count": null,
+        "rows": [
+          "03066cb2 | bp_rev_1b1a669d4766434fab4a1f8d1fa60a2d_enrolling | active=false | created=2026-09-04 16:35:10.367111+00",
+          "1ed0e40d | bp_rev_c81121379c6041f0abf97c9d8d74a84e_enrolling | active=true | created=2026-09-29 03:40:31.71527+00",
+          "395915a7 | bp_rev_e365c0503ba246c599f0d3341efd5938_enrolling | active=true | created=2026-10-17 15:58:48.69061+00",
+          "84fc5674 | bp_rev_a32816b441c448489e6f9e554fb73d58_enrolling | active=true | created=2026-10-21 01:26:18.485445+00"
+        ]
+      },
+      "r1_financial_snippets": {
+        "question_id": "r1_financial_snippets",
+        "row_count": null,
+        "rows": [
+          "\"kind\": \"financial\", \"level\": \"required\", \"scope\": \"each_child\", \"timing\": \"stage_exit\", \"enforcement\": \"blocking\", \"requirement_id\": \"fee_registration_fee\", \"charge_template_key\": \"registration_fee\""
+        ]
+      },
+      "r2_fee_key_mentions": {
+        "question_id": "r2_fee_key_mentions",
+        "row_count": null,
+        "rows": [
+          "registration_fee=true | charge_template=true"
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

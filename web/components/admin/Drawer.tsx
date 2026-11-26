@@ -30,6 +30,26 @@ export const ADMINV2_DRAWER_BACKDROP_Z = 60;
 export const ADMINV2_DRAWER_PANEL_Z = 70;
 /** Registry action modals from VM drawer (create work, tour, send form) — above panel, below shell chrome (100). */
 export const ADMINV2_DRAWER_ACTION_MODAL_Z = 80;
+/**
+ * Scheduling / Inbox workspace BOS modal — above BOS float rail (~91) and rail menus (95),
+ * below shell chrome (100). Without this, BOS controls stack over the workspace dialog.
+ */
+export const ADMINV2_WORKSPACE_BOS_BACKDROP_Z = 96;
+export const ADMINV2_WORKSPACE_BOS_PANEL_Z = 97;
+/**
+ * Dialogs/overlays opened FROM INSIDE a workspace BOS modal that portal to `document.body`
+ * (Processing Studio's Alloy dialogs, the form-builder question library). Portaling escapes the
+ * shell's stacking context, so anything below the panel (97) / backdrop (96) opens BEHIND the
+ * shell — invisible and unclickable, which reads to an operator as "the button does nothing."
+ * Any new `document.body` portal launched from inside a BOS modal must use this.
+ */
+export const ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z = 110;
+/**
+ * Full-screen photo lightbox (identity avatar zoom), portaled to `document.body`. The ONE overlay
+ * meant to dim everything — shell chrome (100) and BOS nested overlays (110) included — because
+ * only the photo should read as active while it is open.
+ */
+export const ADMINV2_PHOTO_LIGHTBOX_Z = 120;
 /** Above drawer panel; below drawer-adjacent modals (z-80+). */
 /** Sidebar + top nav — above portaled drawer (panel z-70). */
 export const ADMINV2_SHELL_CHROME_Z = 100;

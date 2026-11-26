@@ -19,10 +19,4 @@ describe("record drawer Manage menu presentation", () => {
         expect(menu).toContain("registryActions");
     });
 
-    it("legacy entity admin stubs remain for person drawer only", () => {
-        const person = read("components/admin/entity/PersonDrawerHeaderControls.tsx");
-        expect(person).toContain("buildRecordManageMenuForEntity");
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).not.toContain("buildRecordManageMenuForEntity");
-    });
 });

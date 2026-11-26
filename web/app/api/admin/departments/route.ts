@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { isLifecycleBuilderOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderOwned";
 import { ensureLifecycleDepartmentWorkspaceAccess } from "@/lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 import {
     applyDepartmentAccessScope,
     filterActiveWorkspaceDepartments,
@@ -74,9 +74,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: {
         key?: string;
@@ -149,18 +148,19 @@ export async function POST(request: NextRequest) {
 
     const createdId = (created as { id?: string }).id;
     if (createdId && isLifecycleBuilderOwnedDepartmentMetadata(metadata)) {
-        const access = await getAdminAccessContextCached();
         const ensure = await ensureLifecycleDepartmentWorkspaceAccess({
             supabase,
             orgId: ctx.orgId,
             departmentId: createdId,
             currentUserId: ctx.userId,
-            roleKeys: access.ok ? access.roleKeys : [],
         });
+        // W-8: a department-restricted creator no longer self-provisions access to what it just
+        // created. The department is created; the caller is told it is outside their scope rather
+        // than being silently granted it. 403, not 500 — this is a refusal, not a failure.
         if (!ensure.ok) {
             return NextResponse.json(
-                { error: `Department created but workspace access provisioning failed: ${ensure.error}` },
-                { status: 500 }
+                { error: `Department created, but it is outside your department scope: ${ensure.error}` },
+                { status: 403 }
             );
         }
     }

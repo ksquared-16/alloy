@@ -1,0 +1,320 @@
+{
+ "subject": {
+  "body_subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "active_row": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "attendance_subject": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+  "health_subject": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+  "child_grain_proven": true
+ },
+ "milestones": {
+  "t_rows": 18992,
+  "t_first_cards": 18992,
+  "t_bp_present": 18992,
+  "t_bp_meaningful": 18992,
+  "t_settled": 33984
+ },
+ "p0_2": {
+  "first_cards_ms": 18992,
+  "bp_present_ms": 18992,
+  "bp_meaningful_ms": 18992,
+  "gap_ms": 0,
+  "bp_sequence": [
+   {
+    "dt": 3525,
+    "v": null
+   },
+   {
+    "dt": 18992,
+    "v": "BUSINESS PROCESS WAITLIST Waitlist · Manage waitlist candidates and spot offers. Tour ▾ Add family member Send form Offer spot"
+   },
+   {
+    "dt": 30262,
+    "v": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD Waitlist · Manage w"
+   }
+  ],
+  "bp_final": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD Waitlist · Manage w",
+  "current_work_line_in_bp": false
+ },
+ "attendance": {
+  "subject": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+  "token_sequence": [
+   {
+    "dt": 3525,
+    "v": null
+   },
+   {
+    "dt": 30262,
+    "v": "unavailable"
+   }
+  ],
+  "text_sequence": [
+   {
+    "dt": 3525,
+    "v": null
+   },
+   {
+    "dt": 18992,
+    "v": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for"
+   },
+   {
+    "dt": 30262,
+    "v": "ATTENDANCE Attendance is not available for this child."
+   }
+  ],
+  "final_token": "unavailable",
+  "final_text": "ATTENDANCE Attendance is not available for this child."
+ },
+ "health": {
+  "subject": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+  "token_sequence": [
+   {
+    "dt": 3525,
+    "v": null
+   },
+   {
+    "dt": 30262,
+    "v": "unavailable"
+   }
+  ],
+  "text_sequence": [
+   {
+    "dt": 3525,
+    "v": null
+   },
+   {
+    "dt": 18992,
+    "v": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Med"
+   },
+   {
+    "dt": 30262,
+    "v": "HEALTH & SAFETY Health information is not available for this child."
+   }
+  ],
+  "final_token": "unavailable",
+  "final_text": "HEALTH & SAFETY Health information is not available for this child."
+ },
+ "trackA": {
+  "household": {
+   "first_present": 30262,
+   "first_meaningful": 30262,
+   "sequence": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 30262,
+     "v": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.com (602) 290-4816 KK "
+    }
+   ],
+   "final": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.com (602) 290-4816 KK "
+  },
+  "children": {
+   "first_present": 30262,
+   "first_meaningful": 30262,
+   "sequence": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 30262,
+     "v": "CHILDREN Needs info 17 children · 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman Enrolling North Camp"
+    }
+   ],
+   "final": "CHILDREN Needs info 17 children · 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman Enrolling North Camp"
+  },
+  "readiness": {
+   "first_present": null,
+   "first_meaningful": null,
+   "sequence": [
+    {
+     "dt": 3525,
+     "v": null
+    }
+   ],
+   "final": null
+  }
+ },
+ "p0_6": {
+  "cw": {
+   "first_mount": null,
+   "first_meaningful": null,
+   "final": null,
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    }
+   ]
+  },
+  "bp": {
+   "first_mount": 18992,
+   "first_meaningful": 18992,
+   "final": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD Waitlist · Manage w",
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 18992,
+     "v": "BUSINESS PROCESS WAITLIST Waitlist · Manage waitlist candidates and spot offers. Tour ▾ Add family member Send form Offer spot"
+    },
+    {
+     "dt": 30262,
+     "v": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD Waitlist · Manage w"
+    }
+   ]
+  },
+  "fin": {
+   "first_mount": 18992,
+   "first_meaningful": 18992,
+   "final": "FINANCIALS CURRENT PERIOD September 2026 CHARGES NET OBLIGATION $43.00 Payments received $43.00 CURRENT BALANCE $0.00 Add charge →",
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 18992,
+     "v": "FINANCIALS CURRENT PERIOD September 2026 CHARGES NET OBLIGATION $43.00 Payments received $43.00 CURRENT BALANCE $0.00 Add charge →"
+    }
+   ]
+  },
+  "att": {
+   "first_mount": 18992,
+   "first_meaningful": 18992,
+   "final": "ATTENDANCE Attendance is not available for this child.",
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 18992,
+     "v": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for"
+    },
+    {
+     "dt": 30262,
+     "v": "ATTENDANCE Attendance is not available for this child."
+    }
+   ]
+  },
+  "hs": {
+   "first_mount": 18992,
+   "first_meaningful": 18992,
+   "final": "HEALTH & SAFETY Health information is not available for this child.",
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 18992,
+     "v": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Med"
+    },
+    {
+     "dt": 30262,
+     "v": "HEALTH & SAFETY Health information is not available for this child."
+    }
+   ]
+  },
+  "hh": {
+   "first_mount": 30262,
+   "first_meaningful": 30262,
+   "final": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.com (602) 290-4816 KK ",
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 30262,
+     "v": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.com (602) 290-4816 KK "
+    }
+   ]
+  },
+  "kids": {
+   "first_mount": 30262,
+   "first_meaningful": 30262,
+   "final": "CHILDREN Needs info 17 children · 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman Enrolling North Camp",
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    },
+    {
+     "dt": 30262,
+     "v": "CHILDREN Needs info 17 children · 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman Enrolling North Camp"
+    }
+   ]
+  },
+  "ready": {
+   "first_mount": null,
+   "first_meaningful": null,
+   "final": null,
+   "transitions": [
+    {
+     "dt": 3525,
+     "v": null
+    }
+   ]
+  }
+ },
+ "performance": {
+  "provisioning_answer": [
+   {
+    "start": 10733,
+    "dur": 8140,
+    "kb": 236
+   }
+  ],
+  "drawer_vm": [
+   {
+    "start": 18976,
+    "dur": 11018
+   }
+  ],
+  "drawer_body": [
+   {
+    "start": 30108,
+    "dur": null
+   }
+  ],
+  "total_requests": 40,
+  "total_kb": 828,
+  "slowest": [
+   {
+    "u": "/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+    "dur": 11018,
+    "start": 18976
+   },
+   {
+    "u": "/api/admin/work-units/waitlist/provisioning-answer",
+    "dur": 8140,
+    "start": 10733
+   },
+   {
+    "u": "/api/admin/communications/family-workspace",
+    "dur": 3799,
+    "start": 18993
+   },
+   {
+    "u": "47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries",
+    "dur": 3664,
+    "start": 7987
+   },
+   {
+    "u": "/api/admin/metrics/resolve",
+    "dur": 3569,
+    "start": 18976
+   },
+   {
+    "u": "/api/admin/communications/family-workspace",
+    "dur": 3354,
+    "start": 22792
+   }
+  ]
+ }
+}

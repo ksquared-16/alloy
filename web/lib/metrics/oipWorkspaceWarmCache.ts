@@ -40,6 +40,26 @@ function isFresh(entry: OipWarmEntry | undefined): entry is OipWarmEntry {
     return Boolean(entry && Date.now() - entry.fetchedAt < CACHE_TTL_MS);
 }
 
+/**
+ * SEED a scope from truth the document already resolved.
+ *
+ * The Work Unit header KPIs are now resolved during the document's own composition, where every
+ * input already exists. Writing that answer in here — rather than adding a parallel store — means
+ * the existing snapshot/subscribe/stale-while-revalidate machinery serves it unchanged, and the
+ * hook's normal fetch is simply never needed. No new cache: the same Map, one extra writer.
+ *
+ * Deliberately does NOT mark anything in flight and does NOT notify a refresh: a seed is already
+ * the answer.
+ */
+export function seedOipWarmCache(scopeKey: string, resolved: ResolvedMetricMap): void {
+    if (!scopeKey) return;
+    const existing = entries.get(scopeKey);
+    // Never overwrite a fresher live answer with a seed from an older document.
+    if (isFresh(existing)) return;
+    entries.set(scopeKey, { scopeKey, resolved, fetchedAt: Date.now(), error: null });
+    notify();
+}
+
 export function getOipWarmSnapshot(scopeKey: string): ResolvedMetricMap | null {
     const entry = entries.get(scopeKey);
     return isFresh(entry) ? entry.resolved : null;
@@ -72,64 +92,52 @@ export async function prefetchOipMetricsWarm(
 ): Promise<ResolvedMetricMap> {
     const scopeKey = buildOipWarmScopeKey(scope);
     const cached = entries.get(scopeKey);
-    if (isFresh(cached) && !opts?.force) {
-        void fetchOipMetricsResolved({
+
+    // Exactly ONE request per scope may be in flight. Both the cold fetch and the
+    // stale-while-revalidate refresh register here, so repeated settlement cycles — or many
+    // components resolving the same (site, work-unit, key-set) scope — coalesce into a single
+    // metrics/resolve request instead of racing N background refreshes. This is what makes the
+    // count deterministic (N configured KPI slots → 1 request) rather than timing-dependent.
+    const runFetch = (): Promise<ResolvedMetricMap> => {
+        const existing = inflight.get(scopeKey);
+        if (existing && !opts?.force) return existing;
+        const promise = fetchOipMetricsResolved({
             keys: [...scope.keys],
             siteId: scope.siteId,
             workUnitId: scope.workUnitId ?? null,
             window: "rolling_30d",
         })
             .then((resolved) => {
+                entries.set(scopeKey, { scopeKey, resolved, fetchedAt: Date.now(), error: null });
+                notify();
+                return resolved;
+            })
+            .catch((e) => {
+                const message = e instanceof Error ? e.message : "Failed to warm OIP metrics";
                 entries.set(scopeKey, {
                     scopeKey,
-                    resolved,
-                    fetchedAt: Date.now(),
-                    error: null,
+                    resolved: cached?.resolved ?? {},
+                    fetchedAt: cached?.fetchedAt ?? Date.now(),
+                    error: message,
                 });
                 notify();
+                return cached?.resolved ?? {};
             })
-            .catch(() => {
-                /* stale-while-revalidate */
+            .finally(() => {
+                inflight.delete(scopeKey);
             });
+        inflight.set(scopeKey, promise);
+        return promise;
+    };
+
+    if (isFresh(cached) && !opts?.force) {
+        // Stale-while-revalidate: serve cached now; refresh in the background ONLY if no refresh for
+        // this scope is already in flight — so rapid re-renders never fan out into extra requests.
+        if (!inflight.has(scopeKey)) void runFetch();
         return cached.resolved;
     }
 
-    const existingInflight = inflight.get(scopeKey);
-    if (existingInflight && !opts?.force) return existingInflight;
-
-    const promise = fetchOipMetricsResolved({
-        keys: [...scope.keys],
-        siteId: scope.siteId,
-        workUnitId: scope.workUnitId ?? null,
-        window: "rolling_30d",
-    })
-        .then((resolved) => {
-            entries.set(scopeKey, {
-                scopeKey,
-                resolved,
-                fetchedAt: Date.now(),
-                error: null,
-            });
-            notify();
-            return resolved;
-        })
-        .catch((e) => {
-            const message = e instanceof Error ? e.message : "Failed to warm OIP metrics";
-            entries.set(scopeKey, {
-                scopeKey,
-                resolved: cached?.resolved ?? {},
-                fetchedAt: cached?.fetchedAt ?? Date.now(),
-                error: message,
-            });
-            notify();
-            return cached?.resolved ?? {};
-        })
-        .finally(() => {
-            inflight.delete(scopeKey);
-        });
-
-    inflight.set(scopeKey, promise);
-    return promise;
+    return runFetch();
 }
 
 /** Deferred warm for analytics modal datasets after primary workspace surface is ready. */
@@ -158,4 +166,11 @@ export function resetOipWarmCacheForTests(): void {
     inflight.clear();
     warmScheduled = false;
     listeners.clear();
+}
+
+/** Drop warm metric snapshots so queue-membership mutations refetch live values. */
+export function invalidateOipWarmCache(): void {
+    entries.clear();
+    inflight.clear();
+    notify();
 }

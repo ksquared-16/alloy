@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-initiative-close <initiative-key> [--promotion-recorded]
+
+Safely closes an initiative. Does not remove dirty/unmerged worktrees,
+delete branches, evidence, or push/merge.
+
+Use alloy-worktree-remove for worktree cleanup after human review.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  shift
+  local promotion_recorded=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --promotion-recorded) promotion_recorded=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  if [[ "$state" == "awaiting_promotion_approval" ]]; then
+    [[ "$promotion_recorded" -eq 1 ]] || alloy_die "awaiting promotion — pass --promotion-recorded after explicit human promotion"
+    alloy_initiative_transition "$key" "closed"
+  elif [[ "$state" != "closed" ]]; then
+    alloy_warn "closing from state: $state (marking closed locally)"
+    node -e "
+      const fs = require('fs');
+      const p = '$(alloy_initiative_dir "$key")/state.json';
+      const d = JSON.parse(fs.readFileSync(p,'utf8'));
+      d.state = 'closed';
+      d.closed_at = '$(alloy_iso_now)';
+      fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+    "
+  fi
+
+  local base archive_path
+  base="$(alloy_initiative_dir "$key")"
+  archive_path="$base/final/archive-summary.md"
+
+  # Stop owned servers/browsers where safe
+  node -e "
+    const d = require('${base}/state.json');
+    for (const w of Object.values(d.workers||{})) console.log(w.worktree_name + ' ' + w.slot);
+  " 2>/dev/null | while read -r wt_name slot; do
+    [[ -n "$wt_name" ]] || continue
+    if [[ -f "$(alloy_metadata_path "$wt_name")" ]]; then
+      env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+        "${SCRIPT_DIR}/alloy-dev-stop" "$wt_name" 2>/dev/null || true
+      env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+        "${SCRIPT_DIR}/alloy-agent-browser-stop" "$slot" 2>/dev/null || true
+    fi
+  done
+
+  {
+    printf '# Archive summary — %s\n\n' "$key"
+    printf 'Closed: %s\n\n' "$(alloy_iso_now)"
+    printf '## Worktrees eligible for removal (human review required)\n\n'
+    node -e "
+      const d = require('${base}/state.json');
+      for (const w of Object.values(d.workers||{})) {
+        console.log('- ' + w.worktree_name + ' (' + w.path + ')');
+        console.log('  Remove via: alloy-worktree-remove ' + w.worktree_name);
+      }
+    " 2>/dev/null || true
+    printf '\n## Preserved\n\n'
+    printf -- '- Initiative state under `%s`\n' "$base"
+    printf -- '- Reports, reviews, evidence, final packages\n'
+    printf '\n## Not performed\n\n'
+    printf -- '- Worktree removal (dirty/unmerged protected)\n'
+    printf -- '- Branch deletion\n'
+    printf -- '- Push / merge\n'
+  } >"$archive_path"
+
+  alloy_info "Initiative closed: $key"
+  alloy_info "  archive: $archive_path"
+  alloy_info "  state:   $(alloy_initiative_current_state "$key")"
+}
+
+main "$@"

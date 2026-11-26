@@ -30,7 +30,12 @@ const DO_NOT_TOUCH = new Set([
 ]);
 
 // Safe FK-ish order (child → parent). Only org-scoped deletes.
+// process_instances + operational_tasks must go before opportunities: dashboard
+// Family Leads / Pipeline Children metrics read enrollment process_instances, while
+// Work View Today's Work counts opportunities — leaving orphans makes those diverge.
 const DELETE_ORDER = [
+  "operational_tasks",
+  "process_instances",
   "opportunity_customer_members",
   "customer_members",
   "customer_persons",

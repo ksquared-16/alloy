@@ -1,6 +1,6 @@
 # Alloy Commercial Language Bible — V1
 
-**Status:** Proposal / canonical-language-in-deliberation (not frozen)
+**Status:** ✅ **RATIFIED & SHIPPED** — this vocabulary is the language implemented in Commercial Platform V1 (2026-07-03). Canonical architecture: **[Commercial Platform V1](../../platform/commercial/commercial-platform-v1.md)**.
 **Date:** 2026-06-30
 **Builds on:** [commercial-model-v2-reframing.md](commercial-model-v2-reframing.md) — that doc settled the *structure* (two spines: matrix-priced Enrollment + a catalog of extras). This doc settles the *language* on top of that structure. The structure does not change; the words an operator sees do.
 **Mandate:** Determine the canonical operator vocabulary. Challenge every term — including the ones the V2 reframing introduced.

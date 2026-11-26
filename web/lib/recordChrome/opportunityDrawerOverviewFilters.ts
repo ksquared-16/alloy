@@ -13,7 +13,7 @@ export const OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS = new Set([
 export const OPPORTUNITY_INQUIRY_HEADER_BODY_FIELD_KEYS = new Set([
     "status_key",
     "_status_display",
-    "desired_start_date",
+    "start_date",
     "tour_date",
     "program_type",
     "schedule_type",

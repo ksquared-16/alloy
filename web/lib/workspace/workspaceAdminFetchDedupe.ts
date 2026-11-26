@@ -6,6 +6,8 @@
  * to read each Response body stream. Returning the raw shared Response causes the second `.json()`
  * to fail or yield `{}`, breaking department lookup ("Department not found for this organization").
  */
+import { recordWorkspaceRequest } from "@/lib/perf/workspaceNavGraph";
+
 const inflight = new Map<string, Promise<Response>>();
 
 /**
@@ -25,6 +27,71 @@ export function bustWorkspaceDepartmentsFetchDedupe(): void {
     shortCache.delete(WORKSPACE_DEPARTMENTS_URL);
 }
 
+/** Bust lifecycle summary/queue TTL fetches after queue-membership mutations. */
+export function bustLifecycleSiblingFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (
+            key.includes("/work-unit-queue-summaries") ||
+            key.includes("/api/admin/queues/") ||
+            key.includes("/api/admin/lifecycle-catalog") ||
+            key.includes("/api/admin/work-units") ||
+            key.includes("/api/admin/departments") ||
+            key.includes("/api/admin/status-options")
+        ) {
+            shortCache.delete(key);
+        }
+    }
+}
+
+/**
+ * Bust the coalesced / TTL cache for communications provider bindings after a
+ * configuration save.
+ *
+ * Without this, `invalidateCommunicationsBindingsCache()` cleared only the module
+ * cache in `communicationsBindingsCache.ts`, while the forced refetch it triggered
+ * was still served from THIS layer's 90s TTL entry — so an administrator saved a
+ * From address and the page went on showing the old one for up to a minute. Two
+ * caches, one invalidation, and the second one silently won.
+ */
+export function bustCommunicationsBindingsFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (key.includes("/api/admin/communications/bindings")) shortCache.delete(key);
+    }
+    for (const key of inflight.keys()) {
+        if (key.includes("/api/admin/communications/bindings")) inflight.delete(key);
+    }
+}
+
+/**
+ * Bust the coalesced / TTL cache for the Communications TEMPLATES list after any template mutation.
+ *
+ * The templates list is MUTABLE, so it may only use bounded/in-flight reuse if every canonical
+ * mutation busts this owner before the next read. Without that a create/edit/archive would be
+ * followed by a reload served from the TTL entry, and the operator would not see their own save —
+ * the same failure `bustCommunicationsBindingsFetchDedupe` exists to prevent, one resource over.
+ *
+ * The substring match deliberately covers `?status=active` too: Announcements reads that projection
+ * as its template picker, so a template mutation must invalidate it as well.
+ */
+export function bustCommunicationsTemplatesFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (key.includes("/api/admin/communications/templates")) shortCache.delete(key);
+    }
+    for (const key of inflight.keys()) {
+        if (key.includes("/api/admin/communications/templates")) inflight.delete(key);
+    }
+}
+
+/** Bust the coalesced / TTL cache for the Communications ANNOUNCEMENTS list after any mutation. */
+export function bustCommunicationsAnnouncementsFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (key.includes("/api/admin/communications/announcements")) shortCache.delete(key);
+    }
+    for (const key of inflight.keys()) {
+        if (key.includes("/api/admin/communications/announcements")) inflight.delete(key);
+    }
+}
+
 /** Test-only — clears in-flight and TTL caches between vitest cases. */
 export function resetWorkspaceAdminFetchDedupeForTests(): void {
     inflight.clear();
@@ -33,6 +100,8 @@ export function resetWorkspaceAdminFetchDedupeForTests(): void {
 
 export function dedupeAdminFetch(input: string, init?: RequestInit): Promise<Response> {
     const key = input;
+    const joinedInflight = inflight.has(key);
+    const startedAtMs = typeof performance !== "undefined" ? performance.now() : Date.now();
     let p = inflight.get(key);
     if (!p) {
         p = fetch(input, init).finally(() => {
@@ -40,7 +109,33 @@ export function dedupeAdminFetch(input: string, init?: RequestInit): Promise<Res
         });
         inflight.set(key, p);
     }
-    return p.then((res) => res.clone());
+    return p.then(
+        (res) => {
+            recordWorkspaceRequest({
+                url: input,
+                startedAtMs,
+                durationMs:
+                    (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAtMs,
+                joinedInflight,
+                ttlCacheHit: false,
+                ok: res.ok,
+                serverTiming: res.headers.get("Server-Timing"),
+            });
+            return res.clone();
+        },
+        (err) => {
+            recordWorkspaceRequest({
+                url: input,
+                startedAtMs,
+                durationMs:
+                    (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAtMs,
+                joinedInflight,
+                ttlCacheHit: false,
+                ok: false,
+            });
+            throw err;
+        },
+    );
 }
 
 type CachedResponse = { atMs: number; status: number; statusText: string; headers: [string, string][]; bodyText: string };
@@ -68,6 +163,15 @@ export async function dedupeAdminFetchWithTtlMeta(
     if (method === "GET" && ttlMs > 0) {
         const hit = shortCache.get(key);
         if (hit && Date.now() - hit.atMs < ttlMs) {
+            const startedAtMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+            recordWorkspaceRequest({
+                url: input,
+                startedAtMs,
+                durationMs: 0,
+                joinedInflight: false,
+                ttlCacheHit: true,
+                ok: hit.status >= 200 && hit.status < 300,
+            });
             return {
                 response: new Response(hit.bodyText, {
                     status: hit.status,

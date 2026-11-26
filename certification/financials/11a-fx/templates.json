@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "keys": [
+    "templates"
+  ],
+  "count": 5,
+  "tuition": [
+    {
+      "key": "tuition",
+      "label": "Monthly tuition",
+      "strategy": "fixed",
+      "amount": 40000,
+      "active": true,
+      "from": "2026-01-01",
+      "to": null,
+      "category": "tuition"
+    }
+  ],
+  "strategies": {
+    "fixed": 5
+  }
+}

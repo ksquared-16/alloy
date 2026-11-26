@@ -340,7 +340,7 @@ describe("status settings category doctrine", () => {
             ),
             "utf8"
         );
-        expect(save).toContain("persistStatusRollupForLifecycleStageSave");
+        expect(save).toContain("applyStatusRollupDraft");
         expect(route).toContain("status_rollup_v1");
     });
 

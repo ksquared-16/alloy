@@ -1,0 +1,121 @@
+/**
+ * Financials read authorization.
+ *
+ * Uses the existing org RBAC — `user_roles` → `role_permission_grants` through
+ * `resolveActorPermissionGrants` — and adds no parallel permission system.
+ *
+ * ── WHY THIS IS A NAMED HELPER RATHER THAN AN INLINE CHECK ──
+ *
+ * The declared route-capability table (W-14 · I-24) binds a claim to its enforcement through three
+ * joins: the handler calls a named helper, it tests the verdict, and the helper's module names the
+ * capability on an executable line. An inline grants lookup satisfies none of them, so a route that
+ * genuinely enforced `fin.read` could only have been recorded as `pending` — adding to a backlog
+ * whose ratchet is deliberately tight, in exchange for describing a guard that already existed as
+ * absent. Naming it makes the enforcement checkable and reusable by the Financials workspace's later
+ * cohorts, which will need exactly this gate.
+ *
+ * Permission key: {@link FINANCIALS_READ_PERMISSION_KEY}
+ */
+
+import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
+
+export const FINANCIALS_READ_PERMISSION_KEY = "fin.read" as const;
+
+/*
+ * WHAT A DENIED OPERATOR IS ACTUALLY TOLD.
+ *
+ * The refusal used to read "Viewing financial work requires fin.read." — the permission key, in
+ * the primary surface, to a person who cannot act on it. A grant key is a fact about our RBAC
+ * table, not an answer to "why can't I see this": it tells the operator nothing they can do, and
+ * quietly teaches the vocabulary of an internal system to everyone who is refused.
+ *
+ * The key is still the truth of the check and still worth having when something is wrong, so it
+ * stays on the verdict as `requiredPermission` for diagnostics, logging and tests. It is simply
+ * no longer the sentence a director reads.
+ */
+export const FINANCIALS_READ_DENIED_MESSAGE =
+    "You don't have access to view financial information for this organization. "
+    + "Contact an administrator to request access.";
+
+/**
+ * Enforces `fin.read` for a financial read surface. Returns a verdict rather than throwing, so the
+ * caller decides the response shape — and a caller that ignores the verdict fails the table's own
+ * binding check rather than shipping a gate in name only.
+ *
+ * A grants read that FAILS answers null, and null denies: an unidentified caller is not an
+ * unprivileged one, and treating the two alike is how a broken lookup becomes an open door.
+ */
+export async function assertFinancialsReadAllowed(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    userId: string | null | undefined;
+}): Promise<FinancialsVerdict> {
+    return assertKey(params, FINANCIALS_READ_PERMISSION_KEY, FINANCIALS_READ_DENIED_MESSAGE);
+}
+
+/**
+ * Managing financial configuration and records — the write half of the same package.
+ *
+ * Named beside the read gate rather than inlined for the reason the read gate was: the declared
+ * route-capability table binds a claim to its enforcement through three joins, and an inline grants
+ * lookup satisfies none of them. It is the SAME key the registered financial actions enforce
+ * (`fin.write`), so a role configured to view Financials and not manage them gets one answer from
+ * the workspace, the API and the command surface rather than three.
+ */
+export const FINANCIALS_WRITE_PERMISSION_KEY = "fin.write" as const;
+
+export const FINANCIALS_WRITE_DENIED_MESSAGE =
+    "You don't have access to change financial information for this organization. "
+    + "Contact an administrator to request access.";
+
+export async function assertFinancialsWriteAllowed(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    userId: string | null | undefined;
+}): Promise<FinancialsVerdict> {
+    return assertKey(params, FINANCIALS_WRITE_PERMISSION_KEY, FINANCIALS_WRITE_DENIED_MESSAGE);
+}
+
+export type FinancialsVerdict = { ok: true } | { ok: false; message: string; requiredPermission: string };
+
+/**
+ * The SYNCHRONOUS sibling of the two asserts above, for handlers whose context already carries the
+ * caller's effective capabilities.
+ *
+ * ── WHY A SECOND SHAPE RATHER THAN A SECOND SYSTEM ──
+ *
+ * `assertFinancialsReadAllowed` / `assertFinancialsWriteAllowed` re-read the grants from the
+ * database because the routes that first needed them had no capability keys on their context. Modern
+ * `getAdminContextCached` carries `permissionKeys`, so the money-configuration cohort would otherwise
+ * pay a grants query per request to learn something the request already knows. This reads the same
+ * keys, in the same module, so the route-capability table's three-join binding still holds and there
+ * is exactly one place where a Financials key is named.
+ *
+ * It answers the capability question ONLY. Scope, tenancy and resource existence remain the
+ * handler's to enforce — a capability has never been permission to reach across an organization.
+ */
+export function requireFinancialsCapability(
+    ctx: { permissionKeys?: readonly string[] | null },
+    capability: typeof FINANCIALS_READ_PERMISSION_KEY | typeof FINANCIALS_WRITE_PERMISSION_KEY,
+): NextResponse | null {
+    if ((ctx.permissionKeys ?? []).includes(capability)) return null;
+    const message =
+        capability === FINANCIALS_WRITE_PERMISSION_KEY
+            ? FINANCIALS_WRITE_DENIED_MESSAGE
+            : FINANCIALS_READ_DENIED_MESSAGE;
+    return NextResponse.json({ error: message, required_permission: capability }, { status: 403 });
+}
+
+/** One implementation, so the read gate and the write gate cannot come to disagree about `null`. */
+async function assertKey(
+    params: { supabase: SupabaseClient; orgId: string; userId: string | null | undefined },
+    key: string,
+    message: string,
+): Promise<FinancialsVerdict> {
+    const grants = await resolveActorPermissionGrants(params.supabase, params.orgId, params.userId ?? null);
+    if ((grants.permissionKeys ?? []).includes(key)) return { ok: true };
+    return { ok: false, message, requiredPermission: key };
+}

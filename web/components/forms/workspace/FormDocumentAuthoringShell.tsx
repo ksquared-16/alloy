@@ -13,6 +13,7 @@ import {
     resolveDocumentComposition,
 } from "@/lib/forms/documentCompositionAuthoring";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormAuthoringPreviewLaunchContext } from "@/lib/forms/preview/formPreviewOrchestration";
 import { opMetadata, opCaseFileCanvas } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
@@ -20,13 +21,21 @@ type Props = {
     formName: string;
     onChange: (next: FormSchemaV1) => void;
     disabled?: boolean;
+    formDefinitionId?: string;
+    previewLaunchContext?: FormAuthoringPreviewLaunchContext | null;
 };
 
 /**
  * Document authoring shell (FD-8 / FD-12 / FD-13).
  * Native React admin surface — not iframe. See forms-intake-embed-doctrine for public embed boundaries.
  */
-export function FormDocumentAuthoringShell({ schema, onChange, disabled = false }: Props) {
+export function FormDocumentAuthoringShell({
+    schema,
+    onChange,
+    disabled = false,
+    formDefinitionId,
+    previewLaunchContext,
+}: Props) {
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const composition = useMemo(() => resolveDocumentComposition(schema), [schema]);
 
@@ -97,6 +106,8 @@ export function FormDocumentAuthoringShell({ schema, onChange, disabled = false 
                         onSelectField={focusField}
                         onMoveFieldInRegion={handleMoveFieldInRegion}
                         onMoveFieldToRegion={handleMoveFieldToRegionFromEditor}
+                        formDefinitionId={formDefinitionId}
+                        previewLaunchContext={previewLaunchContext}
                     />
                 </div>
 

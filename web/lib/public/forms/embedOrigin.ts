@@ -14,11 +14,16 @@ function normalizeOrigin(raw: string | null): string | null {
     return null;
 }
 
-/** Request Origin header, or Origin derived from Referer. */
-export function requestEmbedOrigin(request: NextRequest): string | null {
-    const direct = normalizeOrigin(request.headers.get("origin"));
+/**
+ * Origin header, or Origin derived from Referer.
+ *
+ * Header-based so the same rule can be applied from a route handler AND from the embed page's
+ * server render — an iframe document navigation sends no Origin but does send Referer.
+ */
+export function embedOriginFromHeaders(getHeader: (name: string) => string | null): string | null {
+    const direct = normalizeOrigin(getHeader("origin"));
     if (direct) return direct;
-    const ref = request.headers.get("referer");
+    const ref = getHeader("referer");
     if (!ref) return null;
     try {
         const u = new URL(ref);
@@ -26,6 +31,11 @@ export function requestEmbedOrigin(request: NextRequest): string | null {
     } catch {
         return null;
     }
+}
+
+/** Request Origin header, or Origin derived from Referer. */
+export function requestEmbedOrigin(request: NextRequest): string | null {
+    return embedOriginFromHeaders((name) => request.headers.get(name));
 }
 
 /** Normalize stored allowlist entries (e.g. `https://host/path` → `https://host`). */

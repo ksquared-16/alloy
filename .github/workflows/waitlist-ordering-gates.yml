@@ -1,0 +1,59 @@
+# Waitlist ordering invariants — standing gate.
+#
+# The product contract is small and absolute: the position an operator requests is the position the
+# row ends up in, active ordinals within a section are unique, and replaying the stored state
+# through the placement rule reproduces what the operator was shown.
+#
+# It has been broken before, in a way no reviewer caught by reading the diff. A writer renumbered
+# ordinals by breaking ties on `created_at` while the renderer broke them on natural rank; the two
+# disagreed and four live director adjustments silently moved. The code looked reasonable. What was
+# missing was a gate that replays the writer's output through the renderer's rule and checks it.
+#
+# That check is `reproduces` in `waitlistSectionOrderPlan`, and these suites are what keep it
+# honest — including the property tests that move every row to every position, and the ones that
+# replay a stored plan under arbitrary natural orders, since the writer never learns the real one.
+#
+# Scoped deliberately, following `operational-expectations-gates.yml` and `docs-lint.yml`: the
+# repository's full Vitest suite is not green at baseline, so a whole-suite job could not act as a
+# gate — it would be red for unrelated reasons and ignored within a week. These files are green
+# today, so any regression here is unambiguously ours.
+name: Waitlist ordering gates
+
+on:
+  pull_request:
+    paths:
+      - "web/lib/orchestration/placement/**"
+      - "web/lib/queues/**"
+      - "web/app/api/admin/placement-candidates/**"
+      - "web/components/presentation/workUnit/WaitlistPlacementAdjustControl.tsx"
+      - "web/lib/ui-v2/waitlistAdjustPositionOptions.ts"
+      - "web/tests/orchestration/placement/**"
+      - ".github/workflows/waitlist-ordering-gates.yml"
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  waitlist-ordering-gates:
+    name: Waitlist ordering invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # The planner: requested position equals resulting position, ordinals are unique, and the
+      # stored state replays correctly under any natural order.
+      - name: Ordering planner invariants
+        run: npm run test -- tests/orchestration/placement/waitlistSectionOrderPlan.test.ts
+      # The command: refuses a move it cannot express, and refuses one that names no queue rather
+      # than falling back to writing a bare ordinal.
+      - name: Manual-position command contract
+        run: npm run test -- tests/orchestration/placement/placementOverrideRoutes.test.ts
+      # The projection either side of the writer: section scoping and shadow-mode behaviour.
+      - name: Section scoping and shadow mode
+        run: npm run test -- tests/orchestration/placement/waitlistRegressionInvariants.test.ts tests/orchestration/placement/waitlistShadowModeBehaviour.test.ts

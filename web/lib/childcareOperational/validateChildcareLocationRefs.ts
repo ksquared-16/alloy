@@ -78,13 +78,50 @@ export async function validateRoomLocationUnderSite(
             },
         };
     }
-    if (String(row.parent_location_id ?? "") !== siteLocationId) {
+    // The room must RESOLVE to the site, not necessarily be its direct child: an
+    // operational group nested inside a physical space has that space as its
+    // parent and the site as its grandparent.
+    if (!(await roomResolvesToSite(supabase, orgId, roomLocationId, siteLocationId))) {
         return {
             ok: false,
-            error: { code: "room_site_mismatch", message: "room is not a child of site" },
+            error: { code: "room_site_mismatch", message: "room does not resolve to site" },
         };
     }
     return { ok: true };
+}
+
+/**
+ * Walk a room's parent chain to its site. Bounded and revisit-guarded so a
+ * malformed hierarchy costs a fixed number of reads and returns false rather
+ * than looping. Mirrors `public.location_site_id()`, which is the DB-side
+ * authority for the same question.
+ */
+async function roomResolvesToSite(
+    supabase: SupabaseClient,
+    orgId: string,
+    roomLocationId: string,
+    siteLocationId: string
+): Promise<boolean> {
+    let currentId: string | null = roomLocationId;
+    const seen = new Set<string>();
+
+    for (let hop = 0; hop < 8 && currentId; hop++) {
+        if (seen.has(currentId)) return false;
+        seen.add(currentId);
+
+        const { data, error } = await supabase
+            .from("locations")
+            .select("id, location_type, parent_location_id")
+            .eq("id", currentId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (error || !data) return false;
+
+        const row = data as { location_type?: string | null; parent_location_id?: string | null };
+        if (row.location_type === "site") return currentId === siteLocationId;
+        currentId = row.parent_location_id ?? null;
+    }
+    return false;
 }
 
 export async function validateProgramCategoryForSite(

@@ -1,0 +1,311 @@
+{
+ "iframeShape": "<iframe src=\"https://vacilandos-mac-mini.tail2aa1af.ts.net:4412/tours/<token>\" title=\"Schedule a Tour — Northwind — Riverside Campus\" style=\"width:100%;max-width:760px;min-height:900px;border:0;\" loading=\"lazy\"></iframe>",
+ "staffConfigNow": {
+  "enabled": true,
+  "user_ids": [
+   "00000000-0000-4000-8000-000000000002"
+  ]
+ },
+ "T4": {
+  "times": [
+   "9:00 AM",
+   "9:30 AM",
+   "10:00 AM",
+   "10:30 AM",
+   "1:00 PM",
+   "1:30 PM",
+   "2:00 PM",
+   "2:30 PM"
+  ],
+  "hostUrl": "https://qa-school.example/visit",
+  "consentControls": 1,
+  "unchecked": true,
+  "requestedTour": "Requested tour | Wednesday, November 4 · 9:30 AM | Northwind — Riverside Campus | Your tour is not confirmed until the school reviews your request. | Change time | Sectio",
+  "defaultStayInTouch": false,
+  "submit": [
+   {
+    "marketing_consent": {
+     "email": true,
+     "sms": false
+    },
+    "requested_tour": true
+   }
+  ],
+  "after": "Your tour request was received | You asked to visit Northwind — Riverside Campus on Wednesday, November 4 · 9:30 AM. This time is not confirmed yet — the school will review your request and contact you to confirm your tour. | You can close ",
+  "errors": []
+ },
+ "T4_approve": {
+  "panelBefore": "REQUESTED TOUR | Tour requested — pending acceptance (not booked) | Requested | Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST | Location | Northwind — Riverside Campus | This time is still open. Approving books it if it is still open then. Nothing is booked and nothing has been sent to the family yet. | MARKETING CONSENT | Email news: yes | Not applied yet — App",
+  "caseIdSeen": "24207cb5-79a6-42e6-8c2e-589076dfed61",
+  "viewBefore": {
+   "state": "pending_acceptance",
+   "acceptance": "pending",
+   "headline": "Tour requested — pending acceptance (not booked)",
+   "reason": null,
+   "reasonLabel": null,
+   "requested": {
+    "startAt": "2026-11-04T17:30:00.000Z",
+    "endAt": "2026-11-04T18:00:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "label": "Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST"
+   },
+   "location": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "label": "Northwind — Riverside Campus"
+   },
+   "requestedAt": "2026-10-29T00:46:10.293Z",
+   "stillAvailable": true,
+   "opportunityId": null,
+   "booking": null,
+   "comms": null,
+   "alternatives": [],
+   "error": null
+  },
+  "approveLabel": "Approve — Create enrollment lead",
+  "approve": {
+   "status": 200,
+   "caseId": "24207cb5-79a6-42e6-8c2e-589076dfed61",
+   "opp": "7b77741f-06f5-4e49-9005-ecd9dfa5953e",
+   "person": "ec239721-a181-421d-aea6-c9e606c9319f",
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "ec239721-a181-421d-aea6-c9e606c9319f",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "opted_in"
+     },
+     {
+      "channel": "sms",
+      "outcome": "skipped_unset"
+     }
+    ],
+    "replayed": false
+   },
+   "tourRequest": {
+    "kind": "booked",
+    "bookingId": "8df7554a-be16-47d3-951d-79211f8099ec",
+    "bookingStatus": "confirmed",
+    "replay": false,
+    "comms": {
+     "status": "sent",
+     "detail": "email:sent"
+    }
+   }
+  },
+  "panelAfter": "REQUESTED TOUR | Tour booked | Requested | Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST | Location | Northwind — Riverside Campus | Booking | Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST · confirmed | Family message | Confirmation sent to the family | email:sent | MARKETING CONSENT | Email news: yes | Recorded as opted in | Text news: no | Nothing recorded — no co",
+  "viewAfter": {
+   "state": "booked",
+   "acceptance": "accepted",
+   "headline": "Tour booked",
+   "reason": null,
+   "reasonLabel": null,
+   "requested": {
+    "startAt": "2026-11-04T17:30:00.000Z",
+    "endAt": "2026-11-04T18:00:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "label": "Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST"
+   },
+   "location": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "label": "Northwind — Riverside Campus"
+   },
+   "requestedAt": "2026-10-29T00:46:10.293Z",
+   "stillAvailable": null,
+   "opportunityId": "7b77741f-06f5-4e49-9005-ecd9dfa5953e",
+   "booking": {
+    "id": "8df7554a-be16-47d3-951d-79211f8099ec",
+    "status": "confirmed",
+    "label": "Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST"
+   },
+   "comms": {
+    "detail": "email:sent",
+    "status": "sent"
+   },
+   "alternatives": [],
+   "error": null
+  },
+  "replay": {
+   "status": 200,
+   "alreadyDone": true,
+   "tourRequest": {
+    "kind": "booked",
+    "bookingId": "8df7554a-be16-47d3-951d-79211f8099ec",
+    "bookingStatus": "confirmed",
+    "replay": true,
+    "comms": {
+     "detail": "email:sent",
+     "status": "sent"
+    }
+   },
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "ec239721-a181-421d-aea6-c9e606c9319f",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "opted_in"
+     },
+     {
+      "channel": "sms",
+      "outcome": "skipped_unset"
+     }
+    ],
+    "replayed": true
+   }
+  },
+  "replay2": {
+   "status": 200,
+   "alreadyDone": true,
+   "tourRequest": {
+    "kind": "booked",
+    "bookingId": "8df7554a-be16-47d3-951d-79211f8099ec",
+    "bookingStatus": "confirmed",
+    "replay": true,
+    "comms": {
+     "detail": "email:sent",
+     "status": "sent"
+    }
+   }
+  },
+  "bookings": {
+   "bookings": [
+    {
+     "id": "8df7554a-be16-47d3-951d-79211f8099ec",
+     "org_id": "00000000-0000-4000-8000-000000000001",
+     "opportunity_id": "7b77741f-06f5-4e49-9005-ecd9dfa5953e",
+     "location_id": "00000000-0000-4000-8000-000000000010",
+     "primary_person_id": "ec239721-a181-421d-aea6-c9e606c9319f",
+     "primary_contact_id": null,
+     "requested_by_user_id": null,
+     "start_at": "2026-11-04T17:30:00+00:00",
+     "end_at": "2026-11-04T18:00:00+00:00",
+     "timezone": "America/Los_Angeles",
+     "status_key": "confirmed",
+     "source": "form_submission",
+     "form_submission_id": "505f0a7d-8de3-4b67-a873-3d11e5d23959",
+     "form_public_link_id": "2bb49237-76b2-4a79-9b1d-9b4ac099817d",
+     "canceled_at": null,
+     "canceled_by": null,
+     "cancel_reason": null,
+     "rescheduled_from_booking_id": null,
+     "metadata": {
+      "rule_id": "c7218de0-8b64-444f-97b9-2712d1d62ae1",
+      "ics_sequence": 0,
+      "slot_capacity": 2,
+      "processing_case_id": "24207cb5-79a6-42e6-8c2e-589076dfed61",
+      "accepted_by_user_id": "00000000-0000-4000-8000-000000000002",
+      "internal_calendar_last": {
+       "at": "2026-10-29T00:46:31.114Z",
+       "action": "request",
+       "outcome": "queued",
+       "refused": [],
+       "duplicates": [],
+       "message_ids": [
+        "4821e4f8-b631-4289-a72c-231925dac88c"
+       ]
+      },
+      "attendance_confirmation": {
+       "status": "awaiting_response"
+      },
+      "requested_tour_submission_key": "form_submission:505f0a7d-8de3-4b67-a873-3d11e5d23959"
+     },
+     "created_at": "2026-10-29T00:46:30.850418+00:00",
+     "updated_at": "2026-10-29T00:46:31.115972+00:00",
+     "host_user_id": null
+    }
+   ],
+   "active_bookings": [
+    {
+     "id": "8df7554a-be16-47d3-951d-79211f8099ec",
+     "org_id": "00000000-0000-4000-8000-000000000001",
+     "opportunity_id": "7b77741f-06f5-4e49-9005-ecd9dfa5953e",
+     "location_id": "00000000-0000-4000-8000-000000000010",
+     "primary_person_id": "ec239721-a181-421d-aea6-c9e606c9319f",
+     "primary_contact_id": null,
+     "requested_by_user_id": null,
+     "start_at": "2026-11-04T17:30:00+00:00",
+     "end_at": "2026-11-04T18:00:00+00:00",
+     "timezone": "America/Los_Angeles",
+     "status_key": "confirmed",
+     "source": "form_submission",
+     "form_submission_id": "505f0a7d-8de3-4b67-a873-3d11e5d23959",
+     "form_public_link_id": "2bb49237-76b2-4a79-9b1d-9b4ac099817d",
+     "canceled_at": null,
+     "canceled_by": null,
+     "cancel_reason": null,
+     "rescheduled_from_booking_id": null,
+     "metadata": {
+      "rule_id": "c7218de0-8b64-444f-97b9-2712d1d62ae1",
+      "ics_sequence": 0,
+      "slot_capacity": 2,
+      "processing_case_id": "24207cb5-79a6-42e6-8c2e-589076dfed61",
+      "accepted_by_user_id": "00000000-0000-4000-8000-000000000002",
+      "internal_calendar_last": {
+       "at": "2026-10-29T00:46:31.114Z",
+       "action": "request",
+       "outcome": "queued",
+       "refused": [],
+       "duplicates": [],
+       "message_ids": [
+        "4821e4f8-b631-4289-a72c-231925dac88c"
+       ]
+      },
+      "attendance_confirmation": {
+       "status": "awaiting_response"
+      },
+      "requested_tour_submission_key": "form_submission:505f0a7d-8de3-4b67-a873-3d11e5d23959"
+     },
+     "created_at": "2026-10-29T00:46:30.850418+00:00",
+     "updated_at": "2026-10-29T00:46:31.115972+00:00",
+     "host_user_id": null
+    }
+   ],
+   "calendar_attention": {},
+   "requested_tour_attention": []
+  },
+  "prefs": [
+   [
+    "email_marketing",
+    "opted_in",
+    "public_intake"
+   ],
+   [
+    "sms_marketing",
+    "unset",
+    null
+   ]
+  ],
+  "viewAfterReplay": {
+   "state": "booked",
+   "acceptance": "accepted",
+   "headline": "Tour booked",
+   "reason": null,
+   "reasonLabel": null,
+   "requested": {
+    "startAt": "2026-11-04T17:30:00.000Z",
+    "endAt": "2026-11-04T18:00:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "label": "Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST"
+   },
+   "location": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "label": "Northwind — Riverside Campus"
+   },
+   "requestedAt": "2026-10-29T00:46:10.293Z",
+   "stillAvailable": null,
+   "opportunityId": "7b77741f-06f5-4e49-9005-ecd9dfa5953e",
+   "booking": {
+    "id": "8df7554a-be16-47d3-951d-79211f8099ec",
+    "status": "confirmed",
+    "label": "Wed, Nov 4, 2026 · 9:30 AM – 10:00 AM PST"
+   },
+   "comms": {
+    "detail": "email:sent",
+    "status": "sent"
+   },
+   "alternatives": [],
+   "error": null
+  }
+ }
+}

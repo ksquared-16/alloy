@@ -14,48 +14,6 @@ function readWebFile(rel: string): string {
 }
 
 describe("personDrawerVmParity", () => {
-    it("PersonsDrawerVmRuntime uses layout runtime cutover shell and overview body", () => {
-        const runtime = readWebFile("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
-        const overview = readWebFile("components/admin/vmDrawer/PersonDrawerOverviewBody.tsx");
-        const legacy = readWebFile("components/admin/vmDrawer/PersonDrawerLegacyOperatingOverview.tsx");
-        expect(runtime).toContain("PersonDrawerOverviewBody");
-        expect(runtime).toContain("PersonDrawerProofLayoutHeader");
-        expect(runtime).not.toContain("PersonsDrawerVmBody");
-        expect(overview).toContain("DrawerLayoutRuntimeOverviewBody");
-        expect(legacy).toContain("PersonDrawerOperatingSections");
-        expect(runtime).not.toContain("AdminEntityDrawerVmShell");
-        expect(runtime).not.toContain("data-drawer-vm-placeholder-body");
-    });
-
-    it("parent VM surface uses guardian operating sections, not child summary", () => {
-        const plan = buildPersonFirstViewportPlan(
-            resolvePersonDrawerVmSurface({
-                openSource: "opportunity_primary_contact",
-                presentationEmphasis: "guardian_communication",
-            })
-        );
-        expect(plan.surface).toBe("parent");
-        expect(plan.operating_sections).toContain("parent_summary");
-        expect(plan.operating_sections).not.toContain("child_summary");
-        const runtime = readWebFile("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
-        expect(runtime).toContain("isLayoutRuntimeLegacyEmergencyFallbackEnabledClient");
-        expect(runtime).toContain("PersonDrawerParentLifecycleRail");
-        expect(readWebFile("components/admin/vmDrawer/PersonDrawerVmTabPanes.tsx")).toContain(
-            "CommunicationsDrawerSection",
-        );
-    });
-
-    it("child VM surface uses child operating sections and lifecycle rail", () => {
-        const plan = buildChildFirstViewportPlan();
-        expect(plan.viewport_slots).toContain("child_summary");
-        expect(plan.viewport_slots).toContain("household");
-        const runtime = readWebFile("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
-        expect(runtime).toContain("isLayoutRuntimeLegacyEmergencyFallbackEnabledClient");
-        expect(runtime).toContain("PersonDrawerChildLifecycleRail");
-        expect(readWebFile("components/admin/vmDrawer/PersonDrawerLegacyOperatingOverview.tsx")).toContain(
-            "PersonDrawerOperatingSections",
-        );
-    });
 
     it("generic surface has empty operating sections but still resolves overview sections", () => {
         const plan = buildPersonFirstViewportPlan(

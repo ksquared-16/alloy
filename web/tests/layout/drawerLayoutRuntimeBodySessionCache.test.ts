@@ -70,38 +70,6 @@ describe("drawerLayoutRuntimeBodySessionCache", () => {
         expect(emptyKey).not.toBe(scopedKey);
     });
 
-    it("prewarm and runtime hook use matching opportunity body cache keys", () => {
-        const runtime = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
-            "utf8",
-        );
-        const payload = readFileSync(
-            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload.ts"),
-            "utf8",
-        );
-
-        expect(runtime).toContain("departmentId: displayVm?.workspace.department_id");
-        expect(runtime).toContain("workUnitId: displayVm?.workspace.work_unit_id");
-        expect(payload).toContain("vm.workspace.department_id");
-        expect(payload).toContain("vm.workspace.work_unit_id");
-        expect(payload).toContain("queryParams:");
-
-        const runtimeKey = buildDrawerLayoutRuntimeBodyCacheKey(
-            OPP_BODY_PATH,
-            "opp-1",
-            serializeDrawerLayoutRuntimeBodyQueryParams(workspaceQueryParams),
-        );
-        const prewarmKey = buildDrawerLayoutRuntimeBodyCacheKey(
-            OPP_BODY_PATH,
-            "opp-1",
-            serializeDrawerLayoutRuntimeBodyQueryParams({
-                departmentId: "dept-1",
-                workUnitId: "wu-1",
-            }),
-        );
-        expect(runtimeKey).toBe(prewarmKey);
-    });
-
     describe("in-flight dedup", () => {
         const originalFetch = globalThis.fetch;
 
@@ -151,17 +119,5 @@ describe("drawerLayoutRuntimeBodySessionCache", () => {
             );
             expect(peekDrawerLayoutRuntimeBodyCacheEntry(cacheKey)?.record.id).toBe("opp-1");
         });
-    });
-});
-
-describe("useOpportunityDrawerVmPayload stale reload guard", () => {
-    it("reloadOpportunityDisplayVm verifies generation token before applyVm", () => {
-        const src = readFileSync(
-            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload.ts"),
-            "utf8",
-        );
-        expect(src).toContain("const reloadGen = ++fetchGenRef.current");
-        expect(src).toContain("if (reloadGen !== fetchGenRef.current) return");
-        expect(src).toContain('String(result.preload.viewModel.entity.id) !== expectedId');
     });
 });

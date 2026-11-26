@@ -1,0 +1,5 @@
+{
+  "target": "alloy_deployed_primary",
+  "read_only": true,
+  "combined_query": "SELECT 1 AS ok"
+}

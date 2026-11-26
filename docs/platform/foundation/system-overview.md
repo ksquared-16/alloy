@@ -1,12 +1,21 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # System overview
 
-**Status:** Canonical platform entry point (June 2026 rebaseline).
+**Status:** Canonical platform entry point (July 2026 stabilization).
 
 ---
 
 ## What Alloy is
 
 Alloy is a configurable operating system for service businesses. Childcare is the first primary market; platform layers remain industry-agnostic. Operators run high-context workflows from one workspace: records, queues, communications, workflows, documents, scheduling, and AI-assisted action — scoped by org, permissions, and configuration.
+
+**Onboarding:** [`alloy-platform-handbook.md`](./alloy-platform-handbook.md) teaches the platform; this overview and the rest of `docs/platform/` are the encyclopedia. Durable cross-platform decisions: [`platform-decisions.md`](./platform-decisions.md).
 
 ---
 
@@ -27,11 +36,11 @@ Work units, departments, and internal routing constructs support this model but 
 
 | Plane | Entry | Purpose |
 |-------|-------|---------|
-| **Operator** | `/workspace` | Business process landing → stage queues → record drawer |
-| **Configuration** | `/admin` | Business processes, fields, layouts, actions, forms, workflows |
+| **Operator** | `/workspace` | Business process landing → stage queues → **Focus Panel** (the modal record product was deleted August 2026; "drawer" survives only as infrastructure naming) |
+| **Configuration** | `/organization/*` | Business processes, fields, layouts, actions, forms, workflows. The **bare** `/admin`, `/admin/settings`, `/settings` and `/settings/organization` are 307 redirects to `/organization` (`web/next.config.ts`); `/settings/*` sub-surfaces and `/admin/*` non-settings modules remain canonical. Owner: [`../../system/routing-doctrine.md`](../../system/routing-doctrine.md) |
 | **Data** | Supabase + RLS | Org-scoped truth; service-role server mutations |
 
-Legacy admin remains at `/legacy-admin` for unmigrated modules.
+`/legacy-admin` is archived — landing redirects to `/workspace`. Settings and operator surfaces are canonical.
 
 ---
 
@@ -41,7 +50,7 @@ Legacy admin remains at `/legacy-admin` for unmigrated modules.
 - **Database:** Supabase Postgres with RLS (`org_id` scoping)
 - **Side effects:** Events (`workflow_events`) → workflows → actions → effects
 - **Record truth:** Resolver-backed entity GET — not queue previews
-- **Identity:** `persons` + `customer_persons` canonical; `contacts` compatibility only
+- **Identity:** `persons` + `customer_persons` canonical; `contacts` compatibility only. Inbound identity for Manual Create Lead and public lead-capture forms resolves through Processing facts/resolutions → immutable Commit Plan → approval → explicit executor commit.
 
 ---
 
@@ -49,6 +58,7 @@ Legacy admin remains at `/legacy-admin` for unmigrated modules.
 
 | Topic | Doc |
 |-------|-----|
+| Platform Decisions | `platform-decisions.md` |
 | Business Process Execution Platform | `../modules/business-process-execution-platform.md` |
 | Business processes | `../core/business-process-system.md` |
 | Status and state | `../core/status-and-state-system.md` |
@@ -78,25 +88,34 @@ Legacy admin remains at `/legacy-admin` for unmigrated modules.
 
 ---
 
-## Platform maturity (June 2026)
+## Platform maturity (September 2026)
 
-Alloy has passed foundational architecture proof. Current theme: **operational completion + product hardening**. Focused pilots are appropriate; general customer readiness depends on open platform items in **`product-roadmap.md`** (action catalog, forms remainder, messaging hardening, drawer VM cutover).
+The architecture is **stable**. Foundational runtimes — Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, and Current Work — are **complete**. Legacy entity drawer runtime has been **removed**.
 
-See `platform-capabilities.md`, `product-roadmap.md`.
+> **Corrected 2026-09-30.** This section previously listed "domain productization (Scheduling, Attendance, Billing, Payments, Commercial, AI, Partner APIs)" as **future work**. Most of that list has shipped and is certified: Staff/Scheduling, Attendance, Commercial, Operational Intelligence, Communications, Configuration and AI/BOS all carry certification records, and the partner API is a frozen versioned surface. Describing shipped, certified domains as future work is the characteristic failure of this document family — it happened in three other canonical documents in the same period.
+
+**Fourteen domains are certified** as documented-and-measured; the scoreboard and per-domain owners are in [`../../context/alloy-benchmark-context.md`](../../context/alloy-benchmark-context.md), and the synthesized platform model is [`../../context/alloy-platform-synthesis.md`](../../context/alloy-platform-synthesis.md).
+
+**Genuinely still ahead:** Financials/Payments certification (the domain is mid-mutation, not undocumented), forecasting, Parent and Teacher experience, broad automation, and outbound partner event delivery. New work should **not** introduce additional foundational runtimes or restore legacy drawer paths.
+
+Milestone record: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md). Capability inventory: `platform-capabilities.md`. Sequencing: `product-roadmap.md`.
 
 ---
 
 ## Load order (onboarding)
 
 1. This file
-2. `../governance/glossary.md`
-3. `architecture.md`
-4. `platform-capabilities.md`
-5. `../core/business-process-system.md`
-6. `../core/entity-model.md`
-7. `../core/record-system.md`
-8. `../operator/queue-system.md` + `../operator/drawer-system.md`
-9. Schema layer (`docs/schema/`) when touching DB/RLS
+2. [`platform-manifesto.md`](../foundation/platform-manifesto.md) — **required reading**
+3. [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md)
+4. `../governance/glossary.md`
+5. `architecture.md`
+6. `platform-capabilities.md`
+7. `../core/business-process-system.md`
+8. `../core/entity-model.md`
+9. `../core/record-system.md`
+10. `../milestones/stabilization-july-2026.md`
+11. `../operator/queue-system.md` + `../operator/drawer-system.md`
+12. Schema layer (`docs/schema/`) when touching DB/RLS
 
 ---
 

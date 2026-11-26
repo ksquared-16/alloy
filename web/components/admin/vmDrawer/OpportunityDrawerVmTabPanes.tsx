@@ -1,8 +1,17 @@
 "use client";
 
+import { OPPORTUNITY_QUEUE_UPDATED_EVENT, type OpportunityQueueUpdatedDetail } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { useCallback, useEffect, useState } from "react";
-import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
-import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
+import dynamic from "next/dynamic";
+// Both are tab-gated (rendered only for their active drawer tab), so they never need to be in the
+// first chunk that loads with this component. Keep them out of the initial graph.
+const EntityDocumentsSection = dynamic(() => import("@/components/admin/EntityDocumentsSection"), {
+    ssr: false,
+});
+const CommunicationsDrawerSection = dynamic(
+    () => import("@/components/admin/communications/CommunicationsDrawerSection"),
+    { ssr: false },
+);
 import { oppInqEyebrow } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
@@ -174,6 +183,18 @@ export default function OpportunityDrawerVmTabPanes({
     useEffect(() => {
         if (drawerTab === "activity") void loadActivity();
     }, [drawerTab, loadActivity]);
+
+    // Live: a mutation on THIS lead (a message sent, a child added, an outcome recorded) re-reads the
+    // timeline from canonical activity — the same refresh the Focus Panel listens to.
+    useEffect(() => {
+        if (drawerTab !== "activity") return;
+        const onUpdated = (event: Event) => {
+            const id = (event as CustomEvent<OpportunityQueueUpdatedDetail>).detail?.id;
+            if (!id || id === drawerId) void loadActivity();
+        };
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onUpdated);
+        return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onUpdated);
+    }, [drawerTab, drawerId, loadActivity]);
 
     const saveNotes = useCallback(async () => {
         setNotesSaving(true);

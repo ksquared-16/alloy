@@ -2,13 +2,13 @@
  * Enrollment-only Operational Surface data for Workspace processNavTile cover page.
  */
 
+import { isDomainProjectionModel } from "@/lib/lifecycle/processModelV1";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import { parseOperatorWorkUnitEntryHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type {
     OperatorLifecycleLandingCard,
     OperatorLifecycleWorkUnitRow,
 } from "@/lib/admin/buildOperatorLifecycleLanding";
-import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import { resolveOperationalViewsForWorkUnit } from "@/lib/adminV2/runtime/perspective/resolveStageOperationalViews";
 import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
@@ -90,8 +90,13 @@ const DEFAULT_STORY_BODY =
 
 /** Explicit enrollment lifecycle detection — safe for render gating. */
 export function isEnrollmentLifecycleCard(
-    card: Pick<OperatorLifecycleLandingCard, "processKey" | "label" | "entryHref">,
+    card: Pick<OperatorLifecycleLandingCard, "processKey" | "label" | "entryHref"> &
+        Partial<Pick<OperatorLifecycleLandingCard, "processModel">>,
 ): boolean {
+    // A declared domain projection is never Enrollment, whatever its name or key happens to contain
+    // ("Lead Billing" must not acquire Enrollment's surface). The text heuristics below remain only
+    // for staged lifecycles, which is every process published before the model was declarable.
+    if (isDomainProjectionModel(card.processModel)) return false;
     const processKey = card.processKey.trim().toLowerCase();
     if (ENROLLMENT_PROCESS_KEYS.has(processKey)) return true;
     if (processKey.includes("enroll") || processKey.includes("lead")) return true;
@@ -99,7 +104,7 @@ export function isEnrollmentLifecycleCard(
     const label = card.label.trim().toLowerCase();
     if (label.includes("enrollment") || label.includes("lead")) return true;
 
-    const entry = card.entryHref.trim().toLowerCase();
+    const entry = (card.entryHref ?? "").trim().toLowerCase();
     return ENROLLMENT_ENTRY_HREF_MARKERS.some((marker) => entry.includes(marker));
 }
 
@@ -353,7 +358,8 @@ function buildWorkLinesFromConfiguredWorkViews(args: {
             workUnit: args.workUnit,
             workViewId,
             queueKey,
-            entryHref: args.card.entryHref,
+            // Enrollment cards always carry an entry (their `new_leads` last resort).
+            entryHref: args.card.entryHref ?? "",
         });
         const projectionCount = projection?.byViewId[workViewId]?.count;
         const count =
@@ -394,33 +400,10 @@ function resolveWorkViewHref(args: {
     entryHref: string;
 }): string {
     void args.entryHref;
-    // Canonical operator route (Phase 2 route canonicalization): always emit the routable slug
-    // surface `/workspace/work-unit/:slug?work_view=…&queue=…`. The previous dept/uuid preview href,
-    // once run through `normalizeOperatorPathname`, became `/workspace/dept/…` — a shape that has NO
-    // `next.config` rewrite and 404s, then forces a retry on the compat route (duplicate RSC loads).
-    if (args.workUnit.key?.trim()) {
-        return buildCanonicalOperationalWorkViewHref({
-            workUnitPlatformKey: args.workUnit.key,
-            workViewId: args.workViewId,
-            queueKey: args.queueKey,
-        });
-    }
-
-    // No platform key to build a slug — fall back to the routable compat dept route under
-    // `/admin/workspace` (served by the `/admin/:path*` rewrite). Never normalize to `/workspace/dept/…`.
-    if (args.workUnit.id) {
-        const fromPreview =
-            buildOperationalViewPreviewRuntimeHref({
-                departmentId: args.departmentId,
-                workUnitId: args.workUnit.id,
-                workViewId: args.workViewId,
-                queueKey: args.queueKey,
-            }) ?? null;
-        if (fromPreview) {
-            return fromPreview.replace(/^\/adminV2\//, "/admin/");
-        }
-    }
-
+    void args.departmentId;
+    // Canonical operator route: always emit the routable slug surface
+    // `/workspace/work-unit/:slug?work_view=…&queue=…`. The dept/uuid work-unit page was retired
+    // with the legacy presentation tree (Presentation Runtime V2), so there is no dept fallback.
     return buildCanonicalOperationalWorkViewHref({
         workUnitPlatformKey: args.workUnit.key,
         workViewId: args.workViewId,
@@ -462,7 +445,7 @@ export function buildEnrollmentOperationalSurfaceFields(args: {
 
     const workUnit = resolveEnrollmentWorkUnitForSurface({
         departmentId: args.card.departmentId,
-        entryHref: args.card.entryHref,
+        entryHref: args.card.entryHref ?? "",
         workUnits: args.workUnits ?? [],
     });
 

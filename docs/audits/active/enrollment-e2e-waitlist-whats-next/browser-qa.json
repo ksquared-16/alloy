@@ -1,0 +1,33 @@
+[
+  {
+    "step": "row",
+    "i": 1,
+    "t": "L Lennon Kurzman 1 / 1 Adjust 4/2/2024 (2y4m) 2d"
+  },
+  {
+    "step": "summary",
+    "insight": "Waitlist",
+    "status": "In progress",
+    "progress": false,
+    "progressLabels": [],
+    "currentWork": "Current work · Review waitlist position",
+    "facts": [],
+    "perspective": "summary",
+    "slice": "What's NextIn progressWaitlistManage waitlist candidates and spot offers.Current work · Review waitlist positionMessageSend formTour ▾View all activity"
+  },
+  {
+    "step": "opened-send-form",
+    "perspective": "focused",
+    "capability": "true",
+    "elevated": 1
+  },
+  {
+    "step": "after-close",
+    "elevated": false,
+    "panel": false,
+    "focusedClose": false
+  },
+  {
+    "step": "no-tour"
+  }
+]

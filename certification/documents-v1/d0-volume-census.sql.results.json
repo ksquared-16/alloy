@@ -1,0 +1,236 @@
+{
+  "trusted_host_action_id": "tha_590a62cdf2c43d",
+  "query_hash": "6c43f6d289e5e7d69478e3d8d996e770d31907fc31f008fb5dae2792611665a9",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-20T19:11:37.229Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_590a62cdf2c43d",
+    "query_hash": "6c43f6d289e5e7d69478e3d8d996e770d31907fc31f008fb5dae2792611665a9",
+    "authorization_id": "grnt_bf706d143d16468f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-20T19:11:47.907Z",
+    "question_ids": [
+      "v00_totals",
+      "v01_by_entity_bucket_status",
+      "v02_by_doc_type",
+      "v03_pos_intake",
+      "v04_storage_reconciliation",
+      "v05_objects_without_document",
+      "v06_path_org_prefix",
+      "v07_version_role",
+      "v08_dependents"
+    ],
+    "questions": {
+      "v00_totals": {
+        "question_id": "v00_totals",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_head": "20261129090000",
+            "orgs_total": 3,
+            "orgs_with_documents": 1,
+            "documents_total": 279,
+            "documents_bytes": 16605015,
+            "documents_null_storage_path": 0,
+            "documents_null_bucket": 0,
+            "documents_null_checksum": 61,
+            "documents_public_url_set": 0,
+            "documents_owner_contact_set": 0,
+            "documents_generated_from_set": 19,
+            "documents_template_key_set": 175,
+            "duplicate_checksum_groups": 12,
+            "documents_in_duplicate_groups": 55,
+            "document_versions_total": 0,
+            "document_versions_distinct_documents": 0,
+            "document_field_definitions_total": 0,
+            "document_field_values_total": 0,
+            "oldest_document": "2026-08-11",
+            "newest_document": "2026-10-20"
+          }
+        ]
+      },
+      "v01_by_entity_bucket_status": {
+        "question_id": "v01_by_entity_bucket_status",
+        "row_count": null,
+        "rows": [
+          {
+            "entity_type": "<freeform>",
+            "bucket": "org_documents",
+            "status": "uploaded",
+            "documents": 44,
+            "orgs": 1,
+            "bytes": 3347558,
+            "null_entity_id": 44,
+            "null_checksum": 2
+          },
+          {
+            "entity_type": "customer_member",
+            "bucket": "org_documents",
+            "status": "uploaded",
+            "documents": 231,
+            "orgs": 1,
+            "bytes": 1887494,
+            "null_entity_id": 0,
+            "null_checksum": 56
+          },
+          {
+            "entity_type": "person",
+            "bucket": "org_documents",
+            "status": "uploaded",
+            "documents": 4,
+            "orgs": 1,
+            "bytes": 11369963,
+            "null_entity_id": 0,
+            "null_checksum": 3
+          }
+        ]
+      },
+      "v02_by_doc_type": {
+        "question_id": "v02_by_doc_type",
+        "row_count": null,
+        "rows": [
+          {
+            "doc_type": "<freeform>",
+            "documents": 45,
+            "orgs": 1
+          },
+          {
+            "doc_type": "generated_form_pdf",
+            "documents": 175,
+            "orgs": 1
+          },
+          {
+            "doc_type": "immunization_record",
+            "documents": 32,
+            "orgs": 1
+          },
+          {
+            "doc_type": "profile_photo",
+            "documents": 3,
+            "orgs": 1
+          },
+          {
+            "doc_type": "signature_asset",
+            "documents": 24,
+            "orgs": 1
+          }
+        ]
+      },
+      "v03_pos_intake": {
+        "question_id": "v03_pos_intake",
+        "row_count": null,
+        "rows": [
+          {
+            "entity_type_null": true,
+            "case_status": "received",
+            "processing_intent": "generate_form",
+            "documents": 44
+          }
+        ]
+      },
+      "v04_storage_reconciliation": {
+        "question_id": "v04_storage_reconciliation",
+        "row_count": null,
+        "rows": [
+          {
+            "bucket": "org_documents",
+            "documents_with_path": 279,
+            "object_found_same_bucket": 279,
+            "object_found_any_bucket": 279,
+            "object_missing": 0
+          }
+        ]
+      },
+      "v05_objects_without_document": {
+        "question_id": "v05_objects_without_document",
+        "row_count": null,
+        "rows": [
+          {
+            "bucket": "org_documents",
+            "objects": 313,
+            "objects_without_document_row": 34
+          }
+        ]
+      },
+      "v06_path_org_prefix": {
+        "question_id": "v06_path_org_prefix",
+        "row_count": null,
+        "rows": [
+          {
+            "bucket": "org_documents",
+            "seg1_matches_org": 279,
+            "seg1_other": 0,
+            "seg1_word": "<org_id>"
+          }
+        ]
+      },
+      "v07_version_role": {
+        "question_id": "v07_version_role",
+        "row_count": null,
+        "rows": [
+          {
+            "version_role": "<freeform>",
+            "source": "<freeform>",
+            "documents": 48
+          },
+          {
+            "version_role": "<freeform>",
+            "source": "participant_signature_capture_v1",
+            "documents": 24
+          },
+          {
+            "version_role": "<freeform>",
+            "source": "participant_upload_v1",
+            "documents": 32
+          },
+          {
+            "version_role": "completed",
+            "source": "<freeform>",
+            "documents": 15
+          },
+          {
+            "version_role": "signed",
+            "source": "<freeform>",
+            "documents": 160
+          }
+        ]
+      },
+      "v08_dependents": {
+        "question_id": "v08_dependents",
+        "row_count": null,
+        "rows": [
+          {
+            "vendors_insurance_doc": 0,
+            "vendors_drivers_license_doc": 0,
+            "staff_qualification_evidence": 1,
+            "safeguarding_evidence_document": 0,
+            "signature_drawn_asset": 20,
+            "fsd_total": 195,
+            "fsd_generated_pdf": 175,
+            "fsd_signature_asset": 20,
+            "fsd_upload": 0,
+            "fsd_other": 0,
+            "subsidy_authorization_source_doc": 0,
+            "subsidy_remittance_source_doc": 0,
+            "processing_sources_document": 44,
+            "processing_sources_by_kind": {
+              "form_submission": 20,
+              "create_lead": 61,
+              "participant_child_request": 2,
+              "document": 44,
+              "form_packet_session": 139
+            }
+          }
+        ]
+      }
+    },
+    "row_count": 19
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "patchA": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "patchB": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "cfgStatus": 200,
+  "enrollments": 2,
+  "assignmentCount": 2,
+  "assignments": [
+    {
+      "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "member": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "child": "Certb Certhouse",
+      "agreement": null,
+      "state": "recommended",
+      "resolutionKey": "b2e43fd1",
+      "configVersion": "ae79d05d",
+      "facts": {
+        "programKey": "preschool",
+        "attendanceType": "full_time",
+        "daysPerWeek": null,
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "payerType": "private_pay",
+        "cadenceKey": null,
+        "asOf": "2026-09-01"
+      },
+      "sources": {
+        "programKey": "assignment",
+        "daysPerWeek": "none",
+        "locationId": "assignment",
+        "asOf": "assignment_start"
+      },
+      "recommended": {
+        "sourceId": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+        "offeringId": "f7cf7d6c-2dee-4f2a-a745-1844424050e1",
+        "variantId": "d484dcc8-87e3-4e83-b02c-48e2846161d4",
+        "variantLabel": "",
+        "programKey": "preschool",
+        "attendanceType": "full_time",
+        "cadenceKey": "monthly",
+        "amountCents": 145000,
+        "currencyCode": "USD",
+        "amountLabel": "$1,450.00/monthly",
+        "scope": "org_default",
+        "effectiveStart": "2026-07-01",
+        "effectiveEnd": null,
+        "matched": [
+          "Program · Preschool",
+          "Attendance · full_time",
+          "Schedule · any",
+          "Billed · monthly",
+          "Organisation default",
+          "Effective 2026-07-01"
+        ]
+      },
+      "tied": [],
+      "applicable": [
+        {
+          "s": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+          "a": "$1,450.00/monthly",
+          "c": "monthly",
+          "v": ""
+        }
+      ],
+      "noMatchReason": null,
+      "rejected": [],
+      "accepted": null
+    },
+    {
+      "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "member": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "child": "Certa Certhouse",
+      "agreement": null,
+      "state": "recommended",
+      "resolutionKey": "2f92ec30",
+      "configVersion": "ae79d05d",
+      "facts": {
+        "programKey": "school_age",
+        "attendanceType": "custom",
+        "daysPerWeek": null,
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "payerType": "private_pay",
+        "cadenceKey": null,
+        "asOf": "2026-09-01"
+      },
+      "sources": {
+        "programKey": "assignment",
+        "daysPerWeek": "none",
+        "locationId": "assignment",
+        "asOf": "assignment_start"
+      },
+      "recommended": {
+        "sourceId": "5532489d-eed3-4080-9477-f47a94fde1c6",
+        "offeringId": "fe7bb68f-1b36-432c-ae0b-e478dbc9f582",
+        "variantId": "ee157cff-3546-4172-b591-984b96fbec10",
+        "variantLabel": "",
+        "programKey": "school_age",
+        "attendanceType": "custom",
+        "cadenceKey": "weekly",
+        "amountCents": 18500,
+        "currencyCode": "USD",
+        "amountLabel": "$185.00/weekly",
+        "scope": "org_default",
+        "effectiveStart": "2026-09-01",
+        "effectiveEnd": null,
+        "matched": [
+          "Program · Before & After",
+          "Attendance · custom",
+          "Schedule · any",
+          "Billed · weekly",
+          "Organisation default",
+          "Effective 2026-09-01"
+        ]
+      },
+      "tied": [],
+      "applicable": [
+        {
+          "s": "5532489d-eed3-4080-9477-f47a94fde1c6",
+          "a": "$185.00/weekly",
+          "c": "weekly",
+          "v": ""
+        }
+      ],
+      "noMatchReason": null,
+      "rejected": [],
+      "accepted": null
+    }
+  ]
+}

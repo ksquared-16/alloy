@@ -1,0 +1,293 @@
+{
+  "trusted_host_action_id": "tha_eab2e64b27d1e9",
+  "query_hash": "13d790ed8a0da6a716ddb6e0096cd94ae348e029508d1718cb488ab2905c8485",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T00:45:16.158Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_eab2e64b27d1e9",
+    "query_hash": "13d790ed8a0da6a716ddb6e0096cd94ae348e029508d1718cb488ab2905c8485",
+    "authorization_id": "grnt_5bac907f55bc4697",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T00:45:21.319Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_id": "7dce5d42-0a40-4f33-9c2a-d4afa03d6c52",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-01",
+            "occurs_on": "2026-10-01",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-01T22:03:52.936785+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          },
+          {
+            "charge_id": "28bb638c-1a16-44e8-bad8-ac55c018f784",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-03",
+            "occurs_on": "2026-10-03",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-01T22:51:44.89604+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          },
+          {
+            "charge_id": "859f1614-0898-4991-82c1-a2055207fb43",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-05",
+            "occurs_on": "2026-10-05",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-01T23:25:44.010891+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          },
+          {
+            "charge_id": "6ccb9225-8c21-4fb4-b414-9b6a1afb993a",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-07",
+            "occurs_on": "2026-10-07",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-02T00:41:05.655473+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          },
+          {
+            "charge_id": "63793ef0-5886-43b0-9e62-106a056f230c",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-02",
+            "occurs_on": "2026-10-02",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-01T22:44:56.910324+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          },
+          {
+            "charge_id": "77b02ec2-a49b-4157-974d-4c4cc044a72e",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-04",
+            "occurs_on": "2026-10-04",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-01T22:54:51.709721+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          },
+          {
+            "charge_id": "3fb7c297-c8d3-44ce-a760-5a939ff85fd3",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-06",
+            "occurs_on": "2026-10-06",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-02T00:09:09.052808+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "arrangement_id": "e5f7deef-a551-4486-ac0f-7fde959470bf",
+            "state": "active",
+            "charge_id": null,
+            "effective_start": "2026-10-01",
+            "effective_end": null,
+            "created_at": "2026-10-01T22:00:01.394896+00:00"
+          },
+          {
+            "arrangement_id": "a639f74d-87e6-4824-9964-5c630a04ba8b",
+            "state": "active",
+            "charge_id": "859f1614-0898-4991-82c1-a2055207fb43",
+            "effective_start": "2026-10-02",
+            "effective_end": null,
+            "created_at": "2026-10-02T00:07:00.120763+00:00"
+          },
+          {
+            "arrangement_id": "a0918a88-0bf7-4e1d-aa2d-59dcdb78384b",
+            "state": "active",
+            "charge_id": "3fb7c297-c8d3-44ce-a760-5a939ff85fd3",
+            "effective_start": "2026-10-02",
+            "effective_end": null,
+            "created_at": "2026-10-02T00:09:10.15598+00:00"
+          },
+          {
+            "arrangement_id": "96b204d9-8e87-4335-a762-aecf0245de8e",
+            "state": "active",
+            "charge_id": "6ccb9225-8c21-4fb4-b414-9b6a1afb993a",
+            "effective_start": "2026-10-02",
+            "effective_end": null,
+            "created_at": "2026-10-02T00:41:07.089896+00:00"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "arrangement_id": "e5f7deef-a551-4486-ac0f-7fde959470bf",
+            "arrangement_charge_id": null,
+            "arrangement_state": "active",
+            "responsible_party_id": "fb4eb21b-ad0e-446b-bab1-5a426fd1846e",
+            "method": "percentage",
+            "percent_basis_points": 10000,
+            "amount_cents": null
+          },
+          {
+            "arrangement_id": "a639f74d-87e6-4824-9964-5c630a04ba8b",
+            "arrangement_charge_id": "859f1614-0898-4991-82c1-a2055207fb43",
+            "arrangement_state": "active",
+            "responsible_party_id": "fb4eb21b-ad0e-446b-bab1-5a426fd1846e",
+            "method": "percentage",
+            "percent_basis_points": 10000,
+            "amount_cents": null
+          },
+          {
+            "arrangement_id": "a0918a88-0bf7-4e1d-aa2d-59dcdb78384b",
+            "arrangement_charge_id": "3fb7c297-c8d3-44ce-a760-5a939ff85fd3",
+            "arrangement_state": "active",
+            "responsible_party_id": "fb4eb21b-ad0e-446b-bab1-5a426fd1846e",
+            "method": "percentage",
+            "percent_basis_points": 10000,
+            "amount_cents": null
+          },
+          {
+            "arrangement_id": "96b204d9-8e87-4335-a762-aecf0245de8e",
+            "arrangement_charge_id": "6ccb9225-8c21-4fb4-b414-9b6a1afb993a",
+            "arrangement_state": "active",
+            "responsible_party_id": "fb4eb21b-ad0e-446b-bab1-5a426fd1846e",
+            "method": "percentage",
+            "percent_basis_points": 10000,
+            "amount_cents": null
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_id": "6ccb9225-8c21-4fb4-b414-9b6a1afb993a",
+            "responsible_party_id": "fb4eb21b-ad0e-446b-bab1-5a426fd1846e",
+            "assigned_amount_cents": 4000,
+            "is_unassigned": false,
+            "basis": "percentage",
+            "explanation": "100.00% of $40.00.",
+            "arrangement_id": "96b204d9-8e87-4335-a762-aecf0245de8e",
+            "state": "active",
+            "created_at": "2026-10-02T00:41:08.209678+00:00"
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_id": "28bb638c-1a16-44e8-bad8-ac55c018f784",
+            "service_date": "2026-10-03",
+            "allocation_count": 0,
+            "allocated_cents": 0,
+            "charge_cents": 4000,
+            "divided": false
+          },
+          {
+            "charge_id": "3fb7c297-c8d3-44ce-a760-5a939ff85fd3",
+            "service_date": "2026-10-06",
+            "allocation_count": 0,
+            "allocated_cents": 0,
+            "charge_cents": 4000,
+            "divided": false
+          },
+          {
+            "charge_id": "63793ef0-5886-43b0-9e62-106a056f230c",
+            "service_date": "2026-10-02",
+            "allocation_count": 0,
+            "allocated_cents": 0,
+            "charge_cents": 4000,
+            "divided": false
+          },
+          {
+            "charge_id": "6ccb9225-8c21-4fb4-b414-9b6a1afb993a",
+            "service_date": "2026-10-07",
+            "allocation_count": 1,
+            "allocated_cents": 4000,
+            "charge_cents": 4000,
+            "divided": true
+          },
+          {
+            "charge_id": "77b02ec2-a49b-4157-974d-4c4cc044a72e",
+            "service_date": "2026-10-04",
+            "allocation_count": 0,
+            "allocated_cents": 0,
+            "charge_cents": 4000,
+            "divided": false
+          },
+          {
+            "charge_id": "7dce5d42-0a40-4f33-9c2a-d4afa03d6c52",
+            "service_date": "2026-10-01",
+            "allocation_count": 0,
+            "allocated_cents": 0,
+            "charge_cents": 4000,
+            "divided": false
+          },
+          {
+            "charge_id": "859f1614-0898-4991-82c1-a2055207fb43",
+            "service_date": "2026-10-05",
+            "allocation_count": 0,
+            "allocated_cents": 0,
+            "charge_cents": 4000,
+            "divided": false
+          }
+        ]
+      }
+    },
+    "row_count": 23
+  }
+}

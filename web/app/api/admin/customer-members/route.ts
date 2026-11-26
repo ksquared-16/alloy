@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
+import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 /** GET: list customer_members for org. Optional ?customer_id= filter. Admin + ops can read. */
 export async function GET(request: NextRequest) {
@@ -14,6 +19,8 @@ export async function GET(request: NextRequest) {
             { status: ctx.status }
         );
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
 
     const customerId = request.nextUrl.searchParams.get("customer_id")?.trim() || undefined;
     const supabase = createAdminClient();
@@ -97,13 +104,13 @@ export async function GET(request: NextRequest) {
 
 /** POST: create customer_member. Admin + ops can create (matches OCM link path). */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return adminContextFailureResponse(ctx);
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     let body: {
         customer_id?: string;
@@ -168,27 +175,74 @@ export async function POST(request: NextRequest) {
         }
     }
 
-    const { data: inserted, error: insertErr } = await supabase
-        .from("customer_members")
-        .insert({
-            org_id: ctx.orgId,
-            customer_id,
-            display_name,
-            relationship,
-            first_name,
-            last_name,
-            dob,
-            person_id,
-            is_active: body.is_active !== false,
-            metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
-        })
-        .select(
-            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, created_at",
-        )
-        .single();
+    const RESPONSE_COLUMNS =
+        "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, created_at";
+    const callerMetadata =
+        body.metadata && typeof body.metadata === "object" ? { ...body.metadata } : {};
+    const callerSource =
+        typeof callerMetadata.source === "string" && callerMetadata.source.trim()
+            ? callerMetadata.source.trim()
+            : "customer_member_create";
+    delete callerMetadata.source;
 
-    if (insertErr) {
-        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    let inserted: Record<string, unknown> | null = null;
+
+    if (relationship === "child") {
+        // ONE child-member write authority. This route is the drawer's Add Child /
+        // Add Sibling path; it kept its own insert and its own answer to "is this
+        // child already here", which is exactly the fragmentation the authority ends.
+        // Identity is still resolved above — the authority never guesses one.
+        try {
+            const { member } = await createHouseholdChildMember(supabase, {
+                orgId: ctx.orgId,
+                customerId: customer_id,
+                personId: person_id,
+                displayName: display_name,
+                firstName: first_name,
+                lastName: last_name,
+                dob,
+                isActive: body.is_active !== false,
+                source: callerSource,
+                metadata: callerMetadata,
+            });
+            const { data: full } = await supabase
+                .from("customer_members")
+                .select(RESPONSE_COLUMNS)
+                .eq("org_id", ctx.orgId)
+                .eq("id", member.id)
+                .maybeSingle();
+            inserted = (full as Record<string, unknown> | null) ?? null;
+        } catch (e) {
+            return NextResponse.json(
+                { error: e instanceof Error ? e.message : "Could not create child record" },
+                { status: 500 },
+            );
+        }
+    } else {
+        const { data, error: insertErr } = await supabase
+            .from("customer_members")
+            .insert({
+                org_id: ctx.orgId,
+                customer_id,
+                display_name,
+                relationship,
+                first_name,
+                last_name,
+                dob,
+                person_id,
+                is_active: body.is_active !== false,
+                metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
+            })
+            .select(RESPONSE_COLUMNS)
+            .single();
+        if (insertErr) {
+            return NextResponse.json({ error: insertErr.message }, { status: 500 });
+        }
+        inserted = data as Record<string, unknown>;
+    }
+
+    if (!inserted) {
+        return NextResponse.json({ error: "Could not create customer member" }, { status: 500 });
     }
 
     const ins = inserted as { id: string; customer_id: string; display_name?: string | null };

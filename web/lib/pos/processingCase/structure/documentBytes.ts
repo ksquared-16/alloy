@@ -7,6 +7,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isStoragePathWithinOrg } from "@/lib/documents/storagePathAuthority";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 
 export async function downloadDocumentBytesSafe(
     supabase: SupabaseClient,
@@ -16,15 +18,23 @@ export async function downloadDocumentBytesSafe(
         if (!args.orgId || !args.documentId) return null;
         const { data: row, error } = await supabase
             .from("documents")
-            .select("bucket, storage_path, mime_type")
+            .select("bucket, storage_path, mime_type, status")
             .eq("org_id", args.orgId)
             .eq("id", args.documentId)
             .maybeSingle();
         if (error || !row) return null;
-        const r = row as { bucket?: string | null; storage_path?: string | null; mime_type?: string | null };
+        const r = row as { bucket?: string | null; storage_path?: string | null; mime_type?: string | null; status?: string | null };
+        // A quarantined (or deleted/restricted) document's bytes are never read: not by Processing, Forms rendering or any
+        // public route (D1c-1).
+        if (isDocumentUnavailable(r.status)) return null;
         const bucket = r.bucket?.trim();
         const path = r.storage_path?.trim();
         if (!bucket || !path) return null;
+        // A row may not aim the service-role client at another tenant's object (Documents V1 / D1a).
+        if (!isStoragePathWithinOrg(path, args.orgId)) {
+            console.warn("[downloadDocumentBytesSafe] storage path outside organization prefix", { document_id: args.documentId });
+            return null;
+        }
 
         const { data, error: dlErr } = await supabase.storage.from(bucket).download(path);
         if (dlErr || !data) return null;
@@ -32,6 +42,25 @@ export async function downloadDocumentBytesSafe(
         return { bytes: new Uint8Array(buf), mimeType: r.mime_type ?? null };
     } catch (e) {
         console.warn("[downloadDocumentBytesSafe]", e instanceof Error ? e.message : e);
+        return null;
+    }
+}
+
+/** True when the mime/bytes look like a captured HTML page (a hosted-form capture). */
+export function looksLikeHtmlBytes(bytes: Uint8Array | null | undefined, mimeType?: string | null): boolean {
+    if (mimeType && /html|xhtml/i.test(mimeType)) return true;
+    if (!bytes || bytes.length < 14) return false;
+    const head = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(0, 1024)).trimStart().toLowerCase();
+    return head.startsWith("<!doctype html") || head.startsWith("<html") || head.includes("<html");
+}
+
+/** Decode captured bytes as text. Never throws; returns null when they are not decodable. */
+export function decodeCaptureText(bytes: Uint8Array | null | undefined): string | null {
+    try {
+        if (!bytes || bytes.length === 0) return null;
+        const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+        return text.trim() ? text : null;
+    } catch {
         return null;
     }
 }

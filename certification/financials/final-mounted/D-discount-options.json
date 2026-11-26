@@ -1,0 +1,17 @@
+{
+  "listbox": 1,
+  "options": [
+    {
+      "t": "Select…",
+      "sel": "false"
+    },
+    {
+      "t": "Sibling discount (QA specimen) · 10%",
+      "sel": "true"
+    },
+    {
+      "t": "No discount",
+      "sel": "false"
+    }
+  ]
+}

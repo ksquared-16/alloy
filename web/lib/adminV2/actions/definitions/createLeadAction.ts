@@ -17,10 +17,10 @@ import {
 } from "@/lib/adminV2/actions/actionTypes";
 import {
     CREATE_LEAD_ACTION_KEY,
-    buildCreateLeadEligibility,
     buildCreateLeadPreview,
     trimmedValue as trimmed,
 } from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
+import { resolveCreateLeadEligibilityForInvocation } from "@/lib/platform/commands/createLead/resolveCreateLeadEligibilityForInvocation";
 
 export { CREATE_LEAD_ACTION_KEY };
 
@@ -44,8 +44,13 @@ export const createLeadAction: RegisteredAction = {
         return { ok: true, value };
     },
 
-    async resolveEligibility({ payload }) {
-        return buildCreateLeadEligibility(payload);
+    async resolveEligibility({ supabase, ctx, invocation, payload }) {
+        return resolveCreateLeadEligibilityForInvocation({
+            supabase,
+            orgId: ctx.orgId,
+            invocation,
+            payload,
+        });
     },
 
     async buildPreview({ payload }) {

@@ -34,9 +34,9 @@ describe("fieldRegistryReferenceMatrix child grain (Phase 1)", () => {
     });
 
     it("maps inquiry_child enrollment refKeys to inquiry_child grain", () => {
-        expect(layoutRefKeyToCanonicalRef("inquiry_child.desired_start_date")).toEqual({
+        expect(layoutRefKeyToCanonicalRef("inquiry_child.start_date")).toEqual({
             entity_type: "inquiry_child",
-            field_key: "desired_start_date",
+            field_key: "start_date",
         });
         expect(layoutRefKeyToCanonicalRef("inquiry_child.location_id")).toEqual({
             entity_type: "inquiry_child",
@@ -67,11 +67,11 @@ describe("fieldRegistryReferenceMatrix child grain (Phase 1)", () => {
     it("maps lifecycle child enrollment rule_ids to inquiry_child", () => {
         expect(ruleIdToCanonicalRef("child:program_interest")).toEqual({
             entity_type: "inquiry_child",
-            field_key: "desired_program_category_id",
+            field_key: "program_category_id",
         });
-        expect(ruleIdToCanonicalRef("child:desired_start_date")).toEqual({
+        expect(ruleIdToCanonicalRef("child:start_date")).toEqual({
             entity_type: "inquiry_child",
-            field_key: "desired_start_date",
+            field_key: "start_date",
         });
     });
 

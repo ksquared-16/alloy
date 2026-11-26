@@ -1,11 +1,9 @@
-import { Suspense } from "react";
-import AnalyticsSettingsClient from "@/app/adminV2/settings/analytics/AnalyticsSettingsClient";
+import { redirect } from "next/navigation";
+import { CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF } from "@/lib/admin/canonicalAdminRoutes";
 
-/** Operational Calculations — the canonical route (formerly /settings/analytics). */
+export const dynamic = "force-dynamic";
+
+/** Compatibility: `/settings/calculations` → Organization Operational Intelligence. */
 export default function AdminV2SettingsCalculationsPage() {
-    return (
-        <Suspense fallback={<p className="text-sm text-alloy-midnight/55">Loading Operational Calculations…</p>}>
-            <AnalyticsSettingsClient />
-        </Suspense>
-    );
+    redirect(CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF);
 }

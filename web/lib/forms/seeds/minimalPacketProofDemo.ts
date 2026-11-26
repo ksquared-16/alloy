@@ -26,12 +26,12 @@ export const MINIMAL_PACKET_PROOF_DEFINITION_METADATA = {
 export const MINIMAL_PACKET_PROOF_CHILD_SCHEMA = {
     schema_version: 1 as const,
     title: "Test Child Basics",
-    sections: [{ id: "sec1", title: "Child", field_ids: ["child_first_name", "child_last_name", "child_date_of_birth", "desired_start_date"] }],
+    sections: [{ id: "sec1", title: "Child", field_ids: ["child_first_name", "child_last_name", "child_date_of_birth", "start_date"] }],
     fields: [
         { id: "child_first_name", type: "text" as const, label: "Child first name", required: true },
         { id: "child_last_name", type: "text" as const, label: "Child last name", required: true },
         { id: "child_date_of_birth", type: "date" as const, label: "Child date of birth", required: true },
-        { id: "desired_start_date", type: "date" as const, label: "Desired start date", required: true },
+        { id: "start_date", type: "date" as const, label: "Desired start date", required: true },
     ],
 } as const;
 

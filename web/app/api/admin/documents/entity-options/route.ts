@@ -2,16 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
+import { requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
 
 const OUT_LIMIT = 40;
 const FETCH_CAP = 250;
 
-/** GET: records to attach a document. Query: entity_type (required), q (optional substring on label). */
+/**
+ * GET: records to attach a document. Query: entity_type (required), q (optional substring on label).
+ *
+ * D1a: this exists only to choose where an UPLOAD attaches, so it requires the same `documents.write`
+ * the upload does. Before D1a any portal member could enumerate the names of every customer, person,
+ * vendor and opportunity through it.
+ */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
+    const writeDenied = requireDocumentWrite(ctx);
+    if (writeDenied) return writeDenied;
 
     const entityType = request.nextUrl.searchParams.get("entity_type")?.trim() ?? "";
     if (!entityType || !isV1DocumentEntityType(entityType)) {

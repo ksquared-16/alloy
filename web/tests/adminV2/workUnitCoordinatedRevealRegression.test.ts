@@ -9,18 +9,11 @@ function readSrc(rel: string): string {
 }
 
 describe("workUnitCoordinatedRevealRegression", () => {
-    it("page does not expose row skeleton as visible lane state", () => {
-        const page = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
-        expect(page).toContain("resolveWorkUnitQueueLaneRevealState");
-        expect(page).toContain("rowsHeld:");
-        expect(page).not.toContain("page_seeded_from_cache: workUnitPageSeededWarm");
-    });
-
-    it("QueueBlock skips skeleton when lane is held", () => {
-        const block = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        expect(block).toContain("!queue.rowsHeld");
+    it("QueueRegion skips skeleton when prior rows are held during refetch", () => {
+        const region = readSrc("components/presentation/workUnit/QueueRegion.tsx");
+        expect(region).toContain("queueRegionRenderState");
+        expect(region).toContain('renderState === "cold-loading"');
+        expect(region).toContain("aria-busy={queue.loading || undefined}");
     });
 
     it("warm page reveal policy requires critical bundle before first paint", () => {
@@ -31,26 +24,16 @@ describe("workUnitCoordinatedRevealRegression", () => {
 });
 
 describe("drawerCoordinatedRevealRegression (source)", () => {
-    it("opportunity releases below-fold lock on primary coordinated reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain(
-            "opportunityDrawerOverviewRevealReady && opportunityDrawerPrimaryContractSatisfied"
+
+    it("child→opportunity restore re-warms graph via VM restore session", () => {
+        const restore = readSrc(
+            "lib/adminV2/viewModel/drawer/vmRuntime/restoreOpportunityDrawerSession.ts"
         );
-        expect(drawer).toContain("setOpportunityDrawerBelowFoldRevealed(true)");
+        const ctx = readSrc("contexts/AdminDrawerContext.tsx");
+        expect(restore).toContain("scheduleOpportunityDrawerGraphRewarmAfterRestore");
+        expect(restore).toContain("scheduleWarmRelatedDrawerTargetsAfterVmApply");
+        expect(ctx).toContain("goBackToLead");
+        expect(ctx).toContain("buildRestoredOpportunityDrawerState");
     });
 
-    it("child→opportunity restore reveals below-fold for header actions", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain('prev.type === "persons"');
-        expect(drawer).toContain("restoreCanRenderFrame");
-        expect(drawer).toContain("setOpportunityDrawerBelowFoldRevealed(true)");
-    });
-
-    it("person section reserves use final-size variants", () => {
-        const reserve = readSrc("components/admin/entity/PersonDrawerSectionCoordinatedReserve.tsx");
-        const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
-        expect(reserve).toContain("min-h-[11rem]");
-        expect(operating).toContain("data-person-drawer-layout-variant={variant.variant_key}");
-        expect(reserve).not.toContain("skeleton-pulse");
-    });
 });

@@ -107,7 +107,7 @@ async function main() {
   // (We don't hit Next routes here; we validate DB + resolvability.)
   const { data: children, error: kidsErr } = await sb
     .from("opportunity_customer_members")
-    .select("id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes")
+    .select("id, customer_member_id, program_category_id, schedule_type, outcome_status_key, fit_status, notes")
     .eq("org_id", orgId)
     .eq("opportunity_id", oppId);
   if (kidsErr) throw new Error(`opportunity_customer_members fetch failed: ${kidsErr.message}`);
@@ -116,8 +116,8 @@ async function main() {
   const okHasKeys =
     first &&
     Object.prototype.hasOwnProperty.call(first, "outcome_status_key") &&
-    Object.prototype.hasOwnProperty.call(first, "desired_program_type") &&
-    Object.prototype.hasOwnProperty.call(first, "desired_schedule_type");
+    Object.prototype.hasOwnProperty.call(first, "program_category_id") &&
+    Object.prototype.hasOwnProperty.call(first, "schedule_type");
 
   let outcomeLabel = null;
   if (first?.outcome_status_key) {

@@ -1,0 +1,90 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+  "date": null,
+  "steps": [
+    {
+      "name": "operations_modal",
+      "at": "2026-09-22T04:12:02.777Z",
+      "present": true,
+      "url": "https://staging.workwithalloy.com/workspace",
+      "title": "Where Work Happens"
+    },
+    {
+      "name": "calendar_mounted",
+      "at": "2026-09-22T04:12:05.902Z",
+      "state": "ready",
+      "date": "2026-09-21"
+    },
+    {
+      "name": "lanes",
+      "at": "2026-09-22T04:12:05.905Z",
+      "count": 2,
+      "lanes": [
+        {
+          "room": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+          "state": "sufficient",
+          "summary": "Infant AStaffed0 expected · 0 present · needs 0 · 1 planned · 0 hereCovered all day",
+          "segments": [
+            {
+              "interval": "07:30-08:30",
+              "state": "idle",
+              "gap": "false",
+              "widthPct": "11.1111%"
+            },
+            {
+              "interval": "08:30-16:00",
+              "state": "sufficient",
+              "gap": "false",
+              "widthPct": "83.3333%"
+            },
+            {
+              "interval": "16:00-16:30",
+              "state": "idle",
+              "gap": "false",
+              "widthPct": "5.55556%"
+            }
+          ]
+        },
+        {
+          "room": "__site__",
+          "state": "sufficient",
+          "summary": "Site — no roomStaffed0 expected · 0 present · needs 0 · 2 planned · 0 hereCovered all day",
+          "segments": [
+            {
+              "interval": "08:30-16:00",
+              "state": "sufficient",
+              "gap": "false",
+              "widthPct": "83.3333%"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "segment_detail",
+      "at": "2026-09-22T04:12:06.818Z",
+      "opened": true,
+      "segment": "07:30-08:30",
+      "explanation": [
+        "Expected children: 0",
+        "1 expected child has no recorded hours and is counted in no segment",
+        "Actual children: 0",
+        "Required staff: 0",
+        "Planned staff: none",
+        "No children expected in this interval"
+      ]
+    },
+    {
+      "name": "next_day",
+      "at": "2026-09-22T04:12:09.598Z",
+      "date": "2026-09-22"
+    },
+    {
+      "name": "console_errors",
+      "at": "2026-09-22T04:12:12.123Z",
+      "count": 0,
+      "sample": []
+    }
+  ]
+}

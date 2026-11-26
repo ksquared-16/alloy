@@ -1,0 +1,102 @@
+# Agent instruction templates
+
+**Canonical managed-sprint doctrine:** [`docs/platform/governance/managed-sprint-operations.md`](../../docs/platform/governance/managed-sprint-operations.md)
+
+Preferred bootstrap for new sprints:
+
+```bash
+alloy-sprint-start <name> --provider <cursor|claude> [--slot auto|N] [--with-server|--without-server]
+```
+
+Phase 2 still generates **concrete** per-worktree instructions automatically:
+
+```bash
+alloy-agent-create <initiative>
+alloy-agent-instructions <slot|name>          # print
+alloy-agent-instructions <slot|name> --copy   # pbcopy
+alloy-agent-open <slot|name>                  # also copies when pbcopy exists
+```
+
+Phase 3 adds **verification context**:
+
+```bash
+alloy-agent-prepare <slot>
+alloy-agent-login <slot>
+alloy-agent-context <slot> --copy
+alloy-agent-ready <slot>
+```
+
+Generated files (git-ignored in the worktree):
+
+```text
+<worktree>/.alloy-agent-instructions.md
+<worktree>/.alloy-agent-context.md
+<worktree>/web/.env.local.agent
+```
+
+Auth storage (never commit):
+
+```text
+~/.local/state/alloy-dev/auth/slot<N>/storage-state.json
+```
+
+See `VERIFICATION-SECURITY.md` for the full security model.
+
+---
+
+## Generic fallbacks (Phase 1–3)
+
+Use only when generated files are unavailable.
+
+### Cursor agent
+
+```text
+You are working in an Alloy Git worktree for parallel local development.
+Read docs/platform/governance/managed-sprint-operations.md for the full sprint contract.
+
+Hard constraints:
+- Work ONLY in this assigned worktree directory.
+- Use ONLY the assigned branch and PORT (see alloy-worker-status / alloy-agent-status).
+- Use ONLY your slot's QA identity and browser storage state — never production.
+- At start: confirm pwd, branch, git status --short.
+- Do NOT push, merge, rebase, delete branches, remove worktrees, open PRs, or trigger Vercel until Kelly authorizes promotion.
+- “Commit” never implies “push.” Multiple coherent local commits are expected.
+- Focused checks: single-file Vitest, lint of touched files.
+- Heavy checks: alloy-validate <worktree> <kind> only (serialized; respect heavy-job limits).
+- Do NOT start a second dev server or duplicate toolkit browser.
+- Do NOT run `npm run dev` directly — use `alloy-dev-start` / `devup` (agent-safe `.env.local.agent` + trusted server injection; privileged values never enter the worktree).
+- Do NOT request or expect service-role / DB secrets in the worktree — they are injected only into the toolkit-owned server process.
+- Run `npm install` inside **this** worktree’s `web/` — browser tooling uses that worktree-local Playwright only (never borrow another tree’s `node_modules`).
+- If `alloy-agent-ready` reports only `web/next-env.d.ts` dirty after dev, run `git restore web/next-env.d.ts` (Next.js regeneration — not a toolkit defect).
+- Overnight: alloy-worker-pause <slot>. Morning: alloy-worker-resume <slot>. Finish: alloy-sprint-finish <slot>.
+
+UI verification (required for user-visible work):
+- Test in the assigned localhost browser — never claim UI verified from code alone.
+- Report route, steps, expected vs observed, console errors, failed requests, evidence paths.
+- Focused: alloy-agent-verify <slot> route /path
+- Full Playwright: alloy-validate <worktree> playwright only.
+- Never expose cookies, tokens, or storage-state contents.
+- Stop browsers: alloy-agent-browser-stop <slot>
+
+Port map: slot N → 3010+N. The slot registry under `metadata/` is the authority for which slots
+and ports exist — it currently extends past the range this document used to restate. Do not invent a
+port; use the one your slot was assigned. Login: /login (Supabase email/password).
+```
+
+### Claude agent
+
+Same as Cursor. Prefer architecture/doctrine on slot 2, refactor/infrastructure on slot 5 unless redirected. Claude Code also loads repo-root `CLAUDE.md`, which points at the same managed-sprint doctrine.
+
+Claude Desktop: open the exact worktree folder printed by `alloy-agent-open` / `alloy-sprint-start` if no `claude` CLI exists.
+
+---
+
+## Phase 4 — Engineering Manager workers
+
+When working from an Engineering Manager package (`.alloy-worker-package.md`):
+
+- Follow **constitutional**, **initiative-approved**, and **worker discretion** sections separately
+- Write structured report to the path specified in the package (`reports/<task>-result.json`)
+- Conversational "done" is not completion — the manager ingests only the JSON report
+- Use `alloy-worker-report <initiative> <task>` from the operator session after you finish
+- Remediation packages preserve approved scope — do not expand or refactor unrelated areas

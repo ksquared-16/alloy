@@ -13,15 +13,18 @@ import {
     type WorkViewFilterV1,
 } from "@/lib/lifecycle/workViewsConfigV1";
 
-function filtersFromStageLabel(stageLabel: string): WorkViewFilterV1[] {
-    // Seed with the canonical typed key (legacy `stage` is normalized to this on load anyway).
+function filtersFromStageKey(stageKey: string): WorkViewFilterV1[] {
+    // Membership is by persisted stage — the runtime `opportunity_stage` field resolves
+    // `lifecycle_stage_key` (the stage KEY, e.g. "lead"), so the filter value MUST be the
+    // stage key, never the display label (which would never match).
     return [
-        { field_key: "opportunity_stage", operator: "equals", value: stageLabel },
+        { field_key: "opportunity_stage", operator: "equals", value: stageKey },
     ];
 }
 
 function workViewFromPerspective(
     perspective: PerspectiveConfigV1Stored,
+    stageKey: string,
     stageLabel: string,
     displayOrder: number,
 ): WorkViewConfigV1Stored {
@@ -31,7 +34,7 @@ function workViewFromPerspective(
             id: slugifyWorkViewId(label),
             label,
             mission: perspective.mission?.trim() || "",
-            filters_v1: filtersFromStageLabel(stageLabel),
+            filters_v1: filtersFromStageKey(stageKey),
             sort_v1: { field_key: "updated_at", direction: "desc" },
             visible_in_runtime: perspective.visible_in_rail !== false,
             display_order: perspective.display_order ?? displayOrder,
@@ -56,7 +59,7 @@ export function resolveProcessWorkViews(params: {
         const perspectives = stage.perspectives_v1 ?? [];
         if (!perspectives.length) continue;
         for (const perspective of perspectives) {
-            seeded.push(workViewFromPerspective(perspective, stage.label, order));
+            seeded.push(workViewFromPerspective(perspective, stage.key, stage.label, order));
             order += 1;
         }
     }

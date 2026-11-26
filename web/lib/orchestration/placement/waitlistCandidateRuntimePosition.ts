@@ -34,7 +34,40 @@ export function formatWaitlistRuntimePositionLabel(
 ): string {
     const n = Math.max(1, Math.floor(position));
     const t = Math.max(n, Math.floor(total));
-    return mode === "preview" ? `Preview position ${n}/${t}` : `Position ${n}/${t}`;
+    // Compact queue scan: `1/4`. Preview keeps an explicit prefix so operators know it is not live.
+    return mode === "preview" ? `Preview ${n}/${t}` : `${n}/${t}`;
+}
+
+export type WaitlistRankParts = {
+    /** True when the label is a preview (not live) rank. */
+    preview: boolean;
+    numerator: number;
+    denominator: number;
+    /** Plain compact string without `#` — `1/4` or `Preview 1/4`. */
+    compact: string;
+};
+
+/** Parse compact / legacy position labels into numerator + denominator for row chrome. */
+export function parseWaitlistRankParts(label: string | null | undefined): WaitlistRankParts | null {
+    const raw = typeof label === "string" ? label.trim() : "";
+    if (!raw) return null;
+    const m = raw.match(/(?:Preview\s+)?(?:position\s+)?#?(\d+)\s*\/\s*(\d+)/i);
+    if (!m) return null;
+    const numerator = Math.max(1, Number(m[1]));
+    const denominator = Math.max(numerator, Number(m[2]));
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) return null;
+    const preview = /\bpreview\b/i.test(raw);
+    return {
+        preview,
+        numerator,
+        denominator,
+        compact: preview ? `Preview ${numerator}/${denominator}` : `${numerator}/${denominator}`,
+    };
+}
+
+/** Parse compact / legacy position labels into `{n}/{t}` for row chrome (no `#`). */
+export function compactWaitlistPositionLabel(label: string | null | undefined): string | null {
+    return parseWaitlistRankParts(label)?.compact ?? null;
 }
 
 function readSortTuple(row: Record<string, unknown>): Array<string | number | null> | null {
@@ -90,8 +123,8 @@ export function readWaitlistCandidateSectionKey(
         cohortKey,
         cohortLabel,
         siteId: scope.siteId,
-        desiredProgramType: scope.desiredProgramType,
-        desiredProgramCategoryId: scope.desiredProgramCategoryId,
+        programKey: scope.programKey,
+        programCategoryId: scope.programCategoryId,
         locationCategoryContext: context,
     }).sectionKey;
 }
@@ -128,7 +161,15 @@ function writeRuntimePositionOnRow(
 ): void {
     const wr = row._placement_waitlist_row;
     if (wr == null || typeof wr !== "object" || Array.isArray(wr)) return;
-    Object.assign(wr as Record<string, unknown>, fields);
+    const target = wr as Record<string, unknown>;
+    /*
+     * Clear the precedence note before writing. `Object.assign` only ADDS keys, so a row that no
+     * longer qualifies would silently keep the explanation written for a previous ordering — the
+     * operator would read a stale note after a Work View switch, a site change, or an unpin.
+     * Position is recomputed on every assignment; its explanation must be too.
+     */
+    delete target.runtime_position_precedence_note;
+    Object.assign(target, fields);
 }
 
 /**
@@ -171,6 +212,12 @@ export function assignWaitlistCandidateRuntimePositions(
                 shadowMode &&
                 position > 1 &&
                 rankIndices.slice(0, rank).some((higherIdx) => rowHasManualPinOverride(rows[higherIdx]!));
+            /*
+             * ONE POSITION. A pin is now placed within the SECTION — the list the operator reads —
+             * so the ordinal they choose is the position they get and there is no second number to
+             * reconcile. The cohort offset this block used to compute, and the reason that explained
+             * it, are gone with the scope change; see `applySectionManualPositions`.
+             */
             writeRuntimePositionOnRow(rows[rowIdx]!, {
                 runtime_position: position,
                 runtime_position_total: total,

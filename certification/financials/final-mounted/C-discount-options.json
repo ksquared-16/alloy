@@ -1,0 +1,11 @@
+{
+  "listbox": true,
+  "listboxLabel": "Discount",
+  "options": [
+    {
+      "t": "Choose a discount…",
+      "selected": "true"
+    }
+  ],
+  "optionCount": 1
+}

@@ -1,0 +1,60 @@
+{
+  "trusted_host_action_id": "tha_a103fdfb4ea58a",
+  "query_hash": "b60ddbefced11e06c094290abb7589d626073d2d9d750ea73b175999d76be5cf",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T20:19:53.758Z",
+    "question_ids": [
+      "accounts_that_can_reach_certification_org"
+    ],
+    "questions": {
+      "accounts_that_can_reach_certification_org": {
+        "question_id": "accounts_that_can_reach_certification_org",
+        "row_count": null,
+        "rows": [
+          {
+            "email": "access-corp@test.com",
+            "roles": "admin",
+            "email_confirmed": true,
+            "password_set": true,
+            "banned_now": false,
+            "last_sign_in": "2026-05-04"
+          },
+          {
+            "email": "access-director@test.com",
+            "roles": "ops,school_director",
+            "email_confirmed": true,
+            "password_set": true,
+            "banned_now": false,
+            "last_sign_in": "2026-05-05"
+          },
+          {
+            "email": "access-regional@test.com",
+            "roles": "ops,regional_lead",
+            "email_confirmed": true,
+            "password_set": true,
+            "banned_now": false,
+            "last_sign_in": "2026-05-04"
+          },
+          {
+            "email": "cert.operator@northwind.invalid",
+            "roles": "admin",
+            "email_confirmed": true,
+            "password_set": true,
+            "banned_now": false,
+            "last_sign_in": "2026-08-21"
+          },
+          {
+            "email": "kelly.kurzman@gmail.com",
+            "roles": "admin",
+            "email_confirmed": true,
+            "password_set": true,
+            "banned_now": false,
+            "last_sign_in": "2026-09-02"
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

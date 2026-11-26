@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatTourInstantForOperator } from "@/lib/tours/schedules/tourTimeFormat";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
 
@@ -26,17 +27,8 @@ function statusLabel(sk: string): string {
 }
 
 function formatBookingWhen(row: TourBookingRow, viewerTz: string | null): string {
-    try {
-        const d = new Date(row.start_at);
-        if (Number.isNaN(d.getTime())) return row.start_at;
-        return new Intl.DateTimeFormat(undefined, {
-            dateStyle: "medium",
-            timeStyle: "short",
-            timeZone: row.timezone || viewerTz || undefined,
-        }).format(d);
-    } catch {
-        return row.start_at;
-    }
+    // The booking's own zone snapshot, on a 12-hour clock — never the browser's locale (S3-D).
+    return formatTourInstantForOperator(row.start_at, row.timezone || viewerTz || null);
 }
 
 /**
@@ -48,6 +40,8 @@ export function OpportunityTourDrawerSection(props: Props) {
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
     const [bookings, setBookings] = useState<TourBookingRow[]>([]);
+    /** Bookings the location's Operating Calendar now closes; null = could not be checked. */
+    const [calendarAttention, setCalendarAttention] = useState<Record<string, { message: string }> | null>({});
     const [active, setActive] = useState<TourBookingRow[]>([]);
 
     const load = useCallback(async () => {
@@ -57,10 +51,16 @@ export function OpportunityTourDrawerSection(props: Props) {
             const res = await fetch(`/api/admin/tours/opportunities/${encodeURIComponent(opportunityId)}/bookings`, {
                 credentials: "include",
             });
-            const j = (await res.json().catch(() => ({}))) as { bookings?: TourBookingRow[]; active_bookings?: TourBookingRow[]; error?: string };
+            const j = (await res.json().catch(() => ({}))) as {
+                bookings?: TourBookingRow[];
+                active_bookings?: TourBookingRow[];
+                calendar_attention?: Record<string, { message: string }> | null;
+                error?: string;
+            };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
             setBookings(j.bookings ?? []);
             setActive(j.active_bookings ?? []);
+            setCalendarAttention(j.calendar_attention === undefined ? {} : j.calendar_attention);
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -115,6 +115,21 @@ export function OpportunityTourDrawerSection(props: Props) {
                             <div className="text-[11px] text-alloy-midnight/50">{primary.timezone}</div>
                         </div>
                     </div>
+                    {calendarAttention?.[primary.id] ? (
+                        <div
+                            className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900"
+                            role="status"
+                            data-testid="tour-booking-calendar-attention"
+                        >
+                            <strong>Needs attention.</strong> {calendarAttention[primary.id]!.message} The booking is unchanged and nothing was
+                            sent to the family — reschedule or cancel it with the tour actions.
+                        </div>
+                    ) : null}
+                    {calendarAttention === null ? (
+                        <p className="mt-2 text-[11px] text-alloy-midnight/55" data-testid="tour-booking-calendar-unchecked">
+                            The location’s operating calendar could not be checked for this booking.
+                        </p>
+                    ) : null}
                     {bookings.filter((b) => !ACTIVE.has(b.status_key)).length > 0 ? (
                         <div className="mt-2 border-t border-alloy-stone/10 pt-2 text-xs text-alloy-midnight/55">
                             Recent:{" "}

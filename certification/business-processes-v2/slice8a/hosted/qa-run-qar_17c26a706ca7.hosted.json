@@ -1,0 +1,290 @@
+{
+  "schema": "alloy.bp_v2.hosted_qa_attempt.v1",
+  "deployed_staging": "f12d000d21c1",
+  "toolkit": "1d35ef4690f2",
+  "plan": "bp_v2",
+  "target": "alloy_staging_web",
+  "qa_run": {
+    "run_id": "qar_17c26a706ca7",
+    "plan_key": "bp_v2",
+    "target": {
+      "kind": "hosted",
+      "key": "alloy_staging_web"
+    },
+    "lane_id": "lane_581d120e4e41",
+    "run_ref": "erun2_713d9e8eaf1fd40d",
+    "open_request_id": "gar_260e6ab8aed8e5",
+    "state": "CLOSING",
+    "opened_at": "2026-10-22T19:19:12.188Z",
+    "lease_expires_at": "2026-10-23T01:19:12.188Z",
+    "personas": [
+      {
+        "persona_key": "admin",
+        "identity_key": "qa_pool_01",
+        "email": "qa-pool-01@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "admin"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "director",
+        "identity_key": "qa_pool_02",
+        "email": "qa-pool-02@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "restricted_operator",
+        "identity_key": "qa_pool_03",
+        "email": "qa-pool-03@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "restricted"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "identity_key": "qa_pool_04",
+        "email": "qa-pool-04@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      }
+    ],
+    "fixture_namespace": {
+      "qa_run_id": "qar_17c26a706ca7"
+    },
+    "sessions": [
+      {
+        "persona_key": "admin",
+        "verified": false,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_17c26a706ca7/admin/storage-state.json",
+        "failure": "verification_failed"
+      }
+    ],
+    "failure": {
+      "code": "not_clean",
+      "detail": "access or sessions remain; close again to recover"
+    },
+    "close": {
+      "request_id": "gar_98543f0123f2bc",
+      "started_at": "2026-10-22T20:00:18.176Z",
+      "recovery": true,
+      "closed_at": null,
+      "verdict": "NOT_CLEAN",
+      "access_clean": false,
+      "sessions_removed": true,
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 0,
+          "clean": false,
+          "remaining_roles": 0,
+          "remaining_profiles": 1
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 0,
+          "clean": false,
+          "remaining_roles": 0,
+          "remaining_profiles": 1
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 0,
+          "clean": false,
+          "remaining_roles": 0,
+          "remaining_profiles": 1
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 0,
+          "clean": false,
+          "remaining_roles": 0,
+          "remaining_profiles": 1
+        }
+      ],
+      "custom_roles": [],
+      "sessions_signed_out": [
+        {
+          "identity_key": "qa_pool_01",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "signed_out": true
+        }
+      ],
+      "residue_census": null,
+      "retained_by_design": [
+        "posted financial records (immutable), neutralized and attributed by run",
+        "published process configuration",
+        "access audit history (mutation_events)"
+      ]
+    },
+    "updated_at": "2026-10-22T20:00:18.176Z",
+    "history": [
+      {
+        "at": "2026-10-22T19:19:12.188Z",
+        "event": "opening"
+      },
+      {
+        "at": "2026-10-22T19:19:12.188Z",
+        "event": "open_failed",
+        "detail": "qa_run_session_failed"
+      },
+      {
+        "at": "2026-10-22T19:21:10.071Z",
+        "event": "closing",
+        "detail": "abandoned"
+      },
+      {
+        "at": "2026-10-22T19:21:10.071Z",
+        "event": "close_incomplete",
+        "detail": "NOT_CLEAN"
+      },
+      {
+        "at": "2026-10-22T19:22:42.551Z",
+        "event": "closing",
+        "detail": "abandoned"
+      },
+      {
+        "at": "2026-10-22T19:22:42.551Z",
+        "event": "close_incomplete",
+        "detail": "NOT_CLEAN"
+      },
+      {
+        "at": "2026-10-22T20:00:18.176Z",
+        "event": "closing",
+        "detail": "abandoned"
+      },
+      {
+        "at": "2026-10-22T20:00:18.176Z",
+        "event": "close_incomplete",
+        "detail": "NOT_CLEAN"
+      }
+    ]
+  },
+  "requests": {
+    "open": {
+      "request_id": "gar_260e6ab8aed8e5",
+      "action_key": "environment.qa_run_open",
+      "status": "failed",
+      "failure_reason": "qa_run_session_failed \u2014 verification_failed",
+      "trusted_host_action_id": null,
+      "execution_started_at": "2026-10-22T19:19:12.188Z",
+      "execution_ended_at": null
+    },
+    "recovery_close_1": {
+      "request_id": "gar_4a6bc40d2b76e8",
+      "action_key": "environment.qa_run_close",
+      "status": "failed",
+      "failure_reason": "qa_run_not_clean \u2014 access or sessions remain; close again to recover",
+      "trusted_host_action_id": null,
+      "execution_started_at": "2026-10-22T19:21:10.071Z",
+      "execution_ended_at": null
+    },
+    "recovery_close_2": {
+      "request_id": "gar_f2b7947ee45fa7",
+      "action_key": "environment.qa_run_close",
+      "status": "failed",
+      "failure_reason": "qa_run_not_clean \u2014 access or sessions remain; close again to recover",
+      "trusted_host_action_id": null,
+      "execution_started_at": "2026-10-22T19:22:42.551Z",
+      "execution_ended_at": null
+    },
+    "census": {
+      "request_id": "gar_6c59b57eb1d7d1",
+      "action_key": "database.read_census",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_1a097172002d5d",
+      "execution_started_at": "2026-10-22T19:23:32.308Z",
+      "execution_ended_at": "2026-10-22T19:23:32.308Z"
+    }
+  },
+  "session_reverification": {
+    "note": "the admin storage-state the open marked verification_failed was re-verified read-only with the toolkit's own agent-verify.mjs (authenticated-home) against the lane web dir and ~/Alloy/web at 19:20Z: identity qa-pool-01@example.com, PASS both times \u2014 the open-time failure was transient"
+  },
+  "census": {
+    "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "census_run_at": "2026-10-22T19:23:40.885Z",
+    "checks": {
+      "bp_qr_pool_access": "user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ false",
+      "bp_qr_zero_sent": "communication_messages ~ outbound_send_evidence ~ zero ~ true",
+      "bp_qr_org_exists": "orgs ~ qa_shared ~ present ~ true",
+      "bp_qr_fin_no_merchant": "payment_provider_merchants ~ any ~ zero ~ true",
+      "bp_qr_fin_no_usable_method": "payment_methods ~ usable ~ zero ~ true",
+      "bp_qr_fin_no_autopay": "payment_autopay_arrangements ~ active_or_paused ~ zero ~ true",
+      "bp_qr_fin_no_provider_activity": "payment_collection_attempts+payment_provider_refunds+provider_payments ~ any ~ zero ~ true",
+      "bp_qr_fin_no_active_schedule": "scheduled_work ~ financials_or_payments_active ~ zero ~ true",
+      "bp_qr_fin_no_draft": "charges ~ draft ~ zero ~ true",
+      "bp_qr_fin_no_open_balance": "charges ~ owed_unreversed_uncovered ~ zero ~ true",
+      "bp_qr_fin_no_open_variance": "financial_subsidy_variances ~ unresolved ~ zero ~ true",
+      "bp_qr_fin_no_unapplied_money": "payments ~ inbound_posted_unapplied ~ zero ~ true",
+      "bp_qr_fin_attributed": "charges+payments+variances ~ non_qa_actor ~ zero ~ true"
+    },
+    "audit_rows": [
+      {
+        "artifact": "access audit history (mutation_events)",
+        "status": "retained_by_design",
+        "not_residue": true,
+        "qa_shared_mutation_event_rows": 11
+      }
+    ]
+  },
+  "blocker": {
+    "defect": "remove_member_access_audited (supabase/migrations/20260911240000_d2_removal_records_prior_scope_ids.sql) deletes only user_roles; no audited Alloy function removes user_access_profiles. The runner requires remaining_profiles == 0 (toolkit qa-run-db.mjs:209) and census v2 bp_qr_pool_access counts profiles, so every run that grants access closes NOT_CLEAN and stays CLOSING (holding QA Shared).",
+    "residue": "one role-less user_access_profiles row each for qa_pool_01..04 in QA Shared (no roles, sessions signed out: no effective access)",
+    "owner": "Alloy Access & Identity (audited removal) + Vacilando Backend (runner uses it)",
+    "smallest_fix": "remove_member_access_audited deletes the user's user_access_profiles row for the org after the last role (user_site_access / user_department_access cascade), recorded in the same access.user.removed event (before_* scopes are already captured); then re-close qar_17c26a706ca7, census v2, bind",
+    "not_recommended": "accepting a role-less profile as clean: it keeps the previous site/department scope, which a later grant re-activates (qa_pool_03 holds QA North restriction)"
+  },
+  "recovery_after_access_repair": {
+    "alloy_repair": {
+      "pr": 1571,
+      "merge": "50b067cd1",
+      "migration": "20261205090000_remove_member_access_clears_profile",
+      "ledger_census": "gar_6221411a0a43d4 (head 20261205090000)",
+      "function_census": "gar_8a22d14363804c 5/5 (deletes_user_access_profiles true; profile-only retry deletes without a second event)"
+    },
+    "close": "gar_98543f0123f2bc (toolkit 1d35ef4690f2, run erun2_d5e0013965934e0e): failed qa_run_not_clean \u2014 removed 0, remaining_roles 0, remaining_profiles 1 for qa_pool_01..04; sessions signed out",
+    "root_cause": "toolkit lib/qa-run-db.mjs closeQaRun iterates only the orgs in which the identity still has ROLES (roles.map(r => r.org_id)); the first close removed every role, so retries never call remove_member_access_audited and the role-less profiles can never be removed by any close",
+    "owner": "Vacilando Backend (QA-run runner)",
+    "smallest_fix": "call remove_member_access_audited for every QA org where the identity has a role OR an access profile (the repaired function is idempotent and deletes a residual profile with no second audit event); add a test: a pool identity with 0 roles and 1 QA profile is cleaned by close"
+  }
+}

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
     computeOperationalProjection,
+    computeWorkViewOperationalSignals,
     diagnoseRecordWorkViewPlacement,
     enrichRowsWithDerivedStage,
+    filterQueueRowsForWorkView,
+    applyWorkViewFilterToQueueItemsResult,
+    firstMatchingVisibleWorkView,
     recordMatchesWorkView,
     resolveFocusPanelScope,
 } from "@/lib/lifecycle/operationalProjection";
@@ -139,6 +143,62 @@ describe("New Leads vs Registration placement (stage derived from status)", () =
         expect(recordMatchesWorkView(enriched, ENROLLMENT_VIEWS[0])).toBe(true); // New Leads now matches
     });
 
+    it("filterQueueRowsForWorkView passes opportunity_stage=lead when row only has stage_key=lead", () => {
+        const queueRow = { id: "opp-1", status_key: "open", stage_key: "lead" };
+        const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
+        const matched = filterQueueRowsForWorkView([queueRow], stageFilters, "all");
+        expect(matched).toHaveLength(1);
+        expect((matched[0] as { lifecycle_stage_key?: string }).lifecycle_stage_key).toBe("lead");
+    });
+
+    it("filterQueueRowsForWorkView excludes non-matching stage after enrichment", () => {
+        const rows = [
+            { id: "a", stage_key: "lead" },
+            { id: "b", stage_key: "waitlist" },
+        ];
+        const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
+        expect(filterQueueRowsForWorkView(rows, stageFilters, "all").map((r) => r.id)).toEqual(["a"]);
+    });
+
+    it("applyWorkViewFilterToQueueItemsResult returns true filtered total with paginated items", () => {
+        const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
+        const page = applyWorkViewFilterToQueueItemsResult({
+            result: {
+                queue: { key: "lifecycle_lead" },
+                items: [
+                    { id: "a", stage_key: "lead" },
+                    { id: "b", stage_key: "lead" },
+                    { id: "c", stage_key: "waitlist" },
+                ],
+                total: 3,
+                limit: 500,
+                offset: 0,
+                total_omitted: true,
+            },
+            filters: stageFilters,
+            pageLimit: 1,
+            pageOffset: 0,
+        });
+        expect(page.total).toBe(2);
+        expect(page.items.map((r) => r.id)).toEqual(["a"]);
+        expect(page.total_omitted).toBeUndefined();
+    });
+
+    it("firstMatchingVisibleWorkView prefers predicate-scoped views over include-all", () => {
+        const views: WorkViewConfigV1Stored[] = [
+            { id: "all", label: "All", display_order: 1, visible_in_runtime: true, filters_v1: [] },
+            {
+                id: "scoped",
+                label: "Scoped",
+                display_order: 2,
+                visible_in_runtime: true,
+                filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" }],
+            },
+        ];
+        const match = firstMatchingVisibleWorkView({ id: "r1", stage_key: "lead" }, views);
+        expect(match?.id).toBe("scoped");
+    });
+
     it("projection with statusStageMap: New Leads = 1, All Leads = 1 (counts agree)", () => {
         const p = computeOperationalProjection({
             baseRows: [lyons],
@@ -180,13 +240,68 @@ describe("Focus Panel membership against the active Work View", () => {
     it("resolveFocusPanelScope classifies in/out of the active view", () => {
         const newLead = { id: "x", status_key: "new_inquiry" };
         expect(resolveFocusPanelScope({ record: newLead, activeView: VIEWS[1] })).toEqual({ kind: "in_scope" });
-        expect(resolveFocusPanelScope({ record: newLead, activeView: VIEWS[3] })).toEqual({
+        expect(resolveFocusPanelScope({ record: newLead, activeView: VIEWS[3], workViews: VIEWS })).toEqual({
             kind: "out_of_scope",
             activeViewId: "waitlist",
             activeViewLabel: "Waitlist",
+            destinationViewId: "new_leads",
+            destinationViewLabel: "New Leads",
         });
         expect(resolveFocusPanelScope({ record: newLead, activeView: null })).toEqual({ kind: "no_active_view" });
         // Record not yet loaded → don't assert out-of-scope.
         expect(resolveFocusPanelScope({ record: null, activeView: VIEWS[3] })).toEqual({ kind: "in_scope" });
+    });
+});
+
+describe("computeWorkViewOperationalSignals — per-view attention/overdue from base rows", () => {
+    // Base rows carry the generic `_queue_row_context` the queue attaches to every opportunity row.
+    const row = (
+        id: string,
+        status: string,
+        opts: { attention?: boolean; overdue?: boolean } = {},
+    ) => ({
+        id,
+        status_key: status,
+        _queue_row_context: {
+            attention_summary: { needs_attention: opts.attention === true, primary_reason_label: null },
+            current_work_summary: opts.overdue
+                ? {
+                      label: "Review",
+                      state: "open",
+                      due_label: "Overdue",
+                      progress_hint: null,
+                      blocker_hint: null,
+                  }
+                : {
+                      label: "Review",
+                      state: "open",
+                      due_label: "Upcoming",
+                      progress_hint: null,
+                      blocker_hint: null,
+                  },
+        },
+    });
+
+    it("counts attention/overdue per view using the SAME predicates as the counts", () => {
+        const baseRows = [
+            row("a", "new_inquiry", { attention: true }),
+            row("b", "new_inquiry", { overdue: true }),
+            row("c", "waitlist", { attention: true, overdue: true }),
+            row("d", "tour_scheduled"),
+        ];
+        const signals = computeWorkViewOperationalSignals({ baseRows, workViews: VIEWS });
+
+        // All Leads (include-all): 2 attention (a, c), 2 overdue (b, c).
+        expect(signals.all_leads).toMatchObject({ attentionCount: 2, overdueCount: 2 });
+        // New Leads (status=new_inquiry): rows a, b → 1 attention, 1 overdue.
+        expect(signals.new_leads).toMatchObject({ attentionCount: 1, overdueCount: 1 });
+        // Waitlist (status=waitlist): row c → 1 attention, 1 overdue.
+        expect(signals.waitlist).toMatchObject({ attentionCount: 1, overdueCount: 1 });
+    });
+
+    it("rows without `_queue_row_context` contribute no signal (never a fabricated one)", () => {
+        const baseRows = [{ id: "x", status_key: "new_inquiry" }];
+        const signals = computeWorkViewOperationalSignals({ baseRows, workViews: VIEWS });
+        expect(signals.new_leads).toMatchObject({ attentionCount: 0, overdueCount: 0 });
     });
 });

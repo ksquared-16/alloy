@@ -1,0 +1,32 @@
+ok  - 1/8 — a validated workflow-only candidate with main unmoved proceeds
+ok  - 9 — exactly ONE commit is created, parented on the approved main
+ok  - 9a — it never merges, rebases, resets or forces
+ok  - 10 — only the declared files are staged onto main's own tree
+ok  - 2 — a candidate touching web/** is refused at mutation time
+ok  - 3 — a candidate carrying a migration is refused
+ok  - 4 — a mixed candidate is refused WHOLE and nothing is pushed
+ok  - 5 — a missing ownership declaration is refused
+ok  - 5a — a missing main_before is refused: approval is ONTO a specific main
+ok  - 6 — a changed file that was not declared is refused
+ok  - 7 — main moving after approval REFUSES and names both heads
+ok  - 7a — the CAS reads the REMOTE, not a local tracking ref
+ok  - 11/12 — the executor cannot target staging or any branch but main
+ok  - 11a — ordinary product promotion still refuses main
+ok  - 13 — the result carries main_before, main_after, candidate and files
+ok  - 14 — a push failure reports no false success AND names the built commit
+ok  - 14a — a retry after a LOST RESULT settles truthfully instead of committing twice
+ok  - A — a missing candidate refuses before anything is built
+ok  - S1 - normalized inputs still reach the executor's happy path
+ok  - S2 - normalized carries the worktree the executor resolves the candidate in
+ok  - S3 - normalized carries the main it was approved onto
+ok  - S4 - a filer that omits the worktree is refused at request time
+ok  - S5 - the write declares what it acted on, so it cannot inherit a stranger's result
+ok  - S6 - main_after is not a copy of main_before
+ok  - I1 - the real git honours GIT_INDEX_FILE, so the build never touches the named worktree
+ok  - I2 - an env override does not strip the ambient environment git needs
+ok  - I3 - the build works in a LINKED WORKTREE, which is where every candidate lives
+ok  - W1 - the git the promotion runs on actually resolves
+ok  - W2 - it keeps a caller's own directory and forwards the index env
+
+# pass 29
+# fail 0

@@ -51,7 +51,7 @@ export const DEFAULT_LEAD_ENROLLMENT_GRID_CELL_ROLES: Record<string, EnrollmentG
     "child.name": "primary_link",
     "child.dob_age": "text",
     "child.program": "pill",
-    "child.desired_start_date": "compact",
+    "child.start_date": "compact",
     "child.schedule": "compact",
     "child.room": "compact",
     "child.status": "pill",

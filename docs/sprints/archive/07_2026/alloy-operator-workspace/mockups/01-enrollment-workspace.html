@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alloy — Enrollment Workspace</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+  <script>if(!location.search.includes('screenshot'))location.search='?screenshot=1';</script>
+</head>
+<body>
+  <nav class="nav-bar mockup-gallery-bar" style="position:static">
+    <a href="index.html">Gallery</a><span class="sep">·</span><span>01 Enrollment Workspace</span>
+    <span class="sep">→</span><a href="02-current-work-focus.html">Focus</a>
+  </nav>
+
+  <div class="os-frame">
+    <aside class="sidebar">
+      <div class="sidebar-icon">⌂</div>
+      <div class="sidebar-icon active">⊞</div>
+      <div class="sidebar-icon">✉</div>
+      <div class="sidebar-icon">☰</div>
+    </aside>
+
+    <div class="os-main">
+      <header class="top-bar">
+        <input class="search" readonly value="Search families, children, staff…" />
+        <span class="campus">North Campus</span>
+      </header>
+
+      <div class="wu-header">
+        <div class="wu-breadcrumb">
+          Workspace <span>/</span> <strong>Enrollment</strong>
+        </div>
+        <div class="wu-pills">
+          <span class="wu-pill active">New Inquiries</span>
+          <span class="wu-pill">Tours This Week</span>
+          <span class="wu-pill">Needs Follow-up</span>
+        </div>
+        <div class="wu-nav">
+          <button>◀ Prev</button>
+          <button>Next ▶</button>
+        </div>
+      </div>
+
+      <div class="os-split">
+        <div class="queue-panel">
+          <div class="queue-header">New Inquiries · 24</div>
+          <div class="queue-row active">
+            <div class="name">Digan Family</div>
+            <div class="hint">Qualify family · 2 of 3</div>
+          </div>
+          <div class="queue-row">
+            <div class="name">Chen Family</div>
+            <div class="hint">Schedule tour</div>
+          </div>
+          <div class="queue-row">
+            <div class="name">Patel Family</div>
+            <div class="hint">Needs first contact</div>
+          </div>
+          <div class="queue-row">
+            <div class="name">Nguyen Family</div>
+            <div class="hint">Record tour visit</div>
+          </div>
+        </div>
+
+        <div class="fp-panel">
+          <div class="fp-chrome">
+            <div class="fp-record-bar">
+              <div class="fp-avatar">DF</div>
+              <div class="fp-identity">
+                <h1>Digan Family</h1>
+                <div class="sub">Enrollment · North Campus</div>
+              </div>
+              <div class="fp-record-actions">
+                <button class="btn-bos">BOS</button>
+                <button class="btn-ghost">···</button>
+              </div>
+            </div>
+            <div class="fp-mode-bar">
+              <span class="fp-mode-tab active">Summary</span>
+              <span class="fp-mode-tab">Work</span>
+              <span class="fp-mode-tab">Activity</span>
+            </div>
+          </div>
+
+          <div class="fp-scroll">
+            <div class="card-objective card-current-work" onclick="location.href='02-current-work-focus.html'">
+              <span class="card-chevron">›</span>
+              <div class="card-label">Current Work</div>
+              <div class="obj-title">Qualify Family</div>
+              <div class="obj-desc">Contact the family and determine if they are a good fit for our programs.</div>
+              <div class="obj-progress">
+                <div class="progress-bar">
+                  <div class="progress-seg done"></div>
+                  <div class="progress-seg done"></div>
+                  <div class="progress-seg"></div>
+                </div>
+                <div class="progress-meta"><span>2 of 3 done</span><span class="progress-verdict">Almost ready</span></div>
+              </div>
+              <button class="btn-primary" onclick="event.stopPropagation();location.href='02-current-work-focus.html'">Complete Qualification</button>
+            </div>
+
+            <div class="card-grid-ws">
+              <div class="card-support" onclick="location.href='03-household-handoff.html'">
+                <div class="card-label">Household</div>
+                <h3>Rob Digan · Primary contact</h3>
+                <div class="card-meta">2 adults · Last contact today</div>
+                <span class="chip chip-ok" style="margin-top:6px">Contacted</span>
+              </div>
+              <div class="card-support" onclick="location.href='03-household-handoff.html'">
+                <div class="card-label">Children</div>
+                <h3>Robbie & Zara</h3>
+                <div class="card-meta">Infant + Toddler · Program interest needed</div>
+                <span class="chip chip-warn" style="margin-top:6px">Needs info</span>
+              </div>
+              <div class="card-support">
+                <div class="card-label">Readiness</div>
+                <h3>Almost ready</h3>
+                <div class="card-meta">2 of 5 factors complete</div>
+              </div>
+              <div class="card-support">
+                <div class="card-label">Tour</div>
+                <h3>No tour scheduled</h3>
+                <div class="card-meta">Available after qualification</div>
+              </div>
+              <div class="card-support" onclick="location.href='04-communications-handoff.html'">
+                <div class="card-label">Communications</div>
+                <h3>1 call logged today</h3>
+                <div class="card-meta">Follow-up not scheduled</div>
+              </div>
+              <div class="card-support">
+                <div class="card-label">Documents</div>
+                <h3>0 uploaded</h3>
+                <div class="card-meta">None required yet</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="bos-rail">
+          <div class="bos-rail-btn">BOS</div>
+          <div class="bos-rail-icon">?</div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup-gallery-bar"><a href="index.html">All mockups</a> · Press P to toggle chrome</div>
+</body>
+</html>

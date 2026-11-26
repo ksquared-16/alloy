@@ -1,22 +1,23 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
     ChevronDown,
     ChevronRight,
+    Building2,
     Home,
     PanelLeftClose,
     PanelLeft,
-    Settings,
     Workflow,
 } from "lucide-react";
 import { neutral, palette, derived } from "@/styles/tokens/colors";
 import {
     CANONICAL_ADMIN_BASE,
+    CANONICAL_ADMIN_CONFIG_LANDING,
     CANONICAL_OPERATOR_BASE,
+    CANONICAL_ORGANIZATION_BASE,
     CANONICAL_SETTINGS_BASE,
-    isCanonicalFormsPath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
@@ -25,24 +26,47 @@ import {
     loadOperatorLifecycleLandingCards,
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
-import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { warmOperatorWorkUnitNavEntry } from "@/lib/admin/warmOperatorWorkUnitNavEntry";
+import {
+    getWorkViewTotalsPublication,
+    getWorkViewTotalsPublicationServerSnapshot,
+    subscribeWorkViewTotalsPublication,
+} from "@/lib/presentation/runtime/workViewTotalsPublication";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import { requestWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
 import {
     SidebarAnalyticsNavItem,
     SidebarInboxNavItem,
     SidebarProcessingNavItem,
+    SidebarFinancialsNavItem,
+    SidebarOperationsNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import {
+    useWorkViewTotals,
+    workViewTotalKey,
+    type WorkViewTotalTarget,
+} from "@/lib/presentation/runtime/useWorkViewTotals";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigurationModeNav";
 import { readInboxUnreadCountCache } from "@/lib/adminV2/inboxNavUnreadCache";
 import { readOperationalTasksNavCountsCache } from "@/lib/adminV2/operationalTasksNavCountsCache";
 import { composeShellNavigationSurfaceViewModel } from "@/lib/adminV2/runtime/surface/shellNavigationSurfaceViewModel";
 
+/*
+ * A stable identity so a miss re-renders nothing: React bails out when the state reference is
+ * unchanged, and this nav re-peeks on every route change.
+ */
+
+/** Stable empty list: a new array each render would re-key the totals hook every time. */
+const EMPTY_TARGETS: WorkViewTotalTarget[] = [];
+
+
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
-const SETTINGS_HREF = CANONICAL_ADMIN_BASE;
+const ORGANIZATION_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
 const EXPANDED_QUEUE_LINK = "adminv2-sidebar-queue-link";
@@ -64,11 +88,14 @@ function isAdminConfigPath(path: string): boolean {
         return false;
     }
     if (path.startsWith("/admin/tasks") || path.startsWith("/admin/messages")) return false;
-    if (isCanonicalFormsPath(path)) return false;
     if (path.startsWith(`${CANONICAL_ADMIN_BASE}/workspace`)) return false;
     return (
         path === CANONICAL_SETTINGS_BASE
         || path.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
+        // Productized Organization domains live under `/organization/{slug}` — must keep
+        // Configuration Mode rail mounted (exact `/organization` alone is not enough).
+        || path === CANONICAL_ORGANIZATION_BASE
+        || path.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`)
         || path === CANONICAL_ADMIN_BASE
         || path.startsWith(`${CANONICAL_ADMIN_BASE}/`)
     );
@@ -89,21 +116,25 @@ function SidebarNav({
     // (Workspace / lifecycle) defer to it so the rail shows a single active anchor.
     const activeModal = useActiveAdminV2WorkspaceModal();
     const modalOpen = activeModal != null;
+    // Site scope: prefer the shell site-filter context (what WS/WU counts use) so the numbers
+    // agree; fall back to the sticky nav site id when the sidebar renders outside the provider
+    // (non-workspace shell branch), matching the scope hrefs already carry.
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter
+        ? siteFilter.selectedSiteId
+        : readStickyWorkspaceSiteIdForNavigation();
 
     const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(
-        () => peekOperatorLifecycleLandingCards() ?? [],
+        () => peekOperatorLifecycleLandingCards(selectedSiteId) ?? [],
     );
     const [lifecycleLoading, setLifecycleLoading] = useState(
-        () => peekOperatorLifecycleLandingCards() == null,
+        () => peekOperatorLifecycleLandingCards(selectedSiteId) == null,
     );
     const [expandedLifecycleIds, setExpandedLifecycleIds] = useState<Set<string>>(() => new Set());
 
     useEffect(() => {
         let cancelled = false;
-        if (!peekOperatorLifecycleLandingCards()) {
-            setLifecycleLoading(true);
-        }
-        void loadOperatorLifecycleLandingCards()
+        void loadOperatorLifecycleLandingCards({ selectedSiteId })
             .then((cards) => {
                 if (cancelled) return;
                 setLifecycleCards(cards);
@@ -119,7 +150,7 @@ function SidebarNav({
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [selectedSiteId]);
 
     const toggleLifecycleExpanded = useCallback((id: string) => {
         setExpandedLifecycleIds((prev) => {
@@ -129,6 +160,93 @@ function SidebarNav({
             return next;
         });
     }, []);
+
+    // Canonical Work View counts — the SAME source the Workspace tile list and Work Unit pill
+    // strip resolve from (`useWorkViewTotals`: the view's `work_view_id` evaluated at its
+    // canonical location — host work unit + base lane). Left-nav count == tile count == pill
+    // count for the same view by construction.
+    //
+    // This once read "Fetches DEDUPE via `dedupeAdminFetch`, so calling the hook here does not
+    // double-fetch what the WS/WU surfaces already request." That is NO LONGER TRUE and the note
+    // below records what replaced it: dedupe only ever hid this call behind someone else's
+    // request, and it stopped hiding it the moment that request went away.
+
+    /*
+     * THE COUNTS THE WORK UNIT OWNER ALREADY RESOLVED — OBSERVED, NEVER RE-ASKED.
+     *
+     * This nav asks the same question the Work Unit surface asks. The comment above records the
+     * assumption that once made that free: "Fetches DEDUPE via `dedupeAdminFetch`". That held only
+     * while the surface issued a request; the WU-03 document seed retired it and this nav became
+     * the sole requester — ~1.5s of server work per navigation, issued ~5.6s in, well after
+     * first-order finality.
+     *
+     * A PREVIOUS REPAIR TRIED TO PEEK THE PROVISIONING CACHE AND FAILED IN PRODUCTION (0 hits in
+     * 6 deployed samples). That entry is consume-once and the route surface — which commits before
+     * this nav, because the nav is behind Suspense — has always already consumed it. That approach
+     * is retired; do not reintroduce it.
+     *
+     * So the OWNER publishes and this nav observes. The ordering that broke the peek is what makes
+     * this correct:
+     *
+     *   absent  — no owner announced for this route, so no answer is coming: fall back NOW.
+     *   pending — an owner announced during ITS render, which precedes this nav's effects: WAIT.
+     *   settled — the owner's terminal answer (a null seed still means fall back, never zero).
+     *
+     * That three-state signal is why there is no timeout here and no state that can leave the
+     * badges pending forever.
+     *
+     * This nav is NOT the semantic owner: it evaluates nothing, and re-validates what it receives
+     * through the existing matcher, whose site-scope and configured-view-signature checks are
+     * derived from this nav's OWN state and are therefore genuinely independent of the publisher.
+     */
+    const publication = useSyncExternalStore(
+        subscribeWorkViewTotalsPublication,
+        getWorkViewTotalsPublication,
+        getWorkViewTotalsPublicationServerSnapshot,
+    );
+    const publicationSettled = publication.phase !== "pending";
+    const published = publication.phase === "settled" ? publication : null;
+
+    /*
+     * Targets are WITHHELD while an owner is still pending, and that ordering is half the repair.
+     *
+     * The totals hook decides ONCE whether a seed answers its question, on the first render where
+     * targets exist. Publishing targets before the owner's answer arrives would spend that single
+     * decision on "no_seed" and fetch anyway — the seed would be present, correct, and
+     * structurally unusable. A deployed measurement caught exactly that on the surface instance.
+     *
+     * Waiting is bounded by the signal, not by a clock: `absent` resolves immediately on routes
+     * with no owner, and a `settled` answer with a null seed falls through to the canonical fetch.
+     */
+    const workViewTotalTargets = useMemo<WorkViewTotalTarget[]>(() => {
+        if (!publicationSettled) return EMPTY_TARGETS;
+        const seen = new Set<string>();
+        const out: WorkViewTotalTarget[] = [];
+        for (const card of lifecycleCards) {
+            for (const entry of card.workQueues) {
+                const viewId = entry.work_view_id?.trim();
+                const workUnitId = entry.host_work_unit_id?.trim();
+                const baseQueueKey = entry.base_queue_key?.trim();
+                if (!viewId || !workUnitId || !baseQueueKey) continue;
+                const key = workViewTotalKey(workUnitId, viewId);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push({ viewId, workUnitId, baseQueueKey });
+            }
+        }
+        return out;
+    }, [lifecycleCards, publicationSettled]);
+
+
+    const workViewTotals = useWorkViewTotals({
+        ownerLabel: "sidebar",
+        targets: workViewTotalTargets,
+        selectedSiteId,
+        enabled: lifecycleCards.length > 0,
+        documentSeed: published?.seed ?? null,
+        seedOrgId: published?.orgId ?? null,
+        seedHostWorkUnitId: published?.hostWorkUnitId ?? null,
+    });
 
     // ShellNavigationSurfaceViewModel — the persistent left nav is mounted ABOVE the route (in
     // AdminV2Shell) so it commits once and never remounts across workspace/work-unit navigation.
@@ -168,6 +286,15 @@ function SidebarNav({
             aria-label="Workspace"
             active={!modalOpen && (path === WORKSPACE || path === `${WORKSPACE}/`)}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+            // Returning to the Workspace is an ATTENTION movement, not just a route change: the
+            // committed work-unit Focus must yield or the Surface Host keeps the Work Unit on screen
+            // (Kelly A2). The Sidebar sits above the kernel providers, so it forwards the intent to
+            // the Surface Host (which owns the kernel) rather than moving attention itself. The href
+            // stays for copy-link / open-in-new-tab; modifier clicks fall through to the browser.
+            onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                requestWorkspaceReturn();
+            }}
         >
             {collapsed ? (
                 <Home size={20} strokeWidth={1.75} />
@@ -181,6 +308,25 @@ function SidebarNav({
     );
 
     const processingLink = <SidebarProcessingNavItem collapsed={collapsed} />;
+    /*
+     * ONE Operations entry, where there were three.
+     *
+     * Roster (the plan), Records (the people) and Assignments (the commitments and their
+     * configuration) were three rail items onto one operating day. A director looking for a person
+     * and a director looking at a short room are the same director, and three doors asked them to
+     * decide which they were before they had looked.
+     *
+     * There is deliberately no hidden duplicate: the Roster and Assignments entries are GONE, not
+     * conditionally rendered, so there is no state in which two buttons open the same workspace.
+     */
+    const operationsLink = <SidebarOperationsNavItem collapsed={collapsed} />;
+
+    /*
+     * FINANCIALS sits after Operations: the operating day is run first, and the money that day
+     * produces is worked afterwards. It is a workspace entry like the others, not a route — the
+     * `/adminV2/finance` placeholder is not the product path and is not linked from here.
+     */
+    const financialsLink = <SidebarFinancialsNavItem collapsed={collapsed} />;
 
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
@@ -188,20 +334,20 @@ function SidebarNav({
 
     const analyticsLink = <SidebarAnalyticsNavItem collapsed={collapsed} />;
 
-    const settingsLink = (
+    const organizationLink = (
         <AdminV2NavLink
-            href={SETTINGS_HREF}
-            title="Admin"
-            aria-label="Admin"
+            href={ORGANIZATION_HREF}
+            title="Organization"
+            aria-label="Organization"
             active={onSettings}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
         >
             {collapsed ? (
-                <Settings size={20} strokeWidth={1.75} />
+                <Building2 size={20} strokeWidth={1.75} />
             ) : (
                 <span className="inline-flex items-center gap-2">
-                    <Settings size={16} strokeWidth={1.75} />
-                    Admin
+                    <Building2 size={16} strokeWidth={1.75} />
+                    Organization
                 </span>
             )}
         </AdminV2NavLink>
@@ -209,6 +355,27 @@ function SidebarNav({
 
     const lifecycleNavExpanded = (
         <>
+            {/*
+             * A QUIET EYEBROW, NOT A DESTINATION.
+             *
+             * Enrollment and its Work Views sat directly under Analytics, so the rail read as one
+             * flat list and the Business Process had no more standing in it than a modal launcher.
+             * This names the section the configured processes belong to. It is a <p>, deliberately:
+             * there is nothing here to click, and the Business Process itself stays the identity
+             * the operator selects.
+             *
+             * "Business Processes", never "Processes" — Processing is its own operating area three
+             * rows above, and the shortened form collides with it.
+             *
+             * Same class as the Organization rail's group headings (`SidebarConfigurationModeNav`),
+             * so the two navigations wear one eyebrow rather than two that drift apart.
+             */}
+            <p
+                className="adminv2-sidebar-section-label mb-1 mt-3 px-2 text-[11px] font-semibold tracking-wide"
+                data-sidebar-group-label="business-processes"
+            >
+                Business Processes
+            </p>
             {lifecycleLoading ? (
                 <p className="adminv2-sidebar-muted px-2 py-2 text-xs" aria-busy="true">
                     Loading processes…
@@ -220,8 +387,9 @@ function SidebarNav({
             <div className="space-y-1">
                 {lifecycleCards.map((lifecycle) => {
                     const isExpanded = expandedLifecycleIds.has(lifecycle.id);
+                    const lifecycleEntryHref = lifecycle.entryHref;
                     const lifecycleEntryActive =
-                        !modalOpen && path === lifecycle.entryHref && !workUnitSlug;
+                        !modalOpen && path === lifecycleEntryHref && !workUnitSlug;
                     return (
                         <div key={lifecycle.id} className="space-y-0.5">
                             <div className="flex items-stretch gap-0.5">
@@ -242,31 +410,50 @@ function SidebarNav({
                                         <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
                                     )}
                                 </button>
+                                {lifecycle.entryHref == null ? (
+                                    // Nothing to open yet (BP V2 S1): the process is listed under its
+                                    // own name and does not borrow another process's queue.
+                                    <span
+                                        className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK} adminv2-sidebar-muted`}
+                                        title={lifecycle.unavailableReason ?? lifecycle.label}
+                                        data-sidebar-process-unavailable
+                                    >
+                                        <span className="inline-flex min-w-0 items-center gap-2">
+                                            <Workflow size={16} strokeWidth={1.75} className="shrink-0" />
+                                            <span className="truncate">{lifecycle.label}</span>
+                                        </span>
+                                    </span>
+                                ) : (
                                 <AdminV2NavLink
                                     href={workspaceHref(lifecycle.entryHref)}
                                     active={lifecycleEntryActive}
                                     className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
                                     title={lifecycle.label}
-                                    onMouseEnter={() =>
-                                        warmOperatorWorkUnitEntryFromHref(
-                                            lifecycle.entryHref,
-                                            null,
-                                            "sidebar_lifecycle_hover",
-                                        )
-                                    }
-                                    onFocus={() =>
-                                        warmOperatorWorkUnitEntryFromHref(
-                                            lifecycle.entryHref,
-                                            null,
-                                            "sidebar_lifecycle_focus",
-                                        )
-                                    }
+                                    onMouseEnter={() => {
+                                        if (lifecycleEntryHref) {
+                                            warmOperatorWorkUnitNavEntry(
+                                                lifecycleEntryHref,
+                                                null,
+                                                "sidebar_lifecycle_hover",
+                                            );
+                                        }
+                                    }}
+                                    onFocus={() => {
+                                        if (lifecycleEntryHref) {
+                                            warmOperatorWorkUnitNavEntry(
+                                                lifecycleEntryHref,
+                                                null,
+                                                "sidebar_lifecycle_focus",
+                                            );
+                                        }
+                                    }}
                                 >
                                     <span className="inline-flex min-w-0 items-center gap-2">
                                         <Workflow size={16} strokeWidth={1.75} className="shrink-0" />
                                         <span className="truncate">{lifecycle.label}</span>
                                     </span>
                                 </AdminV2NavLink>
+                                )}
                             </div>
                             {isExpanded && lifecycle.workQueues.length ? (
                                 <div className="ml-8 border-l border-white/10 pl-2.5">
@@ -277,12 +464,37 @@ function SidebarNav({
                                     >
                                     {lifecycle.workQueues.map((entry) => {
                                         const childHref = workspaceHref(entry.href);
+                                        // Active match on the entry's ROUTE key (the slug its href
+                                        // navigates to). Work-view entries carry `route_key` derived
+                                        // from the configured LABEL; `platformKey` is the internal
+                                        // view id, which diverges after a rename ("Hot List" can
+                                        // carry id `new_work_view_2`) and must not drive highlighting.
                                         const childActive =
                                             !modalOpen &&
                                             workUnitSlug != null &&
-                                            workUnitRouteSlugsEquivalent(workUnitSlug, entry.platformKey);
+                                            workUnitRouteSlugsEquivalent(
+                                                workUnitSlug,
+                                                entry.route_key ?? entry.platformKey,
+                                            );
+                                        const viewId = entry.work_view_id?.trim();
+                                        const hostWorkUnitId = entry.host_work_unit_id?.trim();
+                                        // Canonical count for this view (host-scoped key); null =
+                                        // pending/unresolved → stable placeholder, never a wrong number.
+                                        const count =
+                                            viewId && hostWorkUnitId
+                                                ? workViewTotals.get(
+                                                      workViewTotalKey(hostWorkUnitId, viewId),
+                                                  ) ?? null
+                                                : null;
+                                        // Only reserve the count slot for entries that HAVE a canonical
+                                        // location (a real view total); label-only entries stay label-only.
+                                        const hasCountSlot = Boolean(viewId && hostWorkUnitId);
                                         return (
-                                            <li key={entry.platformKey} role="none">
+                                            <li
+                                                key={entry.platformKey}
+                                                role="none"
+                                                data-work-view-id={viewId ?? entry.platformKey}
+                                            >
                                                 <AdminV2NavLink
                                                     href={childHref}
                                                     active={childActive}
@@ -290,21 +502,40 @@ function SidebarNav({
                                                     className={EXPANDED_QUEUE_LINK}
                                                     title={entry.label}
                                                     onMouseEnter={() =>
-                                                        warmOperatorWorkUnitEntryFromHref(
+                                                        warmOperatorWorkUnitNavEntry(
                                                             entry.href,
                                                             null,
                                                             "sidebar_queue_hover",
                                                         )
                                                     }
                                                     onFocus={() =>
-                                                        warmOperatorWorkUnitEntryFromHref(
+                                                        warmOperatorWorkUnitNavEntry(
                                                             entry.href,
                                                             null,
                                                             "sidebar_queue_focus",
                                                         )
                                                     }
                                                 >
-                                                    <span className="truncate">{entry.label}</span>
+                                                    <span className="flex w-full items-center gap-2">
+                                                        <span className="min-w-0 flex-1 truncate">
+                                                            {entry.label}
+                                                        </span>
+                                                        {hasCountSlot ? (
+                                                            <span
+                                                                className="adminv2-sidebar-queue-count shrink-0 text-right tabular-nums"
+                                                                aria-hidden={count == null}
+                                                            >
+                                                                {count == null ? (
+                                                                    <span
+                                                                        className="adminv2-sidebar-queue-count-pending inline-block h-2.5 w-4 animate-pulse rounded-sm bg-white/20 align-middle"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                ) : (
+                                                                    count
+                                                                )}
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
                                                 </AdminV2NavLink>
                                             </li>
                                         );
@@ -348,7 +579,7 @@ function SidebarNav({
                     <button
                         type="button"
                         onClick={onToggle}
-                        className="adminv2-sidebar-toggle flex h-10 w-full flex-shrink-0 items-center justify-center hover:opacity-90 active:scale-[0.98] transition-transform"
+                        className="adminv2-sidebar-toggle flex h-10 w-full flex-shrink-0 items-center justify-center motion-press hover:opacity-90"
                         aria-label="Expand sidebar"
                     >
                         <PanelLeft size={20} />
@@ -368,7 +599,7 @@ function SidebarNav({
                     <button
                         type="button"
                         onClick={onToggle}
-                        className="adminv2-sidebar-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:opacity-90 active:scale-[0.98] transition-transform"
+                        className="adminv2-sidebar-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-md motion-press hover:opacity-90"
                         aria-label="Collapse sidebar"
                     >
                         <PanelLeftClose size={20} />
@@ -384,6 +615,8 @@ function SidebarNav({
                             <>
                                 {inboxLink}
                                 {processingLink}
+                                {operationsLink}
+                                {financialsLink}
                                 {tasksLink}
                                 {analyticsLink}
                             </>
@@ -391,7 +624,7 @@ function SidebarNav({
                     </div>
                     {onSettings ? <SidebarConfigurationModeNav collapsed /> : <div className="min-h-0 flex-1" aria-hidden />}
                     <div className="adminv2-sidebar-footer flex shrink-0 flex-col items-stretch gap-1 border-t pt-1">
-                        {settingsLink}
+                        {organizationLink}
                     </div>
                 </nav>
             ) : (
@@ -403,6 +636,8 @@ function SidebarNav({
                                 <>
                                     {inboxLink}
                                     {processingLink}
+                                    {operationsLink}
+                                    {financialsLink}
                                     {tasksLink}
                                     {analyticsLink}
                                     {lifecycleNavExpanded}
@@ -411,7 +646,7 @@ function SidebarNav({
                         </div>
                     </div>
                     <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">
-                        {settingsLink}
+                        {organizationLink}
                     </div>
                 </div>
             )}

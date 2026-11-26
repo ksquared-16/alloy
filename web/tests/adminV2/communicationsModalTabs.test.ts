@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Communications modal consolidation — Inbox / Templates / Announcements in one operator surface.
+ * Communications modal — Operational Workspace Doctrine V2 shell.
  */
 
 function read(rel: string): string {
@@ -17,38 +17,44 @@ const SHELL = "app/adminV2/communications/CommunicationsWorkspaceShell.tsx";
 const PANEL = "app/adminV2/communications/CommunicationsModalTabPanel.tsx";
 const PAGE = "app/adminV2/communications/page.tsx";
 const WS = "app/adminV2/communications/TemplatesWorkspace.tsx";
+const DOCTRINE = "components/workspace/doctrine.ts";
 
 describe("Communications modal tabs", () => {
-    it("InboxModal exposes Inbox, Templates, and Announcements tabs when Command Center is enabled", () => {
+    it("InboxModal exposes Work and Studio sections when Command Center is enabled", () => {
         const src = read(MODAL);
         const shell = read(SHELL);
         const panel = read(PANEL);
         expect(src).toContain("CommunicationsWorkspaceShell");
-        expect(shell).toContain('data-comms-workspace-shell="true"');
-        expect(shell).toContain("CommsModalTabBar");
+        expect(shell).toContain("data-comms-workspace-shell");
+        expect(shell).toContain("WorkspaceShell");
         expect(src).toContain("COMMUNICATIONS_MODAL_TABS");
         expect(src).not.toContain("SettingsEntityTabBar");
         expect(src).toContain("CommunicationsModalTabPanel");
-        for (const label of ["Inbox", "Templates", "Announcements"]) {
+        for (const label of [
+            "Overview",
+            "Inbox",
+            "Announcements",
+            "Scheduled",
+            "Templates",
+            "Channels",
+            "Rules",
+        ]) {
             expect(panel).toContain(label);
         }
         expect(shell).toContain('data-inbox-compose-new="true"');
-        expect(src).toContain("QuickMessageModal");
-        expect(shell).toContain('data-comms-workspace-shell="true"');
-        expect(shell).toContain('data-comms-modal-version="workspace-inc2c"');
+        expect(src).toContain("ComposeNewCommunicationModal");
+        expect(shell).toContain("workspace-v2");
         expect(shell).not.toContain('data-comms-workspace-context="true"');
-        // Shared Operational Workspace Shell header (icon + title + actions + Close).
-        expect(shell).toContain("OperationalModalHeader");
-        expect(shell).toContain("COMMS_WORKSPACE_EXECUTION_CLASS");
         expect(shell).toContain("CommunicationsWorkspaceKpiStrip");
+        expect(shell).not.toContain("OperationalModalHeader");
+        expect(shell).toContain("Where conversations happen.");
+        expect(shell).toContain("COMMS_WORKSPACE_EXECUTION_CLASS");
     });
 
     it("CommsModalTabBar renders subordinate underline tabs with a Bend Pine active state (not floating pills)", () => {
         const tabBar = read("app/adminV2/communications/CommsModalTabBar.tsx");
         const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
-        // Child sections read as an underline tab strip attached to the mode context,
-        // not a floating pill group.
-        expect(tabBar).toContain('data-comms-modal-tabs="true"');
+        expect(tabBar).toContain('data-workspace-section-tabs="true"');
         expect(tabBar).toContain("border-b-2");
         expect(tabBar).toContain("border-alloy-juniper");
         expect(tabBar).toContain("text-alloy-juniper");
@@ -67,14 +73,22 @@ describe("Communications modal tabs", () => {
         expect(field).toContain("+ Create new category");
     });
 
-    it("tab panel mounts Command Center, TemplatesWorkspace, and AnnouncementsWorkspace without separate tab flags", () => {
+    it("tab panel mounts all Work and Studio workspaces without separate tab flags", () => {
         const src = read(PANEL);
+        expect(src).toContain("CommunicationsOverviewLanding");
         expect(src).toContain("CommandCenterShell");
         expect(src).toContain("TemplatesWorkspace");
         expect(src).toContain("AnnouncementsWorkspace");
+        expect(src).toContain("ScheduledWorkspace");
+        expect(src).toContain("ChannelsWorkspace");
+        expect(src).toContain("RulesWorkspace");
+        expect(src).toContain('data-comms-tab-panel="overview"');
         expect(src).toContain('data-comms-tab-panel="inbox"');
         expect(src).toContain('data-comms-tab-panel="templates"');
         expect(src).toContain('data-comms-tab-panel="announcements"');
+        expect(src).toContain('data-comms-tab-panel="scheduled"');
+        expect(src).toContain('data-comms-tab-panel="channels"');
+        expect(src).toContain('data-comms-tab-panel="rules"');
         expect(src).not.toContain("comms_v2_templates");
         expect(src).not.toContain("comms_v2_announcements");
         expect(src).not.toContain("comms-modal-placeholder");
@@ -82,11 +96,26 @@ describe("Communications modal tabs", () => {
         expect(src).toMatch(/data-comms-modal-body="true"/);
     });
 
+    it("CommunicationsWorkspaceShell composes doctrine WorkspaceShell", () => {
+        const shell = read(SHELL);
+        expect(shell).not.toContain("OperationalModalHeader");
+        expect(shell).toContain("@/components/workspace/WorkspaceShell");
+        expect(read(DOCTRINE)).toContain("WorkspaceOperationalHealth");
+        expect(read(DOCTRINE)).toContain("WorkspaceMetricTiles");
+    });
+
+    it("Overview landing uses doctrine WorkspaceSurface", () => {
+        const landing = read("app/adminV2/communications/CommunicationsOverviewLanding.tsx");
+        expect(landing).toContain("WorkspaceSurface");
+        expect(landing).toContain("@/components/workspace/WorkspaceSurface");
+    });
+
     it("InboxModal gates the consolidated surface only on comms_v2_command_center", () => {
         const src = read(MODAL);
         expect(src).toMatch(/isCommsV2FlagEnabled\(["']comms_v2_command_center["']\)/);
         expect(src).not.toContain("comms_v2_templates");
         expect(src).not.toContain("comms_v2_announcements");
+        expect(src).toContain('useState<CommunicationsModalTab>("overview")');
     });
 
     it("standalone /admin/communications route is deprecated and not the operator hub", () => {

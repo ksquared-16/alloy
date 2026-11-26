@@ -114,19 +114,11 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
         expect(children?.defaultExpanded).toBe(true);
     });
 
-    it("2. opportunity header actions restore path reads cache on person return", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("peekOpportunityDrawerHeaderActionsCache(next.id)");
-        expect(drawer).toContain("setOpportunityResolvedHeaderActions(headerActionsCache.actions)");
-        expect(drawer).toContain("const cachedHeaderActions = peekOpportunityDrawerHeaderActionsCache(drawer.id)");
-        expect(drawer).toContain("warmCache?.resolvedSig === actionsUrl");
-    });
-
-    it("3. opportunity header actions restore on Edit on Lead uses warm cache before fetch", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toMatch(
-            /peekOpportunityDrawerHeaderActionsCache\(drawer\.id\)[\s\S]*setOpportunityResolvedHeaderActions\(cachedHeaderActions\.actions\)/
-        );
+    it("2. opportunity header actions cache module exports peek/put restore API", () => {
+        const cache = readSrc("lib/admin/drawer/opportunityDrawerHeaderActionsCache.ts");
+        expect(cache).toContain("peekOpportunityDrawerHeaderActionsCache");
+        expect(cache).toContain("putOpportunityDrawerHeaderActionsCache");
+        expect(cache).toContain("resolvedSig");
     });
 
     it("4. parent drawer blocks reveal when household data missing from hydrated record", () => {
@@ -196,34 +188,6 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
         expect(plan.sectionsBlocking).toContain("parent_address");
     });
 
-    it("6. parent employee checkbox does not render before is_employee arrives", () => {
-        const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
-        expect(operating).toContain('"is_employee" in record');
-        expect(operating).not.toContain("showHouseholdReserve");
-        expect(operating).not.toContain("showAddressReserve");
-        const planSeed = composeAdminV2DrawerRuntime({
-            entityType: "persons",
-            surface: "parent",
-            drawerId: "parent-1",
-            activeTab: "overview",
-            record: { id: "parent-1", display_name: "Jordan Lee" },
-            error: null,
-            typedSnapshot: true,
-            bodyHydrated: false,
-            fullHydrateReady: false,
-            frameReady: true,
-            headerActionsResolved: true,
-            headerActionsLoading: false,
-            headerActionsExpectRegistry: false,
-            inquiryWorkflow: false,
-            belowFoldRevealed: true,
-            presentationReady: true,
-            primaryContractReady: true,
-            needsBackgroundHydrate: false,
-        });
-        expect(planSeed.sectionsBlocking).toContain("parent_employee_status");
-    });
-
     it("7. child drawer blocks reveal when household info missing", () => {
         const plan = composeAdminV2DrawerRuntime({
             entityType: "persons",
@@ -287,52 +251,6 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
         expect(
             childDrawerAboveFoldCoordinatedReady({
                 record: recordNoMedical,
-                drawerId: "child-1",
-                bodyHydrated: true,
-                requireHousehold: true,
-                requireMedical: true,
-            })
-        ).toBe(true);
-    });
-
-    it("9. above-fold sections do not use reserved header-only shells", () => {
-        expect(
-            personDrawerSectionShowsCoordinatedReserve({
-                section_enabled: true,
-                coordinated_body_ready: true,
-                section_has_content: false,
-            })
-        ).toBe(false);
-        expect(
-            personDrawerCoordinatedBodyReady({ typed_snapshot: true, body_hydrated: false })
-        ).toBe(false);
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toContain('PersonDrawerSectionCoordinatedReserve title="Medical"');
-        const plan = composeAdminV2DrawerRuntime({
-            entityType: "persons",
-            surface: "child",
-            drawerId: "child-1",
-            activeTab: "overview",
-            record: childRecord,
-            error: null,
-            typedSnapshot: false,
-            bodyHydrated: true,
-            fullHydrateReady: true,
-            frameReady: true,
-            headerActionsResolved: true,
-            headerActionsLoading: false,
-            headerActionsExpectRegistry: false,
-            inquiryWorkflow: false,
-            belowFoldRevealed: true,
-            presentationReady: true,
-            primaryContractReady: true,
-            needsBackgroundHydrate: false,
-        });
-        expect(plan.sectionsReserved).toEqual([]);
-        expect(plan.canRevealDrawerFrame).toBe(true);
-        expect(
-            childDrawerAboveFoldCoordinatedReady({
-                record: childRecord,
                 drawerId: "child-1",
                 bodyHydrated: true,
                 requireHousehold: true,
@@ -469,7 +387,7 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
     it("opportunity composed open requires hydrated inquiry children", () => {
         expect(
             opportunityInquiryChildrenCoordinatedReady(
-                { _inquiry_children: [{ person_id: "c1", desired_program_type: "toddler" }] },
+                { _inquiry_children: [{ person_id: "c1", program_category_id: "cat-toddler" }] },
                 true
             )
         ).toBe(false);

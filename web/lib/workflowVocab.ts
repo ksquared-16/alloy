@@ -36,6 +36,8 @@ export const WORKFLOW_EVENT_TYPES = [
     "intake_case_operationalized",
     "intake_case_review_required",
     "intake_case_linked",
+    /** A new Enrollment lead exists (emitLeadCreatedEvent) — not a child joining an existing lead. */
+    "lead_created",
 ] as const;
 export type WorkflowEventType = (typeof WORKFLOW_EVENT_TYPES)[number];
 

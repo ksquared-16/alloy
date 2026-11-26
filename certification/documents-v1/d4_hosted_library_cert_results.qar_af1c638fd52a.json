@@ -1,0 +1,336 @@
+{
+  "summary": {
+    "passed": 41,
+    "total": 41,
+    "qa_run_id": "qar_af1c638fd52a",
+    "at": "2026-10-27T16:11:56Z"
+  },
+  "results": [
+    {
+      "case": "case anchor resolves the household",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "household subjects: 1 household, 2 adults, 2 children, the case",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "roles": [
+        "adult",
+        "adult",
+        "case",
+        "child",
+        "child",
+        "household"
+      ]
+    },
+    {
+      "case": "every household document is listed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "missing": 0
+    },
+    {
+      "case": "shared document listed once",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "count": 1
+    },
+    {
+      "case": "shared document: owner child1 + context child2",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "associations": [
+        [
+          "child",
+          "context"
+        ],
+        [
+          "child",
+          "owner"
+        ]
+      ]
+    },
+    {
+      "case": "quarantined document never listed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "out-of-household document reached by a context link is owned_elsewhere, owner not named",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": true
+    },
+    {
+      "case": "replaced document shows version 2 of 2",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "version": 2,
+      "count": 2
+    },
+    {
+      "case": "hh: primary owner is the household",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "owner_type": "household"
+    },
+    {
+      "case": "a1: primary owner is the person",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "owner_type": "person"
+    },
+    {
+      "case": "c1: primary owner is the child",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "owner_type": "child"
+    },
+    {
+      "case": "case: primary owner is the opportunity",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "owner_type": "opportunity"
+    },
+    {
+      "case": "medical document carries the medical sensitivity",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "sensitivity": "medical"
+    },
+    {
+      "case": "household anchor resolves the same household",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "person anchor resolves the same household",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "child anchor resolves the same household",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "focus child2: only documents linked to child2",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "n": 2,
+      "extra": 0
+    },
+    {
+      "case": "focus adult1: only adult1's document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "n": 1
+    },
+    {
+      "case": "doc_reader sees the household library",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "doc_reader: medical withheld without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "doc_reader: medical history refused",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "case": "library refused without documents.read",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "library refused without documents.read",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "scoped_ops (QA D1) sees the in-scope household",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "scoped_ops: context link to an out-of-scope document grants nothing",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "scoped_ops: out-of-scope case anchor is 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "cross-org opportunity anchor is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "cross-org household anchor is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "cross-org child anchor is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "cross-org admin's own case shows nothing from QA Shared",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "unauthenticated library refused",
+      "persona": null,
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "case": "bad subject type is 400",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "BAD_REQUEST"
+    },
+    {
+      "case": "quarantined: history refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "quarantined: link refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "a1 has two versions",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "n": 2
+    },
+    {
+      "case": "version 2 link issued",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "version 1 link issued",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "replacement with active content refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 415,
+      "code": "SCREENING_REFUSED"
+    },
+    {
+      "case": "a1 history: upload and replacement committed, link access recorded",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "kinds": [
+        "access",
+        "committed"
+      ]
+    },
+    {
+      "case": "a2 history: screening-refused replacement is not shown as a version; still one version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "kinds": [
+        "committed"
+      ]
+    },
+    {
+      "case": "shared history: context association committed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    }
+  ]
+}

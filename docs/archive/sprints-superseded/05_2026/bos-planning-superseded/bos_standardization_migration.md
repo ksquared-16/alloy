@@ -9,10 +9,10 @@
 
 | Deliverable | Location |
 |-------------|----------|
-| Audit report | `docs/sprints/05_2026/bos_standardization_audit.md` |
+| Audit report | `docs/sprints/archive/05_2026/bos_standardization_audit.md` |
 | BOS foundation + contracts | `docs/product/bos-foundation.md` |
 | `bos-foundation.md` stub | `docs/product/bos-foundation.md` → points to bos-foundation |
-| Migration plan (this file) | `docs/sprints/05_2026/bos_standardization_migration.md` |
+| Migration plan (this file) | `docs/sprints/archive/05_2026/bos_standardization_migration.md` |
 
 **No application code changes** in Phase 1.
 
@@ -30,7 +30,7 @@
 | Docs | **Done** | `bos-foundation.md`, this file, `bos_registry_proposal_envelope_phase_2.md` |
 | Auth barrel | **Done (Phase 3)** | `web/lib/bos/auth/index.ts` |
 
-Sprint detail: **`docs/sprints/05_2026/bos_registry_proposal_envelope_phase_2.md`**.
+Sprint detail: **`docs/sprints/archive/05_2026/bos_registry_proposal_envelope_phase_2.md`**.
 
 ---
 
@@ -44,7 +44,7 @@ Sprint detail: **`docs/sprints/05_2026/bos_registry_proposal_envelope_phase_2.md
 | Readiness tests | **Done** | `bosFoundationReadiness.test.ts` |
 | Closeout doc | **Done** | `completed/bos_foundation_closeout_phase_3.md` |
 
-Sprint detail: **`docs/sprints/05_2026/completed/bos_foundation_closeout_phase_3.md`**.
+Sprint detail: **`docs/sprints/archive/05_2026/completed/bos_foundation_closeout_phase_3.md`**.
 
 ### Phase 2 checklist (acceptance)
 

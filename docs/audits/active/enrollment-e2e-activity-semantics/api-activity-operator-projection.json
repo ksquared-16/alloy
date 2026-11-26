@@ -1,0 +1,149 @@
+{
+  "projected": [
+    {
+      "at": "2026-08-12T21:27:34.725576+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:23:31.693987+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:21:26.308605+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:18:06.305578+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:18:05.589033+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:14:24.676869+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:13:42.642+00:00",
+      "type": "tour_confirmed",
+      "title": "Tour scheduled",
+      "detail": "Fri, Aug 14 at 10:00 AM"
+    },
+    {
+      "at": "2026-08-12T21:13:27.443262+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:11:23.437646+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:02:23.935+00:00",
+      "type": "tour_canceled",
+      "title": "Tour cancelled",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:02:07.665381+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:01:26.950996+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T21:01:26.139+00:00",
+      "type": "tour_rescheduled",
+      "title": "Tour rescheduled",
+      "detail": "Fri, Aug 14 at 10:00 AM"
+    },
+    {
+      "at": "2026-08-12T20:59:45.559+00:00",
+      "type": "tour_confirmed",
+      "title": "Tour scheduled",
+      "detail": "Fri, Aug 14 at 9:00 AM"
+    },
+    {
+      "at": "2026-08-12T20:59:41.971566+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T20:59:26.591737+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T20:57:58.466+00:00",
+      "type": "tour_canceled",
+      "title": "Tour cancelled",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T20:48:13.682982+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T20:47:03.240685+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    },
+    {
+      "at": "2026-08-12T20:46:00.993333+00:00",
+      "type": "tour_invitation_activated",
+      "title": "Tour invitation sent",
+      "detail": null
+    }
+  ],
+  "checks": {
+    "hasTourInvite": true,
+    "hasWaitlistChild": true,
+    "hasWaitlistAny": true,
+    "hasLeadCreated": true,
+    "noContactFamilyTitle": true,
+    "hasContactAttempt": true,
+    "hasTourScheduled": true,
+    "uniqueTitles": [
+      "Tour invitation sent",
+      "Tour scheduled",
+      "Tour cancelled",
+      "Tour rescheduled",
+      "Moved to Tour",
+      "Contact attempt recorded",
+      "Wrigley Kurzman moved to Waitlist",
+      "Lennon Kurzman moved to Waitlist",
+      "Lead created"
+    ],
+    "preview3": [
+      "Tour invitation sent",
+      "Tour invitation sent",
+      "Tour invitation sent"
+    ]
+  }
+}

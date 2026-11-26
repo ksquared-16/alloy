@@ -4,12 +4,24 @@ import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ALLOY_OS_OP_SURFACE_SAFE_AREA_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
-import {
-    ALLOY_OS_OP_SURFACE_BOTTOM_CSS_VAR,
-    ALLOY_OS_OP_SURFACE_HEIGHT_CSS_VAR,
-    ALLOY_OS_OP_SURFACE_TOP_CSS_VAR,
-    computeAlloyOsOperationalSurfaceBounds,
-} from "@/lib/bos/drawerWorkspaceGeometry";
+
+/** CSS var names for the shared operational surface geometry contract. */
+const ALLOY_OS_OP_SURFACE_TOP_CSS_VAR = "--alloy-os-op-surface-top";
+const ALLOY_OS_OP_SURFACE_BOTTOM_CSS_VAR = "--alloy-os-op-surface-bottom";
+const ALLOY_OS_OP_SURFACE_HEIGHT_CSS_VAR = "--alloy-os-op-surface-height";
+
+function computeAlloyOsOperationalSurfaceBounds(input: {
+    surfaceTop: number;
+    viewportHeight: number;
+    safeAreaPx?: number;
+}) {
+    const bottomSafe = input.safeAreaPx ?? ALLOY_OS_OP_SURFACE_SAFE_AREA_PX;
+    return {
+        top: input.surfaceTop,
+        bottomSafe,
+        height: Math.max(0, input.viewportHeight - input.surfaceTop - bottomSafe),
+    };
+}
 import {
     evaluateAlloyOsLayoutSurface,
     type AlloyOsLayoutSurfaceMeasurement,
@@ -217,6 +229,59 @@ describe("evaluateAlloyOsLayoutSurface — peer-alignment predicates (pixel proo
         );
         expect(result.topsAligned).toBe(true);
         expect(result.bottomsAligned).toBe(true);
+    });
+});
+
+describe("Presentation Runtime V2 — split-mode peer height fill (Activity shell)", () => {
+    it("establishes a flex fill chain on the workspace scroll surface + WorkUnitSurface", () => {
+        const scrollRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            ".adminv2-workspace-scroll-surface {"
+        );
+        expect(scrollRule.selector).toContain('data-alloy-os-runtime-split="true"');
+        expect(scrollRule.body).toContain("flex-direction: column");
+
+        const wuRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-component="WorkUnitSurface"] {'
+        );
+        expect(wuRule.selector).toContain('data-alloy-os-runtime-split="true"');
+        expect(wuRule.body).toContain("min-height: 0");
+    });
+
+    it("stretches FP.SURFACE, queue boundary, and focus panel boundary in split mode", () => {
+        const fpRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-alloy-section="FP.SURFACE"] {'
+        );
+        expect(fpRule.selector).toContain('data-alloy-os-runtime-split="true"');
+        expect(fpRule.body).toContain("min-height: 0");
+
+        expect(RUNTIME_CSS).toMatch(
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*?\[data-queue-region-boundary\][\s\S]*?\[data-focus-panel-boundary\][\s\S]*?min-height:\s*0/
+        );
+    });
+
+    it("fills Activity mode body with the cockpit (internal scroll, no page double-scroll)", () => {
+        const bodyRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-adminv2-record-modal-scroll] {'
+        );
+        expect(bodyRule.selector).toContain('data-inline-focus-panel-mode="activity"');
+        expect(bodyRule.body).toContain("overflow: hidden");
+
+        const splitCockpitRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit {'
+        );
+        expect(splitCockpitRule.body).toContain("flex: 1 1 0%");
+
+        expect(RUNTIME_CSS).toMatch(
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*\[data-component="WorkUnitSurface"\] > div[\s\S]*flex: 1 1 0%/
+        );
+        expect(RUNTIME_CSS).toMatch(
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*\[data-focus-panel-boundary\] > \[data-inline-focus-panel="true"\][\s\S]*flex: 1 1 0%/
+        );
     });
 });
 

@@ -97,6 +97,33 @@ describe("summarizeWorkflowEventForSignal", () => {
             )
         ).toBe("Status: New Inquiry → Contact Attempted");
     });
+
+    it("humanizes stage_work_outcome_recorded instead of returning the raw key", () => {
+        expect(
+            summarizeWorkflowEventForSignal({
+                occurred_at: new Date().toISOString(),
+                event_type: "stage_work_outcome_recorded",
+                payload: { outcome_label: "Reached family" },
+            })
+        ).toBe("Outcome recorded: Reached family");
+        expect(
+            summarizeWorkflowEventForSignal({
+                occurred_at: new Date().toISOString(),
+                event_type: "stage_work_outcome_recorded",
+                payload: {},
+            })
+        ).toBe("Work outcome recorded");
+    });
+
+    it("humanizes unknown event types instead of surfacing raw keys", () => {
+        expect(
+            summarizeWorkflowEventForSignal({
+                occurred_at: new Date().toISOString(),
+                event_type: "some_new_event_type",
+                payload: {},
+            })
+        ).toBe("Some New Event Type");
+    });
 });
 
 describe("formatActivitySignalSummary", () => {
@@ -107,6 +134,12 @@ describe("formatActivitySignalSummary", () => {
                 contact_attempted: "Contact Attempted",
             })
         ).toBe("Status: New Inquiry → Contact Attempted");
+    });
+
+    it("humanizes bare snake_case activity summaries", () => {
+        expect(formatActivitySignalSummary("stage_work_outcome_recorded")).toBe(
+            "Stage Work Outcome Recorded",
+        );
     });
 });
 

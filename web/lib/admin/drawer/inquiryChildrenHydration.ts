@@ -4,6 +4,10 @@
  */
 
 import { optionLabelFromBatchMap, type batchOptionItemLabelsForOrg } from "@/lib/admin/optionItemLabelForOrg";
+import {
+    formatAgeFromDateOfBirthIso,
+    formatAgePartsDisplay,
+} from "@/lib/fields/derived/ageFromDateOfBirth";
 
 export type HouseholdChildMemberRow = {
     id: string;
@@ -26,16 +30,19 @@ export type InquiryChildHydrateRow = {
     last_name: string | null;
     dob: string | null;
     age: string | null;
-    desired_program_type: string | null;
-    desired_program_category_id: string | null;
+    program_category_id: string | null;
+    /** Stable program key derived from the category FK (or opportunity default) — display only. */
+    program_key: string | null;
     desired_program_label: string | null;
-    desired_schedule_type: string | null;
+    schedule_type: string | null;
     desired_schedule_label: string | null;
     outcome_status_key: string | null;
+    /** The child's own canonical process stage key, when the participation row carries one. */
+    stage_key?: string | null;
     outcome_status_label: string | null;
     fit_status: string | null;
     notes: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     location_id?: string | null;
     location_label?: string | null;
     program_room_cohort_key?: string | null;
@@ -123,23 +130,67 @@ export function resolveInquiryChildIdentityFields(args: {
 
 export function inquiryChildAgeLabelFromDob(
     dobIso: string | null | undefined,
+    asOfDate: Date = new Date(),
 ): { label: string } | null {
     const raw = String(dobIso ?? "").trim();
     if (!raw) return null;
+
+    // Prefer canonical ISO derivation (years + months compact: `2y2m`, `6m`).
+    const iso = /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null;
+    if (iso) {
+        const label = formatAgeFromDateOfBirthIso(iso, "years_months", asOfDate);
+        return label ? { label } : null;
+    }
+
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return null;
-    const now = new Date();
-    let years = now.getFullYear() - d.getFullYear();
-    let months = now.getMonth() - d.getMonth();
-    if (now.getDate() - d.getDate() < 0) months -= 1;
+    let years = asOfDate.getFullYear() - d.getFullYear();
+    let months = asOfDate.getMonth() - d.getMonth();
+    if (asOfDate.getDate() - d.getDate() < 0) months -= 1;
     if (months < 0) {
         years -= 1;
         months += 12;
     }
     if (years < 0) return null;
-    const label =
-        years >= 2 ? `${years}y` : years >= 1 ? `${years}y ${months}m` : `${Math.max(0, years * 12 + months)}m`;
-    return { label };
+    return { label: formatAgePartsDisplay(years, months, "years_months") };
+}
+
+/** Compact age label from inquiry-child row payload (queue row / header surfaces). */
+export function resolveInquiryChildAgeLabelFromRaw(raw: Record<string, unknown>): string | null {
+    const age = trimOrNull(raw.age);
+    if (age) {
+        const compact = age.replace(/\s+/g, "").replace(/years?/i, "y").replace(/months?/i, "m");
+        return compact.includes("y") || compact.includes("m") ? compact : age;
+    }
+    return inquiryChildAgeLabelFromDob(trimOrNull(raw.dob) ?? trimOrNull(raw.date_of_birth))?.label ?? null;
+}
+
+export function resolveInquiryChildDobFromRaw(raw: Record<string, unknown>): string | null {
+    return trimOrNull(raw.dob) ?? trimOrNull(raw.date_of_birth);
+}
+
+export function resolveInquiryChildGenderLabelFromRaw(raw: Record<string, unknown>): string | null {
+    const direct = trimOrNull(raw.gender);
+    if (direct) return direct;
+    const customFields = raw.custom_fields;
+    if (customFields != null && typeof customFields === "object" && !Array.isArray(customFields)) {
+        const fromCustom = trimOrNull((customFields as Record<string, unknown>).gender);
+        if (fromCustom) return fromCustom;
+    }
+    return null;
+}
+
+export function inquiryChildProfileFieldsFromRaw(raw: Record<string, unknown>): {
+    date_of_birth: string | null;
+    age_label: string | null;
+    gender_label: string | null;
+} {
+    const date_of_birth = resolveInquiryChildDobFromRaw(raw);
+    return {
+        date_of_birth,
+        age_label: resolveInquiryChildAgeLabelFromRaw(raw),
+        gender_label: resolveInquiryChildGenderLabelFromRaw(raw),
+    };
 }
 
 /**
@@ -195,8 +246,8 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
         const last_name = identity.last_name;
         const display_name = identity.display_name ?? `${cmId.slice(0, 8)}…`;
 
-        const desiredProgramType = oppDefaultProgramType;
-        const desiredScheduleType = oppDefaultScheduleType;
+        const defaultProgramKey = oppDefaultProgramType;
+        const scheduleType = oppDefaultScheduleType;
         const memMeta = (m.metadata ?? null) as Record<string, unknown> | null;
         const demoProgramLabel =
             memMeta && typeof memMeta.demo_program_label === "string"
@@ -212,22 +263,23 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
             last_name,
             dob,
             age: age ? age.label : null,
-            desired_program_type: desiredProgramType,
-            desired_program_category_id: null,
+            program_category_id: null,
+            program_key: defaultProgramKey,
             desired_program_label:
-                optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", desiredProgramType) ??
+                optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", defaultProgramKey) ??
                 demoProgramLabel,
-            desired_schedule_type: desiredScheduleType,
+            schedule_type: scheduleType,
             desired_schedule_label: optionLabelFromBatchMap(
                 optionLabelMap,
                 "childcare_schedule_type",
-                desiredScheduleType
+                scheduleType
             ),
             outcome_status_key: null,
+            stage_key: null,
             outcome_status_label: null,
             fit_status: null,
             notes: null,
-            desired_start_date: null,
+            start_date: null,
             custom_fields: {},
             metadata: (m.metadata as Record<string, unknown>) ?? null,
             created_at: null,

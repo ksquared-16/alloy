@@ -1,0 +1,129 @@
+[
+  {
+    "seq": 0,
+    "t": 0,
+    "at": 1784754796580,
+    "phase": "currentWorkCard.compose",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "note": "content"
+  },
+  {
+    "seq": 1,
+    "t": 4,
+    "at": 1784754796584,
+    "phase": "recordRuntime.fetch.start",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 1,
+    "cacheKey": "opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "preloadSource": "live",
+    "cache": "miss",
+    "note": "cold"
+  },
+  {
+    "seq": 2,
+    "t": 8,
+    "at": 1784754796588,
+    "phase": "focusPanel.mount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 3,
+    "t": 8,
+    "at": 1784754796588,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "commit-critical-seed",
+    "cache": "seed"
+  },
+  {
+    "seq": 4,
+    "t": 12,
+    "at": 1784754796592,
+    "phase": "surfaceHost.render",
+    "subjectId": "new-leads",
+    "note": "provisioned"
+  },
+  {
+    "seq": 5,
+    "t": 13,
+    "at": 1784754796593,
+    "phase": "focusPanel.unmount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 6,
+    "t": 13,
+    "at": 1784754796593,
+    "phase": "currentWorkCard.compose",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "note": "content"
+  },
+  {
+    "seq": 7,
+    "t": 14,
+    "at": 1784754796594,
+    "phase": "recordRuntime.fetch.start",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 2,
+    "cacheKey": "opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "preloadSource": "live",
+    "cache": "miss",
+    "note": "cold"
+  },
+  {
+    "seq": 8,
+    "t": 15,
+    "at": 1784754796595,
+    "phase": "focusPanel.mount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 9,
+    "t": 15,
+    "at": 1784754796595,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "commit-critical-seed",
+    "cache": "seed"
+  },
+  {
+    "seq": 10,
+    "t": 43,
+    "at": 1784754796623,
+    "phase": "recordRuntime.fetch.apply",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 2,
+    "preloadSource": "live",
+    "cache": "live",
+    "note": "atomic complete reveal (stage-work pre-resolved)"
+  },
+  {
+    "seq": 11,
+    "t": 105,
+    "at": 1784754796685,
+    "phase": "recordRuntime.fetch.skip",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 2,
+    "cache": "hit",
+    "note": "displayVm already matches subject — no refetch"
+  },
+  {
+    "seq": 12,
+    "t": 106,
+    "at": 1784754796686,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "enriched:resolved",
+    "cache": "live"
+  }
+]

@@ -107,22 +107,6 @@ describe("child placement ownership (OCM / enrollment mirror)", () => {
         ).toBe(true);
     });
 
-    it("child summary patches persons identity only — not placement", () => {
-        const summarySrc = readFileSync(
-            resolve(process.cwd(), "components/admin/entity/PersonDrawerChildSummary.tsx"),
-            "utf8"
-        );
-        const patchSrc = readFileSync(
-            resolve(process.cwd(), "lib/admin/person/patchPersonDrawerFields.ts"),
-            "utf8"
-        );
-        expect(summarySrc).toContain("patchPersonDrawerFields");
-        expect(summarySrc).not.toContain("opportunity-customer-members");
-        expect(summarySrc).not.toContain("PersonDrawerChildPlacementPanel");
-        expect(PERSON_DRAWER_EDIT_PLACEMENT_ON_LEAD_LABEL).toBe("Edit on Family Lead");
-        expect(patchSrc).toContain("/api/admin/persons/");
-    });
-
     it("edit placement opens Family Lead from header — not persons PATCH", () => {
         const header = readFileSync(
             resolve(process.cwd(), "components/admin/entity/PersonDrawerChildHeaderExecutive.tsx"),

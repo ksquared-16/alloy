@@ -9,22 +9,6 @@ function read(rel: string): string {
 }
 
 describe("person drawer perf follow-up wiring", () => {
-    it("AdminEntityDrawer prefetches linked persons after opportunity reveal", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("prefetchLinkedPersonsFromOpportunityRecord");
-        expect(drawer).toContain("opportunity_drawer_idle");
-        expect(drawer).toContain("opportunityDrawerOverviewRevealReady");
-        expect(drawer).toContain("scheduleAdminV2BackgroundWork");
-    });
-
-    it("AdminEntityDrawer applies cache-first person open and back restore in layout effect", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("drawerEntityTargetKeyPrevRef");
-        expect(drawer).toContain("putDrawerStackRestoreSnapshot");
-        expect(drawer).toContain("peekDrawerStackRestoreSnapshot");
-        expect(drawer).toContain("logDrawerBackRestore");
-        expect(drawer).toContain("logPersonDrawerOpen");
-    });
 
     it("View Person hover and pointerdown prefetch uses persons entity endpoint", () => {
         const card = read("components/admin/opportunity/EditablePersonContactCard.tsx");

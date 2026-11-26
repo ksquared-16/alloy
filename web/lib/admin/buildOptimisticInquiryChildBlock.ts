@@ -20,10 +20,11 @@ export function buildOptimisticInquiryChildBlock(
         first_name: first,
         last_name: last,
         dob,
-        desired_program_type: payload.program?.trim() || null,
-        desired_program_label: payload.program?.trim() || null,
-        desired_schedule_type: payload.desired_schedule_type?.trim() || null,
-        desired_start_date: payload.desired_start_date?.trim().slice(0, 10) ?? null,
+        program_category_id: payload.program_category_id?.trim() || null,
+        // Category label resolves on the post-create refetch; the raw FK is not a display label.
+        desired_program_label: null,
+        schedule_type: payload.schedule_type?.trim() || null,
+        start_date: payload.start_date?.trim().slice(0, 10) ?? null,
         linked_on_inquiry: true,
         custom_fields: payload.age_group?.trim() ? { age_group: payload.age_group.trim() } : {},
     };

@@ -20,7 +20,10 @@ const EXPECTED_DEFINITION_KEYS: Record<LifecycleBaseActionKey, string> = {
     add_child: "add_child",
     send_form: "send_form",
     schedule_tour: "schedule_tour",
-    change_status: "update_enrollment_status",
+    send_tour_invitation: "send_tour_invitation",
+    waitlist_child: "waitlist_child",
+    enroll_child: "enroll_child",
+    close_lead: "close_lead",
     create_task: "create_task",
     quick_message: "quick_message",
 };
@@ -53,11 +56,11 @@ describe("lifecycle action save and forms removal", () => {
         expect(route).toContain("ensureOrgLifecycleActionDefinition");
     });
 
-    it("Save Action succeeds for Create Lead and Update Status base keys", () => {
+    it("Save Action succeeds for Create Lead and domain-verb base keys", () => {
         expect(lifecycleActivationBaseActionByKey("create_record")?.definition_key).toBe("create_lead");
-        expect(lifecycleActivationBaseActionByKey("change_status")?.definition_key).toBe(
-            "update_enrollment_status"
-        );
+        expect(lifecycleActivationBaseActionByKey("waitlist_child")?.definition_key).toBe("waitlist_child");
+        expect(lifecycleActivationBaseActionByKey("enroll_child")?.definition_key).toBe("enroll_child");
+        expect(lifecycleActivationBaseActionByKey("close_lead")?.definition_key).toBe("close_lead");
     });
 
     it("dropdown options are only activation base actions from bootstrap", () => {
@@ -68,29 +71,28 @@ describe("lifecycle action save and forms removal", () => {
         expect(card).not.toContain("LIFECYCLE_BASE_ACTIONS");
     });
 
-    it("shows success message and resets form after save in activation board", () => {
-        const activation = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(activation).toContain('setActionFeedback("Action added")');
-        expect(activation).toContain('setBaseActionKey("")');
-        expect(activation).toContain("refreshStageBootstrap");
+    it("shows success message and resets form after save on actions card", () => {
         const card = read("components/adminV2/settings/lifecycle/LifecycleBuilderActionsCard.tsx");
         expect(card).toContain("lifecycle-action-save-success");
         expect(card).toContain("saveSuccess");
+        expect(card).toContain("lifecycle-configured-actions");
     });
 
     it("configured actions list refreshes from bootstrap after save", () => {
+        const card = read("components/adminV2/settings/lifecycle/LifecycleBuilderActionsCard.tsx");
+        expect(card).toContain("lifecycle-configured-actions");
+        expect(card).toContain("configuredActions");
         const activation = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(activation).toContain("setConfiguredActions(payload.actions)");
         expect(activation).toContain("refreshStageBootstrap");
     });
 
-    it("Save Action button is in guided card footer not scrollable body", () => {
+    it("Save Action lives on activation board / actions card (not guided board body)", () => {
         const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain('primaryLabel="Save Action"');
-        expect(guided).not.toMatch(/stepId="actions"[\s\S]*hideFooter/);
-        expect(guided).toContain("lifecycle-guided-save-${stepId}");
+        expect(guided).not.toContain('stepId="actions"');
+        expect(guided).not.toContain('primaryLabel="Save Action"');
         const card = read("components/adminV2/settings/lifecycle/LifecycleBuilderActionsCard.tsx");
         expect(card).not.toContain("lifecycle-add-action-submit");
+        expect(card).toContain("lifecycle-configured-actions");
     });
 
     it("Forms card is not rendered on main Lifecycle Builder guided board", () => {
@@ -100,9 +102,11 @@ describe("lifecycle action save and forms removal", () => {
         expect(guided).not.toContain("Form Coverage");
     });
 
-    it("actions card summary copy is on guided board", () => {
+    it("actions configuration remains on dedicated actions card", () => {
+        const card = read("components/adminV2/settings/lifecycle/LifecycleBuilderActionsCard.tsx");
+        expect(card).toContain("lifecycle-configured-actions");
         const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain("Actions operators can use from workspace surfaces.");
+        expect(guided).not.toContain('stepId="actions"');
     });
 
     it("multiple actions can be added without advancing away from actions card", () => {

@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest) {
     const locked = await getOrgConfigLocked(ctx.orgId);
     if (locked) {
         return NextResponse.json(
-            { error: "Configuration is locked. Unlock in System Settings." },
+            { error: "Configuration is locked. Unlock in System Configuration." },
             { status: 403 }
         );
     }

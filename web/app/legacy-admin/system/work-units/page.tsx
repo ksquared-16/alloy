@@ -1,7 +1,8 @@
-import WorkUnitsClient from "./WorkUnitsClient";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminSystemWorkUnitsPage() {
-    return <WorkUnitsClient />;
+/** Legacy route — work units live under Platform Configuration (diagnostic). */
+export default function AdminSystemWorkUnitsRedirectPage() {
+    redirect("/settings/work-units");
 }

@@ -8,6 +8,7 @@ import type { PlacementPriorityV2CandidatePreview } from "@/lib/orchestration/pl
 import type { HouseholdPlacementFactContextByCustomerId } from "@/lib/orchestration/placement/bulkLoadHouseholdPlacementFactContext";
 import {
     resolveEnrolledSiblingDisplayRefs,
+    resolveHouseholdOtherChildrenDisplay,
     type HouseholdEnrolledSiblingDisplayRef,
     type HouseholdPlacementFactHouseholdSlice,
 } from "@/lib/orchestration/placement/householdPlacementFacts";
@@ -23,6 +24,11 @@ export type PlacementWaitlistSiblingCohortRef = {
 };
 
 export type PlacementWaitlistEnrolledSiblingRef = HouseholdEnrolledSiblingDisplayRef;
+
+export type PlacementWaitlistHouseholdOtherChildren = {
+    count: number;
+    names: string | null;
+};
 
 export type PlacementWaitlistSiblingContext = {
     has_siblings_on_waitlist: boolean;
@@ -44,12 +50,15 @@ export type PlacementWaitlistCandidateRowProjection = {
     program_room_group_label: string;
     /** Site scope for location-owned program category resolution. */
     site_id?: string | null;
-    desired_program_type?: string | null;
-    desired_program_category_id?: string | null;
+    /** Canonical program key (location_program_categories.key) derived from OCM program_category_id. */
+    program_key?: string | null;
+    program_category_id?: string | null;
     bucket: string;
     wait_since?: string | null;
     is_synthetic_fallback?: boolean;
     sibling_context: PlacementWaitlistSiblingContext;
+    /** Other children on the family record (household inquiry children), excluding row child. */
+    household_other_children?: PlacementWaitlistHouseholdOtherChildren | null;
     placement_priority_v2: PlacementPriorityV2CandidatePreview;
     shadow_mode: boolean;
     /** Card 6 — optional informational forecast hints (max one shown in queue UI). */
@@ -61,6 +70,7 @@ export type PlacementWaitlistCandidateRowProjection = {
     runtime_position_mode?: "preview" | "live";
     runtime_position_section_key?: string;
     runtime_position_precedence_note?: string;
+    /** Group-local range from the placement engine — the legal span of a manual position. */
 };
 
 export function placementCandidateQueueRowId(opportunityId: string, candidateId: string): string {
@@ -146,8 +156,8 @@ function resolveProjectionProgramCategoryScope(args: {
     candidateSiteId: string | null;
 }): {
     site_id: string | null;
-    desired_program_type: string | null;
-    desired_program_category_id: string | null;
+    program_key: string | null;
+    program_category_id: string | null;
 } {
     const pcMatch = args.household?.active_placement_candidates.find(
         (pc) => pc.placement_candidate_id === args.candidateId
@@ -160,8 +170,8 @@ function resolveProjectionProgramCategoryScope(args: {
             : null;
     return {
         site_id,
-        desired_program_type: ocm?.desired_program_type?.trim() || null,
-        desired_program_category_id: ocm?.desired_program_category_id?.trim() || null,
+        program_key: ocm?.program_key?.trim() || null,
+        program_category_id: ocm?.program_category_id?.trim() || null,
     };
 }
 
@@ -240,6 +250,7 @@ export function expandOpportunityRowsToPlacementCandidateRows(
             );
 
             const siblingContext = buildSiblingContext(candidateId, allCandidates);
+            let householdOtherChildren: PlacementWaitlistHouseholdOtherChildren | null = null;
             if (household) {
                 const pcMatch = household.active_placement_candidates.find(
                     (pc) => pc.placement_candidate_id === candidateId
@@ -255,6 +266,12 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                     options?.locationLabelsById ?? null
                 );
                 siblingContext.enrolled_siblings = enrolled;
+                householdOtherChildren = resolveHouseholdOtherChildrenDisplay(household, {
+                    placement_candidate_id: candidateId,
+                    opportunity_customer_member_id: pcMatch?.opportunity_customer_member_id ?? null,
+                    customer_member_id: pcMatch?.customer_member_id ?? null,
+                    site_id: candidateSiteId,
+                });
                 if (
                     (cand.bucket === "tier_sibling_enrolled" || cand.policy_bucket === "tier_sibling_enrolled") &&
                     enrolled.every((s) => !s.child_display_name?.trim())
@@ -282,12 +299,13 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                 program_room_cohort_key: cohortKey,
                 program_room_group_label: cohortLabel,
                 site_id: programCategoryScope.site_id,
-                desired_program_type: programCategoryScope.desired_program_type,
-                desired_program_category_id: programCategoryScope.desired_program_category_id,
+                program_key: programCategoryScope.program_key,
+                program_category_id: programCategoryScope.program_category_id,
                 bucket: cand.bucket,
                 wait_since: cand.wait_since ?? null,
                 is_synthetic_fallback: cand.is_synthetic_fallback === true,
                 sibling_context: siblingContext,
+                household_other_children: householdOtherChildren,
                 placement_priority_v2: {
                     ...cand,
                     program_room_cohort_key: cohortKey,

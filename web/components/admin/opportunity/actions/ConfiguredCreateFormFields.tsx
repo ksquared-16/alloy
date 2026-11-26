@@ -1,5 +1,6 @@
 "use client";
 
+import PhoneInput from "@/components/ui/PhoneInput";
 import { useCallback, useMemo } from "react";
 import type { EntityCreateFormField } from "@/lib/admin/actions/entityCreateFormFieldLoader";
 import {
@@ -144,6 +145,16 @@ export default function ConfiguredCreateFormFields({
                                 placeholder={placementRole ? placementPlaceholder : (field.placeholder ?? "Select…")}
                                 data-testid={`${dataPrefix}-select-${field.field_key}`}
                                 aria-label={field.label}
+                            />
+                        : field.field_type === "phone" ?
+                            <PhoneInput
+                                value={values[field.field_key] ?? ""}
+                                onChange={(next) => handleFieldChange(field.field_key, next)}
+                                className={INPUT}
+                                disabled={disabled}
+                                placeholder={field.placeholder ?? "(555) 555-5555"}
+                                data-configured-create-field={field.field_key}
+                                data-testid={`${dataPrefix}-input-${field.field_key}`}
                             />
                         :   <input
                                 type={inputTypeForField(field)}

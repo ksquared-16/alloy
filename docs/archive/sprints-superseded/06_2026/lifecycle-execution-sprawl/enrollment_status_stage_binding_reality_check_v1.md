@@ -2,7 +2,7 @@
 
 **Status:** Step 1 (Process Builder next slice)
 
-**Superseded in part by:** [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) — long-term OCM disposition mapping uses `metadata.enrollment_stage_key` on disposition rows; this doc covers transitional **opportunity** `enrollment_operator_stage` binding only.
+**Superseded in part by:** [`enrollment_lifecycle_status_matrix_contract.md`](../../../../sprints/archive/06_2026/enrollment_lifecycle_status_matrix_contract.md) — long-term OCM disposition mapping uses `metadata.enrollment_stage_key` on disposition rows; this doc covers transitional **opportunity** `enrollment_operator_stage` binding only.
 
 ## Current source of truth
 

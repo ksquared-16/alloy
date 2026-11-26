@@ -1,8 +1,15 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — Operational Context Boundary (Runtime Spine)
 
 **Status:** Design freeze (June 2026). Platform abstraction correction — adopt before the first operational card ships.
 **Supersedes (conceptually):** "drawer" as the runtime composition boundary.
-**Companions:** [`operational-grammar.md`](./operational-grammar.md) · [`card-language.md`](./card-language.md) · [`card-archetypes.md`](./card-archetypes.md) · [`household-reference-card.md`](./household-reference-card.md) · [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md)
+**Companions:** [`operational-grammar.md`](./operational-grammar.md) · [`card-language.md`](./card-language.md) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) · [`household-reference-card.md`](./household-reference-card.md) · [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md)
 
 ---
 

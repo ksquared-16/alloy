@@ -1,7 +1,8 @@
-import EntityLabelsClient from "@/app/legacy-admin/system/entity-labels/EntityLabelsClient";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminV2SettingsEntityLabelsPage() {
-    return <EntityLabelsClient adminV2Chrome />;
+/** Legacy alias — canonical Entities settings live at /settings/entities. */
+export default function AdminV2SettingsEntityLabelsRedirectPage() {
+    redirect("/settings/entities");
 }

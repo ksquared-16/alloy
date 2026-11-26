@@ -1,6 +1,6 @@
 /**
  * Placement priority evaluator types (Card 3).
- * Source of truth: docs/sprints/05_2026/priority_placement_orchestration_may_2026.md § Card 2.
+ * Source of truth: docs/sprints/archive/05_2026/priority_placement_orchestration_may_2026.md § Card 2.
  */
 
 export type FactPresence = "present" | "absent" | "unknown";

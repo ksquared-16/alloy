@@ -1,0 +1,55 @@
+{
+  "trusted_host_action_id": "tha_304b3057ff4b51",
+  "query_hash": "9d631df76facd0c85b1ac27e7abf786db61742c91b58a95a2df9903b7a1a30c3",
+  "results": {
+    "case": {
+      "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+      "stage_key": "waitlist",
+      "status_key": "new",
+      "work_unit_id": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+      "customer_id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19"
+    },
+    "case_status_vocabulary": [
+      {
+        "status_key": "new_inquiry",
+        "stage_key": "lead",
+        "cases": 1
+      },
+      {
+        "status_key": "new",
+        "stage_key": "waitlist",
+        "cases": 1
+      },
+      {
+        "status_key": "new",
+        "stage_key": "lead",
+        "cases": 1
+      },
+      {
+        "status_key": "open",
+        "stage_key": "lead",
+        "cases": 1
+      }
+    ],
+    "candidates_on_case": [
+      {
+        "status": "withdrawn",
+        "rows": 2
+      },
+      {
+        "status": "active",
+        "rows": 33
+      }
+    ],
+    "member_outcomes_on_case": [
+      {
+        "outcome_status_key": "new_inquiry",
+        "rows": 2
+      }
+    ],
+    "totals": {
+      "opportunities": 4
+    }
+  }
+}

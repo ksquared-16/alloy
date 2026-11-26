@@ -15,6 +15,8 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
+    COMPOSER_GRID_GAP_PX,
+    COMPOSER_GRID_ROW_UNIT_PX,
     defaultRowSpanForCard,
     emptyGridLayout,
     gridFromPublishedLayout,
@@ -88,6 +90,66 @@ describe("focusPanelGridLayout — V5 responsive grid", () => {
         expect(planPublishedLayout(buildPublishedLayoutFromGrid(C), 1040).areas.find((a) => a.card === "readiness_kpi")!.rowSpan).toBe(3);
     });
 
+    it("Work mode: presents an authored grid as column-major lanes (no dead vertical gaps)", () => {
+        const twoCol: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "children", colStart: 1, colSpan: 6, rowStart: 3, rowSpan: 2 },
+                { card: "readiness_kpi", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 1 },
+                { card: "health", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 1 },
+            ],
+        };
+        const layout = buildPublishedLayoutFromGrid(twoCol);
+
+        // ONE reading of an authored grid, for every consumer. This used to be two: an
+        // opt-in `preferLanesFromGrid` transposed the same coordinates into lanes for the
+        // Work Unit only, so the composer and the runtime drew the same document
+        // differently. The plan no longer takes a strategy hint.
+        expect(planPublishedLayout(layout, 1040).strategy).toBe("grid");
+        expect(planPublishedLayout(layout, 1040).lanes).toEqual([]);
+        expect(planPublishedLayout(layout, 1040).areas.map((a) => [a.card, a.colStart, a.colSpan])).toEqual([
+            ["household", 1, 6],
+            ["children", 1, 6],
+            ["readiness_kpi", 7, 6],
+            ["health", 7, 6],
+        ]);
+    });
+
+    it("keeps an authored span that is NARROWER than its column neighbours", () => {
+        // The measured defect, as a unit: Financials authored two columns wide beside two
+        // six-wide cards in the same column band. The lane reading gave every card in a band
+        // the band's widest span, so the runtime drew Financials three times its authored
+        // width while the composer drew it correctly.
+        const narrowInABand: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "business_process", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "attendance", colStart: 1, colSpan: 6, rowStart: 2, rowSpan: 2 },
+                { card: "financials", colStart: 7, colSpan: 2, rowStart: 1, rowSpan: 2 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 4 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 3, rowSpan: 4 },
+            ],
+        };
+        const plan = planPublishedLayout(buildPublishedLayoutFromGrid(narrowInABand), 1040);
+        expect(plan.strategy).toBe("grid");
+        expect(plan.areas.find((a) => a.card === "financials")!.colSpan).toBe(2);
+    });
+
+    it("plans a full-width spanner as a grid, exactly as it plans every other layout", () => {
+        const withFullWidth: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "attention", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1 },
+                { card: "household", colStart: 1, colSpan: 6, rowStart: 2, rowSpan: 1 },
+                { card: "readiness_kpi", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 1 },
+            ],
+        };
+        const plan = planPublishedLayout(buildPublishedLayoutFromGrid(withFullWidth), 1040);
+        expect(plan.strategy).toBe("grid");
+        expect(plan.areas.find((a) => a.card === "attention")!.colSpan).toBe(12);
+    });
+
     it("PRESERVES the grid through the publish round-trip — never persists a rows-only stack", () => {
         // The reported bug: the builder holds the grid correctly, but publishing pruned the
         // `grid` away, persisting only the reading-order full-width `rows` fallback → the
@@ -140,9 +202,18 @@ describe("focusPanelGridLayoutOps", () => {
         // readiness lands on the row after household (no overlap).
         expect(g.areas.find((a) => a.card === "readiness_kpi")!.rowStart).toBeGreaterThan(1);
 
-        // Move readiness beside household (col 9, row 1) — a vertical neighbour.
+        /*
+         * Move readiness onto col 9, row 1 — which is INSIDE household. `addCardToGrid`
+         * without a colSpan spans the full 12 columns, so household owns rows 1–3 across
+         * the whole canvas and there is no "beside" it on row 1.
+         *
+         * This once asserted the move landed there, which it only ever did because
+         * overlap was tolerated. It is not: a placement that collides is resolved below
+         * what it collides with, so the column is honoured and the row is pushed past
+         * household. `focusPanelGridNoOverlap.test.ts` owns the invariant itself.
+         */
         g = moveArea(g, "readiness_kpi", 9, 1);
-        expect(g.areas.find((a) => a.card === "readiness_kpi")).toMatchObject({ colStart: 9, rowStart: 1 });
+        expect(g.areas.find((a) => a.card === "readiness_kpi")).toMatchObject({ colStart: 9, rowStart: 4 });
 
         // Resize readiness to span 3 rows vertically.
         g = resizeArea(g, "readiness_kpi", 4, 3);
@@ -153,10 +224,10 @@ describe("focusPanelGridLayoutOps", () => {
     });
 
     it("opens new/seeded cards at their NATURAL summary height — not a min row", () => {
-        // Per-card defaults: Household/Children tallest, Current Work shortest, > 1 row each.
+        // Per-card defaults: Household/Children/Current Work open tall enough for full summary cards.
         expect(defaultRowSpanForCard("household")).toBeGreaterThanOrEqual(3);
-        expect(defaultRowSpanForCard("children")).toBeGreaterThan(defaultRowSpanForCard("current_work"));
-        expect(defaultRowSpanForCard("current_work")).toBeGreaterThan(1);
+        expect(defaultRowSpanForCard("children")).toBeGreaterThanOrEqual(3);
+        expect(defaultRowSpanForCard("current_work")).toBeGreaterThanOrEqual(3);
 
         // addCardToGrid uses the natural default (not rowSpan 1).
         const g = addCardToGrid(emptyGridLayout(12), "household");
@@ -179,4 +250,100 @@ describe("focusPanelGridLayoutOps", () => {
             rowSpan: 1,
         });
     });
+
+    it("moveArea places Children above Household in a full-width stack", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 4 },
+            ],
+        };
+        grid = moveArea(grid, "children", 1, 1);
+        const children = grid.areas.find((a) => a.card === "children")!;
+        const household = grid.areas.find((a) => a.card === "household")!;
+        expect(children.rowStart).toBe(1);
+        expect(children.colSpan).toBe(12);
+        expect(household.rowStart).toBeGreaterThanOrEqual(children.rowStart + children.rowSpan);
+    });
+
+    it("after a card snaps to top, another card can reclaim the top slot", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 3 },
+            ],
+        };
+        grid = moveArea(grid, "household", 7, 1);
+        expect(grid.areas.find((a) => a.card === "household")!.rowStart).toBe(1);
+        grid = moveArea(grid, "children", 7, 1);
+        const children = grid.areas.find((a) => a.card === "children")!;
+        const household = grid.areas.find((a) => a.card === "household")!;
+        expect(children.rowStart).toBe(1);
+        expect(household.rowStart).toBeGreaterThanOrEqual(children.rowStart + children.rowSpan);
+    });
+
+    it("move first card to last and last card to first preserves deterministic reading order", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 2 },
+                { card: "children", colStart: 1, colSpan: 12, rowStart: 3, rowSpan: 2 },
+                { card: "current_work", colStart: 1, colSpan: 12, rowStart: 5, rowSpan: 2 },
+            ],
+        };
+        expect(cardsInGrid(grid)).toEqual(["household", "children", "current_work"]);
+        grid = moveArea(grid, "household", 1, 7);
+        expect(cardsInGrid(grid)).toEqual(["children", "current_work", "household"]);
+        grid = moveArea(grid, "household", 1, 1);
+        expect(cardsInGrid(grid)).toEqual(["household", "children", "current_work"]);
+    });
+
+    it("repeated reorder operations before save stay stable", () => {
+        let grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "readiness_kpi", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "current_work", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "household", colStart: 1, colSpan: 6, rowStart: 3, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 3, rowSpan: 3 },
+            ],
+        };
+        for (let i = 0; i < 5; i += 1) {
+            grid = moveArea(grid, "household", 7, 1);
+            grid = moveArea(grid, "household", 1, 6);
+            grid = moveArea(grid, "children", 1, 1);
+            grid = moveArea(grid, "children", 7, 3);
+        }
+        const order = cardsInGrid(grid);
+        expect(new Set(order).size).toBe(4);
+        expect(order).toHaveLength(4);
+        const published = buildPublishedLayoutFromGrid(grid);
+        const roundTrip = gridFromPublishedLayout(published);
+        expect(cardsInGrid(roundTrip)).toEqual(order);
+    });
+
+    it("moveArea can place Household beside What's Next and push Children down", () => {
+        // Kelly scenario: drag Household up on the right to sit next to What's Next / above Children.
+        const grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 3 },
+            ],
+        };
+        const next = moveArea(grid, "household", 7, 1);
+        const household = next.areas.find((a) => a.card === "household")!;
+        const children = next.areas.find((a) => a.card === "children")!;
+        expect(household).toMatchObject({ colStart: 7, rowStart: 1 });
+        expect(children.rowStart).toBeGreaterThanOrEqual(household.rowStart + household.rowSpan);
+        expect(next.areas.find((a) => a.card === "current_work")).toMatchObject({
+            colStart: 1,
+            rowStart: 1,
+        });
+    });
+
 });

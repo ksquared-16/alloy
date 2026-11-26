@@ -7,6 +7,7 @@ import { evaluateLayoutCondition } from "@/lib/layout/runtime/evaluateLayoutCond
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
+import { formatFocusPanelDobAgeLine } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import { formatDisplayDate, formatQueueRecordDateDisplay } from "@/lib/adminFormatters";
 import { stripParentheticalAgeFromChildDisplayName } from "@/lib/layout/runtime/splitQueuePreviewChildPrimaryLabel";
 import type {
@@ -14,6 +15,10 @@ import type {
     QueueRecordFieldLinkTarget,
     QueueRecordScope,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { formatQueueRowNameDisplay, isQueueRowNameFieldKey } from "@/lib/presentation/formatQueueRowNameDisplay";
+import { isCollectionFieldKey } from "@/lib/presentation/collectionFieldPresentation";
+import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
+import { readQueueRowContextFromRow } from "@/lib/workUnits/resolveQueueRowContextPresentation";
 import { formatQueueRecordStatusDisplay } from "@/lib/layout/runtime/queueRecordFieldDisplayBridge";
 import { isQueueRowSubjectFieldVisible } from "@/lib/layout/runtime/queueRowSubjectPresentation";
 
@@ -64,9 +69,18 @@ function shouldFormatQueueRecordDateField(field: QueueRecordFieldConfig): boolea
 }
 
 function formatQueueRecordFieldValue(rawDisplay: string, field: QueueRecordFieldConfig): string {
-    if (!shouldFormatQueueRecordDateField(field)) return rawDisplay;
+    let display = rawDisplay;
+    if (field.nameDisplay && isQueueRowNameFieldKey(field.fieldKey)) {
+        display = formatQueueRowNameDisplay(display, field.nameDisplay, field.fieldKey);
+    }
+    if (!shouldFormatQueueRecordDateField(field)) return display;
     if (isQueueRecordDobFieldKey(field.fieldKey)) {
-        return formatDisplayDate(rawDisplay) || rawDisplay;
+        // Child DOB doctrine: `3/15/2026 (4m)` — not raw ISO or `Mar 15, 2026` alone.
+        return (
+            formatFocusPanelDobAgeLine(rawDisplay)
+            || formatDisplayDate(rawDisplay)
+            || rawDisplay
+        );
     }
     const formatted = formatQueueRecordDateDisplay(rawDisplay) || rawDisplay;
     // Queue rows: date values omit time segment in the field column (time stays in popover/title when needed).
@@ -80,12 +94,33 @@ export function resolveQueueRecordFieldDisplay(
 ): { display: string | null; isPlaceholder: boolean } {
     const item = queueRecordFieldToLayoutItem(field);
     const resolved = resolveItemValue(record, item);
+
+    if (isCollectionFieldKey(field.fieldKey)) {
+        const context = readQueueRowContextFromRow(record);
+        if (context) {
+            const display = resolveQueueRowChildrenFieldFromContext(field.fieldKey, context, {
+                collectionPresentation: field.collectionPresentation,
+                nameDisplay: field.nameDisplay,
+                record,
+            });
+            if (hasResolvableValue(display)) {
+                return { display: String(display).trim(), isPlaceholder: false };
+            }
+        }
+    }
+
     if (hasResolvableValue(resolved.display) && !resolved.isPlaceholder) {
         let rawDisplay = String(resolved.display).trim();
         if (field.fieldKey === "child.name" || field.fieldKey === "child.display_name") {
             rawDisplay = stripParentheticalAgeFromChildDisplayName(rawDisplay);
         }
-        return { display: formatQueueRecordFieldValue(rawDisplay, field), isPlaceholder: false };
+        // Prefer unresolved raw for date/DOB doctrine formatting — resolveItemValue may
+        // already have turned ISO into `Mar 15, 2024`, which blocks numeric DOB + age.
+        const dateSource =
+            shouldFormatQueueRecordDateField(field) && hasResolvableValue(resolved.raw)
+                ? String(resolved.raw).trim()
+                : rawDisplay;
+        return { display: formatQueueRecordFieldValue(dateSource, field), isPlaceholder: false };
     }
 
     if (isHouseholdDisplayFieldKey(field.fieldKey)) {

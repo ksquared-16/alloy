@@ -23,6 +23,15 @@ function setup() {
 describe("financialPolicyService", () => {
     it("creates an org-scoped policy with a validated value", async () => {
         const { store, supabase } = setup();
+        /*
+         * MEASURED AS A DELTA, not as an absolute count.
+         *
+         * The shared mock store seeds its own `financial_policies` — a fixture chain this test does
+         * not own and should not be coupled to. Asserting "there is exactly one" therefore failed
+         * the moment that chain grew a policy, for a reason with nothing to do with creating one.
+         * What this test actually claims is that creating ONE policy adds exactly ONE.
+         */
+        const before = store.financial_policies.length;
         const p = await createFinancialPolicy(supabase, {
             orgId: ORG_ID,
             scopeType: "org",
@@ -31,8 +40,10 @@ describe("financialPolicyService", () => {
             effectiveStart: "2026-01-01",
         });
         expect(p).toMatchObject({ scope_type: "org", policy_type: "grace_period", value: { days: 5 } });
-        expect(store.financial_policies).toHaveLength(1);
-        expect(await listFinancialPolicies(supabase, ORG_ID)).toHaveLength(1);
+        expect(store.financial_policies).toHaveLength(before + 1);
+        /* And it is readable back through the service, which is the half the count was standing in for. */
+        const listed = await listFinancialPolicies(supabase, ORG_ID);
+        expect(listed.some((row) => row.id === p.id)).toBe(true);
     });
 
     it("supersedes a policy without overwriting the prior value in place", async () => {

@@ -53,7 +53,7 @@ function canonicalEntityTypeForLifecycleBinding(binding: {
 export function lifecycleEntityFromFieldDefinitionEntityType(entityType: string): LifecycleRequirementEntityKey | null {
     const t = entityType.trim().toLowerCase();
     if (t === "person" || t === "persons") return "person";
-    if (t === "inquiry_child") return "child";
+    if (t === "inquiry_child" || t === "customer_member") return "child";
     if (t === "opportunity" || t === "opportunities") return "opportunity";
     if (t === "customer" || t === "customers") return "customer";
     return null;
@@ -67,6 +67,9 @@ export function canonicalRefKey(ref: CanonicalRegistryRef): string {
 export function fieldDefinitionEntityTypeFromFormsEntity(entityType: string): string | null {
     const t = entityType.trim().toLowerCase();
     if (t === "guardian") return "person";
+    // Adult fields authored with the canonical person binding (see sourceFromEntry) persist
+    // entity_type "person" directly; resolve it 1:1 so publish binding validation still passes.
+    if (t === "person") return "person";
     if (t === "child" || t === "enrollment") return "inquiry_child";
     if (t === "opportunity") return "opportunity";
     if (t === "customer") return "customer";
@@ -78,6 +81,7 @@ export function formsEntityTypeFromFieldDefinitionEntity(entityType: string): st
     const t = entityType.trim().toLowerCase();
     if (t === "person") return "guardian";
     if (t === "inquiry_child") return "child";
+    if (t === "customer_member") return "child";
     if (t === "opportunity") return "opportunity";
     if (t === "customer") return "customer";
     return "custom";
@@ -95,10 +99,9 @@ const FORMS_SYSTEM_ID_CANONICAL_OVERRIDES: Readonly<Record<string, CanonicalRegi
     guardian_last_name: { entity_type: "person", field_key: "last_name" },
     guardian_email: { entity_type: "person", field_key: "email" },
     guardian_phone: { entity_type: "person", field_key: "phone" },
-    desired_start_date: { entity_type: "inquiry_child", field_key: "desired_start_date" },
-    desired_program_type: { entity_type: "inquiry_child", field_key: "desired_program_type" },
-    desired_program_category_id: { entity_type: "inquiry_child", field_key: "desired_program_category_id" },
-    desired_schedule_type: { entity_type: "inquiry_child", field_key: "desired_schedule_type" },
+    start_date: { entity_type: "inquiry_child", field_key: "start_date" },
+    program_category_id: { entity_type: "inquiry_child", field_key: "program_category_id" },
+    schedule_type: { entity_type: "inquiry_child", field_key: "schedule_type" },
     program_room_preference: { entity_type: "inquiry_child", field_key: "program_room_cohort_key" },
     child_room_cohort: { entity_type: "inquiry_child", field_key: "program_room_cohort_key" },
     child_site: { entity_type: "inquiry_child", field_key: "location_id" },
@@ -203,6 +206,51 @@ export function layoutRefKeyToCanonicalRef(refKey: string): CanonicalRegistryRef
     const entityType = LAYOUT_NAMESPACE_TO_ENTITY_TYPE[parsed.entityKey];
     if (!entityType) return null;
     return { entity_type: entityType, field_key: parsed.fieldKey };
+}
+
+
+
+/**
+ * Resolve any consumer provider ref (Forms emission, layout refKey, legacy id) to canonical registry ref.
+ * Processing and other commit adapters must use this — not local alias maps.
+ */
+
+/** person_child_relationship.* provider refs */
+function canonicalRefFromPersonChildRelationshipProviderRef(providerRef: string): CanonicalRegistryRef | null {
+    const prefix = "person_child_relationship.";
+    if (!providerRef.startsWith(prefix)) return null;
+    const fieldKey = providerRef.slice(prefix.length).trim();
+    if (!fieldKey) return null;
+    return { entity_type: "person_child_relationship", field_key: fieldKey };
+}
+
+export function providerRefToCanonicalRef(providerRef: string): CanonicalRegistryRef | null {
+    const trimmed = providerRef.trim();
+    const pcr = canonicalRefFromPersonChildRelationshipProviderRef(trimmed);
+    if (pcr) return pcr;
+    if (!trimmed) return null;
+
+    if (trimmed.startsWith("customer_member.")) {
+        const fieldKey = trimmed.slice("customer_member.".length).trim();
+        const profileKey = customerMemberFieldKeyFromLayoutChildField(fieldKey) ?? fieldKey;
+        if (isCustomerMemberProfileFieldKey(profileKey)) {
+            return { entity_type: "customer_member", field_key: profileKey };
+        }
+        return null;
+    }
+
+    const parsed = parseLayoutRefKey(normalizeRefKeyOnRead(trimmed));
+    if (parsed?.entityKey === "child") {
+        const profileKey = customerMemberFieldKeyFromLayoutChildField(parsed.fieldKey);
+        if (profileKey) return { entity_type: "customer_member", field_key: profileKey };
+        const fromFormsId = systemFieldIdToCanonicalRef(parsed.fieldKey);
+        if (fromFormsId) return fromFormsId;
+    }
+
+    const fromLayout = layoutRefKeyToCanonicalRef(trimmed);
+    if (fromLayout) return fromLayout;
+
+    return systemFieldIdToCanonicalRef(trimmed);
 }
 
 /** Stable picker / persistence rule_id for a registry row in Business Processes. */

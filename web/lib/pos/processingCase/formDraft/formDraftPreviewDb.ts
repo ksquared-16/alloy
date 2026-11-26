@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { StoredFormDraftPreview } from "./types";
+import { sanitizeForJsonb } from "./sanitizeForJsonb";
 
 export function stampFormDraftPreview(draft: StoredFormDraftPreview, now: Date = new Date()): StoredFormDraftPreview {
     return { ...draft, generated_at: now.toISOString() };
@@ -27,7 +28,31 @@ export async function dbStoreFormDraftPreview(
     if (readErr) throw new Error(readErr.message);
 
     const baseMeta = (existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
-    const metadata = { ...baseMeta, form_draft_preview: args.draft };
+    // Postgres jsonb rejects NULs and lone surrogates, and some PDFs carry them in their text layer.
+    // Left unsanitized, ONE odd character fails the entire import with an opaque
+    // "unsupported Unicode escape sequence" — which is exactly how the Sunscreen Permission Form
+    // died. Cleaned here because every draft-producing path converges on this write.
+    /*
+     * IMPORTED METADATA NEVER OVERWRITES A STUDIO DECISION.
+     *
+     * Re-detecting a document, or applying discovery, produces a fresh draft from the importer — and
+     * this write replaced `form_draft_preview` whole, so an operator's saved Forms Studio schema
+     * (`studio_schema`: their answer types, mappings, conditions, groups, layout) vanished the moment
+     * the document was read again. The importer owns the draft's evidence; Forms Studio owns the form.
+     * A draft arriving without a Studio schema therefore keeps the one already saved. Only an explicit
+     * Studio save replaces it.
+     */
+    const priorDraft = (baseMeta as { form_draft_preview?: StoredFormDraftPreview }).form_draft_preview;
+    const incoming: StoredFormDraftPreview =
+        !args.draft.studio_schema && priorDraft?.studio_schema
+            ? {
+                  ...args.draft,
+                  studio_schema: priorDraft.studio_schema,
+                  ...(priorDraft.studio_schema_saved_at ? { studio_schema_saved_at: priorDraft.studio_schema_saved_at } : {}),
+              }
+            : args.draft;
+    const safeDraft = sanitizeForJsonb(incoming);
+    const metadata = { ...baseMeta, form_draft_preview: safeDraft };
 
     const { error } = await supabase
         .from("processing_cases")
@@ -36,7 +61,38 @@ export async function dbStoreFormDraftPreview(
         .eq("id", args.caseId);
     if (error) throw new Error(error.message);
 
-    return args.draft;
+    return safeDraft;
+}
+
+/**
+ * Durable record of a detection RUN (reliability diagnostics), stored at
+ * `processing_cases.metadata.form_draft_detection`. Survives a page reload so a hung/failed
+ * detection is a visible, retryable state — not a spinner the operator waited 7 minutes on.
+ */
+export interface FormDraftDetectionRecord {
+    status: "ok" | "timeout" | "error";
+    /** Per-pipeline-stage wall-clock (download / extract-text / acroform / positional / detect). */
+    stages: { stage: string; ms: number; ok: boolean; detail?: string }[];
+    total_ms: number;
+    reason?: string | null;
+    at: string;
+}
+
+export async function dbRecordFormDraftDetection(
+    supabase: SupabaseClient,
+    args: { orgId: string; caseId: string; record: FormDraftDetectionRecord }
+): Promise<void> {
+    const { data: existing } = await supabase
+        .from("processing_cases")
+        .select("metadata")
+        .eq("org_id", args.orgId)
+        .eq("id", args.caseId)
+        .maybeSingle();
+    const baseMeta = (existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+    // Same jsonb column, same hazard: stage details carry extraction messages that may echo document
+    // bytes, so a failure report must not itself become an unwritable row.
+    const metadata = { ...baseMeta, form_draft_detection: sanitizeForJsonb(args.record) };
+    await supabase.from("processing_cases").update({ metadata }).eq("org_id", args.orgId).eq("id", args.caseId);
 }
 
 /** Pure: parse a case's metadata jsonb into a stored draft (or null). For the read model. */
@@ -51,7 +107,24 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
         : {};
     const fields = d.fields as StoredFormDraftPreview["fields"];
     const sections = d.sections as StoredFormDraftPreview["sections"];
+    // OCR provenance: round-trip so the create path can stamp source→OCR→published lineage.
+    const rawOcr = d.ocr && typeof d.ocr === "object" && !Array.isArray(d.ocr) ? (d.ocr as Record<string, unknown>) : null;
+    const ocr =
+        rawOcr && rawOcr.derived === true
+            ? {
+                  derived: true as const,
+                  method: typeof rawOcr.method === "string" ? rawOcr.method : "ocr",
+                  confidence: typeof rawOcr.confidence === "number" ? rawOcr.confidence : 0,
+                  low_confidence: rawOcr.low_confidence === true,
+                  ...(rawOcr.source_kind === "image" || rawOcr.source_kind === "scanned_pdf"
+                      ? { source_kind: rawOcr.source_kind as "image" | "scanned_pdf" }
+                      : {}),
+              }
+            : null;
     return {
+        ...(typeof d.generated_form_name === "string" && d.generated_form_name.trim()
+            ? { generated_form_name: d.generated_form_name.trim() }
+            : {}),
         source_document_id: typeof d.source_document_id === "string" ? d.source_document_id : null,
         title: d.title,
         title_from_text: d.title_from_text === true,
@@ -66,6 +139,24 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
             field_count: typeof diag.field_count === "number" ? diag.field_count : fields.length,
         },
         ...(Array.isArray(d.pdf_pages) ? { pdf_pages: d.pdf_pages as StoredFormDraftPreview["pdf_pages"] } : {}),
+        ...(ocr ? { ocr } : {}),
+        // Configuration Discovery (FP16) — pass through the stored concept-level proposal as-is (it was
+        // produced by pure deterministic code; the concept-first review re-derives nothing).
+        ...(d.configuration_discovery && typeof d.configuration_discovery === "object" && !Array.isArray(d.configuration_discovery)
+            ? { configuration_discovery: d.configuration_discovery as StoredFormDraftPreview["configuration_discovery"] }
+            : {}),
+        // Relationship collections projected by apply (FP17). This parser is an explicit ALLOWLIST —
+        // anything not named here is silently dropped on every read, so a new draft-level construct
+        // must be added or it will vanish between apply and form generation.
+        ...(Array.isArray(d.collections)
+            ? { collections: d.collections as StoredFormDraftPreview["collections"] }
+            : {}),
+        // Forms Studio's own schema for this form (see `StoredFormDraftPreview.studio_schema`). Passed
+        // through as stored; it is validated on write and again by every reader that renders it.
+        ...(d.studio_schema && typeof d.studio_schema === "object" && !Array.isArray(d.studio_schema)
+            ? { studio_schema: d.studio_schema as StoredFormDraftPreview["studio_schema"] }
+            : {}),
+        ...(typeof d.studio_schema_saved_at === "string" ? { studio_schema_saved_at: d.studio_schema_saved_at } : {}),
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };

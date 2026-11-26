@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Trusted Host Action child — apply one committed migration file.
+# Never prints credentials. Args: <migration_file> <out_file> <stderr_file>
+set -euo pipefail
+
+MIG_FILE="${1:?migration file required}"
+OUT_FILE="${2:?out file required}"
+ERR_FILE="${3:?stderr file required}"
+# The requested environment SELECTS the database. It used to be absent here
+# entirely, which is how a request labelled `certification` could reach a
+# deployed pooler: the child simply used whichever DATABASE_URL the trusted
+# host had. Absent is not defaulted — it refuses.
+MIG_ENVIRONMENT="${4:-}"
+
+# S3: the person-specific fallback is gone. `/Users/Kelly/Alloy` was the
+# answer of last resort here -- another operator's home directory, in a
+# trusted-host script that reaches a production database. The trusted
+# executor always exports ALLOY_CANONICAL_ROOT (the registry resolves it);
+# with neither variable set there is no canonical root, and refusing beats
+# resolving somebody else's checkout.
+CANONICAL="${ALLOY_CANONICAL_ROOT:-${ALLOY_REPO:-}}"
+if [[ -z "$CANONICAL" ]]; then
+  echo "no canonical repository root: set ALLOY_CANONICAL_ROOT or register the project" >&2
+  exit 64
+fi
+export ALLOY_REPO="$CANONICAL"
+export ALLOY_SERVER_ENV_SOURCE="${ALLOY_SERVER_ENV_SOURCE:-$CANONICAL/web/.env.local}"
+
+TOOLKIT="${ALLOY_TOOLKIT_DIR:-$CANONICAL/scripts/local-dev}"
+if [[ -f "${VACILANDO_CHECKOUT:-}/scripts/local-dev/lib/verify.sh" ]]; then
+  TOOLKIT="${VACILANDO_CHECKOUT}/scripts/local-dev"
+elif [[ -f "${ALLOY_WORKTREE:-}/scripts/local-dev/lib/verify.sh" ]]; then
+  TOOLKIT="${ALLOY_WORKTREE}/scripts/local-dev"
+fi
+
+# shellcheck disable=SC1091
+source "$TOOLKIT/lib/common.sh"
+# shellcheck disable=SC1091
+source "$TOOLKIT/lib/verify.sh"
+# The routing rules are NOT written here. This helper asks
+# trusted-host-database-target.mjs which credential the environment names and
+# proves the connection matches before the first statement.
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/trusted-host-database-target.sh"
+
+unset ALLOY_BLOCK_REMOTE_SUPABASE || true
+
+# ── THE DATABASE IS CHOSEN BY THE ENVIRONMENT, NEVER BY WHAT HAPPENS TO EXIST ──
+alloy_resolve_trusted_database_target "$MIG_ENVIRONMENT" "$ERR_FILE" || exit $?
+DATABASE_URL="$ALLOY_RESOLVED_DATABASE_URL"
+
+sanitize_database_url() {
+  local url="$1"
+  url="$(printf '%s' "$url" | sed -E \
+    -e 's/([?&])pgbouncer=[^&]*&/\1/g' \
+    -e 's/([?&])pgbouncer=[^&]*$//g' \
+    -e 's/([?&])statement_timeout=[^&]*&/\1/g' \
+    -e 's/([?&])statement_timeout=[^&]*$//g' \
+    -e 's/\?&/?/g' \
+    -e 's/\?$//' \
+    -e 's/&&/\&/g')"
+  printf '%s' "$url"
+}
+
+# ── THE POSTGRES CLIENT IS RESOLVED, NOT ASSUMED ──
+#
+# The same defect as in trusted-host-run-sql.sh, and it hid behind that one: fixing the READ path
+# let the ledger preflight pass, and the apply then failed here for the identical reason one step
+# later. Homebrew's libpq is keg-only, so `brew install libpq` alone leaves psql off PATH; the known
+# location is consulted directly rather than force-linking host-global state.
+resolve_psql() {
+  if command -v psql >/dev/null 2>&1; then
+    command -v psql
+    return 0
+  fi
+  local candidate
+  for candidate in \
+    /opt/homebrew/opt/libpq/bin/psql \
+    /usr/local/opt/libpq/bin/psql \
+    /opt/homebrew/bin/psql \
+    /usr/local/bin/psql \
+    /Applications/Postgres.app/Contents/Versions/latest/bin/psql
+  do
+    [[ -x "$candidate" ]] && { printf '%s' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+if ! PSQL_BIN="$(resolve_psql)"; then
+  {
+    printf 'trusted_host_dependency_missing dependency=psql\n'
+    printf 'No PostgreSQL client found on PATH or at the known keg-only locations.\n'
+    printf 'Install with: brew install libpq  (keg-only; this script resolves it directly)\n'
+  } >"$ERR_FILE"
+  exit 43
+fi
+
+SAFE_DATABASE_URL="$(sanitize_database_url "$DATABASE_URL")"
+unset DATABASE_URL || true
+
+"$PSQL_BIN" "$SAFE_DATABASE_URL" -X -v ON_ERROR_STOP=1 --no-psqlrc -f "$MIG_FILE" >"$OUT_FILE" 2>"$ERR_FILE"
+EXIT=$?
+
+unset SAFE_DATABASE_URL PGPASSWORD SUPABASE_SERVICE_ROLE_KEY || true
+
+if [[ -f "$ERR_FILE" ]]; then
+  sed -E -i.bak 's#postgresql://[^[:space:]]+#postgresql://[redacted]#g; s#postgres://[^[:space:]]+#postgres://[redacted]#g' "$ERR_FILE" 2>/dev/null || true
+  rm -f "${ERR_FILE}.bak" 2>/dev/null || true
+fi
+
+exit "$EXIT"

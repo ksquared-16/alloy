@@ -1,0 +1,40 @@
+{
+  "doors": [
+    {
+      "k": "responsibility",
+      "present": true,
+      "tag": "BUTTON",
+      "tabIndex": 0,
+      "name": "Manage responsibility",
+      "disabled": false,
+      "outlineStyle": "none"
+    },
+    {
+      "k": "discounts",
+      "present": true,
+      "tag": "BUTTON",
+      "tabIndex": 0,
+      "name": "Manage discounts",
+      "disabled": false,
+      "outlineStyle": "solid"
+    },
+    {
+      "k": "payments",
+      "present": true,
+      "tag": "BUTTON",
+      "tabIndex": 0,
+      "name": "Manage payments →",
+      "disabled": false,
+      "outlineStyle": "none"
+    }
+  ],
+  "reached": "payments",
+  "focusRing": {
+    "outline": "color(srgb 0 0.635294 0.513726 / 0.45) solid 2px",
+    "outlineWidth": "2px",
+    "boxShadow": "none"
+  },
+  "overlays": [
+    "payments_admin"
+  ]
+}

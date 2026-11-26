@@ -1,0 +1,136 @@
+{
+  "trusted_host_action_id": "tha_5de3e079e0e0f5",
+  "query_hash": "2928dbe172d2b7aab1aebbcb60d662ed2528ea3c304c4317b11952e7df8d1b3a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T16:59:20.699Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5de3e079e0e0f5",
+    "query_hash": "2928dbe172d2b7aab1aebbcb60d662ed2528ea3c304c4317b11952e7df8d1b3a",
+    "authorization_id": "grnt_89584853bd7d445b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T16:59:22.529Z",
+    "question_ids": [
+      "spaces_correction_precheck"
+    ],
+    "questions": {
+      "spaces_correction_precheck": {
+        "question_id": "spaces_correction_precheck",
+        "row_count": null,
+        "rows": [
+          {
+            "capacity_rules_all": [
+              {
+                "id": "2f5c49bb-6ba4-4b86-91a8-66bc3ce6a578",
+                "kind": "licensed",
+                "scope": "room",
+                "capacity": 10,
+                "room": "Toddler 1",
+                "room_id": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+                "room_role": "operational_group",
+                "age_group": null,
+                "effective_start": "2026-09-20",
+                "effective_end": null,
+                "source": "config",
+                "metadata": {
+                  "legacy_capacity_adoption": {
+                    "source": "locations.metadata.capacity",
+                    "adopted_at": "2026-09-20T03:10:34.630Z",
+                    "legacy_value": "10",
+                    "legacy_retained": true,
+                    "source_location_id": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a"
+                  }
+                },
+                "created_at": "2026-09-20 03:10:35.385061+00"
+              },
+              {
+                "id": "e3ec06c9-ec9a-47a6-8e9e-2904aa63395e",
+                "kind": "licensed",
+                "scope": "room",
+                "capacity": 10,
+                "room": "Toddler 2",
+                "room_id": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "room_role": "operational_group",
+                "age_group": null,
+                "effective_start": "2026-09-19",
+                "effective_end": null,
+                "source": "config",
+                "metadata": {
+                  "legacy_capacity_adoption": {
+                    "source": "locations.metadata.capacity",
+                    "adopted_at": "2026-09-20T03:17:07.055Z",
+                    "legacy_value": "10",
+                    "legacy_retained": true,
+                    "source_location_id": "0c58d0d2-d756-4b56-9008-32649389d323"
+                  }
+                },
+                "created_at": "2026-09-20 03:17:07.378619+00"
+              },
+              {
+                "id": "444e6f70-940e-4d79-81c8-630d89321356",
+                "kind": "physical",
+                "scope": "room",
+                "capacity": 8,
+                "room": "Infant B",
+                "room_id": "edf9398f-c7e2-4267-bda0-8b5846c4f306",
+                "room_role": "(null)",
+                "age_group": null,
+                "effective_start": "2026-09-19",
+                "effective_end": null,
+                "source": "config",
+                "metadata": {
+                  "legacy_capacity_adoption": {
+                    "source": "locations.metadata.capacity",
+                    "adopted_at": "2026-09-20T03:30:27.318Z",
+                    "legacy_value": "8",
+                    "legacy_retained": true,
+                    "source_location_id": "edf9398f-c7e2-4267-bda0-8b5846c4f306"
+                  }
+                },
+                "created_at": "2026-09-20 03:30:27.567445+00"
+              }
+            ],
+            "toddler_rooms": [
+              {
+                "id": "17cf540d-6c64-4ba4-926b-f2b9644b3391",
+                "label": "Toddler 1",
+                "role": "(null)",
+                "site": "West Campus",
+                "metadata_capacity": "7"
+              },
+              {
+                "id": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+                "label": "Toddler 1",
+                "role": "operational_group",
+                "site": "Room 1",
+                "metadata_capacity": "10"
+              },
+              {
+                "id": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "label": "Toddler 2",
+                "role": "operational_group",
+                "site": "Room 1",
+                "metadata_capacity": "10"
+              },
+              {
+                "id": "93c66b6f-bc30-4899-900c-c37aad4c3200",
+                "label": "Toddler 2",
+                "role": "(null)",
+                "site": "West Campus",
+                "metadata_capacity": "7"
+              }
+            ],
+            "observed_at": "2026-09-22 16:59:22.421678+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

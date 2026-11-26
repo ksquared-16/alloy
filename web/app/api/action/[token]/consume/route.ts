@@ -1,4 +1,6 @@
+import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { NextRequest, NextResponse } from "next/server";
+import { claimActionLink } from "@/lib/actionLinks";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -14,7 +16,7 @@ export async function POST(
     const { data: row, error: fetchErr } = await supabase
         .from("action_links")
         .select("id, action_type, entity_type, entity_id, consumed_at, expires_at, org_id")
-        .eq("token", token)
+        .eq("token_hash", hashFormLinkToken(token))
         .single();
 
     if (fetchErr || !row) {
@@ -43,12 +45,13 @@ export async function POST(
         );
     }
 
-    const { error: updateErr } = await supabase
-        .from("action_links")
-        .update({ consumed_at: new Date().toISOString() })
-        .eq("id", r.id);
-    if (updateErr) {
-        return NextResponse.json({ error: "Failed to mark consumed" }, { status: 500 });
+    // `RL-32` — the claim IS the consumption check, and it precedes every side effect below.
+    // The `r.consumed_at` read above is a fast path for the sequential case; it cannot decide a
+    // race, because two callers both read null before either writes. Losing here means another
+    // request already consumed this token, so this one emits no event and runs no workflow.
+    const { claimed } = await claimActionLink(supabase, r.id);
+    if (!claimed) {
+        return NextResponse.json({ error: "Already used" }, { status: 410 });
     }
 
     const body = await _request.json().catch(() => ({})) as Record<string, unknown>;

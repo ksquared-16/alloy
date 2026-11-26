@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { formatFocusPanelDobAgeLine } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import type {
     OperationalContext,
     OperationalContextSignals,
@@ -12,7 +13,7 @@ import type {
 const EMPTY_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
     communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
     billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
 };
@@ -53,7 +54,7 @@ describe("buildChildrenCardEvidence", () => {
                         desired_schedule_label: "M–F · Full day",
                         outcome_status_key: "enrolled",
                         outcome_status_label: "Enrolled",
-                        desired_start_date: "2025-08-26",
+                        start_date: "2025-08-26",
                     },
                 ],
             }),
@@ -61,16 +62,16 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.count).toBe(1);
         const emma = evidence.children[0]!;
         expect(emma.name).toBe("Emma Johnson");
-        expect(emma.dobAge).toBe("Mar 3, 2020 · 6y");
+        expect(emma.dobAge).toBe(formatFocusPanelDobAgeLine("2020-03-03", "6y"));
         expect(emma.program).toBe("Preschool");
         expect(emma.room).toBe("Sunflower");
         expect(emma.schedule).toBe("M–F · Full day");
         expect(emma.status).toBe("Enrolled");
         expect(emma.statusTone).toBe("positive");
-        expect(emma.startDate).toBe("2025-08-26");
+        expect(emma.startDate).toBe("Aug 26, 2025");
         expect(emma.needsAttention).toBe(false);
         // Answer-first sentence evidence (no labeled field grid).
-        expect(emma.detailLine).toBe("Preschool · Sunflower · M–F · Full day · starts 2025-08-26");
+        expect(emma.detailLine).toBe("Preschool · Sunflower · M–F · Full day · starts Aug 26, 2025");
         expect(emma.missingLine).toBeNull();
         expect(evidence.enrolledCount).toBe(1);
     });
@@ -101,14 +102,27 @@ describe("buildChildrenCardEvidence", () => {
             ctx({
                 id: "opp-1",
                 _inquiry_children: [
-                    { id: "c1", display_name: "Emma", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Preschool", desired_schedule_label: "Full day", desired_start_date: "2025-08-26" },
-                    { id: "c2", display_name: "Liam", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Toddler", desired_schedule_label: "Half day", desired_start_date: "2025-08-26" },
+                    { id: "c1", display_name: "Emma", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Preschool", desired_schedule_label: "Full day", start_date: "2025-08-26" },
+                    { id: "c2", display_name: "Liam", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Toddler", desired_schedule_label: "Half day", start_date: "2025-08-26" },
                     { id: "c3", display_name: "Noah", outcome_status_key: "waitlisted", outcome_status_label: "Waitlisted" },
                 ],
             }),
         );
         expect(evidence.count).toBe(3);
         expect(evidence.answerLine).toBe("3 children · 2 enrolled, 1 waitlisted");
+    });
+
+    it("never calls a child in Registration (Enrolling) enrolled", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [
+                    { id: "c1", display_name: "Ava", outcome_status_key: "enrolling", stage_key: "enrolling" },
+                    { id: "c2", display_name: "Ben", outcome_status_key: "waitlisted", stage_key: "waitlist" },
+                ],
+            }),
+        );
+        expect(evidence.answerLine).toBe("2 children · 1 enrolling, 1 waitlisted");
     });
 
     it("humanizes an unlabeled status key instead of showing the raw key", () => {
@@ -139,7 +153,7 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.children[0]!.status).not.toBe("New Inquiry");
     });
 
-    it("prefers the configured label over the key when both are present", () => {
+    it("shows the child's PROCESS STAGE, not the retired participation status label", () => {
         const evidence = buildChildrenCardEvidence(
             ctx({
                 id: "opp-1",
@@ -147,13 +161,18 @@ describe("buildChildrenCardEvidence", () => {
                     {
                         id: "c1",
                         display_name: "Ada Lovelace",
+                        // Even with a configured disposition label, the operator sees the Process Stage.
                         outcome_status_key: "new_inquiry",
                         outcome_status_label: "Inquiry Received",
                     },
+                    { id: "c2", display_name: "Grace Hopper", outcome_status_key: "waitlisted" },
+                    { id: "c3", display_name: "Kay Antonelli", outcome_status_key: "enrolled" },
                 ],
             }),
         );
-        expect(evidence.children[0]!.status).toBe("Inquiry Received");
+        expect(evidence.children[0]!.status).toBe("New Lead"); // new_inquiry → Lead stage, not "Inquiry Received"
+        expect(evidence.children[1]!.status).toBe("Waitlist"); // disposition → Process Stage
+        expect(evidence.children[2]!.status).toBe("Enrolled");
     });
 
     it("never surfaces a UUID-like status id as operator copy", () => {
@@ -166,6 +185,25 @@ describe("buildChildrenCardEvidence", () => {
             }),
         );
         expect(evidence.children[0]!.status).toBeNull();
+    });
+
+    it("reads gender from raw inquiry child profile (drawer mapping strips it)", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [
+                    {
+                        id: "c1",
+                        customer_member_id: "cm-1",
+                        display_name: "Blake Wenc",
+                        first_name: "Blake",
+                        last_name: "Wenc",
+                        gender: "male",
+                    },
+                ],
+            }),
+        );
+        expect(evidence.children[0]!.gender).toBe("Male");
     });
 
     it("does NOT import drawer VM types — it observes the Operational Context", () => {

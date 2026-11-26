@@ -10,8 +10,9 @@ import {
     type ConversationSummary,
 } from "@/lib/communications/v2/commandCenterViewModel";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import type { FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { ComposerChannel, FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { prefetchDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 
 const CACHE_TTL_MS = 90_000;
 
@@ -44,6 +45,7 @@ export type CommandCenterFirstConversationWarm = {
 
 let cache: CommandCenterCacheSnapshot | null = null;
 let firstConversationWarm: CommandCenterFirstConversationWarm | null = null;
+let pendingSelectionId: string | null = null;
 let inflight: Promise<CommandCenterCacheSnapshot> | null = null;
 let warmScheduled = false;
 const listeners = new Set<() => void>();
@@ -65,7 +67,17 @@ export function getCommandCenterFirstConversationWarm(): CommandCenterFirstConve
 }
 
 export function getCommandCenterWarmSelectedConversationId(): string | null {
-    return getCommandCenterFirstConversationWarm()?.conversationId ?? null;
+    return pendingSelectionId ?? getCommandCenterFirstConversationWarm()?.conversationId ?? null;
+}
+
+export function getCommandCenterPendingSelection(): string | null {
+    return pendingSelectionId;
+}
+
+/** After Compose New send, focus the new thread in the workspace inbox. */
+export function setCommandCenterPendingSelection(conversationId: string | null): void {
+    pendingSelectionId = conversationId?.trim() || null;
+    notify();
 }
 
 export function subscribeCommandCenterCache(listener: () => void): () => void {
@@ -105,22 +117,24 @@ async function warmFirstConversationWorkspace(
 
     const conv = conversations.find((c) => c.id === firstId);
     const customerId = conv?.customer_id?.trim() ?? null;
+    const entityType = conv?.primary_entity_type?.trim() ?? null;
+    const entityId = conv?.primary_entity_id?.trim() ?? null;
     const liveWorkspace = isCommsV2FlagEnabled("comms_v2_live_workspace");
 
     try {
-        if (liveWorkspace && customerId) {
-            const res = await fetch(
-                `/api/admin/communications/family-workspace?customer_id=${encodeURIComponent(customerId)}&thread_id=${encodeURIComponent(firstId)}`,
-                { credentials: "include" }
-            );
-            if (!res.ok) return;
-            const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM };
-            if (!data.workspace) return;
+        if (liveWorkspace && (customerId || (entityType && entityId))) {
+            const composerChannel: ComposerChannel = conv?.channel === "sms" ? "sms" : "email";
+            const workspace = await prefetchDrawerFamilyWorkspace({
+                ...(customerId ? { customerId } : { entityType: entityType!, entityId: entityId! }),
+                threadId: firstId,
+                composerChannel,
+            });
+            if (!workspace) return;
             firstConversationWarm = {
                 conversationId: firstId,
                 customerId,
-                workspace: data.workspace,
-                threadMessages: mapTimelineToThreadMessages(data.workspace.messages ?? []),
+                workspace,
+                threadMessages: mapTimelineToThreadMessages(workspace.messages ?? []),
                 fetchedAt: Date.now(),
             };
             notify();
@@ -220,6 +234,7 @@ export function scheduleCommandCenterPrefetch(): void {
 export function resetCommandCenterPrefetchCacheForTests(): void {
     cache = null;
     firstConversationWarm = null;
+    pendingSelectionId = null;
     inflight = null;
     warmScheduled = false;
     listeners.clear();

@@ -1,0 +1,106 @@
+COLD_WORKSPACE_MS=120
+recentPlaceholder=false
+rosterHasLennon=false
+rosterHasProposed=false
+rosterSnippet=
+Assignments
+
+North Campus · operational
+
+Site
+Select…
+North Campus
+South Campus
+West Campus
+Add Assignment
+Actions
+Close
+Work
+Studio
+Overview
+Roster
+Attendance
+
+ASSIGNMENT HEALTH
+
+…Missing assignments
+
+—
+
+…Multiple
+
+—
+
+…Upcoming
+
+—
+
+…Future primary
+
+—
+
+…Conflicts
+
+—
+
+…Expiring soon
+
+—
+
+Assignments
+Room board
+
+Loading assignment roster…
+spaceReq=0
+eligible=0
+purposeCount=0
+createSnippet=
+Work Items
+
+Where operational work gets completed.
+
+Create Work Item
+Close
+Work
+Overview
+Queue
+Create a new work item
+
+Add a follow-up or reminder for yourself or your team.
+
+New work item
+→
+Continue current work
+
+Pick up where you left off in the queue.
+
+View my work
+→
+Business processes
+
+Work organized by process and stage.
+
+View processes
+→
+Continue where you left off
+View all →
+No open work items yet — create one to get started.
+Recently completed
+View all →
+Completed work items appear here.
+Quick navigation
+Open work items
+Due today
+Overdue work items
+Completed work items
+WARM_OPEN_ASSIGNMENTS_MS=87
+history=
+← Back to assignment
+HISTORY
+No history for this assignment yet.
+overflow=
+Duplicate
+Archive
+editCopy=2
+badCopy=0
+bos=Assignments:false Processing:false Communications:false Work Items:false

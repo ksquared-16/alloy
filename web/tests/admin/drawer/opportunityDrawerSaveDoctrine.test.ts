@@ -14,25 +14,6 @@ function readSrc(rel: string): string {
 }
 
 describe("Opportunity drawer save doctrine", () => {
-    it("uses header save actions and hides legacy inline opportunity save", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("OpportunityDrawerHeaderSaveActions");
-        expect(drawer).toContain('drawer.type !== "opportunities"');
-        expect(drawer).toContain("opportunityDrawerHeaderSaveActive");
-        expect(drawer).toContain("opportunityHeaderSaveNode");
-    });
-
-    it("mounts opportunity save in title rail row below workflow actions (same DrawerHeaderRecordSaveActions as person)", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        const saveActions = readSrc("components/admin/entity/OpportunityDrawerHeaderSaveActions.tsx");
-        const shared = readSrc("components/admin/entity/DrawerHeaderRecordSaveActions.tsx");
-        expect(saveActions).toContain("DrawerHeaderRecordSaveActions");
-        expect(shared).not.toContain("opportunity-compact");
-        expect(drawer).toMatch(
-            /opportunityHeaderQuickActionsNode[\s\S]{0,500}opportunityHeaderSaveNode/
-        );
-        expect(drawer).toContain("enrichmentFetchEnabled={drawerChildRows.length > 0 && !!canMutate}");
-    });
 
     it("header save component hides when clean and shows save control when dirty", () => {
         const shared = readSrc("components/admin/entity/DrawerHeaderRecordSaveActions.tsx");

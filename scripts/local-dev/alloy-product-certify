@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# Real-Mac certification harness for Alloy Product Runtime V1.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+# shellcheck source=lib/product-certify.sh
+source "${SCRIPT_DIR}/lib/product-certify.sh"
+# shellcheck source=lib/engineering-certify.sh
+source "${SCRIPT_DIR}/lib/engineering-certify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-product-certify [--keep] [--verbose]
+
+Runs isolated Product Runtime V1 certification (and combined Product → Engineering path).
+Uses temporary state under /tmp — never touches operator initiatives.
+
+Options:
+  --keep     Retain certification artifacts after success
+  --verbose  Log each assertion
+
+Exit code 0 only when all gates pass.
+EOF
+}
+
+product_certify_failure_gates() {
+  set +e
+  product_certify_log "=== failure-path gates ==="
+  local tmp
+
+  tmp="$(mktemp)"
+  product_certify_malformed_brief >"$tmp"
+  product_certify_assert_fail "malformed brief rejected" \
+    product_certify_cmd_env "$SCRIPT_DIR/alloy-product-create" bad-brief --from "$tmp"
+
+  product_certify_happy_brief >"$tmp"
+  product_certify_assert_fail "mismatched key rejected" \
+    product_certify_cmd_env "$SCRIPT_DIR/alloy-product-create" wrong-key --from "$tmp"
+
+  sed 's/key: product-v1-cert/key: product-dup/' "$tmp" >"${PRODUCT_CERT_ROOT}/dup-brief.yaml"
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-create" product-dup --from "${PRODUCT_CERT_ROOT}/dup-brief.yaml" >/dev/null
+  product_certify_assert_fail "duplicate product rejected" \
+    product_certify_cmd_env "$SCRIPT_DIR/alloy-product-create" product-dup --from "${PRODUCT_CERT_ROOT}/dup-brief.yaml"
+
+  product_certify_shell_brief >"$tmp"
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-create" product-shell-cert --from "$tmp" >/dev/null
+  product_certify_assert "shell-looking content stored as data" \
+    test -f "${PRODUCT_CERT_INITIATIVES}/product-shell-cert/product/brief.yaml"
+
+  product_certify_assert_fail "illegal product transition rejected" \
+    node "$SCRIPT_DIR/lib/product-io.mjs" validate-transition draft approved
+
+  product_certify_vague_brief >"${PRODUCT_CERT_ROOT}/vague.yaml"
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-create" product-vague-cert --from "${PRODUCT_CERT_ROOT}/vague.yaml" >/dev/null
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-audit" product-vague-cert >/dev/null
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-contract" product-vague-cert >/dev/null
+  local blocking
+  blocking="$(alloy_product_blocking_decisions_count product-vague-cert 2>/dev/null || echo 0)"
+  product_certify_assert "vague visual adjectives create blocking decisions" test "${blocking:-0}" -ge 1
+
+  rm -f "$tmp"
+  set -e
+}
+
+product_certify_happy_path() {
+  set +e
+  product_certify_log "=== happy-path lifecycle ==="
+  local tmp key="$PRODUCT_CERT_KEY"
+  tmp="$(mktemp)"
+  product_certify_happy_brief >"$tmp"
+
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-create" "$key" --from "$tmp" >/dev/null
+  product_certify_assert "product create" test -f "${PRODUCT_CERT_INITIATIVES}/${key}/product/brief.json"
+
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-audit" "$key" >/dev/null
+  product_certify_assert "audit references.md" test -f "${PRODUCT_CERT_INITIATIVES}/${key}/product/audit/references.md"
+  product_certify_assert "doctrine manifest has authority" \
+    grep -q 'authority:' "${PRODUCT_CERT_INITIATIVES}/${key}/product/audit/doctrine-manifest.yaml"
+
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-contract" "$key" >/dev/null
+  product_certify_assert "product contract md" test -f "${PRODUCT_CERT_INITIATIVES}/${key}/product/contract/product-contract.md"
+  product_certify_assert "contract separates policy section" \
+    grep -q "Standard Product Runtime policy" "${PRODUCT_CERT_INITIATIVES}/${key}/product/contract/product-contract.md"
+
+  product_certify_assert_fail "approve with blocking decisions rejected" \
+    product_certify_cmd_env "$SCRIPT_DIR/alloy-product-approve" product-vague-cert --approver Test
+
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-approve" "$key" --approver Certify >/dev/null
+  product_certify_assert "approval.json written" \
+    test -f "${PRODUCT_CERT_INITIATIVES}/${key}/product/contract/approval.json"
+  local approved_hash
+  approved_hash="$(node -e "console.log(require('${PRODUCT_CERT_INITIATIVES}/${key}/product/state.json').approved_contract_hash)")"
+  product_certify_assert "approved hash recorded" test -n "$approved_hash"
+
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-package" "$key" >/dev/null
+  product_certify_assert "review package" \
+    test -f "${PRODUCT_CERT_INITIATIVES}/${key}/product/final/product-review-package.md"
+
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-product-handoff" "$key" >/dev/null
+  product_certify_assert "engineering handoff yaml" \
+    test -f "${PRODUCT_CERT_INITIATIVES}/${key}/product/final/engineering-handoff.yaml"
+  product_certify_assert "engineering state created" \
+    test -f "${PRODUCT_CERT_INITIATIVES}/${key}/state.json"
+  product_certify_assert "product contract hash in engineering state" \
+    grep -q "$approved_hash" "${PRODUCT_CERT_INITIATIVES}/${key}/state.json"
+
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-initiative-audit" "$key" >/dev/null
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-initiative-plan" "$key" >/dev/null
+  product_certify_cmd_env "$SCRIPT_DIR/alloy-initiative-approve" "$key" --approver Certify >/dev/null
+
+  local fixture_repo="${PRODUCT_CERT_ROOT}/fixture-repo"
+  mkdir -p "$fixture_repo"
+  git -C "$fixture_repo" init -q 2>/dev/null || true
+  echo fixture >"$fixture_repo/README"
+  git -C "$fixture_repo" add README 2>/dev/null || true
+  git -C "$fixture_repo" commit -q -m init 2>/dev/null || true
+  alloy_engineering_certify_fixture_bind "$key" "$fixture_repo"
+
+  local pkg
+  pkg="$(find "$fixture_repo" -name '.alloy-worker-package.md' 2>/dev/null | head -1)"
+  product_certify_assert "worker package includes product truth" \
+    test -n "$pkg" && grep -q "Product truth" "$pkg"
+
+  product_certify_assert "product state handed_off" \
+    test "$(alloy_product_current_state "$key")" = "handed_off"
+
+  product_certify_assert "no credentials in handoff" \
+    bash -c '! grep -qiE "password|service.role|token|cookie|private.key" "$1"' _ \
+      "${PRODUCT_CERT_INITIATIVES}/${key}/product/final/engineering-handoff.yaml"
+
+  rm -f "$tmp"
+  set -e
+}
+
+product_certify_setup_fixture_repo() {
+  local repo="$1"
+  if [[ ! -e "$repo/.git" ]]; then
+    git -C "$repo" init -q 2>/dev/null || true
+    echo fixture >"$repo/README"
+    git -C "$repo" add README 2>/dev/null || true
+    git -C "$repo" commit -q -m init 2>/dev/null || true
+  fi
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --keep) PRODUCT_CERT_KEEP=1; shift ;;
+      --verbose) PRODUCT_CERT_VERBOSE=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) product_certify_die "unknown option: $1" ;;
+    esac
+  done
+
+  PRODUCT_CERT_ROOT="$(mktemp -d /tmp/alloy-product-cert.XXXXXX)"
+  PRODUCT_CERT_INITIATIVES="${PRODUCT_CERT_ROOT}/initiatives"
+  PRODUCT_CERT_CONFIG="${PRODUCT_CERT_ROOT}/config"
+  PRODUCT_CERT_CLIPBOARD="${PRODUCT_CERT_ROOT}/clipboard.txt"
+  mkdir -p "$PRODUCT_CERT_INITIATIVES" "$(dirname "$PRODUCT_CERT_CONFIG")"
+
+  local canon="${PRODUCT_CERT_ROOT}/canon"
+  local origin="${PRODUCT_CERT_ROOT}/origin.git"
+  git init --bare -q "$origin"
+  certify_setup_canonical_repo "$canon" "$origin"
+
+  cat >"$PRODUCT_CERT_CONFIG" <<CFG
+ALLOY_REPO="$canon"
+ALLOY_WORKTREE_ROOT="${PRODUCT_CERT_ROOT}/worktrees"
+ALLOY_RUNTIME_ROOT="${PRODUCT_CERT_ROOT}/runtime"
+ALLOY_BASE_REMOTE="origin"
+ALLOY_BASE_BRANCH="staging"
+ALLOY_FIRST_AGENT_PORT="3911"
+ALLOY_MAX_AGENTS="6"
+CFG
+  mkdir -p "${PRODUCT_CERT_ROOT}/runtime/metadata" "${PRODUCT_CERT_ROOT}/runtime/locks" \
+    "${PRODUCT_CERT_ROOT}/runtime/pids" "${PRODUCT_CERT_ROOT}/runtime/logs"
+
+  PRODUCT_CERT_FIRST_PORT=3911
+  CERT_RUNTIME="${PRODUCT_CERT_ROOT}/runtime"
+  CERT_CONFIG_FILE="$PRODUCT_CERT_CONFIG"
+  CERT_INITIATIVE_ROOT="$PRODUCT_CERT_INITIATIVES"
+  CERT_FIRST_AGENT_PORT=3911
+  CERT_PROD_RUNTIME="${HOME}/.local/state/alloy-dev"
+  export ALLOY_CONFIG_FILE="$PRODUCT_CERT_CONFIG"
+  export ALLOY_INITIATIVE_ROOT="$PRODUCT_CERT_INITIATIVES"
+  export ALLOY_RUNTIME_ROOT="${PRODUCT_CERT_ROOT}/runtime"
+  export ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+  export ALLOY_ENGINEERING_CERTIFY=1
+  export ALLOY_PRODUCT_CERTIFY=1
+  export ALLOY_TEST_FIXTURE=1
+  export ALLOY_FIRST_AGENT_PORT=3911
+  alloy_load_config
+  alloy_resolve_runtime_paths "${PRODUCT_CERT_ROOT}/runtime"
+
+  local prod_snap="${PRODUCT_CERT_ROOT}/prod-snapshot"
+  certify_record_production_snapshot "$prod_snap"
+
+  product_certify_failure_gates
+  product_certify_happy_path
+
+  product_certify_assert "production metadata untouched" \
+    certify_verify_production_untouched "$prod_snap"
+
+  local artifact="${PRODUCT_CERT_ROOT}/product-certification-artifact-quality.md"
+  cat >"$artifact" <<EOF
+# Product Runtime V1 Certification
+
+Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+Assertions passed: ${PRODUCT_CERT_PASS}
+Assertions failed: ${PRODUCT_CERT_FAIL}
+
+## Proven capabilities
+
+- Product Brief intake (file) with strict validation
+- Malformed/mismatched/duplicate brief rejection
+- Shell-like content never executed
+- Product audit with doctrine/surface/visual manifests
+- Product Contract with facts/findings/decisions/policy sections
+- Vague visual language escalated to Human Decision Queue
+- Blocking decisions prevent approval
+- Approval hash freeze and handoff to Engineering Runtime
+- Worker packages include immutable Product truth
+- Combined Product → Engineering certification path (no push/PR/Vercel)
+EOF
+
+  printf '\nProduct certification: %d passed, %d failed\n' "$PRODUCT_CERT_PASS" "$PRODUCT_CERT_FAIL"
+  if [[ "$PRODUCT_CERT_KEEP" -eq 1 ]]; then
+    printf 'Artifacts kept at: %s\n' "$PRODUCT_CERT_ROOT"
+    printf 'Summary: %s\n' "$artifact"
+  else
+    rm -rf "$PRODUCT_CERT_ROOT"
+  fi
+
+  [[ "$PRODUCT_CERT_FAIL" -eq 0 ]]
+}
+
+main "$@"

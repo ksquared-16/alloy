@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset=utf-8><title>After</title>
+<style>
+body{font-family:Georgia,serif;max-width:720px;margin:32px auto;padding:0 20px;background:#f7f1e6;color:#1c1915}
+.kicker{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#6b5e4e}
+h1{font-size:28px;line-height:1.25;margin:8px 0 24px}
+h2{font-size:16px;margin:22px 0 8px}
+.rec{border:1px solid #9cbc9a;background:#e8f2ea;padding:16px;border-radius:12px}
+.badge{display:inline-block;background:#cfe3d4;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase}
+.opt{border:1px solid #ddd;background:#fff;padding:12px;border-radius:10px;margin:8px 0}
+.after{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px}
+</style></head><body>
+<p class=kicker>Director needs your decision</p>
+<h1>I stopped because I found conflicting instructions.</h1>
+<h2>What happened?</h2><p>Your Mission Brief says not to implement the product yet — it asks for discovery and specification work. The plan Vacilando prepared treated this as implementation work instead. I also found that much of the requested discovery already exists and was accepted, while a few important gaps remain. I cannot follow both instructions at once.</p>
+<h2>Why did I stop?</h2><p>If I continue now, I will either:</p><ul><li>ignore your instruction not to implement, or</li><li>redo discovery work that has already been accepted.</li></ul><p>I stopped before either occurred.</p>
+<div class=rec><span class=badge>Recommended</span><p style="font-size:18px;font-weight:650">I recommend completing only the remaining specification gaps and reusing the accepted work.</p>
+<p><b>Why?</b></p><ul><li>option A is the only one that respects both the brief's 'do not implement' instruction and the fact that most of the requested discovery already exists and was accepted</li><li>option D is genuinely valuable and I would run it next — the ingestion defects will recur on every multi-stage brief — but it is a Vacilando fix, not Access &amp; Identity work, and it should not block the auth model, which is the largest and most consequential gap</li></ul>
+<p><b>Estimated impact</b></p><ul><li>Low risk</li><li>~2–4 focused phases</li><li>No accepted work repeated</li></ul></div>
+<h2>Other options</h2>
+<div class=opt><b>Recompile the full four-stage discovery mission</b><p>Rebuild all twelve outputs from the brief, re-deriving the seven already covered. Highest fidelity to the brief as written; substantially mo…</p><p style=color:#666><b>When to choose:</b> Useful if you intentionally want to rewrite every accepted artifact.</p></div><div class=opt><b>Proceed to implementation anyway</b><p>Treat p1's kind='implement' as authoritative and begin building Access &amp; Identity V2 from the existing corpus. Contradicts the brief; the sp…</p><p style=color:#666><b>When to choose:</b> Choose only if you are ready to start building product now.</p></div><div class=opt><b>Fix Vacilando's brief ingestion first, then re-ingest</b><p>Repair M1 (truncated title used as objective) and M2 (multi-stage brief collapsed to one phase) in the champion worktree, then re-ingest thi…</p><p style=color:#666><b>When to choose:</b> Choose if platform correctness matters more than finishing this mission’s gaps first.</p></div>
+<h2>What happens after I answer?</h2>
+<div class=after><div class=card><h3>If you approve</h3><p>Director will re-scope the mission to the remaining specification gaps, reuse accepted work, refresh assignments, and resume paused workers.</p></div><div class=card><h3>If you reject</h3><p>Director will keep work paused and wait for different direction — nothing resumes until you choose another path or give new instructions.</p></div></div>
+<details style="margin-top:24px;color:#666"><summary>Technical details</summary><pre>collapsed</pre></details>
+</body></html>

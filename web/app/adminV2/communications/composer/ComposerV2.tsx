@@ -64,6 +64,8 @@ export default function ComposerV2(props: {
                     body: payload?.body ?? body,
                     subject: payload?.subject ?? undefined,
                     recipient_person_id: props.sendContext.recipientPersonId,
+                    // Explicit classification — the server never infers one.
+                    category: "operational",
                 }),
             });
             setSendNote(res.ok ? "Sent." : "Send failed.");

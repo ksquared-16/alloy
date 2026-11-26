@@ -1,3 +1,5 @@
+import { withholdMedicalAnswersFromSubmissions } from "@/lib/health/withholdMedicalSubmissionAnswers";
+import type { HealthAccessSubject } from "@/lib/health/healthAccess";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
 import {
@@ -141,7 +143,7 @@ async function loadPdfDocumentRows(
     if (documentIds.length === 0) return map;
     const { data, error } = await supabase
         .from("documents")
-        .select("id, name, title, original_filename, created_at, metadata, template_key")
+        .select("id, title, original_filename, created_at, metadata, template_key")
         .eq("org_id", orgId)
         .in("id", documentIds);
     if (error || !data) return map;
@@ -149,7 +151,8 @@ async function loadPdfDocumentRows(
         const r = row as PdfDocumentRow & { metadata?: unknown };
         map.set(r.id, {
             id: r.id,
-            name: r.name ?? null,
+            // `documents` has no `name`; its display name is `title`.
+            name: r.title ?? null,
             title: r.title ?? null,
             original_filename: r.original_filename ?? null,
             created_at: r.created_at ?? null,
@@ -184,7 +187,9 @@ function buildAnswerView(
 export async function buildPacketReviewRollupV1(
     supabase: SupabaseClient,
     orgId: string,
-    packetSessionId: string
+    packetSessionId: string,
+    /** Whose review this is: a child's medical answers are shown only with health.view. */
+    health: HealthAccessSubject,
 ): Promise<BuildPacketReviewRollupResult> {
     const { data: sessionRaw, error: sErr } = await supabase
         .from("form_packet_sessions")
@@ -279,7 +284,8 @@ export async function buildPacketReviewRollupV1(
             .eq("org_id", orgId)
             .in("id", submissionIds);
         if (subErr) return { ok: false, error: subErr.message, httpStatus: 500 };
-        for (const row of subs ?? []) {
+        const visible = await withholdMedicalAnswersFromSubmissions(supabase, orgId, (subs ?? []) as SubmissionRow[], health);
+        for (const row of visible) {
             submissionById.set((row as SubmissionRow).id, row as SubmissionRow);
         }
     }

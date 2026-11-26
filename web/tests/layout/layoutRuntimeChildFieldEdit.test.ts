@@ -8,7 +8,7 @@ describe("layoutRuntimeChildFieldEdit", () => {
     it("supports durable child identity and inquiry OCM refKeys", () => {
         expect(isLayoutRuntimeChildEditableRefKey("child.first_name")).toBe(true);
         expect(isLayoutRuntimeChildEditableRefKey("child.date_of_birth")).toBe(true);
-        expect(isLayoutRuntimeChildEditableRefKey("inquiry_child.desired_schedule_type")).toBe(true);
+        expect(isLayoutRuntimeChildEditableRefKey("inquiry_child.schedule_type")).toBe(true);
         expect(isLayoutRuntimeChildEditableRefKey("child.full_name")).toBe(false);
     });
 

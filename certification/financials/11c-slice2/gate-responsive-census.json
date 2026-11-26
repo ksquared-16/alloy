@@ -1,0 +1,20 @@
+{
+  "details1280": {
+    "panelOpen": true,
+    "withinViewport": true,
+    "nativeSelects": 0,
+    "horizontalOverflow": false
+  },
+  "details1440": {
+    "panelOpen": true,
+    "withinViewport": true,
+    "nativeSelects": 0,
+    "horizontalOverflow": false
+  },
+  "details1680": {
+    "panelOpen": true,
+    "withinViewport": true,
+    "nativeSelects": 0,
+    "horizontalOverflow": false
+  }
+}

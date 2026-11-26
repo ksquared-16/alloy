@@ -123,4 +123,6 @@ export type ResolvedObligationReviewRow = {
     draft_charge_id: string | null;
     resolution_key: string | null;
     created_at: string | null;
+    /** D12a: the correction event that superseded this obligation (provenance). */
+    superseded_by_event_id?: string | null;
 };

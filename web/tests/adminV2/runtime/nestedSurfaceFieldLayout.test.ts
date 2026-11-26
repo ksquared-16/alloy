@@ -1,0 +1,346 @@
+import { describe, expect, it } from "vitest";
+
+import {
+    defaultNestedSurfaceConfig,
+    applyNestedSurfaceFieldDrop,
+    fieldLayoutWidthForNestedGroup,
+    reconcileNestedSurfaceConfig,
+    removeFieldFromNestedGroup,
+    selectedFieldKeys,
+    setFieldLayoutWidthInNestedGroup,
+    CHILDREN_SURFACE_ID,
+    HOUSEHOLD_SURFACE_ID,
+    addFieldToNestedGroup,
+    setNestedGroupEnabled,
+    identityConfigurationFieldKeys,
+    moveFieldInNestedGroup,
+    moveFieldToIdentityTierInNestedGroup,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import { childrenFocusRowsFromNestedConfig } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
+
+describe("nestedSurfaceFieldLayout", () => {
+    it("pairs consecutive half-width fields on one row", () => {
+        const keys = ["child.first_name", "child.last_name", "inquiry_child.program"];
+        const layout = (key: string) =>
+            key === "child.first_name" || key === "child.last_name" ? "half" as const : "full" as const;
+
+        expect(chunkNestedSurfaceFieldsForHalfRowLayout(keys, layout)).toEqual([
+            ["child.first_name", "child.last_name"],
+            ["inquiry_child.program"],
+        ]);
+    });
+
+    it("pairs DOB + age on the same row", () => {
+        const keys = ["child.date_of_birth", "child.dob_age", "child.room"];
+        const layout = (key: string) =>
+            key === "child.date_of_birth" || key === "child.dob_age" ? "half" as const : "full" as const;
+
+        expect(chunkNestedSurfaceFieldsForHalfRowLayout(keys, layout)).toEqual([
+            ["child.date_of_birth", "child.dob_age"],
+            ["child.room"],
+        ]);
+    });
+
+    it("keeps schedule blocks on full rows even when marked half", () => {
+        const keys = ["inquiry_child.schedule_type", "child.start_date"];
+        const layout = () => "half" as const;
+
+        expect(chunkNestedSurfaceFieldsForHalfRowLayout(keys, layout)).toEqual([
+            ["inquiry_child.schedule_type"],
+            ["child.start_date"],
+        ]);
+    });
+
+    it("persists field layout widths through reconcile", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.first_name", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.last_name", "half");
+
+        const reconciled = reconcileNestedSurfaceConfig(CHILDREN_SURFACE_ID, config);
+        expect(fieldLayoutWidthForNestedGroup(reconciled, "identity", "child.first_name")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(reconciled, "identity", "child.last_name")).toBe("half");
+    });
+
+    it("surfaces layout width on children focus rows after publish-shaped config", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.first_name", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.last_name", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.preferred_name", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.nickname", "half");
+
+        const rows = childrenFocusRowsFromNestedConfig(reconcileNestedSurfaceConfig(CHILDREN_SURFACE_ID, config));
+        const first = rows.find((row) => row.fieldKey === "child.first_name");
+        const last = rows.find((row) => row.fieldKey === "child.last_name");
+        const preferred = rows.find((row) => row.fieldKey === "child.preferred_name");
+        const nickname = rows.find((row) => row.fieldKey === "child.nickname");
+
+        expect(first?.layoutWidth).toBe("half");
+        expect(last?.layoutWidth).toBe("half");
+        expect(preferred?.layoutWidth).toBe("half");
+        expect(nickname?.layoutWidth).toBe("half");
+    });
+
+    it("pairs fields when dragged beside each other", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.first_name", "child.last_name", "beside");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.first_name")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.last_name")).toBe("half");
+        const keys = config.groups.find((g) => g.key === "identity")?.selectedFieldKeys ?? [];
+        expect(keys.indexOf("child.first_name")).toBeGreaterThan(keys.indexOf("child.last_name"));
+        const rows = chunkNestedSurfaceFieldsForHalfRowLayout(keys, (k) =>
+            fieldLayoutWidthForNestedGroup(config, "identity", k),
+        );
+        expect(rows).toContainEqual(["child.last_name", "child.first_name"]);
+    });
+
+    it("pairs preferred name and nickname when dragged beside each other", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.nickname", "child.preferred_name", "beside");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.preferred_name")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.nickname")).toBe("half");
+    });
+
+    it("stacks a field on a new full row when dropped below", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.first_name", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.last_name", "half");
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.dob_age", "child.last_name", "below");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.dob_age")).toBe("full");
+    });
+
+    it("removes a full-width field from a group", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = removeFieldFromNestedGroup(config, "identity", "child.nickname");
+        const keys = selectedFieldKeys(config, "identity");
+        expect(keys).not.toContain("child.nickname");
+    });
+
+    it("removes one half-row field and promotes the survivor to full width", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.first_name", "child.last_name", "beside");
+        config = removeFieldFromNestedGroup(config, "identity", "child.last_name");
+        expect(selectedFieldKeys(config, "identity")).toContain("child.first_name");
+        expect(selectedFieldKeys(config, "identity")).not.toContain("child.last_name");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.first_name")).toBe("full");
+    });
+
+    it("removes evidence section fields without leaving orphan half widths", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setNestedGroupEnabled(config, "medical", true, { sectionSemantic: "medical" });
+        config = setFieldLayoutWidthInNestedGroup(config, "medical", "child.medical_summary", "half");
+        config = addFieldToNestedGroup(config, "medical", "child.nickname");
+        config = setFieldLayoutWidthInNestedGroup(config, "medical", "child.nickname", "half");
+        config = removeFieldFromNestedGroup(config, "medical", "child.nickname");
+        expect(fieldLayoutWidthForNestedGroup(config, "medical", "child.medical_summary")).toBe("full");
+    });
+});
+
+
+describe("tier-aware nested surface field drop", () => {
+    it("drop into Summary creates a summary placement only", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.secondary_phone", { tier: "summary" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.preferred_language", { tier: "summary" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.preferred_language",
+            "person.secondary_phone",
+            "beside",
+            { tier: "summary" },
+        );
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).toContain("person.secondary_phone");
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).toContain("person.preferred_language");
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "context_facts")).not.toContain("person.preferred_language");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.preferred_language", { purpose: "summary" })).toBe("half");
+    });
+
+    it("drop into Context Facts creates a context_fact placement only", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.employer", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.role_label", { tier: "context_fact" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.role_label",
+            "person.employer",
+            "beside",
+            { tier: "context_fact" },
+        );
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "context_facts")).toEqual(
+            expect.arrayContaining(["person.employer", "person.role_label"]),
+        );
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).not.toContain("person.employer");
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "details")).not.toContain("person.employer");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.employer", { purpose: "context_facts" })).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.role_label", { purpose: "context_facts" })).toBe("half");
+    });
+
+    it("keeps Summary and Context Facts layout widths independent for the same field refs", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.phone", { tier: "summary" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "summary" });
+        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.phone", "full", {
+            purpose: "summary",
+        });
+        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.email", "full", {
+            purpose: "summary",
+        });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.phone", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "context_fact" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.email",
+            "person.phone",
+            "beside",
+            { tier: "context_fact" },
+        );
+
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.phone", { purpose: "summary" })).toBe(
+            "full",
+        );
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.email", { purpose: "summary" })).toBe(
+            "full",
+        );
+        expect(
+            fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.phone", { purpose: "context_facts" }),
+        ).toBe("half");
+        expect(
+            fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.email", { purpose: "context_facts" }),
+        ).toBe("half");
+
+        const placements = config.groups.find((g) => g.key === "primary_contact")?.fieldPlacements ?? [];
+        const summaryPhone = placements.find((p) => p.fieldRef === "person.phone" && p.tier === "summary");
+        const summaryEmail = placements.find((p) => p.fieldRef === "person.email" && p.tier === "summary");
+        const contextPhone = placements.find((p) => p.fieldRef === "person.phone" && p.tier === "context_fact");
+        const contextEmail = placements.find((p) => p.fieldRef === "person.email" && p.tier === "context_fact");
+        expect(summaryPhone?.width).toBe("full");
+        expect(summaryEmail?.width).toBe("full");
+        expect(summaryPhone?.row).not.toBe(summaryEmail?.row);
+        expect(contextPhone?.width).toBe("half");
+        expect(contextEmail?.width).toBe("half");
+        expect(contextPhone?.row).toBe(contextEmail?.row);
+    });
+
+    it("drop into Details creates a details placement only", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line1", { tier: "details" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.notes", { tier: "details" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.notes",
+            "person.address_line1",
+            "beside",
+            { tier: "details" },
+        );
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "details")).toEqual(
+            expect.arrayContaining(["person.address_line1", "person.notes"]),
+        );
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).not.toContain("person.notes");
+        expect(fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.notes", { purpose: "details" })).toBe("half");
+    });
+
+    it("dropping into one tier does not add the field to another tier", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.employer", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.role_label", { tier: "context_fact" });
+        const beforeSummary = identityConfigurationFieldKeys(config, "primary_contact", "summary");
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.role_label",
+            "person.employer",
+            "below",
+            { tier: "context_fact" },
+        );
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).toEqual(beforeSummary);
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "details")).not.toContain("person.role_label");
+    });
+
+    it("pairs two fields in Context Facts and Details", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "identity", "child.room", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "identity", "child.status", { tier: "context_fact" });
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.status", "child.room", "beside", {
+            tier: "context_fact",
+        });
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.room", { purpose: "context_facts" })).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.status", { purpose: "context_facts" })).toBe("half");
+
+        config = addFieldToNestedGroup(config, "identity", "child.date_of_birth", { tier: "details" });
+        config = addFieldToNestedGroup(config, "identity", "child.notes_summary", { tier: "details" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "identity",
+            "child.notes_summary",
+            "child.date_of_birth",
+            "beside",
+            { tier: "details" },
+        );
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.date_of_birth", { purpose: "details" })).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.notes_summary", { purpose: "details" })).toBe("half");
+    });
+
+    it("reordering persists in all three tiers", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.secondary_phone", { tier: "summary" });
+        config = moveFieldInNestedGroup(config, "primary_contact", "person.secondary_phone", -1, { tier: "summary" });
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary").indexOf("person.secondary_phone")).toBeGreaterThanOrEqual(0);
+
+        config = addFieldToNestedGroup(config, "primary_contact", "person.employer", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.role_label", { tier: "context_fact" });
+        config = moveFieldInNestedGroup(config, "primary_contact", "person.role_label", -1, { tier: "context_fact" });
+        const contextKeys = identityConfigurationFieldKeys(config, "primary_contact", "context_facts");
+        expect(contextKeys.indexOf("person.role_label")).toBeLessThan(contextKeys.indexOf("person.employer"));
+
+        config = addFieldToNestedGroup(config, "primary_contact", "person.notes", { tier: "details" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line1", { tier: "details" });
+        config = moveFieldInNestedGroup(config, "primary_contact", "person.address_line1", -1, { tier: "details" });
+        const detailKeys = identityConfigurationFieldKeys(config, "primary_contact", "details");
+        expect(detailKeys.indexOf("person.address_line1")).toBeLessThan(detailKeys.indexOf("person.notes"));
+    });
+
+    it("moving between tiers preserves deterministic placement on the destination tier", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.phone", { tier: "summary" });
+        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.phone", "half");
+        config = moveFieldToIdentityTierInNestedGroup(config, "primary_contact", "person.phone", "details");
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).not.toContain("person.phone");
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "details")).toContain("person.phone");
+    });
+
+    it("save/reload shaped reconcile preserves each tier layout", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.employer", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.role_label", { tier: "context_fact" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.role_label",
+            "person.employer",
+            "beside",
+            { tier: "context_fact" },
+        );
+        config = addFieldToNestedGroup(config, "primary_contact", "person.notes", { tier: "details" });
+        config = setFieldLayoutWidthInNestedGroup(config, "primary_contact", "person.notes", "half", {
+            purpose: "details",
+        });
+
+        const reconciled = reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, config);
+        expect(identityConfigurationFieldKeys(reconciled, "primary_contact", "context_facts")).toEqual(
+            expect.arrayContaining(["person.employer", "person.role_label"]),
+        );
+        expect(
+            fieldLayoutWidthForNestedGroup(reconciled, "primary_contact", "person.employer", {
+                purpose: "context_facts",
+            }),
+        ).toBe("half");
+        expect(identityConfigurationFieldKeys(reconciled, "primary_contact", "details")).toContain("person.notes");
+        expect(
+            fieldLayoutWidthForNestedGroup(reconciled, "primary_contact", "person.notes", { purpose: "details" }),
+        ).toBe("half");
+    });
+});

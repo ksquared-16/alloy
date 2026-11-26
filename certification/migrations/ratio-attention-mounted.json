@@ -1,0 +1,95 @@
+{
+  "at": "2026-09-24T15:40:53.034Z",
+  "checks": [
+    {
+      "name": "A_campus_rows_before",
+      "north": "North Campus · Bend, Oregon · Active · 5 rooms need capacity",
+      "south": "South Campus · Bend, Oregon · Active · 5 rooms need capacity",
+      "west": "West Campus · Bend, Oregon · Active · 5 rooms need capacity"
+    },
+    {
+      "name": "B_north_attention_detail",
+      "present": true,
+      "items": "Needs attention | 5 rooms need capacity | Those rooms cannot count toward location inventory. | Set capacity →"
+    },
+    {
+      "name": "C1_before",
+      "read": "STAFFING RATIO | 1:4 · 2:8 · 3:12",
+      "review": "Ratio needs review | Recorded earlier: 1:5 · 2:11 | Configured now: 1:4 · 2:8 · 3:12 | These disagree. Only you can say which is right for this space."
+    },
+    {
+      "name": "C2_save",
+      "stillEditing": false,
+      "error": ""
+    },
+    {
+      "name": "D_after_reload",
+      "read": "STAFFING RATIO | 1:5 · 2:11",
+      "review": null
+    },
+    {
+      "name": "D2_canonical_history",
+      "rules": [
+        {
+          "id": "31bc3220",
+          "start": "2026-01-01",
+          "end": "2026-09-24",
+          "via": null,
+          "tiers": [
+            "1:4",
+            "2:8",
+            "3:12"
+          ]
+        },
+        {
+          "id": "ebd5f46b",
+          "start": "2026-09-24",
+          "end": null,
+          "via": "object_editor",
+          "tiers": [
+            "1:5",
+            "2:11"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "E_invalid_still_refuses",
+      "error": "Each step up in children should need more staff, not the same or fewer."
+    },
+    {
+      "name": "F_campus_rows_after",
+      "north": "North Campus · Bend, Oregon · Active · 5 rooms need capacity",
+      "south": "South Campus · Bend, Oregon · Active · 5 rooms need capacity",
+      "west": "West Campus · Bend, Oregon · Active · 5 rooms need capacity"
+    },
+    {
+      "name": "runtime_errors",
+      "errs": [],
+      "perrs": []
+    }
+  ],
+  "canonical": [
+    {
+      "id": "31bc3220",
+      "start": "2026-01-01",
+      "end": "2026-09-24",
+      "via": null,
+      "tiers": [
+        "1:4",
+        "2:8",
+        "3:12"
+      ]
+    },
+    {
+      "id": "ebd5f46b",
+      "start": "2026-09-24",
+      "end": null,
+      "via": "object_editor",
+      "tiers": [
+        "1:5",
+        "2:11"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,313 @@
+/**
+ * An in-memory stand-in for the service-role Supabase client — tables, filters and storage.
+ *
+ * WHY THIS AND NOT A STUB PER QUERY
+ * A stub that answers "the next query returns X" proves only that a route ASKED something. The
+ * document authorization chain asks several things in a data-dependent order — the document row,
+ * then (for a scope-restricted actor) the opportunity, its work unit, its department, a vendor's
+ * referenced files — and the decision is only as good as the filters each query applies. Here every
+ * query is evaluated against seeded rows with the filters it actually sent, so the REAL route, the
+ * REAL `assertDocumentAccess` and the REAL `accessScope` helpers run unmodified and a wrong or
+ * missing `.eq("org_id", …)` returns the wrong rows exactly as Postgres would.
+ *
+ * Supported surface: `from(t).select().eq().neq().in().is().gt().gte().lt().lte().order().limit().range()`,
+ * `.maybeSingle()`, `.single()`, awaiting the builder; `insert`/`update`/`delete` with the same
+ * filters and an optional `.select().single()`; `storage.from(b).createSignedUrl/download/remove/
+ * upload/copy`. Unknown tables read as empty. Every storage call and every write is recorded.
+ */
+
+export type Row = Record<string, unknown>;
+
+type Filter = (row: Row) => boolean;
+
+type Result = { data: unknown; error: { message: string; code?: string } | null; count?: number | null };
+
+let idCounter = 0;
+function newId(): string {
+    idCounter += 1;
+    return `eeeeeeee-0000-4000-8000-${String(idCounter).padStart(12, "0")}`;
+}
+
+export class InMemorySupabase {
+    tables: Record<string, Row[]> = {};
+    objects = new Map<string, Uint8Array>();
+    signCalls: Array<{ bucket: string; path: string; expires: number }> = [];
+    downloadCalls: Array<{ bucket: string; path: string }> = [];
+    removeCalls: Array<{ bucket: string; paths: string[] }> = [];
+    uploadCalls: Array<{ bucket: string; path: string; bytes: number }> = [];
+    copyCalls: Array<{ bucket: string; from: string; to: string }> = [];
+    /** Tables whose INSERT fails, to prove a route refuses when its audit cannot be written. */
+    failInsertInto = new Set<string>();
+    /** Unique constraints to enforce on INSERT (`23505`), e.g. `{ documents: [["id"]] }`. None by default. */
+    uniqueOn: Record<string, string[][]> = {};
+
+    seed(table: string, rows: Row[]): this {
+        this.tables[table] = [...(this.tables[table] ?? []), ...rows.map((r) => ({ ...r }))];
+        return this;
+    }
+
+    putObject(bucket: string, path: string, content = "bytes"): this {
+        this.objects.set(`${bucket}/${path}`, new TextEncoder().encode(content));
+        return this;
+    }
+
+    rows(table: string): Row[] {
+        return this.tables[table] ?? [];
+    }
+
+    from(table: string): QueryBuilder {
+        return new QueryBuilder(this, table);
+    }
+
+    /**
+     * No SQL function exists in memory. PostgREST answers an unknown function with `PGRST202`, so callers take the
+     * same path they take against a database that has not received the function yet. A test that needs a function
+     * assigns its own `rpc`.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async rpc(fn: string, _args?: Record<string, unknown>): Promise<{ data: unknown; error: { code?: string; message: string } | null }> {
+        return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${fn} in the schema cache` } };
+    }
+
+    get storage() {
+        return {
+            from: (bucket: string) => ({
+                createSignedUrl: async (path: string, expires: number) => {
+                    this.signCalls.push({ bucket, path, expires });
+                    return { data: { signedUrl: `https://storage.invalid/${bucket}/${path}?sig=test&exp=${expires}` }, error: null };
+                },
+                download: async (path: string) => {
+                    this.downloadCalls.push({ bucket, path });
+                    const bytes = this.objects.get(`${bucket}/${path}`);
+                    if (!bytes) return { data: null, error: { message: "Object not found" } };
+                    const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+                    return { data: new Blob([copy]), error: null };
+                },
+                remove: async (paths: string[]) => {
+                    this.removeCalls.push({ bucket, paths: [...paths] });
+                    for (const p of paths) this.objects.delete(`${bucket}/${p}`);
+                    return { data: paths.map((name) => ({ name })), error: null };
+                },
+                copy: async (from: string, to: string) => {
+                    this.copyCalls.push({ bucket, from, to });
+                    const bytes = this.objects.get(`${bucket}/${from}`);
+                    if (!bytes) return { data: null, error: { message: "Object not found" } };
+                    if (this.objects.has(`${bucket}/${to}`)) return { data: null, error: { message: "The resource already exists" } };
+                    this.objects.set(`${bucket}/${to}`, bytes);
+                    return { data: { path: to }, error: null };
+                },
+                upload: async (path: string, body: Uint8Array | ArrayBuffer | Blob) => {
+                    const bytes =
+                        body instanceof Uint8Array
+                            ? body
+                            : body instanceof ArrayBuffer
+                              ? new Uint8Array(body)
+                              : new Uint8Array(await (body as Blob).arrayBuffer());
+                    this.uploadCalls.push({ bucket, path, bytes: bytes.length });
+                    this.objects.set(`${bucket}/${path}`, bytes);
+                    return { data: { path }, error: null };
+                },
+            }),
+        };
+    }
+}
+
+/**
+ * A PostgREST column reference: a plain column, or a JSON path (`metadata->filing`, `metadata->>source`,
+ * `metadata->a->>b`). `->>` yields text, as Postgres does; a missing key is null.
+ */
+function pick(r: Row, col: string): unknown {
+    if (!col.includes("->")) return r[col];
+    const parts = col.split(/(->>|->)/);
+    let v: unknown = r[parts[0]];
+    for (let i = 1; i < parts.length; i += 2) {
+        const asText = parts[i] === "->>";
+        v = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>)[parts[i + 1]] : undefined;
+        if (v === undefined) return null;
+        if (asText && v !== null) v = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+    return v ?? null;
+}
+
+class QueryBuilder implements PromiseLike<Result> {
+    private op: "select" | "insert" | "update" | "delete" = "select";
+    private filters: Filter[] = [];
+    private payload: Row[] = [];
+    private patch: Row = {};
+    private limitN: number | null = null;
+    private orders: Array<{ col: string; ascending: boolean }> = [];
+    private returning = false;
+    /** `select(cols, { count: "exact", head? })`: report the matching row count (and no rows when `head`). */
+    private countMode: { head: boolean } | null = null;
+
+    constructor(
+        private readonly db: InMemorySupabase,
+        private readonly table: string,
+    ) {}
+
+    /** Column lists are accepted and ignored: every seeded column is returned. */
+    select(...columns: unknown[]): this {
+        const opts = columns[1] as { count?: string; head?: boolean } | undefined;
+        if (opts && typeof opts === "object" && opts.count) this.countMode = { head: Boolean(opts.head) };
+        if (this.op !== "select") this.returning = true;
+        return this;
+    }
+    insert(rows: Row | Row[]): this {
+        this.op = "insert";
+        this.payload = (Array.isArray(rows) ? rows : [rows]).map((r) => ({ ...r }));
+        return this;
+    }
+    upsert(rows: Row | Row[]): this {
+        return this.insert(rows);
+    }
+    update(patch: Row): this {
+        this.op = "update";
+        this.patch = { ...patch };
+        return this;
+    }
+    delete(): this {
+        this.op = "delete";
+        return this;
+    }
+    eq(col: string, val: unknown): this {
+        this.filters.push((r) => pick(r, col) === val);
+        return this;
+    }
+    neq(col: string, val: unknown): this {
+        this.filters.push((r) => pick(r, col) !== val);
+        return this;
+    }
+    in(col: string, vals: unknown[]): this {
+        this.filters.push((r) => vals.includes(pick(r, col)));
+        return this;
+    }
+    is(col: string, val: unknown): this {
+        this.filters.push((r) => (val === null ? pick(r, col) == null : pick(r, col) === val));
+        return this;
+    }
+    /**
+     * PostgREST `or` filter — the `col.eq.value` and `col.is.null` terms this codebase uses. An
+     * unrecognised term throws rather than matching everything, so a test cannot pass on a filter
+     * the fake silently ignored.
+     */
+    or(expression: string): this {
+        const terms = expression.split(",").map((term) => {
+            const [col, op, ...rest] = term.trim().split(".");
+            const value = rest.join(".");
+            if (op === "eq") return (r: Row) => String(r[col]) === value;
+            if (op === "is" && value === "null") return (r: Row) => r[col] == null;
+            throw new Error(`InMemorySupabase.or: unsupported term "${term}"`);
+        });
+        this.filters.push((r) => terms.some((t) => t(r)));
+        return this;
+    }
+    gt(col: string, val: unknown): this {
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) > String(val));
+        return this;
+    }
+    gte(col: string, val: unknown): this {
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) >= String(val));
+        return this;
+    }
+    lt(col: string, val: unknown): this {
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) < String(val));
+        return this;
+    }
+    lte(col: string, val: unknown): this {
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) <= String(val));
+        return this;
+    }
+    /** Sorts as Postgres would (string comparison; nulls last). Keyset pagination depends on it. */
+    order(col?: string, opts?: { ascending?: boolean }): this {
+        if (typeof col === "string") this.orders.push({ col, ascending: opts?.ascending !== false });
+        return this;
+    }
+    limit(n: number): this {
+        this.limitN = n;
+        return this;
+    }
+    range(from: number, to: number): this {
+        this.limitN = to - from + 1;
+        return this;
+    }
+
+    private matching(): Row[] {
+        return (this.db.tables[this.table] ?? []).filter((r) => this.filters.every((f) => f(r)));
+    }
+
+    private execute(): Result {
+        if (this.op === "insert") {
+            if (this.db.failInsertInto.has(this.table)) {
+                return { data: null, error: { message: `insert into ${this.table} failed (test)` } };
+            }
+            const inserted = this.payload.map((r) => ({ id: newId(), ...r }));
+            for (const cols of this.db.uniqueOn[this.table] ?? []) {
+                const key = (row: Row) => JSON.stringify(cols.map((c) => row[c]));
+                const seen = new Set((this.db.tables[this.table] ?? []).map(key));
+                for (const row of inserted) {
+                    if (seen.has(key(row))) {
+                        return { data: null, error: { message: `duplicate key value violates unique constraint (${cols.join(",")})`, code: "23505" } };
+                    }
+                    seen.add(key(row));
+                }
+            }
+            this.db.tables[this.table] = [...(this.db.tables[this.table] ?? []), ...inserted];
+            return { data: this.returning ? inserted : null, error: null };
+        }
+        if (this.op === "update") {
+            const hit = this.matching();
+            for (const r of hit) Object.assign(r, this.patch);
+            return { data: this.returning ? hit : null, error: null };
+        }
+        if (this.op === "delete") {
+            const hit = new Set(this.matching());
+            this.db.tables[this.table] = (this.db.tables[this.table] ?? []).filter((r) => !hit.has(r));
+            return { data: this.returning ? [...hit] : null, error: null };
+        }
+        let rows = this.matching();
+        if (this.orders.length) {
+            rows = [...rows].sort((a, b) => {
+                for (const o of this.orders) {
+                    const av = a[o.col], bv = b[o.col];
+                    if (av == null && bv == null) continue;
+                    if (av == null) return 1;
+                    if (bv == null) return -1;
+                    const c = String(av) < String(bv) ? -1 : String(av) > String(bv) ? 1 : 0;
+                    if (c) return o.ascending ? c : -c;
+                }
+                return 0;
+            });
+        }
+        return { data: this.limitN == null ? rows : rows.slice(0, this.limitN), error: null };
+    }
+
+    async maybeSingle(): Promise<Result> {
+        const res = this.execute();
+        if (res.error) return res;
+        const rows = (res.data as Row[] | null) ?? [];
+        if (rows.length > 1) return { data: null, error: { message: "multiple rows", code: "PGRST116" } };
+        return { data: rows[0] ?? null, error: null };
+    }
+
+    async single(): Promise<Result> {
+        const res = this.execute();
+        if (res.error) return res;
+        const rows = (res.data as Row[] | null) ?? [];
+        if (rows.length !== 1) return { data: null, error: { message: "expected one row", code: "PGRST116" } };
+        return { data: rows[0], error: null };
+    }
+
+    then<TResult1 = Result, TResult2 = never>(
+        onfulfilled?: ((value: Result) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ): PromiseLike<TResult1 | TResult2> {
+        return Promise.resolve(this.withCount(this.execute())).then(onfulfilled, onrejected);
+    }
+
+    /** Counted selects carry `count` (the filtered total, before any limit); `head` returns no rows. */
+    private withCount(res: Result): Result {
+        if (!this.countMode || this.op !== "select" || res.error) return res;
+        const count = this.matching().length;
+        return { ...res, data: this.countMode.head ? null : res.data, count } as Result;
+    }
+}

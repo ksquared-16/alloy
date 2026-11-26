@@ -1,0 +1,18 @@
+{
+  "slice2": {
+    "availablePrepaid": "AVAILABLE PREPAID\n$125.00",
+    "balance": "BALANCE\n$1,412.87",
+    "responsibilityFilter": 1,
+    "responsibilityGear": 1,
+    "paymentButton": 1,
+    "addButton": 1,
+    "nativeSelects": 0
+  },
+  "automationCopy": {
+    "claimsAutomatic": false
+  },
+  "automationCopyBilling": {
+    "claimsAutomatic": false,
+    "accountingWordOnBilling": false
+  }
+}

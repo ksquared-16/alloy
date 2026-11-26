@@ -1,7 +1,8 @@
-import LocationFieldsClient from "./LocationFieldsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemLocationFieldsPage() {
-    return <LocationFieldsClient />;
+/** Legacy route — location field settings live under Platform Configuration → Fields. */
+export default function AdminSystemLocationFieldsRedirectPage() {
+    redirect("/settings/fields?entity=location");
 }

@@ -83,7 +83,7 @@ export default function FocusPanelBuilderDevClient() {
                 model={model}
                 context={context}
                 focusPanelMode="summary"
-                compat={{ subjectVm: vm, onSelectTab: () => {} }}
+                compat={{ onSelectTab: () => {} }}
             />
         );
     };

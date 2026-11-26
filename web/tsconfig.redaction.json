@@ -1,0 +1,14 @@
+{
+  // Narrow on purpose. A broader include is SIGTERM-killed in this sandbox, so
+  // this covers only the redaction + selection modules — enough to catch the
+  // Playwright fixture generics that CI's full graph otherwise finds first.
+  "extends": "./tsconfig.json",
+  "include": [
+    "playwright/redactedTest.ts",
+    "playwright/redactingReporter.ts",
+    "lib/security/redactSecrets.ts",
+    "lib/search/searchSelectionAdapter.ts",
+    "lib/layout/layoutBuilderPreviewRecordSearch.ts",
+    "next-env.d.ts"
+  ]
+}

@@ -1,6 +1,6 @@
 # Full Lifecycle Walkthrough Validation v1
 
-**Path:** `docs/sprints/06_2026/lifecycle_walkthrough_validation_v1.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_walkthrough_validation_v1.md`  
 **Status:** Phase 7 — validation checklist (May 2026)  
 **Doctrine path:** Lead → Qualification → Tour → Waitlist → Enrollment → Enrolled
 

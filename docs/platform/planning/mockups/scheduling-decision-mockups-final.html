@@ -1,0 +1,254 @@
+<title>Scheduling — Alloy</title>
+<style>
+  :root{
+    --pine:#00A283;--pine-hover:#009276;--forge:#273F52;--ink:#18273A;--slate:#45506c;--muted:#59678b;
+    --stone:#F4F6F9;--gold:#DBC078;--gold-dark:#d0ad50;--ember:#BC4300;--blue:#00458C;--page:#EEF2F8;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-90:rgba(39,63,82,.90);--mid-70:rgba(39,63,82,.70);--mid-62:rgba(39,63,82,.62);--mid-58:rgba(39,63,82,.58);
+    --mid-45:rgba(39,63,82,.45);--mid-42:rgba(39,63,82,.42);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);
+    --stone-30:rgba(244,246,249,.30);color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3,h4{margin:0} button{font-family:inherit;cursor:pointer;border:none;background:none}
+  .frame{max-width:1160px;margin:0 auto;padding:22px 18px 48px}
+  .switch{display:flex;gap:6px;margin-bottom:14px;justify-content:center}
+  .sw{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:12px;font-weight:500;padding:6px 14px;border-radius:999px;transition:all .15s}
+  .sw:hover{border-color:var(--pine);color:var(--pine)} .sw[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600}
+  .sw:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .app{display:flex;background:var(--stone);border-radius:16px;overflow:hidden;box-shadow:0 16px 48px rgba(39,63,82,.12);min-height:660px}
+  .rail{width:56px;flex:0 0 56px;background:var(--forge);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
+  .rail-logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pine),#0b7d68);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;margin-bottom:8px}
+  .rail-i{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:rgba(255,255,255,.55);font-size:15px;position:relative}
+  .rail-i.on{background:rgba(255,255,255,.10);color:#fff} .rail-i.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--pine)}
+  .topbar{height:6px;background:var(--blue)} .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .shell{flex:1;display:flex;flex-direction:column;min-width:0;border-radius:16px;border:1px solid rgba(244,246,249,.9);background:#fff;overflow:hidden}
+  .cband{border-bottom:1px solid var(--stone-30)}
+  .whead{display:flex;align-items:center;justify-content:space-between;gap:12px;border-left:2px solid var(--pine);background:#fff;padding:8px 16px 0}
+  .wid{display:flex;align-items:center;gap:8px;min-width:0} .wico{width:24px;height:24px;display:grid;place-items:center;color:var(--forge);font-size:15px}
+  .wtitle{font-size:14px;font-weight:600;color:var(--forge);line-height:1.15} .wsub{font-size:11px;color:var(--slate)}
+  .wacts{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .bp{display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:var(--pine);padding:6px 12px;font-size:12.5px;font-weight:600;color:#fff} .bp:hover{background:var(--pine-hover)}
+  .bs{display:inline-flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--mid-25);background:#fff;padding:6px 12px;font-size:12px;font-weight:500;color:var(--mid-70)}
+  .bx{display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:1px solid rgba(244,246,249,.8);padding:5px 9px;font-size:11px;font-weight:600;color:var(--mid-40)}
+  .mnav{background:#fff;padding:6px 16px 12px}
+  .msplit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px 16px;align-items:center} @media (max-width:800px){.msplit{grid-template-columns:1fr}}
+  .subtabs{display:inline-flex;align-items:center;gap:14px;margin-bottom:-1px;flex-wrap:wrap;padding-top:2px}
+  .st{padding:2px 2px 7px;font-size:12.5px;font-weight:600;color:rgba(39,63,82,.5);border-bottom:2px solid transparent} .st.on{color:var(--pine);border-bottom-color:var(--pine)}
+  .oph{display:flex;flex-direction:column;gap:6px;min-width:0} .ophe{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--slate)} .ophe::before{content:"";width:6px;height:6px;transform:rotate(45deg);background:rgba(69,80,108,.5)}
+  .ophm{display:flex;flex-wrap:wrap;gap:8px 24px} .om{min-width:80px}
+  .ov{font-size:18px;font-weight:600;line-height:1;color:var(--forge)} .ov.pine{color:var(--pine)} .ov.gold{color:var(--gold-dark)} .ov.ember{color:var(--ember)}
+  .ol{margin-left:6px;font-size:11px;font-weight:500;color:var(--slate)} .ot{margin-top:2px;font-size:10px;font-weight:500;line-height:1.1} .ot.pine{color:var(--pine)} .ot.ember{color:var(--ember)}
+  .inset{display:flex;min-height:0;flex:1;flex-direction:column;background:#fff;padding:12px 16px 16px}
+  .canvas{display:flex;min-height:0;flex:1;flex-direction:column;overflow:auto;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(244,246,249,.55);background:rgba(244,246,249,.5)}
+  .canvas.white{background:#fff;box-shadow:none;padding:0}
+  .surf{padding:18px} .surf .wrap{max-width:1010px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+  .eyebrow{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--mid-35);margin:0 0 9px}
+  /* overview */
+  .acards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px} @media (max-width:760px){.acards{grid-template-columns:1fr}}
+  .ac{position:relative;overflow:hidden;border-radius:16px;background:#fff;padding:18px 18px 18px 22px;text-align:left;width:100%}
+  .ac.p1{box-shadow:0 4px 24px rgba(24,39,58,.10);outline:1px solid rgba(0,162,131,.20)} .ac.p2{box-shadow:0 3px 14px rgba(24,39,58,.09);outline:1px solid rgba(188,67,0,.18)} .ac.p3{box-shadow:0 2px 10px rgba(24,39,58,.07);outline:1px solid rgba(39,63,82,.16)}
+  .ac .rl{position:absolute;top:12px;bottom:12px;left:0;width:4px;border-radius:999px;background:var(--pine)} .ac.p2 .rl{background:var(--ember)}
+  .aw{margin-bottom:13px;width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px}
+  .aw.pine{background:rgba(0,162,131,.11);color:var(--pine)} .aw.ember{background:rgba(188,67,0,.10);color:var(--ember)} .aw.forge{background:rgba(39,63,82,.06);color:var(--forge)}
+  .ah{font-size:15px;font-weight:600;color:var(--forge)} .ap{margin:6px 0 0;min-height:36px;font-size:12px;line-height:1.4;color:var(--slate)}
+  .acta{margin-top:14px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--pine)} .acta.ember{color:var(--ember)} .acta.forge{color:var(--forge)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px} @media (max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 8px rgba(24,39,58,.07)}
+  .kw{flex:0 0 auto;width:36px;height:36px;border-radius:8px;display:grid;place-items:center;font-size:15px} .kw.pine{background:rgba(0,162,131,.08);color:var(--pine)} .kw.gold{background:rgba(219,192,120,.20);color:var(--gold-dark)} .kw.ember{background:rgba(188,67,0,.08);color:var(--ember)}
+  .kv2{font-size:18px;font-weight:700;letter-spacing:-.03em;line-height:1;color:var(--forge)} .kl{display:flex;align-items:center;gap:6px;margin-top:6px} .kg{width:8px;height:8px;transform:rotate(45deg)} .kg.pine{background:var(--pine)} .kg.gold{background:var(--gold)} .kg.ember{background:var(--ember)} .klbl{font-size:10px;font-weight:500;color:var(--mid-42)}
+  .zones{display:grid;grid-template-columns:1.3fr 1fr;gap:16px} @media (max-width:760px){.zones{grid-template-columns:1fr}}
+  .zone{border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 10px rgba(24,39,58,.07);padding:13px 16px}
+  .zh{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px} .zh h2{font-size:13px;font-weight:600;color:var(--forge)} .zh button{font-size:11px;font-weight:600;color:var(--pine)}
+  .rl2{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+  .rl2 li{display:flex;align-items:center;gap:12px;border-radius:8px;padding:9px 6px;border-bottom:1px solid rgba(39,63,82,.05)} .rl2 li:last-child{border-bottom:none}
+  .bar{width:2px;height:30px;flex:0 0 auto;border-radius:999px;background:var(--pine)} .bar.ember{background:var(--ember)} .bar.gold{background:var(--gold)} .bar.slate{background:var(--mid-25)}
+  .lmain{min-width:0;flex:1} .llbl{font-size:13px;font-weight:600;color:var(--forge)} .lsub{font-size:11px;font-weight:500;color:var(--slate);margin-top:1px} .lsub.pine{color:var(--pine)} .lsub.ember{color:var(--ember)}
+  .lcta{font-size:11.5px;font-weight:600;color:var(--pine);flex:0 0 auto}
+  /* work unit */
+  .wu{display:grid;grid-template-columns:21rem minmax(0,1fr);height:100%} @media (max-width:800px){.wu{grid-template-columns:1fr}}
+  .qcol{padding:16px;overflow:auto;border-right:1px solid rgba(244,246,249,.9)}
+  .qh{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 8px} .qh h3{font-size:13px;font-weight:600;color:var(--forge)} .qh .c{font-size:11px;color:var(--mid-45)}
+  .ql{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .qr{display:block;width:100%;text-align:left;border-radius:8px;border:1px solid rgba(244,246,249,.9);border-left:2px solid rgba(244,246,249,.9);padding:9px 11px;box-shadow:0 1px 2px rgba(39,63,82,.05)} .qr:hover{background:rgba(244,246,249,.5)}
+  .qr.sel{border-color:rgba(0,162,131,.45);border-left-color:var(--pine);background:rgba(0,162,131,.06);box-shadow:0 0 0 1px rgba(0,162,131,.18)} .qr.ember{border-left-color:var(--ember)}
+  .qrt{display:flex;align-items:center;gap:6px} .qi{width:14px;height:14px;color:var(--mid-40);flex:0 0 auto} .qtt{font-size:12.5px;font-weight:600;color:var(--mid-90)}
+  .qp{margin-left:auto;border-radius:999px;padding:2px 7px;font-size:9px;font-weight:600} .qp.ember{background:rgba(188,67,0,.10);color:var(--ember)} .qp.gold{background:rgba(219,192,120,.18);color:var(--gold-dark)}
+  .qs{margin-top:3px;font-size:11px;color:var(--mid-58);line-height:1.4}
+  .fph{padding:16px;overflow:auto;background:rgba(244,246,249,.35)}
+  .fp{border-radius:12px;background:#fff;border:1px solid rgba(39,63,82,.20);box-shadow:0 1px 3px rgba(15,23,42,.06);overflow:hidden}
+  .fphd{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid rgba(39,63,82,.07)}
+  .fpav{width:32px;height:32px;border-radius:999px;background:rgba(188,67,0,.10);color:var(--ember);display:grid;place-items:center;font-size:14px}
+  .fpnm{font-size:13.5px;font-weight:600;color:var(--forge)} .fpsb{font-size:10.5px;color:var(--muted)}
+  .fpmodes{margin-left:auto;display:flex;gap:4px} .fpm{font-size:10px;font-weight:600;color:var(--mid-45);padding:3px 9px;border-radius:999px;border:1px solid var(--mid-25);background:#fff} .fpm.on{background:var(--pine);color:#fff;border-color:var(--pine)}
+  /* decision card */
+  .dcard{margin:12px;border:1px solid rgba(39,63,82,.14);border-left:3px solid var(--ember);border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(24,39,58,.06)}
+  .dsec{padding:12px 14px;border-bottom:1px solid rgba(39,63,82,.07)} .dsec:last-child{border-bottom:none}
+  .dlabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid-40);display:flex;align-items:center;justify-content:space-between}
+  .dsev{font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(188,67,0,.10);color:var(--ember)}
+  .dprob{margin-top:6px;font-size:15px;font-weight:600;color:var(--forge);line-height:1.3}
+  .dprob small{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:2px}
+  .opt{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(39,63,82,.05);cursor:pointer;border-radius:6px} .opt:last-child{border-bottom:none} .opt:hover{background:rgba(0,162,131,.04)}
+  .oradio{width:15px;height:15px;border-radius:50%;border:2px solid var(--mid-25);flex:0 0 auto;position:relative} .opt.on .oradio{border-color:var(--pine)} .opt.on .oradio::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--pine)}
+  .onm{font-size:13px;font-weight:600;color:var(--forge)} .opt.off .onm{font-weight:500;color:var(--mid-70)}
+  .orec{font-size:9.5px;font-weight:600;color:var(--pine);background:rgba(0,162,131,.10);padding:2px 7px;border-radius:999px;margin-left:auto}
+  .odesc{font-size:10.5px;color:var(--muted);margin-top:1px}
+  .trade{display:grid;grid-template-columns:1fr 22px 1fr;gap:8px;align-items:stretch;margin-top:6px}
+  .tside{border-radius:9px;padding:9px 10px;border:1px solid rgba(39,63,82,.10)} .tside.now{background:rgba(188,67,0,.04)} .tside.then{background:rgba(0,162,131,.05);border-color:rgba(0,162,131,.28)}
+  .te{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mid-40)} .tv{font-size:19px;font-weight:600;letter-spacing:-.02em;margin-top:2px} .tside.now .tv{color:var(--ember)} .tside.then .tv{color:var(--pine)} .td{font-size:10px;color:var(--muted);margin-top:1px}
+  .tarrow{display:grid;place-items:center;color:var(--muted);font-size:15px}
+  .tmeta{margin-top:8px;font-size:11px;color:var(--slate);display:flex;gap:14px;flex-wrap:wrap} .tmeta b{color:var(--forge)}
+  .dfoot{padding:12px 14px;display:flex;align-items:center;gap:10px}
+  .dfoot .note{font-size:10.5px;color:var(--muted)} .dcommit{margin-left:auto;display:inline-flex;align-items:center;gap:6px;border-radius:8px;background:var(--pine);padding:8px 16px;font-size:12.5px;font-weight:600;color:#fff} .dcommit:hover{background:var(--pine-hover)}
+  /* roster */
+  .board{overflow:auto;border-radius:12px;border:1px solid rgba(39,63,82,.10);background:#fff;box-shadow:0 2px 8px rgba(24,39,58,.06)}
+  .board table{border-collapse:collapse;width:100%} .board th,.board td{border:1px solid rgba(39,63,82,.07);padding:0;text-align:left}
+  .board thead th{background:rgba(244,246,249,.7);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);padding:8px 10px} .board thead th.now{background:rgba(0,162,131,.08);color:var(--pine)}
+  .rc{padding:10px;min-width:118px} .rn{font-size:12px;font-weight:600;color:var(--forge)} .rm{font-size:9.5px;color:var(--muted)}
+  .cell{padding:8px 9px;min-width:100px;position:relative} .occ{font-size:14px;font-weight:600;color:var(--forge)} .cap{font-size:9.5px;color:var(--muted)}
+  .cbar{height:3px;border-radius:2px;background:rgba(39,63,82,.10);margin-top:6px;overflow:hidden} .cbar>i{display:block;height:100%;background:var(--pine);border-radius:2px}
+  .crr{display:flex;align-items:center;gap:4px;margin-top:6px;font-size:9px;color:var(--muted)}
+  .cell.breach{background:rgba(188,67,0,.06)} .cell.breach .cbar>i{background:var(--ember)} .cell.breach .crr{color:var(--ember);font-weight:600}
+  .cell.closed{background:repeating-linear-gradient(45deg,#fff,#fff 6px,rgba(39,63,82,.03) 6px,rgba(39,63,82,.03) 12px)} .cell.closed .occ{color:var(--mid-25)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block} .dot.pine{background:var(--pine)} .dot.ember{background:var(--ember)} .dot.gold{background:var(--gold)}
+  .rostertop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .weekpick{display:inline-flex;border:1px solid var(--mid-25);border-radius:8px;overflow:hidden} .weekpick button{padding:6px 11px;font-size:12px;color:var(--slate)} .weekpick .mid{border-left:1px solid var(--mid-25);border-right:1px solid var(--mid-25);font-weight:600;color:var(--forge)}
+  .screen{display:none}.screen.on{display:block}
+</style>
+
+<div class="frame">
+  <div class="switch" role="tablist" aria-label="Screens">
+    <button class="sw" role="tab" aria-selected="true" data-s="overview">Overview</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="decision">A decision</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="roster">Roster</button>
+  </div>
+
+  <div class="app">
+    <nav class="rail" aria-hidden="true"><div class="rail-logo">A</div><div class="rail-i">◫</div><div class="rail-i">◷</div><div class="rail-i on">▦</div><div class="rail-i">✉</div><div class="rail-i">◧</div><div class="rail-i">▤</div></nav>
+    <div class="main">
+      <div class="topbar"></div>
+      <div class="shell">
+        <div class="cband">
+          <div class="whead"><div class="wid"><span class="wico">▦</span><div><div class="wtitle">Scheduling</div><div class="wsub" id="sub">Maple Street · week of Jul 20</div></div></div>
+            <div class="wacts"><button class="bs">This week ▾</button><button class="bp" id="act">Resolve</button><button class="bx">✕ Close</button></div></div>
+          <div class="mnav"><div class="msplit">
+            <div class="subtabs" id="subtabs"></div>
+            <div class="oph" id="oph"></div>
+          </div></div>
+        </div>
+        <div class="inset"><div class="canvas" id="canvas">
+          <section class="screen on" id="s-overview"></section>
+          <section class="screen" id="s-decision"></section>
+          <section class="screen" id="s-roster"></section>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var subtabs={
+    overview:[["Overview",1],["Roster",0],["Attendance",0],["Insights",0]],
+    decision:[["Overview",1],["Roster",0],["Attendance",0],["Insights",0]],
+    roster:[["Overview",0],["Roster",1],["Attendance",0],["Insights",0]]
+  };
+  var oph={
+    overview:[["3","To decide","ember","2 today","ember"],["7/8","Rooms in ratio","pine","",""],["86%","Fill","pine","",""]],
+    decision:[["3","To decide","ember","",""],["3","Options","pine","",""],["0","Blocking","pine","",""]],
+    roster:[["7/8","In ratio","pine","",""],["1","Over","ember","Sunflower Thu","ember"],["86%","Fill","pine","",""]]
+  };
+  var sub={overview:"Maple Street · week of Jul 20",decision:"Sunflower over ratio · Thursday",roster:"Maple Street · week of Jul 20"};
+  var act={overview:"Resolve",decision:"Commit",roster:"Resolve"};
+
+  var OVERVIEW='<div class="surf"><div class="wrap">'
+    +'<div><p class="eyebrow">To decide</p><div class="acards">'
+    +'<button class="ac p2"><span class="rl"></span><span class="aw ember">▲</span><span class="ah">Sunflower over ratio</span><p class="ap">Thursday projects 12 children in a room that holds 11. Choose how to bring it back in line.</p><span class="acta ember">Resolve →</span></button>'
+    +'<button class="ac p1"><span class="rl"></span><span class="aw pine">◑</span><span class="ah">Ethan needs a room</span><p class="ap">Starts Monday. No room set yet — two rooms fit, one keeps his sibling\'s cohort.</p><span class="acta">Resolve →</span></button>'
+    +'<button class="ac p3"><span class="aw forge">◷</span><span class="ah">Lila\'s start date</span><p class="ap">Infant room is tight Tue and Thu. Starting a day later avoids it with no cost.</p><span class="acta forge">Resolve →</span></button>'
+    +'</div></div>'
+    +'<div><p class="eyebrow">This week</p><div class="kpis">'
+    +'<div class="kpi"><span class="kw ember">▲</span><div><div class="kv2 tab">3</div><div class="kl"><span class="kg ember"></span><span class="klbl">To decide</span></div></div></div>'
+    +'<div class="kpi"><span class="kw pine">◱</span><div><div class="kv2 tab">7/8</div><div class="kl"><span class="kg pine"></span><span class="klbl">Rooms in ratio</span></div></div></div>'
+    +'<div class="kpi"><span class="kw pine">▦</span><div><div class="kv2 tab">86%</div><div class="kl"><span class="kg pine"></span><span class="klbl">Fill</span></div></div></div>'
+    +'<div class="kpi"><span class="kw gold">✓</span><div><div class="kv2 tab">4</div><div class="kl"><span class="kg gold"></span><span class="klbl">Decided today</span></div></div></div>'
+    +'</div></div>'
+    +'<div class="zones">'
+    +'<div class="zone"><div class="zh"><h2>Needs a decision</h2><button>See all</button></div><ul class="rl2">'
+    +'<li><span class="bar ember"></span><span class="lmain"><span class="llbl">Sunflower over ratio · Thursday</span><span class="lsub ember">12 of 11 · 3 options</span></span><span class="lcta">Resolve →</span></li>'
+    +'<li><span class="bar"></span><span class="lmain"><span class="llbl">Ethan needs a room</span><span class="lsub">starts Monday · Sunshine or Rainbow</span></span><span class="lcta">Resolve →</span></li>'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">Lila\'s start date</span><span class="lsub">infant room tight Tue / Thu</span></span><span class="lcta">Resolve →</span></li>'
+    +'</ul></div>'
+    +'<div class="zone"><div class="zh"><h2>Decided today</h2><button>History</button></div><ul class="rl2">'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">Noah → Rainbow</span><span class="lsub pine">full week · in ratio</span></span></li>'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">Wednesday drop-in · Rainbow</span><span class="lsub pine">within ratio</span></span></li>'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">Priya → Sunshine</span><span class="lsub pine">Mon–Thu</span></span></li>'
+    +'</ul></div>'
+    +'</div>'
+    +'</div></div>';
+
+  var DECISION='<div class="wu">'
+    +'<div class="qcol"><div class="qh"><h3>To decide</h3><span class="c tab">3</span></div><ul class="ql">'
+    +'<li><button class="qr sel ember"><div class="qrt"><span class="qi">▲</span><span class="qtt">Sunflower over ratio</span><span class="qp ember">Thu</span></div><p class="qs">12 of 11 · 3 options</p></button></li>'
+    +'<li><button class="qr"><div class="qrt"><span class="qi">◔</span><span class="qtt">Ethan needs a room</span><span class="qp gold">Mon</span></div><p class="qs">Sunshine or Rainbow</p></button></li>'
+    +'<li><button class="qr"><div class="qrt"><span class="qi">◔</span><span class="qtt">Lila\'s start date</span><span class="qp gold">Tue</span></div><p class="qs">infant room tight</p></button></li>'
+    +'</ul></div>'
+    +'<div class="fph"><div class="fp">'
+    +'<div class="fphd"><div class="fpav">▲</div><div><div class="fpnm">Sunflower · Thursday</div><div class="fpsb">Toddler room</div></div><div class="fpmodes"><span class="fpm on">Decide</span><span class="fpm">History</span></div></div>'
+    +'<div class="dcard">'
+    +'<div class="dsec"><div class="dlabel"><span>What needs deciding</span><span class="dsev">Over ratio</span></div><div class="dprob">Thursday has 12 children in a room that holds 11<small>Ava\'s enrollment starts Thursday, putting the room one over its two-teacher limit.</small></div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Options</span></div>'
+    +'<div class="opt on" data-after="11 / 11" data-afterlabel="in ratio" data-meta="Labor&nbsp;<b>no change</b> &nbsp;·&nbsp; Tuition&nbsp;<b>no change</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b>"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Move Ethan to Sunshine</span><div class="odesc">Sunshine has room every day · keeps Ethan with his cohort</div></div><span class="orec">Recommended</span></div>'
+    +'<div class="opt off" data-after="12 / 17" data-afterlabel="in ratio · 3 staff" data-meta="Labor&nbsp;<b>+$180</b> &nbsp;·&nbsp; Tuition&nbsp;<b>no change</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b>"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Add a teacher Thursday</span><div class="odesc">Allows up to 17 · adds ~$180 in labor</div></div></div>'
+    +'<div class="opt off" data-after="11 / 11" data-afterlabel="in ratio" data-meta="Labor&nbsp;<b>no change</b> &nbsp;·&nbsp; Tuition&nbsp;<b>−$62</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b>"><span class="oradio"></span><div style="min-width:0;flex:1"><span class="onm">Drop one Thursday session</span><div class="odesc">Back within ratio · loses $62 in tuition</div></div></div>'
+    +'</div>'
+    +'<div class="dsec"><div class="dlabel"><span>What changes</span></div>'
+    +'<div class="trade"><div class="tside now"><div class="te">Now</div><div class="tv tab">12 / 11</div><div class="td">over ratio</div></div><div class="tarrow">→</div><div class="tside then"><div class="te">After</div><div class="tv tab" id="v1-after">11 / 11</div><div class="td" id="v1-afterlabel">in ratio</div></div></div>'
+    +'<div class="tmeta" id="v1-meta">Labor&nbsp;<b>no change</b> &nbsp;·&nbsp; Tuition&nbsp;<b>no change</b> &nbsp;·&nbsp; Conflicts&nbsp;<b>none</b></div></div>'
+    +'<div class="dfoot"><span class="note">Nothing changes until you commit.</span><button class="dcommit">Commit</button></div>'
+    +'</div></div></div>'
+    +'</div>';
+
+  function cell(o,c,pct,rr,dot,cls){return '<td class="cell '+(cls||'')+'"><div class="occ tab">'+o+'</div><div class="cap">'+c+'</div><div class="cbar"><i style="width:'+pct+'%"></i></div><div class="crr"><span class="dot '+dot+'"></span>'+rr+'</div></td>';}
+  var ROSTER='<div class="surf"><div class="wrap">'
+    +'<div class="rostertop"><div class="weekpick"><button>‹</button><button class="mid">Jul 20 – 24</button><button>›</button></div><span style="font-size:11.5px;color:var(--muted)">142 children · 8 rooms</span></div>'
+    +'<div class="board"><table><thead><tr><th>Room</th><th>Mon 20</th><th>Tue 21</th><th>Wed 22</th><th class="now">Thu 23</th><th>Fri 24</th></tr></thead><tbody>'
+    +'<tr><td class="rc"><div class="rn">Sunflower</div><div class="rm">Toddler · holds 11</div></td>'+cell(9,'of 11',82,'2 staff','pine')+cell(10,'of 11',91,'2 staff','pine')+cell(10,'of 11',91,'2 staff','pine')+cell(12,'of 11',100,'over','ember','breach')+cell(9,'of 11',82,'2 staff','pine')+'</tr>'
+    +'<tr><td class="rc"><div class="rn">Sunshine</div><div class="rm">Toddler · holds 11</div></td>'+cell(7,'of 11',64,'2 staff','pine')+cell(8,'of 11',73,'2 staff','pine')+cell(8,'of 11',73,'2 staff','pine')+cell(8,'of 11',73,'2 staff','pine')+cell(8,'of 11',73,'2 staff','pine')+'</tr>'
+    +'<tr><td class="rc"><div class="rn">Rainbow</div><div class="rm">Preschool · holds 20</div></td>'+cell(16,'of 20',80,'2 staff','pine')+cell(17,'of 20',85,'2 staff','pine')+cell(18,'of 20',90,'2 staff','pine')+cell(17,'of 20',85,'2 staff','pine')+cell(15,'of 20',75,'2 staff','pine')+'</tr>'
+    +'<tr><td class="rc"><div class="rn">Caterpillar</div><div class="rm">Infant · holds 8</div></td>'+cell(6,'of 8',75,'2 staff','pine')+cell(7,'of 8',88,'tight','gold')+cell(6,'of 8',75,'2 staff','pine')+cell(7,'of 8',88,'tight','gold')+'<td class="cell closed"><div class="occ tab">—</div><div class="cap">closed</div></td></tr>'
+    +'</tbody></table></div>'
+    +'</div></div>';
+
+  var S={overview:OVERVIEW,decision:DECISION,roster:ROSTER};
+  Object.keys(S).forEach(function(k){document.getElementById('s-'+k).innerHTML=S[k];});
+  // interactive compare: selecting an option updates "What changes"
+  (function(){
+    var opts=document.querySelectorAll('#s-decision .opt');
+    opts.forEach(function(o){o.addEventListener('click',function(){
+      opts.forEach(function(x){x.classList.add('off');x.classList.remove('on');});
+      o.classList.remove('off');o.classList.add('on');
+      document.getElementById('v1-after').textContent=o.getAttribute('data-after');
+      document.getElementById('v1-afterlabel').textContent=o.getAttribute('data-afterlabel');
+      document.getElementById('v1-meta').innerHTML=o.getAttribute('data-meta');
+    });});
+  })();
+  var subEl=document.getElementById('subtabs'),ophEl=document.getElementById('oph');
+  function render(key){
+    subEl.innerHTML=subtabs[key].map(function(t){return '<span class="st'+(t[1]?' on':'')+'">'+t[0]+'</span>';}).join('');
+    ophEl.innerHTML='<div class="ophe">This section</div><div class="ophm">'+oph[key].map(function(m){return '<div class="om"><p style="margin:0"><span class="ov '+m[2]+' tab">'+m[0]+'</span><span class="ol">'+m[1]+'</span></p>'+(m[3]?'<div class="ot '+m[4]+'">'+m[3]+'</div>':'<div class="ot" style="color:transparent">—</div>')+'</div>';}).join('')+'</div>';
+    document.getElementById('sub').textContent=sub[key];
+    document.getElementById('act').textContent=act[key];
+    document.getElementById('canvas').classList.toggle('white',key==='decision');
+  }
+  document.querySelectorAll('.sw').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.sw').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+      document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+      document.getElementById('s-'+b.dataset.s).classList.add('on');
+      render(b.dataset.s);
+    });
+  });
+  render('overview');
+})();
+</script>

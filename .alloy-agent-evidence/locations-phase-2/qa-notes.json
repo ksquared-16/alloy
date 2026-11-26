@@ -1,0 +1,98 @@
+{
+  "url": "http://127.0.0.1:3014/organization/locations",
+  "loading": false,
+  "landing": true,
+  "selected": false,
+  "bosText": [
+    "Summarize this Location",
+    "Which Programs are offered"
+  ],
+  "api": [
+    {
+      "status": 200,
+      "url": "/api/admin/location-program-categories?include_inactive=true"
+    },
+    {
+      "status": 200,
+      "url": "/api/admin/schedule-patterns"
+    },
+    {
+      "status": 200,
+      "url": "/api/admin/locations"
+    },
+    {
+      "status": 200,
+      "url": "/api/admin/locations?include_inactive=true&hierarchy=1"
+    },
+    {
+      "status": 200,
+      "url": "/api/admin/configuration/programs"
+    },
+    {
+      "status": 200,
+      "url": "/api/admin/location-program-categories?include_inactive=true"
+    },
+    {
+      "status": 200,
+      "url": "/api/admin/option-sets/location_age_range_unit"
+    }
+  ],
+  "testIds": [
+    "configuration-continuity-root",
+    "organization-configuration-shell",
+    "locations-configuration-page",
+    "locations-content-column",
+    "locations-configuration-context",
+    "locations-configuration-context-title-icon",
+    "locations-collection-posture",
+    "config-scope-context",
+    "config-scope-context-organization",
+    "config-scope-context-object",
+    "locations-breadcrumb-programs-locations",
+    "locations-configuration-shell",
+    "configuration-workspace",
+    "locations-composition",
+    "locations-landing",
+    "locations-landing-header",
+    "locations-landing-summary",
+    "locations-landing-active-count",
+    "locations-landing-rooms-count",
+    "locations-landing-programs-count",
+    "locations-list-card",
+    "locations-search",
+    "locations-show-inactive",
+    "locations-add-location",
+    "locations-list",
+    "locations-row-1a5644a7-45c4-413b-9021-5f556118b6e2",
+    "locations-row-e9ed1883-d6a5-463d-bda0-b765e15c6214",
+    "locations-row-ae34d822-60ef-4f82-81eb-8f3513059627"
+  ],
+  "overview": {
+    "facts": true,
+    "bodyHasPctReady": false
+  },
+  "Programs": {
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=programs",
+    "hasClosures": false,
+    "hasStaffing": false,
+    "hasOfferingsPanel": true,
+    "hasRooms": false,
+    "hasSchedule": false
+  },
+  "Rooms": {
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=rooms",
+    "hasClosures": false,
+    "hasStaffing": false,
+    "hasOfferingsPanel": false,
+    "hasRooms": true,
+    "hasSchedule": false
+  },
+  "Schedule": {
+    "url": "http://127.0.0.1:3014/organization/locations?locationId=1a5644a7-45c4-413b-9021-5f556118b6e2&tab=rooms",
+    "hasClosures": false,
+    "hasStaffing": false,
+    "hasOfferingsPanel": false,
+    "hasRooms": true,
+    "hasSchedule": false
+  }
+}

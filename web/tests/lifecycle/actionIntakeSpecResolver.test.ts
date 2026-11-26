@@ -200,6 +200,14 @@ describe("create lead action workspace wiring", () => {
                                 "person:phone",
                             ],
                             recommended_rule_ids: [],
+                            rule_meta_v1: {
+                                version: 1,
+                                by_rule_id: {
+                                    "opportunity:location": { timing: ["record_creation"] },
+                                    "person:email": { timing: ["record_creation"] },
+                                    "person:phone": { timing: ["record_creation"] },
+                                },
+                            },
                         },
                     },
                 },
@@ -207,7 +215,13 @@ describe("create lead action workspace wiring", () => {
         });
         expect(spec.constraints).toEqual([]);
         expect(spec.required.map((f) => f.rule_id)).toEqual(
-            expect.arrayContaining(["person:first_name", "person:last_name", "opportunity:location", "person:email", "person:phone"]),
+            expect.arrayContaining([
+                "person:first_name",
+                "person:last_name",
+                "opportunity:location",
+                "person:email",
+                "person:phone",
+            ]),
         );
     });
 });

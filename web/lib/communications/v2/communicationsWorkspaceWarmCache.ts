@@ -2,6 +2,7 @@
  * Communications workspace — unified warm cache for modal tabs.
  * Orchestrates Command Center prefetch plus templates, campaigns, bindings, and audience metadata.
  */
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import type { InquiryChildPlacementHierarchyRow } from "@/lib/admin/location/inquiryChildPlacementOptions";
 import { fetchCommunicationsBindingsCached } from "@/lib/communications/communicationsBindingsCache";
 import { parseProgramOptionRowsFromApi } from "@/lib/communications/v2/audienceHierarchy";
@@ -156,9 +157,9 @@ function mapAnnouncementRows(raw: Record<string, unknown>[]): CommsWarmAnnouncem
     }));
 }
 
-async function fetchStatusOptions(grain: "family" | "child"): Promise<CommsWarmStatusOption[]> {
+async function fetchStatusOptions(grain: "family" | "child", ttlMs: number): Promise<CommsWarmStatusOption[]> {
     try {
-        const res = await fetch(`${STATUS_OPTIONS_API}?grain=${grain}`, { credentials: "include" });
+        const res = await dedupeAdminFetchWithTtl(`${STATUS_OPTIONS_API}?grain=${grain}`, { credentials: "include" }, ttlMs);
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !Array.isArray(json.options)) return [];
         return (json.options as Record<string, unknown>[]).map((o) => ({
@@ -170,12 +171,12 @@ async function fetchStatusOptions(grain: "family" | "child"): Promise<CommsWarmS
     }
 }
 
-async function warmAudienceMetadata(): Promise<CommsWarmAudienceMetadata> {
+async function warmAudienceMetadata(ttlMs: number): Promise<CommsWarmAudienceMetadata> {
     const [progRes, hierarchyRes, familyStatus, childStatus] = await Promise.all([
-        fetch(PROGRAM_OPTIONS_API, { credentials: "include" }),
-        fetch(LOCATION_HIERARCHY_API, { credentials: "include" }),
-        fetchStatusOptions("family"),
-        fetchStatusOptions("child"),
+        dedupeAdminFetchWithTtl(PROGRAM_OPTIONS_API, { credentials: "include" }, ttlMs),
+        dedupeAdminFetchWithTtl(LOCATION_HIERARCHY_API, { credentials: "include" }, ttlMs),
+        fetchStatusOptions("family", ttlMs),
+        fetchStatusOptions("child", ttlMs),
     ]);
     const progJson = await progRes.json().catch(() => ({}));
     const hierarchyJson = await hierarchyRes.json().catch(() => ({}));
@@ -196,15 +197,28 @@ async function warmAudienceMetadata(): Promise<CommsWarmAudienceMetadata> {
     };
 }
 
+/*
+ * ── THE WARM CACHE AND ITS CONSUMERS SHARE ONE FETCH OWNER ──
+ *
+ * This module and the workspaces it warms were fetching the SAME six URLs independently, so every
+ * resource arrived exactly twice — a warm prefetch and a component load, neither aware of the other.
+ * That is two loader owners for one resource, which is the thing law 43 forbids; deduping only the
+ * consumer side could never collapse it.
+ *
+ * Routing the warm fetches through the same dedupe owner makes whichever runs first win and the other
+ * join it. `ttlMs` is threaded rather than fixed so a FORCED refresh passes 0 and is never served from
+ * the coalescing layer — a force that a cache can satisfy is not a force.
+ */
 async function warmWorkspaceDatasets(
-    prev: CommunicationsWorkspaceWarmSnapshot | null
+    prev: CommunicationsWorkspaceWarmSnapshot | null,
+    ttlMs: number
 ): Promise<CommunicationsWorkspaceWarmSnapshot> {
     const [templatesLibRes, activeTemplatesRes, announcementsRes, bindingsResult, audienceMetadata] = await Promise.all([
-        fetch(TEMPLATES_API, { credentials: "include" }),
-        fetch(`${TEMPLATES_API}?status=active`, { credentials: "include" }),
-        fetch(ANNOUNCEMENTS_API, { credentials: "include" }),
+        dedupeAdminFetchWithTtl(TEMPLATES_API, { credentials: "include" }, ttlMs),
+        dedupeAdminFetchWithTtl(`${TEMPLATES_API}?status=active`, { credentials: "include" }, ttlMs),
+        dedupeAdminFetchWithTtl(ANNOUNCEMENTS_API, { credentials: "include" }, ttlMs),
         fetchCommunicationsBindingsCached(),
-        warmAudienceMetadata(),
+        warmAudienceMetadata(ttlMs),
     ]);
 
     const templatesJson = await templatesLibRes.json().catch(() => ({}));
@@ -243,6 +257,9 @@ async function warmWorkspaceDatasets(
 }
 
 /** Full workspace warm — Command Center queue plus tab datasets. */
+/** Coalescing window shared with the workspaces; a forced refresh passes 0 and bypasses it. */
+const WARM_COALESCE_TTL_MS = 10_000;
+
 export async function prefetchCommunicationsWorkspaceWarm(opts?: {
     force?: boolean;
 }): Promise<CommunicationsWorkspaceWarmSnapshot> {
@@ -267,7 +284,7 @@ export async function prefetchCommunicationsWorkspaceWarm(opts?: {
     const fresh = getCommunicationsWorkspaceWarmSnapshot();
     if (fresh && !opts?.force) {
         void prefetchCommandCenterConversations();
-        void warmWorkspaceDatasets(fresh)
+        void warmWorkspaceDatasets(fresh, WARM_COALESCE_TTL_MS)
             .then((next) => {
                 snapshot = next;
                 notify();
@@ -284,7 +301,7 @@ export async function prefetchCommunicationsWorkspaceWarm(opts?: {
         try {
             await prefetchCommandCenterConversations();
             const prev = getCommunicationsWorkspaceWarmSnapshot() ?? snapshot;
-            const next = await warmWorkspaceDatasets(prev);
+            const next = await warmWorkspaceDatasets(prev, opts?.force ? 0 : WARM_COALESCE_TTL_MS);
             snapshot = next;
             notify();
             return next;

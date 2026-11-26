@@ -1,0 +1,17 @@
+{
+  "filter": 0,
+  "gear": 1,
+  "beforeRows": 11,
+  "panelOpened": 1,
+  "scopes": [
+    "Household — the whole account",
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "afterEscape": {
+    "panel": 0,
+    "accountRows": 0,
+    "gear": 0,
+    "focus": "BODY"
+  }
+}

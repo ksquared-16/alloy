@@ -1,0 +1,24 @@
+{
+  "at": "2026-08-13T19:29:06.991Z",
+  "waitlist": [
+    {
+      "key": "lifecycle_waitlist",
+      "label": "Waitlist",
+      "count": 0,
+      "preview": []
+    }
+  ],
+  "tours": [
+    {
+      "key": "lifecycle_tour",
+      "label": "Tours",
+      "count": 1,
+      "preview": [
+        {
+          "name": "Kurzman Family",
+          "stage": "waitlist"
+        }
+      ]
+    }
+  ]
+}

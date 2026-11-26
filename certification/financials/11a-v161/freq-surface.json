@@ -1,0 +1,34 @@
+{
+  "url": "/organization/financials?chapter=tuition&setup=frequencies",
+  "text": "⌘K / QS / Organization / financials / Financials / Tuition Plans, enrollment commitments, organization pricing, and location overrides. / Tuition / Catalog / Policies / Accounting / Simulator / Funding / Plans / Enrollment Commitments / Billing Frequencies / Billing Frequencies / How often tuition is billed — used as the primary frequency on Tuition Plans. / New Frequency / NAME\tDESCRIPTION\tCADENCE\tACTIVE\tPLANS USING\t / MORE / Semi-Annual\tSemi-Annual\tSemi-Annual\tActive\t0\t / Weekly\t—\tWeekly\tActive\t1\t / Bi-weekly\t—\tBi-weekly\tActive\t0\t / Monthly\t—\tMonthly\tActive\t6\t / Annual\t—\tAnnual\tActive\t0\t / Daily\t—\tDaily\tActive\t0\t / Hourly\t—\tHourly\tActive\t0\t / Per Session\t—\tPer Session\tActive\t0\t / BOS / Operational Intelligence / Reset / Pin / Close / Attention / · No urgent issues / Here are some ways I can help / ▾ / Explain this configuration / Summarize the active state and working changes / Review configuration attention / Identify setup, publication, or assignment issues / Review unpublished changes / Explain what remains private to Organization / / commands · ↵ to send · ⇧↵ new line / BOS uses AI. Review for accuracy.",
+  "buttons": [
+    "QS",
+    "Tuition",
+    "Catalog",
+    "Policies",
+    "Accounting",
+    "Simulator",
+    "Funding",
+    "New Frequency",
+    "Reset",
+    "Pin",
+    "Close",
+    "Here are some ways I can help\n▾",
+    "Explain this configuration\nSummarize the active state and working changes",
+    "Review configuration attention\nIdentify setup, publication, or assignment issues",
+    "Review unpublished changes\nExplain what remains private to Organization"
+  ],
+  "rows": [],
+  "inputs": [
+    {
+      "tag": "input",
+      "type": "search",
+      "id": "Search…"
+    },
+    {
+      "tag": "textarea",
+      "type": "textarea",
+      "id": "Ask BOS or type / for commands…"
+    }
+  ]
+}

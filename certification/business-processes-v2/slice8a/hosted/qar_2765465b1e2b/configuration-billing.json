@@ -1,0 +1,21 @@
+{
+  "billing": {
+    "department_id": "5abbc24f-9087-4c32-908e-38f622f98186",
+    "process_id": "67cf201e-ee0d-4325-83dd-49a35d128c7c",
+    "published": {
+      "department_id": "5abbc24f-9087-4c32-908e-38f622f98186",
+      "revision_id": "b2dea6e2-282a-4441-a969-e7075d290e0d",
+      "revision_number": 1,
+      "publication_id": "143c9bfb-3003-4753-9e04-43f7b684826c",
+      "published_at": "2026-10-22T21:31:10.299275+00:00",
+      "already_published": false
+    },
+    "projection_hosts": [
+      {
+        "processKey": "billing",
+        "ok": true,
+        "created": true
+      }
+    ]
+  }
+}

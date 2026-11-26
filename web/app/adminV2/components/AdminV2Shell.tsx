@@ -1,6 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
+
+import { Suspense, useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import {
     readAdminV2SidebarCollapsed,
     writeAdminV2SidebarCollapsed,
@@ -24,15 +26,28 @@ import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
 import { GlobalAssistantProvider } from "@/contexts/GlobalAssistantContext";
 import AskBosHandoffListener from "@/components/adminV2/AskBosHandoffListener";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
-import KPIBand from "./dashboard/KPIBand";
-import SystemCanvas from "./canvas/SystemCanvas";
-import RecordsExpandable from "./records/RecordsExpandable";
+/*
+ * THE LEGACY DASHBOARD BODY LOADS WHEN THE LEGACY DASHBOARD RENDERS.
+ *
+ * These three render only BELOW the early return above: on a workspace, AI-activity, settings or
+ * workflows route this component returns before reaching them, so they are never mounted there. They
+ * were still statically imported, so every authenticated page downloaded and parsed them — and
+ * `SystemCanvas` brings `reactflow`, measured at 345 KB transferred / 1,354 KB parsed, arriving at
+ * 170 ms on a queue path whose rows do not appear until ~1,490 ms. That is 17% of the entire
+ * JavaScript path for a node canvas the operator never sees on those routes.
+ *
+ * `next/dynamic` WITHOUT `ssr: false`: on the legacy dashboard, where these ARE the visible content,
+ * they still server-render exactly as before — only the client chunk is split out. Nothing that was
+ * in the HTML leaves it, so this cannot trade truthfulness for bytes.
+ */
+const KPIBand = dynamic(() => import("./dashboard/KPIBand"));
+const SystemCanvas = dynamic(() => import("./canvas/SystemCanvas"));
+const RecordsExpandable = dynamic(() => import("./records/RecordsExpandable"));
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 import { AdminV2NavigationTransitionRibbon } from "@/components/admin/workspace/AdminV2NavigationTransitionRibbon";
 import {
     isCanonicalAiActivityPath,
-    isCanonicalFormsPath,
     isCanonicalSettingsPath,
     isCanonicalWorkflowsPath,
     isCanonicalWorkspacePath,
@@ -45,7 +60,14 @@ import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
-import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
+import { BosPresentationControls } from "@/components/presentation/BosPresentationControls";
+import { BosPresentationControllerProvider } from "@/contexts/BosPresentationControllerContext";
+import { BosCommandSessionProvider } from "@/contexts/BosCommandSessionContext";
+import {
+  isExperienceBuilderStudioActive,
+  isExperienceBuilderStudioPath,
+} from "@/lib/layout/experienceBuilderStudioMode";
+import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 /**
  * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
@@ -92,17 +114,16 @@ const workspaceContentAmbientStyle: CSSProperties = DEBUG_EXAGGERATE_WORKSPACE_A
 
 function AdminV2ShellInner({
   children,
+  experienceBuilderStudio,
 }: {
   children: React.ReactNode;
+  experienceBuilderStudio: boolean;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const experienceBuilderStudio = isExperienceBuilderStudioActive(pathname, searchParams);
   const isWorkspaceV2Route = isCanonicalWorkspacePath(pathname);
   const isAiActivityRoute = isCanonicalAiActivityPath(pathname);
   const isSettingsRoute = isCanonicalSettingsPath(pathname);
   const isWorkflowsRoute = isCanonicalWorkflowsPath(pathname);
-  const isFormsRoute = isCanonicalFormsPath(pathname);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readAdminV2SidebarCollapsed() ?? true);
   const toggleSidebarCollapsed = useCallback(() => {
@@ -148,6 +169,8 @@ function AdminV2ShellInner({
   useAdminV2WorkspaceShellDocumentFlag();
   useWorkspaceCommandRailDrawerOffset(pathname);
 
+  const ambientRootRef = useRef<HTMLDivElement | null>(null);
+
   if (experienceBuilderStudio) {
     return (
       <GlobalAssistantProvider>
@@ -174,9 +197,16 @@ function AdminV2ShellInner({
     );
   }
 
-  if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
+  if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute) {
     return (
       <GlobalAssistantProvider>
+        {/*
+          Provider must wrap CommandRailBosMount: the BOS dock portals to document.body as a
+          sibling of shell children. If the provider is nested inside the mount's children,
+          BosRailHeader cannot read pin/close context.
+        */}
+        <BosPresentationControllerProvider ambientRef={ambientRootRef}>
+        <BosCommandSessionProvider>
         <CommandRailBosMount>
         <WorkspaceCommandRailRegistryProvider>
         <DrawerCommandRailActionsProvider>
@@ -201,19 +231,26 @@ function AdminV2ShellInner({
               </div>
               <AdminV2ShellDrawerScope>
                 <div
+                  ref={ambientRootRef}
                   data-adminv2-workspace-ambient-root
                   className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden lg:flex-row"
                   style={workspaceContentAmbientStyle}
                 >
-                  <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
+                  <div
+                    className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate"
+                    data-adaptive-region="primary"
+                  >
                     <AdminV2NavigationTransitionRibbon />
-                    {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
+                    {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute ?
                       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                         {children}
                       </main>
                     : children}
                   </div>
-                  <AdminV2PersistentCommandRail />
+                  <div data-adaptive-region="assistant" className="relative flex min-h-0 shrink-0 flex-col">
+                    <AdminV2PersistentCommandRail />
+                    <BosPresentationControls />
+                  </div>
                 </div>
               </AdminV2ShellDrawerScope>
             </div>
@@ -222,6 +259,8 @@ function AdminV2ShellInner({
         </DrawerCommandRailActionsProvider>
         </WorkspaceCommandRailRegistryProvider>
         </CommandRailBosMount>
+        </BosCommandSessionProvider>
+        </BosPresentationControllerProvider>
       </GlobalAssistantProvider>
     );
   }
@@ -313,10 +352,34 @@ function AdminV2ShellInner({
   );
 }
 
-export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
+/**
+ * Studio-mode is the ONLY consumer of `useSearchParams()` in this shell, and it applies only on
+ * `/settings/surfaces|layouts`. Reading search params here (rather than unconditionally in the
+ * inner shell) confines the hydration-time Suspense boundary to studio-eligible routes.
+ */
+function AdminV2ShellStudioAware({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const experienceBuilderStudio = isExperienceBuilderStudioActive(pathname, searchParams);
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-alloy-midnight/55">Loading…</div>}>
-      <AdminV2ShellInner>{children}</AdminV2ShellInner>
+    <AdminV2ShellInner experienceBuilderStudio={experienceBuilderStudio}>{children}</AdminV2ShellInner>
+  );
+}
+
+export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  // The operational path (`/workspace`, `/workspace/work-unit/*`) is never studio-eligible, so it
+  // never needs `useSearchParams()`. Reading it there would make this whole shell suspend during
+  // client hydration and re-paint AlloyOperationalBootShell a SECOND time — the duplicate
+  // midnight-blue loader (Anticipatory Operational Runtime §13). Gate the suspending read behind the
+  // pathname check (usePathname does not suspend) so the route-level `loading.tsx` boot shell stays
+  // the single preparation owner (§12) on the operational path.
+  if (!isExperienceBuilderStudioPath(pathname)) {
+    return <AdminV2ShellInner experienceBuilderStudio={false}>{children}</AdminV2ShellInner>;
+  }
+  return (
+    <Suspense fallback={<AlloyOperationalBootShell variant="workspace" />}>
+      <AdminV2ShellStudioAware>{children}</AdminV2ShellStudioAware>
     </Suspense>
   );
 }

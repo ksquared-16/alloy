@@ -1,0 +1,15 @@
+{
+  "start": [],
+  "afterFirstKey": [
+    "Certa Certhouse"
+  ],
+  "afterSecondKey": [
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "afterHouseholdKey": [
+    "Household"
+  ],
+  "listAfterEscape": 0,
+  "focusAfterEscape": "BUTTON[addcharge-target](\"Applies to\")"
+}

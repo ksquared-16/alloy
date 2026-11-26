@@ -1,0 +1,997 @@
+{
+ "p1": {
+  "A": {
+   "tag": "a-desktop-standalone",
+   "mobile": false,
+   "iframe": false,
+   "times": [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "2:00 PM",
+    "2:30 PM"
+   ],
+   "consentControls": 1,
+   "submitStatus": 200,
+   "submitRequest": {
+    "tour": "pending_acceptance",
+    "consent": {
+     "email": true,
+     "sms": false
+    }
+   },
+   "received": true,
+   "errors": [],
+   "err409": 0
+  },
+  "B": {
+   "tag": "b-mobile-iframe",
+   "mobile": true,
+   "iframe": true,
+   "times": [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "2:00 PM",
+    "2:30 PM"
+   ],
+   "consentControls": 1,
+   "submitStatus": 200,
+   "submitRequest": {
+    "tour": "pending_acceptance",
+    "consent": {
+     "email": false,
+     "sms": false
+    }
+   },
+   "received": true,
+   "errors": [],
+   "err409": 0
+  },
+  "C": {
+   "tag": "c-desktop-iframe",
+   "mobile": false,
+   "iframe": true,
+   "times": [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "2:00 PM",
+    "2:30 PM"
+   ],
+   "consentControls": 1,
+   "submitStatus": 200,
+   "submitRequest": {
+    "tour": "pending_acceptance",
+    "consent": {
+     "email": false,
+     "sms": true
+    }
+   },
+   "received": true,
+   "errors": [],
+   "err409": 0
+  },
+  "D": {
+   "tag": "d-mobile-standalone",
+   "mobile": true,
+   "iframe": false,
+   "times": [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "2:00 PM",
+    "2:30 PM"
+   ],
+   "consentControls": 1,
+   "submitStatus": 200,
+   "submitRequest": {
+    "tour": "pending_acceptance",
+    "consent": {
+     "email": false,
+     "sms": false
+    }
+   },
+   "received": true,
+   "errors": [],
+   "err409": 0
+  },
+  "E": {
+   "tag": "e-desktop-standalone",
+   "mobile": false,
+   "iframe": false,
+   "times": [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "2:00 PM",
+    "2:30 PM"
+   ],
+   "consentControls": 1,
+   "submitStatus": 200,
+   "submitRequest": {
+    "tour": "pending_acceptance",
+    "consent": {
+     "email": false,
+     "sms": false
+    }
+   },
+   "received": true,
+   "errors": [],
+   "err409": 0
+  }
+ },
+ "p2": {
+  "A": {
+   "label": "Approve \u2014 Route for review",
+   "caseId": "bd845ff6-0dc4-4265-8d25-6da024557712",
+   "before": {
+    "requestedTour": "REQUESTED TOUR | Tour requested \u2014 pending acceptance (not booked) | Requested | Tue, Nov 3, 2026 \u00b7 10:00 AM \u2013 10:30 AM PST ",
+    "nothingSent": true,
+    "consentPanel": "Email news: yes | Not applied yet \u2014 Approve records it against the person's preferences | Text news: no | Not applied yet \u2014 Approve records it against the person's preferences | Captured Oct 28, 2026 \u00b7 2:52 PM \u00b7 wording intake_marketing_consent.2026-10.v1"
+   },
+   "approve": {
+    "status": 200,
+    "label": null,
+    "opp": "0bf5c489-f066-42d1-a3e0-cfb6fe874ef3",
+    "person": "4faece2a-31bc-4ab2-97c0-1614e2ec7fa3",
+    "matchedExisting": false,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "02ea8ddc-b688-4c57-aebc-e3f87e6d97b5",
+     "bookingStatus": "confirmed",
+     "replay": true,
+     "comms": {
+      "detail": "email:sent",
+      "status": "sent"
+     }
+    },
+    "marketingConsent": {
+     "kind": "committed",
+     "personId": "4faece2a-31bc-4ab2-97c0-1614e2ec7fa3",
+     "outcomes": [
+      {
+       "channel": "email",
+       "outcome": "opted_in"
+      },
+      {
+       "channel": "sms",
+       "outcome": "skipped_unset"
+      }
+     ],
+     "replayed": true
+    }
+   },
+   "after": {
+    "requestedTour": "REQUESTED TOUR | Tour booked | Requested | Tue, Nov 3, 2026 \u00b7 10:00 AM \u2013 10:30 AM PST | Location ",
+    "consentPanel": "Email news: yes | Recorded as opted in | Text news: no | Nothing recorded \u2014 no consent given | Captured Oct 28, 2026 \u00b7 2:52 PM \u00b7 wording intake_marketing_consent.2026-10.v1",
+    "rescheduling": false
+   },
+   "replay": {
+    "status": 200,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "02ea8ddc-b688-4c57-aebc-e3f87e6d97b5",
+     "bookingStatus": "confirmed",
+     "replay": true,
+     "comms": {
+      "detail": "email:sent",
+      "status": "sent"
+     }
+    },
+    "consentReplayed": true
+   },
+   "evidence": {
+    "bookings": [
+     {
+      "id": "02ea8ddc-b688-4c57-aebc-e3f87e6d97b5",
+      "status": "confirmed",
+      "start": "2026-11-03T18:00:00+00:00",
+      "staffInvite": {
+       "at": "2026-10-28T14:55:01.518Z",
+       "action": "request",
+       "outcome": "queued",
+       "refused": [],
+       "duplicates": [],
+       "message_ids": [
+        "6b5f3494-c026-459a-b4c6-055a8ac3bc9f"
+       ]
+      }
+     }
+    ],
+    "messages": [
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa.operator@northwind.invalid",
+      "subject": "Finalqa Family \u2014 Tour",
+      "event": "tour_internal_calendar",
+      "action": "request",
+      "staff": {
+       "user_id": "00000000-0000-4000-8000-000000000002",
+       "verified": true
+      },
+      "category": null,
+      "calendarLink": false,
+      "unsubscribe": null,
+      "ics": {
+       "method": "REQUEST",
+       "dtstart": "20261103T180000Z",
+       "tz": "America/Los_Angeles",
+       "attendee": true
+      },
+      "id": "6b5f3494-c026-459a-b4c6-055a8ac3bc9f",
+      "created_at": "2026-10-28T14:55:01.50146+00:00"
+     },
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa+final-a@example.invalid",
+      "subject": "Your tour is scheduled \u2014 11/03/2026, 10:00 AM",
+      "event": "tour_confirmation",
+      "action": null,
+      "staff": null,
+      "category": null,
+      "calendarLink": true,
+      "unsubscribe": null,
+      "ics": null,
+      "id": "b102ecfa-e828-46eb-ad93-1537e9603808",
+      "created_at": "2026-10-28T14:55:01.39438+00:00"
+     }
+    ],
+    "prefs": {
+     "email_marketing": {
+      "state": "opted_in",
+      "set_by": "public_intake",
+      "wording": "intake_marketing_consent.2026-10.v1",
+      "effective": "allowed",
+      "history": [
+       "public_intake:null->opted_in"
+      ]
+     },
+     "sms_marketing": {
+      "state": "unset",
+      "set_by": null,
+      "wording": null,
+      "effective": "blocked",
+      "history": []
+     }
+    }
+   }
+  },
+  "B": {
+   "label": "Approve \u2014 Route for review",
+   "caseId": "eaaccce8-3232-4a91-aa51-909d0b6dae57",
+   "before": {
+    "requestedTour": "REQUESTED TOUR | Tour requested \u2014 pending acceptance (not booked) | Requested | Wed, Nov 4, 2026 \u00b7 2:00 PM \u2013 2:30 PM PST ",
+    "nothingSent": true,
+    "consentPanel": "Email news: no | Not applied yet \u2014 Approve records it against the person's preferences | Text news: no | Not applied yet \u2014 Approve records it against the person's preferences | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1"
+   },
+   "approve": {
+    "status": 200,
+    "label": null,
+    "opp": "aef0c525-a900-46cd-8b73-9c1b83a15387",
+    "person": "387e6877-86eb-4c44-96d5-c99238f4cfa3",
+    "matchedExisting": false,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "52346bc8-29ea-47e5-9d5d-3ac8016cd406",
+     "bookingStatus": "pending_approval",
+     "replay": true,
+     "comms": {
+      "detail": "booking_pending_approval",
+      "status": "not_applicable"
+     }
+    },
+    "marketingConsent": {
+     "kind": "committed",
+     "personId": "387e6877-86eb-4c44-96d5-c99238f4cfa3",
+     "outcomes": [
+      {
+       "channel": "email",
+       "outcome": "skipped_unset"
+      },
+      {
+       "channel": "sms",
+       "outcome": "skipped_unset"
+      }
+     ],
+     "replayed": true
+    }
+   },
+   "after": {
+    "requestedTour": "REQUESTED TOUR | Tour booked \u2014 awaiting tour approval | Requested | Wed, Nov 4, 2026 \u00b7 2:00 PM \u2013 2:30 PM PST | Location ",
+    "consentPanel": "Email news: no | Nothing recorded \u2014 no consent given | Text news: no | Nothing recorded \u2014 no consent given | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1",
+    "rescheduling": false
+   },
+   "replay": {
+    "status": 200,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "52346bc8-29ea-47e5-9d5d-3ac8016cd406",
+     "bookingStatus": "pending_approval",
+     "replay": true,
+     "comms": {
+      "detail": "booking_pending_approval",
+      "status": "not_applicable"
+     }
+    },
+    "consentReplayed": true
+   },
+   "beforeConfirm": {
+    "bookings": [
+     {
+      "id": "52346bc8-29ea-47e5-9d5d-3ac8016cd406",
+      "status": "pending_approval",
+      "start": "2026-11-04T22:00:00+00:00",
+      "staffInvite": null
+     }
+    ],
+    "messages": [],
+    "prefs": {
+     "email_marketing": {
+      "state": "unset",
+      "set_by": null,
+      "wording": null,
+      "effective": "blocked",
+      "history": []
+     },
+     "sms_marketing": {
+      "state": "unset",
+      "set_by": null,
+      "wording": null,
+      "effective": "blocked",
+      "history": []
+     }
+    }
+   },
+   "confirm": {
+    "status": 200,
+    "booking": null
+   },
+   "afterConfirm": {
+    "bookings": [
+     {
+      "id": "52346bc8-29ea-47e5-9d5d-3ac8016cd406",
+      "status": "confirmed",
+      "start": "2026-11-04T22:00:00+00:00",
+      "staffInvite": {
+       "at": "2026-10-28T14:56:00.142Z",
+       "action": "request",
+       "outcome": "queued",
+       "refused": [],
+       "duplicates": [],
+       "message_ids": [
+        "54bf281b-53b1-41d8-9788-1ce161e2eb71"
+       ]
+      }
+     }
+    ],
+    "messages": [
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa.operator@northwind.invalid",
+      "subject": "Pendingqa Family \u2014 Tour",
+      "event": "tour_internal_calendar",
+      "action": "request",
+      "staff": {
+       "user_id": "00000000-0000-4000-8000-000000000002",
+       "verified": true
+      },
+      "category": null,
+      "calendarLink": false,
+      "unsubscribe": null,
+      "ics": {
+       "method": "REQUEST",
+       "dtstart": "20261104T220000Z",
+       "tz": "America/Los_Angeles",
+       "attendee": true
+      },
+      "id": "54bf281b-53b1-41d8-9788-1ce161e2eb71",
+      "created_at": "2026-10-28T14:56:00.124896+00:00"
+     },
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa+final-b@example.invalid",
+      "subject": "Your tour is scheduled \u2014 11/04/2026, 2:00 PM",
+      "event": "tour_confirmation",
+      "action": null,
+      "staff": null,
+      "category": null,
+      "calendarLink": true,
+      "unsubscribe": null,
+      "ics": null,
+      "id": "faa59e8b-6cc6-4f15-8f85-7a8a38eb2906",
+      "created_at": "2026-10-28T14:56:00.02145+00:00"
+     }
+    ],
+    "prefs": {
+     "email_marketing": {
+      "state": "unset",
+      "set_by": null,
+      "wording": null,
+      "effective": "blocked",
+      "history": []
+     },
+     "sms_marketing": {
+      "state": "unset",
+      "set_by": null,
+      "wording": null,
+      "effective": "blocked",
+      "history": []
+     }
+    }
+   }
+  },
+  "C": {
+   "label": "Approve \u2014 Route for review",
+   "caseId": "27c21e9e-c770-4527-8c3d-3b7fc7848dcd",
+   "before": {
+    "requestedTour": "REQUESTED TOUR | Tour requested \u2014 pending acceptance (not booked) | Requested | Thu, Nov 5, 2026 \u00b7 11:00 AM \u2013 11:30 AM PST ",
+    "nothingSent": true,
+    "consentPanel": "Email news: no | Not applied yet \u2014 Approve records it against the person's preferences | Text news: yes | Not applied yet \u2014 Approve records it against the person's preferences | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1"
+   },
+   "approve": {
+    "status": 200,
+    "label": null,
+    "opp": "7b06d7b2-ec84-4a57-9ec1-8078bb683d14",
+    "person": "a338520f-3004-4040-937d-fa8c9088e286",
+    "matchedExisting": false,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "d9bf4225-e9e7-4050-b90a-986eb5498daa",
+     "bookingStatus": "confirmed",
+     "replay": true,
+     "comms": {
+      "detail": "email:sent",
+      "status": "sent"
+     }
+    },
+    "marketingConsent": {
+     "kind": "committed",
+     "personId": "a338520f-3004-4040-937d-fa8c9088e286",
+     "outcomes": [
+      {
+       "channel": "email",
+       "outcome": "skipped_unset"
+      },
+      {
+       "channel": "sms",
+       "outcome": "opted_in"
+      }
+     ],
+     "replayed": true
+    }
+   },
+   "after": {
+    "requestedTour": "REQUESTED TOUR | Tour booked | Requested | Thu, Nov 5, 2026 \u00b7 11:00 AM \u2013 11:30 AM PST | Location ",
+    "consentPanel": "Email news: no | Nothing recorded \u2014 no consent given | Text news: yes | Recorded as opted in | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1",
+    "rescheduling": false
+   },
+   "replay": {
+    "status": 200,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "d9bf4225-e9e7-4050-b90a-986eb5498daa",
+     "bookingStatus": "confirmed",
+     "replay": true,
+     "comms": {
+      "detail": "email:sent",
+      "status": "sent"
+     }
+    },
+    "consentReplayed": true
+   },
+   "evidence": {
+    "bookings": [
+     {
+      "id": "d9bf4225-e9e7-4050-b90a-986eb5498daa",
+      "status": "confirmed",
+      "start": "2026-11-05T19:00:00+00:00",
+      "staffInvite": {
+       "at": "2026-10-28T14:56:25.031Z",
+       "action": "request",
+       "outcome": "queued",
+       "refused": [],
+       "duplicates": [],
+       "message_ids": [
+        "d78cfc65-7d4a-4ded-b91e-3402a6d0610d"
+       ]
+      }
+     }
+    ],
+    "messages": [
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa.operator@northwind.invalid",
+      "subject": "Seatoneqa Family \u2014 Tour",
+      "event": "tour_internal_calendar",
+      "action": "request",
+      "staff": {
+       "user_id": "00000000-0000-4000-8000-000000000002",
+       "verified": true
+      },
+      "category": null,
+      "calendarLink": false,
+      "unsubscribe": null,
+      "ics": {
+       "method": "REQUEST",
+       "dtstart": "20261105T190000Z",
+       "tz": "America/Los_Angeles",
+       "attendee": true
+      },
+      "id": "d78cfc65-7d4a-4ded-b91e-3402a6d0610d",
+      "created_at": "2026-10-28T14:56:25.01637+00:00"
+     },
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa+final-c@example.invalid",
+      "subject": "Your tour is scheduled \u2014 11/05/2026, 11:00 AM",
+      "event": "tour_confirmation",
+      "action": null,
+      "staff": null,
+      "category": null,
+      "calendarLink": true,
+      "unsubscribe": null,
+      "ics": null,
+      "id": "5999d05b-e1a3-4cbb-ae3c-0947c72a3006",
+      "created_at": "2026-10-28T14:56:24.917288+00:00"
+     }
+    ],
+    "prefs": {
+     "email_marketing": {
+      "state": "unset",
+      "set_by": null,
+      "wording": null,
+      "effective": "blocked",
+      "history": []
+     },
+     "sms_marketing": {
+      "state": "opted_in",
+      "set_by": "public_intake",
+      "wording": "intake_marketing_consent.2026-10.v1",
+      "effective": "blocked",
+      "history": [
+       "public_intake:null->opted_in"
+      ]
+     }
+    }
+   }
+  },
+  "D": {
+   "label": "Approve \u2014 Route for review",
+   "caseId": "64587c7f-b263-4663-83f5-a98f1241abf8",
+   "before": {
+    "requestedTour": "REQUESTED TOUR | Tour requested \u2014 pending acceptance (not booked) | Requested | Thu, Nov 5, 2026 \u00b7 11:00 AM \u2013 11:30 AM PST ",
+    "nothingSent": true,
+    "consentPanel": "Email news: no | Not applied yet \u2014 Approve records it against the person's preferences | Text news: no | Not applied yet \u2014 Approve records it against the person's preferences | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1"
+   },
+   "approve": {
+    "status": 200,
+    "label": null,
+    "opp": "41ddb554-97c0-4d64-a111-2a6ce18ee5e4",
+    "person": "22fd8380-dfa4-4a33-8c69-61746e20043c",
+    "matchedExisting": false,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "b5716369-41d1-40b2-86a1-da611bf8e01c",
+     "bookingStatus": "confirmed",
+     "replay": true,
+     "comms": {
+      "detail": "email:sent",
+      "status": "sent"
+     }
+    },
+    "marketingConsent": {
+     "kind": "committed",
+     "personId": "22fd8380-dfa4-4a33-8c69-61746e20043c",
+     "outcomes": [
+      {
+       "channel": "email",
+       "outcome": "skipped_unset"
+      },
+      {
+       "channel": "sms",
+       "outcome": "skipped_unset"
+      }
+     ],
+     "replayed": true
+    }
+   },
+   "after": {
+    "requestedTour": "REQUESTED TOUR | Tour booked | Requested | Thu, Nov 5, 2026 \u00b7 11:00 AM \u2013 11:30 AM PST | Location ",
+    "consentPanel": "Email news: no | Nothing recorded \u2014 no consent given | Text news: no | Nothing recorded \u2014 no consent given | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1",
+    "rescheduling": false
+   },
+   "replay": {
+    "status": 200,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "b5716369-41d1-40b2-86a1-da611bf8e01c",
+     "bookingStatus": "confirmed",
+     "replay": true,
+     "comms": {
+      "detail": "email:sent",
+      "status": "sent"
+     }
+    },
+    "consentReplayed": true
+   },
+   "evidence": {
+    "bookings": [
+     {
+      "id": "b5716369-41d1-40b2-86a1-da611bf8e01c",
+      "status": "confirmed",
+      "start": "2026-11-05T19:00:00+00:00",
+      "staffInvite": {
+       "at": "2026-10-28T14:56:58.428Z",
+       "action": "request",
+       "outcome": "queued",
+       "refused": [],
+       "duplicates": [],
+       "message_ids": [
+        "2b0c3d8a-e69f-438f-a5fd-c3d64c0189be"
+       ]
+      }
+     }
+    ],
+    "messages": [
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa.operator@northwind.invalid",
+      "subject": "Seattwoqa Family \u2014 Tour",
+      "event": "tour_internal_calendar",
+      "action": "request",
+      "staff": {
+       "user_id": "00000000-0000-4000-8000-000000000002",
+       "verified": true
+      },
+      "category": null,
+      "calendarLink": false,
+      "unsubscribe": null,
+      "ics": {
+       "method": "REQUEST",
+       "dtstart": "20261105T190000Z",
+       "tz": "America/Los_Angeles",
+       "attendee": true
+      },
+      "id": "2b0c3d8a-e69f-438f-a5fd-c3d64c0189be",
+      "created_at": "2026-10-28T14:56:58.412538+00:00"
+     },
+     {
+      "channel": "email",
+      "status": "queued",
+      "to": "qa+final-d@example.invalid",
+      "subject": "Your tour is scheduled \u2014 11/05/2026, 11:00 AM",
+      "event": "tour_confirmation",
+      "action": null,
+      "staff": null,
+      "category": null,
+      "calendarLink": true,
+      "unsubscribe": null,
+      "ics": null,
+      "id": "b6881cbd-3d8a-40a0-b6da-85bddca04caf",
+      "created_at": "2026-10-28T14:56:58.319344+00:00"
+     }
+    ],
+    "prefs": null
+   }
+  },
+  "E": {
+   "label": "Approve \u2014 Route for review",
+   "caseId": "785457ce-78de-420b-8a90-b37fcd6478ca",
+   "before": {
+    "requestedTour": "REQUESTED TOUR | Tour requested \u2014 pending acceptance (not booked) | Requested | Thu, Nov 5, 2026 \u00b7 11:00 AM \u2013 11:30 AM PST ",
+    "nothingSent": true,
+    "consentPanel": "Email news: no | Not applied yet \u2014 Approve records it against the person's preferences | Text news: no | Not applied yet \u2014 Approve records it against the person's preferences | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1"
+   },
+   "approve": {
+    "status": 200,
+    "label": null,
+    "opp": "3dc282f1-a259-4fc5-a0aa-198dc85b48d2",
+    "person": "c27ac865-7b93-4209-9b2d-44a44b7ab7c4",
+    "matchedExisting": false,
+    "tourRequest": {
+     "kind": "needs_rescheduling",
+     "reason": "slot_unavailable",
+     "replay": true,
+     "existingBookingId": null
+    },
+    "marketingConsent": {
+     "kind": "committed",
+     "personId": "c27ac865-7b93-4209-9b2d-44a44b7ab7c4",
+     "outcomes": [
+      {
+       "channel": "email",
+       "outcome": "skipped_unset"
+      },
+      {
+       "channel": "sms",
+       "outcome": "skipped_unset"
+      }
+     ],
+     "replayed": true
+    }
+   },
+   "after": {
+    "requestedTour": "REQUESTED TOUR | Lead accepted \u2014 tour needs rescheduling | Requested | Thu, Nov 5, 2026 \u00b7 11:00 AM \u2013 11:30 AM PST | Location ",
+    "consentPanel": "Email news: no | Nothing recorded \u2014 no consent given | Text news: no | Nothing recorded \u2014 no consent given | Captured Oct 28, 2026 \u00b7 2:53 PM \u00b7 wording intake_marketing_consent.2026-10.v1",
+    "rescheduling": true
+   },
+   "replay": {
+    "status": 200,
+    "tourRequest": {
+     "kind": "needs_rescheduling",
+     "reason": "slot_unavailable",
+     "replay": true,
+     "existingBookingId": null
+    },
+    "consentReplayed": true
+   },
+   "evidence": {
+    "bookings": [],
+    "messages": [],
+    "prefs": null
+   }
+  },
+  "thuAfter": [
+   "10:00 AM",
+   "10:30 AM",
+   "11:30 AM",
+   "2:00 PM",
+   "2:30 PM"
+  ]
+ },
+ "p3": {
+  "marketing1": {
+   "status": 200,
+   "outcome": "sent_to_queue",
+   "code": null,
+   "id": "8e90b389-a907-4504-a93e-a1e42a53cbb7"
+  },
+  "marketing1Row": [
+   {
+    "status": "queued",
+    "category": null,
+    "unsubscribe": true,
+    "origin": "https://vacilandos-mac-mini.tail2aa1af.ts.net:4412",
+    "url": "https://vacilandos-mac-mini.tail2aa1af.ts.net:4412/api/communications/unsubscribe?t=<redacted>"
+   }
+  ],
+  "unsubscribe": {
+   "linkOriginWasPreview": true,
+   "asked": "Unsubscribe | You are about to stop receiving marketing and promotional email from this school. | Essential messages about your child\u2019s care and enrolment will still be sent. | Unsubscribe",
+   "done": "You have been unsubscribed | You will no longer receive marketing and promotional email from this school. | Essential messages about your child\u2019s care and enrolment will still be sent."
+  },
+  "prefsAfterUnsub": {
+   "email_marketing": {
+    "state": "opted_out",
+    "set_by": "recipient_unsubscribe",
+    "wording": null,
+    "effective": "blocked",
+    "history": [
+     "recipient_unsubscribe:opted_in->opted_out",
+     "public_intake:null->opted_in"
+    ]
+   },
+   "sms_marketing": {
+    "state": "unset",
+    "set_by": null,
+    "wording": null,
+    "effective": "blocked",
+    "history": []
+   }
+  },
+  "marketing2": {
+   "status": 409,
+   "outcome": "blocked",
+   "code": "eligibility_blocked:OPTED_OUT",
+   "id": null
+  },
+  "transactional": {
+   "status": 200,
+   "outcome": "sent_to_queue",
+   "code": null,
+   "id": "70109ed7-c6ae-4e4e-923d-6308b381126e"
+  },
+  "repeatRequest": {
+   "tag": "f-repeat-desktop-iframe",
+   "mobile": false,
+   "iframe": true,
+   "times": [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "2:00 PM",
+    "2:30 PM"
+   ],
+   "consentControls": 1,
+   "submitStatus": 200,
+   "submitRequest": {
+    "tour": "pending_acceptance",
+    "consent": {
+     "email": true,
+     "sms": false
+    }
+   },
+   "received": true,
+   "errors": [],
+   "err409": 0
+  },
+  "repeatApprove": {
+   "label": "Approve \u2014 Route for review",
+   "caseId": "7e80b1fa-e1bd-469d-8dab-9999b7b2e392",
+   "before": {
+    "requestedTour": "REQUESTED TOUR | Tour requested \u2014 pending acceptance (not booked) | Requested | Fri, Nov 6, 2026 \u00b7 10:30 AM \u2013 11:00 AM PST ",
+    "nothingSent": true,
+    "consentPanel": "Email news: yes | Not applied yet \u2014 Approve records it against the person's preferences | Text news: no | Not applied yet \u2014 Approve records it against the person's preferences | Captured Oct 28, 2026 \u00b7 3:00 PM \u00b7 wording intake_marketing_consent.2026-10.v1"
+   },
+   "approve": {
+    "status": 200,
+    "label": null,
+    "opp": "0bf5c489-f066-42d1-a3e0-cfb6fe874ef3",
+    "person": "4faece2a-31bc-4ab2-97c0-1614e2ec7fa3",
+    "matchedExisting": true,
+    "tourRequest": {
+     "kind": "needs_rescheduling",
+     "reason": "existing_active_tour",
+     "replay": false,
+     "existingBookingId": "02ea8ddc-b688-4c57-aebc-e3f87e6d97b5"
+    },
+    "marketingConsent": {
+     "kind": "committed",
+     "personId": "4faece2a-31bc-4ab2-97c0-1614e2ec7fa3",
+     "outcomes": [
+      {
+       "channel": "email",
+       "outcome": "preserved_opt_out"
+      },
+      {
+       "channel": "sms",
+       "outcome": "skipped_unset"
+      }
+     ],
+     "replayed": false
+    }
+   },
+   "after": {
+    "requestedTour": "REQUESTED TOUR | Lead accepted \u2014 tour needs rescheduling | Requested | Fri, Nov 6, 2026 \u00b7 10:30 AM \u2013 11:00 AM PST | Location ",
+    "consentPanel": "Email news: yes | Not applied \u2014 the person had opted out; the opt-out stands | Text news: no | Nothing recorded \u2014 no consent given | Captured Oct 28, 2026 \u00b7 3:00 PM \u00b7 wording intake_marketing_consent.2026-10.v1",
+    "rescheduling": true
+   },
+   "replay": {
+    "status": 200,
+    "tourRequest": {
+     "kind": "needs_rescheduling",
+     "reason": "existing_active_tour",
+     "replay": true,
+     "existingBookingId": "02ea8ddc-b688-4c57-aebc-e3f87e6d97b5"
+    },
+    "consentReplayed": true
+   }
+  },
+  "prefsAfterRepeat": {
+   "email_marketing": {
+    "state": "opted_out",
+    "set_by": "recipient_unsubscribe",
+    "wording": null,
+    "effective": "blocked",
+    "history": [
+     "public_intake:opted_out->opted_out (no change)",
+     "recipient_unsubscribe:opted_in->opted_out",
+     "public_intake:null->opted_in"
+    ]
+   },
+   "sms_marketing": {
+    "state": "unset",
+    "set_by": null,
+    "wording": null,
+    "effective": "blocked",
+    "history": []
+   }
+  }
+ },
+ "p4": {
+  "publishV2": {
+   "version": 201,
+   "err": null,
+   "publish": 200
+  },
+  "request": {
+   "tag": "g-bound-desktop-standalone",
+   "mobile": false,
+   "iframe": false,
+   "times": [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "2:00 PM",
+    "2:30 PM"
+   ],
+   "consentControls": 1,
+   "submitStatus": 200,
+   "submitRequest": {
+    "tour": "pending_acceptance",
+    "consent": {
+     "email": true,
+     "sms": false
+    }
+   },
+   "received": true,
+   "errors": [],
+   "err409": 0
+  },
+  "approve": {
+   "label": "Approve \u2014 Create enrollment lead",
+   "caseId": "8e3825f1-4967-4540-a353-a7ffafa171d6",
+   "before": {
+    "requestedTour": "REQUESTED TOUR | Tour requested \u2014 pending acceptance (not booked) | Requested | Mon, Nov 9, 2026 \u00b7 10:00 AM \u2013 10:30 AM PST ",
+    "nothingSent": true,
+    "consentPanel": "Email news: yes | Not applied yet \u2014 Approve records it against the person's preferences | Text news: no | Not applied yet \u2014 Approve records it against the person's preferences | Captured Oct 28, 2026 \u00b7 3:05 PM \u00b7 wording intake_marketing_consent.2026-10.v1"
+   },
+   "approve": {
+    "status": 200,
+    "label": null,
+    "opp": "5c5afaec-a77f-4aed-ae09-2d293f513258",
+    "person": "592b8b14-8754-4f99-8dcf-30afd8d4bc37",
+    "matchedExisting": false,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "97609b3e-16da-4bec-aa98-54955126741a",
+     "bookingStatus": "confirmed",
+     "replay": false,
+     "comms": {
+      "status": "sent",
+      "detail": "email:sent"
+     }
+    },
+    "marketingConsent": {
+     "kind": "committed",
+     "personId": "592b8b14-8754-4f99-8dcf-30afd8d4bc37",
+     "outcomes": [
+      {
+       "channel": "email",
+       "outcome": "opted_in"
+      },
+      {
+       "channel": "sms",
+       "outcome": "skipped_unset"
+      }
+     ],
+     "replayed": false
+    }
+   },
+   "after": {
+    "requestedTour": "REQUESTED TOUR | Tour booked | Requested | Mon, Nov 9, 2026 \u00b7 10:00 AM \u2013 10:30 AM PST | Location ",
+    "consentPanel": "Email news: yes | Recorded as opted in | Text news: no | Nothing recorded \u2014 no consent given | Captured Oct 28, 2026 \u00b7 3:05 PM \u00b7 wording intake_marketing_consent.2026-10.v1",
+    "rescheduling": false
+   },
+   "replay": {
+    "status": 200,
+    "tourRequest": {
+     "kind": "booked",
+     "bookingId": "97609b3e-16da-4bec-aa98-54955126741a",
+     "bookingStatus": "confirmed",
+     "replay": true,
+     "comms": {
+      "detail": "email:sent",
+      "status": "sent"
+     }
+    },
+    "consentReplayed": true
+   }
+  }
+ }
+}

@@ -7,6 +7,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseAnonKeyForAuth, getSupabaseUrlForAuth } from "@/lib/supabase/auth-env";
+import { authCookieNameFor } from "@/lib/supabase/browserTransport";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -20,7 +21,16 @@ export async function createClient() {
     );
   }
 
+  /*
+   * The browser may reach Supabase through the app's own origin on a loopback
+   * runtime, which would otherwise change the cookie name it derives and leave
+   * middleware looking for a cookie nobody set. Both sides are pinned to the same
+   * name; null on hosted runtimes, so production keeps the library default.
+   */
+  const cookieName = authCookieNameFor(supabaseUrl);
+
   return createServerClient(supabaseUrl, supabaseAnonKey, {
+    ...(cookieName ? { cookieOptions: { name: cookieName } } : {}),
     cookies: {
       getAll() {
         return cookieStore.getAll();

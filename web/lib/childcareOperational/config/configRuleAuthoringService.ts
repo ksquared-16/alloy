@@ -32,6 +32,7 @@ import {
     validateEndOnOrAfterStart,
 } from "@/lib/childcareOperational/effectiveDating";
 import { planSupersede } from "@/lib/adminV2/operationalConfig/effectiveDatedVersioning";
+import { canonicalUnitRoleFromStorage, isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
 import {
     CAPACITY_KINDS,
     CONFIG_RULE_SCOPE_TYPES,
@@ -41,14 +42,70 @@ import {
     type ChildcareRatioRuleRow,
     type ChildcareRatioRuleTierRow,
     type ChildcareScheduleRuleRow,
+    type ConfigRuleScopeContext,
     type ConfigRuleScopeType,
 } from "@/lib/childcareOperational/config/configRuleTypes";
+import { validateLicensedOverrideNotWeaker } from "@/lib/childcareOperational/config/regulatoryCeiling";
+import { emitCalculationConfigChanged } from "@/lib/operationalCalculations/propagation/configChangeEvents";
+import type { CalculationConfigChangeKind } from "@/lib/operationalCalculations/propagation/types";
 
 const CAPACITY = "childcare_capacity_rules";
 const RATIO = "childcare_ratio_rules";
 const TIERS = "childcare_ratio_rule_tiers";
 const WINDOWS = "childcare_operating_windows";
 const SCHEDULE = "childcare_schedule_rules";
+
+/**
+ * Operational Calculation configuration event propagation (Phase 4, Stage 1).
+ *
+ * A committed change to a ratio or capacity rule — the config that parameterizes
+ * the registered Resource Requirements & Capacity calculations — emits a typed
+ * authoring event onto the canonical event layer so calculation results can be
+ * invalidated. Best-effort: emission never fails a committed write. Only ratio
+ * and capacity rules emit; operating windows and schedule rules (Scheduling
+ * family, out of scope until Phase 6) do not.
+ */
+function emitCapacityRuleChange(
+    row: ChildcareCapacityRuleRow,
+    changeKind: CalculationConfigChangeKind,
+): Promise<string | null> {
+    return emitCalculationConfigChanged({
+        orgId: row.org_id,
+        ruleType: "capacity",
+        changeKind,
+        ruleId: row.id,
+        scope: {
+            siteLocationId: row.site_location_id,
+            programCategoryId: row.program_category_id,
+            roomLocationId: row.room_location_id,
+            ageGroupKey: row.age_group_key,
+        },
+        effectiveStart: row.effective_start,
+        effectiveEnd: row.effective_end,
+        actorUserId: row.updated_by ?? row.created_by,
+    });
+}
+
+function emitRatioRuleChange(
+    row: ChildcareRatioRuleRow,
+    changeKind: CalculationConfigChangeKind,
+): Promise<string | null> {
+    return emitCalculationConfigChanged({
+        orgId: row.org_id,
+        ruleType: "ratio",
+        changeKind,
+        ruleId: row.id,
+        scope: {
+            siteLocationId: row.site_location_id,
+            programCategoryId: row.program_category_id,
+            roomLocationId: row.room_location_id,
+            ageGroupKey: row.age_group_key,
+        },
+        effectiveStart: row.effective_start,
+        effectiveEnd: row.effective_end,
+        actorUserId: row.updated_by ?? row.created_by,
+    });
+}
 
 type Code = OperationalEnrollmentServiceError["code"];
 
@@ -206,6 +263,15 @@ async function supersedeRow<T extends RowLike>(
         newStart: string;
         actor: string | null;
         valueColumns: (prior: T) => Record<string, unknown>;
+        /**
+         * Merged over the prior row's metadata on the new version.
+         *
+         * Without it a version only INHERITS provenance, so a rule authored
+         * through an object editor on top of a seeded predecessor produced a new
+         * row claiming no authorship at all — the confirmation would evaporate
+         * on the second day's edit.
+         */
+        metadata?: Record<string, unknown>;
         afterInsert?: (newId: string, prior: T) => Promise<void>;
     },
 ): Promise<{ row: T; priorId: string; priorCloseDate: string }> {
@@ -228,6 +294,7 @@ async function supersedeRow<T extends RowLike>(
             ...asMetadata(prior.metadata),
             lineage_origin_id: lineageOriginOf(asMetadata(prior.metadata), prior.id),
             supersedes_id: prior.id,
+            ...asMetadata(args.metadata),
         },
         created_by: args.actor,
         updated_by: args.actor,
@@ -277,6 +344,8 @@ async function voidScheduledRow<T extends RowLike>(
         actor: string | null;
         sameLineage: (a: T, b: T) => boolean;
         beforeDelete?: (row: T) => Promise<void>;
+        /** Called after a successful void with the deleted row (propagation hook). */
+        onVoided?: (row: T) => Promise<unknown> | unknown;
     },
 ): Promise<VoidResult> {
     const row = await getRowById<T>(supabase, args.table, args.orgId, args.id);
@@ -309,6 +378,7 @@ async function voidScheduledRow<T extends RowLike>(
         .eq("org_id", args.orgId)
         .eq("id", args.id);
     if (deleteError) fail("db_error", deleteError.message);
+    if (args.onVoided) await args.onVoided(row);
     return { voided: true, id: args.id, reopenedPriorId };
 }
 
@@ -327,6 +397,45 @@ function requireNonNegInt(value: unknown, field: string): number {
     const n = typeof value === "number" ? value : Number(value);
     if (!Number.isInteger(n) || n < 0) fail("invalid_input", `${field} must be a non-negative integer`);
     return n;
+}
+
+function scopeContextFromColumns(scope: ScopeColumns, ageGroupKey: string | null): ConfigRuleScopeContext {
+    return {
+        siteLocationId: scope.site_location_id,
+        programCategoryId: scope.program_category_id,
+        roomLocationId: scope.room_location_id,
+        ageGroupKey,
+    };
+}
+
+/**
+ * Author-time regulatory guard (A7): a `licensed` capacity rule may not weaken
+ * (raise above) the binding licensing ceiling already applicable at its scope.
+ * No-op for non-licensed kinds. `excludeId` omits the row being superseded so a
+ * version does not validate against its own predecessor.
+ */
+async function assertLicensedCapacityNotWeakened(
+    supabase: SupabaseClient,
+    orgId: string,
+    candidate: {
+        context: ConfigRuleScopeContext;
+        capacityKind: string;
+        capacity: number;
+        effectiveStart: string;
+    },
+    excludeId?: string,
+): Promise<void> {
+    if (candidate.capacityKind !== "licensed") return;
+    const all = await listRowsByOrg<ChildcareCapacityRuleRow>(supabase, CAPACITY, orgId);
+    const existing = excludeId ? all.filter((r) => r.id !== excludeId) : all;
+    const result = validateLicensedOverrideNotWeaker(candidate, existing);
+    if (!result.ok) {
+        fail("validation_failed", result.message, {
+            code: result.code,
+            boundByRuleId: result.boundByRuleId,
+            boundCeiling: result.boundCeiling,
+        });
+    }
 }
 
 export type CreateCapacityRuleInput = ScopeInput & {
@@ -348,12 +457,20 @@ export async function createCapacityRule(
     const effectiveStart = requireEffectiveStart(input.effectiveStart);
     const effectiveEnd = optionalEffectiveEnd(input.effectiveEnd, effectiveStart);
     const actor = trimOrNull(input.actorUserId);
-    return insertRow<ChildcareCapacityRuleRow>(supabase, CAPACITY, {
+    const capacityKind = requireCapacityKind(input.capacityKind);
+    const capacity = requireNonNegInt(input.capacity, "capacity");
+    await assertLicensedCapacityNotWeakened(supabase, input.orgId, {
+        context: scopeContextFromColumns(scope, trimOrNull(input.ageGroupKey)),
+        capacityKind,
+        capacity,
+        effectiveStart,
+    });
+    const row = await insertRow<ChildcareCapacityRuleRow>(supabase, CAPACITY, {
         org_id: input.orgId,
         ...scope,
         age_group_key: trimOrNull(input.ageGroupKey),
-        capacity_kind: requireCapacityKind(input.capacityKind),
-        capacity: requireNonNegInt(input.capacity, "capacity"),
+        capacity_kind: capacityKind,
+        capacity,
         effective_start: effectiveStart,
         effective_end: effectiveEnd,
         source_key: "config",
@@ -361,6 +478,8 @@ export async function createCapacityRule(
         created_by: actor,
         updated_by: actor,
     });
+    await emitCapacityRuleChange(row, "create");
+    return row;
 }
 
 export type CapacityVersionInput = {
@@ -373,35 +492,62 @@ export type CapacityVersionInput = {
 };
 
 export async function createCapacityRuleVersion(supabase: SupabaseClient, input: CapacityVersionInput) {
-    return supersedeRow<ChildcareCapacityRuleRow>(supabase, {
+    const prior = await getRowById<ChildcareCapacityRuleRow>(supabase, CAPACITY, input.orgId, input.priorId);
+    const newKind = input.capacityKind != null ? requireCapacityKind(input.capacityKind) : prior.capacity_kind;
+    const newCapacity = input.capacity != null ? requireNonNegInt(input.capacity, "capacity") : prior.capacity;
+    const newStart = requireEffectiveStart(input.effectiveStart);
+    await assertLicensedCapacityNotWeakened(
+        supabase,
+        input.orgId,
+        {
+            context: scopeContextFromColumns(
+                {
+                    scope_type: prior.scope_type,
+                    site_location_id: prior.site_location_id,
+                    program_category_id: prior.program_category_id,
+                    room_location_id: prior.room_location_id,
+                },
+                prior.age_group_key,
+            ),
+            capacityKind: newKind,
+            capacity: newCapacity,
+            effectiveStart: newStart,
+        },
+        prior.id,
+    );
+    const result = await supersedeRow<ChildcareCapacityRuleRow>(supabase, {
         table: CAPACITY,
         orgId: input.orgId,
         priorId: input.priorId,
-        newStart: requireEffectiveStart(input.effectiveStart),
+        newStart,
         actor: trimOrNull(input.actorUserId),
-        valueColumns: (prior) => ({
-            scope_type: prior.scope_type,
-            site_location_id: prior.site_location_id,
-            program_category_id: prior.program_category_id,
-            room_location_id: prior.room_location_id,
-            age_group_key: prior.age_group_key,
-            capacity_kind: input.capacityKind != null ? requireCapacityKind(input.capacityKind) : prior.capacity_kind,
-            capacity: input.capacity != null ? requireNonNegInt(input.capacity, "capacity") : prior.capacity,
+        valueColumns: (p) => ({
+            scope_type: p.scope_type,
+            site_location_id: p.site_location_id,
+            program_category_id: p.program_category_id,
+            room_location_id: p.room_location_id,
+            age_group_key: p.age_group_key,
+            capacity_kind: newKind,
+            capacity: newCapacity,
         }),
     });
+    await emitCapacityRuleChange(result.row, "version");
+    return result;
 }
 
-export function retireCapacityRule(
+export async function retireCapacityRule(
     supabase: SupabaseClient,
     input: { orgId: string; id: string; effectiveEnd: string; actorUserId?: string | null },
 ) {
-    return retireRow<ChildcareCapacityRuleRow>(supabase, {
+    const row = await retireRow<ChildcareCapacityRuleRow>(supabase, {
         table: CAPACITY,
         orgId: input.orgId,
         id: input.id,
         effectiveEnd: input.effectiveEnd,
         actor: trimOrNull(input.actorUserId),
     });
+    await emitCapacityRuleChange(row, "retire");
+    return row;
 }
 
 export function voidScheduledCapacityRule(
@@ -418,6 +564,7 @@ export function voidScheduledCapacityRule(
             sameScope(a, b) &&
             (a.age_group_key ?? null) === (b.age_group_key ?? null) &&
             a.capacity_kind === b.capacity_kind,
+        onVoided: (row) => emitCapacityRuleChange(row, "void"),
     });
 }
 
@@ -481,11 +628,34 @@ export type CreateRatioRuleInput = ScopeInput & {
     actorUserId?: string | null;
 };
 
+/**
+ * A STAFFING RATIO BELONGS TO A CLASSROOM (V7 S4). A room-scoped ratio is the operational group's
+ * staffing law; a physical container or a shared space (playground, gym) is never a staffing unit,
+ * whatever it is used for. The Rooms editor already hid the field for them; the server did not.
+ */
+async function assertRatioRoomIsClassroom(supabase: SupabaseClient, orgId: string, roomLocationId: string | null): Promise<void> {
+    if (!roomLocationId) return;
+    const { data, error } = await supabase
+        .from("locations")
+        .select("location_type, unit_role")
+        .eq("org_id", orgId)
+        .eq("id", roomLocationId)
+        .maybeSingle();
+    if (error) fail("db_error", error.message);
+    const row = data as { location_type?: unknown; unit_role?: unknown } | null;
+    if (!isOperationalGroupRole(canonicalUnitRoleFromStorage(row?.location_type, row?.unit_role))) {
+        fail("invalid_input", "A staffing ratio belongs to a classroom (operational group), not a physical or shared space.", {
+            room_location_id: roomLocationId,
+        });
+    }
+}
+
 export async function createRatioRule(
     supabase: SupabaseClient,
     input: CreateRatioRuleInput,
 ): Promise<{ rule: ChildcareRatioRuleRow; tierCount: number }> {
     const scope = buildScopeColumns(input);
+    if (scope.scope_type === "room") await assertRatioRoomIsClassroom(supabase, input.orgId, scope.room_location_id);
     const effectiveStart = requireEffectiveStart(input.effectiveStart);
     const effectiveEnd = optionalEffectiveEnd(input.effectiveEnd, effectiveStart);
     const tiers = normalizeTiers(input.tiers);
@@ -504,6 +674,7 @@ export async function createRatioRule(
         updated_by: actor,
     });
     await insertTiers(supabase, input.orgId, rule.id, tiers);
+    await emitRatioRuleChange(rule, "create");
     return { rule, tierCount: tiers.length };
 }
 
@@ -512,6 +683,8 @@ export type RatioVersionInput = {
     priorId: string;
     effectiveStart: string;
     jurisdictionKey?: string | null;
+    /** Provenance to stamp on the new version, merged over the prior metadata. */
+    metadata?: Record<string, unknown>;
     /** New tier set; when omitted the prior version's tiers are carried forward. */
     tiers?: RatioTierInput[];
     actorUserId?: string | null;
@@ -523,12 +696,22 @@ export async function createRatioRuleVersion(
 ): Promise<{ row: ChildcareRatioRuleRow; priorId: string; priorCloseDate: string; tierCount: number }> {
     const orgId = input.orgId;
     let tierCount = 0;
+    const { data: priorScope, error: priorScopeError } = await supabase
+        .from(RATIO)
+        .select("scope_type, room_location_id")
+        .eq("org_id", orgId)
+        .eq("id", input.priorId)
+        .maybeSingle();
+    if (priorScopeError) fail("db_error", priorScopeError.message);
+    const ps = priorScope as { scope_type?: string; room_location_id?: string | null } | null;
+    if (ps?.scope_type === "room") await assertRatioRoomIsClassroom(supabase, orgId, ps.room_location_id ?? null);
     const result = await supersedeRow<ChildcareRatioRuleRow>(supabase, {
         table: RATIO,
         orgId,
         priorId: input.priorId,
         newStart: requireEffectiveStart(input.effectiveStart),
         actor: trimOrNull(input.actorUserId),
+        metadata: input.metadata,
         valueColumns: (prior) => ({
             scope_type: prior.scope_type,
             site_location_id: prior.site_location_id,
@@ -554,20 +737,23 @@ export async function createRatioRuleVersion(
             await insertTiers(supabase, orgId, newId, tiers);
         },
     });
+    await emitRatioRuleChange(result.row, "version");
     return { ...result, tierCount };
 }
 
-export function retireRatioRule(
+export async function retireRatioRule(
     supabase: SupabaseClient,
     input: { orgId: string; id: string; effectiveEnd: string; actorUserId?: string | null },
 ) {
-    return retireRow<ChildcareRatioRuleRow>(supabase, {
+    const row = await retireRow<ChildcareRatioRuleRow>(supabase, {
         table: RATIO,
         orgId: input.orgId,
         id: input.id,
         effectiveEnd: input.effectiveEnd,
         actor: trimOrNull(input.actorUserId),
     });
+    await emitRatioRuleChange(row, "retire");
+    return row;
 }
 
 export function voidScheduledRatioRule(
@@ -585,6 +771,7 @@ export function voidScheduledRatioRule(
             sameScope(a, b) &&
             (a.age_group_key ?? null) === (b.age_group_key ?? null) &&
             (a.jurisdiction_key ?? null) === (b.jurisdiction_key ?? null),
+        onVoided: (row) => emitRatioRuleChange(row, "void"),
         beforeDelete: async (row) => {
             // Explicit tier cleanup (FK is ON DELETE CASCADE too; voiding stays self-contained).
             const { error } = await supabase.from(TIERS).delete().eq("org_id", orgId).eq("ratio_rule_id", row.id);

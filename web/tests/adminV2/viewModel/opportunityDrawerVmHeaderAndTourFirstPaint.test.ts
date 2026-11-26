@@ -72,30 +72,6 @@ describe("buildOpportunityDrawerHeaderMenuActions", () => {
     });
 });
 
-describe("Opportunity VM header layout A.4", () => {
-    it("places status below title via headerSubtitle, not headerTitleRight", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("headerSubtitleBelowTitle");
-        expect(runtime).toMatch(/headerSubtitle=\{layoutCutoverHeader \? undefined : headerSubtitleBelowTitle\}/);
-        expect(runtime).toContain("data-opportunity-drawer-header-status-below-title");
-        expect(runtime).not.toContain("displayVm?.header.subtitle");
-        expect(runtime).toMatch(
-            /headerTitleRight[\s\S]*OpportunityDrawerHeaderControls[\s\S]*subjectManageActions/
-        );
-        expect(runtime).not.toMatch(
-            /headerTitleRight[\s\S]*VmProgressiveStatusDropdown/
-        );
-    });
-
-    it("uses header_menu for command rail and Manage menu", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("displayVm.actions.header_menu");
-        expect(runtime).toContain("subjectManageActions");
-        expect(runtime).toContain("onSubjectManageActionSelect={onActionSelect}");
-        expect(runtime).not.toContain("buildRecordManageMenuForEntity");
-    });
-});
-
 describe("Opportunity VM tour first paint", () => {
     it("compose stores active_tour_bookings on summaries", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
@@ -103,17 +79,4 @@ describe("Opportunity VM tour first paint", () => {
         expect(compose).toContain("buildOpportunityDrawerHeaderMenuActions");
     });
 
-    it("overview passes shared tour bookings when first_paint tour_bookings is settled", () => {
-        const overview = read("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        expect(overview).toContain("summaries.active_tour_bookings");
-        expect(overview).toContain("sharedActiveBookings");
-        expect(overview).toContain("tourBookingsFirstPaintReady");
-        expect(overview).toMatch(/!tourBookingsFirstPaintReady/);
-    });
-
-    it("tour lifecycle bar skips client fetch when shared bookings are provided", () => {
-        const bar = read("components/admin/opportunity/tours/OpportunityTourBookingLifecycleBar.tsx");
-        expect(bar).toContain("useSharedBookings");
-        expect(bar).toContain('data-tour-booking-ui-state="loading"');
-    });
 });

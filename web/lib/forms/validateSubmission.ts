@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FormField, FormSchemaV1 } from "./schema";
-import { formSchemaV1Schema } from "./schema";
+import { safeParseFormSchema } from "./schema";
+import { validateCollectionPayloadContract } from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 
 export type FormPayloadMode = "draft" | "submit";
 
@@ -10,6 +11,11 @@ const signatureEntrySchema = z
         typed_full_name: z.string().optional(),
         drawn_document_id: z.string().optional(),
         acknowledged_at: z.string().optional(),
+        /**
+         * The signer's printed legal name, typed BY THE SIGNER beside a drawn mark. A drawn mark alone
+         * says nothing about who made it; `typed_full_name` keeps meaning "a typed signature".
+         */
+        signer_printed_name: z.string().optional(),
     })
     .strict();
 
@@ -20,12 +26,21 @@ export type FormPayload = {
     meta?: Record<string, unknown>;
 };
 
+export type FormPayloadGroupRowCollectionMeta = {
+    provider_ref: string;
+    item_id?: string;
+    origin: "existing" | "respondent_added";
+    iteration_entity_type: string;
+};
+
 export type FormPayloadGroupRow = {
     instance_key: string;
     values: Record<string, unknown>;
     groups?: Record<string, FormPayloadGroupRow[]>;
     /** Signatures for `signature` fields defined inside this group (required for repeatable / nested signatures). */
     signatures?: Record<string, FormPayloadSignature>;
+    /** Optional runtime metadata for collection-bound repeaters — preserved in submission envelope for Processing (P5). */
+    collection?: FormPayloadGroupRowCollectionMeta;
 };
 
 export type FormPayloadSignature = z.infer<typeof signatureEntrySchema>;
@@ -40,6 +55,15 @@ export type ValidateFormPayloadResult =
     | { ok: true; schema: FormSchemaV1; payload: FormPayload }
     | { ok: false; errors: NormalizedValidationError[] };
 
+const formPayloadGroupRowCollectionMetaSchema = z
+    .object({
+        provider_ref: z.string().min(1),
+        item_id: z.string().optional(),
+        origin: z.enum(["existing", "respondent_added"]),
+        iteration_entity_type: z.string().min(1),
+    })
+    .strict();
+
 const formPayloadGroupRowSchema: z.ZodType<FormPayloadGroupRow> = z.lazy(() =>
     z
         .object({
@@ -47,6 +71,7 @@ const formPayloadGroupRowSchema: z.ZodType<FormPayloadGroupRow> = z.lazy(() =>
             values: z.record(z.string(), z.unknown()).default({}),
             groups: z.record(z.string(), z.array(formPayloadGroupRowSchema)).optional(),
             signatures: z.record(z.string(), signatureEntrySchema).optional(),
+            collection: formPayloadGroupRowCollectionMetaSchema.optional(),
         })
         .strict()
 );
@@ -247,7 +272,15 @@ function violatesHiddenNonEmpty(field: FormField, raw: unknown): boolean {
     return raw !== "";
 }
 
-function validateScalarValue(
+/**
+ * The one owner of "is this value valid for this authored field".
+ *
+ * Exported so the Participant Runtime can DELEGATE to it instead of restating its rules. That
+ * matters more than it looks: this function is where `validate.min`, `validate.max`,
+ * `validate.pattern`, the closed option set and the type checks live, and a conversational surface
+ * that re-implemented any of them would drift from the artifact the parent eventually signs.
+ */
+export function validateScalarValue(
     field: FormField,
     raw: unknown,
     mode: FormPayloadMode,
@@ -399,6 +432,11 @@ function validateSignaturePayload(
             errors.push(err([...path, "typed_full_name"], "typed name required by field config", "custom"));
         }
     } else if (sig.kind === "drawn") {
+        // A field that requires a typed name requires one whatever the method: the drawn mark is the
+        // signature, the printed name is who made it. Never inferred from the link recipient.
+        if (cfg.require_typed_name && !sig.signer_printed_name?.trim()) {
+            errors.push(err([...path, "signer_printed_name"], "Signer's printed name required", "custom"));
+        }
         const id = sig.drawn_document_id;
         if (!id || !isUuid(id)) {
             errors.push(err([...path, "drawn_document_id"], "drawn_document_id UUID required", "custom"));
@@ -431,6 +469,122 @@ function mergeLookup(chain: Record<string, unknown>[]): (id: string) => unknown 
     };
 }
 
+/**
+ * The name lines that make a collected member a PERSON.
+ *
+ * A collection-bound group (Emergency contacts, Authorized pickup, Physicians) is applied by creating
+ * or linking a person, and the canonical commit refuses to create one without a name
+ * (`personDraftFromFacts`). So for those groups a member with no name is not a member, whatever else
+ * was typed. Read from the lines' own canonical keys, never their labels.
+ */
+function memberNameFields(groupField: FormField & { type: "group" }): FormField[] {
+    if (!(groupField as { collection_binding?: unknown }).collection_binding) return [];
+    return groupField.fields.filter((c) => {
+        const key = (c as { field_source?: { field_key?: string } }).field_source?.field_key;
+        return key === "full_name" || key === "first_name" || key === "last_name";
+    });
+}
+
+export type GroupMemberState = "blank" | "incomplete" | "complete";
+
+/**
+ * What one row of a repeatable group IS — the single definition the validator counts with, and the
+ * participant surfaces read, so "at least 2 emergency contacts" means two members everywhere.
+ *
+ *  - blank:      nothing visible was answered. A row the form seeded so there was somewhere to type
+ *                is not a member, and never counts toward a minimum.
+ *  - incomplete: something was answered, but a visible required line is missing, a value is invalid,
+ *                or (for a people collection) the member has no name. Kept, and reported on the
+ *                member's own lines — a half-entered contact is never silently dropped.
+ *  - complete:   everything the member needs is there.
+ */
+export function groupMemberState(
+    groupField: FormField & { type: "group" },
+    row: (Pick<FormPayloadGroupRow, "values"> & Partial<Pick<FormPayloadGroupRow, "groups" | "signatures">>) | undefined,
+    schema: FormSchemaV1,
+    lookupChain: Record<string, unknown>[] = [],
+    /** The option lists hydrated at runtime, when the caller has them (as the submission does). */
+    optionValuesByFieldId?: Record<string, readonly string[]>,
+): { state: GroupMemberState; missing: string[] } {
+    const values = row?.values ?? {};
+    const rowLookup = mergeLookup([...lookupChain, values]);
+    let answered = false;
+    let invalid = false;
+    const missing: string[] = [];
+    for (const child of groupField.fields) {
+        if (child.type === "group") {
+            const nested = row?.groups?.[child.id] ?? [];
+            if (nested.some((r) => groupMemberState(child, r, schema, [...lookupChain, values], optionValuesByFieldId).state !== "blank")) answered = true;
+            continue;
+        }
+        if (!evaluateFieldVisibility(child.id, schema, rowLookup)) continue;
+        if (child.type === "signature") {
+            if (row?.signatures?.[child.id] !== undefined) answered = true;
+            else if (child.required) missing.push(child.id);
+            continue;
+        }
+        const raw = values[child.id];
+        if (!isRequiredValueMissing(child, raw)) {
+            answered = true;
+            // A choice whose options are supplied at runtime cannot be judged without them; the
+            // submission, which has them, is the authority on it.
+            const runtimeChoices =
+                (child.type === "select" || child.type === "multiselect")
+                && !optionValuesByFieldId
+                && !((child as { options?: unknown[] }).options?.length);
+            if (!runtimeChoices && validateScalarValue(child, raw, "submit", optionValuesByFieldId, [child.id]).length > 0) invalid = true;
+        } else if (child.required) {
+            missing.push(child.id);
+        }
+    }
+    if (!answered) return { state: "blank", missing: [] };
+    const names = memberNameFields(groupField);
+    if (names.length) {
+        const full = names.find((c) => (c as { field_source?: { field_key?: string } }).field_source?.field_key === "full_name");
+        const needed = full ? [full] : names;
+        for (const n of needed) {
+            if (isRequiredValueMissing(n, values[n.id]) && !missing.includes(n.id)) missing.push(n.id);
+        }
+    }
+    return { state: missing.length || invalid ? "incomplete" : "complete", missing };
+}
+
+/** How many of a group's rows are complete members. */
+export function completeGroupMemberCount(
+    groupField: FormField & { type: "group" },
+    rows: ReadonlyArray<Pick<FormPayloadGroupRow, "values"> & Partial<Pick<FormPayloadGroupRow, "groups" | "signatures">>> | undefined,
+    schema: FormSchemaV1,
+    lookupChain: Record<string, unknown>[] = [],
+    optionValuesByFieldId?: Record<string, readonly string[]>,
+): number {
+    return (rows ?? []).filter((r) => groupMemberState(groupField, r, schema, lookupChain, optionValuesByFieldId).state === "complete").length;
+}
+
+/**
+ * The required collections a participant has not yet filled with enough COMPLETE members.
+ *
+ * The same counting the submit validator refuses with, exposed so a participant surface can say so
+ * before the parent signs — "Everything looks good" on a packet missing an emergency contact was a
+ * promise the submit then broke.
+ */
+export function outstandingRequiredCollections(
+    schema: FormSchemaV1,
+    payload: Pick<FormPayload, "values" | "groups">,
+): Array<{ field_id: string; label: string; needed: number; complete: number }> {
+    const values = (payload.values ?? {}) as Record<string, unknown>;
+    const lookup = mergeLookup([values]);
+    const out: Array<{ field_id: string; label: string; needed: number; complete: number }> = [];
+    for (const field of schema.fields) {
+        if (field.type !== "group") continue;
+        const needed = Math.max(field.repeat?.min ?? 0, field.required ? 1 : 0);
+        if (needed === 0) continue;
+        if (!evaluateFieldVisibility(field.id, schema, lookup)) continue;
+        const complete = completeGroupMemberCount(field, payload.groups?.[field.id], schema, [values]);
+        if (complete < needed) out.push({ field_id: field.id, label: field.label ?? "", needed, complete });
+    }
+    return out;
+}
+
 function validateGroupInstances(
     groupField: FormField & { type: "group" },
     instances: FormPayloadGroupRow[] | undefined,
@@ -445,17 +599,34 @@ function validateGroupInstances(
     const min = rep.min;
     const max = rep.max;
     const list = instances ?? [];
+    const states = list.map((row) => groupMemberState(groupField, row, schema, lookupChain, optionValuesByFieldId));
 
     if (mode === "submit") {
-        if (list.length < min) {
+        // A minimum is a number of MEMBERS, not of allocated rows: two blank rows the form seeded so
+        // there was somewhere to type are zero emergency contacts.
+        const complete = states.filter((s) => s.state === "complete").length;
+        const members = states.filter((s) => s.state !== "blank").length;
+        if (complete < min) {
             errors.push(err([...pathPrefix, groupField.id], `Expected at least ${min} group instance(s)`, "too_small"));
         }
-        if (max !== undefined && list.length > max) {
+        if (max !== undefined && members > max) {
             errors.push(err([...pathPrefix, groupField.id], `Expected at most ${max} group instance(s)`, "too_big"));
         }
-        if (groupField.required && list.length < 1) {
+        if (groupField.required && complete < 1) {
             errors.push(err([...pathPrefix, groupField.id], "Required group must have at least one instance", "custom"));
         }
+        // A started member with no name cannot become a person; say so on that member's name line.
+        const names = new Set(memberNameFields(groupField).map((n) => n.id));
+        states.forEach((s, i) => {
+            if (s.state === "blank") return;
+            for (const id of s.missing) {
+                if (!names.has(id)) continue;
+                const child = groupField.fields.find((c) => c.id === id);
+                if (child && !child.required) {
+                    errors.push(err([...pathPrefix, groupField.id, String(i), "values", id], "Required field missing", "custom"));
+                }
+            }
+        });
     }
 
     const allowedChildIds = new Set(groupField.fields.map((c) => c.id));
@@ -469,6 +640,9 @@ function validateGroupInstances(
     for (let i = 0; i < list.length; i++) {
         const row = list[i];
         const rowPath = [...pathPrefix, groupField.id, String(i)];
+        // A blank row is not a member: its required lines are not asked for. Whether the group has
+        // enough members is the cardinality check above.
+        const rowBlank = states[i]?.state === "blank";
 
         for (const k of Object.keys(row.values)) {
             if (!allowedChildIds.has(k)) {
@@ -520,6 +694,7 @@ function validateGroupInstances(
                     }
                     continue;
                 }
+                if (rowBlank && sig === undefined) continue;
                 errors.push(...validateSignaturePayload(child, sig, mode, sigPath));
                 continue;
             }
@@ -532,7 +707,7 @@ function validateGroupInstances(
                 continue;
             }
 
-            if (mode === "submit" && child.required) {
+            if (mode === "submit" && child.required && !rowBlank) {
                 if (isRequiredValueMissing(child, raw)) {
                     errors.push(err([...rowPath, "values", child.id], "Required field missing", "custom"));
                 }
@@ -553,7 +728,17 @@ export function validateFormPayload(input: {
     mode: FormPayloadMode;
     optionValuesByFieldId?: Record<string, readonly string[]>;
 }): ValidateFormPayloadResult {
-    const schemaParsed = formSchemaV1Schema.safeParse(input.schemaJson);
+    /*
+     * The NORMALIZING entry point, not the raw zod object.
+     *
+     * A published version outlives the code that authored it. Admissions v12 carries four field
+     * properties the current schema does not name, and `normalizeLegacyPublishedFormSchema`
+     * translates them before the strict parse — which is why `/resolve` can read it. This call site
+     * reached past that into `formSchemaV1Schema` and so rejected 23 of its 58 fields, which a family
+     * saw as "Invalid submission payload" the moment the page opened a draft. The read path was
+     * repaired and the write path was not.
+     */
+    const schemaParsed = safeParseFormSchema(input.schemaJson);
     if (!schemaParsed.success) {
         return { ok: false, errors: normalizeValidationErrors(schemaParsed.error) };
     }
@@ -614,10 +799,57 @@ export function validateFormPayload(input: {
         }
     }
 
-    const rootLookup = mergeLookup([payload.values]);
+    /*
+     * A SIGNATURE'S VALUE IS THE SIGNATURE.
+     *
+     * A condition may legitimately ask whether a signature was made — the Oregon CIS's "Update
+     * signature — Date" applies only when there is an update signature — and a signature does not
+     * live in `values`. Reading only `values` made such a field permanently hidden here while the
+     * document renderer, which does consult `signatures`, considered it applicable. The two
+     * disagreed, and the submission was refused for a value the platform had just written.
+     *
+     * `values` still wins where a field id appears in both, so nothing about existing conditions
+     * changes: only signature ids, which never appear in `values`, resolve differently.
+     */
+    const signatureIds = new Set<string>();
+    for (const field of schema.fields) {
+        if (field.type === "signature") signatureIds.add(field.id);
+        if (field.type === "group") {
+            for (const child of (field as { fields: FormField[] }).fields) {
+                if (child.type === "signature") signatureIds.add(child.id);
+            }
+        }
+    }
+    const rootValues = mergeLookup([payload.values]);
+    const rootLookup = (fieldId: string): unknown => {
+        const fromValues = rootValues(fieldId);
+        if (fromValues !== undefined || !signatureIds.has(fieldId)) return fromValues;
+        return payload.signatures?.[fieldId] ?? null;
+    };
 
     for (const field of schema.fields) {
+        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
+
         if (field.type === "group") {
+            /*
+             * A COLLECTION THAT DOES NOT APPLY CANNOT BE INCOMPLETE — AND IS NOT A HIDING PLACE.
+             *
+             * This dispatched into `validateGroupInstances` BEFORE visibility was computed, so a
+             * conditional collection was validated as if it were always asked. Measured on a sibling
+             * gate with `repeat.min = 1`: a family answering "No" was refused with "Expected at least
+             * 1 group instance(s)" — blocked for answering honestly, with no way forward, because the
+             * question they answered was the one that hid the collection. The mirror case was just as
+             * wrong: a hidden collection carrying stray rows submitted as VALID.
+             *
+             * Every other field kind already asks this question first; only the group branch skipped
+             * it. Hidden means NOT ASKED, and not asked means neither required nor permitted.
+             */
+            if (!vis) {
+                if (mode === "submit" && (payload.groups?.[field.id]?.length ?? 0) > 0) {
+                    errors.push(err(["groups", field.id], "Group is hidden and must be empty on submit", "custom"));
+                }
+                continue;
+            }
             validateGroupInstances(
                 field,
                 payload.groups?.[field.id],
@@ -630,8 +862,6 @@ export function validateFormPayload(input: {
             );
             continue;
         }
-
-        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
 
         if (field.type === "signature") {
             const sig = payload.signatures?.[field.id];
@@ -668,6 +898,8 @@ export function validateFormPayload(input: {
             errors.push(...validateScalarValue(field, raw, mode, optionValuesByFieldId, ["values", field.id]));
         }
     }
+
+    errors.push(...validateCollectionPayloadContract(schema, payload, mode));
 
     if (errors.length > 0) {
         return { ok: false, errors };

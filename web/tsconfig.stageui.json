@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "components/adminV2/settings/lifecycle/BusinessProcessPublicationBar.tsx",
+    "components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx",
+    "components/adminV2/settings/lifecycle/LifecycleStageConfiguration.tsx",
+    "components/adminV2/settings/lifecycle/StageEditorV2.tsx"
+  ]
+}

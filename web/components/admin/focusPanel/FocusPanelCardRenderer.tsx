@@ -1,27 +1,49 @@
 "use client";
 
 import clsx from "clsx";
+import dynamic from "next/dynamic";
 
 import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
+import EmploymentCard from "@/components/admin/focusPanel/cards/EmploymentCard";
+import StaffAvailabilityCard from "@/components/admin/focusPanel/cards/StaffAvailabilityCard";
+import StaffCompensationCard from "@/components/admin/focusPanel/cards/StaffCompensationCard";
+import StaffReadinessCard from "@/components/admin/focusPanel/cards/StaffReadinessCard";
+import StaffQualificationsCard from "@/components/admin/focusPanel/cards/StaffQualificationsCard";
+import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
 import TourCard from "@/components/admin/focusPanel/cards/TourCard";
 import CommunicationsCard from "@/components/admin/focusPanel/cards/CommunicationsCard";
-import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
+import AssignmentTuitionCard from "@/components/admin/focusPanel/cards/AssignmentTuitionCard";
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
+import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
+import AttendanceCard from "@/components/admin/focusPanel/cards/AttendanceCard";
+import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
+import HealthSafetyCard from "@/components/admin/focusPanel/cards/HealthSafetyCard";
+import BusinessProcessCard from "@/components/admin/focusPanel/cards/BusinessProcessCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
-import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
-import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
+// Drill-only content: renders ONLY inside the `documents` / `notes` cards on drill-down (an operator
+// interaction), never at first paint — yet statically importing it forced the whole tab-panes graph
+// (CommunicationsDrawerSection ~1.4k lines + EntityDocumentsSection) into FocusPanelCardRenderer's
+// first-paint chunk. Load on drill so it leaves the critical path.
+const OpportunityDrawerVmTabPanes = dynamic(
+    () => import("@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes"),
+    { ssr: false },
+);
+const FocusPanelDocumentLibrary = dynamic(() => import("@/components/admin/documents/FocusPanelDocumentLibrary"), { ssr: false });
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import FocusPanelAuthoringPreview, {
+    hasAuthoringPreview,
+} from "@/lib/adminV2/runtime/focusPanel/authoring/focusPanelAuthoringPreview";
+import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { system5ArchetypeSuppressesFooterAction } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
-import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
 /**
@@ -34,9 +56,7 @@ import type { DrawerTabKey } from "@/lib/entityPresentation";
  * @see focus-panel-runtime-cutover-report.md
  */
 export type FocusPanelCardCompat = {
-    /** Composed subject VM — consumed only by the lifecycle-rail + drawer-tab drill cards. */
-    subjectVm: OperationalSubjectViewModel;
-    /** Drawer-tab drill navigation — migrates out with the tab-pane cards. */
+    /** Drawer-tab drill navigation — the last compat dependency; migrates out with the tab-pane cards. */
     onSelectTab: (tab: DrawerTabKey) => void;
 };
 
@@ -58,6 +78,19 @@ type Props = {
     mutation?: FocusPanelMutation;
     /** Internal compatibility wrapper — see {@link FocusPanelCardCompat}. Pure cards ignore it. */
     compat: FocusPanelCardCompat;
+    /**
+     * AUTHORING ONLY. Set exclusively by the Surface Builder canvas.
+     *
+     * A card's production container fetches its own subject data, which a settings
+     * page has none of — so an authoring canvas renders the approved PRESENTATION
+     * with representative evidence instead. Absent (the runtime default) this whole
+     * branch is unreachable, and a guard test holds that no runtime path sets it.
+     */
+    authoringPreview?: {
+        /** The authored placement, so the preview answers at the size being placed. */
+        columns?: number | null;
+        density?: FocusPanelCardDensity | null;
+    };
 };
 
 function CardFooterAction({
@@ -93,8 +126,31 @@ export default function FocusPanelCardRenderer({
     coordination,
     mutation,
     compat,
+    authoringPreview,
 }: Props) {
     if (!model.visible) return null;
+
+    /*
+     * THE AUTHORING BRANCH, FIRST AND NARROW.
+     *
+     * Before any container runs. The containers are exactly what cannot resolve in
+     * a settings page — no scoped participant, no tenant account — and letting one
+     * run first is how the builder came to show "Select a child to see their day"
+     * as a preview of the Attendance card.
+     *
+     * `hasAuthoringPreview` is a short allowlist: a card whose container resolves
+     * fine from the composer's demo record falls straight through and keeps its
+     * real render.
+     */
+    if (authoringPreview && hasAuthoringPreview(model.key)) {
+        return (
+            <FocusPanelAuthoringPreview
+                cardKey={model.key}
+                columns={authoringPreview.columns}
+                density={authoringPreview.density}
+            />
+        );
+    }
 
     // Household is the first operational reference card (Identity archetype). It
     // observes the Operational Context (not the drawer VM), owns its collapsed →
@@ -118,10 +174,112 @@ export default function FocusPanelCardRenderer({
     // its answer from `context` (truth + projected signals). No fetch on expand.
     // `coordination` lets a referencing card hand off focus here (Perspective Change).
     if (model.key === "children") {
-        return <ChildrenCard model={model} context={context} receded={receded} coordination={coordination} />;
+        return (
+            <ChildrenCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
+    }
+    // Employment reads the person-owned composition projected onto the context. Pure card: it
+    // observes `model` + `context` only, and never mutates — Add/Edit/End live at
+    // /organization/staff, so this surface has exactly one execution path for the capability.
+    // `staff` is the person-grain successor to this presentation. One component, because the two
+    // keys name one owner's truth at two grains — a second component would be a second presentation.
+    if (model.key === "employment" || model.key === "staff") {
+        return (
+            <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Qualifications reads its own state for the person's OPEN employment. A separate component
+    // because it is a separate question on a separate clock — see the card key's comment.
+    // Availability answers a third question on a third clock — its own component.
+    // Readiness is a projection over the other three — its own component, because
+    // it fetches a server-side verdict rather than deriving one locally.
+    // Compensation is the one restricted card: it renders nothing on a 403, so the
+    // branch is unconditional here and the decision lives in the card and the
+    // context layer rather than being spread across a third place.
+    if (model.key === "staff_compensation") {
+        return (
+            <StaffCompensationCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    if (model.key === "staff_readiness") {
+        return (
+            <StaffReadinessCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    if (model.key === "staff_availability") {
+        return (
+            <StaffAvailabilityCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
+        );
+    }
+    if (model.key === "staff_qualifications") {
+        return (
+            <StaffQualificationsCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
+        );
+    }
+    // Health & Safety reads ONE child's composed health record, permission-gated server-side.
+    if (model.key === "health_safety") {
+        return (
+            <HealthSafetyCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Financials reads the household's composed account; a scoped child preselects the subject
+    // filter rather than narrowing the account, because the account is genuinely the family's.
+    if (model.key === "financials") {
+        return (
+            <FinancialsCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Attendance reads its own composed VM for the SCOPED participant; the panel stays case-grain.
+    if (model.key === "attendance") {
+        return (
+            <AttendanceCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    if (model.key === "scheduling") {
+        return (
+            <SchedulingCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // The production Business Process card — the canonical successor's own presentation. Current
+    // Work remains a consumed data owner (the evidence builder reads it); what changed is which
+    // card renders, not who owns the truth.
+    if (model.key === "business_process") {
+        return (
+            <BusinessProcessCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
     }
     if (model.key === "current_work") {
-        return <CurrentWorkCard model={model} context={context} receded={receded} coordination={coordination} />;
+        return (
+            <CurrentWorkCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
     }
     if (model.key === "readiness_kpi") {
         return <ReadinessCard model={model} context={context} receded={receded} coordination={coordination} />;
@@ -134,10 +292,30 @@ export default function FocusPanelCardRenderer({
         return <TourCard model={model} context={context} receded={receded} mutation={mutation} />;
     }
     if (model.key === "communications") {
-        return <CommunicationsCard model={model} context={context} receded={receded} mutation={mutation} />;
+        return (
+            <CommunicationsCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
     }
     if (model.key === "billing_preview") {
-        return <BillingPreviewCard model={model} context={context} receded={receded} coordination={coordination} />;
+        // The runtime key stays `billing_preview` for the same reason the Assignments card's key is
+        // still `scheduling`: a key is history, a label is the product. There is no Billing Card.
+        return <AssignmentTuitionCard model={model} context={context} receded={receded} coordination={coordination} />;
+    }
+    if (model.key === "milestones") {
+        return (
+            <MilestonesCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
+        );
     }
     if (model.key === "timeline") {
         return <TimelineCard model={model} context={context} receded={receded} />;
@@ -149,10 +327,9 @@ export default function FocusPanelCardRenderer({
     const drawerId = context.subject.id;
     const record = context.truth;
 
-    const lifecycleRailModel = buildOpportunityVmLifecycleRailModel({
-        displayVm: compat.subjectVm,
-        drawerId,
-    });
+    // The lifecycle rail is a SETTLEMENT projection carried on the context (built by the enriched
+    // adapter). At commit it is null → `workflow_steps` renders reserved; the drawer VM fills it.
+    const lifecycleRailModel = context.lifecycleRail ?? null;
     const drillDownAllowed = model.density === "standard" || model.density === "expanded";
     const suppressFooter = system5ArchetypeSuppressesFooterAction(model.archetype);
     const isLauncher = model.archetype === "launcher";
@@ -168,14 +345,7 @@ export default function FocusPanelCardRenderer({
             break;
         case "documents":
             if (drillDownAllowed) {
-                drillBody = (
-                    <OpportunityDrawerVmTabPanes
-                        drawerId={drawerId}
-                        drawerTab="documents"
-                        record={record}
-                        onSelectTab={compat.onSelectTab}
-                    />
-                );
+                drillBody = <FocusPanelDocumentLibrary opportunityId={drawerId} record={record} />;
             }
             break;
         case "notes":
@@ -228,6 +398,25 @@ export default function FocusPanelCardRenderer({
             density={model.density}
             gridSpan={model.span}
             data-universal-card-key={model.key}
+            /*
+             * THE SUBJECT THIS CARD ACTUALLY COMPOSED AGAINST.
+             *
+             * This first read `context.subject.id`, on the strength of the comment above saying
+             * subject identity derives from the Operational Context. Measured on deployed 4b1dea3a:
+             * the attribute never reached the DOM at all, because that field is null on this path -
+             * React drops an undefined attribute, so the instrumentation failed silently and
+             * cardsBoundToB read 0 while six UniversalCards were on screen.
+             *
+             * `context.truth` is the record the card was composed from, so its id is the honest
+             * answer to "whose content is this". Falls back to the subject id where truth carries
+             * none, and is omitted entirely when neither is known - an absent attribute is UNKNOWN,
+             * which is the correct reading, rather than a subject the card cannot vouch for.
+             */
+            data-card-subject={
+                (typeof (record as { id?: unknown })?.id === "string" ?
+                    ((record as { id?: string }).id as string)
+                :   null) || drawerId || undefined
+            }
             receded={receded}
             className={isPrimaryNextAction ? "alloy-os-ucard--primary-action" : undefined}
             footerAction={

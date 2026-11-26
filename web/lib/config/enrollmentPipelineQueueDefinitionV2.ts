@@ -45,7 +45,7 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
                 "email",
                 "child_name",
                 "program",
-                "desired_start_date",
+                "start_date",
                 "tour_date",
             ],
             actions: ["open"],

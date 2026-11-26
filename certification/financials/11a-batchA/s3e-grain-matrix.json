@@ -1,0 +1,49 @@
+{
+  "Field trip": {
+    "grainOptions": [
+      "Household",
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated by the event · billed next cycle · fixed amount",
+    "confirmDisabled": false
+  },
+  "Late pickup": {
+    "grainOptions": [
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated today · billed immediately · fixed amount",
+    "confirmDisabled": false
+  },
+  "Materials": {
+    "grainOptions": [
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated today · billed on a configured offset · fixed amount",
+    "confirmDisabled": false
+  },
+  "Monthly tuition": {
+    "grainOptions": [
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated to the service period · billed immediately · fixed amount",
+    "confirmDisabled": false
+  },
+  "Registration fee": {
+    "grainOptions": [
+      "Household",
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated today · billed immediately · fixed amount",
+    "confirmDisabled": false
+  }
+}

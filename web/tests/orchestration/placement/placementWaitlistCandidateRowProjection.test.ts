@@ -166,4 +166,87 @@ describe("expandOpportunityRowsToPlacementCandidateRows", () => {
             expect(proj.child_display_name).toMatch(/Hayes$/);
         }
     });
+
+    it("attaches household other-children display when household facts are loaded", () => {
+        const customerId = "cust-hayes";
+        const { rows } = expandOpportunityRowsToPlacementCandidateRows(
+            [
+                {
+                    ...baseOpp,
+                    customer_id: customerId,
+                    _placement_priority_v2: {
+                        projection_mode: "family_row",
+                        evaluated: true,
+                        shadow_mode: true,
+                        candidates: [
+                            {
+                                placement_candidate_id: "pc-liam",
+                                child_display_name: "Liam Hayes",
+                                program_room_cohort_key: "preschool_3_4",
+                                program_room_group_label: "Preschool",
+                                bucket: "tier_general_waitlist",
+                                sort_tuple: ["preschool_3_4", 100],
+                                link_mode: "independent",
+                                active_override_kinds: [],
+                            },
+                            {
+                                placement_candidate_id: "pc-sophia",
+                                child_display_name: "Sophia Hayes",
+                                program_room_cohort_key: "young_toddler",
+                                program_room_group_label: "Young Toddler",
+                                bucket: "tier_general_waitlist",
+                                sort_tuple: ["young_toddler", 100],
+                                link_mode: "independent",
+                                active_override_kinds: [],
+                            },
+                        ],
+                        family_rollup: { bucket: "tier_general_waitlist", sort_tuple: [], candidate_count: 2 },
+                    },
+                },
+            ],
+            {
+                householdFactsByCustomerId: new Map([
+                    [
+                        customerId,
+                        {
+                            customer_id: customerId,
+                            inquiry_children: [
+                                {
+                                    opportunity_customer_member_id: "ocm-liam",
+                                    customer_member_id: "cm-liam",
+                                    outcome_status_key: "waitlisted",
+                                    child_display_name: "Liam Hayes",
+                                },
+                                {
+                                    opportunity_customer_member_id: "ocm-sophia",
+                                    customer_member_id: "cm-sophia",
+                                    outcome_status_key: "waitlisted",
+                                    child_display_name: "Sophia Hayes",
+                                },
+                            ],
+                            active_placement_candidates: [
+                                {
+                                    placement_candidate_id: "pc-liam",
+                                    opportunity_customer_member_id: "ocm-liam",
+                                    customer_member_id: "cm-liam",
+                                },
+                                {
+                                    placement_candidate_id: "pc-sophia",
+                                    opportunity_customer_member_id: "ocm-sophia",
+                                    customer_member_id: "cm-sophia",
+                                },
+                            ],
+                            household_persons: [],
+                        },
+                    ],
+                ]),
+            },
+        );
+
+        const liam = rows[0]!._placement_waitlist_row as {
+            household_other_children?: { count: number; names: string | null };
+        };
+        expect(liam.household_other_children?.count).toBe(1);
+        expect(liam.household_other_children?.names).toBe("Sophia Hayes");
+    });
 });

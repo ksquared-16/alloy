@@ -139,6 +139,13 @@ export async function scheduleAnnouncement(
             approved_by: userId,
             source: ANNOUNCEMENT_SCHEDULED_SEND_SOURCE,
             announcement_id: announcementId,
+            // Frozen at schedule time so process-due does not silently remap bulk
+            // promotional sends to operational via the enqueue category fallback.
+            metadata: {
+                message_category: "marketing",
+                purpose: "announcement_broadcast",
+                announcement_id: announcementId,
+            },
         }));
         const { data: inserted, error: insErr } = await supabase
             .from("communication_scheduled_sends")

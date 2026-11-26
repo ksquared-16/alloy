@@ -8,7 +8,7 @@
  * program / schedule / desired start) and real signals (attention blockers). The
  * percentage is honest factor-completion (complete ÷ total), not a magic number.
  *
- * @see docs/platform/operator/card-archetypes.md (Intelligence)
+ * @see docs/platform/operator/universal-card-archetypes.md (Intelligence)
  */
 
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
@@ -33,6 +33,15 @@ export type ReadinessFactor = {
     ownerFocus: string | null;
     /** Short noun for diagnosis copy ("program", "primary contact"). */
     shortLabel: string;
+};
+
+/**
+ * The narrow context slice Readiness derives from — observed truth + the attention signal. A full
+ * `OperationalContext` is structurally assignable, so both producers (commit-critical answer and
+ * enriched settlement) can evaluate readiness over whatever context they hold.
+ */
+export type ReadinessEvidenceContext = Pick<OperationalContext, "truth"> & {
+    signals: Pick<OperationalContext["signals"], "attention">;
 };
 
 export type ReadinessCardEvidence = {
@@ -68,7 +77,7 @@ function resolvePrimaryContactName(truth: Record<string, unknown>): string | nul
     );
 }
 
-export function buildReadinessCardEvidence(context: OperationalContext): ReadinessCardEvidence {
+export function buildReadinessCardEvidence(context: ReadinessEvidenceContext): ReadinessCardEvidence {
     const truth = context.truth;
     const attention = context.signals.attention;
     const childrenEvidence = buildChildrenCardEvidence(context);

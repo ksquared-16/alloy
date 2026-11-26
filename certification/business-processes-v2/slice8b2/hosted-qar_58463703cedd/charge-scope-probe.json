@@ -1,0 +1,62 @@
+{
+  "director": {
+    "charge_detail": {
+      "status": 200,
+      "amount_visible": true,
+      "error": null,
+      "keys": [
+        "ok",
+        "detail"
+      ]
+    },
+    "card": {
+      "status": 200,
+      "amount_visible": true,
+      "error": null,
+      "keys": [
+        "ok",
+        "vm"
+      ]
+    }
+  },
+  "restricted_operator": {
+    "charge_detail": {
+      "status": 200,
+      "amount_visible": true,
+      "error": null,
+      "keys": [
+        "ok",
+        "detail"
+      ]
+    },
+    "card": {
+      "status": 200,
+      "amount_visible": true,
+      "error": null,
+      "keys": [
+        "ok",
+        "vm"
+      ]
+    }
+  },
+  "no_finance_operator": {
+    "charge_detail": {
+      "status": 403,
+      "amount_visible": false,
+      "error": "You don't have access to view financial information for this organization. Contact an administrator to request access.",
+      "keys": [
+        "error",
+        "required_permission"
+      ]
+    },
+    "card": {
+      "status": 403,
+      "amount_visible": false,
+      "error": "You don't have access to view financial information for this organization. Contact an administrator to request access.",
+      "keys": [
+        "error",
+        "required_permission"
+      ]
+    }
+  }
+}

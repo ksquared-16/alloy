@@ -1,0 +1,51 @@
+{
+  "summary": {
+    "available": "$125.00",
+    "balance": "$1,412.87",
+    "zeroRendered": false,
+    "saysDeposit": false
+  },
+  "target": {
+    "checkboxCount": 2,
+    "uniqueChildren": 2,
+    "eachOnce": true,
+    "householdOffered": true,
+    "summary": "Certb Certhouse",
+    "commandHosts": 1
+  },
+  "details": {
+    "available": "$125.00",
+    "balance": "$1,412.87",
+    "zeroRendered": false,
+    "saysDeposit": false
+  },
+  "responsive": {
+    "target_1280": {
+      "w": 386,
+      "overflows": false,
+      "clipped": false
+    },
+    "target_1440": {
+      "w": 386,
+      "overflows": false,
+      "clipped": false
+    },
+    "target_1680": {
+      "w": 386,
+      "overflows": false,
+      "clipped": false
+    },
+    "prepaid_1280": {
+      "value": "$125.00",
+      "clipped": false
+    },
+    "prepaid_1440": {
+      "value": "$125.00",
+      "clipped": false
+    },
+    "prepaid_1680": {
+      "value": "$125.00",
+      "clipped": false
+    }
+  }
+}

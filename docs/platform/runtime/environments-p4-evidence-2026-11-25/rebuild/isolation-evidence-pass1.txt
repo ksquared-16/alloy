@@ -1,0 +1,19 @@
+## docker inspect (selected)
+Name=/alloy-p4-rehearsal-20261125 Image=public.ecr.aws/supabase/postgres:17.6.1.165 NetworkMode=none Networks=none  PortBindings={} PublishedPorts={} Mounts=[] Tmpfs={"/var/lib/postgresql/data":"size=4g"} AutoRemove=true Labels={"alloy.objective":"WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66","alloy.purpose":"p4-throwaway-rebuild"}
+## interfaces inside container
+1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
+## routes inside container (empty = none)
+## DNS + HTTPS egress probe (expected to fail)
+dns_rc=2
+sh: can't create /dev/tcp/1.1.1.1/443: nonexistent directory
+tcp_rc=1
+## target identity
+system_identifier=7712245162832560164
+version=PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit
+databases=template1,template0,postgres
+public_tables=0
+schemas=auth,extensions,graphql,graphql_public,information_schema,public,realtime,storage,vault
+auth_users_cols=21
+## containers carrying the throwaway label
+alloy-p4-rehearsal-20261125 Up 24 seconds (healthy)

@@ -9,6 +9,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import type { ProposedValue, SourceEvidenceLoader, SourceEvidenceRaw, SourceEvidenceRegistry } from "./resolveSourceEvidence";
+import type { FormPayload } from "@/lib/forms/validateSubmission";
+import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
+import { loadHealthCaptureDeclarations } from "@/lib/health/healthCaptureDeclaration";
+import { canViewHealth, type HealthAccessSubject } from "@/lib/health/healthAccess";
+import { isMedicalCollectionProvider, medicalFormFieldIds } from "@/lib/health/medicalFormAnswers";
+import { adaptHealthCaptureToProposals } from "@/lib/health/healthCaptureProposals";
+import { adaptPersonContactFactsToProposals } from "@/lib/fields/personContactFacts/personContactFactProposals";
+import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
+import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
+import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";
+import {
+    adaptParticipantChildRequestToRelatedRecordProposals,
+    loadParticipantChildRequests,
+} from "@/lib/pos/processingCase/sources/participantChildRequest";
 
 function stringifyValue(v: unknown): string | null {
     if (v === null || v === undefined) return null;
@@ -21,8 +35,8 @@ function stringifyValue(v: unknown): string | null {
     return null;
 }
 
-/** Label a submission's top-level answers from its versioned schema. Nested group values are out of FP4 scope. */
-function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unknown> | null): ProposedValue[] {
+/** Label a submission's top-level answers from its versioned schema. Collection nested values are resolved separately (P5A). */
+function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unknown> | null, withheld: ReadonlySet<string> = new Set()): ProposedValue[] {
     const parsed = safeParseFormSchema(schemaJson);
     if (!parsed.success) return [];
     const valuesRaw = payload?.values;
@@ -34,6 +48,7 @@ function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unkn
     for (const field of parsed.data.fields) {
         if (field.type === "group") continue;
         if (!Object.prototype.hasOwnProperty.call(values, field.id)) continue;
+        if (withheld.has(field.id)) continue;
         out.push({
             label: field.label,
             value: stringifyValue(values[field.id]),
@@ -44,7 +59,11 @@ function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unkn
     return out;
 }
 
-function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: string): SourceEvidenceLoader {
+/** Shown in place of a child's medical answers to an operator without Medical access. */
+export const MEDICAL_ANSWERS_WITHHELD_LABEL = "Medical answers — visible with Medical access";
+
+function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: string, health: HealthAccessSubject): SourceEvidenceLoader {
+    const mayReadHealth = canViewHealth(health);
     return async (ids) => {
         const out = new Map<string, SourceEvidenceRaw>();
         if (ids.length === 0) return out;
@@ -74,19 +93,67 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
             }
         }
 
+        // What each form declares it captures for Medical (immunization grid, consent).
+        const healthCapture = await loadHealthCaptureDeclarations(supabase, orgId, versionIds);
+
         for (const s of subRows) {
-            const schema = s.form_definition_version_id ? schemaByVersion.get(s.form_definition_version_id) : undefined;
+            const schemaParsed = s.form_definition_version_id ? safeParseFormSchema(schemaByVersion.get(s.form_definition_version_id)) : null;
+            const schema = schemaParsed?.success ? schemaParsed.data : null;
+            const payload = (s.payload ?? null) as FormPayload | null;
+            const accessibleIds = await loadAccessibleExistingCollectionItemIds(supabase, orgId, payload);
+            const proposalBundle = schema
+                ? adaptSourceToRelatedRecordProposals(
+                      {
+                          sourceKind: "form_submission",
+                          sourceRecordId: s.id,
+                          formSchema: schema,
+                          formPayload: payload,
+                      },
+                      {
+                          formDefinitionVersionId: s.form_definition_version_id,
+                          accessibleExistingItemIds: accessibleIds,
+                      },
+                  )
+                : null;
+            const capture = s.form_definition_version_id ? healthCapture.get(s.form_definition_version_id) : undefined;
+            if (proposalBundle && schema && capture && mayReadHealth) {
+                proposalBundle.collections.push(
+                    ...adaptHealthCaptureToProposals(schema, payload, capture, { formSubmissionId: s.id, formDefinitionVersionId: s.form_definition_version_id }),
+                );
+            }
+            if (proposalBundle && schema) {
+                proposalBundle.collections.push(
+                    ...adaptPersonContactFactsToProposals(schema, payload, { formSubmissionId: s.id, formDefinitionVersionId: s.form_definition_version_id }),
+                );
+            }
+            // A child's medical proposals (allergies, conditions, medications, insurance, immunizations,
+            // consents) are Medical's to show: withheld from an operator without health.view.
+            if (proposalBundle && !mayReadHealth) {
+                proposalBundle.collections = proposalBundle.collections.filter((c) => !isMedicalCollectionProvider(c.collection_provider_ref));
+            }
+            const collectionEvidence = proposalBundle
+                ? projectRelatedRecordProposalsToEvidence(proposalBundle, { processingCaseId: null })
+                : undefined;
+            const withheld = schema && !mayReadHealth ? medicalFormFieldIds(schema, capture) : new Set<string>();
+            const answered = (s.payload?.values ?? {}) as Record<string, unknown>;
+            const anyWithheld = [...withheld].some((id) => answered[id] !== undefined && answered[id] !== null && answered[id] !== "");
             out.set(s.id, {
-                proposedValues: schema ? labelSubmissionValues(schema, s.payload) : [],
+                proposedValues: schema
+                    ? [
+                          ...labelSubmissionValues(schema, s.payload, withheld),
+                          ...(anyWithheld ? [{ label: MEDICAL_ANSWERS_WITHHELD_LABEL, value: null, entityType: null }] : []),
+                      ]
+                    : [],
                 documentId: null,
+                collectionEvidence,
             });
         }
         return out;
     };
 }
 
-function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): SourceEvidenceLoader {
-    const submissionLoader = makeFormSubmissionEvidenceLoader(supabase, orgId);
+function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string, health: HealthAccessSubject): SourceEvidenceLoader {
+    const submissionLoader = makeFormSubmissionEvidenceLoader(supabase, orgId, health);
     return async (sessionIds) => {
         const out = new Map<string, SourceEvidenceRaw>();
         if (sessionIds.length === 0) return out;
@@ -109,9 +176,21 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
             const ev = submissionEvidence.get(item.form_submission_id);
             if (!ev) continue;
             const current = out.get(item.packet_session_id) ?? { proposedValues: [], documentId: null };
+            const mergedGroups: ProcessingCollectionGroupEvidence[] = [
+                ...(current.collectionEvidence?.groups ?? []),
+                ...(ev.collectionEvidence?.groups ?? []),
+            ];
+            const mergedDiagnostics = [
+                ...(current.collectionEvidence?.diagnostics ?? []),
+                ...(ev.collectionEvidence?.diagnostics ?? []),
+            ];
             out.set(item.packet_session_id, {
                 proposedValues: [...current.proposedValues, ...ev.proposedValues],
                 documentId: null,
+                collectionEvidence:
+                    mergedGroups.length > 0 || mergedDiagnostics.length > 0
+                        ? { groups: mergedGroups, diagnostics: mergedDiagnostics }
+                        : undefined,
             });
         }
         return out;
@@ -126,10 +205,34 @@ function makeDocumentEvidenceLoader(): SourceEvidenceLoader {
     };
 }
 
-export function makeDefaultSourceEvidenceRegistry(supabase: SupabaseClient, orgId: string): SourceEvidenceRegistry {
+/** A family's new-child statement: what they told us, and the one proposal it makes. */
+function makeParticipantChildRequestEvidenceLoader(supabase: SupabaseClient, orgId: string): SourceEvidenceLoader {
+    return async (ids) => {
+        const out = new Map<string, SourceEvidenceRaw>();
+        for (const row of await loadParticipantChildRequests(supabase, orgId, ids)) {
+            out.set(row.id, {
+                proposedValues: [
+                    { label: "First name", value: row.first_name, entityType: "customer_member", fieldKey: "first_name" },
+                    { label: "Last name", value: row.last_name, entityType: "customer_member", fieldKey: "last_name" },
+                    { label: "Date of birth", value: row.date_of_birth, entityType: "customer_member", fieldKey: "date_of_birth" },
+                    { label: "Request", value: row.status, entityType: null },
+                ],
+                documentId: null,
+                collectionEvidence: projectRelatedRecordProposalsToEvidence(adaptParticipantChildRequestToRelatedRecordProposals(row), {
+                    processingCaseId: null,
+                }),
+            });
+        }
+        return out;
+    };
+}
+
+/** `health` is whose evidence this is: a child's medical answers and proposals need health.view. */
+export function makeDefaultSourceEvidenceRegistry(supabase: SupabaseClient, orgId: string, health: HealthAccessSubject): SourceEvidenceRegistry {
     return new Map([
-        ["form_submission", makeFormSubmissionEvidenceLoader(supabase, orgId)],
-        ["form_packet_session", makePacketEvidenceLoader(supabase, orgId)],
+        ["form_submission", makeFormSubmissionEvidenceLoader(supabase, orgId, health)],
+        ["form_packet_session", makePacketEvidenceLoader(supabase, orgId, health)],
         ["document", makeDocumentEvidenceLoader()],
+        ["participant_child_request", makeParticipantChildRequestEvidenceLoader(supabase, orgId)],
     ]);
 }

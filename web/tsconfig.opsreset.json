@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "scripts/resetOperationalState.ts",
+    "scripts/demoRuntimeCleanupDryRun.ts",
+    "scripts/demoRuntimeCleanupExecute.ts",
+    "scripts/lib/demoRuntimeCleanupScope.ts",
+    "scripts/lib/demoRuntimeCleanupPlan.ts",
+    "scripts/lib/enrollmentRuntimeResetSelection.ts",
+    "scripts/lib/enrollmentRuntimeResetSharedGuard.ts",
+    "scripts/lib/resetOperationalStateIdentity.ts",
+    "scripts/lib/certificationBaselineSelection.ts",
+    "scripts/lib/certificationBaselineResolver.ts",
+    "scripts/lib/certificationResidueSelection.ts",
+    "scripts/lib/certificationResidueResolver.ts",
+    "scripts/lib/certificationPlanIdentity.ts",
+    "scripts/lib/certificationResetAdapter.ts",
+    "scripts/lib/certificationResetOrchestrator.ts",
+    "tests/scripts/enrollmentRuntimeReset.test.ts",
+    "tests/scripts/enrollmentRuntimeResetIncludeClosed.test.ts",
+    "tests/scripts/certificationBaseline.test.ts",
+    "tests/scripts/certificationResidue.test.ts",
+    "tests/scripts/certificationPlanIdentity.test.ts",
+    "tests/scripts/certificationResetAdapter.test.ts",
+    "tests/scripts/certificationAdapterIntegration.test.ts",
+    "tests/scripts/certificationOrchestration.test.ts"
+  ]
+}

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import { minimalSettledOpportunityDrawerViewModel } from "@/tests/adminV2/viewModel/fixtures/minimalSettledOpportunityDrawerViewModel";
 
 const webRoot = join(process.cwd());
@@ -17,11 +18,12 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
                 state: "loaded",
                 open_count: 2,
                 open_tasks: [
-                    { id: "t1", title: "Follow up", due_at: null, status: "open", source: "task_assist" },
-                    { id: "t2", title: "Send form", due_at: null, status: "open", source: "task_assist" },
+                    { id: "t1", title: "Follow up", due_at: "", status: "open", source: "task_assist" },
+                    { id: "t2", title: "Send form", due_at: "", status: "open", source: "task_assist" },
                 ],
             },
             active_tour_bookings: [],
+            operator_relevant_tour_booking: null,
             reminders: { state: "empty", next_follow_up_iso: null, scheduled_send_count: 0, scheduled_sends: [] },
             bos: null,
             attention: {
@@ -67,18 +69,20 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
             statusLabel: "New",
         });
 
-        const firstRowKeys = grid.rows[0]?.cells.map((c) => c.key) ?? [];
-        const secondRowKeys = grid.rows[1]?.cells.map((c) => c.key) ?? [];
-        // Core Four validation pass: Overview pairs wide identity/collection cards
-        // with their adjacent assessment/work card.
-        expect(firstRowKeys).toEqual(["household", "readiness_kpi"]);
-        expect(secondRowKeys).toEqual(["children", "current_work"]);
+        // Summary declares no second composition: it derives from the SAME authority the runtime
+        // resolves — the code-owned default composition (a published org doc overrides it).
+        // Reading order is the composition's order, one card per gridRow.
+        expect(grid.rows.map((r) => r.cells.map((c) => c.key))).toEqual(
+            FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.map((entry) => [entry.key]),
+        );
 
-        // Card models for suppressed cards are still built (used by Work / catalog).
+        // Card models for catalog / Linked cards are still built (composer + Linked host).
         expect(cards.get("attention")?.insight).toBe("Missing immunizations");
         expect(cards.get("health")?.insight).toBe("2 blockers before tour");
-        expect(cards.get("readiness_kpi")?.insight).toBe("Missing immunizations");
+        expect(cards.get("readiness_kpi")?.insight).toContain("Missing immunizations");
         expect(cards.get("children")?.insight).toBe("1 child enrolling");
+        expect(cards.get("milestones")?.title).toBe("Milestones");
+        expect(cards.get("milestones")?.visible).toBe(true);
     });
 
     it("work idle grid follows attention → step → blockers hierarchy", () => {
@@ -140,9 +144,15 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
         expect(rowKeys[1]).toEqual(["workflow_steps", "required_information"]);
     });
 
-    it("activity grid includes timeline and audit cards", () => {
+    it("Activity mode renders the composed cockpit (canonical)", () => {
         const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
-        expect(workspace).toContain('data-embedded-workspace-tab={tab.key}');
-        expect(workspace).toContain("DEFAULT_EMBEDDED_WORKSPACE_TAB");
+        // Canonical Activity mode: one-viewport cockpit composed from existing runtimes.
+        expect(workspace).toContain('data-focus-panel-cockpit="true"');
+        expect(workspace).toContain("LayoutRuntimeActivityTimelineWidget"); // Recent Activity ribbon
+        expect(workspace).toContain("CommunicationsDrawerSection"); // Communications hero
+        expect(workspace).toContain("Work Items"); // Work panel tab
+        // Persistent Documents utility — D4: the household document library, not the case-only list.
+        expect(workspace).toContain("<FocusPanelDocumentLibrary opportunityId={drawerId} record={record} />");
+        expect(workspace).not.toContain('drawerTab="documents"');
     });
 });

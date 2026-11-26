@@ -1,0 +1,2712 @@
+{
+ "timing_self_check": {
+  "ok": true,
+  "tolerance_ms": 60,
+  "playwright_doc_duration": 6122,
+  "browser_doc_responseEnd": 6122,
+  "playwright_prov_count": 0,
+  "browser_prov_count": 0,
+  "playwright_prov": [],
+  "browser_prov": []
+ },
+ "returning_operator_state": {
+  "client_state_keys_before_entry": 0,
+  "pre_navigation_requests_excluded": 0,
+  "pre_navigation_provisioning": 0
+ },
+ "seed_trace": [
+  {
+   "kind": "register",
+   "producer": "page(subject=null,cohort=null)",
+   "t": 6136,
+   "url": "/api/admin/work-units/waitlist/provisioning-answer",
+   "subjectInKey": null,
+   "lensInKey": null,
+   "composedSubject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "terminal": "operational"
+  },
+  {
+   "kind": "consume-miss",
+   "producer": "kernel-consume",
+   "t": 6142,
+   "url": "/api/admin/work-units/waitlist/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b",
+   "subjectInKey": null,
+   "lensInKey": null,
+   "composedSubject": null,
+   "terminal": null
+  },
+  {
+   "kind": "consume-hit",
+   "producer": "kernel-consume",
+   "t": 6142,
+   "url": "/api/admin/work-units/waitlist/provisioning-answer",
+   "subjectInKey": null,
+   "lensInKey": null,
+   "composedSubject": null,
+   "terminal": null
+  }
+ ],
+ "HTTP_PROVISIONING_REQUEST_COUNT": 0,
+ "provisioning_requests": [],
+ "document": {
+  "start": 4,
+  "ttfb": 504,
+  "duration": 6122,
+  "end": 6126
+ },
+ "milestones": {
+  "navigation": 0,
+  "first_non_blank": 1,
+  "destination_shell": 623,
+  "destination_named": "waitlist",
+  "work_view_pills": 1,
+  "queue_rows": 6250,
+  "published_structure": 6250,
+  "first_critical_meaning": 6250,
+  "last_critical_meaning": 6250,
+  "trackA_resolving": 6250,
+  "trackA_meaningful": 12341,
+  "final_settlement": 39934
+ },
+ "coherence": {
+  "per_card": {
+   "business_process": 6250,
+   "financials": 6250,
+   "attendance": 6250,
+   "health_safety": 6250
+  },
+  "CARD_COHERENCE_WINDOW_ms": 0,
+  "budget_ms": 250,
+  "within_budget": true,
+  "trackA": {
+   "children": 12341,
+   "household": 12341
+  }
+ },
+ "structure": {
+  "present_per_card": {
+   "business_process": 6250,
+   "financials": 6250,
+   "attendance": 6250,
+   "health_safety": 6250,
+   "children": 6250,
+   "household": 6250
+  },
+  "at_structure_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "at_settlement": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ]
+ },
+ "geometry_final": {
+  "business_process": {
+   "t": 292.5,
+   "h": 299
+  },
+  "financials": {
+   "t": 292.5,
+   "h": 299.2
+  },
+  "children": {
+   "t": 601.5,
+   "h": 534
+  },
+  "attendance": {
+   "t": 601.5,
+   "h": 124
+  },
+  "household": {
+   "t": 1145.5,
+   "h": 293
+  },
+  "health_safety": {
+   "t": 864.5,
+   "h": 141.8
+  }
+ },
+ "network": {
+  "total_requests": 145,
+  "api_requests": 38,
+  "total_bytes": 11673714,
+  "api_bytes": 0,
+  "top": [
+   {
+    "path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a",
+    "startRel": 12498,
+    "duration": 14597,
+    "ttfb": 14592,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-",
+    "startRel": 6179,
+    "duration": 6146,
+    "ttfb": 6029,
+    "bytes": null
+   },
+   {
+    "path": "/workspace/work-unit/waitlist",
+    "startRel": 4,
+    "duration": 6122,
+    "ttfb": 504,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+    "startRel": 12328,
+    "duration": 4219,
+    "ttfb": 4201,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-u",
+    "startRel": 1801,
+    "duration": 2036,
+    "ttfb": 2033,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/queue-view-totals",
+    "startRel": 3841,
+    "duration": 1936,
+    "ttfb": 1933,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/communications/family-workspace",
+    "startRel": 7875,
+    "duration": 1786,
+    "ttfb": 1785,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/communications/family-workspace",
+    "startRel": 6267,
+    "duration": 1607,
+    "ttfb": 1607,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/communications/bindings",
+    "startRel": 6349,
+    "duration": 1508,
+    "ttfb": 1508,
+    "bytes": null
+   },
+   {
+    "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-acc9",
+    "startRel": 12489,
+    "duration": 1464,
+    "ttfb": 420,
+    "bytes": 4457857
+   },
+   {
+    "path": "/api/admin/metrics/resolve",
+    "startRel": 6180,
+    "duration": 1388,
+    "ttfb": 1388,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/communications/threads",
+    "startRel": 6349,
+    "duration": 1298,
+    "ttfb": 1298,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/communications/family-workspace",
+    "startRel": 13611,
+    "duration": 1178,
+    "ttfb": 1178,
+    "bytes": null
+   },
+   {
+    "path": "/api/admin/communications/conversations",
+    "startRel": 12438,
+    "duration": 1171,
+    "ttfb": 1169,
+    "bytes": null
+   }
+  ]
+ },
+ "trace": [
+  {
+   "dt": 1,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 955
+  },
+  {
+   "dt": 962,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 59
+  },
+  {
+   "dt": 1417,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 1877,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 2336,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 2796,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 3252,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 3711,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 4172,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 4634,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 5099,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 5558,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 6017,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "provisioned": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 6485,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 6936,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 7395,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 7851,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 8311,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 8766,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 9226,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 9690,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 10149,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 10612,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 11074,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 11535,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 11993,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 12602,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 2768
+  },
+  {
+   "dt": 13056,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3199
+  },
+  {
+   "dt": 13505,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 13953,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 14418,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 14875,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 15328,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 15786,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 16254,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 16717,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 17183,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 17648,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 18117,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 18577,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 19039,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 19498,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 19964,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 20421,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 20879,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 21339,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 21794,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 22261,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 22718,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 23182,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 23642,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 24110,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 24574,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 25042,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 25512,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 25974,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 26441,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 26909,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 27368,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 27831,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 28299,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 28754,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 29212,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 29668,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 30125,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 30579,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 31037,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 31497,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 31959,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 32428,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 32891,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 33353,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 33809,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 34274,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 34737,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 35201,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 35661,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 36126,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 36593,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 37050,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 37519,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 37981,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 38442,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 38901,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 39360,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 39819,
+   "destShell": 0,
+   "destUnit": null,
+   "provisioned": 1,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  }
+ ]
+}

@@ -16,6 +16,8 @@ export type BindingSummary = {
 
 function isSmsBindingReady(b: BindingSummary): boolean {
     if ((b.channel || "").toLowerCase() !== "sms") return false;
+    const prov = String(b.provider ?? "").toLowerCase();
+    if (prov !== "twilio") return false;
     const ref = String(b.secret_ref ?? "").trim().toLowerCase();
     if (ref === "unconfigured" || ref === "") return false;
     return true;
@@ -26,7 +28,12 @@ function isEmailBindingReady(b: BindingSummary): boolean {
     const prov = String(b.provider ?? "").toLowerCase();
     if (prov !== "resend") return false;
     const ref = String(b.secret_ref ?? "").trim().toLowerCase();
-    if (ref === "unconfigured") return false;
+    // Empty counts as unconfigured, exactly as it does for SMS above. Both mean
+    // "nothing for `resolve_secret_plaintext` to resolve", so an empty ref would
+    // offer the operator a channel that fails at send time. The column is
+    // NOT NULL DEFAULT 'unconfigured', so only a runbook can produce this state —
+    // which is precisely why the gate should not depend on it never happening.
+    if (ref === "" || ref === "unconfigured") return false;
     return true;
 }
 

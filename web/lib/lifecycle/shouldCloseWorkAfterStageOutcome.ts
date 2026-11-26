@@ -1,6 +1,7 @@
 /**
  * Whether lifecycle stage work should close after an outcome is recorded.
  * Success and terminal non-success close; retry outcomes keep the work intent open.
+ * Leaving the stage is terminal too — work cannot be retried in a stage the record has left.
  */
 
 import { outcomeRulesForKey, type StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
@@ -27,6 +28,25 @@ function isTerminalOutcomeTarget(target: {
     status_key?: string | null;
     disposition_key?: string | null;
 }): boolean {
+    /*
+     * WORK CANNOT BE RETRIED IN A STAGE THE RECORD HAS LEFT.
+     *
+     * Terminality was read only from the two status-moving targets, so an outcome whose configured
+     * consequence is `move_to_stage` fell through to "retry" and its work stayed open. Measured on
+     * staging: Tour's two completion outcomes are `successful: null` with a single
+     * `move_to_stage → tour_transition_2` target, so recording "Tour Completed — Interested"
+     * executed the move, provisioned the Decision entry work — and left Conduct Tour open at Tour.
+     *
+     * That state is not merely untidy. The open work belongs to a stage nobody is standing in, so
+     * nothing will ever resolve it, and as prior-stage open work it permanently blocks
+     * `tour_transition_2` — the very exit the outcome had just performed.
+     *
+     * The authored vocabulary already separates the two cases, which is why this can be decided
+     * from the target kind alone: an outcome that means "stay and try again" is configured
+     * `no_movement` (Tour's Awaiting Family Response and No Show both are), and one that means
+     * "leave" is configured `move_to_stage`. Leaving is terminal for the work of the stage departed.
+     */
+    if (target.kind === "move_to_stage") return true;
     if (target.kind === "update_family_case_status") {
         const statusKey = trimKey(target.status_key);
         return statusKey != null && TERMINAL_FAMILY_CASE_STATUS_KEYS.has(statusKey);

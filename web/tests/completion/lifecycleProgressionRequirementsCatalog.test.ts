@@ -36,9 +36,9 @@ describe("evaluateLifecycleStageProgression", () => {
             inquiry_children: [
                 {
                     id: "ocm-1",
-                    desired_program_type: "infant",
-                    desired_schedule_type: null,
-                    desired_start_date: null,
+                    program_category_id: "cat-infant",
+                    schedule_type: null,
+                    start_date: null,
                 },
             ],
             primary_person_id: "person-1",

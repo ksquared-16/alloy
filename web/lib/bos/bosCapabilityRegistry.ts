@@ -1,6 +1,6 @@
 /**
  * Static catalog of shipped BOS capabilities (Phase 1 audit).
- * @see docs/sprints/05_2026/bos_standardization_audit.md
+ * @see docs/sprints/archive/05_2026/bos_standardization_audit.md
  */
 
 import type { BosCapabilityDefinition, BosCapabilityKey } from "@/lib/bos/bosCapability";
@@ -199,6 +199,88 @@ export const BOS_CAPABILITY_REGISTRY: readonly BosCapabilityDefinition[] = [
         source_modules: [
             "web/lib/forms/packets/buildPacketReviewInsightV1.ts",
             "web/app/api/admin/forms/packet-sessions/[packetSessionId]/review-insight/route.ts",
+        ],
+    },
+    {
+        capability_key: "operational_question_future_room_capacity",
+        label: "Future Room Capacity",
+        domain: "operational",
+        proposal_mode: "none",
+        apply_policy: "human_approved_operational_api",
+        default_risk_level: "low",
+        requires_human_approval: false,
+        legacy_agent_keys: [],
+        read_classes: ["resolver_entity", "workspace_metadata"],
+        write_class: "operational_api",
+        org_policy_features: [],
+        propose_permission_keys: [],
+        apply_permission_keys: [],
+        apply_route_family: "/api/admin/operational-questions",
+        source_modules: [
+            "web/lib/operationalQuestions/",
+            "web/app/api/admin/operational-questions/",
+        ],
+    },
+    {
+        capability_key: "operational_question_room_utilization",
+        label: "Room Utilization",
+        domain: "operational",
+        proposal_mode: "none",
+        apply_policy: "human_approved_operational_api",
+        default_risk_level: "low",
+        requires_human_approval: false,
+        legacy_agent_keys: [],
+        read_classes: ["resolver_entity", "workspace_metadata"],
+        write_class: "operational_api",
+        org_policy_features: [],
+        propose_permission_keys: [],
+        apply_permission_keys: [],
+        apply_route_family: "/api/admin/operational-questions",
+        source_modules: [
+            "web/lib/operationalQuestions/",
+            "web/app/api/admin/operational-questions/",
+        ],
+    },
+    {
+        capability_key: "operational_question_room_utilization_fte",
+        label: "Room Utilization (FTE)",
+        domain: "operational",
+        proposal_mode: "none",
+        apply_policy: "human_approved_operational_api",
+        default_risk_level: "low",
+        requires_human_approval: false,
+        legacy_agent_keys: [],
+        read_classes: ["resolver_entity", "workspace_metadata"],
+        write_class: "operational_api",
+        org_policy_features: [],
+        propose_permission_keys: [],
+        apply_permission_keys: [],
+        apply_route_family: "/api/admin/operational-questions",
+        source_modules: [
+            "web/lib/operationalQuestions/",
+            "web/lib/organizationPopulations/",
+            "web/lib/organizationWeightings/",
+        ],
+    },
+    {
+        capability_key: "operational_question_equivalent_child_count",
+        label: "Equivalent Child Count",
+        domain: "operational",
+        proposal_mode: "none",
+        apply_policy: "human_approved_operational_api",
+        default_risk_level: "low",
+        requires_human_approval: false,
+        legacy_agent_keys: [],
+        read_classes: ["resolver_entity", "workspace_metadata"],
+        write_class: "operational_api",
+        org_policy_features: [],
+        propose_permission_keys: [],
+        apply_permission_keys: [],
+        apply_route_family: "/api/admin/operational-questions",
+        source_modules: [
+            "web/lib/operationalQuestions/",
+            "web/lib/organizationPopulations/",
+            "web/lib/organizationWeightings/",
         ],
     },
 ] as const;

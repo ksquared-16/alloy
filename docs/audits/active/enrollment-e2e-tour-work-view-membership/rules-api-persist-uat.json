@@ -1,0 +1,61 @@
+{
+  "catalogStatus": 200,
+  "sitesStatus": 200,
+  "stagesStatus": 200,
+  "stages": [
+    {
+      "value": "lead",
+      "label": "Lead"
+    },
+    {
+      "value": "tour",
+      "label": "Tour"
+    },
+    {
+      "value": "decision",
+      "label": "Decision"
+    },
+    {
+      "value": "waitlist",
+      "label": "Waitlist"
+    },
+    {
+      "value": "enrolling",
+      "label": "Enrolling"
+    },
+    {
+      "value": "enrolled",
+      "label": "Enrolled"
+    }
+  ],
+  "wait": {
+    "value": "waitlist",
+    "label": "Waitlist"
+  },
+  "north": {
+    "id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+    "label": "North Campus"
+  },
+  "patchStatus": 200,
+  "regetStatus": 200,
+  "conditions": [
+    {
+      "value": "waitlist",
+      "operator": "equals",
+      "field_key": "opportunity_stage"
+    },
+    {
+      "value": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "operator": "equals",
+      "field_key": "site"
+    }
+  ],
+  "offset": {
+    "channels": [
+      "email"
+    ],
+    "reminder_key": "tour_reminder_48h",
+    "offset_minutes": 2880
+  },
+  "persistPass": true
+}

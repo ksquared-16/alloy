@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateAnnouncementTargets } from "@/lib/communications/v2/announcementService";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * Communications V2 — announcement target CONFIG (Phase 1 / B5).
  * Replaces the announcement_targets rows for one announcement (segment definition).
  * This is target CONFIG only — NOT recipient snapshots, NO audience resolution,
- * NO send, NO schedule, NO provider. Pattern: requireAdminOrOps -> ctx -> client; org scoped.
+ * NO send, NO schedule, NO provider. Pattern: `communications.bulk.send` / `communications.read` -> ctx -> client; org scoped.
  */
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
@@ -16,8 +20,8 @@ const TARGET_COLS = "id, target_type, target_ref, rule, created_at";
 
 /** GET …/announcements/[id]/targets — current target config. */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
@@ -36,8 +40,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 /** PUT …/announcements/[id]/targets — replace the target config set (draft segment definition). */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+    if (!auth.ok) return auth.response;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 

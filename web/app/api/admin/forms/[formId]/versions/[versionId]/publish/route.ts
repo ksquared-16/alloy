@@ -7,6 +7,7 @@ import { catchSchemaValidation, jsonData, jsonError, parseUuidParam } from "@/li
 import { isPosConnectedSurface } from "@/lib/forms/binding/posConnectedMarker";
 import { loadOrgFieldDefinitionKeySet } from "@/lib/forms/binding/loadOrgFieldDefinitionKeySet";
 import { evaluatePosConnectedBinding } from "@/lib/forms/binding/evaluatePosConnectedBinding";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/[formId]/versions/[versionId]/publish — draft → published (admin only). */
 export async function POST(
@@ -15,7 +16,8 @@ export async function POST(
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { formId: rawForm, versionId: rawVer } = await params;
     const formId = parseUuidParam(rawForm, "formId");

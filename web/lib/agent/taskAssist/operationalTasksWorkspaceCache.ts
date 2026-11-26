@@ -3,6 +3,7 @@ import {
     fetchWorkspaceOperationalTasks,
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import { createWarmCache } from "@/lib/runtime/warmCache";
 
 export type CachedOperationalTaskRow = {
     id: string;
@@ -23,32 +24,63 @@ export type CachedOperationalTaskRow = {
     location_id?: string | null;
 };
 
-type CacheEntry = {
-    tasks: CachedOperationalTaskRow[];
-    loadedAtMs: number;
+export type WorkspaceOperationalTasksResult = {
+    tasks: CachedOperationalTaskRow[] | null;
+    error: string | null;
 };
 
-const cache = new Map<OperationalTaskWorkspaceFilter, CacheEntry>();
-const inflight = new Map<OperationalTaskWorkspaceFilter, Promise<CachedOperationalTaskRow[] | null>>();
-
 const DEFAULT_STALE_MS = 90_000;
+
+/**
+ * Workspace task list — one shared, deduped, warm-first cache keyed by filter, shared by every consumer
+ * (the panel, the overview landing, the KPI strip, the nav) so a Work Items open no longer fires the
+ * same `/operational-tasks?filter=…` three times.
+ *
+ * Built on the shared `createWarmCache` Runtime primitive (`lib/runtime/warmCache.ts`), keyed by filter.
+ * The named exports below are a thin, back-compatible facade so existing consumers are unchanged.
+ */
+const warmCache = createWarmCache<OperationalTaskWorkspaceFilter, CachedOperationalTaskRow[]>({
+    keyOf: (filter) => filter,
+    staleMs: DEFAULT_STALE_MS,
+    errorMessage: "Failed to load tasks",
+    fetcher: async (filter) => {
+        const res = await fetchWorkspaceOperationalTasks(filter);
+        const json = await readJson<{ ok?: boolean; tasks?: CachedOperationalTaskRow[]; error?: string; message?: string }>(res);
+        if (!res.ok || !json.ok) {
+            throw new Error(json.message || json.error || `Request failed (${res.status})`);
+        }
+        return Array.isArray(json.tasks) ? json.tasks : [];
+    },
+});
+
+/**
+ * Warm-first, deduped load. Reuses a fresh cache (paints with no fetch); otherwise shares the single
+ * in-flight request. Pass `{ force: true }` after a mutation to bypass cache freshness and revalidate
+ * (still deduped).
+ */
+export async function loadWorkspaceOperationalTasks(
+    filter: OperationalTaskWorkspaceFilter = "open",
+    options?: { force?: boolean }
+): Promise<WorkspaceOperationalTasksResult> {
+    const result = await warmCache.warm(filter, options);
+    return { tasks: result.data, error: result.error };
+}
 
 export function getCachedWorkspaceOperationalTasks(
     filter: OperationalTaskWorkspaceFilter = "open"
 ): CachedOperationalTaskRow[] | null {
-    return cache.get(filter)?.tasks ?? null;
+    return warmCache.get(filter);
 }
 
 export function setCachedWorkspaceOperationalTasks(
     filter: OperationalTaskWorkspaceFilter,
     tasks: CachedOperationalTaskRow[]
 ): void {
-    cache.set(filter, { tasks, loadedAtMs: Date.now() });
+    warmCache.set(filter, tasks);
 }
 
 export function clearOperationalTasksWorkspaceCache(): void {
-    cache.clear();
-    inflight.clear();
+    warmCache.invalidate();
 }
 
 /**
@@ -59,24 +91,10 @@ export function prefetchWorkspaceOperationalTasks(
     filter: OperationalTaskWorkspaceFilter = "open",
     options?: { maxAgeMs?: number }
 ): void {
-    const maxAge = options?.maxAgeMs ?? DEFAULT_STALE_MS;
-    const existing = cache.get(filter);
-    if (existing && Date.now() - existing.loadedAtMs < maxAge) return;
-    if (inflight.has(filter)) return;
-
-    const p = (async (): Promise<CachedOperationalTaskRow[] | null> => {
-        try {
-            const res = await fetchWorkspaceOperationalTasks(filter);
-            const json = await readJson<{ ok?: boolean; tasks?: CachedOperationalTaskRow[] }>(res);
-            if (!res.ok || !json.ok) return null;
-            const tasks = Array.isArray(json.tasks) ? json.tasks : [];
-            setCachedWorkspaceOperationalTasks(filter, tasks);
-            return tasks;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(filter);
-        }
-    })();
-    inflight.set(filter, p);
+    if (options?.maxAgeMs != null) {
+        const state = warmCache.getState(filter);
+        if (state.fetchedAt != null && Date.now() - state.fetchedAt < options.maxAgeMs) return;
+    }
+    // Fire-and-forget through the shared in-flight so a prefetch and a concurrent load coalesce.
+    void warmCache.warm(filter);
 }

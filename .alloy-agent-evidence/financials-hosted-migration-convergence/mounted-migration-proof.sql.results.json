@@ -1,0 +1,73 @@
+{
+  "trusted_host_action_id": "tha_a1a67a14fe418f",
+  "query_hash": "0541862c9f45fb8547f79f7b1a86c4ff4dd4df34c4a6b0615484e8e870acdd2d",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-23T20:08:21.495Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_a1a67a14fe418f",
+    "query_hash": "0541862c9f45fb8547f79f7b1a86c4ff4dd4df34c4a6b0615484e8e870acdd2d",
+    "authorization_id": "grnt_e757a784d5854e0c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-23T20:08:23.283Z",
+    "question_ids": [
+      "m1_financials_three",
+      "m2_deployed_lineage_marker",
+      "m3_current_database",
+      "m4_physical_objects",
+      "m5_constraint_and_triggers",
+      "m6_rls"
+    ],
+    "questions": {
+      "m1_financials_three": {
+        "question_id": "m1_financials_three",
+        "row_count": null,
+        "rows": [
+          "20261018120000,20261019120000,20261020120000"
+        ]
+      },
+      "m2_deployed_lineage_marker": {
+        "question_id": "m2_deployed_lineage_marker",
+        "row_count": null,
+        "rows": [
+          "20261016130000,20261016150000"
+        ]
+      },
+      "m3_current_database": {
+        "question_id": "m3_current_database",
+        "row_count": null,
+        "rows": [
+          "postgres"
+        ]
+      },
+      "m4_physical_objects": {
+        "question_id": "m4_physical_objects",
+        "row_count": null,
+        "rows": [
+          "assignments_ok,exclusions_ok,charge_id_ok"
+        ]
+      },
+      "m5_constraint_and_triggers": {
+        "question_id": "m5_constraint_and_triggers",
+        "row_count": null,
+        "rows": [
+          "exclusion_constraint_ok,commercial_policy_charge_exclusion_parity_trg|financial_responsibility_charge_scope_parity_trg|trg_enforce_commercial_policy_assignment_parity"
+        ]
+      },
+      "m6_rls": {
+        "question_id": "m6_rls",
+        "row_count": null,
+        "rows": [
+          "assignments_rls_on,commercial_policy_assignments_org_read|commercial_policy_charge_exclusions_org_read"
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

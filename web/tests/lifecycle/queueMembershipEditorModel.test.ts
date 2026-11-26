@@ -17,7 +17,8 @@ describe("queueMembershipEditorModel", () => {
         const draft = queueMembershipEditorDraftFromSaved(saved, "tour");
         expect(draft.subject_type).toBe("case");
         expect(draft.count_unit).toBe("cases");
-        expect(draft.included_keys.length).toBeGreaterThan(0);
+        // S4: default membership carries no status/disposition keys (membership is by stage_key).
+        expect(draft.included_keys).toEqual([]);
     });
 
     it("splits case container keys into included_status_keys", () => {

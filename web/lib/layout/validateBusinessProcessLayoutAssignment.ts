@@ -8,6 +8,7 @@ import {
     layoutAssignmentSurfaceIdentity,
     type LayoutAssignmentSurfaceKey,
 } from "@/lib/layout/businessProcessLayoutAssignmentTypes";
+import { isFocusPanelSummaryLayoutRecord } from "@/lib/layout/layoutAssignmentLayoutOptions";
 import { resolveSurfaceLayoutKeyFromDoc } from "@/lib/layout/surfaceLayoutRegistry";
 import { isWaitlistQueueLayoutDoc } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
@@ -53,6 +54,18 @@ export function validateBusinessProcessLayoutAssignmentInput(input: {
             errors.push({
                 field: "entity_layout_id",
                 message: `Layout surface mismatch: expected ${identity.entityType}/${identity.surface}.`,
+            });
+        }
+        // The Focus Panel Summary shares `opportunities`/`drawer` with the legacy drawer, so
+        // the identity checks above cannot tell them apart. It resolves by published variant,
+        // never by an assigned id, so an assignment naming one saves and does nothing —
+        // refuse it at the write rather than store configuration with no runtime effect.
+        if (isFocusPanelSummaryLayoutRecord(record)) {
+            errors.push({
+                field: "entity_layout_id",
+                message:
+                    "The Focus Panel Summary is not an assignable drawer surface. It resolves by published variant — "
+                    + "scope it by publishing a variant for this Business Process, stage or Work View.",
             });
         }
         const docSurface = resolveSurfaceLayoutKeyFromDoc(record.doc);

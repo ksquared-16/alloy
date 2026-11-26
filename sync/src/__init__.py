@@ -1,4 +1,0 @@
-# Sync worker package
-
-
-

@@ -259,7 +259,7 @@ function queueRenderHint(field: string): LayoutRenderHint {
             return "status";
         case "phone":
             return "phone";
-        case "desired_start_date":
+        case "start_date":
         case "tour_date":
             return "date";
         default:

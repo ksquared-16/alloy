@@ -82,7 +82,7 @@ For **authoritative** job payload (not queue preview), use:
 - **`GET /api/admin/entity/[type]/[id]`** with `type=jobs` — `web/app/api/admin/entity/[type]/[id]/route.ts`
 - **`GET /api/admin/jobs/[id]`** — `web/app/api/admin/jobs/[id]/route.ts` (narrower job-focused handler)
 
-Queue rows **must not** be treated as the full contract — see [record-rendering-system-spec.md](../../../architecture/record-rendering-system-spec.md).
+Queue rows **must not** be treated as the full contract — see [record-rendering-system-spec.md](../../architecture/record-rendering-system-spec.md).
 
 ## Other admin APIs used by workspace shell
 

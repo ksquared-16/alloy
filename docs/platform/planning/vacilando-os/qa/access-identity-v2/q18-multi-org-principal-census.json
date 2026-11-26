@@ -1,0 +1,55 @@
+{
+  "artifact": "q18-multi-org-principal-census",
+  "title": "Q18 — does the lexicographic org tiebreak decide anything, on real data? (W-22 / I-7)",
+  "plan_of_record": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_section": "§9 (W-22, I-7)",
+  "worktree": "wt1-access-identity-v2",
+  "branch": "agent/claude/1-access-identity-v2",
+  "prepared_at": "2026-08-19",
+  "prepared_by": "Access & Identity V2 lane",
+  "status": "PREPARED — requested through the governed trusted-host path. This lane holds no deployed credential and does not attempt one.",
+  "target": "alloy_deployed_primary",
+  "read_only": true,
+  "$comment": "A DEDICATED artifact, deliberately not an amendment to q15-authority-census.json. Promoting amended SQL into that file inherits its stored hash and fails query_hash_mismatch — a trap this program has already paid for once. Q15 is consumed and is not retried.",
+  "why_this_question": "W-22 removes a silent authority decision: `chooseOrgAndRoleKeysFromMembershipRows` collapses a multi-org principal to one org by sorting UUIDs (`admin`/`ops` rows win, else the lexicographically smallest `org_id`). The plan's exit is `no authority decision depends on UUID ordering`. What the plan cannot say is what removing it COSTS, because that depends on whether any principal is actually multi-org. This is the same shape as `Q15-A1` for W-20: if the population is zero the workstream collapses from an architectural change to a deletion plus a lock; if it is non-zero, removing the tiebreak is lockout-class and must be sequenced behind an explicit request org.",
+  "read_only_basis": "One SELECT. No INSERT/UPDATE/DELETE/ALTER/CREATE/DROP/GRANT, no DO block, no writing function. Validated with `validateReadOnlySql` and executed against a local PostgreSQL to prove it parses and returns — those cert-tenant rows are NOT the census and are recorded nowhere.",
+  "data_minimization": {
+    "returns": "counts, and role keys already public in the catalog",
+    "never_returns": "user ids, names, emails, phone numbers, org names, child or family data",
+    "identifier_policy": "No query selects a user_id or an org_id. Every answer is an aggregate; a principal is counted, never identified. If a specific principal must be examined, that is a follow-up question with its own approval, not a widening of this one."
+  },
+  "questions": [
+    {
+      "id": "Q18-A1",
+      "question": "How many principals hold memberships in more than one organization?",
+      "gates": ["W-22", "I-7"],
+      "decides": "Zero means the tiebreak never fires on real data and W-22 becomes a deletion plus RL-lock, exactly as Q15-A1 collapsed W-20. Non-zero is the population a removal would affect."
+    },
+    {
+      "id": "Q18-A2",
+      "question": "Of the multi-org principals, how many hold admin/ops rows in more than one organization — the pool the tiebreak actually sorts?",
+      "gates": ["W-22"],
+      "decides": "The code sorts admin/ops rows when any exist, and all rows otherwise. A principal multi-org in custom roles only is sorted by the second branch; one multi-org in admin/ops is sorted by the first. The two have different blast radii and this separates them."
+    },
+    {
+      "id": "Q18-B1",
+      "question": "Distribution: how many principals hold memberships in exactly N organizations?",
+      "gates": ["W-22"],
+      "note": "A tail of one principal in nine orgs is a different remediation from ninety principals in two."
+    },
+    {
+      "id": "Q18-C1",
+      "question": "For multi-org principals, does the chosen org differ from the org holding their strongest role — i.e. is the sort discarding authority rather than merely choosing between equals?",
+      "gates": ["W-22", "I-7"],
+      "decides": "Non-zero means the tiebreak is not a presentation default but an authority narrowing that is already happening today."
+    }
+  ],
+  "decision_rules": {
+    "W-22_is_a_deletion_iff": "Q18-A1 returns zero principals. The sort is then unreachable and removing it cannot change any principal's resolved org.",
+    "W-22_is_lockout_class_iff": "Q18-A1 is non-zero. Removal must then be sequenced behind an explicit request org, and the affected population is Q18-A1.",
+    "the_tiebreak_is_already_narrowing_iff": "Q18-C1 is non-zero — in which case W-22 is not only removing a silent decision, it is restoring authority the sort is discarding today."
+  },
+  "combined_query": "WITH memberships AS (\n  SELECT ur.user_id,\n         ur.org_id,\n         lower(btrim(ur.role::text)) AS role_key\n  FROM public.user_roles ur\n  WHERE NULLIF(lower(btrim(ur.role::text)), '') IS NOT NULL\n),\nper_principal AS (\n  SELECT m.user_id,\n         count(DISTINCT m.org_id) AS orgs,\n         count(DISTINCT m.org_id) FILTER (WHERE m.role_key IN ('admin', 'ops')) AS portal_orgs\n  FROM memberships m\n  GROUP BY m.user_id\n),\na1 AS (\n  SELECT count(*) AS multi_org_principals,\n         (SELECT count(*) FROM per_principal) AS principals_total\n  FROM per_principal p\n  WHERE p.orgs > 1\n),\na2 AS (\n  SELECT count(*) FILTER (WHERE p.portal_orgs > 1) AS multi_org_in_portal_roles,\n         count(*) FILTER (WHERE p.orgs > 1 AND p.portal_orgs <= 1) AS multi_org_custom_only\n  FROM per_principal p\n  WHERE p.orgs > 1\n),\nb1 AS (\n  SELECT p.orgs AS organizations, count(*) AS principals\n  FROM per_principal p\n  GROUP BY p.orgs\n),\nchosen AS (\n  SELECT p.user_id,\n         (SELECT min(m.org_id::text)\n            FROM memberships m\n           WHERE m.user_id = p.user_id\n             AND (p.portal_orgs = 0 OR m.role_key IN ('admin', 'ops'))) AS chosen_org\n  FROM per_principal p\n  WHERE p.orgs > 1\n),\nc1 AS (\n  SELECT count(*) AS multi_org_principals_examined,\n         count(*) FILTER (\n           WHERE EXISTS (\n             SELECT 1 FROM memberships m\n             WHERE m.user_id = ch.user_id\n               AND m.org_id::text <> ch.chosen_org\n               AND m.role_key IN ('admin', 'ops')\n           )\n         ) AS discards_a_portal_role_elsewhere\n  FROM chosen ch\n),\nanswered AS (\n  SELECT 'Q18-A1' AS question_id, (SELECT count(*) FROM a1) AS row_count\n  UNION ALL SELECT 'Q18-A2', (SELECT count(*) FROM a2)\n  UNION ALL SELECT 'Q18-B1', (SELECT count(*) FROM b1)\n  UNION ALL SELECT 'Q18-C1', (SELECT count(*) FROM c1)\n)\nSELECT question_id, kind, payload\nFROM (\n  SELECT ans.question_id, 'row_count' AS kind,\n         jsonb_build_object('row_count', ans.row_count) AS payload\n  FROM answered ans\n  UNION ALL SELECT 'Q18-A1', 'row', to_jsonb(a1) FROM a1\n  UNION ALL SELECT 'Q18-A2', 'row', to_jsonb(a2) FROM a2\n  UNION ALL SELECT 'Q18-B1', 'row', to_jsonb(b1) FROM b1\n  UNION ALL SELECT 'Q18-C1', 'row', to_jsonb(c1) FROM c1\n) census\nORDER BY question_id, kind, payload::text;",
+  "combined_query_shape": "Rows are (question_id, kind, payload). Every question emits exactly one kind='row_count' row even when it matches nothing, so 'returned zero' stays distinguishable from 'never ran' — the decision rules turn on zero/non-zero and a silently skipped query would read as a pass.",
+  "combined_query_hash_absent_deliberately": "No hash is stored. The validator compares a stored hash against what it is about to run and fails query_hash_mismatch on any drift; the executing channel should hash what it runs."
+}

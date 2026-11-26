@@ -1,0 +1,324 @@
+{
+  "run": "qar_4246ac22ece0",
+  "phase": "certify",
+  "summary": {
+    "passed": 43,
+    "total": 43
+  },
+  "results": [
+    {
+      "case": "queue: medical reader sees the real label",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "restricted": false
+    },
+    {
+      "case": "queue: medical source label hidden",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "queue: medical source label hidden",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "queue: medical source label hidden",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "queue: medical source label hidden",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "queue: medical source label hidden",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "queue: case not listed",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": false
+    },
+    {
+      "case": "queue: anonymous refused",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "case": "case: medical reader sees the real label",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "case: medical source label hidden",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "case: medical source label hidden",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "case: medical source label hidden",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "case: medical source label hidden",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "case: medical source label hidden",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "leaked": false
+    },
+    {
+      "case": "case: not readable",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "case: anonymous refused",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "case": "p076: organization administrator may run the diagnostic",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "p076: refused",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "p076: refused",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "p076: refused",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "p076: refused",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "p076: refused",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "p076: cross-organization reads nothing of this child",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "p076: anonymous refused",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "related: out-of-department document hidden",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": false
+    },
+    {
+      "case": "related: in-scope reader lists it",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "related: in-scope reader lists it",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "health card: Medical + Documents reader lists the child's medical document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "health card: refused or empty",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "health card: refused or empty",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "health card: refused or empty",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "health card: refused or empty",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "health card: refused or empty",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "health card: refused or empty",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "health card: refused or empty",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "case": "signed-url medical allowed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "signed-url medical refused",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "case": "signed-url medical refused",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "case": "signed-url medical refused",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE"
+    },
+    {
+      "case": "signed-url medical refused",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE"
+    },
+    {
+      "case": "signed-url medical refused",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "signed-url medical refused",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "signed-url medical refused",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": "UNAUTHENTICATED"
+    }
+  ]
+}

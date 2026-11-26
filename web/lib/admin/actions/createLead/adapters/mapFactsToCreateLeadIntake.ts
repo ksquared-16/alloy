@@ -80,12 +80,12 @@ function mapLegacyFactsWithoutHousehold(input: {
                 });
             }
         }
-        if (fact.fact_type === "date" && !seen.has(keys.child_desired_start_date)) {
+        if (fact.fact_type === "date" && !seen.has(keys.child_start_date)) {
             pushCandidate(candidates, seen, {
-                payload_key: keys.child_desired_start_date,
+                payload_key: keys.child_start_date,
                 rule_id:
-                    fieldByPayloadKey(spec, keys.child_desired_start_date)?.rule_id ??
-                    "child:desired_start_date",
+                    fieldByPayloadKey(spec, keys.child_start_date)?.rule_id ??
+                    "child:start_date",
                 value: String(fact.normalized_value ?? fact.raw_value),
                 confidence: fact.confidence === "high" ? "high" : "medium",
                 fact_ids: [fact.fact_id],
@@ -116,6 +116,39 @@ export function mapFactsToCreateLeadIntake(input: {
     const primaryChild = household.children[0];
     if (primaryChild) {
         mapCreateLeadPrimaryChild(candidates, seen, input.spec, primaryChild, push);
+    }
+
+    // Contact fallback: an email/phone provided WITHOUT a (re-stated) parent name in the same message
+    // must still populate the primary-contact fields. Otherwise, when the operator sends contact info
+    // on its own turn (the parent name came in an earlier BOS turn), `household.parents` is empty for
+    // this extraction, mapCreateLeadPrimaryParent never runs, and the email/phone are silently dropped
+    // ("I still need: Email"). The `seen` guard means this never overrides a per-parent mapping above.
+    const parentKeys = CREATE_LEAD_HOUSEHOLD_FIELD_KEYS.primary_parent;
+    if (!seen.has(parentKeys.email)) {
+        const emailFact = input.extraction.facts.find((f) => f.fact_type === "email");
+        if (emailFact) {
+            push({
+                payload_key: parentKeys.email,
+                rule_id: fieldByPayloadKey(input.spec, parentKeys.email)?.rule_id ?? "person:email",
+                value: String(emailFact.normalized_value ?? emailFact.raw_value).trim(),
+                confidence: emailFact.validation_state === "invalid" ? "invalid" : "high",
+                fact_ids: [emailFact.fact_id],
+                validation_state: emailFact.validation_state ?? "valid",
+            });
+        }
+    }
+    if (!seen.has(parentKeys.phone)) {
+        const phoneFact = input.extraction.facts.find((f) => f.fact_type === "phone");
+        if (phoneFact) {
+            push({
+                payload_key: parentKeys.phone,
+                rule_id: fieldByPayloadKey(input.spec, parentKeys.phone)?.rule_id ?? "person:phone",
+                value: String(phoneFact.normalized_value ?? phoneFact.raw_value).trim(),
+                confidence: phoneFact.validation_state === "invalid" ? "invalid" : "high",
+                fact_ids: [phoneFact.fact_id],
+                validation_state: phoneFact.validation_state ?? "valid",
+            });
+        }
     }
 
     if (household.source && !seen.has(keys.source)) {
@@ -196,17 +229,54 @@ export function mapFactsToCreateLeadIntake(input: {
         });
     }
 
-    if (household.desired_start_date && !seen.has(keys.child_desired_start_date)) {
+    if (household.start_date && !seen.has(keys.child_start_date)) {
         push({
-            payload_key: keys.child_desired_start_date,
+            payload_key: keys.child_start_date,
             rule_id:
-                fieldByPayloadKey(input.spec, keys.child_desired_start_date)?.rule_id ??
-                "child:desired_start_date",
-            value: household.desired_start_date,
+                fieldByPayloadKey(input.spec, keys.child_start_date)?.rule_id ??
+                "child:start_date",
+            value: household.start_date,
             confidence: "high",
             fact_ids: [],
             validation_state: "valid",
         });
+    }
+
+    // Map parsed mailing address onto create-lead address keys when the intake
+    // spec includes them; otherwise the household commit selection still carries
+    // structured address for post-commit persistence.
+    if (household.address?.lines?.length) {
+        const line1 = household.address.lines[0]!.trim();
+        if (line1) {
+            const householdKey = keys.household_address_line1;
+            const personKey = keys.address_line1;
+            if (fieldByPayloadKey(input.spec, householdKey) && !seen.has(householdKey)) {
+                push({
+                    payload_key: householdKey,
+                    rule_id: fieldByPayloadKey(input.spec, householdKey)?.rule_id ?? null,
+                    value: line1,
+                    confidence: "medium",
+                    fact_ids: household.address.source_fact_ids,
+                    validation_state: "unknown",
+                });
+            } else if (fieldByPayloadKey(input.spec, personKey) && !seen.has(personKey)) {
+                push({
+                    payload_key: personKey,
+                    rule_id: fieldByPayloadKey(input.spec, personKey)?.rule_id ?? null,
+                    value: line1,
+                    confidence: "medium",
+                    fact_ids: household.address.source_fact_ids,
+                    validation_state: "unknown",
+                });
+            } else if (!fieldByPayloadKey(input.spec, householdKey) && !fieldByPayloadKey(input.spec, personKey)) {
+                mappingWarnings.push({
+                    code: "address_no_action_field",
+                    severity: "info",
+                    message:
+                        `Address detected (${line1}) — will be saved on the household when you confirm.`,
+                });
+            }
+        }
     }
 
     mapLegacyFactsWithoutHousehold({

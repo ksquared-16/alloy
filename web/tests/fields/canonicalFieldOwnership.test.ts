@@ -25,13 +25,13 @@ describe("canonicalFieldOwnership", () => {
     });
 
     it("rejects enrollment fields registered on customer_member", () => {
-        expect(validateFieldDefinitionOwnership("customer_member", "desired_start_date")).toMatch(/inquiry_child/);
+        expect(validateFieldDefinitionOwnership("customer_member", "start_date")).toMatch(/inquiry_child/);
         expect(validateFieldDefinitionOwnership("customer_member", "outcome_status_key")).toMatch(/inquiry_child/);
     });
 
     it("finds profile keys that must not PATCH OCM rows", () => {
         expect(findCustomerMemberProfileKeysInPatch({ allergies: "peanut", notes: "ok" })).toEqual(["allergies"]);
-        expect(findCustomerMemberProfileKeysInPatch({ desired_start_date: "2026-09-01" })).toEqual([]);
+        expect(findCustomerMemberProfileKeysInPatch({ start_date: "2026-09-01" })).toEqual([]);
     });
 });
 
@@ -47,8 +47,8 @@ describe("partitionCustomerMemberPatchBody", () => {
     });
 
     it("flags unsupported patch keys", () => {
-        expect(findUnsupportedCustomerMemberPatchKeys({ desired_start_date: "2026-01-01" })).toEqual([
-            "desired_start_date",
+        expect(findUnsupportedCustomerMemberPatchKeys({ start_date: "2026-01-01" })).toEqual([
+            "start_date",
         ]);
         expect(findUnsupportedCustomerMemberPatchKeys({ first_name: "Ava" })).toEqual([]);
     });

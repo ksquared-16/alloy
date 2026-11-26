@@ -1,0 +1,7 @@
+{
+  "organization": "Sibling discount (QA specimen)\nPricing · Discount\n10% off everything · Active · Whole organization · from 2026-01-01",
+  "familyPosition": "Sibling discount (QA specimen)\n\nCerta Certhouse · Expected $18.50 · 10% of $185.00\n\nCertb Certhouse · Expected $145.00 · 10% of $1,450.00",
+  "familyManagement": "Sibling discount (QA specimen)\n\nCerta Certhouse · Expected $18.50 · 10% of $185.00\n\nAdd exception\n\nCertb Certhouse · Expected $145.00 · 10% of $1,450.00\n\nAdd exception",
+  "assignment:Certa Certhouse": "Sibling discount (QA specimen) · $18.50 expected to apply\nAdd exception",
+  "assignment:Certb Certhouse": "Sibling discount (QA specimen) · $145.00 expected to apply\nAdd exception"
+}

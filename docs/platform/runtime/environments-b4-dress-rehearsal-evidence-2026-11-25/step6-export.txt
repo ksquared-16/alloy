@@ -1,0 +1,8 @@
+export: local postgresql://postgres:***@127.0.0.1:54422/firefly_seed_scratch_b4_source  org 93667019-bd28-49b5-a688-acc9bb1e0a19
+  kinds: sites, rooms, household_role_types, enrollment_process
+  source org: Firefly Early Learning  (seed configuration kept: local only)
+  items: {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+  left behind: 0
+  metadata keys dropped: site:north-campus [seed]; site:south-campus [seed]; site:west-campus [seed]; room:south-campus/bears [seed]; room:south-campus/giraffe [seed]; room:north-campus/infant-a [seed]; room:west-campus/infant-a [seed]; room:north-campus/infant-b [seed]; room:west-campus/infant-b [seed]; room:south-campus/monkeys [seed]; room:north-campus/pre-k [seed]; room:west-campus/preschool [seed]; room:north-campus/preschool-1 [seed]; room:north-campus/preschool-2 [seed]; room:south-campus/tigers [seed]; room:north-campus/toddler-1 [seed]; room:west-campus/toddler-1 [seed]; room:north-campus/toddler-2 [seed]; room:west-campus/toddler-2 [seed]; room:south-campus/zebras [seed]
+✓ wrote /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-25/release/firefly-config-export.json
+  sha256 e6bd9d678e6aaf87d3e1e872d3fe2aeb79b7cfad5270ae4e2fe2f34a5ce9a34c

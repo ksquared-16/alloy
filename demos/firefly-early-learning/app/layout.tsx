@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import "./globals.css";
+import { EMBED_ORIGIN } from "@/lib/locations";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,6 +26,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Warm DNS + TLS to the form host so the iframe request does not pay handshake cost. */}
+        <link rel="preconnect" href={EMBED_ORIGIN} crossOrigin="" />
+        <link rel="dns-prefetch" href={EMBED_ORIGIN} />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <div className="flex min-h-screen flex-col">
           <Header />

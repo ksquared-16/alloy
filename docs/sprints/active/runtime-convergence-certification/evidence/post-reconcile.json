@@ -1,0 +1,216 @@
+{
+  "rowCount": 17,
+  "terminal": "operational",
+  "sections": {
+    "infant": 12,
+    "pre_k": 1,
+    "unspecified": 1,
+    "school_age": 2,
+    "toddler": 1
+  },
+  "order": [
+    "Test Process3=3/12(9e230cf8)",
+    "Test Process5=5/12(a8077c41)",
+    "Test Process8=10/12(e392cb90)",
+    "PassA Kid=1/12(ee36c3b1)",
+    "Wrigley Kurzman=2/12(698f850a)",
+    "Test Process10=8/12(55cf37fb)",
+    "Test Process9=12/12(cab180fc)",
+    "Test Process6=6/12(33af29af)",
+    "Test Process11=11/12(17ce4d8e)",
+    "Test Process4=4/12(504bf3f3)",
+    "Test Process7=9/12(85c0259d)",
+    "PassB Kid=7/12(22357ef1)",
+    "Test Process=1/1(bed8ce49)",
+    "Tomas Rivera=1/1(dbfd573f)",
+    "Marisol Vega=2/2(4b1b508c)",
+    "Test Process2=1/2(448c5dcb)",
+    "Lennon Kurzman=1/1(ba8cdcf5)"
+  ],
+  "candidates": [
+    {
+      "id": "0cad23a8-536b-414e-af1e-0f15ef1e3ca0",
+      "status": "withdrawn",
+      "cohort": "infant",
+      "label": "infant",
+      "wait": "2026-08-07T20:05:50.73002+00:00",
+      "member": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+      "ov": []
+    },
+    {
+      "id": "ee36c3b1-9aba-4923-95d1-31ca5603e34a",
+      "status": "active",
+      "cohort": "infant",
+      "label": "Infant",
+      "wait": "2026-08-21T19:26:23.073+00:00",
+      "member": "1e30034b-54b2-46e5-ba46-079fd087b945",
+      "ov": []
+    },
+    {
+      "id": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-07T20:05:50.73002+00:00",
+      "member": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+      "ov": [
+        "ec6dce10-8bb0-4172-9495-0b7871af56ef"
+      ]
+    },
+    {
+      "id": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-19T15:55:45.614+00:00",
+      "member": "c90d7352-fc07-497b-ad23-6af60e06a30a",
+      "ov": []
+    },
+    {
+      "id": "504bf3f3-7eb5-4bac-bc4d-c7aca413eab9",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-19T17:47:58.167+00:00",
+      "member": "5535361f-c097-42d6-8aed-9153b2f9a7b4",
+      "ov": []
+    },
+    {
+      "id": "a8077c41-34ae-4695-9852-c0df0a3a65b0",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-19T18:24:07.893+00:00",
+      "member": "138b6b1a-52bd-4001-8ce8-433c026d31e6",
+      "ov": []
+    },
+    {
+      "id": "85c0259d-d558-446a-b7f5-909f88b8c4f4",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:28.778+00:00",
+      "member": "e907e214-7164-42f3-8f82-eebe6c4db4af",
+      "ov": []
+    },
+    {
+      "id": "94984f6c-f269-4f86-8b1b-9a4607cac2c6",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:28.794+00:00",
+      "member": "1e30034b-54b2-46e5-ba46-079fd087b945",
+      "ov": [
+        "489a6460-0e20-40ca-9122-87f0bc87c459"
+      ]
+    },
+    {
+      "id": "22357ef1-ac83-41e3-96b9-3d15625d3ace",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:28.771+00:00",
+      "member": "c1cd2074-37ac-43a5-b897-827a84c00f93",
+      "ov": []
+    },
+    {
+      "id": "55cf37fb-1fe4-441a-b9d1-5c3665f78a79",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:28.771+00:00",
+      "member": "025a307f-67b5-405e-9223-ee42fb283b32",
+      "ov": []
+    },
+    {
+      "id": "33af29af-4ca3-49ac-b6f7-5f75eeabe1f1",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:28.75+00:00",
+      "member": "28cb6bbb-bf0b-4401-8360-fd904c745f9e",
+      "ov": []
+    },
+    {
+      "id": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:28.789+00:00",
+      "member": "998ffc89-110d-4c33-9a89-2bd343ce3f45",
+      "ov": []
+    },
+    {
+      "id": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:28.81+00:00",
+      "member": "d879b222-7ff7-48cb-8e94-08e0218c636d",
+      "ov": []
+    },
+    {
+      "id": "cab180fc-0b21-4e92-a998-4e80cd58efb9",
+      "status": "active",
+      "cohort": "infant_0_18_months",
+      "label": "Infant — 0–18 months",
+      "wait": "2026-08-20T20:58:29.113+00:00",
+      "member": "0a7a04ba-4c1f-4542-a87b-cd86e1891ce9",
+      "ov": []
+    },
+    {
+      "id": "bed8ce49-06a3-46ae-a90a-5579c5307aa7",
+      "status": "active",
+      "cohort": "pre_k_4_5_years",
+      "label": "Pre-K — 4–5 years",
+      "wait": "2026-08-18T20:19:28.399+00:00",
+      "member": "8a8448a2-e90b-4e9e-bf3e-dd24426d1624",
+      "ov": []
+    },
+    {
+      "id": "448c5dcb-f84b-4cea-ad45-31744bf5513a",
+      "status": "active",
+      "cohort": "school_age_5_years",
+      "label": "School Age — 5+ years",
+      "wait": "2026-08-18T20:27:52.955+00:00",
+      "member": "a38899dd-cb0b-4670-bbfc-d7bf7a1dd24c",
+      "ov": []
+    },
+    {
+      "id": "4b1b508c-3373-408e-87ff-c7920ee332f8",
+      "status": "active",
+      "cohort": "school_age_5_years",
+      "label": "School Age — 5+ years",
+      "wait": "2026-08-21T21:04:13.447+00:00",
+      "member": "e953b5c3-76a8-4766-8e55-be4eb6aa09b4",
+      "ov": []
+    },
+    {
+      "id": "27de6932-6910-4498-9f5f-5f3bc688fd5a",
+      "status": "withdrawn",
+      "cohort": "toddler",
+      "label": "toddler",
+      "wait": "2026-08-07T20:05:50.73002+00:00",
+      "member": "b247b8a3-7df7-4919-9309-698796b59c3b",
+      "ov": []
+    },
+    {
+      "id": "ba8cdcf5-73b2-43e6-8a86-aa28f1098c0e",
+      "status": "active",
+      "cohort": "toddler_2_3_years",
+      "label": "Toddler — 2–3 years",
+      "wait": "2026-08-07T20:05:50.73002+00:00",
+      "member": "b247b8a3-7df7-4919-9309-698796b59c3b",
+      "ov": []
+    },
+    {
+      "id": "dbfd573f-3a4d-41c1-b778-d20736821ff9",
+      "status": "active",
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "wait": "2026-08-21T23:04:43.166+00:00",
+      "member": "927a3348-ec46-4378-9bd6-4e659a5539de",
+      "ov": []
+    }
+  ]
+}

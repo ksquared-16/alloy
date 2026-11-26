@@ -1,0 +1,78 @@
+"use client";
+
+import type { QueueRowSurfaceEnvelope } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
+
+export type QueueRowSurfaceLoadResult = {
+    /** What the BUILDER edits — empty when nothing is published. */
+    envelope: QueueRowSurfaceEnvelope;
+    /** What the RUNTIME renders — never empty (unconfigured surfaces get the runtime default). */
+    runtimeLayout: QueueRowSurfaceEnvelope["layout"];
+    placementOverrideEnabled: boolean;
+    source: string;
+};
+
+export async function loadQueueRowSurfaceConfig(
+    surfaceId: string,
+    processKey?: string | null,
+): Promise<QueueRowSurfaceLoadResult> {
+    const qs = processKey?.trim() ? `?processKey=${encodeURIComponent(processKey.trim())}` : "";
+    const res = await fetch(`/api/admin/queue-row-layout/${encodeURIComponent(surfaceId)}${qs}`);
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+        throw new Error((body.error as string | undefined) ?? `HTTP ${res.status}`);
+    }
+    const envelope = body.envelope as QueueRowSurfaceEnvelope | undefined;
+    if (!envelope?.layout) {
+        throw new Error("Invalid queue row surface response");
+    }
+    const runtimeLayout = (body.config as QueueRowSurfaceEnvelope["layout"] | null | undefined) ?? envelope.layout;
+    return {
+        envelope,
+        runtimeLayout,
+        placementOverrideEnabled: body.placementOverrideEnabled === true,
+        source: typeof body.source === "string" ? body.source : "unknown",
+    };
+}
+
+export async function publishQueueRowSurfaceConfig(args: {
+    surfaceId: string;
+    envelope: QueueRowSurfaceEnvelope;
+    placementOverrideEnabled?: boolean;
+}): Promise<void> {
+    const res = await fetch(`/api/admin/queue-row-layout/${encodeURIComponent(args.surfaceId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            envelope: args.envelope,
+            placementOverrideEnabled: args.placementOverrideEnabled ?? false,
+        }),
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+        throw new Error((body.error as string | undefined) ?? `HTTP ${res.status}`);
+    }
+}
+
+export const QUEUE_ROW_SURFACE_PUBLISHED_EVENT = "alloy:queue-row-surface-published";
+export const QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL = "alloy-queue-row-surface";
+
+export function dispatchQueueRowSurfacePublished(
+    surfaceId: string,
+    processKey?: string | null,
+): void {
+    if (typeof window === "undefined") return;
+    const detail = {
+        surfaceId,
+        processKey: processKey?.trim() || null,
+    };
+    window.dispatchEvent(
+        new CustomEvent(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, { detail }),
+    );
+    try {
+        const channel = new BroadcastChannel(QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL);
+        channel.postMessage({ type: "published", ...detail });
+        channel.close();
+    } catch {
+        /* BroadcastChannel unavailable */
+    }
+}

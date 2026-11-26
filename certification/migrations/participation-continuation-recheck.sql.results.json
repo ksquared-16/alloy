@@ -1,0 +1,43 @@
+{
+  "trusted_host_action_id": "tha_a00ce90d4a835b",
+  "query_hash": "f55fcf62da41adde395069597858faa7c4167eaca6913a7a3e606204dc99e60d",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:59:26.612Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_a00ce90d4a835b",
+    "query_hash": "f55fcf62da41adde395069597858faa7c4167eaca6913a7a3e606204dc99e60d",
+    "authorization_id": "grnt_54f1ec0d633f4729",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:59:28.258Z",
+    "question_ids": [
+      "recheck"
+    ],
+    "questions": {
+      "recheck": {
+        "question_id": "recheck",
+        "row_count": null,
+        "rows": [
+          {
+            "staff_capable_active": 2,
+            "staff_capable_none": 2,
+            "staff_capable_supply": 0,
+            "staff_capable_keys": [
+              "recurring_service"
+            ],
+            "staff_supply_today": 3,
+            "untyped_staff": 0,
+            "observed_at": "2026-09-21 21:59:28.256742+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

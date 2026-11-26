@@ -1,0 +1,43 @@
+{
+ "build": "fd12eb6b81611fa699b1e317d9bdd4f938f6bfa5",
+ "tag": "after-827a345",
+ "accounts": [
+  {
+   "shell": 133.60000002384186,
+   "meaningful": 133.60000002384186,
+   "hydrated": 1242.2000000476837,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 40.299999952316284,
+   "meaningful": 40.299999952316284,
+   "hydrated": 1353.8999999761581,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 57,
+   "meaningful": 57,
+   "hydrated": 1200.4000000953674,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 53.699999928474426,
+   "meaningful": 53.699999928474426,
+   "hydrated": 1096.2999999523163,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 52,
+   "meaningful": 52,
+   "hydrated": 1163.5,
+   "emptyFrames": 0
+  }
+ ],
+ "charges": [],
+ "accounts_median": {
+  "shell": 54,
+  "meaningful": 54,
+  "hydrated": 1200,
+  "samples": 5
+ }
+}

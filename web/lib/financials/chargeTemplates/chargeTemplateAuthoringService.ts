@@ -73,7 +73,8 @@ function buildValueColumns(input: ChargeTemplateValueInput): Record<string, unkn
 
     const occursOn = trimOrNull(input.occursOnStrategy) ?? "now";
     if (!isOccursOn(occursOn)) fail("invalid_input", "occursOnStrategy is invalid");
-    const billableOn = trimOrNull(input.billableOnStrategy) ?? "immediate";
+    /* A new template follows the organisation's invoice timing unless it names an exception. */
+    const billableOn = trimOrNull(input.billableOnStrategy) ?? "billing_policy";
     if (!isBillableOn(billableOn)) fail("invalid_input", "billableOnStrategy is invalid");
 
     // amount shape: fixed requires a non-negative amount; others must omit it.

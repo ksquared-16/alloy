@@ -4,6 +4,11 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { fetchScopedPersonIdsForRestrictedAdmin, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 /** GET: list persons for org. Returns rows with _person_name, _customer_count, _compatibility_contacts_count, _compatibility_members_count, _updated. */
 export async function GET(request: NextRequest) {
@@ -14,6 +19,8 @@ export async function GET(request: NextRequest) {
             { status: ctx.status }
         );
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
 
     const { searchParams } = new URL(request.url);
     const limit = Math.min(Number(searchParams.get("limit")) || 500, 500);
@@ -111,9 +118,8 @@ export async function POST(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     let body: { first_name?: string; last_name?: string; email?: string; phone?: string } = {};
     try {

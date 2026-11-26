@@ -1,0 +1,10 @@
+import { open, ORIGIN } from "./lib.mjs";
+const OUT = new URL("./out3/", import.meta.url).pathname;
+const { browser, page } = await open();
+await page.goto(`${ORIGIN}/organization/tours`, { waitUntil: "networkidle", timeout: 90000 }); await page.waitForTimeout(2500);
+await page.getByRole("button", { name: /Add organization-wide schedule/i }).first().click(); await page.waitForTimeout(1500);
+const ed = page.getByTestId("tours-schedule-editor");
+console.log("tz hint:", (await ed.innerText()).match(/No time zone is configured[^\n]*|The organization's time zone[^\n]*|Times are in this zone[^\n]*/)?.[0]);
+await ed.screenshot({ path: `${OUT}d3-org-tz-hint.png` });
+await ed.getByRole("button", { name: /^Cancel$/ }).click();
+await browser.close();

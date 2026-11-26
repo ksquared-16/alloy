@@ -1,0 +1,5 @@
+{
+  "artifact": "governed-mutation-reject",
+  "title": "Mutation SQL must be rejected",
+  "combined_query": "DELETE FROM public.user_roles WHERE true"
+}

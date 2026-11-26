@@ -12,6 +12,7 @@ import type {
 } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { filterActivePlacementOverrides } from "@/lib/orchestration/placement/filterActivePlacementOverrides";
 import {
+    firstNestedRecord,
     normalizeCustomerMemberNested,
     normalizePlacementLinkMemberRow,
     type NormalizedPlacementLinkMemberRow,
@@ -65,32 +66,60 @@ export type PlacementCandidateQueueBundle = {
 
 export type PlacementCandidatesByOpportunityId = Map<string, PlacementCandidateQueueBundle[]>;
 
+/** The exact column list this loader maps. Exported so a caller that already read the rows can ask for the same shape. */
+export const PLACEMENT_CANDIDATE_QUEUE_SELECT =
+    "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, start_date, status, seed_key, metadata, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, program_category_id, location_program_categories(key), customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)))";
+
 export async function bulkLoadPlacementCandidatesByOpportunity(params: {
     supabase: SupabaseClient;
     orgId: string;
     opportunityIds: string[];
     /** Active candidates only (default true). */
     activeOnly?: boolean;
+    /**
+     * Rows the caller already read with {@link PLACEMENT_CANDIDATE_QUEUE_SELECT}.
+     *
+     * `placement_candidates` was read TWICE in a row on the queue-critical path: the ensure step
+     * reads it inside its concurrent wave to decide what to insert, and this loader then read the
+     * same table with the same org + opportunity filter as the NEXT serial step. Widening the read
+     * already in the wave costs nothing extra there and lets that serial round trip disappear.
+     *
+     * The mapping below stays the only place candidate rows become queue truth — this parameter
+     * changes where the rows came from, never what they mean.
+     */
+    preloadedRows?: readonly Record<string, unknown>[] | null;
 }): Promise<PlacementCandidatesByOpportunityId> {
     const out: PlacementCandidatesByOpportunityId = new Map();
     const ids = [...new Set(params.opportunityIds.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length) return out;
 
-    let q = params.supabase
-        .from("placement_candidates")
-        .select(
-            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status, seed_key, metadata, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, desired_program_type, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)))"
-        )
-        .eq("org_id", params.orgId)
-        .in("opportunity_id", ids);
+    let rawCandidates: Array<Record<string, unknown>>;
+    if (params.preloadedRows) {
+        // Same filter the query below applies, re-applied here so a preloaded caller cannot widen
+        // the result set by accident.
+        const idSet = new Set(ids);
+        rawCandidates = (params.preloadedRows as Array<Record<string, unknown>>).filter((r) => {
+            const oppId = typeof r.opportunity_id === "string" ? r.opportunity_id : null;
+            if (!oppId || !idSet.has(oppId)) return false;
+            if (params.activeOnly !== false && r.status !== "active") return false;
+            return true;
+        });
+    } else {
+        let q = params.supabase
+            .from("placement_candidates")
+            .select(PLACEMENT_CANDIDATE_QUEUE_SELECT)
+            .eq("org_id", params.orgId)
+            .in("opportunity_id", ids);
 
-    if (params.activeOnly !== false) {
-        q = q.eq("status", "active");
-    }
+        if (params.activeOnly !== false) {
+            q = q.eq("status", "active");
+        }
 
-    const { data: rawCandidates, error: candErr } = await q;
-    if (candErr) {
-        throw new Error(`placement_candidates bulk load failed: ${candErr.message}`);
+        const { data, error: candErr } = await q;
+        if (candErr) {
+            throw new Error(`placement_candidates bulk load failed: ${candErr.message}`);
+        }
+        rawCandidates = (data ?? []) as unknown as Array<Record<string, unknown>>;
     }
 
     type Row = PlacementCandidateRow & {
@@ -100,33 +129,30 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
             location_id?: string | null;
             program_room_cohort_key?: string | null;
             metadata: Record<string, unknown> | null;
-            desired_program_type: string | null;
+            program_category_id: string | null;
+            /** Canonical program key (location_program_categories.key). */
+            program_key: string | null;
             customer_members: ReturnType<typeof normalizeCustomerMemberNested>;
         } | null;
     };
 
+    type OcmEmbedRaw = {
+        id: string;
+        location_id?: string | null;
+        program_room_cohort_key?: string | null;
+        metadata: Record<string, unknown> | null;
+        program_category_id?: string | null;
+        location_program_categories?: { key?: string | null } | Array<{ key?: string | null }> | null;
+        customer_members: unknown;
+    };
+
     function normalizeCandidateRow(raw: unknown): Row {
         const c = raw as Record<string, unknown>;
-        const ocmRaw = c.opportunity_customer_members as
-            | {
-                  id: string;
-                  location_id?: string | null;
-                  program_room_cohort_key?: string | null;
-                  metadata: Record<string, unknown> | null;
-                  desired_program_type: string | null;
-                  customer_members: unknown;
-              }
-            | Array<{
-                  id: string;
-                  location_id?: string | null;
-                  program_room_cohort_key?: string | null;
-                  metadata: Record<string, unknown> | null;
-                  desired_program_type: string | null;
-                  customer_members: unknown;
-              }>
-            | null
-            | undefined;
+        const ocmRaw = c.opportunity_customer_members as OcmEmbedRaw | OcmEmbedRaw[] | null | undefined;
         const ocmSingle = Array.isArray(ocmRaw) ? (ocmRaw[0] ?? null) : (ocmRaw ?? null);
+        const categoryKey = ocmSingle
+            ? firstNestedRecord(ocmSingle.location_program_categories)?.key
+            : null;
         return {
             ...(c as PlacementCandidateRow),
             customer_members: normalizeCustomerMemberNested(c.customer_members),
@@ -140,7 +166,8 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
                               ? ocmSingle.program_room_cohort_key
                               : null,
                       metadata: ocmSingle.metadata ?? null,
-                      desired_program_type: ocmSingle.desired_program_type ?? null,
+                      program_category_id: ocmSingle.program_category_id ?? null,
+                      program_key: (typeof categoryKey === "string" ? categoryKey.trim() : "") || null,
                       customer_members: normalizeCustomerMemberNested(ocmSingle.customer_members),
                   }
                 : null,
@@ -164,60 +191,75 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         return null;
     }
 
-    const candidates = (rawCandidates ?? []).map(normalizeCandidateRow);
+    const candidates = (rawCandidates as unknown as Row[]).map(normalizeCandidateRow);
     const candidateIds = candidates.map((c) => c.id);
 
+    /*
+     * LINK GROUPS AND OVERRIDES ARE INDEPENDENT READS OF THE SAME KEY SET.
+     *
+     * Both are keyed by `candidateIds` and org-scoped; neither reads the other's result. Running them
+     * in sequence simply added one round trip to every placement-bearing page. They now run together
+     * and are joined below — same queries, same org scoping, same maps, same active-only semantics.
+     */
     const linkByCandidate = new Map<string, PlacementCandidateLinkGroupSummary>();
-    if (candidateIds.length) {
-        const { data: memberRows, error: memErr } = await params.supabase
-            .from("placement_link_group_members")
-            .select(
-                "placement_candidate_id, placement_link_group_id, placement_link_groups(id, link_mode, placement_link_group_members(id))"
-            )
-            .eq("org_id", params.orgId)
-            .in("placement_candidate_id", candidateIds);
-
-        if (memErr) {
-            throw new Error(`placement_link_group_members bulk load failed: ${memErr.message}`);
-        }
-
-        for (const row of memberRows ?? []) {
-            const normalized = normalizePlacementLinkMemberRow(row);
-            const grp = normalized.placement_link_groups;
-            if (!grp) continue;
-            linkByCandidate.set(normalized.placement_candidate_id, {
-                id: grp.id,
-                link_mode: asLinkMode(grp.link_mode),
-                member_count: grp.placement_link_group_members?.length ?? 0,
-            });
-        }
-    }
-
     const overridesByCandidate = new Map<string, PlacementCandidateActiveOverrideSummary[]>();
-    if (candidateIds.length) {
-        const { data: overrideRows, error: ovErr } = await params.supabase
-            .from("placement_overrides")
-            .select("id, placement_candidate_id, override_kind, reason, expires_at, payload")
-            .eq("org_id", params.orgId)
-            .eq("is_active", true)
-            .in("placement_candidate_id", candidateIds);
 
-        if (ovErr) {
-            throw new Error(`placement_overrides bulk load failed: ${ovErr.message}`);
-        }
+    const linkRead = (async () => {
+        if (candidateIds.length) {
+            const { data: memberRows, error: memErr } = await params.supabase
+                .from("placement_link_group_members")
+                .select(
+                    "placement_candidate_id, placement_link_group_id, placement_link_groups(id, link_mode, placement_link_group_members(id))"
+                )
+                .eq("org_id", params.orgId)
+                .in("placement_candidate_id", candidateIds);
 
-        for (const row of (overrideRows ?? []) as OverrideRow[]) {
-            const list = overridesByCandidate.get(row.placement_candidate_id) ?? [];
-            list.push({
-                id: row.id,
-                override_kind: asOverrideKind(row.override_kind),
-                reason: row.reason,
-                expires_at: row.expires_at,
-                payload: row.payload,
-            });
-            overridesByCandidate.set(row.placement_candidate_id, list);
+            if (memErr) {
+                throw new Error(`placement_link_group_members bulk load failed: ${memErr.message}`);
+            }
+
+            for (const row of memberRows ?? []) {
+                const normalized = normalizePlacementLinkMemberRow(row);
+                const grp = normalized.placement_link_groups;
+                if (!grp) continue;
+                linkByCandidate.set(normalized.placement_candidate_id, {
+                    id: grp.id,
+                    link_mode: asLinkMode(grp.link_mode),
+                    member_count: grp.placement_link_group_members?.length ?? 0,
+                });
+            }
         }
-    }
+    })();
+
+    const overrideRead = (async () => {
+        if (candidateIds.length) {
+            const { data: overrideRows, error: ovErr } = await params.supabase
+                .from("placement_overrides")
+                .select("id, placement_candidate_id, override_kind, reason, expires_at, payload")
+                .eq("org_id", params.orgId)
+                .eq("is_active", true)
+                .in("placement_candidate_id", candidateIds);
+
+            if (ovErr) {
+                throw new Error(`placement_overrides bulk load failed: ${ovErr.message}`);
+            }
+
+            for (const row of (overrideRows ?? []) as OverrideRow[]) {
+                const list = overridesByCandidate.get(row.placement_candidate_id) ?? [];
+                list.push({
+                    id: row.id,
+                    override_kind: asOverrideKind(row.override_kind),
+                    reason: row.reason,
+                    expires_at: row.expires_at,
+                    payload: row.payload,
+                });
+                overridesByCandidate.set(row.placement_candidate_id, list);
+            }
+        }
+    })();
+
+    // Either read failing must surface exactly as it did when they ran in sequence.
+    await Promise.all([linkRead, overrideRead]);
 
     for (const c of candidates) {
         const meta =
@@ -241,7 +283,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
                 ocm?.metadata != null && typeof ocm.metadata === "object" && !Array.isArray(ocm.metadata)
                     ? ocm.metadata
                     : null,
-            desiredProgramType: ocm?.desired_program_type ?? null,
+            programKey: ocm?.program_key ?? null,
             dateOfBirth: readMemberDob(memberForCohort),
         });
 
@@ -294,7 +336,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
                 program_room_cohort_key: cohort.program_room_cohort_key,
                 program_room_group_label: cohort.program_room_group_label,
                 wait_since: c.wait_since,
-                desired_start_date: c.desired_start_date,
+                start_date: c.start_date,
                 status: c.status,
                 seed_key: c.seed_key,
                 metadata: meta,

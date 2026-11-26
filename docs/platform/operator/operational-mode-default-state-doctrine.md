@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — Operational Mode as Default Runtime State
 
 **Revision:** 2  

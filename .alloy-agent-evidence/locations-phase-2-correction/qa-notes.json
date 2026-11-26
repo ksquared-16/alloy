@@ -1,0 +1,29 @@
+{
+  "landing": {
+    "rail": true,
+    "landing": true,
+    "glance": true,
+    "readiness": false,
+    "bosUnpublished": false
+  },
+  "overview": {
+    "selected": true,
+    "facts": true
+  },
+  "schedule": {
+    "hasSchedule": true,
+    "hasMutuallyExclusiveTypeRotating": false,
+    "hasDayTypeUi": true
+  },
+  "tours": {
+    "earlyMs": 10874,
+    "hasLoadingEllipsis": false,
+    "hasAdd": true,
+    "hasPendingOrRows": true
+  },
+  "toursWarm": {
+    "ms": 11552,
+    "hasLoadingEllipsis": false,
+    "addPresent": true
+  }
+}

@@ -8,17 +8,35 @@
  */
 
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { ENROLLMENT_STAGE_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStageBindings";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
+/**
+ * Legacy operator-stage → CRM status keys. This is the consolidated legacy bridge home
+ * (the drifted `enrollmentProcessStageBindings.ts` duplicate was removed in S4).
+ *
+ * NOTE: Under the S4 status collapse, durable statuses are `open`/`closed` (case) and
+ * `waitlisted`/`enrolling`/`enrolled`/`withdrawn`/`not_enrolling` (child). These arrays retain
+ * the pre-collapse keys ONLY so legacy (un-migrated) records and legacy transition/readiness
+ * code continue to resolve. Stage for live records is the persisted `stage_key` column — do NOT
+ * treat this as the source of truth for a record's stage.
+ */
+export const ENROLLMENT_LEGACY_STAGE_STATUS_KEYS: Record<LifecycleOperatorStage, readonly string[]> = {
+    lead: ["new_inquiry", "open", "new"],
+    qualification: ["contact_attempted", "contacted", "qualification", "qualified"],
+    tour: ["tour_scheduled", "tour_completed", "follow_up_attempted", "tour_no_show"],
+    waitlist: ["waitlisted"],
+    enrollment: ["enrolling", "ready_to_enroll"],
+    enrolled: ["enrolled"],
+};
+
 const LEGACY_CANONICAL_KEY_TO_STAGE: Map<string, string> = (() => {
     const m = new Map<string, string>();
-    for (const stage of Object.keys(ENROLLMENT_STAGE_STATUS_KEYS) as LifecycleOperatorStage[]) {
-        for (const key of ENROLLMENT_STAGE_STATUS_KEYS[stage]) {
+    for (const stage of Object.keys(ENROLLMENT_LEGACY_STAGE_STATUS_KEYS) as LifecycleOperatorStage[]) {
+        for (const key of ENROLLMENT_LEGACY_STAGE_STATUS_KEYS[stage]) {
             if (!m.has(key)) m.set(key, stage);
         }
     }

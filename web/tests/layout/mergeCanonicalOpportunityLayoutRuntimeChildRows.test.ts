@@ -58,7 +58,7 @@ describe("mergeCanonicalOpportunityLayoutRuntimeChildRows", () => {
                     customer_member_id: "cm-a",
                     display_name: "Mia Mitchell",
                     desired_program_label: "Preschool",
-                    desired_start_date: "2026-09-01",
+                    start_date: "2026-09-01",
                 }),
             ],
             householdChildren: [

@@ -125,7 +125,9 @@ export const GOLDEN_HOUSEHOLD_FIXTURES: GoldenFixtureExpectation[] = [
         children: 0,
         relationships: 0,
         has_address: true,
-        warning_codes: ["address_no_action_field"],
+        // Address is persisted via household commit / post-commit layout writers —
+        // no longer warned as "no action field".
+        warning_codes: [],
     },
     {
         id: "location-present",
@@ -269,7 +271,7 @@ describe("golden household graph fixtures", () => {
         if (fixture.has_address) expect(household.address?.lines.length).toBeGreaterThan(0);
         if (fixture.has_location) expect(household.location?.label).toBeTruthy();
         if (fixture.has_program) expect(household.program_interest ?? mapped.candidates.find((c) => c.payload_key === "child_program")?.value).toBeTruthy();
-        if (fixture.has_start_date) expect(household.desired_start_date).toBeTruthy();
+        if (fixture.has_start_date) expect(household.start_date).toBeTruthy();
 
         if (fixture.parent_names) {
             expect(guardianNames(household)).toEqual(fixture.parent_names);

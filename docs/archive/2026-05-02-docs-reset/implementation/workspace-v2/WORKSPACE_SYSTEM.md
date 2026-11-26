@@ -1,6 +1,6 @@
 # Workspace system (implementation)
 
-**Doctrine:** Org → department → work unit → record; queues are projections — see [workspace-work-unit-scope-doctrine.md](../../../architecture/workspace-work-unit-scope-doctrine.md).
+**Doctrine:** Org → department → work unit → record; queues are projections — see [workspace-work-unit-scope-doctrine.md](../../architecture/workspace-work-unit-scope-doctrine.md).
 
 ## Route shape (Admin V2)
 

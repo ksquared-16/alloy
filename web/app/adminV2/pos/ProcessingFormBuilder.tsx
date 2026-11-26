@@ -1,0 +1,911 @@
+"use client";
+
+import { MarketingConsentControl } from "@/components/forms/engine/MarketingConsentControl";
+import {
+    resolveMarketingConsentLanguage,
+    type IntakeMarketingConsentChoice,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { composeRuntimeRows, RUNTIME_FORM_CONTAINER_CLASS, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
+import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { FORM_SUBMIT_LABEL_MAX, formSubmitLabel } from "@/lib/forms/schema";
+import { participantButtonColors } from "@/lib/public/forms/participantBrandTheme";
+import { findFieldDeep } from "@/lib/forms/formBuilderSchema";
+import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
+import ProcessingFormCanvas from "./ProcessingFormCanvas";
+import ProcessingFormDistributionPanel from "./ProcessingFormDistributionPanel";
+import ProcessingFormPublishedBar from "./ProcessingFormPublishedBar";
+import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
+import ProcessingCollapsibleInspectorSection from "./ProcessingCollapsibleInspectorSection";
+import { useFormStudioAuthoring } from "./useFormStudioAuthoring";
+import type { ProcessingFormRow, ProcessingFormPublicLinkRow } from "./useProcessingFormApi";
+import { useProcessingFormApi } from "./useProcessingFormApi";
+import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
+import { DEFAULT_FORM_ACCENT, parseFormBranding, type ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
+import { FormOperationalIntentPicker } from "@/components/forms/admin/FormOperationalIntentPicker";
+import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
+import { FormLifecycleUsagePanel } from "@/components/forms/admin/FormLifecycleUsagePanel";
+import { FormQueueFolderPanel } from "@/components/forms/admin/FormQueueFolderPanel";
+import { FormLocationShareLinksPanel } from "@/components/forms/admin/FormLocationShareLinksPanel";
+import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
+import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
+import {
+    OPERATIONAL_INTENT_CATALOG,
+    resolveEffectiveOperationalIntent,
+} from "@/lib/forms/operationalIntentTemplates";
+import { readFormLifecycleUsage } from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
+import { LIFECYCLE_STAGE_LABELS } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { ENROLLMENT_PROCESS_DISPLAY_NAME } from "@/lib/lifecycle/businessProcessUiLabels";
+import { distributionIsPreviewLink, type DistributionLinkRow } from "@/lib/forms/distributionPresentation";
+import type { FormPublicLinkRow } from "@/components/forms/workspace/FormDistributionPanel";
+
+type BuilderMode = "edit" | "preview" | "runtime";
+
+export default function ProcessingFormBuilder({
+    formId,
+    formMeta,
+    initialFormName = null,
+    onBack,
+}: {
+    formId: string;
+    formMeta: ProcessingFormRow | null;
+    initialFormName?: string | null;
+    onBack: () => void;
+}) {
+    const {
+        loadFormSchema,
+        saveDraft: persistDraft,
+        publishForm,
+        loadForms,
+        listPublicLinks,
+        mintProcessingPublicLink,
+        unpublishProcessingPublicLinks,
+    } = useProcessingFormApi();
+    const { folders } = useProcessingFolders();
+    const [schema, setSchema] = useState<FormSchemaV1 | null>(null);
+    const [editVersionId, setEditVersionId] = useState<string | null>(null);
+    const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+    const [mode, setMode] = useState<BuilderMode>("edit");
+    const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+    const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+    const [dirty, setDirty] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [publishing, setPublishing] = useState(false);
+    const [builderErr, setBuilderErr] = useState<string | null>(null);
+    const [branding, setBranding] = useState<ProcessingFormBranding>(() =>
+        parseFormBranding(formMeta)
+    );
+    const [formMetaSnapshot, setFormMetaSnapshot] = useState<Record<string, unknown>>(formMeta?.metadata ?? {});
+    const [links, setLinks] = useState<ProcessingFormPublicLinkRow[]>([]);
+    const [hasPublishedVersion, setHasPublishedVersion] = useState(Boolean(formMeta?.has_published_version));
+    const [publishJustSucceeded, setPublishJustSucceeded] = useState(false);
+    const [fieldLibrary, setFieldLibrary] = useState<ProcessingLibraryGroupOffer[] | null>(null);
+
+    const [inspectorSection, setInspectorSection] = useState<string>(hasPublishedVersion ? "distribution" : "form");
+
+    const displayFormName = formMeta?.name?.trim() || initialFormName?.trim() || schema?.title || "Untitled form";
+
+    useEffect(() => {
+        setHasPublishedVersion(Boolean(formMeta?.has_published_version));
+    }, [formMeta?.has_published_version]);
+
+    useEffect(() => {
+        if (publishJustSucceeded) setInspectorSection("distribution");
+    }, [publishJustSucceeded]);
+
+    useEffect(() => {
+        if (selectedFieldId) setInspectorSection("question");
+    }, [selectedFieldId]);
+
+    const editable = editVersionId !== null && mode === "edit";
+
+    const load = useCallback(async () => {
+        setLoadState("loading");
+        const result = await loadFormSchema(formId);
+        if (result.state === "error" || !result.schema) {
+            setLoadState("error");
+            return;
+        }
+        setSchema(result.schema);
+        setEditVersionId(result.editVersionId);
+        // Open on the form-configuration rail (Form · Purpose · Business Process · …), not a
+        // pre-selected section — the rail is the primary inspector; a section/question editor
+        // only takes over when the operator clicks one on the canvas.
+        setSelectedSectionId(null);
+        setBranding(parseFormBranding(result.formRow ?? formMeta));
+        setFormMetaSnapshot(result.formRow?.metadata ?? formMeta?.metadata ?? {});
+        setHasPublishedVersion(Boolean(result.formRow?.has_published_version ?? formMeta?.has_published_version));
+        setLoadState("ready");
+        setDirty(false);
+    }, [loadFormSchema, formId, formMeta]);
+
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    const reloadLinks = useCallback(async () => {
+        try {
+            setLinks(await listPublicLinks(formId));
+        } catch {
+            /* non-fatal */
+        }
+    }, [listPublicLinks, formId]);
+
+    useEffect(() => {
+        void reloadLinks();
+    }, [reloadLinks]);
+
+    // Stage-derived field library. Comes from the lifecycle-coverage payload so the picker offers
+    // the same vocabulary `/process → requirements` can require — including org custom fields.
+    // A failure leaves it null and the panel falls back to the curated list rather than emptying.
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/admin/forms/${encodeURIComponent(formId)}/lifecycle-coverage`,
+                    { credentials: "include" }
+                );
+                if (cancelled) return;
+                if (res.ok) {
+                    const json = (await res.json()) as { data?: { field_library?: ProcessingLibraryGroupOffer[] } };
+                    const library = json.data?.field_library ?? null;
+                    if (!cancelled && library?.length) {
+                        setFieldLibrary(library);
+                        return;
+                    }
+                }
+                /*
+                 * A form with no lifecycle usage yet answers with no library, and the picker then fell
+                 * back to 17 curated entries — so a destination that exists in the catalog could not be
+                 * chosen. The org-scoped route serves the same authority without needing a form.
+                 */
+                const orgRes = await fetch("/api/admin/forms/field-library", { credentials: "include" });
+                if (!orgRes.ok || cancelled) return;
+                const orgJson = (await orgRes.json()) as { data?: { field_library?: ProcessingLibraryGroupOffer[] } };
+                if (!cancelled) setFieldLibrary(orgJson.data?.field_library ?? null);
+            } catch {
+                /* keep the curated fallback */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [formId, formMetaSnapshot]);
+
+    const onFormMetadataUpdated = useCallback(
+        (metadata: Record<string, unknown>) => setFormMetaSnapshot(metadata),
+        []
+    );
+    const onLinkMetadataSaved = useCallback(
+        (linkId: string, metadata: Record<string, unknown>) =>
+            setLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, metadata } : l))),
+        []
+    );
+    // The panel renders "Copied" from this key. It was never tracked, so every copy button looked
+    // inert even when the clipboard write succeeded.
+    const [copiedKey, setCopiedKey] = useState<string | null>(null);
+    const onCopy = useCallback((key: string, text: string) => {
+        void Promise.resolve(navigator.clipboard?.writeText(text))
+            .then(() => setCopiedKey(key))
+            .catch(() => setCopiedKey(null));
+    }, []);
+    useEffect(() => {
+        if (!copiedKey) return;
+        const t = setTimeout(() => setCopiedKey(null), 1600);
+        return () => clearTimeout(t);
+    }, [copiedKey]);
+    const onCreateLocationLink = useCallback(
+        async ({ locationId, locationName }: { locationId: string; locationName: string }) => {
+            await mintProcessingPublicLink(formId, {
+                formName: displayFormName,
+                formKey: formMeta?.key ?? formId,
+                existingMeta: formMetaSnapshot,
+                locationId,
+                locationName,
+            });
+            await reloadLinks();
+        },
+        [mintProcessingPublicLink, formId, displayFormName, formMeta?.key, formMetaSnapshot, reloadLinks]
+    );
+
+    const activeLink = useMemo(
+        () => links.find((l) => l.is_active && !distributionIsPreviewLink(l)) ?? links[0] ?? null,
+        [links]
+    );
+    const selectedLinkId = activeLink?.id ?? null;
+    const selectedLinkMetadata = activeLink?.metadata ?? null;
+    const hasOperationalLink = links.length > 0;
+    const outcomeLinks = useMemo<DistributionLinkRow[]>(
+        () => links.map((l) => ({ id: l.id, is_active: l.is_active, created_at: l.created_at ?? "", metadata: l.metadata })),
+        [links]
+    );
+    const locationLinks = useMemo<FormPublicLinkRow[]>(
+        () =>
+            links.map((l) => ({
+                id: l.id,
+                is_active: l.is_active,
+                created_at: l.created_at ?? "",
+                metadata: l.metadata,
+                token_prefix: l.token_prefix,
+                pinned_form_definition_version_id: l.pinned_form_definition_version_id,
+            })),
+        [links]
+    );
+
+    const mutate = useCallback((fn: (s: FormSchemaV1) => FormSchemaV1) => {
+        setSchema((cur) => (cur ? fn(cur) : cur));
+        setDirty(true);
+        setBuilderErr(null);
+    }, []);
+
+    const fieldById = useMemo(() => {
+        const map = new Map<string, FormField>();
+        if (schema) for (const f of schema.fields) map.set(f.id, f);
+        return map;
+    }, [schema]);
+
+    // A group's line is selectable too, so the lookup walks into groups.
+    const selectedField = selectedFieldId && schema ? findFieldDeep(schema, selectedFieldId)?.field ?? null : null;
+    const selectedSection = selectedSectionId ? schema?.sections.find((s) => s.id === selectedSectionId) ?? null : null;
+
+    // Adding, arranging and removing questions and sections: the shared Forms Studio authoring, the
+    // same implementation a document-originated form uses. @see useFormStudioAuthoring
+    const authoring = useFormStudioAuthoring({
+        schema,
+        mutate,
+        editable,
+        fieldLibrary,
+        onSelectField: setSelectedFieldId,
+        onSelectSection: setSelectedSectionId,
+    });
+
+    const saveDraft = async () => {
+        if (!editVersionId || !schema) return;
+        setSaving(true);
+        setBuilderErr(null);
+        try {
+            await persistDraft(formId, editVersionId, schema, { branding, existingMeta: formMetaSnapshot, formName: schema.title });
+            setDirty(false);
+        } catch (e) {
+            setBuilderErr(e instanceof Error ? e.message : "Save failed");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const publish = async () => {
+        if (!editVersionId || !schema) return;
+        setPublishing(true);
+        setBuilderErr(null);
+        setPublishJustSucceeded(false);
+        try {
+            const patchedMeta = await publishForm(formId, editVersionId, schema, {
+                branding,
+                existingMeta: formMetaSnapshot,
+                formName: schema.title,
+                formKey: formMeta?.key ?? formId,
+            });
+            setFormMetaSnapshot(patchedMeta);
+            setDirty(false);
+            setHasPublishedVersion(true);
+            setPublishJustSucceeded(true);
+            const result = await loadFormSchema(formId);
+            if (result.schema) {
+                setSchema(result.schema);
+                setEditVersionId(result.editVersionId);
+                setBranding(parseFormBranding(result.formRow ?? formMeta));
+                setFormMetaSnapshot(result.formRow?.metadata ?? patchedMeta);
+            }
+            setHasPublishedVersion(true);
+            await loadForms({ force: true });
+            await reloadLinks();
+        } catch (e) {
+            setBuilderErr(e instanceof Error ? e.message : "Publish failed");
+        } finally {
+            setPublishing(false);
+        }
+    };
+
+    if (loadState === "loading") {
+        return (
+            <div className="flex flex-1 items-center justify-center">
+                <BosExecutionLoader variant="inline" title="Loading form" />
+            </div>
+        );
+    }
+    if (loadState === "error" || !schema) {
+        return <div className="flex flex-1 items-center justify-center text-[12px] text-alloy-midnight/60">Couldn&apos;t load this form.</div>;
+    }
+
+    // Live collapsed-state summaries for the six-section configuration rail.
+    const purposeIntent = resolveEffectiveOperationalIntent({
+        formMetadata: formMetaSnapshot,
+        linkMetadata: selectedLinkMetadata,
+        formKey: formMeta?.key ?? formId,
+    });
+    const purposeSummary =
+        (purposeIntent && OPERATIONAL_INTENT_CATALOG.find((t) => t.key === purposeIntent)?.label) || "Not set";
+    const lifecycleUsage = readFormLifecycleUsage(formMetaSnapshot);
+    const processSummary = lifecycleUsage
+        ? `${ENROLLMENT_PROCESS_DISPLAY_NAME} · ${LIFECYCLE_STAGE_LABELS[lifecycleUsage.stage_key] ?? lifecycleUsage.stage_key}`
+        : "Not set";
+    const distributionSummary = hasPublishedVersion
+        ? `Published · ${links.length} link${links.length === 1 ? "" : "s"}`
+        : "Draft — not published";
+    const queueFolderRaw = (formMetaSnapshot as Record<string, unknown> | null | undefined)?.admin_category;
+    // The folder's own name, as the organization saved it — never its id with underscores removed.
+    const queueFolderId = typeof queueFolderRaw === "string" ? queueFolderRaw.trim() : "";
+    const queueFolderSummary = queueFolderId
+        ? folders.find((f) => f.id === queueFolderId)?.label ?? "Folder"
+        : "Match by keyword";
+
+    return (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-alloy-stone" data-testid="processing-form-builder">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-alloy-midnight/[0.06] bg-white py-2.5 pl-4 pr-14" data-testid="surface-publish-toolbar">
+                <button type="button" onClick={onBack} className="text-[12px] text-alloy-midnight/50 hover:text-alloy-midnight">
+                    ← Forms
+                </button>
+                <span className="text-[14px] font-semibold text-alloy-midnight">{displayFormName}</span>
+                <span className="text-[10px] font-semibold text-alloy-midnight/55" data-surface-dirty={dirty ? "true" : "false"}>
+                    {hasPublishedVersion ? (
+                        <span className="text-alloy-bend-pine" data-testid="form-builder-published-badge">Published</span>
+                    ) : editVersionId ? (
+                        dirty ? "Draft · unsaved" : "Draft saved"
+                    ) : (
+                        "Published (read-only)"
+                    )}
+                </span>
+                <span className="flex-1" />
+                <div className="flex rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.08] p-0.5">
+                    {(["edit", "preview", "runtime"] as const).map((m) => (
+                        <button
+                            key={m}
+                            type="button"
+                            data-builder-mode-btn={m}
+                            onClick={() => setMode(m)}
+                            className={`rounded-md px-3 py-1 text-[11px] font-semibold ${
+                                mode === m ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/50"
+                            }`}
+                        >
+                            {m === "edit" ? "✎ Edit" : m === "preview" ? "▷ Preview" : "◎ Runtime"}
+                        </button>
+                    ))}
+                </div>
+                {editable ? (
+                    <>
+                        <button
+                            type="button"
+                            disabled={saving || !dirty}
+                            onClick={() => void saveDraft()}
+                            className="config-secondary-btn text-[11px] disabled:opacity-40"
+                            data-testid="form-builder-save-draft"
+                        >
+                            {saving ? "Saving…" : "Save draft"}
+                        </button>
+                        {!hasPublishedVersion ? (
+                            <button
+                                type="button"
+                                disabled={publishing}
+                                onClick={() => void publish()}
+                                className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                                data-testid="form-builder-publish"
+                            >
+                                {publishing ? "Publishing…" : "Publish"}
+                            </button>
+                        ) : null}
+                    </>
+                ) : null}
+            </div>
+
+            {hasPublishedVersion ? (
+                <ProcessingFormPublishedBar
+                    formId={formId}
+                    formKey={formMeta?.key ?? formId}
+                    formName={displayFormName}
+                    existingMeta={formMetaSnapshot}
+                    listPublicLinks={listPublicLinks}
+                    onManageDistribution={() => setInspectorSection("distribution")}
+                    onRepublish={editable ? () => void publish() : undefined}
+                    onBackToForms={onBack}
+                    republishBusy={publishing}
+                />
+            ) : null}
+
+            {mode === "preview" ? (
+                <div className="flex shrink-0 items-center gap-2 border-b border-alloy-midnight/[0.06] bg-alloy-midnight/[0.03] px-4 py-1.5 text-[11px] font-semibold text-alloy-midnight/55">
+                    Preview — what families complete
+                </div>
+            ) : mode === "runtime" ? (
+                <div className="flex shrink-0 items-center gap-2 border-b border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.05] px-4 py-1.5 text-[11px] font-semibold text-alloy-bend-pine">
+                    Runtime — published structure
+                </div>
+            ) : null}
+
+            {builderErr ? (
+                <div className="shrink-0 border-b border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2 text-[11px] text-alloy-midnight/60">{builderErr}</div>
+            ) : null}
+
+            <div className="flex min-h-0 flex-1">
+                <div className={`min-w-0 flex-[8] overflow-y-auto p-4 md:p-8 ${mode !== "edit" ? "bg-alloy-stone/[0.04]" : "bg-alloy-stone"}`}>
+                    {mode === "preview" || mode === "runtime" ? (
+                        <FormPreview schema={schema} branding={branding} runtime={mode === "runtime"} />
+                    ) : (
+                        <div className="mx-auto max-w-[960px] rounded-2xl bg-white px-8 py-8 shadow-[0_8px_40px_rgba(24,39,58,0.08)]">
+                            <ProcessingFormCanvas
+                                schema={schema}
+                                selectedFieldId={selectedFieldId}
+                                selectedSectionId={selectedSectionId}
+                                editable={editable}
+                                {...authoring.canvasProps}
+                                onSelectField={(id) => {
+                                    setSelectedFieldId(id);
+                                    setSelectedSectionId(null);
+                                }}
+                                onSelectSection={(id) => {
+                                    setSelectedSectionId(id);
+                                    setSelectedFieldId(null);
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {mode === "edit" ? (
+                    <aside
+                        className="flex min-w-[340px] max-w-[380px] flex-[2] shrink-0 flex-col overflow-y-auto border-l border-alloy-midnight/[0.06] bg-white px-4 py-2"
+                        data-surface-inspector="true"
+                    >
+                        <div>
+                        {selectedField || selectedSection ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSelectedFieldId(null);
+                                    setSelectedSectionId(null);
+                                }}
+                                className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40 hover:text-alloy-midnight"
+                                data-testid="processing-builder-inspector-header"
+                            >
+                                <span aria-hidden>←</span> {selectedField ? "Question" : "Section"} · Back to form
+                            </button>
+                        ) : (
+                            <p
+                                className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40"
+                                data-testid="processing-builder-inspector-header"
+                            >
+                                Form configuration
+                            </p>
+                        )}
+                        {selectedField ? (
+                            <ProcessingFormQuestionInspector
+                                field={selectedField}
+                                schema={schema}
+                                editable={editable}
+                                mutate={mutate}
+                                fieldLibrary={fieldLibrary}
+                                onRemove={() => authoring.removeQuestion(selectedField.id)}
+                                onDuplicate={() => authoring.duplicateQuestion(selectedField.id)}
+                                onSelectField={setSelectedFieldId}
+                                onOpenDistribution={() => {
+                                    setSelectedFieldId(null);
+                                    setInspectorSection("distribution");
+                                }}
+                            />
+                        ) : selectedSection ? (
+                            authoring.renderSectionInspector(selectedSection)
+                        ) : (
+                            <div data-surface-inspector-empty="true">
+                                {/* 1 — Form */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Form"
+                                    subtitle="Name and description"
+                                    summary={schema.title || "Untitled form"}
+                                    accent
+                                    open={inspectorSection === "form"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "form" : "")}
+                                    testId="form-builder-form-section"
+                                >
+                                    {editable ? (
+                                        <div className="space-y-3">
+                                            <label className="block">
+                                                <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Form name</span>
+                                                <input
+                                                    type="text"
+                                                    value={schema.title}
+                                                    onChange={(e) => {
+                                                        setSchema((cur) => (cur ? { ...cur, title: e.target.value } : cur));
+                                                        setDirty(true);
+                                                    }}
+                                                    className="w-full rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-[12px]"
+                                                    data-testid="form-builder-form-name"
+                                                />
+                                            </label>
+                                            <label className="block">
+                                                <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Submit button label</span>
+                                                <input
+                                                    type="text"
+                                                    value={schema.submit_label ?? ""}
+                                                    maxLength={FORM_SUBMIT_LABEL_MAX}
+                                                    placeholder="Submit"
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        // Cleared means the runtime's default wording — the key is removed, never saved empty.
+                                                        setSchema((cur) => {
+                                                            if (!cur) return cur;
+                                                            const next: FormSchemaV1 = { ...cur, submit_label: value };
+                                                            if (!value.trim()) delete next.submit_label;
+                                                            return next;
+                                                        });
+                                                        setDirty(true);
+                                                    }}
+                                                    className="w-full rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-[12px]"
+                                                    data-testid="form-builder-submit-label"
+                                                />
+                                            </label>
+                                            <label className="block">
+                                                <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Description</span>
+                                                <textarea
+                                                    value={branding.description}
+                                                    onChange={(e) => {
+                                                        setBranding((b) => ({ ...b, description: e.target.value }));
+                                                        setDirty(true);
+                                                    }}
+                                                    rows={2}
+                                                    className="w-full resize-none rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-[12px]"
+                                                    data-testid="form-builder-brand-description"
+                                                />
+                                            </label>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[12px] text-alloy-midnight/60">{schema.title || "Untitled form"}</p>
+                                    )}
+                                </ProcessingCollapsibleInspectorSection>
+
+                                {/* 2 — Purpose */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Purpose"
+                                    subtitle="What this form is used for"
+                                    summary={purposeSummary}
+                                    open={inspectorSection === "purpose"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "purpose" : "")}
+                                >
+                                    <FormOperationalIntentPicker
+                                        formId={formId}
+                                        formKey={formMeta?.key ?? formId}
+                                        formMetadata={formMetaSnapshot}
+                                        selectedLinkId={selectedLinkId}
+                                        selectedLinkMetadata={selectedLinkMetadata}
+                                        canMutate={editable || hasPublishedVersion}
+                                        hasOperationalLink={hasOperationalLink}
+                                        onFormMetadataUpdated={onFormMetadataUpdated}
+                                        onLinkMetadataSaved={onLinkMetadataSaved}
+                                    />
+                                </ProcessingCollapsibleInspectorSection>
+
+                                {/* 3 — Business Process */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Business Process"
+                                    subtitle="Which process and stage this form serves"
+                                    summary={processSummary}
+                                    open={inspectorSection === "process"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "process" : "")}
+                                >
+                                    <FormLifecycleUsagePanel
+                                        formId={formId}
+                                        formMetadata={formMetaSnapshot}
+                                        canMutate={editable || hasPublishedVersion}
+                                        hasSchema={Boolean(schema && schema.fields.length > 0)}
+                                        onFormMetadataUpdated={onFormMetadataUpdated}
+                                    />
+                                </ProcessingCollapsibleInspectorSection>
+
+                                {/* 3b — Queue folder: where submissions land in Work */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Queue folder"
+                                    subtitle="Where submissions land in the Work queue"
+                                    summary={queueFolderSummary}
+                                    open={inspectorSection === "queue_folder"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "queue_folder" : "")}
+                                    testId="form-builder-queue-folder-section"
+                                >
+                                    <FormQueueFolderPanel
+                                        formId={formId}
+                                        formMetadata={formMetaSnapshot}
+                                        canMutate={editable || hasPublishedVersion}
+                                        onFormMetadataUpdated={onFormMetadataUpdated}
+                                    />
+                                </ProcessingCollapsibleInspectorSection>
+
+                                {/* 4 — Distribution */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Distribution"
+                                    subtitle="Publish, share links, and routing"
+                                    summary={distributionSummary}
+                                    accent
+                                    open={inspectorSection === "distribution"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "distribution" : "")}
+                                    testId="form-builder-distribution-section"
+                                >
+                                    <div className="space-y-4">
+                                        <ProcessingFormDistributionPanel
+                                            bare
+                                            formId={formId}
+                                            formKey={formMeta?.key ?? formId}
+                                            formName={displayFormName}
+                                            hasPublishedVersion={hasPublishedVersion}
+                                            existingMeta={formMetaSnapshot}
+                                            canMutate={editable || hasPublishedVersion}
+                                            onBackToForms={onBack}
+                                            listPublicLinks={listPublicLinks}
+                                            mintProcessingPublicLink={mintProcessingPublicLink}
+                                            unpublishProcessingPublicLinks={unpublishProcessingPublicLinks}
+                                            onPublishRepublish={editable ? () => publish() : undefined}
+                                            publishBusy={publishing}
+                                            publishJustSucceeded={publishJustSucceeded}
+                                        />
+                                        <div className="border-t border-alloy-stone/10 pt-3">
+                                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                                Share by location
+                                            </p>
+                                            <FormLocationShareLinksPanel
+                                                formId={formId}
+                                                formName={displayFormName}
+                                                links={locationLinks}
+                                                hasPublished={hasPublishedVersion}
+                                                canMutate={editable || hasPublishedVersion}
+                                                onCopy={onCopy}
+                                                copied={copiedKey}
+                                                onCreateLocationLink={onCreateLocationLink}
+                                            />
+                                        </div>
+                                        <div className="border-t border-alloy-stone/10 pt-3">
+                                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                                Send to a record
+                                            </p>
+                                            <FormExistingRecordSendPanel
+                                                formId={formId}
+                                                formName={displayFormName}
+                                                canMutate={editable || hasPublishedVersion}
+                                            />
+                                        </div>
+                                    </div>
+                                </ProcessingCollapsibleInspectorSection>
+
+                                {/* 5 — Branding */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Branding"
+                                    subtitle="Logo, colors, parent-facing identity"
+                                    summary={branding.brand_name || "Default"}
+                                    open={inspectorSection === "branding"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "branding" : "")}
+                                    testId="form-builder-branding-card"
+                                >
+                                    <BrandingInspectorFields
+                                        branding={branding}
+                                        editable={editable}
+                                        onBrandingChange={(patch) => {
+                                            setBranding((b) => ({ ...b, ...patch }));
+                                            setDirty(true);
+                                        }}
+                                    />
+                                </ProcessingCollapsibleInspectorSection>
+
+                                {/* 6 — Advanced */}
+                                <ProcessingCollapsibleInspectorSection
+                                    title="Advanced"
+                                    subtitle="Intake behavior and routing details"
+                                    summary="Intake behavior, routing"
+                                    open={inspectorSection === "advanced"}
+                                    onOpenChange={(open) => setInspectorSection(open ? "advanced" : "")}
+                                >
+                                    <FormOutcomeConfigPanel
+                                        formId={formId}
+                                        formMetadata={formMetaSnapshot}
+                                        links={outcomeLinks}
+                                        formKey={formMeta?.key ?? formId}
+                                        documentGenerationConfigured={false}
+                                        canMutate={editable || hasPublishedVersion}
+                                        onLinkMetadataSaved={onLinkMetadataSaved}
+                                    />
+                                </ProcessingCollapsibleInspectorSection>
+                            </div>
+                        )}
+                        </div>
+                    </aside>
+                ) : null}
+            </div>
+
+            {authoring.overlays}
+        </div>
+    );
+}
+
+export function FormPreview({
+    schema,
+    branding,
+    runtime,
+}: {
+    schema: FormSchemaV1;
+    branding: ProcessingFormBranding;
+    runtime: boolean;
+}) {
+    const fieldById = useMemo(() => new Map(schema.fields.map((f) => [f.id, f])), [schema.fields]);
+    const accent = branding.accent_color || DEFAULT_FORM_ACCENT;
+    return (
+        <div className={`${RUNTIME_FORM_CONTAINER_CLASS} mx-auto max-w-2xl space-y-5`} data-testid="form-builder-preview">
+            <ProcessingFormBrandedHeader title={schema.title} branding={branding} runtime={runtime} />
+            <div className="rounded-2xl border border-alloy-stone/15 bg-white p-6 shadow-sm">
+            <div className="space-y-6">
+                {schema.sections.map((section) => {
+                    // The public runtime's own row composition and grid classes (FormEngineRenderer) —
+                    // not a second interpreter, so Preview cannot disagree with what families see.
+                    const sectionFields = section.field_ids
+                        .map((fid) => fieldById.get(fid))
+                        .filter((f): f is FormField => f != null);
+                    const rows = composeRuntimeRows(sectionFields);
+                    return (
+                        <section key={section.id}>
+                            <h3 className="text-[13px] font-bold text-alloy-midnight">{section.title}</h3>
+                            <div className="mt-3 space-y-4">
+                                {rows.map((row, rowIdx) => (
+                                    <div
+                                        key={`${section.id}-row-${rowIdx}`}
+                                        className={runtimeRowClass(row)}
+                                        data-testid={`form-preview-row-${section.id}-${rowIdx}`}
+                                        data-preview-row-cells={row.length}
+                                    >
+                                        {row.map((field) => (
+                                            <div
+                                                key={field.id}
+                                                className={row.length > 1 ? runtimeCellSpanClass(field) : undefined}
+                                                data-preview-field={field.id}
+                                            >
+                                                {field.type === "marketing_consent" ? (
+                                                    // The control families see — same component, same wording.
+                                                    <PreviewMarketingConsent field={field} />
+                                                ) : field.type === "text_block" ? (
+                                                    <div className="rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.05] px-4 py-3 text-[13px] leading-relaxed text-alloy-midnight/70">
+                                                        <PreviewTokenText value={field.content} />
+                                                    </div>
+                                                ) : (
+                                                    <label className="block text-[12px] font-semibold">
+                                                        {field.label}
+                                                        {field.required ? <span className="text-red-600"> *</span> : null}
+                                                    </label>
+                                                )}
+                                                {field.type === "signature" ? (
+                                                    <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-alloy-stone/30 text-[11px] text-alloy-midnight/40">
+                                                        Sign here
+                                                    </div>
+                                                ) : field.type !== "text_block" && field.type !== "marketing_consent" ? (
+                                                    <input type="text" className="mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm" placeholder="" readOnly aria-label={field.label} />
+                                                ) : null}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    );
+                })}
+            </div>
+            {/* Mirrors the public runtime: same label, same contrast-chosen text, full width on mobile only. */}
+            <button
+                type="button"
+                className="mt-8 w-full rounded-lg px-8 py-3 text-[13px] font-semibold sm:w-auto sm:min-w-[10rem]"
+                style={{ backgroundColor: participantButtonColors(accent).fill, color: participantButtonColors(accent).ink }}
+                data-testid="form-builder-preview-submit"
+            >
+                {formSubmitLabel(schema) ?? "Submit"}
+            </button>
+            </div>
+        </div>
+    );
+}
+
+/** Preview's consent boxes: clickable, unchecked to start, and never sent anywhere. */
+function PreviewMarketingConsent({ field }: { field: FormField & { type: "marketing_consent" } }) {
+    const [value, setValue] = useState<IntakeMarketingConsentChoice>({ email: false, sms: false });
+    return (
+        <MarketingConsentControl
+            className=""
+            language={resolveMarketingConsentLanguage(field)}
+            value={value}
+            onChange={setValue}
+            disabled={false}
+        />
+    );
+}
+
+function PreviewTokenText({ value }: { value: string }) {
+    const parts = (value || "Authorization language").split(/(\{[^}]+\})/g).filter(Boolean);
+    return (
+        <>
+            {parts.map((part, idx) =>
+                part.startsWith("{") && part.endsWith("}") ? (
+                    <span
+                        key={`${part}-${idx}`}
+                        className="mx-1 inline-flex rounded-full border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.08] px-2 py-0.5 text-[11px] font-semibold text-alloy-bend-pine"
+                    >
+                        {part.slice(1, -1)}
+                    </span>
+                ) : (
+                    <span key={`${part}-${idx}`}>{part}</span>
+                )
+            )}
+        </>
+    );
+}
+
+function BrandingInspectorFields({
+    branding,
+    editable,
+    onBrandingChange,
+}: {
+    branding: ProcessingFormBranding;
+    editable: boolean;
+    onBrandingChange: (patch: Partial<ProcessingFormBranding>) => void;
+}) {
+    if (!editable) {
+        return <p className="text-[12px] text-alloy-midnight/60">{branding.brand_name || "No brand name set"}</p>;
+    }
+    // Legacy forms (no brand_source) behave as before: their own values, except the builder's old
+    // auto-saved default accent, which falls through to the school's brand (lib/branding/publicBrand.ts).
+    const inherit = branding.brand_source === "inherit";
+    return (
+        <div className="space-y-3">
+            <fieldset className="space-y-1 text-[12px] text-alloy-midnight" data-testid="form-builder-brand-source">
+                <legend className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Branding on the public form</legend>
+                <label className="flex items-center gap-2">
+                    <input type="radio" name="brand-source" checked={inherit} onChange={() => onBrandingChange({ brand_source: "inherit" })} />
+                    Use the school&apos;s branding (location, then organization)
+                </label>
+                <label className="flex items-center gap-2">
+                    <input type="radio" name="brand-source" checked={!inherit} onChange={() => onBrandingChange({ brand_source: "form" })} />
+                    Customize for this form
+                </label>
+                <p className="text-[11px] text-alloy-midnight/50">Branding changes reach families when you publish.</p>
+            </fieldset>
+            {inherit ? null : <>
+            <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">School / brand name</span>
+                <input
+                    type="text"
+                    value={branding.brand_name}
+                    onChange={(e) => onBrandingChange({ brand_name: e.target.value })}
+                    className="w-full rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-[12px]"
+                    data-testid="form-builder-brand-name"
+                />
+            </label>
+            <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Accent color</span>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={branding.accent_color || DEFAULT_FORM_ACCENT}
+                        onChange={(e) => onBrandingChange({ accent_color: e.target.value })}
+                        className="h-9 w-10 cursor-pointer rounded border border-alloy-stone/20 p-0.5"
+                        data-testid="form-builder-accent-color"
+                    />
+                    <span className="font-mono text-[11px] uppercase text-alloy-midnight/50">
+                        {branding.accent_color || DEFAULT_FORM_ACCENT}
+                    </span>
+                </div>
+            </label>
+            <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Logo URL or placeholder</span>
+                <input
+                    type="text"
+                    value={branding.logo_url ?? ""}
+                    onChange={(e) => onBrandingChange({ logo_url: e.target.value.trim() || null })}
+                    placeholder="https://… or leave blank for initials"
+                    className="w-full rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-[12px]"
+                    data-testid="form-builder-logo-url"
+                />
+            </label>
+            </>}
+        </div>
+    );
+}

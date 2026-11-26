@@ -6,6 +6,24 @@ export type OpportunityDrawerQueuePreviewSeed = {
     title: string;
     subtitle?: string | null;
     statusLabel?: string | null;
+    /**
+     * Family opportunity id for Settlement when Attention is a child/candidate row.
+     * From queue `drawer_open.entity_id` — never the process_instance Attention id.
+     */
+    familyOpportunityId?: string | null;
+    /**
+     * The subject image the SELECTED ROW already rendered — presentation identity, on the click clock.
+     *
+     * Not a new authority: it is read with the same rule `CondensedQueueRow` uses (focused primary when
+     * Subject Focus is set, else the row subject), from the same queue-row presentation source. It exists
+     * because the header avatar had NO click-clocked owner at all, so it could only follow the held
+     * payload — and the previous child's face stayed under the new selection for ~5.8 s (P0-7.2).
+     *
+     * Display only. No business truth is promoted from a preview by carrying it.
+     */
+    subjectImageUrl?: string | null;
+    /** Authoritative status key echo for chip tone — display-only, from queue row context. */
+    statusKey?: string | null;
     stageLabel?: string | null;
     /** Site / room / program context from queue CRM compact slots. */
     locationLabel?: string | null;
@@ -21,6 +39,8 @@ export type OpportunityDrawerQueuePreviewSeed = {
     /** Card 9 — child/candidate grain context from queue row (drawer/action follow-up). */
     rowGrain?: "case" | "child" | "candidate";
     placementCandidateId?: string;
+    /** Child subject = customer_members.id (process_instances.subject_id) — targets movement directly. */
+    customerMemberId?: string;
     opportunityCustomerMemberId?: string;
     childLifecycleStatus?: string | null;
     /** Card 11 — read-only child lifecycle rollup headline while entity GET loads. */
@@ -79,6 +99,7 @@ export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): Op
         operTrustUrgency,
         rowGrain: grainCtx.rowGrain,
         placementCandidateId: grainCtx.placementCandidateId,
+        customerMemberId: grainCtx.customerMemberId,
         opportunityCustomerMemberId: grainCtx.opportunityCustomerMemberId,
         childLifecycleStatus: grainCtx.childLifecycleStatus,
         childLifecycleSummaryHeadline: item.semanticCrmCompact?.childLifecycleSummary ?? null,

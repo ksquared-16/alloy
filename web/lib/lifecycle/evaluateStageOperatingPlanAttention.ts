@@ -5,6 +5,10 @@
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import { completionPolicyForWorkTemplate } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { normalizeAttentionRuleKind } from "@/lib/lifecycle/stageAttentionRuleCatalog";
+import {
+    attentionThresholdDurationToMs,
+    normalizeAttentionThresholdDuration,
+} from "@/lib/lifecycle/stageAttentionThresholdDuration";
 import type {
     StageAttentionRuleV1,
     StageAttentionSeverity,
@@ -72,6 +76,7 @@ function normalizeEvalKind(kind: StageAttentionRuleV1["kind"]): StageAttentionEv
         case "days_without_success":
             return "stage_age_exceeded";
         case "missing_required_fields":
+        case "missing_requirements":
             return "missing_required_fields";
         case "no_contact_attempt":
         case "tasks_without_success":
@@ -121,8 +126,9 @@ function evaluateWorkOverdue(
     input: StageAttentionEvaluationInput,
 ): boolean {
     const templateKey = trimOrNull(rule.template_key);
-    const thresholdDays = finiteDays(rule.threshold, 1);
-    const thresholdMs = thresholdDays * MS_PER_DAY;
+    const thresholdMs = attentionThresholdDurationToMs(
+        normalizeAttentionThresholdDuration(rule, 1),
+    );
     const matching = openTasksForRule(input.tasks, templateKey, input.builderStageKey);
     for (const task of matching) {
         if (!task.due_at) continue;
@@ -134,8 +140,9 @@ function evaluateWorkOverdue(
 }
 
 function evaluateStageAge(rule: StageAttentionRuleV1, input: StageAttentionEvaluationInput): boolean {
-    const thresholdDays = finiteDays(rule.threshold, 7);
-    const thresholdMs = thresholdDays * MS_PER_DAY;
+    const thresholdMs = attentionThresholdDurationToMs(
+        normalizeAttentionThresholdDuration(rule, 7),
+    );
     return input.nowMs - input.stageEnteredMs >= thresholdMs;
 }
 

@@ -6,12 +6,26 @@ import { requireAnalyticsV2AdminMutate } from "@/lib/metrics/platform/adminApiHe
 import { loadMetricDefinitionById } from "@/lib/metrics/platform/placementResolver";
 import { evaluateAndSnapshotMetric } from "@/lib/metrics/platform/metricSnapshots";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { snapshotReadableForScope } from "@/lib/metrics/metricScopeGuard";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext) {
+    /*
+     * ANALYTICS TRUTH — materialises a metric snapshot into metric_platform_snapshots.
+     *
+     * This was reachable through ORG CONTEXT ALONE: no capability, no role, only portal
+     * admission. `reports.write` is the established owner of this family — the promoted
+     * Operational Intelligence model already declares its sibling routes under it — so no
+     * vocabulary is invented here.
+     */
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const gate = await requireAnalyticsV2AdminMutate();
     if (!gate.ok) return gate.response;
 
@@ -31,5 +45,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (result.error) return apiError("INTERNAL", result.error, 500, undefined, { request });
 
-    return apiOk({ evaluation: result.evaluation, snapshot_id: result.snapshotId }, { request });
+    /*
+     * WS0-A — the snapshot is materialised canonically (unrestricted), which is right for what is
+     * STORED. What is RETURNED is a read: authority to materialise (`reports.write`) is not
+     * authority to see the org figure, so a restricted operator gets the snapshot id and not the
+     * value.
+     */
+    const evaluationVisible = snapshotReadableForScope(scopeDimensionsFromAccess(access), "org", null);
+    return apiOk(
+        evaluationVisible
+            ? { evaluation: result.evaluation, snapshot_id: result.snapshotId }
+            : { evaluation: null, evaluation_withheld: "snapshot_scope_wider_than_caller", snapshot_id: result.snapshotId },
+        { request }
+    );
 }

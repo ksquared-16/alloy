@@ -126,19 +126,6 @@ describe("person layout + completion reconciliation", () => {
             expect(completionBlocksSave(r)).toBe(false);
         });
 
-        it("PersonDrawerOperatingSections passes layout variant to summary BOS panels", () => {
-            const operating = readFileSync(
-                join(process.cwd(), "components/admin/entity/PersonDrawerOperatingSections.tsx"),
-                "utf8"
-            );
-            const parentBos = readFileSync(
-                join(process.cwd(), "components/admin/entity/PersonDrawerParentSummaryBosPanel.tsx"),
-                "utf8"
-            );
-            expect(operating).toContain("layoutVariantKey={variant.variant_key}");
-            expect(parentBos).toContain("data-person-drawer-completion-layout-variant");
-            expect(parentBos).toContain("evaluatePersonDrawerCompletionPreview");
-        });
     });
 
     describe("client/server agreement shape", () => {
@@ -221,13 +208,13 @@ describe("person layout + completion reconciliation", () => {
                             id: "c1",
                             first_name: "Kid",
                             last_name: "One",
-                            desired_program_type: "infant",
-                            desired_start_date: "",
+                            program_category_id: "cat-infant",
+                            start_date: "",
                         },
                     ],
                 },
             });
-            expect(r.blocking.some((v) => v.field_key === "desired_start_date")).toBe(true);
+            expect(r.blocking.some((v) => v.field_key === "start_date")).toBe(true);
         });
     });
 });

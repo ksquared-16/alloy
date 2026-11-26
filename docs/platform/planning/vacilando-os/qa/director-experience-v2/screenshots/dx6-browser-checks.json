@@ -1,0 +1,25 @@
+{
+  "controlPlane": "http://127.0.0.1:3026",
+  "liveMissionId": "msn_f74ed02c126c88d7ff",
+  "capturedAt": "2026-08-05T16:09:43.516Z",
+  "checks": {
+    "hasSection": true,
+    "total": 6,
+    "open": 1,
+    "hasAccepted": true,
+    "hasRejected": true,
+    "hasOpenRevision": true,
+    "types": [
+      "decision",
+      "implementation_guidance",
+      "feedback",
+      "revision_request",
+      "approval_note"
+    ]
+  },
+  "shots": [
+    "dx6-live-collaboration.png",
+    "dx6-live-feedback-composer.png",
+    "dx6-live-l1.png"
+  ]
+}

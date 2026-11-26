@@ -6,6 +6,7 @@ import {
     RECORD_OVERVIEW_LAYOUT_V1_SURFACE,
     normalizeRecordOverviewEntityTypeParam,
 } from "@/lib/rrs/overview/recordOverviewLayoutScope";
+import { LAYOUTS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 type PutBody = {
     entity_type?: unknown;
@@ -20,9 +21,8 @@ type PutBody = {
 export async function PUT(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     let body: PutBody;
     try {

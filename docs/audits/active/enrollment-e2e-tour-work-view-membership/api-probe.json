@@ -1,0 +1,35 @@
+{
+  "lifecycle_wu_lead": {
+    "meta": {
+      "id": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+      "name": "New Leads"
+    },
+    "probe": {
+      "url": "http://127.0.0.1:3015/api/admin/work-units/587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37/queues",
+      "status": 200,
+      "body": "{\"queues\":[{\"key\":\"lifecycle_lead\",\"label\":\"Lead\",\"entity_type\":\"opportunity\",\"priority\":\"standard\",\"display\":\"list\",\"count\":0,\"preview\":[],\"grain\":\"case\"}],\"work_unit_scope_total\":0,\"work_unit_scope_queue_key\":\"lifecycle_lead\",\"viewer_timezone\":{\"iana\":\"America/Los_Angeles\",\"source\":\"org_metadata\"},\"lifecycle_queue_debug\":{\"lifecycle_visibility_scope_applied\":true,\"scope_mode\":\"lifecycle_visibility\",\"filter_equivalent\":{\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"scope_mode\":\"lifecycle_vis"
+    }
+  },
+  "lifecycle_wu_waitlist": {
+    "meta": {
+      "id": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+      "name": "Waitlist"
+    },
+    "probe": {
+      "url": "http://127.0.0.1:3015/api/admin/work-units/99bc2a38-6d47-4abc-8ec6-88d7f31dd59b/queues",
+      "status": 200,
+      "body": "{\"queues\":[{\"key\":\"lifecycle_waitlist\",\"label\":\"Waitlist\",\"entity_type\":\"opportunity\",\"priority\":\"standard\",\"display\":\"list\",\"count\":0,\"preview\":[],\"grain\":\"candidate\",\"domain\":\"waitlist\"}],\"work_unit_scope_total\":0,\"work_unit_scope_queue_key\":\"lifecycle_waitlist\",\"viewer_timezone\":{\"iana\":\"America/Los_Angeles\",\"source\":\"org_metadata\"},\"lifecycle_queue_debug\":{\"lifecycle_visibility_scope_applied\":true,\"scope_mode\":\"lifecycle_visibility\",\"filter_equivalent\":{\"org_id\":\"93667019-bd28-49b5-a688-acc9"
+    }
+  },
+  "lifecycle_wu_tour": {
+    "meta": {
+      "id": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+      "name": "Tours"
+    },
+    "probe": {
+      "url": "http://127.0.0.1:3015/api/admin/work-units/5c0d15fc-6545-411c-9a73-8df3df772f62/queues",
+      "status": 200,
+      "body": "{\"queues\":[{\"key\":\"lifecycle_tour\",\"label\":\"Tours\",\"entity_type\":\"opportunity\",\"priority\":\"standard\",\"display\":\"list\",\"count\":1,\"preview\":[{\"id\":\"d097e1a8-c3c0-4c51-a113-2275b009b9a9\",\"name\":\"Kurzman Family\",\"title\":\"Kurzman Family\",\"status_key\":\"new\",\"stage_key\":\"tour\",\"stage_entered_at\":\"2026-08-13T17:58:56.295+00:00\",\"customer_id\":\"0658832a-48d6-4b80-beae-0b12d573fdf2\",\"primary_person_id\":\"e5df3f17-d0ba-475a-bb37-73a8f1f899a0\",\"primary_contact_id\":null,\"work_unit_id\":\"587de5bc-c43d-47b1-b1a0-"
+    }
+  }
+}

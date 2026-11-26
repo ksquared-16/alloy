@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formsReadScope, namedSubject } from "@/lib/forms/formSubmissionScope";
+import { formsDestinationInActorScope } from "@/lib/forms/formsDestinationScope";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 import {
     dbGetFormDefinition,
@@ -14,18 +17,25 @@ import { mintPacketPublicLinkForAdmin } from "@/lib/forms/packets/mintPacketPubl
 import { buildPacketComposerItems, type ComposerAnchor } from "@/lib/pos/packet/packetComposerPlan";
 import { buildFamilyPacketInstancePlan } from "@/lib/pos/packet/familyPacketPlan";
 import { resolveAnchorContext } from "@/lib/pos/packet/posPacketRoster";
+import { parseRequirementResponsibilityRules, REQUIREMENT_RESPONSIBILITIES_KEY } from "@/lib/pos/packet/requirementResponsibility";
 import { isLaunchEntityType, type LaunchEntityType } from "@/lib/pos/packet/launchFromEntity";
 import { randomUUID } from "crypto";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 
 export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    if (!host?.trim()) return null;
-    const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
-    return `${proto}://${host.trim()}`;
+/**
+ * The origin these packet links are built on.
+ *
+ * Read from the ONE canonical public-origin authority, never from the request: these links
+ * are delivered to recipients, so a caller-supplied `Host` / `X-Forwarded-Host` header must
+ * not be able to decide where they point.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 /** Ensure a form has a published version; publish its latest draft if none. */
@@ -74,7 +84,8 @@ interface ShareResult {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {
@@ -90,6 +101,13 @@ export async function POST(request: NextRequest) {
         if (!UUID_RE.test(it.form_definition_id)) return jsonError(`Invalid form_definition_id: ${it.form_definition_id}`, 400);
     }
 
+    // Requirement-responsibility rules (operator-configured), validated + kept only for the selected
+    // forms. Stored on the packet definition metadata; the projection seam reads them back.
+    const selectedFormIdSet = new Set(itemsPlan.items.map((i) => i.form_definition_id));
+    const responsibilityRules = parseRequirementResponsibilityRules({
+        [REQUIREMENT_RESPONSIBILITIES_KEY]: Array.isArray(body.requirement_responsibilities) ? body.requirement_responsibilities : [],
+    }).filter((r) => selectedFormIdSet.has(r.ref.form_definition_id));
+
     const childIds = Array.isArray(body.child_ids) ? body.child_ids.filter((x): x is string => typeof x === "string" && UUID_RE.test(x)) : [];
     const recipientIds = Array.isArray(body.recipient_ids) ? body.recipient_ids.filter((x): x is string => typeof x === "string" && UUID_RE.test(x)) : [];
 
@@ -104,6 +122,17 @@ export async function POST(request: NextRequest) {
         const id = typeof a.entity_id === "string" ? a.entity_id : "";
         if (!isLaunchEntityType(t) || !UUID_RE.test(id)) return jsonError("anchor.entity_type/entity_id invalid", 400);
         const resolved = await resolveAnchorContext(supabase, ctx.orgId, t, id);
+        // R2: packets are composed only for an anchor inside the caller's department/site scope (its opportunity when known),
+        // and only for children and recipients of that anchor's own household roster — every one of them, not just the anchor.
+        const anchorSubject = resolved.opportunity_id ? { opportunity_id: resolved.opportunity_id } : namedSubject(t, id);
+        if (!anchorSubject) return jsonError("Not found", 404);
+        const destinationOk = await formsDestinationInActorScope(supabase, ctx.orgId, await formsReadScope(), {
+            subjects: [anchorSubject],
+            childIds,
+            recipientIds,
+            rosterOpportunityId: resolved.opportunity_id,
+        });
+        if (!destinationOk) return jsonError("Not found", 404);
         anchor = { entity_type: t, entity_id: id, opportunity_id: resolved.opportunity_id, customer_id: resolved.customer_id };
     } else {
         if (childIds.length > 0 || recipientIds.length > 0) return jsonError("anchor is required when selecting children/recipients", 400);
@@ -133,7 +162,15 @@ export async function POST(request: NextRequest) {
                 name: baseName,
                 description,
                 is_active: true,
-                metadata: { created_via: "pos_packet_compose", form_count: itemsPlan.items.length },
+                // pos_connected marks this packet so completing it opens a Processing Case (the
+                // packet→Processing on-ramp gates on isPosConnectedSurface). Composer packets must
+                // reach Processing; without this marker the journey dead-ends at completion.
+                metadata: {
+                    created_via: "pos_packet_compose",
+                    form_count: itemsPlan.items.length,
+                    pos_connected: true,
+                    [REQUIREMENT_RESPONSIBILITIES_KEY]: responsibilityRules,
+                },
             })
             .select("id")
             .single();
@@ -186,7 +223,7 @@ export async function POST(request: NextRequest) {
         ? fam.recipient_access.map((a) => ({ recipient_person_id: a.recipient_person_id as string | null }))
         : [{ recipient_person_id: null }];
 
-    const embedBaseUrl = deriveEmbedBaseUrl(request);
+    const embedBaseUrl = deriveEmbedBaseUrl();
     const shares: ShareResult[] = [];
 
     for (const access of accesses) {

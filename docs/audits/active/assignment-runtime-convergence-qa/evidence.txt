@@ -1,0 +1,26 @@
+URL_AFTER_LOGIN=http://127.0.0.1:3015/workspace
+MODAL_OPEN_MS=172
+RUNTIME coreReady=false shellMs=0 coreMs=null
+SHOT 01-workspace-overview
+EXPAND_CONTROL=1
+EXPANDED=3 BOS=2
+SHOT 02-workspace-expanded
+RUNTIME_AFTER_WAIT coreReady=true coreMs=4337
+CATEGORIES_TAB_MS=472 cards=8
+CATEGORIES_RAW_KEYS=0
+SHOT 03-categories
+PATTERNS_TAB_MS=25 patterns=6
+SHOT 04-patterns
+ROOM_BOARD rooms=0 cells=0 proposed=0 toggles=0
+SHOT 05-room-board
+ROSTER subjects=1 proposed=0 avatars=1
+SHOT 08-operational-roster
+LOCATIONS_SAVE visible=0 disabled=n/a sticky=0
+SHOT 09-locations-pattern
+AVATAR_CONTROLS=0 editForm=0 photosAttr=null
+SHOT 10-children-edit-avatar
+PASS2_FAIL locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('[data-assignment-roster-view="rooms"]').first()
+
+SHOT 99-pass2-fail

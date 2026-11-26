@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { fetchOpportunityForTourAdmin, assertBookingLocationMatchesOpportunity } from "@/lib/tours/admin/opportunityTourContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { TOURS_CONFIGURE, requireToursCapability } from "@/lib/access/toursAuthority";
 
 type RuleInsert = {
     location_id?: string | null;
@@ -31,8 +33,9 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     let q = supabase.from("tour_availability_rules").select("*").eq("org_id", ctx.orgId).order("created_at", { ascending: true });
-    // Include org-wide rules (null location_id) alongside site-specific rules — matches slot computation.
-    if (locationId) q = q.or(`location_id.eq.${locationId},location_id.is.null`);
+    // The location's own rules — the same set slot computation uses (legacy organization-wide rules
+    // no longer offer times at a location). Without location_id, every rule of the org (unchanged).
+    if (locationId) q = q.eq("location_id", locationId);
     const { data, error } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ rules: data ?? [] });
@@ -40,8 +43,17 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/admin/tours/availability-rules */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    /*
+     * TOURS CONFIGURATION — creates a tour availability rule.
+     *
+     * `requireAdminOrOps()` stood here, and despite its name it resolves PORTAL
+     * ADMISSION and no role: every principal who could enter the portal could do this.
+     * `tours.configure` is the authority now, held by grant and by nothing else.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireToursCapability(access, TOURS_CONFIGURE);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 

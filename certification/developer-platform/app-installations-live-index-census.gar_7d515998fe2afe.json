@@ -1,0 +1,86 @@
+{
+  "trusted_host_action_id": "tha_d5319e780560db",
+  "query_hash": "1b85c8ef65f0ab5d84b828f5461cedc93e9438d55aafa594373ae8a8388ca507",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-09T01:24:19.996Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d5319e780560db",
+    "query_hash": "1b85c8ef65f0ab5d84b828f5461cedc93e9438d55aafa594373ae8a8388ca507",
+    "authorization_id": "grnt_94efd72d87d1470a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-09T01:24:25.236Z",
+    "question_ids": [
+      "ri_app_org_live_present",
+      "ri_producer_key_live_present",
+      "ri_full_indexes_dropped",
+      "ri_ledger_has_20261221100000",
+      "ri_indexes"
+    ],
+    "questions": {
+      "ri_app_org_live_present": {
+        "question_id": "ri_app_org_live_present",
+        "row_count": null,
+        "rows": [
+          "pg_indexes ~ uq_app_installations_app_org_live_partial_unique ~ present ~ true"
+        ]
+      },
+      "ri_producer_key_live_present": {
+        "question_id": "ri_producer_key_live_present",
+        "row_count": null,
+        "rows": [
+          "pg_indexes ~ uq_app_installations_producer_key_live_partial_unique ~ present ~ true"
+        ]
+      },
+      "ri_full_indexes_dropped": {
+        "question_id": "ri_full_indexes_dropped",
+        "row_count": null,
+        "rows": [
+          "pg_indexes ~ uq_app_installations_app_org_and_producer_key_full ~ absent ~ true"
+        ]
+      },
+      "ri_ledger_has_20261221100000": {
+        "question_id": "ri_ledger_has_20261221100000",
+        "row_count": null,
+        "rows": [
+          "schema_migrations ~ 20261221100000 ~ present ~ true"
+        ]
+      },
+      "ri_indexes": {
+        "question_id": "ri_indexes",
+        "row_count": null,
+        "rows": [
+          [
+            {
+              "name": "app_installations_pkey",
+              "unique": true,
+              "def": "CREATE UNIQUE INDEX app_installations_pkey ON public.app_installations USING btree (id)"
+            },
+            {
+              "name": "idx_app_installations_org_active",
+              "unique": false,
+              "def": "CREATE INDEX idx_app_installations_org_active ON public.app_installations USING btree (org_id) WHERE (status = 'active'::text)"
+            },
+            {
+              "name": "uq_app_installations_app_org_live",
+              "unique": true,
+              "def": "CREATE UNIQUE INDEX uq_app_installations_app_org_live ON public.app_installations USING btree (application_id, org_id) WHERE (status <> 'revoked'::text)"
+            },
+            {
+              "name": "uq_app_installations_producer_key_live",
+              "unique": true,
+              "def": "CREATE UNIQUE INDEX uq_app_installations_producer_key_live ON public.app_installations USING btree (org_id, producer_key) WHERE (status <> 'revoked'::text)"
+            }
+          ]
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

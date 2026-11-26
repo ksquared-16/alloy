@@ -5,13 +5,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { instantiateWorkFromDefinition } from "@/lib/admin/operationalWork/instantiateWorkFromDefinition";
 import { buildBusinessProcessWorkTaskMetadata } from "@/lib/lifecycle/buildBusinessProcessWorkTaskMetadata";
-import { buildBusinessProcessWorkRuntimeFingerprint, findOpenBusinessProcessWorkTask } from "@/lib/lifecycle/buildBusinessProcessWorkRuntimeFingerprint";
+import {
+    buildBusinessProcessWorkRuntimeFingerprint,
+    findOpenBusinessProcessWorkBySemanticIdentity,
+} from "@/lib/lifecycle/buildBusinessProcessWorkRuntimeFingerprint";
 import {
     buildLifecycleIntentIdempotencyKey,
     buildLifecycleIntentSubjectFingerprint,
 } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { resolveEffectiveWorkDefinitionKeyFromTemplate } from "@/lib/lifecycle/resolveWorkDefinitionKeyFromTemplate";
 import type { StageWorkDuePolicy, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    effectiveFollowUpDuePolicy,
+    resolveFollowUpWorkDueAt,
+    type StageFollowUpWorkDuePolicyV1,
+} from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+import { stageWorkChildMetadata, type StageWorkChildSubject } from "@/lib/lifecycle/stageWorkChildSubject";
+import {
+    RECORD_TOUR_OUTCOME_WORK_DEFINITION_KEY,
+    readActiveTourBooking,
+} from "@/lib/lifecycle/scheduledTourOutcomeInvariant";
 
 export type InstantiateStageWorkFromTemplateResult =
     | { status: "created"; work_id: string }
@@ -46,6 +59,15 @@ export async function instantiateStageWorkFromTemplate(params: {
     template: Pick<StageWorkTemplateV1, "template_key" | "label" | "work_definition_key" | "due_policy">;
     departmentMetadata?: Record<string, unknown> | null;
     dueDaysOverride?: number | null;
+    followUpDuePolicy?: StageFollowUpWorkDuePolicyV1 | null;
+    scheduledEventStartAt?: string | null;
+    stageEnteredAt?: string | null;
+    fieldValueAt?: string | null;
+    /**
+     * The child this work belongs to, when it is created for a child at a child stage. Each sibling
+     * then gets their own item; omitted for family work, whose identity is unchanged.
+     */
+    childSubject?: StageWorkChildSubject | null;
     now?: Date;
 }): Promise<InstantiateStageWorkFromTemplateResult> {
     const templateKey = params.template.template_key.trim();
@@ -67,39 +89,66 @@ export async function instantiateStageWorkFromTemplate(params: {
         };
     }
 
+    const workDefinitionKey = resolvedDefinition.work_definition_key;
+    const subjectChildId = params.childSubject?.customerMemberId?.trim() || null;
     const bpRuntimeFingerprint = buildBusinessProcessWorkRuntimeFingerprint({
         orgId,
         entityType: "opportunities",
         entityId: opportunityId,
-        stageKey,
+        workDefinitionKey,
         templateKey,
+        subjectChildId,
     });
 
-    const existingBpTask = await findOpenBusinessProcessWorkTask({
+    const existingBpTask = await findOpenBusinessProcessWorkBySemanticIdentity({
         supabase: params.supabase,
         orgId,
-        fingerprint: bpRuntimeFingerprint,
+        entityType: "opportunities",
+        entityId: opportunityId,
+        workDefinitionKey,
+        templateKey,
+        subjectChildId,
     });
     if (existingBpTask?.id) {
         return { status: "deduped", work_id: existingBpTask.id, reason: "bp_runtime_fingerprint" };
     }
-
-    const workDefinitionKey = resolvedDefinition.work_definition_key;
     const now = params.now ?? new Date();
     const idempotencyKey = buildLifecycleIntentIdempotencyKey({
         orgId,
         opportunityId,
         stageKey,
         workIntentKey: templateKey,
+        subjectChildId,
     });
     const subjectFingerprint = buildLifecycleIntentSubjectFingerprint({
         orgId,
         opportunityId,
         stageKey,
+        subjectChildId,
     });
-    const dueAtOverride =
-        dueAtFromTargetDays(params.dueDaysOverride, now) ??
-        dueAtIsoFromPolicy(params.template.due_policy, now);
+
+    let dueAtOverride: string | undefined;
+    const followUpPolicy = params.followUpDuePolicy
+        ? effectiveFollowUpDuePolicy(params.followUpDuePolicy, params.dueDaysOverride)
+        : null;
+    if (followUpPolicy) {
+        const resolved = resolveFollowUpWorkDueAt({
+            policy: followUpPolicy,
+            legacyDueDays: params.dueDaysOverride,
+            outcomeRecordedAt: now,
+            scheduledEventStartAt: params.scheduledEventStartAt,
+            stageEnteredAt: params.stageEnteredAt,
+            fieldValueAt: params.fieldValueAt,
+        });
+        if (!resolved.ok) {
+            return { status: "rejected", error: resolved.reason };
+        }
+        dueAtOverride = resolved.dueAt ?? undefined;
+    } else {
+        dueAtOverride =
+            dueAtFromTargetDays(params.dueDaysOverride, now)
+            ?? dueAtIsoFromPolicy(params.template.due_policy, await tourOutcomeDueAnchor(params, workDefinitionKey, now));
+    }
 
     const result = await instantiateWorkFromDefinition({
         supabase: params.supabase,
@@ -120,6 +169,7 @@ export async function instantiateStageWorkFromTemplate(params: {
             departmentId: params.departmentId,
             attemptCount: 0,
             bpRuntimeFingerprint,
+            extra: { work_definition_key: workDefinitionKey, ...stageWorkChildMetadata(params.childSubject) },
         }),
         resolveParams: {
             departmentMetadata: params.departmentMetadata ?? null,
@@ -138,4 +188,28 @@ export async function instantiateStageWorkFromTemplate(params: {
         status: "rejected",
         error: result.status === "rejected" ? (result.message ?? result.reason) : "instantiate_failed",
     };
+}
+
+/**
+ * RECORDING A TOUR'S OUTCOME IS DUE AFTER THE TOUR, NOT AFTER THE BOOKING.
+ *
+ * The template's due policy was counted from the moment the work was created — which, for Tour work,
+ * is when the tour was booked. A tour booked for next week therefore made "record the outcome" overdue
+ * days before the family had visited. The policy is unchanged (same day / N days); only its anchor
+ * moves, to the scheduled end of the family's active tour, read from the booking itself. With no active
+ * booking there is nothing to anchor to and the creation time is used, exactly as before.
+ */
+export async function tourOutcomeDueAnchor(
+    params: { supabase: SupabaseClient; orgId: string; opportunityId: string },
+    workDefinitionKey: string,
+    now: Date,
+): Promise<Date> {
+    if (workDefinitionKey !== RECORD_TOUR_OUTCOME_WORK_DEFINITION_KEY) return now;
+    try {
+        const booking = await readActiveTourBooking(params.supabase, params.orgId.trim(), params.opportunityId.trim());
+        const end = booking ? new Date(booking.end_at) : null;
+        return end && Number.isFinite(end.getTime()) && end.getTime() > now.getTime() ? end : now;
+    } catch {
+        return now;
+    }
 }

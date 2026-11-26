@@ -104,7 +104,7 @@ export async function buildLifecycleQueueEmptyDebug(params: {
     let hint: string | undefined;
     if (statusSum === 0 && sampleKeys.length) {
         hint =
-            "No opportunities in org use these status keys. Check Settings status assignments vs opportunity.status_key (e.g. new_inquiry vs new_lead).";
+            "No opportunities in org use these status keys. Check Configuration status assignments vs opportunity.status_key (e.g. new_inquiry vs new_lead).";
     } else if (department_scope_status_match_total > 0 && lanes.every((l) => l.queue_api_count === 0)) {
         hint =
             "Records are visible by lifecycle status filter but queue lane filters may not include them. Check queue_definition status ops.";

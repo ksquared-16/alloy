@@ -1,0 +1,84 @@
+{
+  "trusted_host_action_id": "tha_98194047dad66d",
+  "query_hash": "837416d15d799a03521c0eedf9ef5a17faf7056e676c2d109cbd5b3aa11774d8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-08T17:26:36.433Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_98194047dad66d",
+    "query_hash": "837416d15d799a03521c0eedf9ef5a17faf7056e676c2d109cbd5b3aa11774d8",
+    "authorization_id": "grnt_2c0cae0fb4d54dd6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-08T17:26:38.781Z",
+    "question_ids": [
+      "d9_l11_link_rows_present",
+      "d9_l11_attribution_complete",
+      "d9_l11_no_scope_cert_links",
+      "d9_l11_no_secondary_links",
+      "d9_l11_rows"
+    ],
+    "questions": {
+      "d9_l11_link_rows_present": {
+        "question_id": "d9_l11_link_rows_present",
+        "row_count": null,
+        "rows": [
+          "workflow_events ~ d9_read_cert_document_link_issued ~ at_least_one ~ true"
+        ]
+      },
+      "d9_l11_attribution_complete": {
+        "question_id": "d9_l11_attribution_complete",
+        "row_count": null,
+        "rows": [
+          "workflow_events ~ d9_link_rows_misattributed ~ zero ~ true"
+        ]
+      },
+      "d9_l11_no_scope_cert_links": {
+        "question_id": "d9_l11_no_scope_cert_links",
+        "row_count": null,
+        "rows": [
+          "workflow_events ~ d9_scope_cert_document_link_issued ~ zero ~ true"
+        ]
+      },
+      "d9_l11_no_secondary_links": {
+        "question_id": "d9_l11_no_secondary_links",
+        "row_count": null,
+        "rows": [
+          "workflow_events ~ d9_document_link_issued_in_qa_secondary ~ zero ~ true"
+        ]
+      },
+      "d9_l11_rows": {
+        "question_id": "d9_l11_rows",
+        "row_count": null,
+        "rows": [
+          [
+            {
+              "event_id": "c8a1927e-5ee8-4689-89db-56defda5a3c4",
+              "created_at": "2026-11-08T17:24:13.042475+00:00",
+              "document_id": "8abce264-a874-414d-839d-6ea961e93b79",
+              "org": "qa_shared",
+              "application": "d9-documents-read-cert",
+              "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+              "credential_id": "dfb8d936-924d-4440-b952-0a0cfdee99aa"
+            },
+            {
+              "event_id": "1fae7458-e038-48a2-858c-72a7fc2942c8",
+              "created_at": "2026-11-08T17:24:13.904494+00:00",
+              "document_id": "8abce264-a874-414d-839d-6ea961e93b79",
+              "org": "qa_shared",
+              "application": "d9-documents-read-cert",
+              "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+              "credential_id": "dfb8d936-924d-4440-b952-0a0cfdee99aa"
+            }
+          ]
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

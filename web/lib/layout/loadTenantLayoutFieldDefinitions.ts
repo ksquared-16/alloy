@@ -12,7 +12,7 @@ export async function loadTenantFieldDefinitionsForLayoutPicker(
 ): Promise<TenantFieldDefinitionRow[]> {
     const { data, error } = await supabase
         .from("field_definitions")
-        .select("field_key, label, entity_type, field_type, config, is_system, is_active, is_visible_in_drawer, org_id")
+        .select("field_key, label, entity_type, field_type, section_key, config, is_system, is_active, is_visible_in_drawer, org_id")
         .eq("org_id", orgId)
         .eq("is_active", true)
         .in("entity_type", [...LAYOUT_TENANT_FIELD_ENTITY_TYPES]);
@@ -25,6 +25,7 @@ export async function loadTenantFieldDefinitionsForLayoutPicker(
             label?: string | null;
             entity_type?: string;
             field_type?: string;
+            section_key?: string | null;
             config?: Record<string, unknown> | null;
             is_system?: boolean;
             is_active?: boolean;
@@ -40,6 +41,7 @@ export async function loadTenantFieldDefinitionsForLayoutPicker(
                 entity_type,
                 label: r.label ?? null,
                 field_type: String(r.field_type ?? "text"),
+                section_key: r.section_key ?? null,
                 config: r.config ?? null,
                 is_system: r.is_system === true,
                 is_active: r.is_active !== false,

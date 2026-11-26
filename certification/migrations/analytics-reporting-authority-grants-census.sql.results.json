@@ -1,0 +1,67 @@
+{
+  "trusted_host_action_id": "tha_b441b911893056",
+  "query_hash": "3b50138c5fe291da64bffab1bb74d4c6725adf2deeded2f1057fae385ad4fd31",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T23:56:31.357Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b441b911893056",
+    "query_hash": "3b50138c5fe291da64bffab1bb74d4c6725adf2deeded2f1057fae385ad4fd31",
+    "authorization_id": "grnt_4b4347dc5d944c5f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T23:56:32.978Z",
+    "question_ids": [
+      "catalog",
+      "grants",
+      "scale",
+      "role_keys"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "reports.read ~ active=true",
+          "reports.write ~ active=true"
+        ]
+      },
+      "grants": {
+        "question_id": "grants",
+        "row_count": null,
+        "rows": [
+          "reports.read ~ role=admin ~ allowed=true ~ orgs=3",
+          "reports.read ~ role=ops ~ allowed=true ~ orgs=3",
+          "reports.write ~ role=admin ~ allowed=true ~ orgs=3"
+        ]
+      },
+      "scale": {
+        "question_id": "scale",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "role_keys": {
+        "question_id": "role_keys",
+        "row_count": null,
+        "rows": [
+          "_w17_a ~ orgs=1",
+          "_w17_b ~ orgs=1",
+          "admin ~ orgs=3",
+          "assistant_director ~ orgs=1",
+          "director ~ orgs=1",
+          "ops ~ orgs=3",
+          "regional_lead ~ orgs=3",
+          "school_director ~ orgs=3"
+        ]
+      }
+    },
+    "row_count": 14
+  }
+}

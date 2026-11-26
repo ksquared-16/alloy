@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Current Work Focus — Alloy</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+  <script>if(!location.search.includes('screenshot'))location.search='?screenshot=1';</script>
+</head>
+<body>
+  <nav class="nav-bar"><a href="01-enrollment-workspace.html">← Workspace</a><span class="sep">·</span><a href="05-complete-work.html">Complete →</a></nav>
+
+  <div class="os-frame">
+    <aside class="sidebar"><div class="sidebar-icon active">⊞</div></aside>
+    <div class="os-main">
+      <header class="top-bar"><input class="search" readonly value="Search…" /><span class="campus">North Campus</span></header>
+      <div class="wu-header"><div class="wu-breadcrumb">Workspace <span>/</span> <strong>Enrollment</strong></div></div>
+      <div class="os-split">
+        <div class="queue-panel"><div class="queue-row active"><div class="name">Digan Family</div></div></div>
+        <div class="fp-panel" style="position:relative">
+          <div class="fp-chrome">
+            <div class="fp-record-bar">
+              <div class="fp-avatar">DF</div>
+              <div class="fp-identity"><h1>Digan Family</h1><div class="sub">Enrollment · North Campus</div></div>
+            </div>
+            <div class="fp-mode-bar"><span class="fp-mode-tab active">Summary</span></div>
+          </div>
+          <div class="fp-scroll" style="filter:blur(2px);opacity:0.35;pointer-events:none">
+            <div class="card-objective card-current-work compact-card"><div class="obj-title">Qualify Family</div></div>
+          </div>
+          <div class="focus-scrim" style="display:flex">
+            <div class="focus-card">
+              <div class="focus-card-header">
+                <button class="focus-back" onclick="location.href='01-enrollment-workspace.html'">← Back</button>
+                <span class="focus-card-label">Current Work</span>
+              </div>
+              <div class="focus-card-body">
+                <div class="obj-title" style="font-size:22px">Qualify Family</div>
+                <p style="color:var(--muted);font-size:14px;margin:10px 0 16px;line-height:1.5">Contact the family and determine if they are a good fit for our programs.</p>
+                <div class="progress-bar"><div class="progress-seg done"></div><div class="progress-seg done"></div><div class="progress-seg"></div></div>
+                <div class="progress-meta"><span>2 of 3 done</span><span class="progress-verdict">Almost ready</span></div>
+                <ul class="checklist">
+                  <li class="done"><span class="icon">✓</span> Review inquiry</li>
+                  <li class="done"><span class="icon">✓</span> Contact family</li>
+                  <li class="open"><a href="03-household-handoff.html"><span class="icon">→</span> Confirm program interest <span class="chev">›</span></a></li>
+                </ul>
+                <button class="btn-primary" onclick="location.href='05-complete-work.html'">Complete Qualification</button>
+                <div class="bos-companion" style="margin-top:18px;border-radius:8px">
+                  <div class="bos-companion-header"><div class="bos-mark">B</div><span class="bos-companion-title">Help with this step</span></div>
+                  <div class="bos-suggestions"><span class="bos-chip">Draft follow-up</span><span class="bos-chip">Summarize family</span></div>
+                </div>
+                <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+                  <div class="rail-section-title">More you can do</div>
+                  <ul class="supporting-actions"><li><a href="04-communications-handoff.html">Message family</a></li><li><a href="#">Add note</a></li></ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="bos-rail"><div class="bos-rail-btn">BOS</div></aside>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

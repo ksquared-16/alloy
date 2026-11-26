@@ -1,0 +1,56 @@
+{
+  "trusted_host_action_id": "tha_e9fc39c3e1310d",
+  "query_hash": "9a8cb93e9700a069c8afff3b519166f101a7499ff6a416c5e2845ab253d06625",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-28T13:36:31.576Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e9fc39c3e1310d",
+    "query_hash": "9a8cb93e9700a069c8afff3b519166f101a7499ff6a416c5e2845ab253d06625",
+    "authorization_id": "grnt_d346d22655594c9a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-28T13:36:39.139Z",
+    "question_ids": [
+      "w0_totals",
+      "w1_actions",
+      "w2_runs_90d"
+    ],
+    "questions": {
+      "w0_totals": {
+        "question_id": "w0_totals",
+        "row_count": null,
+        "rows": [
+          "workflows=26 | enabled=16"
+        ]
+      },
+      "w1_actions": {
+        "question_id": "w1_actions",
+        "row_count": null,
+        "rows": [
+          "type=create_message | channel=sms | enabled=false | event=booking_confirmed | declared_category=none | n=1 | orgs=1 | org8=7803388d",
+          "type=create_message | channel=sms | enabled=true | event=action_link_consumed | declared_category=none | n=2 | orgs=1 | org8=7803388d",
+          "type=create_message | channel=sms | enabled=true | event=booking_confirmed | declared_category=none | n=1 | orgs=1 | org8=7803388d",
+          "type=send_communication_template | channel=email | enabled=false | event=lead_created | declared_category=none | n=1 | orgs=1 | org8=93667019",
+          "type=send_communication_template | channel=sms | enabled=false | event=lead_created | declared_category=none | n=1 | orgs=1 | org8=93667019",
+          "type=send_message | channel=sms | enabled=false | event=booking_confirmed | declared_category=none | n=1 | orgs=1 | org8=7803388d",
+          "type=send_message | channel=sms | enabled=true | event=booking_confirmed | declared_category=none | n=1 | orgs=1 | org8=7803388d"
+        ]
+      },
+      "w2_runs_90d": {
+        "question_id": "w2_runs_90d",
+        "row_count": null,
+        "rows": [
+          "type=send_communication_template | status=completed | n=4 | last=2026-10-16",
+          "type=send_communication_template | status=skipped | n=1 | last=2026-10-16"
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}

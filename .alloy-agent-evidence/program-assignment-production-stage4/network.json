@@ -1,0 +1,35 @@
+[
+  {
+    "type": "response",
+    "status": 200,
+    "ok": null,
+    "hasPreview": false,
+    "hasResult": false,
+    "error": null,
+    "t": 1784734965201
+  },
+  {
+    "type": "response",
+    "status": 200,
+    "hasPreview": false,
+    "hasResult": false,
+    "error": null,
+    "t": 1784734978626
+  },
+  {
+    "type": "response",
+    "status": 200,
+    "hasPreview": false,
+    "hasResult": false,
+    "error": null,
+    "t": 1784734998327
+  },
+  {
+    "type": "response",
+    "status": 200,
+    "hasPreview": false,
+    "hasResult": false,
+    "error": null,
+    "t": 1784735029297
+  }
+]

@@ -1,0 +1,149 @@
+{
+  "error": null,
+  "steps": [
+    {
+      "step": "01_waitlist",
+      "selected": "new_work_view_4",
+      "active": "new_work_view_4",
+      "grain": "child",
+      "terminal": "operational",
+      "empty": 0,
+      "queueKurzman": false,
+      "noRecords": false,
+      "deadlineError": false,
+      "lennon": true,
+      "wrigley": true,
+      "scheduled": false,
+      "total": null,
+      "q": "new_work_view_4"
+    },
+    {
+      "step": "02_all",
+      "selected": "new_work_view_6",
+      "active": "new_work_view_6",
+      "grain": "family",
+      "terminal": "operational",
+      "empty": 0,
+      "queueKurzman": true,
+      "noRecords": false,
+      "deadlineError": false,
+      "lennon": false,
+      "wrigley": false,
+      "scheduled": false,
+      "total": "1",
+      "q": "new_work_view_6"
+    },
+    {
+      "step": "03_tours",
+      "selected": "new_work_view_5",
+      "active": "new_work_view_5",
+      "grain": "family",
+      "terminal": "operational",
+      "empty": 0,
+      "queueKurzman": true,
+      "noRecords": false,
+      "deadlineError": false,
+      "lennon": false,
+      "wrigley": false,
+      "scheduled": true,
+      "total": "1",
+      "q": "new_work_view_5"
+    },
+    {
+      "step": "04_waitlist",
+      "selected": "new_work_view_4",
+      "active": "new_work_view_4",
+      "grain": "child",
+      "terminal": "operational",
+      "empty": 0,
+      "queueKurzman": false,
+      "noRecords": false,
+      "deadlineError": false,
+      "lennon": true,
+      "wrigley": true,
+      "scheduled": true,
+      "total": "2",
+      "q": "new_work_view_4"
+    },
+    {
+      "step": "05_all_again",
+      "selected": "new_work_view_6",
+      "active": "new_work_view_6",
+      "grain": "family",
+      "terminal": "operational",
+      "empty": 0,
+      "queueKurzman": true,
+      "noRecords": false,
+      "deadlineError": false,
+      "lennon": false,
+      "wrigley": false,
+      "scheduled": true,
+      "total": "1",
+      "q": "new_work_view_6"
+    },
+    {
+      "step": "06_tours_again",
+      "selected": "new_work_view_5",
+      "active": "new_work_view_5",
+      "grain": "family",
+      "terminal": "operational",
+      "empty": 0,
+      "queueKurzman": true,
+      "noRecords": false,
+      "deadlineError": false,
+      "lennon": false,
+      "wrigley": false,
+      "scheduled": true,
+      "total": "1",
+      "q": "new_work_view_5"
+    }
+  ],
+  "lifecycle": [
+    {
+      "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_6",
+      "t": "operational",
+      "n": 1,
+      "g": "family",
+      "active": "new_work_view_6",
+      "title": "Kurzman Family"
+    },
+    {
+      "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_5",
+      "t": "operational",
+      "n": 1,
+      "g": "family",
+      "active": "new_work_view_5",
+      "title": "Kurzman Family"
+    },
+    {
+      "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_leads",
+      "t": "empty",
+      "n": 0,
+      "g": "family",
+      "active": "new_leads"
+    },
+    {
+      "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_3",
+      "t": "empty",
+      "n": 0,
+      "g": "child",
+      "active": "new_work_view_3"
+    },
+    {
+      "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_2",
+      "t": "operational",
+      "n": 1,
+      "g": "family",
+      "active": "new_work_view_2",
+      "title": "Kurzman Family"
+    },
+    {
+      "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_3",
+      "t": "empty",
+      "n": 0,
+      "g": "child",
+      "active": "new_work_view_3"
+    }
+  ],
+  "pass": true
+}

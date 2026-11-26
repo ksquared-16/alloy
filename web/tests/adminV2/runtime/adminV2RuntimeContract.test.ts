@@ -210,38 +210,3 @@ describe("AdminV2 route / queue reveal contract", () => {
         ).toBe(false);
     });
 });
-
-describe("AdminV2 runtime wiring (source guards)", () => {
-    it("AdminEntityDrawer consumes composer policy for inquiry opportunity", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("composeAdminV2DrawerRuntime");
-        expect(drawer).toContain("opportunityDrawerRuntimePlan");
-        expect(drawer).toContain("personDrawerRuntimePlan");
-    });
-
-    it("work unit page never paints row skeleton when lane held", () => {
-        const page = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
-        expect(page).toContain("rowsHeld: !laneMayPaint");
-        expect(page).toContain("resolveWorkUnitQueueLaneRevealState");
-        expect(page).not.toMatch(/page_seeded_from_cache:\s*workUnitPageSeededWarm/);
-    });
-
-    it("QueueBlock guards skeleton behind rowsHeld", () => {
-        const block = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        expect(block).toContain("!queue.rowsHeld");
-    });
-
-    it("opportunity header actions stay on title rail across tabs", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("opportunityHeaderTitleRailStable");
-        expect(drawer).toContain("headerTitleRightForDrawer");
-    });
-
-    it("person sections render only when hydrated — no reserve variants", () => {
-        const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
-        expect(operating).not.toContain('variant="household"');
-        expect(operating).not.toContain("PersonDrawerSectionCoordinatedReserve");
-    });
-});

@@ -43,8 +43,10 @@ const expected: ExpectedAttendanceEntry[] = [
         siteLocationId: "site-1",
         roomLocationId: "room-a",
         programCategoryId: null,
+        assignmentId: "asg-1",
         schedulePatternId: "pat-1",
         scheduleTypeKey: "full_day",
+        isPrimary: true,
     },
 ];
 

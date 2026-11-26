@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
+import { dispatchQueueRowSurfacePublished } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
 
 // ── Loader ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,10 @@ export function useQueueRowLayoutConfig(surfaceId: string): UseQueueRowLayoutCon
     });
 
     useEffect(() => {
+        if (!surfaceId || surfaceId === "__controlled__") {
+            setState({ data: null, loading: false, error: null });
+            return;
+        }
         let cancelled = false;
         setState({ data: null, loading: true, error: null });
 
@@ -98,6 +103,9 @@ export function useQueueRowPublish(surfaceId: string): UseQueueRowPublishResult 
                 if (!res.ok) {
                     throw new Error((body.error as string | undefined) ?? `HTTP ${res.status}`);
                 }
+                // Same-tab + BroadcastChannel refresh for live Work Unit CondensedQueueRow.
+                // QueueRowSurfaceEditor also dispatches; this covers the standalone builder path.
+                dispatchQueueRowSurfacePublished(surfaceId, null);
                 setPublishedAt(new Date());
             } catch (err: unknown) {
                 setError((err as Error).message);

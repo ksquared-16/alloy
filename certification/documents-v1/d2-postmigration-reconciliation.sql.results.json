@@ -1,0 +1,127 @@
+{
+  "trusted_host_action_id": "tha_3d76bcb0c18e80",
+  "query_hash": "1797e78849b55bd62d2ad45e27c376cf82c53dc02222b49a1892ca6526f5bd23",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T16:03:28.462Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_3d76bcb0c18e80",
+    "query_hash": "1797e78849b55bd62d2ad45e27c376cf82c53dc02222b49a1892ca6526f5bd23",
+    "authorization_id": "grnt_06bf5eac4e294efb",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T16:03:35.979Z",
+    "question_ids": [
+      "r00_ledger",
+      "r01_identity",
+      "r02_versions",
+      "r03_subjects",
+      "r04_sensitivity",
+      "r05_references_intact"
+    ],
+    "questions": {
+      "r00_ledger": {
+        "question_id": "r00_ledger",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T16:03:35.061829+00:00",
+            "ledger_20261208090000": 1,
+            "document_subjects_table": true,
+            "links_view": true,
+            "d2_triggers": 7,
+            "client_privilege_on_d2": 0
+          }
+        ]
+      },
+      "r01_identity": {
+        "question_id": "r01_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "documents": 378,
+            "identity_hash": "6e7ff5693393b627d22d0a39ec0ae8f1",
+            "baseline_identity_hash": "6e7ff5693393b627d22d0a39ec0ae8f1"
+          }
+        ]
+      },
+      "r02_versions": {
+        "question_id": "r02_versions",
+        "row_count": null,
+        "rows": [
+          {
+            "versions": 378,
+            "by_source": {
+              "legacy_backfill": 378
+            },
+            "documents_with_current": 378,
+            "stored_documents": 378,
+            "current_matches_file": 378,
+            "versions_with_checksum": 267,
+            "versions_with_etag": 378,
+            "version_objects_present": 378,
+            "documents_with_more_than_one_version": 0
+          }
+        ]
+      },
+      "r03_subjects": {
+        "question_id": "r03_subjects",
+        "row_count": null,
+        "rows": [
+          {
+            "resolvable_legacy_parents": 172,
+            "unresolved_legacy_parents": 158,
+            "unattached": 48,
+            "primary_by_type": {
+              "person": 4,
+              "child": 168
+            },
+            "resolvable_without_primary": 0,
+            "unresolved_with_owner": 0,
+            "primary_disagrees_with_legacy": 0,
+            "associations_cross_org": 0,
+            "derived_context_links": 333
+          }
+        ]
+      },
+      "r04_sensitivity": {
+        "question_id": "r04_sensitivity",
+        "row_count": null,
+        "rows": [
+          {
+            "by_class": {
+              "standard": 132,
+              "medical": 246
+            },
+            "medical_type_declared_standard": 0,
+            "medical_form_linked": 211,
+            "medical_form_linked_declared_medical": 211,
+            "legal_holds": 0,
+            "retention_until": 0
+          }
+        ]
+      },
+      "r05_references_intact": {
+        "question_id": "r05_references_intact",
+        "row_count": null,
+        "rows": [
+          {
+            "form_submission_documents": 285,
+            "drawn_signature_refs": 65,
+            "processing_document_sources": 48,
+            "staff_qualification_evidence": 1,
+            "medical_consent_evidence": 3,
+            "profile_photo_pointers": 2,
+            "org_documents_objects": 412
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

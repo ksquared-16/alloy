@@ -1,0 +1,286 @@
+<title>Scheduling — Alloy</title>
+<style>
+  :root{
+    --pine:#00A283;--pine-hover:#009276;--forge:#273F52;--ink:#18273A;--slate:#45506c;--muted:#59678b;
+    --stone:#F4F6F9;--gold:#DBC078;--gold-dark:#d0ad50;--ember:#BC4300;--blue:#00458C;--page:#EEF2F8;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-90:rgba(39,63,82,.90);--mid-70:rgba(39,63,82,.70);--mid-62:rgba(39,63,82,.62);--mid-58:rgba(39,63,82,.58);
+    --mid-45:rgba(39,63,82,.45);--mid-42:rgba(39,63,82,.42);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);
+    --stone-30:rgba(244,246,249,.30);color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3,h4{margin:0} button{font-family:inherit;cursor:pointer;border:none;background:none}
+  .frame{max-width:1160px;margin:0 auto;padding:22px 18px 48px}
+  .switch{display:flex;gap:6px;margin-bottom:14px;justify-content:center;flex-wrap:wrap}
+  .sw{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:11.5px;font-weight:500;padding:6px 12px;border-radius:999px;transition:all .15s}
+  .sw:hover{border-color:var(--pine);color:var(--pine)} .sw[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600}
+  .sw:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .app{display:flex;background:var(--stone);border-radius:16px;overflow:hidden;box-shadow:0 16px 48px rgba(39,63,82,.12);min-height:660px}
+  .rail{width:56px;flex:0 0 56px;background:var(--forge);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
+  .rl0{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pine),#0b7d68);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;margin-bottom:8px}
+  .ri{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:rgba(255,255,255,.55);font-size:15px;position:relative} .ri.on{background:rgba(255,255,255,.10);color:#fff} .ri.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--pine)}
+  .topbar{height:6px;background:var(--blue)} .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .shell{flex:1;display:flex;flex-direction:column;min-width:0;border-radius:16px;border:1px solid rgba(244,246,249,.9);background:#fff;overflow:hidden}
+  .cband{border-bottom:1px solid var(--stone-30)}
+  .whead{display:flex;align-items:center;justify-content:space-between;gap:12px;border-left:2px solid var(--pine);background:#fff;padding:8px 16px 0}
+  .wid{display:flex;align-items:center;gap:8px;min-width:0} .wico{width:24px;height:24px;display:grid;place-items:center;color:var(--forge);font-size:15px}
+  .wt{font-size:14px;font-weight:600;color:var(--forge);line-height:1.15} .ws2{font-size:11px;color:var(--slate)}
+  .wacts{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .bp{display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:var(--pine);padding:6px 12px;font-size:12.5px;font-weight:600;color:#fff} .bp:hover{background:var(--pine-hover)} .bp.dis{background:var(--mid-25);cursor:not-allowed}
+  .bs{display:inline-flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--mid-25);background:#fff;padding:6px 12px;font-size:12px;font-weight:500;color:var(--mid-70)}
+  .bx{display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:1px solid rgba(244,246,249,.8);padding:5px 9px;font-size:11px;font-weight:600;color:var(--mid-40)}
+  .mnav{background:#fff;padding:6px 16px 12px} .subtabs{display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .st{padding:2px 2px 7px;font-size:12.5px;font-weight:600;color:rgba(39,63,82,.5);border-bottom:2px solid transparent} .st.on{color:var(--pine);border-bottom-color:var(--pine)}
+  .inset{display:flex;min-height:0;flex:1;flex-direction:column;background:#fff;padding:12px 16px 16px}
+  .canvas{display:flex;min-height:0;flex:1;flex-direction:column;overflow:auto;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(244,246,249,.55);background:rgba(244,246,249,.5)}
+  .canvas.white{background:#fff;box-shadow:none;padding:0}
+  .surf{padding:18px} .surf .wrap{max-width:1010px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+  .eyebrow{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--mid-35);margin:0 0 9px}
+  .healthline{font-size:15px;line-height:1.5;color:var(--forge);font-weight:500} .healthline b{color:var(--ember);font-weight:600} .healthline .g{color:var(--pine);font-weight:600}
+  /* zones/list */
+  .zone{border-radius:12px;border:1px solid rgba(244,246,249,.9);background:#fff;box-shadow:0 2px 10px rgba(24,39,58,.07);padding:13px 16px}
+  .zh{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px} .zh h2{font-size:13px;font-weight:600;color:var(--forge)} .zh button{font-size:11px;font-weight:600;color:var(--pine)}
+  .rl2{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+  .rl2 li{display:flex;align-items:center;gap:12px;border-radius:8px;padding:9px 6px;border-bottom:1px solid rgba(39,63,82,.05)} .rl2 li:last-child{border-bottom:none}
+  .bar{width:2px;height:30px;flex:0 0 auto;border-radius:999px;background:var(--pine)} .bar.ember{background:var(--ember)} .bar.gold{background:var(--gold)} .bar.slate{background:var(--mid-25)}
+  .lmain{min-width:0;flex:1} .llbl{font-size:13px;font-weight:600;color:var(--forge)} .lsub{font-size:11px;font-weight:500;color:var(--slate);margin-top:1px} .lsub.pine{color:var(--pine)} .lsub.ember{color:var(--ember)}
+  .lcta{font-size:11.5px;font-weight:600;color:var(--pine);flex:0 0 auto}
+  .hero{border-radius:14px;background:#fff;padding:16px 18px 16px 22px;position:relative;overflow:hidden;box-shadow:0 4px 20px rgba(24,39,58,.09);outline:1px solid rgba(188,67,0,.18)}
+  .hero .rl{position:absolute;top:12px;bottom:12px;left:0;width:4px;border-radius:999px;background:var(--ember)}
+  .hero h3{font-size:16px;font-weight:600;color:var(--forge)} .hero p{margin:5px 0 12px;font-size:12.5px;color:var(--slate)}
+  .calm{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px 20px;text-align:center}
+  .calm .big{font-size:34px} .calm h3{font-size:16px;color:var(--forge)} .calm p{font-size:12.5px;color:var(--muted);max-width:44ch}
+  /* filters + groups */
+  .filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .fchip{font-size:11px;font-weight:500;color:var(--slate);border:1px solid var(--mid-25);background:#fff;border-radius:999px;padding:4px 10px} .fchip.on{border-color:var(--pine);color:var(--pine);background:rgba(0,162,131,.06);font-weight:600} .fchip.saved{margin-left:auto;color:var(--blue);border-color:rgba(0,69,140,.3)}
+  .grouphdr{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-45)} .grouphdr .n{margin-left:auto;font-size:10.5px;color:var(--mid-40)}
+  .grouphdr.ember{color:var(--ember)} .grouphdr.gold{color:var(--gold-dark)}
+  .pager{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted);padding-top:6px}
+  /* work unit */
+  .wu{display:grid;grid-template-columns:20rem minmax(0,1fr);height:100%} @media (max-width:800px){.wu{grid-template-columns:1fr}}
+  .qcol{padding:16px;overflow:auto;border-right:1px solid rgba(244,246,249,.9)}
+  .qh{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 8px} .qh h3{font-size:13px;font-weight:600;color:var(--forge)} .qh .c{font-size:11px;color:var(--mid-45)}
+  .ql{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .qr{display:block;width:100%;text-align:left;border-radius:8px;border:1px solid rgba(244,246,249,.9);border-left:2px solid rgba(244,246,249,.9);padding:9px 11px;box-shadow:0 1px 2px rgba(39,63,82,.05)} .qr.sel{border-color:rgba(0,162,131,.45);border-left-color:var(--pine);background:rgba(0,162,131,.06)} .qr.ember{border-left-color:var(--ember)}
+  .qrt{display:flex;align-items:center;gap:6px} .qi{width:14px;height:14px;color:var(--mid-40)} .qtt{font-size:12.5px;font-weight:600;color:var(--mid-90)} .qp{margin-left:auto;border-radius:999px;padding:2px 7px;font-size:9px;font-weight:600} .qp.ember{background:rgba(188,67,0,.10);color:var(--ember)} .qp.gold{background:rgba(219,192,120,.18);color:var(--gold-dark)}
+  .qs{margin-top:3px;font-size:11px;color:var(--mid-58)}
+  .fph{padding:16px;overflow:auto;background:rgba(244,246,249,.35)}
+  .fp{border-radius:12px;background:#fff;border:1px solid rgba(39,63,82,.20);box-shadow:0 1px 3px rgba(15,23,42,.06);overflow:hidden}
+  .fphd{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid rgba(39,63,82,.07)}
+  .fpav{width:32px;height:32px;border-radius:999px;display:grid;place-items:center;font-size:13px;font-weight:700;background:rgba(0,162,131,.10);color:var(--pine)} .fpav.ember{background:rgba(188,67,0,.10);color:var(--ember)} .fpav.forge{background:rgba(39,63,82,.08);color:var(--forge)}
+  .fpnm{font-size:13.5px;font-weight:600;color:var(--forge)} .fpsb{font-size:10.5px;color:var(--muted)}
+  .fpmodes{margin-left:auto;display:flex;gap:4px} .fpm{font-size:10px;font-weight:600;color:var(--mid-45);padding:3px 9px;border-radius:999px;border:1px solid var(--mid-25);background:#fff} .fpm.on{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .dcard{margin:12px;border:1px solid rgba(39,63,82,.14);border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(24,39,58,.06)} .dcard.place{border-left:3px solid var(--pine)} .dcard.issue{border-left:3px solid var(--ember)}
+  .dsec{padding:12px 14px;border-bottom:1px solid rgba(39,63,82,.07)} .dsec:last-child{border-bottom:none}
+  .dlabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid-40);display:flex;align-items:center;justify-content:space-between}
+  .dsev{font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(188,67,0,.10);color:var(--ember)}
+  .dprob{margin-top:6px;font-size:15px;font-weight:600;color:var(--forge);line-height:1.3} .dprob small{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:2px}
+  .opt{display:flex;align-items:flex-start;gap:10px;padding:10px 6px;border-bottom:1px solid rgba(39,63,82,.05)} .opt:last-child{border-bottom:none}
+  .orad{width:15px;height:15px;border-radius:50%;border:2px solid var(--mid-25);flex:0 0 auto;margin-top:1px;position:relative} .opt.on .orad{border-color:var(--pine)} .opt.on .orad::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--pine)}
+  .opt.blocked{opacity:.6} .opt.blocked .orad{border-style:dashed}
+  .onm{font-size:13px;font-weight:600;color:var(--forge)} .opt.off .onm,.opt.blocked .onm{font-weight:500;color:var(--mid-70)}
+  .obadges{display:flex;gap:6px;margin-top:3px;flex-wrap:wrap} .ob{font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:999px} .ob.pine{background:rgba(0,162,131,.10);color:var(--pine)} .ob.gold{background:rgba(219,192,120,.18);color:var(--gold-dark)} .ob.ember{background:rgba(188,67,0,.10);color:var(--ember)} .ob.slate{background:rgba(69,80,108,.10);color:var(--slate)} .ob.blue{background:rgba(0,69,140,.08);color:var(--blue)}
+  .otag{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-left:auto;flex:0 0 auto;padding-top:2px} .otag.rec{color:var(--pine)} .otag.elig{color:var(--slate)} .otag.trade{color:var(--gold-dark)} .otag.block{color:var(--ember)}
+  .shapes{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px} .shape{font-size:10.5px;font-weight:500;color:var(--slate);border:1px solid var(--mid-25);border-radius:8px;padding:4px 9px} .shape.on{border-color:var(--pine);color:var(--pine);background:rgba(0,162,131,.06);font-weight:600}
+  .cont{margin-top:8px;font-size:11px;color:var(--slate);background:rgba(219,192,120,.10);border:1px solid rgba(219,192,120,.3);border-radius:8px;padding:8px 10px} .cont b{color:var(--forge)}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:5px 0;border-bottom:1px solid rgba(39,63,82,.06)} .kv:last-child{border-bottom:none} .kv .k{color:var(--muted)} .kv .v{color:var(--forge);font-weight:500}
+  .tmeta{font-size:11px;color:var(--slate)} .tmeta b{color:var(--forge)}
+  .dfoot{padding:12px 14px;display:flex;align-items:center;gap:10px} .dfoot .note{font-size:10.5px;color:var(--muted)} .dcommit{margin-left:auto;display:inline-flex;align-items:center;gap:6px;border-radius:8px;background:var(--pine);padding:8px 16px;font-size:12.5px;font-weight:600;color:#fff}
+  /* child list (roster drill-down) */
+  .childlist{display:flex;flex-direction:column;gap:0} .crow{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(39,63,82,.05)} .crow:last-child{border-bottom:none}
+  .cav{width:26px;height:26px;border-radius:999px;background:var(--stone);color:var(--forge);display:grid;place-items:center;font-size:10px;font-weight:600;flex:0 0 auto}
+  .cnm{font-size:12.5px;font-weight:500;color:var(--forge)} .cpat{font-size:10.5px;color:var(--muted)} .cwarn{margin-left:auto;font-size:9.5px;font-weight:600;color:var(--ember);background:rgba(188,67,0,.08);padding:2px 7px;border-radius:999px} .cok{margin-left:auto;font-size:9.5px;color:var(--pine)}
+  /* banners */
+  .banner{border-radius:10px;padding:10px 12px;font-size:11.5px;display:flex;align-items:center;gap:8px}
+  .banner.warn{background:rgba(219,192,120,.12);border:1px solid rgba(219,192,120,.4);color:#7a5c14} .banner.stale{background:rgba(0,69,140,.06);border:1px solid rgba(0,69,140,.2);color:var(--blue)} .banner b{font-weight:600}
+  .banner button{margin-left:auto;font-size:11px;font-weight:600;color:inherit;text-decoration:underline}
+  .success{display:flex;flex-direction:column;align-items:center;gap:8px;padding:26px 18px;text-align:center} .success .ck{width:44px;height:44px;border-radius:999px;background:rgba(0,162,131,.12);color:var(--pine);display:grid;place-items:center;font-size:22px} .success h3{font-size:15px;color:var(--forge)} .success p{font-size:12px;color:var(--muted)}
+  .undo{display:inline-flex;gap:8px;align-items:center;font-size:12px;color:var(--slate)} .undo button{font-size:12px;font-weight:600;color:var(--pine);text-decoration:underline}
+  .screen{display:none}.screen.on{display:block}
+</style>
+
+<div class="frame">
+  <div class="switch" role="tablist" aria-label="States">
+    <button class="sw" role="tab" aria-selected="true" data-s="zero">Overview · all clear</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="high">Overview · high volume</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="place">Place · options</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="noroom">Place · no room</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="ratio">Over ratio · move</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="drill">Roster · who's included</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="child">Child panel</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="commit">Commit &amp; undo</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="degraded">Degraded data</button>
+  </div>
+
+  <div class="app">
+    <nav class="rail" aria-hidden="true"><div class="rl0">A</div><div class="ri">◫</div><div class="ri">◷</div><div class="ri on">▦</div><div class="ri">✉</div><div class="ri">◧</div><div class="ri">▤</div></nav>
+    <div class="main"><div class="topbar"></div><div class="shell">
+      <div class="cband">
+        <div class="whead"><div class="wid"><span class="wico">▦</span><div><div class="wt">Scheduling</div><div class="ws2" id="sub"></div></div></div>
+          <div class="wacts"><button class="bs">This week ▾</button><button class="bp" id="act">Fix next</button><button class="bx">✕ Close</button></div></div>
+        <div class="mnav"><div class="subtabs" id="subtabs"></div></div>
+      </div>
+      <div class="inset"><div class="canvas" id="canvas">
+        <section class="screen on" id="s-zero"></section>
+        <section class="screen" id="s-high"></section>
+        <section class="screen" id="s-place"></section>
+        <section class="screen" id="s-noroom"></section>
+        <section class="screen" id="s-ratio"></section>
+        <section class="screen" id="s-drill"></section>
+        <section class="screen" id="s-child"></section>
+        <section class="screen" id="s-commit"></section>
+        <section class="screen" id="s-degraded"></section>
+      </div></div>
+    </div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var sub={zero:"Maple Street · week of Jul 20",high:"3 sites · week of Jul 20",place:"Place Ethan · starts Monday",noroom:"Place Sofia · starts Monday",ratio:"Sunflower over ratio · Thursday",drill:"Roster · Sunflower Thursday",child:"Ethan Rivera · scheduling",commit:"Move Ethan → Sunshine · Thursday",degraded:"Maple Street · staffing not connected"};
+  var act={zero:"Open roster",high:"Review group",place:"Commit placement",noroom:"Adjust request",ratio:"Commit",drill:"Fix Thursday",child:"Place Ethan",commit:"Done",degraded:"Fix Thursday"};
+  var subtabs={zero:"Overview",high:"Overview",place:"Overview",noroom:"Overview",ratio:"Overview",drill:"Roster",child:"Overview",commit:"Overview",degraded:"Overview"};
+
+  var ZERO='<div class="surf"><div class="wrap">'
+    +'<div class="zone"><div class="healthline"><span class="g">All rooms are in ratio this week</span> and every enrolled child has a room. Nothing needs a decision.</div></div>'
+    +'<div class="calm"><div class="big" style="color:var(--pine)">✓</div><h3>You\'re all set for the week</h3><p>Four changes were committed today. Open the roster to see the week, or check back as new enrollments arrive.</p><button class="bs">Open roster →</button></div>'
+    +'<div class="zone"><div class="zh"><h2>Committed today</h2><button>History</button></div><ul class="rl2">'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">Noah → Rainbow</span><span class="lsub pine">full week · in ratio</span></span></li>'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">Priya → Sunshine</span><span class="lsub pine">Mon–Thu</span></span></li>'
+    +'</ul></div>'
+    +'</div></div>';
+
+  var HIGH='<div class="surf"><div class="wrap">'
+    +'<div class="zone"><div class="healthline">Across your sites this week: <b>6 rooms will exceed ratio</b> and <b>40 children still need rooms</b> this term. <span class="g">Most rooms are healthy.</span></div></div>'
+    +'<div class="filters"><span class="fchip on">This week</span><span class="fchip">Over ratio</span><span class="fchip">Needs a room</span><span class="fchip">Maple St</span><span class="fchip">Oak Ave</span><span class="fchip saved">★ My sites, over-ratio</span></div>'
+    +'<div class="zone">'
+    +'<div class="grouphdr ember">Over ratio · this week<span class="n">6 rooms</span></div><ul class="rl2">'
+    +'<li><span class="bar ember"></span><span class="lmain"><span class="llbl">Sunflower · Thu — Maple St</span><span class="lsub ember">12 of 11 · 2 fixes need no staff</span></span><span class="lcta">Fix →</span></li>'
+    +'<li><span class="bar ember"></span><span class="lmain"><span class="llbl">Bluebird · Wed — Oak Ave</span><span class="lsub ember">19 of 18</span></span><span class="lcta">Fix →</span></li>'
+    +'<li><span class="bar ember"></span><span class="lmain"><span class="llbl">+ 4 more rooms over ratio</span><span class="lsub">grouped · step through</span></span><span class="lcta">Review →</span></li>'
+    +'</ul>'
+    +'<div class="grouphdr gold" style="margin-top:10px">Needs a room · this term<span class="n">40 children</span></div><ul class="rl2">'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">Ethan Rivera + 12 toddlers</span><span class="lsub">start Mon–Fri · Maple St</span></span><span class="lcta">Review →</span></li>'
+    +'<li><span class="bar gold"></span><span class="lmain"><span class="llbl">27 more across 2 sites</span><span class="lsub">grouped by site → room</span></span><span class="lcta">Review →</span></li>'
+    +'</ul>'
+    +'<div class="pager"><span>Showing 2 groups · 46 decisions</span><span>Grouped by severity → site → room · ‹ 1 of 3 ›</span></div>'
+    +'</div>'
+    +'</div></div>';
+
+  function opt(cls,on,name,badges,tag,body){
+    var b=badges.map(function(x){return '<span class="ob '+x[1]+'">'+x[0]+'</span>';}).join('');
+    return '<div class="opt '+cls+' '+(on?'on':'off')+'"><span class="orad"></span><div style="min-width:0;flex:1"><span class="onm">'+name+'</span><div class="obadges">'+b+'</div>'+(body||'')+'</div><span class="otag '+tag[1]+'">'+tag[0]+'</span></div>';
+  }
+  var PLACE='<div class="wu">'
+    +'<div class="qcol"><div class="qh"><h3>To decide</h3><span class="c tab">6</span></div><ul class="ql">'
+    +'<li><button class="qr sel"><div class="qrt"><span class="qi">◑</span><span class="qtt">Ethan needs a room</span><span class="qp gold">Mon</span></div><p class="qs">2 rooms fit · no new staff</p></button></li>'
+    +'<li><button class="qr ember"><div class="qrt"><span class="qi">▲</span><span class="qtt">Sunflower over ratio</span><span class="qp ember">Thu</span></div></li></button></li>'
+    +'</ul></div>'
+    +'<div class="fph"><div class="fp"><div class="fphd"><div class="fpav">ER</div><div><div class="fpnm">Ethan Rivera</div><div class="fpsb">Toddler · full week · from Monday Jul 28</div></div><div class="fpmodes"><span class="fpm on">Place</span><span class="fpm">Profile</span></div></div>'
+    +'<div class="dcard place">'
+    +'<div class="dsec"><div class="dlabel"><span>Where does Ethan go?</span></div><div class="dprob">Toddler room · Mon–Fri · from Jul 28<small>Enrolled and ready. Rooms are classified by fit, not just space.</small></div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Rooms</span></div>'
+    +opt('',true,'Sunshine',[['Healthy','pine'],['No new staff','pine'],['With his cohort','slate']],['Recommended','rec'],'')
+    +opt('',false,'Rainbow',[['Healthy now','pine'],['Tighter in Oct','gold']],['Valid · tradeoff','trade'],'')
+    +opt('',false,'Butterfly',[['In ratio','slate']],['Eligible','elig'],'')
+    +opt('blocked',false,'Caterpillar',[['Full','ember'],['Infant only','slate']],['Blocked','block'],'')
+    +'</div>'
+    +'<div class="dsec"><div class="dlabel"><span>What changes · Sunshine</span></div><div class="tmeta">Sunshine <b>8 → 9 of 11</b> · Ratio <b>in tier all week</b> · <b>No new staff</b> · Tuition <b>+$980/mo</b> · Continuity <b>stays with cohort</b></div></div>'
+    +'<div class="dfoot"><span class="note">From registered calculations. Nothing changes until you commit.</span><button class="dcommit">Commit placement</button></div>'
+    +'</div></div></div>'
+    +'</div>';
+
+  var NOROOM='<div class="fph" style="height:100%"><div class="fp"><div class="fphd"><div class="fpav forge">SL</div><div><div class="fpnm">Sofia Lang</div><div class="fpsb">Toddler · full week · from Monday</div></div></div>'
+    +'<div class="dcard place" style="border-left-color:var(--gold-dark)">'
+    +'<div class="dsec"><div class="dlabel"><span>Where does Sofia go?</span><span class="dsev" style="background:rgba(219,192,120,.18);color:var(--gold-dark)">No room fits</span></div><div class="dprob">No toddler room has space Sofia\'s full week<small>Every eligible room is full on one or more of her days. She isn\'t placed — and nothing was invented.</small></div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Closest options</span></div>'
+    +opt('blocked',false,'Sunshine',[['Full Wed & Thu','ember']],['Blocked','block'],'')
+    +opt('blocked',false,'Rainbow',[['Full Mon–Wed','ember']],['Blocked','block'],'')
+    +'</div>'
+    +'<div class="dsec"><div class="dlabel"><span>What you can do</span></div><ul class="rl2">'
+    +'<li><span class="bar"></span><span class="lmain"><span class="llbl">Change Sofia\'s requested days</span><span class="lsub">Tue/Thu fits Sunshine now</span></span><span class="lcta">Adjust →</span></li>'
+    +'<li><span class="bar"></span><span class="lmain"><span class="llbl">Delay her start one week</span><span class="lsub">Rainbow opens Aug 4</span></span><span class="lcta">Delay →</span></li>'
+    +'<li><span class="bar slate"></span><span class="lmain"><span class="llbl">Hold for the waitlist</span><span class="lsub">flag for the director</span></span><span class="lcta">Hold →</span></li>'
+    +'</ul></div>'
+    +'<div class="dfoot"><span class="note">Adjusting the request re-runs the room search.</span><button class="bp dis">Commit placement</button></div>'
+    +'</div></div></div>';
+
+  var RATIO='<div class="fph" style="height:100%"><div class="fp"><div class="fphd"><div class="fpav ember">▲</div><div><div class="fpnm">Sunflower · Thursday</div><div class="fpsb">Toddler room · holds 11</div></div><div class="fpmodes"><span class="fpm on">Fix</span><span class="fpm">History</span></div></div>'
+    +'<div class="dcard issue">'
+    +'<div class="dsec"><div class="dlabel"><span>Why is Thursday over ratio?</span><span class="dsev">12 of 11</span></div><div class="dprob">Ava starts Thursday, bringing Sunflower to 12<small>The two-teacher limit is 11. Stable fixes are offered first.</small></div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Ways to fix it</span></div>'
+    +opt('',true,'Change Ava\'s Thursday session',[['No new staff','pine'],['Stable · no room change','pine']],['Recommended','rec'],'')
+    +opt('',false,'Drop one Thursday drop-in',[['No new staff','pine'],['−$62','gold']],['Valid · tradeoff','trade'],'')
+    +opt('',false,'Move a child to Sunshine — Thursday only',[['No new staff','pine'],['Continuity cost','gold']],['Valid · tradeoff','trade'],
+        '<div class="shapes"><span class="shape on">One day</span><span class="shape">Date range</span><span class="shape">Weekdays</span><span class="shape">Permanent</span></div><div class="cont"><b>Temporary move.</b> The child changes room, teachers and cohort <b>Thursday only</b>, then returns. Family notification is on for your org. Moves are never preselected.</div>')
+    +opt('blocked',false,'Add a teacher Thursday',[['Staffing not connected','slate']],['Unavailable','block'],'')
+    +'</div>'
+    +'<div class="dsec"><div class="dlabel"><span>What changes</span></div><div class="tmeta">Sunflower <b>12 → 11</b> · Ratio <b>in tier</b> · <b>No new staff</b> · Continuity <b>unchanged</b> · Conflicts <b>none</b></div></div>'
+    +'<div class="dfoot"><span class="note">Stable fixes ranked first. Nothing changes until you commit.</span><button class="dcommit">Commit</button></div>'
+    +'</div></div></div>';
+
+  var DRILL='<div class="fph" style="height:100%"><div class="fp"><div class="fphd"><div class="fpav ember">▲</div><div><div class="fpnm">Sunflower · Thursday Jul 23</div><div class="fpsb">Toddler · committed schedule</div></div><div class="fpmodes"><span class="fpm on">Who\'s here</span><span class="fpm">Fix</span></div></div>'
+    +'<div class="dcard" style="border-left:3px solid var(--ember)">'
+    +'<div class="dsec"><div class="kv"><span class="k">Children</span><span class="v tab" style="color:var(--ember)">12 of 11 · over</span></div><div class="kv"><span class="k">Program · age</span><span class="v">Toddler (18–36mo)</span></div><div class="kv"><span class="k">Ratio tier</span><span class="v">1:6 · needs 3 staff</span></div><div class="kv"><span class="k">Scheduled staff</span><span class="v" style="color:var(--gold-dark)">2 (unknown source)</span></div><div class="kv"><span class="k">Schedule source</span><span class="v">committed</span></div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Children included</span><span style="color:var(--pine)">12</span></div><div class="childlist">'
+    +'<div class="crow"><span class="cav">AR</span><div style="min-width:0;flex:1"><div class="cnm">Ada Reyes</div><div class="cpat">Mon–Fri</div></div><span class="cok">✓</span></div>'
+    +'<div class="crow"><span class="cav">BK</span><div style="min-width:0;flex:1"><div class="cnm">Ben Kim</div><div class="cpat">Mon–Fri</div></div><span class="cok">✓</span></div>'
+    +'<div class="crow"><span class="cav">AV</span><div style="min-width:0;flex:1"><div class="cnm">Ava Vance</div><div class="cpat">Thu/Fri · starts today</div></div><span class="cwarn">start date today</span></div>'
+    +'<div class="crow"><span class="cav">CM</span><div style="min-width:0;flex:1"><div class="cnm">Cora Malik</div><div class="cpat">Tue/Thu</div></div><span class="cok">✓</span></div>'
+    +'<div class="crow"><span class="cav">+8</span><div style="min-width:0;flex:1"><div class="cnm">8 more children</div><div class="cpat">Mon–Fri patterns</div></div></div>'
+    +'</div></div>'
+    +'<div class="dfoot"><span class="note">Read-only. This view feeds the future printed roster.</span><button class="dcommit">Fix Thursday</button></div>'
+    +'</div></div></div>';
+
+  var CHILD='<div class="fph" style="height:100%"><div class="fp"><div class="fphd"><div class="fpav">ER</div><div><div class="fpnm">Ethan Rivera</div><div class="fpsb">Toddler · Maple Street</div></div><div class="fpmodes"><span class="fpm on">Schedule</span><span class="fpm">Profile</span></div></div>'
+    +'<div class="dcard place">'
+    +'<div class="dsec"><div class="dlabel"><span>Placement</span><span style="color:var(--gold-dark)">Needs a room</span></div><div class="kv"><span class="k">Room</span><span class="v" style="color:var(--gold-dark)">not set</span></div><div class="kv"><span class="k">Required schedule</span><span class="v">Mon–Fri</span></div><div class="kv"><span class="k">Effective start</span><span class="v">Jul 28</span></div><div class="kv"><span class="k">Enrollment</span><span class="v" style="color:var(--pine)">agreement executed</span></div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Schedule health</span></div><div class="tmeta">Not yet scheduled. Two rooms fit with no new staff. <b>Sunshine</b> keeps his sibling\'s cohort.</div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Downstream</span></div><div class="kv"><span class="k">Projected tuition</span><span class="v tab">$980 / mo</span></div><div class="kv"><span class="k">Attendance</span><span class="v">begins once scheduled</span></div></div>'
+    +'<div class="dfoot"><span class="note">Everything about scheduling one child.</span><button class="dcommit">Place Ethan →</button></div>'
+    +'</div></div></div>';
+
+  var COMMIT='<div class="surf"><div class="wrap">'
+    +'<div class="fp" style="max-width:520px;margin:0 auto;width:100%"><div class="fphd"><div class="fpav">✓</div><div><div class="fpnm">Review change</div><div class="fpsb">before it becomes truth</div></div></div>'
+    +'<div class="dcard place">'
+    +'<div class="dsec"><div class="dlabel"><span>You are committing</span></div><div class="dprob" style="font-size:14px">Change Ava\'s Thursday session — Sunflower back to 11<small>Resolves: Sunflower over ratio, Thursday Jul 23</small></div></div>'
+    +'<div class="dsec"><div class="kv"><span class="k">Effective</span><span class="v">Thu Jul 23 onward</span></div><div class="kv"><span class="k">Preview</span><span class="v tab">12 → 11 · in ratio</span></div><div class="kv"><span class="k">Warnings</span><span class="v" style="color:var(--pine)">none</span></div><div class="kv"><span class="k">Authority</span><span class="v">Site Director ✓</span></div><div class="kv"><span class="k">Family notice</span><span class="v">not required</span></div></div>'
+    +'<div class="dfoot"><span class="note">Recorded as an effective-dated change. History is kept.</span><button class="dcommit">Commit change</button></div>'
+    +'</div></div>'
+    +'<div class="fp" style="max-width:520px;margin:0 auto;width:100%">'
+    +'<div class="success"><div class="ck">✓</div><h3>Committed</h3><p>Sunflower is back in ratio for Thursday. The roster and overview are updated.</p><div class="undo">Changed your mind? <button>Undo</button> <span style="color:var(--mid-40)">· creates a superseding change</span></div></div>'
+    +'</div>'
+    +'</div></div>';
+
+  var DEGRADED='<div class="fph" style="height:100%"><div class="fp"><div class="fphd"><div class="fpav ember">▲</div><div><div class="fpnm">Sunflower · Thursday</div><div class="fpsb">Toddler room · holds 11</div></div></div>'
+    +'<div style="padding:12px 12px 0"><div class="banner warn">⚠ <b>Staffing isn\'t connected.</b> Occupancy and ratios are exact; staff-based fixes are unavailable until staffing is set up.</div></div>'
+    +'<div class="dcard issue" style="margin-top:8px">'
+    +'<div class="dsec"><div class="dlabel"><span>Why is Thursday over ratio?</span><span class="dsev">12 of 11</span></div><div class="dprob">Ava starts Thursday, bringing Sunflower to 12<small>Occupancy and ratio are computed from the schedule — always available.</small></div></div>'
+    +'<div class="dsec"><div class="dlabel"><span>Ways to fix it</span></div>'
+    +opt('',true,'Change Ava\'s Thursday session',[['No new staff','pine']],['Recommended','rec'],'')
+    +opt('',false,'Drop one Thursday drop-in',[['−$62','gold']],['Valid · tradeoff','trade'],'')
+    +opt('blocked',false,'Add a teacher Thursday',[['Staffing not connected','slate']],['Unavailable','block'],'')
+    +'</div>'
+    +'<div style="padding:0 12px 12px"><div class="banner stale">↻ <b>The numbers changed</b> since you opened this — a new enrollment landed. <button>Review again</button></div></div>'
+    +'<div class="dfoot"><span class="note">Commit is disabled until the preview is refreshed.</span><button class="bp dis">Commit</button></div>'
+    +'</div></div></div>';
+
+  var S={zero:ZERO,high:HIGH,place:PLACE,noroom:NOROOM,ratio:RATIO,drill:DRILL,child:CHILD,commit:COMMIT,degraded:DEGRADED};
+  var whiteCanvas={place:1,noroom:1,ratio:1,drill:1,child:1,degraded:1};
+  Object.keys(S).forEach(function(k){document.getElementById('s-'+k).innerHTML=S[k];});
+  var subEl=document.getElementById('subtabs');
+  function render(key){
+    subEl.innerHTML='<span class="st on">'+subtabs[key]+'</span>'+(subtabs[key]==='Roster'?'<span class="st">Overview</span>':'<span class="st">Roster</span>')+'<span class="st">Attendance</span>';
+    document.getElementById('sub').textContent=sub[key];
+    document.getElementById('act').textContent=act[key];
+    document.getElementById('canvas').classList.toggle('white',!!whiteCanvas[key]);
+  }
+  document.querySelectorAll('.sw').forEach(function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('.sw').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+    document.getElementById('s-'+b.dataset.s).classList.add('on'); render(b.dataset.s);
+  });});
+  render('zero');
+})();
+</script>

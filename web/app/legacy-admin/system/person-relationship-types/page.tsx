@@ -1,7 +1,8 @@
-import PersonRelationshipTypesClient from "./PersonRelationshipTypesClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemPersonRelationshipTypesPage() {
-    return <PersonRelationshipTypesClient />;
+/** Legacy route — person relationship vocabulary lives under Platform Configuration → Relationships. */
+export default function AdminSystemPersonRelationshipTypesRedirectPage() {
+    redirect("/settings/relationships?tab=person-relationships");
 }

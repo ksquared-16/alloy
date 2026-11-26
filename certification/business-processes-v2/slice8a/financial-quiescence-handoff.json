@@ -1,0 +1,87 @@
+{
+  "schema": "alloy.bp_v2.financial_quiescence_handoff.v1",
+  "gate": "bp_financial_quiescence_proven",
+  "plan": "bp_v2",
+  "from_lane": "lane_581d120e4e41",
+  "contract": "certification/business-processes-v2/slice8a/FINANCIAL-QUIESCENCE.md",
+  "residue_census_repin": {
+    "replaces": {
+      "path": "certification/qa-shared/bp-quiesced-retained-census.sql",
+      "query_sha256": "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef",
+      "checks": [
+        "bp_qr_pool_access",
+        "bp_qr_zero_sent"
+      ],
+      "defect": "asserts nothing financial: a run could close QUIESCED_RETAINED with a bound merchant, an owed charge, an open variance or live periodic billing"
+    },
+    "path": "certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql",
+    "query_sha256": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "checks": [
+      "bp_qr_pool_access",
+      "bp_qr_zero_sent",
+      "bp_qr_org_exists",
+      "bp_qr_fin_no_merchant",
+      "bp_qr_fin_no_usable_method",
+      "bp_qr_fin_no_autopay",
+      "bp_qr_fin_no_provider_activity",
+      "bp_qr_fin_no_active_schedule",
+      "bp_qr_fin_no_draft",
+      "bp_qr_fin_no_open_balance",
+      "bp_qr_fin_no_open_variance",
+      "bp_qr_fin_no_unapplied_money",
+      "bp_qr_fin_attributed"
+    ],
+    "data_rows": [
+      "bp_qr_00",
+      "bp_qr_org_present",
+      "bp_qr_retained_financial",
+      "bp_qr_retained_financial_actors",
+      "bp_qr_retained_process_config",
+      "bp_qr_retained_audit"
+    ],
+    "retained_by_design": [
+      "posted financial records (immutable), neutralized and attributed by run",
+      "published process configuration",
+      "access audit history (mutation_events)"
+    ],
+    "supersedes_draft": {
+      "query_sha256": "bb99a1a18abfe7a54a5e2960039cbe554116a3967e00a6e4980b9e0de0477d9c",
+      "deployed_baseline": "gar_59095c7294014e",
+      "defect": "zero_sent read only status='sent'; pool_access read only user_roles \u2014 must not be registered"
+    },
+    "corrections": {
+      "bp_qr_zero_sent": "outbound messages with durable send evidence: sent_at/delivered_at/opened_at/clicked_at/replied_at/provider_message_id set, or status in sent/delivered/bounced/opened/clicked/complained",
+      "bp_qr_pool_access": "effective access across user_roles, user_access_profiles, user_site_access, user_department_access; excludes only qa_shared_actor (qa-shared-actor@example.com)"
+    }
+  },
+  "local_proof": {
+    "suite": "web/tests/businessProcesses/financialQuiescence.live.test.ts",
+    "green_on": [
+      "lane agent/business-processes",
+      "Alloy staging 841becb44 (git archive)"
+    ],
+    "evidence": [
+      "certification/business-processes-v2/slice8a/quiescence-live.lane.local-cert.json",
+      "certification/business-processes-v2/slice8a/quiescence-live.staging-841becb44.local-cert.json",
+      "certification/business-processes-v2/slice8a/census-v2-corrections.prev-vs-corrected.local-cert.json",
+      "certification/business-processes-v2/slice8a/census-v2-scope-audit.local-cert.json"
+    ],
+    "positive": "7 committed product commands (charge.cancel_draft x2, payment.record, subsidy.resolve_variance, charge.reverse x3) take a live org (census failing no_draft/no_open_balance/no_open_variance; 4 Billing views non-empty) to all 13 checks true and all 5 Billing views 0; 0 rows removed; posted rows byte-identical; drafts retained void",
+    "negative": "12 defects each flip exactly their own check (org_exists, pool_access, merchant, usable_method, autopay, provider_activity, periodic billing via ensurePeriodicBillingSchedule, draft, open_balance, unapplied money via payment.record + payment.reverse_application, open_variance, attributed)",
+    "negative_corrections": "each in its own org: sent\u2192delivered, sent\u2192bounced, sent_at with status failed, provider-accepted without sent_at fail bp_qr_zero_sent; a profile left by a removed role fails bp_qr_pool_access; controls (queued outbound, inbound, the actor's own access) stay clean. The superseded draft passed all five defects.",
+    "scope_audit": "one SELECT, no write keywords, executes in a READ ONLY transaction; only UUID literal is QA Shared; Firefly absent; every public read filtered by QA Shared or correlated to a scoped row"
+  },
+  "deployed_baseline_census": {
+    "status": "complete",
+    "request_id": "gar_f04e0a9aaae37e",
+    "trusted_host_action_id": "tha_930f45aa5a9147",
+    "database_target": "alloy_deployed_primary",
+    "census_run_at": "2026-10-22T15:00:03.694Z",
+    "query_sha256": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "result": "QA Shared present; all 13 checks ~ true; 0 retained charge/payment/variance rows (no bp_v2 run yet)",
+    "results_file": "certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql.results.json"
+  },
+  "do_not": "record bp_financial_quiescence_proven against the v1 pin (dacbfc62\u2026) or the superseded draft (bb99a1a1\u2026)",
+  "non_blocking_financials_handoff": "certification/business-processes-v2/slice8a/financials-quiescence-handoff.md",
+  "registration": "register the path and hash as present on MERGED Alloy staging; the merge commit is reported with the PR"
+}

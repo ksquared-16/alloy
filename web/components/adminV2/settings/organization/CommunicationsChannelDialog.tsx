@@ -1,0 +1,902 @@
+"use client";
+
+/**
+ * Connect or configure one Communications channel.
+ *
+ * Everything an administrator can change about a channel lives here, in the
+ * organization's own words: the identity Alloy sends as, the address or number
+ * replies come back to, whether the channel is on, and which one is the default
+ * when several exist.
+ *
+ * The credential is the one thing they choose but never type. The picker offers
+ * what the deployment has provisioned and nothing else — see
+ * `providerCredentialCatalog.ts`. There is no key field, and adding one would be
+ * refused by the route regardless.
+ *
+ * Errors are shown exactly as the server phrased them. That matters most for the
+ * duplicate-address case: the receiving-address index is global across tenants, so
+ * the server deliberately says only that the address is taken. Re-wording it here
+ * risks inventing detail about another organization.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
+import {
+    ConfigurationPrimaryButton,
+    ConfigurationSecondaryButton,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import type { BindingView, ChannelCard, OrgLocation } from "@/lib/communications/organizationCommunicationsModel";
+import type { CredentialOption } from "./OrganizationCommunicationsPage";
+
+const BINDINGS = "/api/admin/communications/bindings";
+
+type Props = {
+    card: ChannelCard;
+    mode: "connect" | "configure";
+    /** Null = the organization default identity. Otherwise the location being configured. */
+    locationId: string | null;
+    locations: OrgLocation[];
+    bindings: BindingView[];
+    credentialOptions: CredentialOption[];
+    onClose: () => void;
+    onSaved: () => void | Promise<void>;
+};
+
+/**
+ * What "Replies come back to" does NOT mean.
+ *
+ * The field takes an email address, so it reads like somewhere Alloy will go and
+ * read mail — and a reasonable administrator could type a teacher's work mailbox
+ * expecting exactly that. It would not work, and worse, the expectation itself is
+ * wrong about the product: Alloy never connects to a staff mailbox, and there is
+ * no Gmail or Outlook sign-in anywhere in this flow.
+ *
+ * Alloy receives only what is deliberately addressed or forwarded to an identity
+ * it controls. Saying so at the point of entry is cheaper than correcting the
+ * belief later, and the belief is a privacy one.
+ */
+
+/**
+ * Connect the organization's OWN Resend account.
+ *
+ * The key is entered once and never comes back. It is posted to the one endpoint
+ * that accepts a credential, verified against Resend BEFORE the connection is
+ * called connected, and stored through the organization-owned credential
+ * authority. Nothing here reads it back, and the field is cleared the moment the
+ * request is made so it does not linger in the DOM.
+ *
+ * The "Real messages" warning is deliberately kept nearby: an organization's own
+ * Resend account CAN reach real families, and that is exactly the point of
+ * connecting it — but it should never be a surprise.
+ */
+
+/**
+ * Manage an existing provider connection.
+ *
+ * The lifecycle a Director could not perform: see what is connected, replace it,
+ * disconnect it, reconnect. Previously the only affordance was pasting a new key
+ * into the connect field, which is a replacement but not a lifecycle — there was
+ * no way to answer "how do I disconnect this?".
+ *
+ * DISCONNECT REVOKES THE CREDENTIAL AND NOTHING ELSE. Conversations and message
+ * history are not touched, and the copy says so before the operator commits:
+ * losing a provider must never look like losing the record of what was said.
+ */
+function ManageConnection({
+    card,
+    account,
+    onChanged,
+}: {
+    card: ChannelCard;
+    account: NonNullable<ChannelCard["providerAccount"]>;
+    onChanged: () => void;
+}) {
+    const [confirming, setConfirming] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const provider = card.channel === "email" ? "resend" : "twilio";
+
+    const disconnect = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/communications/provider-connection?provider=${provider}`, {
+                method: "DELETE",
+            });
+            if (!res.ok) {
+                const json = (await res.json()) as { error?: string };
+                setError(json.error ?? "Could not disconnect.");
+                return;
+            }
+            setConfirming(false);
+            onChanged();
+        } catch {
+            setError("Could not reach Alloy to disconnect.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div
+            className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.05] px-2.5 py-2"
+            data-testid={`communications-manage-${card.channel}`}
+        >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-alloy-midnight/70">Connection</p>
+                    <p className="text-[12px] text-alloy-midnight/85" data-testid={`communications-manage-${card.channel}-account`}>
+                        {account.providerLabel}
+                        {account.label ? ` · ${account.label}` : ""}
+                    </p>
+                    <p className="text-[11px] text-alloy-midnight/55">
+                        {account.owner === "organization"
+                            ? "Connected by your organization. You can replace or disconnect it here."
+                            : "Managed by Alloy for this deployment. Connect your own account below to take ownership."}
+                    </p>
+                </div>
+                {account.owner === "organization" ? (
+                    <button
+                        type="button"
+                        onClick={() => setConfirming((v) => !v)}
+                        className="shrink-0 text-[11px] font-semibold text-alloy-ember hover:underline"
+                        data-testid={`communications-manage-${card.channel}-disconnect`}
+                    >
+                        Disconnect
+                    </button>
+                ) : null}
+            </div>
+
+            {confirming ? (
+                <div
+                    className="mt-2 rounded border border-alloy-ember/30 bg-alloy-ember/[0.05] px-2.5 py-2"
+                    data-testid={`communications-manage-${card.channel}-confirm`}
+                >
+                    <p className="text-[11px] font-semibold text-alloy-ember">Disconnect this connection?</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-alloy-midnight/75">
+                        <li>Sending will stop.</li>
+                        <li>Replies will no longer be received through this connection.</li>
+                        <li>
+                            <strong>Existing conversations and message history will be retained.</strong>
+                        </li>
+                    </ul>
+                    <div className="mt-1.5 flex gap-1.5">
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void disconnect()}
+                            className="rounded bg-alloy-ember px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
+                            data-testid={`communications-manage-${card.channel}-confirm-disconnect`}
+                        >
+                            {busy ? "Disconnecting…" : "Disconnect"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setConfirming(false)}
+                            className="rounded border border-alloy-stone/40 px-2.5 py-1 text-[11px] font-semibold text-alloy-midnight/70"
+                            data-testid={`communications-manage-${card.channel}-cancel`}
+                        >
+                            Keep it
+                        </button>
+                    </div>
+                    {error ? <p className="mt-1 text-[11px] text-alloy-ember">{error}</p> : null}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+
+/**
+ * Connect the organization's OWN Twilio account.
+ *
+ * Twilio Connect would have avoided storing a customer secret entirely, and is
+ * not used for one unresolved reason: Twilio signs inbound webhooks with "your
+ * account's auth token", and the documentation does not say whether that is
+ * Alloy's token or the Connect subaccount's. Alloy validates that signature and
+ * fails closed, so an unproven answer would risk silently refusing every inbound
+ * text. This uses the organization-owned credential authority instead.
+ *
+ * The Account SID and Messaging Service SID are NOT secrets — they appear in
+ * Twilio's own console — so they are ordinary fields. Only the Auth Token is
+ * write-once.
+ */
+function ConnectTwilioStep({ onConnected }: { onConnected: () => void }) {
+    const [accountSid, setAccountSid] = useState("");
+    const [authToken, setAuthToken] = useState("");
+    const [serviceSid, setServiceSid] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [done, setDone] = useState<string | null>(null);
+
+    const connect = async () => {
+        setBusy(true);
+        setError(null);
+        const token = authToken;
+        setAuthToken("");
+        try {
+            const res = await fetch("/api/admin/communications/provider-connection", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider: "twilio",
+                    account_sid: accountSid.trim(),
+                    auth_token: token,
+                    messaging_service_sid: serviceSid.trim() || undefined,
+                }),
+            });
+            const json = (await res.json()) as { error?: string; connection?: { account_label?: string | null } };
+            if (!res.ok) {
+                setError(json.error ?? "Could not connect.");
+                return;
+            }
+            setDone(json.connection?.account_label ?? "Connected");
+            onConnected();
+        } catch {
+            setError("Could not reach Alloy to complete the connection.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div
+            className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.05] px-2.5 py-2"
+            data-testid="communications-dialog-connect-twilio"
+        >
+            <p className="text-[11px] font-semibold text-alloy-midnight/70">Connect your Twilio account</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/60">
+                Paste the Account SID and Auth Token from your Twilio console. Alloy stores the token securely for your
+                organization and never shows it again.
+            </p>
+            <div className="mt-1.5 space-y-1.5">
+                <input
+                    value={accountSid}
+                    onChange={(e) => setAccountSid(e.target.value)}
+                    placeholder="Account SID (AC…)"
+                    autoComplete="off"
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-twilio-sid"
+                />
+                <input
+                    type="password"
+                    value={authToken}
+                    onChange={(e) => setAuthToken(e.target.value)}
+                    placeholder="Auth Token"
+                    autoComplete="off"
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-twilio-token"
+                />
+                <input
+                    value={serviceSid}
+                    onChange={(e) => setServiceSid(e.target.value)}
+                    placeholder="Messaging Service SID (optional)"
+                    autoComplete="off"
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-twilio-service"
+                />
+                <button
+                    type="button"
+                    disabled={busy || !accountSid.trim() || !authToken.trim()}
+                    onClick={() => void connect()}
+                    className="rounded bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40"
+                    data-testid="communications-dialog-twilio-connect"
+                >
+                    {busy ? "Verifying…" : "Connect Twilio"}
+                </button>
+            </div>
+            {error ? (
+                <p className="mt-1 text-[11px] text-alloy-ember" data-testid="communications-dialog-twilio-error">
+                    {error}
+                </p>
+            ) : null}
+            {done ? (
+                <p className="mt-1 text-[11px] text-emerald-800" data-testid="communications-dialog-twilio-connected">
+                    Connected{done && done !== "Connected" ? ` · ${done}` : ""}.
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
+function ConnectResendStep({
+    onConnected,
+    hasDeploymentOption,
+}: {
+    onConnected: () => void;
+    hasDeploymentOption: boolean;
+}) {
+    const [apiKey, setApiKey] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [domains, setDomains] = useState<string[] | null>(null);
+
+    const connect = async () => {
+        setBusy(true);
+        setError(null);
+        const submitted = apiKey;
+        // Cleared before the await: a rejected key must not sit in the DOM while
+        // the request is in flight.
+        setApiKey("");
+        try {
+            const res = await fetch("/api/admin/communications/provider-connection", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ provider: "resend", api_key: submitted }),
+            });
+            const json = (await res.json()) as {
+                error?: string;
+                connection?: { verified_domains?: string[] };
+            };
+            if (!res.ok) {
+                setError(json.error ?? "Could not connect.");
+                return;
+            }
+            setDomains(json.connection?.verified_domains ?? []);
+            onConnected();
+        } catch {
+            setError("Could not reach Alloy to complete the connection.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div
+            className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.05] px-2.5 py-2"
+            data-testid="communications-dialog-connect-resend"
+        >
+            <p className="text-[11px] font-semibold text-alloy-midnight/70">Connect your Resend account</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/60">
+                Create an API key in Resend and paste it here. Alloy stores it securely for your organization and never
+                shows it again. You can replace or remove it at any time.
+            </p>
+            <div className="mt-1.5 flex gap-1.5">
+                <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="re_..."
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-resend-key"
+                />
+                <button
+                    type="button"
+                    disabled={busy || !apiKey.trim()}
+                    onClick={() => void connect()}
+                    className="shrink-0 rounded bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40"
+                    data-testid="communications-dialog-resend-connect"
+                >
+                    {busy ? "Verifying…" : "Connect"}
+                </button>
+            </div>
+            {error ? (
+                <p className="mt-1 text-[11px] text-alloy-ember" data-testid="communications-dialog-resend-error">
+                    {error}
+                </p>
+            ) : null}
+            {domains ? (
+                <p className="mt-1 text-[11px] text-emerald-800" data-testid="communications-dialog-resend-connected">
+                    Connected.{" "}
+                    {domains.length
+                        ? `Verified for sending from ${domains.join(", ")}.`
+                        : "No verified sending domain yet — verify one in Resend before mail will be delivered."}
+                </p>
+            ) : null}
+            {hasDeploymentOption ? null : (
+                <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/45">
+                    Connecting your own account is the normal path — Alloy staff are not involved.
+                </p>
+            )}
+        </div>
+    );
+}
+
+function MailboxPrivacyNote() {
+    return (
+        <p
+            className="rounded border border-alloy-stone/25 bg-alloy-stone/[0.05] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/65"
+            data-testid="communications-dialog-mailbox-privacy"
+        >
+            Alloy does not read anyone&apos;s mailbox. It never signs in to Gmail or Outlook and needs no access to
+            staff email. Only mail addressed or forwarded to a Communications address Alloy controls reaches Alloy —
+            so this must be an address you route to Alloy, not a personal or staff mailbox.
+        </p>
+    );
+}
+
+function fieldLabel(channel: string, key: "identity" | "receiving"): string {
+    if (channel === "email") return key === "identity" ? "Send as" : "Replies come back to";
+    return key === "identity" ? "Send from" : "Number families text";
+}
+
+export default function CommunicationsChannelDialog({
+    card,
+    mode,
+    locationId,
+    locations,
+    bindings,
+    credentialOptions,
+    onClose,
+    onSaved,
+}: Props) {
+    const isEmail = card.channel === "email";
+
+    // Scope the dialog to what is being configured: one location's identity, or
+    // the organization default. Without this, editing Riverside would silently
+    // load the organization's binding and overwrite it.
+    const scopedBindings = bindings.filter((b) =>
+        locationId ? (b.location_id ?? null) === locationId : !(b.location_id ?? null),
+    );
+    const connecting = mode === "connect" || scopedBindings.length === 0;
+    const locationLabel = locationId ? (locations.find((l) => l.id === locationId)?.label ?? "this location") : null;
+
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Connect form
+    const [credentialKey, setCredentialKey] = useState("");
+    const [label, setLabel] = useState("");
+    const [fromEmail, setFromEmail] = useState("");
+    const [inboundAddress, setInboundAddress] = useState("");
+    const [inboundNumber, setInboundNumber] = useState("");
+
+    // Configure form — one binding at a time, defaulting to the channel's face.
+    const [editingId, setEditingId] = useState<string | null>(
+        locationId ? (scopedBindings[0]?.id ?? null) : card.primaryBindingId,
+    );
+    const editing = useMemo(
+        () => scopedBindings.find((b) => b.id === editingId) ?? scopedBindings[0] ?? null,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [bindings, editingId, locationId],
+    );
+
+    const [editFrom, setEditFrom] = useState("");
+    const [editInbound, setEditInbound] = useState("");
+    const [editNumber, setEditNumber] = useState("");
+    const [editLabel, setEditLabel] = useState("");
+    const [editEnabled, setEditEnabled] = useState(true);
+    const [editPrimary, setEditPrimary] = useState(false);
+
+    useEffect(() => {
+        const first = credentialOptions.find((c) => c.available) ?? credentialOptions[0];
+        setCredentialKey(first?.key ?? "");
+    }, [credentialOptions]);
+
+    useEffect(() => {
+        if (!editing) return;
+        setEditFrom(editing.from_email ?? "");
+        setEditInbound(editing.inbound_address ?? "");
+        setEditNumber(editing.inbound_to_e164 ?? "");
+        setEditLabel(editing.display_label ?? "");
+        setEditEnabled(String(editing.status ?? "").toLowerCase() !== "disabled");
+        setEditPrimary(Boolean(editing.is_primary));
+    }, [editing]);
+
+    const chosenCredential = credentialOptions.find((c) => c.key === credentialKey) ?? null;
+
+    async function submit(url: string, method: "POST" | "PATCH", payload: Record<string, unknown>) {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(url, {
+                method,
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) throw new Error(json.error ?? `Could not save (${res.status})`);
+            await onSaved();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not save");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const doConnect = () =>
+        submit(BINDINGS, "POST", {
+            channel: card.channel,
+            credential_key: credentialKey,
+            location_id: locationId,
+            display_label: label.trim() || null,
+            status: "pending_verification",
+            ...(isEmail
+                ? { from_email: fromEmail.trim() || null, inbound_address: inboundAddress.trim() || null }
+                : { inbound_to_e164: inboundNumber.trim() || null }),
+        });
+
+    const doSave = () => {
+        if (!editing) return;
+        submit(`${BINDINGS}/${encodeURIComponent(editing.id)}`, "PATCH", {
+            display_label: editLabel.trim() || null,
+            status: editEnabled ? "active" : "disabled",
+            is_primary: editPrimary,
+            ...(isEmail
+                ? { from_email: editFrom.trim() || null, inbound_address: editInbound.trim() || null }
+                : { inbound_to_e164: editNumber.trim() || null }),
+        });
+    };
+
+    /**
+     * Return this location to the organization identity.
+     *
+     * Clearing `location_id` rather than deleting the binding is deliberate: the
+     * receiving address stays claimed by this tenant (the global uniqueness index
+     * still protects it) and the conversation history that referenced it stays
+     * intact. Deleting would free the address for another organization to claim
+     * and orphan every message that named it.
+     */
+    const doRemoveOverride = () => {
+        if (!editing) return;
+        submit(`${BINDINGS}/${encodeURIComponent(editing.id)}`, "PATCH", { location_id: null });
+    };
+
+    if (typeof document === "undefined") return null;
+
+    // PORTALED TO BODY, at the platform's nested-overlay z.
+    //
+    // A plain `z-[120]` was not enough and the reason is the classic one: this
+    // dialog renders inside the workspace, so its z-index competes only within
+    // that stacking context. The floating BOS assistant is portaled to `body`, so
+    // it sat above the dialog regardless — certification caught the dialog's own
+    // Close button being unclickable, which is the same "button does nothing"
+    // failure this platform has hit before with nested portals.
+    //
+    // `ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z` is the existing constant for
+    // exactly this, already used by the Processing dialogs.
+    return createPortal(
+        <div
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
+            className="fixed inset-0 flex items-center justify-center bg-alloy-midnight/35 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${connecting ? "Connect" : "Configure"} ${card.channelLabel}`}
+            data-testid="communications-channel-dialog"
+        >
+            <div className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-alloy-stone/30 bg-white shadow-xl">
+                <header className="flex items-baseline justify-between gap-2 border-b border-alloy-stone/25 px-4 py-3">
+                    <div>
+                        <h2 className="config-typo-workspace-title">
+                            {locationLabel
+                                ? `${locationLabel} — ${card.channelLabel}`
+                                : connecting
+                                  ? `Connect ${card.channelLabel}`
+                                  : `${card.channelLabel} — organization default`}
+                        </h2>
+                        <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
+                            Alloy never asks for an API key — choose a credential this deployment already provides.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Close"
+                        className="rounded p-1 text-alloy-midnight/50 hover:bg-alloy-stone/10"
+                        data-testid="communications-dialog-close"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </header>
+
+                <div className="space-y-3 px-4 py-3 text-[12px]">
+                    {connecting ? (
+                        <>
+                            {/*
+                              * WHAT AM I CONNECTING TO? An administrator must be able
+                              * to answer that before clicking, without reading code or
+                              * asking an engineer. Provider, the named connection, and
+                              * whether choosing it makes real external delivery
+                              * possible — stated plainly, with no credential detail.
+                              */}
+                            <dl
+                                className="rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-2.5 py-2 text-[11px]"
+                                data-testid="communications-dialog-connection-summary"
+                            >
+                                <div className="flex justify-between gap-2">
+                                    <dt className="text-alloy-midnight/50">Provider</dt>
+                                    <dd className="font-medium text-alloy-midnight/85">
+                                        {card.providerLabel ?? (isEmail ? "Resend" : "Twilio")}
+                                    </dd>
+                                </div>
+                                <div className="mt-0.5 flex justify-between gap-2">
+                                    <dt className="text-alloy-midnight/50">Connection</dt>
+                                    <dd
+                                        className="min-w-0 truncate font-medium text-alloy-midnight/85"
+                                        data-testid="communications-dialog-connection-name"
+                                    >
+                                        {chosenCredential?.label ?? "None available"}
+                                    </dd>
+                                </div>
+                                <div className="mt-0.5 flex justify-between gap-2">
+                                    <dt className="text-alloy-midnight/50">Real messages</dt>
+                                    <dd
+                                        className={
+                                            chosenCredential?.externalSendCapable
+                                                ? "font-semibold text-amber-900"
+                                                : "font-medium text-alloy-midnight/70"
+                                        }
+                                        data-testid="communications-dialog-external-capability"
+                                    >
+                                        {chosenCredential
+                                            ? chosenCredential.externalSendCapable
+                                                ? "Yes — can send to real people"
+                                                : "No — cannot leave this environment"
+                                            : "—"}
+                                    </dd>
+                                </div>
+                            </dl>
+
+                            {isEmail ? (
+                                <ConnectResendStep
+                                    onConnected={() => void onSaved()}
+                                    hasDeploymentOption={credentialOptions.some((c) => c.available)}
+                                />
+                            ) : credentialOptions.length === 0 || !credentialOptions.some((c) => c.available) ? (
+                                <p
+                                    className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.06] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/70"
+                                    data-testid="communications-dialog-no-connection"
+                                >
+                                    <strong>No SMS connection yet.</strong> Connecting a Twilio account from here is not
+                                    available in this release. Everything else on this screen can still be configured.
+                                </p>
+                            ) : null}
+
+                            <Field label="Credential">
+                                <select
+                                    value={credentialKey}
+                                    onChange={(e) => setCredentialKey(e.target.value)}
+                                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                    data-testid="communications-dialog-credential"
+                                >
+                                    {credentialOptions.length === 0 ? <option value="">None available</option> : null}
+                                    {credentialOptions.map((c) => (
+                                        <option key={c.key} value={c.key} disabled={!c.available}>
+                                            {c.label}
+                                            {c.available ? "" : " — not available yet"}
+                                        </option>
+                                    ))}
+                                </select>
+                                {chosenCredential ? (
+                                    <Hint>
+                                        {chosenCredential.description}
+                                        {chosenCredential.available ? null : (
+                                            <strong className="text-alloy-ember">
+                                                {" "}
+                                                Ask your administrator to add this to the deployment first.
+                                            </strong>
+                                        )}
+                                    </Hint>
+                                ) : null}
+                            </Field>
+
+                            <Field label="Name (optional)">
+                                <input
+                                    value={label}
+                                    onChange={(e) => setLabel(e.target.value)}
+                                    placeholder="Front desk"
+                                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                    data-testid="communications-dialog-label"
+                                />
+                            </Field>
+
+                            {isEmail ? (
+                                <>
+                                    <Field label={fieldLabel("email", "identity")}>
+                                        <input
+                                            type="email"
+                                            value={fromEmail}
+                                            onChange={(e) => setFromEmail(e.target.value)}
+                                            placeholder="hello@yourschool.org"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-from"
+                                        />
+                                        <Hint>
+                                            Needs a sending domain verified with Resend. Leave blank to use the
+                                            deployment&apos;s default sending address.
+                                        </Hint>
+                                    </Field>
+                                    <Field label={fieldLabel("email", "receiving")}>
+                                        <input
+                                            type="email"
+                                            value={inboundAddress}
+                                            onChange={(e) => setInboundAddress(e.target.value)}
+                                            placeholder="families@yourschool.org"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-inbound"
+                                        />
+                                        <Hint>
+                                            Needs a domain whose mail is routed into Resend receiving — an address
+                                            Alloy controls, not a staff mailbox.
+                                        </Hint>
+                                    </Field>
+                                </>
+                            ) : (
+                                <Field label={fieldLabel("sms", "receiving")}>
+                                    <input
+                                        type="tel"
+                                        value={inboundNumber}
+                                        onChange={(e) => setInboundNumber(e.target.value)}
+                                        placeholder="+15551234567"
+                                        className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                        data-testid="communications-dialog-number"
+                                    />
+                                </Field>
+                            )}
+
+                            {isEmail ? <MailboxPrivacyNote /> : null}
+
+                            <p className="text-[11px] text-alloy-midnight/55">
+                                The channel is connected as <strong>not yet verified</strong> — nothing is sent or received until the
+                                provider side is confirmed. This page reports when sending and receiving each start working.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            {/* Connecting the organization's own account belongs in BOTH
+                                modes. An administrator whose channel is already
+                                connected — to the deployment credential, or to a key
+                                that has since been rotated — reaches this screen through
+                                Configure, and previously had nowhere to put their own
+                                Resend key. */}
+                            {card.providerAccount ? (
+                                <ManageConnection
+                                    card={card}
+                                    account={card.providerAccount}
+                                    onChanged={() => void onSaved()}
+                                />
+                            ) : null}
+                            {isEmail ? <ConnectResendStep onConnected={() => void onSaved()} hasDeploymentOption /> : null}
+                            {!isEmail ? <ConnectTwilioStep onConnected={() => void onSaved()} /> : null}
+
+                            {scopedBindings.length > 1 ? (
+                                <Field label="Which one">
+                                    <select
+                                        value={editing?.id ?? ""}
+                                        onChange={(e) => setEditingId(e.target.value)}
+                                        className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                        data-testid="communications-dialog-which"
+                                    >
+                                        {scopedBindings.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.display_label ||
+                                                    b.from_email ||
+                                                    b.inbound_address ||
+                                                    b.inbound_to_e164 ||
+                                                    card.channelLabel}
+                                                {b.is_primary ? " (default)" : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                            ) : null}
+
+                            <Field label="Name">
+                                <input
+                                    value={editLabel}
+                                    onChange={(e) => setEditLabel(e.target.value)}
+                                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                    data-testid="communications-dialog-edit-label"
+                                />
+                            </Field>
+
+                            {isEmail ? (
+                                <>
+                                    <Field label={fieldLabel("email", "identity")}>
+                                        <input
+                                            type="email"
+                                            value={editFrom}
+                                            onChange={(e) => setEditFrom(e.target.value)}
+                                            placeholder="Using the default sending address"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-edit-from"
+                                        />
+                                        <Hint>Needs a sending domain verified with Resend.</Hint>
+                                    </Field>
+                                    <Field label={fieldLabel("email", "receiving")}>
+                                        <input
+                                            type="email"
+                                            value={editInbound}
+                                            onChange={(e) => setEditInbound(e.target.value)}
+                                            placeholder="families@yourschool.org"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-edit-inbound"
+                                        />
+                                        <Hint>
+                                            Needs a domain whose mail is routed into Resend receiving — an address
+                                            Alloy controls, not a staff mailbox.
+                                        </Hint>
+                                    </Field>
+                                    <MailboxPrivacyNote />
+                                </>
+                            ) : (
+                                <Field label={fieldLabel("sms", "receiving")}>
+                                    <input
+                                        type="tel"
+                                        value={editNumber}
+                                        onChange={(e) => setEditNumber(e.target.value)}
+                                        className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                        data-testid="communications-dialog-edit-number"
+                                    />
+                                </Field>
+                            )}
+
+                            <label className="flex items-center gap-2" data-testid="communications-dialog-enabled-row">
+                                <input
+                                    type="checkbox"
+                                    checked={editEnabled}
+                                    onChange={(e) => setEditEnabled(e.target.checked)}
+                                    data-testid="communications-dialog-enabled"
+                                />
+                                <span className="text-[12px] text-alloy-midnight/75">Channel is switched on</span>
+                            </label>
+
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={editPrimary}
+                                    onChange={(e) => setEditPrimary(e.target.checked)}
+                                    data-testid="communications-dialog-primary"
+                                />
+                                <span className="text-[12px] text-alloy-midnight/75">
+                                    Use this as the default {card.channelLabel} identity
+                                </span>
+                            </label>
+                        </>
+                    )}
+
+                    {error ? (
+                        <p className="rounded border border-alloy-ember/30 bg-alloy-ember/[0.06] px-2.5 py-2 text-[12px] text-alloy-ember"
+                           role="alert"
+                           data-testid="communications-dialog-error">
+                            {error}
+                        </p>
+                    ) : null}
+                </div>
+
+                <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-alloy-stone/25 px-4 py-3">
+                    {locationId && !connecting && editing ? (
+                        <button
+                            type="button"
+                            onClick={() => void doRemoveOverride()}
+                            disabled={busy}
+                            className="mr-auto text-[11px] font-semibold text-alloy-ember hover:underline disabled:opacity-50"
+                            data-testid="communications-dialog-remove-override"
+                        >
+                            Use the organization identity instead
+                        </button>
+                    ) : null}
+                    <ConfigurationSecondaryButton onClick={onClose} disabled={busy}>
+                        Cancel
+                    </ConfigurationSecondaryButton>
+                    <ConfigurationPrimaryButton
+                        onClick={() => void (connecting ? doConnect() : doSave())}
+                        disabled={busy || (connecting && !(chosenCredential?.available ?? false))}
+                        data-testid="communications-dialog-submit"
+                    >
+                        {busy ? "Saving…" : connecting ? `Connect ${card.channelLabel}` : "Save changes"}
+                    </ConfigurationPrimaryButton>
+                </footer>
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-alloy-midnight/55">{label}</span>
+            {children}
+        </label>
+    );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+    return <span className="mt-0.5 block text-[11px] leading-snug text-alloy-midnight/52">{children}</span>;
+}

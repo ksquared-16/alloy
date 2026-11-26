@@ -8,25 +8,28 @@ import {
 import * as supabaseAdmin from "@/lib/supabaseAdmin";
 
 describe("chooseOrgAndRoleKeysFromMembershipRows", () => {
-    it("prefers smallest org_id among admin/ops rows when mixed with custom roles", () => {
+    // W-22 / `I-7` inverted the next two. They certified the org tiebreak — smallest `org_id` among
+    // admin/ops rows, else smallest among all — which §9 names *"a silent, unexplainable authority
+    // decision"*. `Q18` (deployed, `tha_f2f89635241cea`) found 0 of 6 principals in more than one
+    // organization, so removing it moves nobody; the helper now REFUSES an ambiguous membership
+    // rather than choosing, because there is no request org to consult. Fixtures unchanged, so the
+    // inputs that proved the old behaviour are the ones proving it is gone.
+
+    it("INVERTED: a membership spanning three orgs no longer resolves to the smallest", () => {
         const rows = [
             { org_id: "z-org", role: "coordinator" },
             { org_id: "a-org", role: "admin" },
             { org_id: "m-org", role: "ops" },
         ];
-        const out = chooseOrgAndRoleKeysFromMembershipRows(rows);
-        expect(out?.orgId).toBe("a-org");
-        expect(out?.roleKeys).toEqual(["admin"]);
+        expect(chooseOrgAndRoleKeysFromMembershipRows(rows)).toBeNull();
     });
 
-    it("uses smallest org among all memberships when no admin/ops", () => {
+    it("INVERTED: custom roles across two orgs no longer resolve to the smallest", () => {
         const rows = [
             { org_id: "b-org", role: "school_director" },
             { org_id: "a-org", role: "regional_lead" },
         ];
-        const out = chooseOrgAndRoleKeysFromMembershipRows(rows);
-        expect(out?.orgId).toBe("a-org");
-        expect(out?.roleKeys).toEqual(["regional_lead"]);
+        expect(chooseOrgAndRoleKeysFromMembershipRows(rows)).toBeNull();
     });
 
     it("aggregates multiple roles for chosen org when admin path picks org", () => {
@@ -242,35 +245,39 @@ function createOrgMemberMockSupabase(config: {
 }
 
 describe("resolveAdminAccessCore", () => {
-    it("admin membership resolves portalEligible with default all/all when profile missing", async () => {
+    it("admin membership with no profile stays portal-eligible but reaches no department or site (W-7: absent scope denies)", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "org-x", role: "admin" }],
-            grants: [{ permission_key: "crm.read" }],
+            // W-13 — `portalEligible` is read from this list now, not from the role name, so an
+            // administrator fixture that omits `portal.access` describes a principal who cannot open
+            // the portal. That is a real state the product can express; it is not this test's.
+            grants: [{ permission_key: "crm.read" }, { permission_key: "portal.access" }],
             profile: null,
         });
         const core = await resolveAdminAccessCore(sb, "user-1");
         expect(core).not.toBeNull();
         expect(core!.orgId).toBe("org-x");
         expect(core!.roleKeys).toEqual(["admin"]);
-        expect(core!.permissionKeys).toEqual(["crm.read"]);
-        expect(core!.departmentScope).toBe("all");
-        expect(core!.siteScope).toBe("all");
-        expect(core!.allowedDepartmentIds).toBeNull();
-        expect(core!.allowedSiteLocationIds).toBeNull();
+        expect(core!.permissionKeys).toEqual(["crm.read", "portal.access"]);
+        // Capabilities still come from grants; only the absent profile's scope is denied, never widened.
+        expect(core!.departmentScope).toBe("restricted");
+        expect(core!.siteScope).toBe("restricted");
+        expect(core!.allowedDepartmentIds).toEqual([]);
+        expect(core!.allowedSiteLocationIds).toEqual([]);
         expect(core!.portalEligible).toBe(true);
     });
 
-    it("ops membership resolves all/all when profile missing", async () => {
+    it("ops membership with no profile reaches no department or site (W-7: absent scope denies)", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "org-x", role: "ops" }],
-            grants: [],
+            grants: [{ permission_key: "portal.access" }],
             profile: null,
         });
         const core = await resolveAdminAccessCore(sb, "user-1");
         expect(core?.portalEligible).toBe(true);
         expect(core?.roleKeys).toEqual(["ops"]);
-        expect(core?.departmentScope).toBe("all");
-        expect(core?.siteScope).toBe("all");
+        expect(core?.departmentScope).toBe("restricted");
+        expect(core?.siteScope).toBe("restricted");
     });
 
     it("custom role resolves roleKeys with portalEligible false", async () => {
@@ -300,10 +307,41 @@ describe("resolveAdminAccessCore", () => {
         expect(core?.allowedSiteLocationIds).toEqual(["site-1"]);
     });
 
-    it("legacy app_users admin fills org when user_roles empty", async () => {
+    // W-20 inverted the next two. They certified the legacy fallback: an `app_users` row, or a
+    // `user_profiles.role`, conferring `admin` and portal admission on a principal with NO
+    // membership. `Q15-A1`/`A2`/`A3` returned zero on the deployed tenant, the fallback was
+    // deleted, and the fixtures are kept EXACTLY as they were so the assertions say the strong
+    // thing: the input that used to grant admin now grants nothing.
+
+    it("legacy app_users admin no longer fills org when user_roles is empty", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [],
             grants: [],
+            profile: null,
+            app_users_by_id: { role: "admin", org_id: "legacy-org" },
+            app_users_by_auth: null,
+        });
+        expect(await resolveAdminAccessCore(sb, "user-1")).toBeNull();
+    });
+
+    it("a legacy profile role no longer resolves an org through app_users", async () => {
+        const sb = createAccessMockSupabase({
+            user_roles: [],
+            grants: [],
+            profile: null,
+            legacy_profile_role: "admin",
+            app_users_by_id: null,
+            app_users_by_auth: { role: "admin", org_id: "legacy-org-2" },
+        });
+        expect(await resolveAdminAccessCore(sb, "auth-user-9")).toBeNull();
+    });
+
+    it("the same mock still resolves a principal who HAS a membership — not a broken double", async () => {
+        // Without this, both assertions above would be satisfied by a fixture that cannot resolve
+        // anything at all, which is the vacuity an inverted test invites.
+        const sb = createAccessMockSupabase({
+            user_roles: [{ org_id: "legacy-org", role: "admin" }],
+            grants: [{ permission_key: "portal.access" }],
             profile: null,
             app_users_by_id: { role: "admin", org_id: "legacy-org" },
             app_users_by_auth: null,
@@ -313,28 +351,15 @@ describe("resolveAdminAccessCore", () => {
         expect(core?.roleKeys).toEqual(["admin"]);
         expect(core?.portalEligible).toBe(true);
     });
-
-    it("legacy profile admin resolves org via app_users.org_id lookup", async () => {
-        const sb = createAccessMockSupabase({
-            user_roles: [],
-            grants: [],
-            profile: null,
-            legacy_profile_role: "admin",
-            app_users_by_id: null,
-            app_users_by_auth: { role: "admin", org_id: "legacy-org-2" },
-        });
-        const core = await resolveAdminAccessCore(sb, "auth-user-9");
-        expect(core?.orgId).toBe("legacy-org-2");
-        expect(core?.roleKeys).toEqual(["admin"]);
-        expect(core?.portalEligible).toBe(true);
-    });
 });
 
 describe("layout vs API org alignment (same resolver)", () => {
     it("getAdminOrgIdForUser matches resolveAdminAccessCore org when portalEligible", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "same-org", role: "admin" }],
-            grants: [],
+            // `getAdminOrgIdForUser` returns null unless the principal is admitted, so the fixture
+            // has to carry the admission grant for the alignment claim to have a subject at all.
+            grants: [{ permission_key: "portal.access" }],
             profile: null,
         });
 

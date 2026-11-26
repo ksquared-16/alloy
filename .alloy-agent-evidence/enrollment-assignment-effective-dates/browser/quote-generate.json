@@ -1,0 +1,66 @@
+{
+  "attempt": 1,
+  "status": 200,
+  "pick": {
+    "id": "cf1d14ae-85f1-4302-b8dc-18164901ec96"
+  },
+  "quoteJson": {
+    "ok": true,
+    "process_instance_id": "802472d3-8f47-44fa-924e-c5da4456d56b",
+    "snapshot": {
+      "id": "fec155ae-4b73-46eb-ad0a-bf9abcff0bbe",
+      "offering_id": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+      "offering_version_key": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+      "offering_label": "$425.00/monthly",
+      "amount_cents": 42500,
+      "currency": "USD",
+      "effective_date": "2026-08-01",
+      "pricing_inputs": {
+        "program_key": "toddler",
+        "schedule_key": null,
+        "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "billing_period": "monthly",
+        "rate_cents": 42500,
+        "rate_id": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+        "is_location_override": false,
+        "customer_member_id": "05cf9138-7f4f-482c-a839-4644359985d1",
+        "opportunity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+        "program_category_id": "08e30247-4aeb-4bb8-890d-cdbb54979b6f"
+      },
+      "created_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+      "generated_at": "2026-08-03T23:51:40.760Z",
+      "status": "generated"
+    },
+    "active_snapshot": {
+      "id": "fec155ae-4b73-46eb-ad0a-bf9abcff0bbe",
+      "offering_id": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+      "offering_version_key": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+      "offering_label": "$425.00/monthly",
+      "amount_cents": 42500,
+      "currency": "USD",
+      "effective_date": "2026-08-01",
+      "pricing_inputs": {
+        "program_key": "toddler",
+        "schedule_key": null,
+        "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "billing_period": "monthly",
+        "rate_cents": 42500,
+        "rate_id": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+        "is_location_override": false,
+        "customer_member_id": "05cf9138-7f4f-482c-a839-4644359985d1",
+        "opportunity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+        "program_category_id": "08e30247-4aeb-4bb8-890d-cdbb54979b6f"
+      },
+      "created_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+      "generated_at": "2026-08-03T23:51:40.760Z",
+      "status": "generated"
+    },
+    "metadata_keys": {
+      "tuition_plan_id": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+      "assignment_quote_snapshots": 1
+    },
+    "ledger_posted": false,
+    "invoice_created": false,
+    "payment_created": false
+  }
+}

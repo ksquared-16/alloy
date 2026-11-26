@@ -1,0 +1,44 @@
+{
+  "trusted_host_action_id": "tha_58746d4640192b",
+  "query_hash": "ad400c44e5365e44eca3a4d917419f2c7793e85b6bd5f98a9f1737ca2508750e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T12:54:12.207Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_58746d4640192b",
+    "query_hash": "ad400c44e5365e44eca3a4d917419f2c7793e85b6bd5f98a9f1737ca2508750e",
+    "authorization_id": "grnt_268fcc3d2de144e4",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T12:54:13.661Z",
+    "question_ids": [
+      "w3_post_deploy"
+    ],
+    "questions": {
+      "w3_post_deploy": {
+        "question_id": "w3_post_deploy",
+        "row_count": null,
+        "rows": [
+          {
+            "payment_method_id_exists": 1,
+            "expected_settlement_is_date": "date",
+            "both_nullable": 2,
+            "method_fk_present": 1,
+            "provenance_index": true,
+            "payment_methods_still_there": true,
+            "attempts_total": 0,
+            "attempts_with_method": 0,
+            "needs_recognition_now": 0,
+            "ledger_has_w3": 1
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

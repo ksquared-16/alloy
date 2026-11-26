@@ -1,0 +1,156 @@
+{
+  "configure": [
+    {
+      "itemKey": "semiannual",
+      "billable": "false",
+      "recurrence": "No recurring periods — nothing is billed on a schedule for this frequency",
+      "billingPeriod": "No billing periods",
+      "cells": [
+        "Semi-Annual",
+        "Semi-Annual",
+        "No recurring periods — nothing is billed on a schedule for this frequency",
+        "No billing periods",
+        "Active",
+        "0",
+        ""
+      ]
+    },
+    {
+      "itemKey": "weekly",
+      "billable": "true",
+      "recurrence": "Every 7 days from the agreement anchor",
+      "billingPeriod": "Current · Sep 15–21, 2026 Next · Sep 22–28, 2026",
+      "cells": [
+        "Weekly",
+        "—",
+        "Every 7 days from the agreement anchor",
+        "Current · Sep 15–21, 2026 Next · Sep 22–28, 2026",
+        "Active",
+        "1",
+        ""
+      ]
+    },
+    {
+      "itemKey": "biweekly",
+      "billable": "true",
+      "recurrence": "Every 14 days from the agreement anchor",
+      "billingPeriod": "Current · Sep 15–28, 2026 Next · Sep 29–Oct 12, 2026",
+      "cells": [
+        "Bi-weekly",
+        "—",
+        "Every 14 days from the agreement anchor",
+        "Current · Sep 15–28, 2026 Next · Sep 29–Oct 12, 2026",
+        "Active",
+        "0",
+        ""
+      ]
+    },
+    {
+      "itemKey": "monthly",
+      "billable": "true",
+      "recurrence": "Each calendar month",
+      "billingPeriod": "Current · September 2026 Next · October 2026",
+      "cells": [
+        "Monthly",
+        "—",
+        "Each calendar month",
+        "Current · September 2026 Next · October 2026",
+        "Active",
+        "6",
+        ""
+      ]
+    },
+    {
+      "itemKey": "annual",
+      "billable": "true",
+      "recurrence": "Each year from the agreement anchor",
+      "billingPeriod": "Current · Sep 1, 2026–Aug 31, 2027 Next · Sep 1, 2027–Aug 31, 2028",
+      "cells": [
+        "Annual",
+        "—",
+        "Each year from the agreement anchor",
+        "Current · Sep 1, 2026–Aug 31, 2027 Next · Sep 1, 2027–Aug 31, 2028",
+        "Active",
+        "0",
+        ""
+      ]
+    },
+    {
+      "itemKey": "daily",
+      "billable": "true",
+      "recurrence": "Every day from the agreement anchor",
+      "billingPeriod": "Current · Sep 21–21, 2026 Next · Sep 22–22, 2026",
+      "cells": [
+        "Daily",
+        "—",
+        "Every day from the agreement anchor",
+        "Current · Sep 21–21, 2026 Next · Sep 22–22, 2026",
+        "Active",
+        "0",
+        ""
+      ]
+    },
+    {
+      "itemKey": "hourly",
+      "billable": "false",
+      "recurrence": "No recurring periods — nothing is billed on a schedule for this frequency",
+      "billingPeriod": "No billing periods",
+      "cells": [
+        "Hourly",
+        "—",
+        "No recurring periods — nothing is billed on a schedule for this frequency",
+        "No billing periods",
+        "Active",
+        "0",
+        ""
+      ]
+    },
+    {
+      "itemKey": "per_session",
+      "billable": "false",
+      "recurrence": "No recurring periods — nothing is billed on a schedule for this frequency",
+      "billingPeriod": "No billing periods",
+      "cells": [
+        "Per Session",
+        "—",
+        "No recurring periods — nothing is billed on a schedule for this frequency",
+        "No billing periods",
+        "Active",
+        "0",
+        ""
+      ]
+    }
+  ],
+  "accept": [
+    {
+      "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "who": "Certa Certhouse",
+      "surface": true,
+      "periodLine": "Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026",
+      "tuition": "Overridden $185.00 / weekly · from 2026-09-01",
+      "text": "CC Certa Certhouse 4/12/2021 (5y5m) New schedule DAYS M T W T F S S Use a schedule pattern DAILY HOURS 🕒 – 🕒 ROOM Select a room Select Site · Site EFFECTIVE Start End Open-ended Ongoing — no end date; ends later via a change. TUITION Tuition — Certa Certhouse Recommended · $195.00/weekly 1 option did not apply Expand options (1 other) The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity. Overridden $185.00 / weekly · from 2026-09-01 · Family kept the organisation rate agreed at enrolment. Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026 DISCOUNTS Sibling discount (QA specimen) · $18.50 expected to apply Add exception Sibling discount (QA specimen) · ended 2026-08-31 — Retired: certification scaffolding, superseded so the walkthrough starts clean Ended Acc"
+    },
+    {
+      "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "who": "Certb Certhouse",
+      "surface": true,
+      "periodLine": "Billing frequency monthly · current period September 2026 · next October 2026",
+      "tuition": null,
+      "text": "CC Certb Certhouse 9/30/2022 (3y11m) New schedule DAYS M T W T F S S Use a schedule pattern DAILY HOURS 🕒 – 🕒 ROOM Select a room Select Site · Site EFFECTIVE Start End Open-ended Ongoing — no end date; ends later via a change. TUITION Tuition — Certb Certhouse Recommended · $1,450.00/monthly The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity. Accepted $1,450.00 / monthly · from 2026-09-01 Billing frequency monthly · current period September 2026 · next October 2026 DISCOUNTS Sibling discount (QA specimen) · $145.00 expected to apply Add exception Sibling discount (QA specimen) · ended 2026-08-31 — Retired: certification scaffolding dated into a future period Ended Tuition needs review — this assignment has changed since the price was agreed. Choose the recommendation, another option, "
+    }
+  ],
+  "execute": [
+    {
+      "cadence": "weekly",
+      "period": "2026-09",
+      "scope": "Weekly terms, organization-wide for this period.",
+      "panel": "GENERATE TUITION | Close | Billing frequency | Weekly | ▾ | Service period | Weekly terms, organization-wide for this period. | Preview run | Generate 5 · $925.00 | 5 to bill · 5 not due · 0 already posted · 0 refused · 0 errored | Not due · cadence_not_billed_by_this_run | Not due · cadence_not_billed_by_this_run | Not due · cadence_not_billed_by_this_run | Not due · cadence_not_billed_by_this_run | Not due · cadence_not_billed_by_this_run"
+    },
+    {
+      "cadence": "monthly",
+      "period": "2026-09",
+      "scope": "Monthly terms, organization-wide for this period.",
+      "panel": "GENERATE TUITION | Close | Billing frequency | Monthly | ▾ | Service period | Monthly terms, organization-wide for this period. | Preview run | Generate 1 · $1,450.00 | 1 to bill · 1 not due · 0 already posted · 0 refused · 0 errored | Not due · cadence_not_billed_by_this_run"
+    }
+  ]
+}

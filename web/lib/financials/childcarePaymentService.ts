@@ -1,0 +1,1641 @@
+/**
+ * CHILDCARE PAYMENT SERVICE — money received, applied to an obligation exactly once, and refunded
+ * without rewriting what happened.
+ *
+ * ── WHAT THIS IS NOT ──
+ *
+ * It is not a second payments table, not a childcare payment ledger, not a second balance rule and
+ * not a new allocation model. The census (certification/financials/payments-spine-census.sql,
+ * tha_be923375ea3595) settled that the substrate was already there and had simply never been
+ * reachable:
+ *
+ *   * `payments.job_id` is NULLABLE on the deployed primary — it has been since `20260329210000`.
+ *     A childcare payment was never blocked by a NOT NULL, and nothing here relaxes one.
+ *   * `payment_allocations.charge_id` already targets a charge, and `charges` is already generalized
+ *     to `billable_source_*`. Applying money to a childcare charge is therefore the EXISTING
+ *     allocation model used against an existing charge — no new shape.
+ *   * `jobPaymentBalances` already states the balance rule: owed = charges − active allocations
+ *     whose parent payment is POSTED. This service writes rows that rule already understands, so
+ *     the childcare card and the job drawer answer the same arithmetic. There is no second answer.
+ *
+ * What was genuinely missing was a WRITE PATH. Before this, nothing in the application ever inserted
+ * a `payments` or a `payment_allocations` row except the Stripe executor, which takes `job_id` and
+ * `customer_id` as required arguments and allocates to `target_entity_type = 'job'`. A childcare
+ * family could be charged and could never pay.
+ *
+ * ── INVARIANTS (the database is authoritative; these mirror it for friendly errors) ──
+ *
+ *   - A childcare payment carries a childcare `billable_source_type` + `billable_source_id`;
+ *     `job_id` is NULL. Job payments are untouched by every rule here.
+ *   - Recording is IDEMPOTENT by `idempotency_key`, unique per org, so a retried request returns the
+ *     payment that already exists rather than a second one.
+ *   - Only a POSTED payment reduces a balance. A pending or failed attempt is recorded and changes
+ *     nothing owed.
+ *   - An application reduces the balance EXACTLY ONCE: one active allocation per (payment, charge),
+ *     enforced by a partial unique index rather than by a check that races with itself.
+ *   - Neither side is over-spent: not more than the payment is worth, not more than the charge asks.
+ *   - A refund is a NEW outbound row via `refunds_payment_id`. The original receipt is frozen.
+ *   - Every operator write is actor-attributed (`created_by` / `updated_by`).
+ *
+ * Posture: callers MUST pass a server-only Supabase client (service-role admin client). RLS
+ * additionally role-gates childcare payment rows for `authenticated` (has_org_role).
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
+import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
+import { resolveReceiptAccount } from "@/lib/financials/payments/paymentLedgerFacts";
+
+import {
+    OperationalEnrollmentServiceError,
+    trimOrNull,
+} from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import {
+    CHILDCARE_BILLABLE_SOURCE_TYPES,
+    DEFAULT_CURRENCY_CODE,
+    isChildcareBillableSource,
+    type ChildcareBillableSourceType,
+} from "@/lib/financials/billableSource";
+import {
+    paymentAppliedEntry,
+    paymentApplicationReversedEntry,
+    paymentReceivedEntry,
+    paymentRefundedEntry,
+    findEntryForSource,
+    tryRecordFinancialJournalEntry,
+    type JournalOutcome,
+} from "@/lib/financials/financialJournalService";
+
+/**
+ * How the money arrived. The vocabulary is the one already on the table
+ * (`payments_payment_method_chk`); nothing is added.
+ */
+export const CHILDCARE_PAYMENT_METHODS = ["cash", "check", "money_order", "ach", "card", "manual", "other"] as const;
+export type ChildcarePaymentMethod = (typeof CHILDCARE_PAYMENT_METHODS)[number];
+
+export function isChildcarePaymentMethod(value: unknown): value is ChildcarePaymentMethod {
+    return typeof value === "string" && (CHILDCARE_PAYMENT_METHODS as readonly string[]).includes(value);
+}
+
+/**
+ * The lifecycle states this service writes.
+ *
+ * `posted` is money that is financial truth; `pending` is an attempt that is not. The vocabulary is
+ * `payments_status_chk`'s (`pending | posted | failed | voided`) and is not extended: inventing
+ * `authorized` or `settled` here would create states no balance rule knows how to read.
+ */
+export type ChildcarePaymentStatus = "posted" | "pending";
+
+/** Subset of the payments row this service reads/writes. */
+export type PaymentRow = {
+    id: string;
+    org_id: string;
+    job_id: string | null;
+    customer_id: string | null;
+    billable_source_type: string | null;
+    billable_source_id: string | null;
+    refunds_payment_id: string | null;
+    /** Who caused this reversal: an operator's refund, or a provider/bank return. Null on receipts. */
+    reversal_origin: string | null;
+    idempotency_key: string | null;
+    amount_cents: number;
+    currency: string;
+    status: string;
+    direction: string;
+    payment_method: string;
+    processor: string | null;
+    processor_transaction_id: string | null;
+    reference_number: string | null;
+    received_at: string;
+    posted_at: string | null;
+    failed_at: string | null;
+    voided_at: string | null;
+    notes: string | null;
+    metadata: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+    created_by: string | null;
+    updated_by: string | null;
+};
+
+export type PaymentAllocationRow = {
+    id: string;
+    org_id: string;
+    payment_id: string;
+    charge_id: string | null;
+    target_entity_type: string;
+    target_entity_id: string;
+    allocated_amount_cents: number;
+    status: string;
+    allocation_type: string;
+    allocated_at: string;
+    reversed_at: string | null;
+    reversal_reason: string | null;
+    metadata: Record<string, unknown>;
+    created_by: string | null;
+    updated_by: string | null;
+};
+
+/*
+ * ── WHY `reversal_origin` IS IN THIS LIST ───────────────────────────────────────────────────────
+ *
+ * It is WRITTEN on every outbound row and was never SELECTED back, so `PaymentRow` could not carry
+ * the one fact that distinguishes an operator's refund from a provider's return. The Financials
+ * card was unaffected — `buildFinancialsCardVM` selects the column in its own list — but every
+ * service-layer consumer of a `PaymentRow` was blind to it, and a test asserting on it was
+ * measuring a mock's fidelity rather than the product.
+ *
+ * The domain draws this distinction deliberately: an operator chose to give money back; a bank took
+ * it. Reading it back is what lets anything downstream say so.
+ */
+const PAYMENT_COLUMNS =
+    "id, org_id, job_id, customer_id, billable_source_type, billable_source_id, refunds_payment_id, "
+    + "idempotency_key, amount_cents, currency, status, direction, payment_method, processor, "
+    + "processor_transaction_id, reference_number, received_at, posted_at, failed_at, voided_at, notes, "
+    + "reversal_origin, metadata, created_at, updated_at, created_by, updated_by";
+
+const ALLOCATION_COLUMNS =
+    "id, org_id, payment_id, charge_id, target_entity_type, target_entity_id, allocated_amount_cents, "
+    + "status, allocation_type, allocated_at, reversed_at, reversal_reason, metadata, created_by, updated_by";
+
+/**
+ * The allocation's target when it names a charge.
+ *
+ * `target_entity_type` / `target_entity_id` are NOT NULL and predate `charge_id`, so a charge-level
+ * application still has to say what it targets. It targets the charge — which is what `charge_id`
+ * already says — rather than being back-attributed to a job it has nothing to do with. The existing
+ * job reads find these rows through `charge_id`, so nothing that reads job allocations changes.
+ */
+const ALLOCATION_TARGET_CHARGE = "charge" as const;
+
+function assertPositiveIntCents(amount: number, field: string): void {
+    if (!Number.isInteger(amount) || amount <= 0) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            `${field} must be a positive integer number of cents`,
+        );
+    }
+}
+
+function nowIso(): string {
+    return new Date().toISOString();
+}
+
+/**
+ * Translate a database refusal into the sentence it means.
+ *
+ * The rules are asserted by triggers and partial unique indexes because that is where concurrency is
+ * actually resolved. An operator should read a sentence, not a constraint name, so the authoritative
+ * refusal is mapped here rather than re-implemented above it — a mirror check would race and could
+ * disagree.
+ */
+function translateDbError(error: { message: string; code?: string }, context: string): never {
+    const message = error.message ?? "";
+    if (message.includes("uq_payment_allocations_one_active_per_payment_charge")) {
+        throw new OperationalEnrollmentServiceError(
+            "conflict",
+            "this payment is already applied to that charge; a second application would reduce the balance twice",
+        );
+    }
+    if (message.includes("uq_payments_org_idempotency_key")) {
+        throw new OperationalEnrollmentServiceError(
+            "conflict",
+            "a payment with this idempotency key already exists in this organization",
+        );
+    }
+    if (message.includes("uq_payments_org_processor_transaction")) {
+        throw new OperationalEnrollmentServiceError(
+            "conflict",
+            "this provider transaction has already been recorded as a payment",
+        );
+    }
+    if (message.includes("over-apply") || message.includes("over-pay") || message.includes("would exceed")) {
+        throw new OperationalEnrollmentServiceError("invalid_state", message);
+    }
+    if (message.includes("is immutable") || message.includes("cannot be refunded") || message.includes("cannot receive a payment")) {
+        throw new OperationalEnrollmentServiceError("invalid_state", message);
+    }
+    throw new OperationalEnrollmentServiceError("db_error", `${context}: ${message}`);
+}
+
+async function loadPayment(supabase: SupabaseClient, orgId: string, paymentId: string): Promise<PaymentRow> {
+    const { data, error } = await supabase
+        .from("payments")
+        .select(PAYMENT_COLUMNS)
+        .eq("org_id", orgId)
+        .eq("id", paymentId)
+        .maybeSingle();
+    if (error) translateDbError(error, "load payment");
+    if (!data) throw new OperationalEnrollmentServiceError("not_found", `payment ${paymentId} not found`);
+    return data as unknown as PaymentRow;
+}
+
+/**
+ * This service governs CHILDCARE money — every childcare billable source, not one of them.
+ * A job payment reaching here is a caller mistake, not a case to handle: job billing owns its own
+ * lifecycle and its own write path.
+ */
+function assertChildcarePayment(payment: PaymentRow): void {
+    if (!isChildcareBillableSource(payment.billable_source_type)) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `this service only governs childcare payments (${CHILDCARE_BILLABLE_SOURCE_TYPES.join(" | ")}); `
+                + "job payments use the job billing path",
+        );
+    }
+}
+
+async function findByIdempotencyKey(
+    supabase: SupabaseClient,
+    orgId: string,
+    idempotencyKey: string,
+): Promise<PaymentRow | null> {
+    const { data, error } = await supabase
+        .from("payments")
+        .select(PAYMENT_COLUMNS)
+        .eq("org_id", orgId)
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle();
+    if (error) translateDbError(error, "look up payment by idempotency key");
+    return (data as unknown as PaymentRow | null) ?? null;
+}
+
+export type RecordChildcarePaymentInput = {
+    orgId: string;
+    /** The account the money was received against: the household, or a specific agreement. */
+    billableSourceType: ChildcareBillableSourceType;
+    billableSourceId: string;
+    /**
+     * The household, when the source is an agreement. Written to the legacy `customer_id` column so
+     * job-era readers of "whose payment is this" keep working; it is never a second source of truth.
+     */
+    customerId?: string | null;
+    amountCents: number;
+    currency?: string;
+    paymentMethod: ChildcarePaymentMethod;
+    /**
+     * `posted` is money that IS financial truth. `pending` records an attempt that is not, and
+     * reduces nothing owed until it posts.
+     */
+    status?: ChildcarePaymentStatus;
+    /** When the money actually arrived, if not now. Distinct from the allocation date. */
+    receivedAt?: string | null;
+    processor?: string | null;
+    processorTransactionId?: string | null;
+    referenceNumber?: string | null;
+    /*
+     * WHO ACTUALLY PAID — identity, never responsibility.
+     *
+     * `payments.payer_entity_type` / `payer_entity_id` have existed with a paired-null CHECK and no
+     * writer at all; Thread 6 is the first path that fills them, because a grandparent settling a
+     * bill has to be recordable without that making the grandparent responsible for it. Whose SHARE
+     * the money went against is a separate, explicit attribution.
+     */
+    payerEntityType?: string | null;
+    payerEntityId?: string | null;
+    /** Required for a retry to be harmless. Unique per org. */
+    idempotencyKey?: string | null;
+    notes?: string | null;
+    metadata?: Record<string, unknown>;
+    /** The operator recording the payment. Recorded as `created_by`; null for system writes. */
+    actorUserId?: string | null;
+};
+
+export type RecordChildcarePaymentResult = {
+    payment: PaymentRow;
+    /**
+     * True when an existing payment was returned because the idempotency key had already been used,
+     * and nothing was written. The caller can tell "I recorded it" from "it was recorded" without
+     * either being an error.
+     */
+    alreadyRecorded: boolean;
+    /**
+     * What the posted history recorded. A PENDING payment is skipped with a reason: an attempt that
+     * has not become money is not a financial consequence, and journalling it would put an event in
+     * a period that may never have happened.
+     */
+    journal: JournalOutcome;
+};
+
+/**
+ * RECORD MONEY RECEIVED. This does not apply it to anything — receiving and applying are separate
+ * facts, and an unapplied payment is a real and legitimate state (money on the account, not yet
+ * assigned to an obligation).
+ *
+ * ── RECORDING IS IDEMPOTENT ──
+ *
+ * A double-click, a network retry or a replayed provider event must not turn one payment into two.
+ * The key is unique per org IN THE DATABASE, so two concurrent requests carrying the same key race
+ * on the index and exactly one writes; the loser reads back the winner's row and reports
+ * `alreadyRecorded`. A read-then-write pair alone would not have been enough.
+ */
+export async function recordChildcarePayment(
+    supabase: SupabaseClient,
+    input: RecordChildcarePaymentInput,
+): Promise<RecordChildcarePaymentResult> {
+    const orgId = trimOrNull(input.orgId);
+    const sourceId = trimOrNull(input.billableSourceId);
+    if (!orgId || !sourceId) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            "orgId and billableSourceId are required",
+        );
+    }
+    if (!isChildcareBillableSource(input.billableSourceType)) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            `billableSourceType must be one of ${CHILDCARE_BILLABLE_SOURCE_TYPES.join(" | ")}`,
+        );
+    }
+    if (!isChildcarePaymentMethod(input.paymentMethod)) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            `invalid payment method: ${String(input.paymentMethod)}`,
+        );
+    }
+    assertPositiveIntCents(input.amountCents, "amountCents");
+
+    const idempotencyKey = trimOrNull(input.idempotencyKey);
+    if (idempotencyKey) {
+        const existing = await findByIdempotencyKey(supabase, orgId, idempotencyKey);
+        if (existing) {
+            // The replay path, and the one most likely to be taken: it converges the journal too,
+            // so a receipt whose entry failed the first time is repaired by the retry.
+            return {
+                payment: existing,
+                alreadyRecorded: true,
+                journal: await recordPaymentReceivedEntry(supabase, existing, input.actorUserId ?? null),
+            };
+        }
+    }
+
+    const status: ChildcarePaymentStatus = input.status === "pending" ? "pending" : "posted";
+    const now = nowIso();
+    const receivedAt = trimOrNull(input.receivedAt) ?? now;
+    /*
+     * W7-F042: WHERE THIS MONEY LANDS, recorded as it arrives. The method's configured destination
+     * (an asset account) is resolved once and stamped on the receipt, so the ledger reports the
+     * accounting that applied at the time — a later mapping change never re-labels it. No
+     * destination configured is stamped as such; a failed read stamps nothing. Neither blocks the
+     * receipt.
+     */
+    const receiptAccount = await resolveReceiptAccount(supabase, orgId, input.paymentMethod);
+
+    const { data, error } = await supabase
+        .from("payments")
+        .insert({
+            org_id: orgId,
+            // A childcare payment is not a job payment. `job_id` stays NULL, which the deployed
+            // schema has permitted since 20260329210000.
+            job_id: null,
+            customer_id: trimOrNull(input.customerId)
+                ?? (input.billableSourceType === "customer" ? sourceId : null),
+            billable_source_type: input.billableSourceType,
+            billable_source_id: sourceId,
+            refunds_payment_id: null,
+            idempotency_key: idempotencyKey,
+            amount_cents: input.amountCents,
+            currency: trimOrNull(input.currency) ?? DEFAULT_CURRENCY_CODE,
+            status,
+            direction: "inbound",
+            payment_method: input.paymentMethod,
+            processor: trimOrNull(input.processor),
+            processor_transaction_id: trimOrNull(input.processorTransactionId),
+            reference_number: trimOrNull(input.referenceNumber),
+            // Both or neither — `payments_payer_entity_chk` refuses a half-identified payer.
+            payer_entity_type: trimOrNull(input.payerEntityId) ? (trimOrNull(input.payerEntityType) ?? "person") : null,
+            payer_entity_id: trimOrNull(input.payerEntityId),
+            received_at: receivedAt,
+            // `posted_at` is set only when the money IS truth. `payments_posted_at_status_chk`
+            // refuses the pair being inconsistent, so the two can never drift.
+            posted_at: status === "posted" ? now : null,
+            notes: trimOrNull(input.notes),
+            metadata: receiptAccount
+                ? { ...(input.metadata ?? {}), receipt_account: receiptAccount }
+                : (input.metadata ?? {}),
+            updated_at: now,
+            created_by: input.actorUserId ?? null,
+            updated_by: input.actorUserId ?? null,
+        })
+        .select(PAYMENT_COLUMNS)
+        .single();
+
+    if (error) {
+        // Lost the race on the idempotency index: the winner's payment is the one that stands.
+        if (idempotencyKey && String(error.message ?? "").includes("uq_payments_org_idempotency_key")) {
+            const winner = await findByIdempotencyKey(supabase, orgId, idempotencyKey);
+            if (winner) {
+                return {
+                    payment: winner,
+                    alreadyRecorded: true,
+                    journal: await recordPaymentReceivedEntry(supabase, winner, input.actorUserId ?? null),
+                };
+            }
+        }
+        translateDbError(error, "record payment");
+    }
+    const recorded = data as unknown as PaymentRow;
+    return {
+        payment: recorded,
+        alreadyRecorded: false,
+        journal: await recordPaymentReceivedEntry(supabase, recorded, input.actorUserId ?? null),
+    };
+}
+
+/**
+ * The money-received consequence, recorded once per payment.
+ *
+ * Idempotent by `payment_received:<payment id>`, so the already-recorded path converges rather than
+ * duplicating — a retried request repairs a journal entry that failed the first time.
+ *
+ * A receipt's `obligation_delta_cents` is ZERO. Money on the account is not money applied to an
+ * obligation, and the journal is the one place where conflating them would be invisible.
+ */
+function receiptAccountOf(payment: PaymentRow): unknown {
+    const m = (payment as unknown as { metadata?: unknown }).metadata;
+    return m && typeof m === "object" ? ((m as Record<string, unknown>).receipt_account ?? null) : null;
+}
+
+async function recordPaymentReceivedEntry(
+    supabase: SupabaseClient,
+    payment: PaymentRow,
+    actorUserId: string | null,
+): Promise<JournalOutcome> {
+    if (payment.status !== "posted") {
+        return { status: "skipped", reason: `payment_not_posted: status is ${payment.status}` };
+    }
+    return tryRecordFinancialJournalEntry(
+        supabase,
+        paymentReceivedEntry({
+            orgId: payment.org_id,
+            paymentId: payment.id,
+            amountCents: payment.amount_cents,
+            currency: payment.currency,
+            billableSourceType: payment.billable_source_type,
+            billableSourceId: payment.billable_source_id,
+            customerId: payment.customer_id,
+            // Money reports in the period it ARRIVED in, not the one it was keyed in.
+            effectiveOn: payment.received_at,
+            actorUserId,
+            metadata: {
+                payment_method: payment.payment_method,
+                ...(receiptAccountOf(payment) ? { receipt_account: receiptAccountOf(payment) } : {}),
+            },
+        }),
+    );
+}
+
+export type ApplyPaymentToChargeInput = {
+    orgId: string;
+    paymentId: string;
+    chargeId: string;
+    /** Defaults to the smaller of what the payment has left and what the charge still owes. */
+    amountCents?: number;
+    /** The operator applying the money. Recorded as `created_by`. */
+    actorUserId?: string | null;
+    notes?: string | null;
+    metadata?: Record<string, unknown>;
+    /**
+     * A held deposit this application discharges.
+     *
+     * Supplying it does not change what is applied, who may apply it, or how it is journalled — every
+     * guard below runs identically. It changes only HOW the allocation row is written: through
+     * `apply_held_funds_atomic`, so the allocation and the hold's `applied` disposition commit in one
+     * transaction instead of two round trips with an unrecoverable window between them.
+     *
+     * It lives here rather than in a second apply path because held money becoming an allocation is
+     * the SAME act as any other application. A parallel writer would be a second application path,
+     * with its own household guard to forget and its own journal to omit.
+     */
+    disposeHoldId?: string | null;
+};
+
+export type ApplyPaymentToChargeResult = {
+    allocation: PaymentAllocationRow;
+    /**
+     * True when an active application of this payment to this charge already existed and nothing was
+     * written. This is what makes a retried apply harmless rather than a second reduction.
+     */
+    alreadyApplied: boolean;
+    /**
+     * What the posted history recorded. An application of a PENDING payment is skipped with a
+     * reason: it does not reduce the balance, so journalling a negative obligation delta for it
+     * would make the journal disagree with the balance rule.
+     */
+    journal: JournalOutcome;
+};
+
+type ChargeBalanceFacts = {
+    chargeId: string;
+    amountCents: number;
+    status: string;
+    billableSourceType: string | null;
+    appliedCents: number;
+    outstandingCents: number;
+};
+
+/**
+ * What a charge still owes, by the ONE rule the platform already has.
+ *
+ * The predicate — active allocations whose parent payment is POSTED — is `jobPaymentBalances`'s,
+ * quoted rather than re-derived. A childcare charge and a job charge are asked the same question and
+ * get the same arithmetic; a second rule here is how two surfaces start disagreeing about money.
+ */
+export async function readChargeBalance(
+    supabase: SupabaseClient,
+    orgId: string,
+    chargeId: string,
+): Promise<ChargeBalanceFacts> {
+    const { data: charge, error: chargeError } = await supabase
+        .from("charges")
+        .select("id, amount_cents, status, billable_source_type")
+        .eq("org_id", orgId)
+        .eq("id", chargeId)
+        .maybeSingle();
+    if (chargeError) translateDbError(chargeError, "load charge");
+    if (!charge) throw new OperationalEnrollmentServiceError("not_found", `charge ${chargeId} not found`);
+
+    const row = charge as { id: string; amount_cents: number; status: string; billable_source_type: string | null };
+
+    const { data: allocs, error: allocError } = await supabase
+        .from("payment_allocations")
+        .select("payment_id, allocated_amount_cents")
+        .eq("org_id", orgId)
+        .eq("charge_id", chargeId)
+        .eq("status", "active");
+    if (allocError) translateDbError(allocError, "load applications");
+
+    const allocRows = (allocs ?? []) as Array<{ payment_id: string; allocated_amount_cents: number }>;
+    let appliedCents = 0;
+    if (allocRows.length > 0) {
+        const paymentIds = [...new Set(allocRows.map((a) => a.payment_id))];
+        const { data: posted, error: postedError } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("id", paymentIds)
+            .eq("status", "posted");
+        if (postedError) translateDbError(postedError, "load payment statuses");
+        const postedIds = new Set(((posted ?? []) as Array<{ id: string }>).map((p) => p.id));
+        for (const a of allocRows) {
+            if (!postedIds.has(a.payment_id)) continue;
+            appliedCents += Number(a.allocated_amount_cents) || 0;
+        }
+    }
+
+    const amountCents = Number(row.amount_cents) || 0;
+    return {
+        chargeId: row.id,
+        amountCents,
+        status: row.status,
+        billableSourceType: row.billable_source_type,
+        appliedCents,
+        outstandingCents: amountCents - appliedCents,
+    };
+}
+
+/** The rows these two answers are computed from, when the caller already holds them. */
+export type PaymentMoneyRows = {
+    /** Outbound rows pointing at a receipt. */
+    refunds: ReadonlyArray<{ refunds_payment_id?: unknown; amount_cents?: unknown; status?: unknown }>;
+    /** Applications of a receipt. */
+    allocations: ReadonlyArray<{ payment_id?: unknown; allocated_amount_cents?: unknown; status?: unknown }>;
+};
+
+/**
+ * What has been given back out of this receipt. Refunds are outbound rows pointing at it.
+ *
+ * ── WHY THIS TAKES ROWS ─────────────────────────────────────────────────────────────────────────
+ *
+ * This was called once PER RECEIPT from the household payment views, and so was
+ * `readPaymentUnappliedCents` below — two awaited reads inside a loop over every receipt on the
+ * account. On the certification tenant's largest household that is 3,198 receipts and roughly
+ * 6,400 sequential round trips, which is the bulk of the 1,131-4,211 ms the payment views cost on
+ * deployed staging.
+ *
+ * The SUM is the Payments authority and does not move: it is the same arithmetic over the same
+ * rows, under the same `status != voided` rule. Only where the rows come from changed.
+ */
+export async function readPaymentRefundedCents(
+    supabase: SupabaseClient,
+    orgId: string,
+    paymentId: string,
+    supplied?: Pick<PaymentMoneyRows, "refunds">,
+): Promise<number> {
+    let rows: Array<{ amount_cents: number }>;
+    if (supplied) {
+        rows = supplied.refunds
+            .filter((r) => String(r.refunds_payment_id ?? "") === paymentId && String(r.status ?? "") !== "voided")
+            .map((r) => ({ amount_cents: Number(r.amount_cents) || 0 }));
+    } else {
+        const { data, error } = await supabase
+            .from("payments")
+            .select("amount_cents")
+            .eq("org_id", orgId)
+            .eq("refunds_payment_id", paymentId)
+            .neq("status", "voided");
+        if (error) translateDbError(error, "load refunds for payment");
+        rows = (data ?? []) as Array<{ amount_cents: number }>;
+    }
+    let refunded = 0;
+    for (const r of rows) {
+        refunded += Number(r.amount_cents) || 0;
+    }
+    return refunded;
+}
+
+/**
+ * The payment's unapplied remainder — money received, not yet assigned to an obligation, AND NOT
+ * ALREADY GIVEN BACK.
+ *
+ * Refunds are subtracted for a reason that is easy to miss: a full refund reverses the applications,
+ * which by itself would make the whole receipt look freshly available to apply again. The money left
+ * the building; only the un-refunded part of it can be assigned to anything.
+ */
+export async function readPaymentUnappliedCents(
+    supabase: SupabaseClient,
+    orgId: string,
+    paymentId: string,
+    paymentAmountCents: number,
+    supplied?: PaymentMoneyRows,
+): Promise<number> {
+    let rows: Array<{ allocated_amount_cents: number }>;
+    if (supplied) {
+        rows = supplied.allocations
+            .filter((a) => String(a.payment_id ?? "") === paymentId && String(a.status ?? "") === "active")
+            .map((a) => ({ allocated_amount_cents: Number(a.allocated_amount_cents) || 0 }));
+    } else {
+        const { data, error } = await supabase
+            .from("payment_allocations")
+            .select("allocated_amount_cents")
+            .eq("org_id", orgId)
+            .eq("payment_id", paymentId)
+            .eq("status", "active");
+        if (error) translateDbError(error, "load applications for payment");
+        rows = (data ?? []) as Array<{ allocated_amount_cents: number }>;
+    }
+    let applied = 0;
+    for (const r of rows) {
+        applied += Number(r.allocated_amount_cents) || 0;
+    }
+    const refunded = await readPaymentRefundedCents(supabase, orgId, paymentId, supplied);
+    return paymentAmountCents - applied - refunded;
+}
+
+async function findActiveAllocation(
+    supabase: SupabaseClient,
+    orgId: string,
+    paymentId: string,
+    chargeId: string,
+): Promise<PaymentAllocationRow | null> {
+    const { data, error } = await supabase
+        .from("payment_allocations")
+        .select(ALLOCATION_COLUMNS)
+        .eq("org_id", orgId)
+        .eq("payment_id", paymentId)
+        .eq("charge_id", chargeId)
+        .eq("status", "active")
+        .maybeSingle();
+    if (error) translateDbError(error, "look up existing application");
+    return (data as unknown as PaymentAllocationRow | null) ?? null;
+}
+
+/**
+ * APPLY MONEY TO AN OBLIGATION — the step that changes what is owed.
+ *
+ * The posted charge is NOT touched. Its principal, its category and its posting stamp stay exactly
+ * as posted (the database refuses otherwise), and the balance moves because an application row now
+ * exists — which is why the charge's history stays readable after it is paid.
+ *
+ * ── EXACTLY ONCE ──
+ *
+ * A retried apply returns the application that already exists. The guarantee is the partial unique
+ * index on (payment_id, charge_id) WHERE status = 'active', not the lookup below: two concurrent
+ * applies both pass the lookup, and only one passes the index.
+ */
+export async function applyPaymentToCharge(
+    supabase: SupabaseClient,
+    input: ApplyPaymentToChargeInput,
+): Promise<ApplyPaymentToChargeResult> {
+    const orgId = trimOrNull(input.orgId);
+    const paymentId = trimOrNull(input.paymentId);
+    const chargeId = trimOrNull(input.chargeId);
+    if (!orgId || !paymentId || !chargeId) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            "orgId, paymentId and chargeId are required",
+        );
+    }
+
+    const payment = await loadPayment(supabase, orgId, paymentId);
+    assertChildcarePayment(payment);
+    if (payment.direction !== "inbound") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "an outbound payment is a refund and is not applied to an obligation",
+        );
+    }
+    if (payment.status === "failed" || payment.status === "voided") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `payment ${paymentId} is ${payment.status} and cannot be applied`,
+        );
+    }
+
+    const existing = await findActiveAllocation(supabase, orgId, paymentId, chargeId);
+    if (existing) {
+        return {
+            allocation: existing,
+            alreadyApplied: true,
+            journal: await recordPaymentAppliedEntry(supabase, payment, existing, input.actorUserId ?? null),
+        };
+    }
+
+    const charge = await readChargeBalance(supabase, orgId, chargeId);
+    if (!isChildcareBillableSource(charge.billableSourceType)) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "this service applies payments to childcare charges; a job charge uses the job billing path",
+        );
+    }
+
+    /*
+     * ── ONE FAMILY'S MONEY MAY ONLY ANSWER THAT FAMILY'S OBLIGATIONS ─────────────────────────────
+     *
+     * Everything above this point checks the payment and the charge SEPARATELY — direction, status,
+     * source type, amounts. None of it asks whether they belong to the same household, and without
+     * that question a same-org operator could apply one family's receipt to another family's charge.
+     * That was reachable: proven by applying a household-A payment to a household-B agreement charge.
+     *
+     * The comparison is at HOUSEHOLD grain deliberately. Requiring the two billable sources to be
+     * equal would refuse the supported case where a household pays and the money answers a charge
+     * raised against one of its children's agreements.
+     *
+     * It lives HERE, in the service that inserts the allocation, rather than in a chooser or an
+     * action: a target the UI never offered is still reachable by anyone who can call this, and a
+     * filter is not a boundary.
+     */
+    const { data: chargeSourceRow, error: chargeSourceError } = await supabase
+        .from("charges")
+        .select("billable_source_type, billable_source_id")
+        .eq("org_id", orgId)
+        .eq("id", chargeId)
+        .maybeSingle();
+    if (chargeSourceError) translateDbError(chargeSourceError, "load charge billable source");
+    const chargeSource = chargeSourceRow as
+        | { billable_source_type?: string | null; billable_source_id?: string | null }
+        | null;
+    const paymentHousehold = await resolveBillableSourceHouseholdId(
+        supabase,
+        orgId,
+        payment.billable_source_type,
+        payment.billable_source_id,
+    );
+    const chargeHousehold = await resolveBillableSourceHouseholdId(
+        supabase,
+        orgId,
+        chargeSource?.billable_source_type ?? null,
+        chargeSource?.billable_source_id ?? null,
+    );
+    /*
+     * An unresolvable household REFUSES. "We could not tell whose this is" is the one answer that
+     * must not open the gate, and it is the answer a forged or dangling source id produces.
+     */
+    if (!paymentHousehold || !chargeHousehold) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `cannot establish the household for payment ${paymentId} or charge ${chargeId}; refusing to apply`,
+        );
+    }
+    if (paymentHousehold !== chargeHousehold) {
+        /*
+         * The other household is not named. The refusal says whose money this is and that the target
+         * is not theirs, which is what the operator needs; which family the charge belongs to is not
+         * this caller's to learn.
+         */
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `charge ${chargeId} belongs to a different household than payment ${paymentId}; a payment may only be applied within the household whose money was received`,
+        );
+    }
+
+    const unapplied = await readPaymentUnappliedCents(supabase, orgId, paymentId, payment.amount_cents);
+
+    /*
+     * ── HELD MONEY IS NOT AVAILABLE TO APPLY ─────────────────────────────────────────────────
+     *
+     * `unapplied` counts the WHOLE receipt, and a hold is a restriction WITHIN it. Bounding an
+     * ordinary application by `unapplied` therefore let the ordinary path spend a deposit: no
+     * disposition, no decision about the lot, no refusal — the held figure simply shrank.
+     *
+     * MEASURED ON DEPLOYED STAGING (build e9694c5c8). A receipt showing AVAILABLE PREPAID $7.00
+     * beside HELD DEPOSIT $515.00 applied $75.00 to a registration fee. Prepaid went to zero and
+     * HELD fell to $447.00 — $68 of restricted money settled tuition, which is the one thing the
+     * surface's own sentence promises cannot happen: "It is not available prepaid and it does not
+     * reduce what the family owes until it is applied."
+     *
+     * A hold cannot be created beyond the unapplied balance — `enforce_payment_hold_within_unapplied`
+     * sees to that — but nothing stopped an allocation eroding the money an existing hold depends
+     * on, because no hold row changes and the trigger never fires.
+     *
+     * An application that DISCHARGES a lot is the exception and is bounded by the lot instead: that
+     * is the whole point of `disposeHoldId`, and `apply_held_funds_atomic` re-derives the bound.
+     */
+    const disposeHoldId = trimOrNull(input.disposeHoldId ?? null);
+    const heldCents = disposeHoldId
+        ? 0
+        : heldCentsFor(paymentId, await readHoldsForPayments(supabase, { orgId, paymentIds: [paymentId] }));
+    const applicable = Math.max(0, unapplied - heldCents);
+
+    /*
+     * THE DEFAULT IS THE SMALLER OF THE TWO CEILINGS, which is what makes a partial payment work
+     * without the operator doing arithmetic: pay $500 against a $1,300 charge and $500 applies; pay
+     * $2,000 against it and $1,300 applies with $700 left on the account.
+     */
+    const requested = input.amountCents ?? Math.min(applicable, charge.outstandingCents);
+    assertPositiveIntCents(requested, "amountCents");
+
+    if (requested > applicable) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            heldCents > 0
+                ? `applying ${requested} cents would spend held money on payment ${paymentId}: ${unapplied} cents are unapplied but ${heldCents} of them are held, leaving ${applicable} available to apply`
+                : `applying ${requested} cents would over-apply payment ${paymentId}: only ${applicable} cents remain unapplied`,
+        );
+    }
+    if (requested > charge.outstandingCents) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `applying ${requested} cents would over-pay charge ${chargeId}: only ${charge.outstandingCents} cents are outstanding`,
+        );
+    }
+
+    const now = nowIso();
+
+    /*
+     * HELD MONEY COMMITS BOTH ROWS OR NEITHER.
+     *
+     * When this application discharges a hold, the allocation is written by
+     * `apply_held_funds_atomic`, which inserts the allocation and the `applied` disposition in one
+     * transaction. Written as two client round trips, a failure after the allocation left the money
+     * applied to the charge AND still counted as restricted — the balance fell, available prepaid
+     * under-reported by the same cents, and no surface explained why.
+     *
+     * Everything above this line has already run, so the RPC inherits the household guard, both
+     * ceilings and the childcare-source rule rather than restating them. It returns the allocation's
+     * id; the row is then re-read through the same columns the ordinary path selects, so the shape
+     * the caller receives does not depend on which writer produced it.
+     */
+    if (disposeHoldId) {
+        const { data: applied, error: appliedError } = await supabase.rpc("apply_held_funds_atomic", {
+            p_org_id: orgId,
+            p_hold_id: disposeHoldId,
+            p_charge_id: chargeId,
+            p_amount_cents: requested,
+            p_actor: input.actorUserId ?? null,
+            p_notes: trimOrNull(input.notes),
+        });
+        if (appliedError) translateDbError(appliedError, "apply held deposit");
+        /* RETURNS TABLE, so PostgREST hands back an array of one row. */
+        const row = (Array.isArray(applied) ? applied[0] : applied) as
+            | { allocation_id?: string | null }
+            | null;
+        const allocationId = trimOrNull(row?.allocation_id ?? null);
+        if (!allocationId) {
+            throw new OperationalEnrollmentServiceError(
+                "invalid_state",
+                "applying the held deposit reported no allocation",
+            );
+        }
+        const { data: heldAllocation, error: reReadError } = await supabase
+            .from("payment_allocations")
+            .select(ALLOCATION_COLUMNS)
+            .eq("org_id", orgId)
+            .eq("id", allocationId)
+            .single();
+        if (reReadError) translateDbError(reReadError, "re-read the held-deposit application");
+        const allocation = heldAllocation as unknown as PaymentAllocationRow;
+        return {
+            allocation,
+            alreadyApplied: false,
+            journal: await recordPaymentAppliedEntry(supabase, payment, allocation, input.actorUserId ?? null),
+        };
+    }
+
+    const { data, error } = await supabase
+        .from("payment_allocations")
+        .insert({
+            org_id: orgId,
+            payment_id: paymentId,
+            charge_id: chargeId,
+            target_entity_type: ALLOCATION_TARGET_CHARGE,
+            target_entity_id: chargeId,
+            allocated_amount_cents: requested,
+            status: "active",
+            allocation_type: "payment_application",
+            // The APPLICATION date, which is its own fact and not the date the money arrived.
+            allocated_at: now,
+            notes: trimOrNull(input.notes),
+            metadata: input.metadata ?? {},
+            updated_at: now,
+            created_by: input.actorUserId ?? null,
+            updated_by: input.actorUserId ?? null,
+        })
+        .select(ALLOCATION_COLUMNS)
+        .single();
+
+    if (error) {
+        // Lost the race on the one-active-application index: the winner's row is the one that stands.
+        if (String(error.message ?? "").includes("uq_payment_allocations_one_active_per_payment_charge")) {
+            const winner = await findActiveAllocation(supabase, orgId, paymentId, chargeId);
+            if (winner) {
+                return {
+                    allocation: winner,
+                    alreadyApplied: true,
+                    journal: await recordPaymentAppliedEntry(supabase, payment, winner, input.actorUserId ?? null),
+                };
+            }
+        }
+        translateDbError(error, "apply payment");
+    }
+    const allocation = data as unknown as PaymentAllocationRow;
+    return {
+        allocation,
+        alreadyApplied: false,
+        journal: await recordPaymentAppliedEntry(supabase, payment, allocation, input.actorUserId ?? null),
+    };
+}
+
+/**
+ * The money-applied consequence, recorded once per allocation.
+ *
+ * This is the entry whose `obligation_delta_cents` is NEGATIVE — the only kind of event that reduces
+ * what a family owes, which is exactly the predicate `jobPaymentBalances` uses. The journal repeats
+ * that rule; it does not restate it differently.
+ */
+async function recordPaymentAppliedEntry(
+    supabase: SupabaseClient,
+    payment: PaymentRow,
+    allocation: PaymentAllocationRow,
+    actorUserId: string | null,
+): Promise<JournalOutcome> {
+    if (payment.status !== "posted") {
+        return { status: "skipped", reason: `payment_not_posted: status is ${payment.status}` };
+    }
+    return tryRecordFinancialJournalEntry(
+        supabase,
+        paymentAppliedEntry({
+            orgId: allocation.org_id,
+            allocationId: allocation.id,
+            chargeId: allocation.charge_id,
+            amountCents: Number(allocation.allocated_amount_cents) || 0,
+            currency: payment.currency,
+            billableSourceType: payment.billable_source_type,
+            billableSourceId: payment.billable_source_id,
+            customerId: payment.customer_id,
+            // The APPLICATION date. A payment received in one period and applied in the next reports
+            // its receipt in the first and its application in the second, which is the distinction
+            // that makes unapplied money visible at a period boundary.
+            effectiveOn: allocation.allocated_at,
+            actorUserId,
+            metadata: { payment_id: payment.id },
+        }),
+    );
+}
+
+export type RecordAndApplyInput = Omit<RecordChildcarePaymentInput, "billableSourceType" | "billableSourceId"> & {
+    /** The charge the money is being paid against. Its billable source becomes the payment's. */
+    chargeId: string;
+    /** Defaults to the whole payment, bounded by what the charge still owes. */
+    applyAmountCents?: number;
+};
+
+export type RecordAndApplyResult = {
+    payment: PaymentRow;
+    allocation: PaymentAllocationRow | null;
+    alreadyRecorded: boolean;
+    alreadyApplied: boolean;
+};
+
+export type ReversePaymentApplicationInput = {
+    orgId: string;
+    /** The application being undone. Canonical allocation identity — never UI money arithmetic. */
+    allocationId: string;
+    reason: string;
+    actorUserId?: string | null;
+};
+
+export type ReversePaymentApplicationResult = {
+    allocationId: string;
+    paymentId: string;
+    chargeId: string | null;
+    reversedAmountCents: number;
+    /** Recomputed after the reversal, from the same readers every other surface uses. */
+    paymentUnappliedCents: number;
+    chargeOutstandingCents: number | null;
+};
+
+/**
+ * UNDO AN APPLICATION WITHOUT UNDOING THE PAYMENT.
+ *
+ * A receipt and an allocation are different facts. The money arrived, and separately somebody
+ * decided which obligation it answered. Only the second can be wrong, and until now only the refund
+ * path could correct it — which meant an operator who applied $500 to the wrong charge had to give
+ * the money back to move it. This is that correction on its own.
+ *
+ * ── THE SHAPE IS NOT NEW ──
+ *
+ * `refundChildcarePayment` already reverses applications exactly this way: `status = 'reversed'`
+ * with `reversed_at` and a reason, guarded by `status = 'active'`, plus a
+ * `payment_application_reversed` journal entry pointing back at the `payment_applied` entry it
+ * undoes. This extracts that shape rather than inventing a second notion of reversal, so the two
+ * paths cannot drift into disagreeing about what a reversed application is.
+ *
+ * ── WHY NOTHING HAS TO BE RECOMPUTED ──
+ *
+ * `readChargeBalance` and `readPaymentUnappliedCents` both count only `status = 'active'`. So the
+ * obligation returning to the charge and the money becoming unapplied are the SAME write, not two
+ * bookkeeping steps that could disagree. The row keeps its original amount, charge and
+ * `allocated_at`: what was applied stays readable, annotated with the fact that it was undone.
+ *
+ * ── WHAT THIS IS NOT ──
+ *
+ * Not a refund: refunds are outbound `payments` rows carrying `refunds_payment_id`, and none is
+ * created here. Not a provider operation: no processor is contacted, because the organisation still
+ * holds the money. The receipt, its payer, its method, its date and its processor reference are all
+ * untouched — this function never writes to `payments`.
+ */
+export async function reversePaymentApplication(
+    supabase: SupabaseClient,
+    input: ReversePaymentApplicationInput,
+): Promise<ReversePaymentApplicationResult> {
+    const orgId = trimOrNull(input.orgId);
+    const allocationId = trimOrNull(input.allocationId);
+    const reason = trimOrNull(input.reason);
+    if (!orgId || !allocationId) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            "orgId and allocationId are required",
+        );
+    }
+    /*
+     * A reason is required because this row is the only account of why the money moved. The refund
+     * path writes one for the same column; a correction that cannot say what it corrected is the
+     * kind of history that gets re-litigated six months later.
+     */
+    if (!reason) {
+        throw new OperationalEnrollmentServiceError("invalid_input", "reason is required");
+    }
+
+    const { data: allocData, error: allocError } = await supabase
+        .from("payment_allocations")
+        .select(ALLOCATION_COLUMNS)
+        .eq("org_id", orgId)
+        .eq("id", allocationId)
+        .maybeSingle();
+    if (allocError) translateDbError(allocError, "load application");
+    /*
+     * Org-scoped lookup, so another tenant's allocation is NOT FOUND rather than forbidden. The
+     * distinction leaks the existence of the row, which is the thing tenancy is there to hide.
+     */
+    const alloc = (allocData as unknown as PaymentAllocationRow | null) ?? null;
+    if (!alloc) {
+        throw new OperationalEnrollmentServiceError(
+            "not_found",
+            `application ${allocationId} not found`,
+        );
+    }
+    if (alloc.status !== "active") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `application ${allocationId} is already ${alloc.status}`,
+        );
+    }
+
+    const { data: paymentData, error: paymentError } = await supabase
+        .from("payments")
+        .select(PAYMENT_COLUMNS)
+        .eq("org_id", orgId)
+        .eq("id", alloc.payment_id)
+        .maybeSingle();
+    if (paymentError) translateDbError(paymentError, "load payment");
+    const payment = (paymentData as unknown as PaymentRow | null) ?? null;
+    if (!payment) {
+        throw new OperationalEnrollmentServiceError(
+            "not_found",
+            `payment ${alloc.payment_id} not found`,
+        );
+    }
+
+    const now = new Date().toISOString();
+    const amountCents = Number(alloc.allocated_amount_cents) || 0;
+
+    /*
+     * `status = 'active'` in the WHERE clause is the concurrency guard, not the check above. Two
+     * operators who both read an active row both pass that check; only one of them updates a row
+     * here, and the loser sees zero rows back and is refused. Same reasoning as the partial unique
+     * index that makes apply exactly-once.
+     */
+    const { data: updatedData, error: reverseError } = await supabase
+        .from("payment_allocations")
+        .update({
+            status: "reversed",
+            reversed_at: now,
+            reversal_reason: reason,
+            updated_at: now,
+            updated_by: input.actorUserId ?? null,
+        })
+        .eq("org_id", orgId)
+        .eq("id", alloc.id)
+        .eq("status", "active")
+        .select(ALLOCATION_COLUMNS);
+    if (reverseError) translateDbError(reverseError, "reverse application");
+    const updated = (updatedData ?? []) as unknown as PaymentAllocationRow[];
+    if (updated.length === 0) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `application ${allocationId} was reversed concurrently`,
+        );
+    }
+
+    /*
+     * The obligation comes back in the period the reversal happened, not the one the application was
+     * in — that period may already have reported. Identical to the refund path's treatment.
+     */
+    const appliedEntry = await findEntryForSource(supabase, {
+        orgId,
+        entryType: "payment_applied",
+        sourceId: alloc.id,
+    });
+    await tryRecordFinancialJournalEntry(
+        supabase,
+        paymentApplicationReversedEntry({
+            orgId,
+            allocationId: alloc.id,
+            chargeId: alloc.charge_id,
+            amountCents,
+            currency: payment.currency,
+            billableSourceType: payment.billable_source_type,
+            billableSourceId: payment.billable_source_id,
+            customerId: payment.customer_id,
+            effectiveOn: now,
+            reversesEntryId: appliedEntry?.id ?? null,
+            actorUserId: input.actorUserId ?? null,
+            metadata: { payment_id: payment.id, reason },
+        }),
+    );
+
+    const paymentUnappliedCents = await readPaymentUnappliedCents(
+        supabase,
+        orgId,
+        payment.id,
+        Number(payment.amount_cents) || 0,
+    );
+    let chargeOutstandingCents: number | null = null;
+    if (alloc.charge_id) {
+        chargeOutstandingCents = (await readChargeBalance(supabase, orgId, alloc.charge_id))
+            .outstandingCents;
+    }
+
+    return {
+        allocationId: alloc.id,
+        paymentId: payment.id,
+        chargeId: alloc.charge_id,
+        reversedAmountCents: amountCents,
+        paymentUnappliedCents,
+        chargeOutstandingCents,
+    };
+}
+
+/**
+ * THE OPERATOR'S ACTUAL INTENT: "this family paid this charge."
+ *
+ * Recording and applying stay separate operations underneath, because an unapplied payment is a real
+ * state and because a refund reverses the application without unmaking the receipt. This composes
+ * them for the common case, and is idempotent END TO END: replaying the same request returns the
+ * same payment and the same application, and the balance moves once.
+ *
+ * ── WHY IT CANNOT LEAVE A PAYMENT WITHOUT ITS APPLICATION ──
+ *
+ * There is no transaction spanning the two writes (the Supabase client has none to offer), so the
+ * failure this must survive is: payment written, application refused. It survives it by being
+ * REPLAYABLE rather than by being atomic — the payment carries the idempotency key, so the retry
+ * finds it instead of writing a second one and then applies. The alternative, deleting the payment
+ * on failure, would destroy a record of money that really did arrive.
+ */
+export async function recordAndApplyChildcarePayment(
+    supabase: SupabaseClient,
+    input: RecordAndApplyInput,
+): Promise<RecordAndApplyResult> {
+    const orgId = trimOrNull(input.orgId);
+    const chargeId = trimOrNull(input.chargeId);
+    if (!orgId || !chargeId) {
+        throw new OperationalEnrollmentServiceError("invalid_input", "orgId and chargeId are required");
+    }
+
+    const charge = await readChargeBalance(supabase, orgId, chargeId);
+    if (!isChildcareBillableSource(charge.billableSourceType)) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "this service applies payments to childcare charges; a job charge uses the job billing path",
+        );
+    }
+    if (charge.status === "draft" || charge.status === "void") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `charge ${chargeId} is ${charge.status} and is not owed; post it before recording a payment against it`,
+        );
+    }
+
+    // The payment is received against the SAME account the charge is billed to. Deriving it rather
+    // than accepting it is what stops a payment being recorded against one family and applied to
+    // another's obligation.
+    const { data: chargeSource, error: sourceError } = await supabase
+        .from("charges")
+        .select("billable_source_type, billable_source_id")
+        .eq("org_id", orgId)
+        .eq("id", chargeId)
+        .single();
+    if (sourceError) translateDbError(sourceError, "resolve charge account");
+    const source = chargeSource as { billable_source_type: string; billable_source_id: string };
+
+    const { payment, alreadyRecorded } = await recordChildcarePayment(supabase, {
+        ...input,
+        orgId,
+        billableSourceType: source.billable_source_type as ChildcareBillableSourceType,
+        billableSourceId: source.billable_source_id,
+    });
+
+    // A pending attempt is recorded and applied to nothing: it is not money yet, and the balance
+    // must not move for it.
+    if (payment.status !== "posted") {
+        return { payment, allocation: null, alreadyRecorded, alreadyApplied: false };
+    }
+
+    const { allocation, alreadyApplied } = await applyPaymentToCharge(supabase, {
+        orgId,
+        paymentId: payment.id,
+        chargeId,
+        amountCents: input.applyAmountCents,
+        actorUserId: input.actorUserId ?? null,
+    });
+
+    return { payment, allocation, alreadyRecorded, alreadyApplied };
+}
+
+export type RefundChildcarePaymentInput = {
+    orgId: string;
+    /** The receipt being refunded. It is never modified. */
+    paymentId: string;
+    /** Defaults to the whole payment. A partial refund is legitimate and repeatable. */
+    amountCents?: number;
+    reason?: string | null;
+    /** The operator recording the refund. */
+    actorUserId?: string | null;
+    /** Required for a retried refund to be harmless. */
+    idempotencyKey?: string | null;
+    metadata?: Record<string, unknown>;
+    /**
+     * WHO TOOK THE MONEY BACK. Defaults to the operator, because until Thread 8C every reversal in
+     * the system was one they asked for.
+     *
+     * `provider` means nobody here decided: the bank or the network withdrew money Alloy had already
+     * recognised — an ACH return, and later a card chargeback. The financial consequence is the same
+     * reversal, which is why this reuses that machinery rather than growing a second one; the CAUSE
+     * is the opposite, which is why it is written down instead of inferred. Inferred from
+     * `processor`, a Stripe refund and a Stripe dispute look identical.
+     */
+    reversalOrigin?: "operator" | "provider";
+
+    /**
+     * THE HELD LOT THIS REFUND DISCHARGES, when it was raised from one.
+     *
+     * A lot's money is restricted and UNAPPLIED BY CONSTRUCTION —
+     * `enforce_payment_hold_within_unapplied` refuses a hold larger than the receipt's unapplied
+     * balance — so giving it back settles nothing and must un-settle nothing. Reversing
+     * applications to fund it takes the money out of obligations the family had already paid.
+     *
+     * Measured on deployed staging before this existed: an $80 deposit refunded against a $700
+     * receipt holding $582 unapplied reversed all three of its applications and re-applied $38.
+     * The balance rose $75 -> $137, PAID fell $100 -> $38, and Available prepaid rose by exactly
+     * the $80 refunded — the lot became spendable prepaid while the refund came out of settled
+     * obligations, which is the release-then-refund shape the held-money design exists to refuse.
+     */
+    heldLotId?: string | null;
+};
+
+export type RefundChildcarePaymentResult = {
+    /** The NEW outbound row. The original receipt is untouched and returned as `original`. */
+    refund: PaymentRow;
+    original: PaymentRow;
+    /** Applications reversed to give the money back, and any re-application of the remainder. */
+    reversedAllocationIds: string[];
+    reappliedAllocation: PaymentAllocationRow | null;
+    alreadyRefunded: boolean;
+};
+
+/**
+ * REFUND — the only way money that was received changes.
+ *
+ * Two things happen, and neither is an edit:
+ *
+ *   1. A NEW outbound payment row is written pointing at the receipt through `refunds_payment_id`.
+ *      The receipt keeps reading exactly as it was received; the database refuses to change it.
+ *   2. The APPLICATIONS are reversed by the part of the refund that nothing else can fund, which is
+ *      what puts the balance back. An operator's refund is funded from eligible ordinary unapplied
+ *      retained money FIRST — `received − already refunded − applied − held` — and only the
+ *      shortfall reverses anything, so returning a credit balance no longer re-opens obligations
+ *      the family had already settled. A held-lot refund is funded by the lot and reverses
+ *      nothing; a provider return reverses in full, because the bank removed recognised money and
+ *      nobody chose how to fund it. See the funding block below.
+ *      A reversal sets `status = 'reversed'` with `reversed_at` and a reason — the correction shape
+ *      the table was designed with — and never deletes the row, so "this money was applied and then
+ *      given back" stays legible. For a partial refund the remainder is RE-APPLIED as a new active
+ *      row, so the charge still shows the part that was actually kept.
+ *
+ * The balance is not recomputed here and is not stored anywhere: it is derived from charges and
+ * active applications, so reversing an application IS the balance change.
+ */
+export async function refundChildcarePayment(
+    supabase: SupabaseClient,
+    input: RefundChildcarePaymentInput,
+): Promise<RefundChildcarePaymentResult> {
+    const orgId = trimOrNull(input.orgId);
+    const paymentId = trimOrNull(input.paymentId);
+    if (!orgId || !paymentId) {
+        throw new OperationalEnrollmentServiceError("invalid_input", "orgId and paymentId are required");
+    }
+
+    const original = await loadPayment(supabase, orgId, paymentId);
+    assertChildcarePayment(original);
+    if (original.direction !== "inbound") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `payment ${paymentId} is outbound and is itself a refund; record the refund against the original receipt`,
+        );
+    }
+    if (original.status !== "posted") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `payment ${paymentId} is ${original.status}; only money that was actually received can be refunded`,
+        );
+    }
+
+    const idempotencyKey = trimOrNull(input.idempotencyKey);
+    if (idempotencyKey) {
+        const existing = await findByIdempotencyKey(supabase, orgId, idempotencyKey);
+        if (existing) {
+            return {
+                refund: existing,
+                original,
+                reversedAllocationIds: [],
+                reappliedAllocation: null,
+                alreadyRefunded: true,
+            };
+        }
+    }
+
+    const amountCents = input.amountCents ?? original.amount_cents;
+    assertPositiveIntCents(amountCents, "amountCents");
+    if (amountCents > original.amount_cents) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `refunding ${amountCents} cents exceeds the ${original.amount_cents} cents received`,
+        );
+    }
+
+    /*
+     * ── WHAT FUNDS AN OPERATOR'S REFUND ─────────────────────────────────────────────────────────
+     *
+     * DIRECTOR DECISION. An operator-initiated refund is funded from eligible ordinary unapplied
+     * RETAINED money first, and only the portion that money cannot cover reverses applications:
+     *
+     *     unapplied-funded  = min(X, U)
+     *     must reverse      = max(0, X − U)
+     *
+     * where U is what this receipt still holds that nothing has a claim on —
+     * `received − already refunded − actively applied − held`. `readPaymentUnappliedCents` is the
+     * canonical reader for the first three of those (it nets refunds itself, which is why they are
+     * not subtracted again here); the held total is the only thing it does not know about.
+     * Before this, every refund reversed
+     * applications for its whole amount, so returning a credit balance silently re-opened
+     * obligations the family had already settled: an $80 refund against $400 of unapplied money
+     * added $80 to what they owed.
+     *
+     * HELD MONEY IS NOT ELIGIBLE. A deposit is unapplied by construction, and an ordinary refund
+     * that quietly consumed one would be the very thing `heldLotId` exists to prevent. It is
+     * subtracted out of U, and a refund that NAMES a lot is funded by that lot and reverses
+     * nothing — the W6-B / #1348 authority, untouched.
+     *
+     * A PROVIDER RETURN IS NOT THIS. Nobody chose how to fund a chargeback; the bank removed money
+     * that had already been recognised, and the obligations it settled genuinely come back. It is
+     * excluded by `reversalOrigin`, which `providerDispute` has always set and which is recorded on
+     * the row, so the distinction is in the data and not only in this branch.
+     *
+     * COMPUTED BEFORE THE REFUND ROW EXISTS. `readPaymentUnappliedCents` nets the outbound rows
+     * pointing at this receipt, and the row written below is one of them — asking afterwards would
+     * count this refund as already made and under-fund it by its own amount.
+     *
+     * NO NEW ARITHMETIC: the three readers are the canonical ones every other surface uses.
+     */
+    const fundedFromHeldLot = Boolean(trimOrNull(input.heldLotId ?? null));
+    const isProviderReturn = (input.reversalOrigin ?? "operator") === "provider";
+
+    let unappliedFundedCents = 0;
+    if (!fundedFromHeldLot && !isProviderReturn) {
+        const unappliedRetained = await readPaymentUnappliedCents(
+            supabase, orgId, original.id, original.amount_cents,
+        );
+        const heldCents = heldCentsFor(
+            original.id,
+            await readHoldsForPayments(supabase, { orgId, paymentIds: [original.id] }),
+        );
+        const eligible = Math.max(0, unappliedRetained - heldCents);
+        unappliedFundedCents = Math.min(amountCents, eligible);
+    }
+
+    const now = nowIso();
+    const reason = trimOrNull(input.reason) ?? `refund of payment ${original.id}`;
+
+    /*
+     * THE REFUND ROW FIRST. Its trigger holds the receipt under lock while it sums the refunds that
+     * already exist, so two concurrent refunds cannot each believe the full amount is still
+     * available. Reversing the applications before that check would give money back for a refund the
+     * database was about to refuse.
+     */
+    const { data: refundData, error: refundError } = await supabase
+        .from("payments")
+        .insert({
+            org_id: orgId,
+            job_id: null,
+            customer_id: original.customer_id,
+            billable_source_type: original.billable_source_type,
+            billable_source_id: original.billable_source_id,
+            refunds_payment_id: original.id,
+            reversal_origin: input.reversalOrigin ?? "operator",
+            idempotency_key: idempotencyKey,
+            amount_cents: amountCents,
+            currency: original.currency,
+            status: "posted",
+            direction: "outbound",
+            payment_method: original.payment_method,
+            processor: original.processor,
+            // A refund is its own provider transaction, never a second row claiming the original's.
+            processor_transaction_id: null,
+            reference_number: original.reference_number,
+            received_at: now,
+            posted_at: now,
+            notes: reason,
+            metadata: { ...(input.metadata ?? {}), refunds_payment_id: original.id, reason },
+            updated_at: now,
+            created_by: input.actorUserId ?? null,
+            updated_by: input.actorUserId ?? null,
+        })
+        .select(PAYMENT_COLUMNS)
+        .single();
+    if (refundError) translateDbError(refundError, "record refund");
+    const refund = refundData as unknown as PaymentRow;
+
+    /*
+     * GIVE THE MONEY BACK ON THE BALANCE. Applications are reversed oldest-first up to the refunded
+     * amount. The one that straddles the boundary is reversed in full and its kept remainder is
+     * re-applied as a NEW active row, because an active application's amount is not edited in place
+     * — that would rewrite what was applied rather than record what changed.
+     */
+    const { data: allocData, error: allocError } = await supabase
+        .from("payment_allocations")
+        .select(ALLOCATION_COLUMNS)
+        .eq("org_id", orgId)
+        .eq("payment_id", original.id)
+        .eq("status", "active")
+        .order("allocated_at", { ascending: true });
+    if (allocError) translateDbError(allocError, "load applications to reverse");
+
+    const active = (allocData ?? []) as unknown as PaymentAllocationRow[];
+    const reversedAllocationIds: string[] = [];
+    let reappliedAllocation: PaymentAllocationRow | null = null;
+
+    /*
+     * ONLY THE SHORTFALL. `unappliedFundedCents` has already left money nothing had a claim on, so
+     * what remains is the part of the refund that must come out of settled obligations. It is
+     * zero whenever the receipt could fund the refund by itself, zero for a held-lot refund, and
+     * the whole amount for a provider return.
+     *
+     * The ORDER is unchanged: oldest-first, straddling allocation reversed in full with its kept
+     * remainder re-applied. This decision changes WHEN a reversal is required, not which
+     * allocation goes first.
+     */
+    let remaining = fundedFromHeldLot ? 0 : Math.max(0, amountCents - unappliedFundedCents);
+
+    for (const alloc of remaining > 0 ? active : []) {
+        if (remaining <= 0) break;
+        const allocAmount = Number(alloc.allocated_amount_cents) || 0;
+
+        const { error: reverseError } = await supabase
+            .from("payment_allocations")
+            .update({
+                status: "reversed",
+                reversed_at: now,
+                reversal_reason: reason,
+                updated_at: now,
+                updated_by: input.actorUserId ?? null,
+            })
+            .eq("org_id", orgId)
+            .eq("id", alloc.id)
+            .eq("status", "active");
+        if (reverseError) translateDbError(reverseError, "reverse application");
+        reversedAllocationIds.push(alloc.id);
+
+        // The obligation comes BACK, and it comes back in the period the reversal happened — not the
+        // one the application was in, which may already have reported.
+        const appliedEntry = await findEntryForSource(supabase, {
+            orgId,
+            entryType: "payment_applied",
+            sourceId: alloc.id,
+        });
+        await tryRecordFinancialJournalEntry(
+            supabase,
+            paymentApplicationReversedEntry({
+                orgId,
+                allocationId: alloc.id,
+                chargeId: alloc.charge_id,
+                amountCents: allocAmount,
+                currency: original.currency,
+                billableSourceType: original.billable_source_type,
+                billableSourceId: original.billable_source_id,
+                customerId: original.customer_id,
+                effectiveOn: now,
+                reversesEntryId: appliedEntry?.id ?? null,
+                actorUserId: input.actorUserId ?? null,
+                metadata: { payment_id: original.id, refund_payment_id: refund.id, reason },
+            }),
+        );
+
+        if (allocAmount > remaining) {
+            // Part of this application survives the refund. It is re-applied, not edited.
+            const keep = allocAmount - remaining;
+            const { data: reapplied, error: reapplyError } = await supabase
+                .from("payment_allocations")
+                .insert({
+                    org_id: orgId,
+                    payment_id: original.id,
+                    charge_id: alloc.charge_id,
+                    target_entity_type: alloc.target_entity_type,
+                    target_entity_id: alloc.target_entity_id,
+                    allocated_amount_cents: keep,
+                    status: "active",
+                    allocation_type: "payment_application",
+                    allocated_at: now,
+                    notes: `remainder after partial refund of payment ${original.id}`,
+                    metadata: {
+                        ...(alloc.metadata ?? {}),
+                        reapplied_after_refund_of: refund.id,
+                        supersedes_allocation_id: alloc.id,
+                    },
+                    updated_at: now,
+                    created_by: input.actorUserId ?? null,
+                    updated_by: input.actorUserId ?? null,
+                })
+                .select(ALLOCATION_COLUMNS)
+                .single();
+            if (reapplyError) translateDbError(reapplyError, "re-apply remainder after partial refund");
+            reappliedAllocation = reapplied as unknown as PaymentAllocationRow;
+            // The kept remainder is a NEW application and reduces the balance again by its own
+            // amount. Reversing the whole and re-applying the part nets to the refunded amount,
+            // which is what makes a partial refund arithmetic rather than an edit.
+            await recordPaymentAppliedEntry(supabase, original, reappliedAllocation, input.actorUserId ?? null);
+            remaining = 0;
+            break;
+        }
+        remaining -= allocAmount;
+    }
+
+    // The refund itself: money went back out. Its own obligation delta is ZERO — what the family
+    // owes was restored by the application reversals above, and counting it twice here is exactly
+    // the double-count a single signed `amount` column would have invited.
+    const receiptEntry = await findEntryForSource(supabase, {
+        orgId,
+        entryType: "payment_received",
+        sourceId: original.id,
+    });
+    await tryRecordFinancialJournalEntry(
+        supabase,
+        paymentRefundedEntry({
+            orgId,
+            refundPaymentId: refund.id,
+            refundsPaymentId: original.id,
+            amountCents: amountCents,
+            currency: refund.currency,
+            billableSourceType: refund.billable_source_type,
+            billableSourceId: refund.billable_source_id,
+            customerId: refund.customer_id,
+            effectiveOn: now,
+            reversesEntryId: receiptEntry?.id ?? null,
+            actorUserId: input.actorUserId ?? null,
+            metadata: { reason, reversed_allocation_ids: reversedAllocationIds },
+        }),
+    );
+
+    return { refund, original, reversedAllocationIds, reappliedAllocation, alreadyRefunded: false };
+}

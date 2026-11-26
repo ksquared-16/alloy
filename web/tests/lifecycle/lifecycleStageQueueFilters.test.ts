@@ -58,6 +58,17 @@ describe("lifecycleStageQueueFilters", () => {
         ).toThrow(LifecycleStageQueueFiltersEmptyError);
     });
 
+    it("assertLifecycleStageOpportunityQueryHasStatusFilters accepts stage_key eq membership", () => {
+        expect(() =>
+            assertLifecycleStageOpportunityQueryHasStatusFilters({
+                workUnitKey: "lifecycle_wu_tour",
+                opportunityScopeMode: "lifecycle_visibility",
+                ops: [{ kind: "eq", column: "stage_key", value: "tour" }],
+                workUnitMetadata: { lifecycle_stage_key: "tour" },
+            })
+        ).not.toThrow();
+    });
+
     it("validation fails when expected statuses exist but queue filters are empty", () => {
         const activation: LifecycleActivationV1 = {
             version: 1,

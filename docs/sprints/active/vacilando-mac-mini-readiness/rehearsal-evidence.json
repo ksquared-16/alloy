@@ -1,0 +1,399 @@
+{
+  "at": "2026-08-21T16:36:44.128Z",
+  "live_root": "/Users/Kelly/.local/state/alloy-dev/gateway",
+  "git_mutated": false,
+  "worktree_mutated": false,
+  "live_gateway_written": true,
+  "steps": {
+    "ensure_live_lane": {
+      "ok": true,
+      "created": true,
+      "lane_id": "lane_db3431e755a8",
+      "name": "Vacilando",
+      "work_class": "runtime_self",
+      "scarce_resource_priority": -10
+    },
+    "live_lane_count": 6,
+    "live_lane_ids": [
+      "lane_336af3bdc474",
+      "lane_69151a515d83",
+      "lane_73a897409906",
+      "lane_955fe041d417",
+      "lane_db3431e755a8",
+      "lane_e04f184e7527"
+    ],
+    "backup": {
+      "ok": true,
+      "backup_id": "vbak_2026-08-21T16-36-44-137Z_04355cec",
+      "path": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-rehearsal-bak-BcMDUj/vbak_2026-08-21T16-36-44-137Z_04355cec",
+      "error": null,
+      "files": 25
+    },
+    "verify": {
+      "ok": true,
+      "errors": [],
+      "backup_id": "vbak_2026-08-21T16-36-44-137Z_04355cec"
+    },
+    "restore": {
+      "ok": true,
+      "dest_root": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-rehearsal-dest-N4xplt",
+      "node_id": "node_e772f5e18fe9",
+      "backup_id": "vbak_2026-08-21T16-36-44-137Z_04355cec",
+      "bindings_invalidated": 3,
+      "git_mutated": false,
+      "worktree_mutated": false,
+      "lanes": [
+        {
+          "lane_id": "lane_955fe041d417",
+          "name": "Access & Identity",
+          "work_class": "product",
+          "binding_status": "stale"
+        },
+        {
+          "lane_id": "lane_336af3bdc474",
+          "name": "Communications",
+          "work_class": "product",
+          "binding_status": "stale"
+        },
+        {
+          "lane_id": "lane_69151a515d83",
+          "name": "Processing",
+          "work_class": "product",
+          "binding_status": "unbound"
+        },
+        {
+          "lane_id": "lane_73a897409906",
+          "name": "Runtime Performance",
+          "work_class": "product",
+          "binding_status": "stale"
+        },
+        {
+          "lane_id": "lane_e04f184e7527",
+          "name": "Lifecycle Cert",
+          "work_class": "product",
+          "binding_status": "unbound"
+        },
+        {
+          "lane_id": "lane_db3431e755a8",
+          "name": "Vacilando",
+          "work_class": "runtime_self",
+          "binding_status": "unbound"
+        }
+      ]
+    },
+    "restored_lanes": [
+      {
+        "lane_id": "lane_336af3bdc474",
+        "name": "Communications",
+        "aliases": [],
+        "work_class": "product"
+      },
+      {
+        "lane_id": "lane_69151a515d83",
+        "name": "Processing",
+        "aliases": [],
+        "work_class": "product"
+      },
+      {
+        "lane_id": "lane_73a897409906",
+        "name": "Runtime Performance",
+        "aliases": [],
+        "work_class": "product"
+      },
+      {
+        "lane_id": "lane_955fe041d417",
+        "name": "Access & Identity",
+        "aliases": [
+          "alloy-identity"
+        ],
+        "work_class": "product"
+      },
+      {
+        "lane_id": "lane_db3431e755a8",
+        "name": "Vacilando",
+        "aliases": [
+          "vacilando"
+        ],
+        "work_class": "runtime_self"
+      },
+      {
+        "lane_id": "lane_e04f184e7527",
+        "name": "Lifecycle Cert",
+        "aliases": [],
+        "work_class": "product"
+      }
+    ],
+    "historical_runs": {
+      "lane_955fe041d417": [
+        {
+          "run_id": "erun_70a72b7e240c5619",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_4c5ac328be5091cb",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_1cef83d0ea7d5222",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_4bd1ed7ca3b7b143",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_462c30df92586482",
+          "state": "COMPLETE",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_0f5b83c09b0d4621",
+          "state": "FAILED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_0a749119d8f48a77",
+          "state": "COMPLETE",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_618c78b4dedf74fc",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_d06fd2fd713f4df2",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_473442779d895b1b",
+          "state": "FAILED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_f66fa294bb9425d5",
+          "state": "COMPLETE",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_6641af4d56b804e2",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_efe2bc4a53e6f28c",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_08d9e9b33e0c6e9d",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_0a685459acc693de",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        },
+        {
+          "run_id": "erun_d003de873e1f6fe0",
+          "state": "ABANDONED",
+          "lane_id": "lane_955fe041d417"
+        }
+      ],
+      "lane_336af3bdc474": [
+        {
+          "run_id": "erun_804f2cbf4ac661ff",
+          "state": "COMPLETE",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_1dcd6fb5819466d7",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_1a314d2980a18cc3",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_91d721f697bc7c7a",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_70c83df584abc065",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_626d497d25f3d40e",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_3ea7985b52bd628d",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_438c6d69ba16ffed",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_a2562198aaddca61",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_b01d30ea7dd32b79",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_25f63661fe6444fb",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_6587617add430c4c",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_5383e7d460eb3c0b",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_a171b83a7a572391",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_1c8dffe29f73c328",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        },
+        {
+          "run_id": "erun_109635f19a4af8ce",
+          "state": "ABANDONED",
+          "lane_id": "lane_336af3bdc474"
+        }
+      ],
+      "lane_69151a515d83": [
+        {
+          "run_id": "erun_f4733ab4d06a0aa7",
+          "state": "QUEUED",
+          "lane_id": "lane_69151a515d83"
+        }
+      ],
+      "lane_73a897409906": [
+        {
+          "run_id": "erun_2e75bcad7d11c169",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_97f02e7330ce7218",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_110972700a263e69",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_6c926854c50a2e9f",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_7595fb60f3d522c7",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_ddead48d5959569b",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_1fb5077cca25fe8f",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_d880e4971165d8b4",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_52dade33b2f72af8",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_86f8bed21e089e89",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_f11224d033f8be42",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_7aed820afc3382d1",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_f38f3af1082ecc43",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_f6dfde5fc928683c",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_001a20279379bef2",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        },
+        {
+          "run_id": "erun_b67a1bb9afb97e0d",
+          "state": "ABANDONED",
+          "lane_id": "lane_73a897409906"
+        }
+      ],
+      "lane_e04f184e7527": [
+        {
+          "run_id": "erun_4e4d3b9ba5b4c101",
+          "state": "QUEUED",
+          "lane_id": "lane_e04f184e7527"
+        }
+      ],
+      "lane_db3431e755a8": []
+    },
+    "bindings_stale": true,
+    "arrival_day_uncertified": [
+      "physical Mac mini hardware and disk layout",
+      "Tailscale HTTPS Serve on the mini",
+      "Claude Code login on the mini",
+      "empirical provider/CPU/RAM capacity vs this MacBook",
+      "launchd KeepAlive under the mini's logged-in user",
+      "Docker/alloy-stack lease behavior on the mini"
+    ]
+  }
+}

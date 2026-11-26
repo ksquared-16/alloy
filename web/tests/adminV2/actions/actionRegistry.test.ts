@@ -12,6 +12,7 @@ import {
     partitionConfiguredActionKeys,
     validateConfiguredActionKey,
 } from "@/lib/adminV2/actions/configValidation";
+import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 
 describe("action registry", () => {
     it("registers update_status and create_lead with executable handlers", () => {
@@ -23,6 +24,13 @@ describe("action registry", () => {
         expect(typeof action?.execute).toBe("function");
         expect(typeof action?.resolveEligibility).toBe("function");
         expect(typeof action?.buildPreview).toBe("function");
+    });
+
+    it("aligns create_lead bosProposalSupport across registered and canonical catalogs", () => {
+        const registered = getRegisteredAction("create_lead");
+        const canonical = canonicalActionDefinition("create_lead");
+        expect(registered?.bosProposalSupport).toBe(true);
+        expect(canonical?.bosProposalSupport).toBe(true);
     });
 
     it("rejects unknown action keys", () => {

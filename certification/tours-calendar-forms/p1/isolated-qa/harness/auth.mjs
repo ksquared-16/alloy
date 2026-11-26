@@ -1,0 +1,13 @@
+import { open, ORIGIN, OUT } from "./lib.mjs";
+const { browser, page, errors } = await open();
+const r = {};
+await page.goto(`${ORIGIN}/organization/locations`, { waitUntil: "networkidle", timeout: 90000 });
+r.landed = page.url();
+r.signedOut = /\/login/.test(page.url());
+r.title = await page.title();
+r.me = await page.evaluate(async () => { const x = await fetch("/api/me").catch(() => null); return x ? { status: x.status, body: (await x.text()).slice(0, 400) } : null; });
+r.locations = await page.locator("text=/Campus|Location/").allInnerTexts().then(a => a.slice(0, 12)).catch(() => []);
+await page.screenshot({ path: `${OUT}auth-locations.png` });
+r.errors = errors.slice(0, 5);
+console.log(JSON.stringify(r, null, 1));
+await browser.close();

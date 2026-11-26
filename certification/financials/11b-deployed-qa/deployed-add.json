@@ -1,0 +1,25 @@
+{
+  "summary": {
+    "present": true,
+    "balance": "Balance $1,412.87",
+    "availablePrepaid": "Available prepaid $125.00",
+    "bareAvailable": false
+  },
+  "addControl": {
+    "count": 1,
+    "present": true
+  },
+  "add": {
+    "targets": [
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "children": [
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "eachChildOnce": true,
+    "householdExplicit": true,
+    "oneActiveTargetControl": true
+  }
+}

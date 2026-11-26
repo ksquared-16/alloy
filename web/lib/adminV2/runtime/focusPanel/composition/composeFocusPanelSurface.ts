@@ -2,7 +2,7 @@
  * Composition Engine V1 — the Focus Panel surface is COMPOSED from card
  * semantics, not laid out as equal grid cells.
  *
- * @see docs/sprints/06_2026/focus-panel-composition-engine-v1
+ * @see docs/sprints/archive/06_2026/focus-panel-composition-engine-v1
  * @see docs/platform/operator/card-composition-system.md
  *
  * The engine receives:

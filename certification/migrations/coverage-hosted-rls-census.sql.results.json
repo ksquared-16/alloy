@@ -1,0 +1,174 @@
+{
+  "trusted_host_action_id": "tha_bcc89f29218066",
+  "query_hash": "9144dcbaa4353174388938ca1a8c4dc5cf65a61e6f6a2758020faf6b7caa78f2",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:32:45.567Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_bcc89f29218066",
+    "query_hash": "9144dcbaa4353174388938ca1a8c4dc5cf65a61e6f6a2758020faf6b7caa78f2",
+    "authorization_id": "grnt_89933524834447fd",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:32:46.966Z",
+    "question_ids": [
+      "coverage_rls"
+    ],
+    "questions": {
+      "coverage_rls": {
+        "question_id": "coverage_rls",
+        "row_count": null,
+        "rows": [
+          {
+            "policies": [
+              {
+                "name": "staff_coverage_allocations_mutate_ops",
+                "cmd": "ALL",
+                "roles": "{authenticated}",
+                "using": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.org_id = staff_coverage_allocations.org_id) AND (ur.role = ANY (ARRAY['owner'::text, 'admin'::text, 'ops'::text])))))",
+                "with_check": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.org_id = staff_coverage_allocations.org_id) AND (ur.role = ANY (ARRAY['owner'::text, 'admin'::text, 'ops'::text])))))"
+              },
+              {
+                "name": "staff_coverage_allocations_select_org",
+                "cmd": "SELECT",
+                "roles": "{authenticated}",
+                "using": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.org_id = staff_coverage_allocations.org_id))))",
+                "with_check": null
+              }
+            ],
+            "grants_all": [
+              {
+                "grantee": "authenticated",
+                "priv": "INSERT"
+              },
+              {
+                "grantee": "authenticated",
+                "priv": "SELECT"
+              },
+              {
+                "grantee": "authenticated",
+                "priv": "UPDATE"
+              },
+              {
+                "grantee": "postgres",
+                "priv": "DELETE"
+              },
+              {
+                "grantee": "postgres",
+                "priv": "INSERT"
+              },
+              {
+                "grantee": "postgres",
+                "priv": "REFERENCES"
+              },
+              {
+                "grantee": "postgres",
+                "priv": "SELECT"
+              },
+              {
+                "grantee": "postgres",
+                "priv": "TRIGGER"
+              },
+              {
+                "grantee": "postgres",
+                "priv": "TRUNCATE"
+              },
+              {
+                "grantee": "postgres",
+                "priv": "UPDATE"
+              },
+              {
+                "grantee": "service_role",
+                "priv": "DELETE"
+              },
+              {
+                "grantee": "service_role",
+                "priv": "INSERT"
+              },
+              {
+                "grantee": "service_role",
+                "priv": "REFERENCES"
+              },
+              {
+                "grantee": "service_role",
+                "priv": "SELECT"
+              },
+              {
+                "grantee": "service_role",
+                "priv": "TRIGGER"
+              },
+              {
+                "grantee": "service_role",
+                "priv": "TRUNCATE"
+              },
+              {
+                "grantee": "service_role",
+                "priv": "UPDATE"
+              }
+            ],
+            "anon_or_public_grants": 0,
+            "rls_enabled": true,
+            "rls_forced": false,
+            "rpc_security": [
+              {
+                "name": "staff_coverage_cancel",
+                "security_definer": false
+              },
+              {
+                "name": "staff_coverage_effective_for_employment",
+                "security_definer": false
+              },
+              {
+                "name": "staff_coverage_effective_for_site",
+                "security_definer": false
+              },
+              {
+                "name": "staff_coverage_plan",
+                "security_definer": false
+              },
+              {
+                "name": "staff_coverage_supersede",
+                "security_definer": false
+              }
+            ],
+            "index_defs": [
+              {
+                "name": "staff_coverage_allocations_employment_date_idx",
+                "def": "CREATE INDEX staff_coverage_allocations_employment_date_idx ON public.staff_coverage_allocations USING btree (org_id, employment_id, service_date) WHERE (lifecycle_state = 'active'::text)"
+              },
+              {
+                "name": "staff_coverage_allocations_lineage_idx",
+                "def": "CREATE INDEX staff_coverage_allocations_lineage_idx ON public.staff_coverage_allocations USING btree (lineage_root_id)"
+              },
+              {
+                "name": "staff_coverage_allocations_no_overlap",
+                "def": "CREATE INDEX staff_coverage_allocations_no_overlap ON public.staff_coverage_allocations USING gist (employment_id, service_date, int4range((((EXTRACT(hour FROM start_time) * (60)::numeric) + EXTRACT(minute FROM start_time)))::integer, (((EXTRACT(hour FROM end_time) * (60)::numeric) + EXTRACT(minute FROM end_time)))::integer)) WHERE (lifecycle_state = 'active'::text)"
+              },
+              {
+                "name": "staff_coverage_allocations_pkey",
+                "def": "CREATE UNIQUE INDEX staff_coverage_allocations_pkey ON public.staff_coverage_allocations USING btree (id)"
+              },
+              {
+                "name": "staff_coverage_allocations_room_date_idx",
+                "def": "CREATE INDEX staff_coverage_allocations_room_date_idx ON public.staff_coverage_allocations USING btree (org_id, room_location_id, service_date) WHERE ((lifecycle_state = 'active'::text) AND (room_location_id IS NOT NULL))"
+              },
+              {
+                "name": "staff_coverage_allocations_site_date_idx",
+                "def": "CREATE INDEX staff_coverage_allocations_site_date_idx ON public.staff_coverage_allocations USING btree (org_id, site_location_id, service_date) WHERE (lifecycle_state = 'active'::text)"
+              }
+            ],
+            "time_order_check": "CHECK ((end_time > start_time))",
+            "transition_check": "CHECK ((((supersedes_coverage_id IS NULL) AND (transition_type IS NULL)) OR ((supersedes_coverage_id IS NOT NULL) AND (transition_type = ANY (ARRAY['revision'::text, 'correction'::text])))))",
+            "observed_at": "2026-09-22 01:32:46.884683+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

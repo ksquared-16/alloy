@@ -1,5 +1,6 @@
 "use client";
 
+import { isDomainProjectionModel } from "@/lib/lifecycle/processModelV1";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import LifecycleCreateForm from "@/components/adminV2/settings/lifecycle/LifecycleCreateForm";
@@ -21,14 +22,19 @@ import BusinessProcessActionsListColumn, {
 } from "@/components/adminV2/settings/businessProcess/BusinessProcessActionsQueueWorkspace";
 import BusinessProcessAutomationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessAutomationShell";
 import BusinessProcessHealthListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessHealthQueueWorkspace";
+import BusinessProcessOverviewPanel from "@/components/adminV2/settings/businessProcess/BusinessProcessOverviewPanel";
 import {
     BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY,
+    BUSINESS_PROCESS_HISTORY_PLANNED,
+    BUSINESS_PROCESS_HISTORY_TITLE,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import BusinessProcessConfigurationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell";
-import BusinessProcessStagesListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
+import BusinessProcessStagesListColumn, { ALL_TRACKS_KEY } from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
 import BusinessProcessWorkViewsListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsListColumn";
 import BusinessProcessWorkViewsSetupWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsSetupWorkspace";
+import BusinessProcessParticipationCard from "@/components/adminV2/settings/businessProcess/BusinessProcessParticipationCard";
 import { WorkViewsConfigurationProvider } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
+import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import type { BusinessProcessWorkspaceSection } from "@/lib/lifecycle/businessProcessUiLabels";
 import type { LifecycleBaseActionKey } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import { queueMembershipWithSyncedStatusKeys } from "@/lib/lifecycle/queueMembershipEditorModel";
@@ -64,7 +70,6 @@ import type {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     readProcessTracks,
-    splitRuleForStage,
     stagesForTrack,
 } from "@/lib/businessProcesses/businessProcessConfigReader";
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
@@ -91,8 +96,11 @@ import {
     type LifecycleStatusDraftAction,
 } from "@/lib/lifecycle/lifecycleStatusDraftReducer";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import BusinessProcessTrackAdoptionCard from "@/components/adminV2/settings/lifecycle/BusinessProcessTrackAdoptionCard";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
+import { effectiveLifecycleStageStatusKeys } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
+import { remainingIssuesSummary } from "@/lib/lifecycle/stageOperatingPlanDraftDelta";
 
 type DeptRow = {
     id: string;
@@ -104,10 +112,28 @@ type WorkUnitApiRow = { id: string; key: string; name: string; is_active: boolea
 
 const PRIMARY_RECORD_LABEL = "Lead";
 
+/**
+ * Put the operator in front of the thing that blocked the save.
+ *
+ * `controlId` is the same handle the editor stamps onto its issue list, so scrolling to it lands
+ * on the sentence explaining the defect. A blocked save that only sets a message at the bottom of
+ * a long form is barely better than the silent failure this replaces.
+ */
+function focusStageOperatingPlanControl(controlId: string): void {
+    if (typeof document === "undefined") return;
+    const target =
+        document.querySelector(`[data-control-id="${CSS.escape(controlId)}"]`) ??
+        document.querySelector('[data-testid="lifecycle-stage-operating-plan-editor"]');
+    if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+}
+
 export default function LifecycleActivationBoard({
     identity,
     catalog = [],
     creatingNew = false,
+    initialSection = "stages",
     onIdentityChange,
     onCatalogRefresh,
     onWorkspaceBust,
@@ -121,10 +147,14 @@ export default function LifecycleActivationBoard({
     catalogSummary = null,
     onBackToCatalog,
     onContextActionsChange,
+    activeProcessSection,
+    onProcessSectionChange,
+    onRenameTriggerReady,
 }: {
     identity: LifecycleRuntimeIdentity | null;
     catalog?: LifecycleCatalogEntry[];
     creatingNew?: boolean;
+    initialSection?: BusinessProcessWorkspaceSection;
     onIdentityChange: (identity: LifecycleRuntimeIdentity) => void;
     onCatalogRefresh?: () => void | Promise<void>;
     onWorkspaceBust?: () => void;
@@ -139,6 +169,11 @@ export default function LifecycleActivationBoard({
     catalogSummary?: { trackCount: number; stageCount: number; queueCount: number } | null;
     onBackToCatalog?: () => void;
     onContextActionsChange?: (actions: ReactNode) => void;
+    /** Controlled Selected-Process header tab (overview/stages/.../history) — parent owns the tab bar. */
+    activeProcessSection?: BusinessProcessWorkspaceSection;
+    onProcessSectionChange?: (section: BusinessProcessWorkspaceSection) => void;
+    /** Registers a direct "open rename modal" trigger so the parent header can offer an Edit action. */
+    onRenameTriggerReady?: (trigger: () => void) => void;
 }) {
     const runtimeDepartmentId = identity?.runtimeDepartmentId?.trim() ?? "";
     const catalogEntry =
@@ -171,8 +206,30 @@ export default function LifecycleActivationBoard({
     const [bootLoading, setBootLoading] = useState(true);
     const [stageSaveState, setStageSaveState] = useState<LifecycleStageSaveUiState>("idle");
     const [stageSaveError, setStageSaveError] = useState<string | null>(null);
+    /** Saved-but-not-publishable: the honest count of what the graph still owes. */
+    const [stageSaveNotice, setStageSaveNotice] = useState<string | null>(null);
     const [readyCheckRevision, setReadyCheckRevision] = useState(0);
-    const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>("stages");
+    const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>(
+        activeProcessSection ?? initialSection
+    );
+
+    /** Two-way sync with the parent-owned Selected-Process header tab bar — no new nav runtime. */
+    useEffect(() => {
+        if (activeProcessSection && activeProcessSection !== processSection) {
+            setProcessSection(activeProcessSection);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeProcessSection]);
+
+    useEffect(() => {
+        onProcessSectionChange?.(processSection);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [processSection]);
+
+    useEffect(() => {
+        onRenameTriggerReady?.(() => setRenameOpen(true));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onRenameTriggerReady]);
     const [selectedActionKey, setSelectedActionKey] = useState<LifecycleBaseActionKey | null>(null);
     const workspaceHandleRef = useRef<StageEditorV2Handle | null>(null);
     const stageDirtyRef = useRef(false);
@@ -585,23 +642,43 @@ export default function LifecycleActivationBoard({
         ): Promise<boolean> => {
             const dept = opts?.runtimeDepartmentId ?? runtimeDepartmentId;
             if (!dept) return false;
-            const body: LifecycleActivationV1 = {
+            /**
+             * Send IDENTITY plus only what this caller actually changed.
+             *
+             * The endpoint now treats an absent key as "unchanged" (see its PATCH handler), so a
+             * sibling the operator did not touch keeps its persisted value instead of being
+             * overwritten by whatever this component happens to hold. Previously every call
+             * rebuilt the whole bundle and two fields were reset unconditionally —
+             * `action_definition_id` to null, `action_placement_ids` to [] — so an unrelated edit
+             * such as renaming the lifecycle silently cleared both (R-009).
+             *
+             * Identity still travels on every call: a first save has no persisted bundle to merge
+             * over, and `parseLifecycleActivationV1` rejects a payload without `process_id` /
+             * `stage_key`. A caller that means "clear" passes an explicit `null`, and that still
+             * clears, because the key is present.
+             */
+            const body: Partial<LifecycleActivationV1> = {
                 version: 1,
-                lifecycle_name: patch.lifecycle_name ?? lifecycleName,
                 primary_entity: "opportunity",
                 primary_record_label: PRIMARY_RECORD_LABEL,
                 process_id: patch.process_id ?? processId,
                 stage_key: patch.stage_key ?? stageKey,
                 stage_label: patch.stage_label ?? stageLabel,
-                work_unit_id: patch.work_unit_id !== undefined ? patch.work_unit_id : workUnitId,
-                work_unit_name: patch.work_unit_name !== undefined ? patch.work_unit_name : workUnitName,
-                status_keys: patch.status_keys ?? statusKeys,
-                status_labels: patch.status_labels ?? statusDisplayLabels,
-                action_definition_id:
-                    patch.action_definition_id !== undefined ? patch.action_definition_id : null,
-                action_placement_ids: patch.action_placement_ids ?? [],
-                activation_owned: patch.activation_owned ?? activationOwned,
-                completed_steps: patch.completed_steps ?? 6,
+                lifecycle_name: patch.lifecycle_name ?? lifecycleName,
+                ...(patch.work_unit_id !== undefined ? { work_unit_id: patch.work_unit_id } : {}),
+                ...(patch.work_unit_name !== undefined ? { work_unit_name: patch.work_unit_name } : {}),
+                ...(patch.status_keys !== undefined ? { status_keys: patch.status_keys } : {}),
+                ...(patch.status_labels !== undefined ? { status_labels: patch.status_labels } : {}),
+                ...(patch.action_definition_id !== undefined
+                    ? { action_definition_id: patch.action_definition_id }
+                    : {}),
+                ...(patch.action_placement_ids !== undefined
+                    ? { action_placement_ids: patch.action_placement_ids }
+                    : {}),
+                ...(patch.activation_owned !== undefined
+                    ? { activation_owned: patch.activation_owned }
+                    : {}),
+                ...(patch.completed_steps !== undefined ? { completed_steps: patch.completed_steps } : {}),
                 updated_at: new Date().toISOString(),
             };
             const res = await fetch(
@@ -617,18 +694,9 @@ export default function LifecycleActivationBoard({
             if (!res.ok) throw new Error(j.error ?? "Failed to save activation bundle");
             return true;
         },
-        [
-            runtimeDepartmentId,
-            lifecycleName,
-            processId,
-            stageKey,
-            stageLabel,
-            workUnitId,
-            workUnitName,
-            statusKeys,
-            statusDisplayLabels,
-            activationOwned,
-        ]
+        // Only identity is read from component state now; the sibling values are no longer
+        // reconstructed here, so depending on them would just churn this callback's identity.
+        [runtimeDepartmentId, lifecycleName, processId, stageKey, stageLabel]
     );
 
     const saveStageStatuses = useCallback(async (keysToSave?: readonly string[]): Promise<boolean> => {
@@ -652,17 +720,18 @@ export default function LifecycleActivationBoard({
             }),
             availableStatusCount: collectAllOpportunityStatusRows(statusesPayload).length,
         });
-        if (!runtimeDepartmentId || !sk || selectedKeys.length < 1) {
+        if (!runtimeDepartmentId || !sk || effectiveLifecycleStageStatusKeys(sk, selectedKeys).length < 1) {
             setStatusesError("Select at least one status for this stage.");
             return false;
         }
         setStatusesSaving(true);
         setStatusesError(null);
+        const effectiveKeys = effectiveLifecycleStageStatusKeys(sk, selectedKeys);
         const contractBody = {
             department_id: runtimeDepartmentId,
             process_id: processId,
             stage_key: sk,
-            selected_status_keys: selectedKeys,
+            selected_status_keys: effectiveKeys,
             ...(workUnitName?.trim() ? { work_unit_name: workUnitName.trim() } : {}),
         };
         logLifecycleStatusStepDebug("save-contract-request", { body: contractBody });
@@ -691,7 +760,7 @@ export default function LifecycleActivationBoard({
             const keys =
                 j.snapshot?.selectedStatusKeys?.length
                     ? j.snapshot.selectedStatusKeys
-                    : selectedKeys;
+                    : effectiveKeys;
             if (keys.length < 1) {
                 throw new Error(
                     `Statuses were not assigned to stage "${sk}". Check that this stage exists on the lifecycle department.`
@@ -755,25 +824,174 @@ export default function LifecycleActivationBoard({
         if (runtimeDepartmentId) await loadPipeline(runtimeDepartmentId);
     }, [saveStageStatuses, runtimeDepartmentId, loadPipeline, statusesSaveState]);
 
+    // ── Publication workflow (Law 4) ────────────────────────────────────────────
+    // A stage save writes the DRAFT. Runtime keeps serving the published revision until the
+    // operator publishes, so the editor needs its own small workflow rather than a "Saved" chip.
+    const [publicationBusy, setPublicationBusy] = useState(false);
+    const [publicationNotice, setPublicationNotice] = useState<string | null>(null);
+    // Independent of stage bootstrap — Work Views (and other process sections) still need Apply
+    // even when no stage is selected / bootstrap is empty.
+    const [publicationSummary, setPublicationSummary] = useState<
+        LifecycleStageBootstrapPayload["configuration_state"] | null
+    >(null);
+
+    const refreshConfigurationState = useCallback(async () => {
+        if (!runtimeDepartmentId) return;
+        try {
+            const res = await fetch(
+                `/api/admin/business-process/configuration?department_id=${encodeURIComponent(runtimeDepartmentId)}`,
+                workspaceDataFetchInit(),
+            );
+            const j = (await res.json().catch(() => ({}))) as {
+                summary?: LifecycleStageBootstrapPayload["configuration_state"];
+            };
+            if (res.ok && j.summary) {
+                setPublicationSummary(j.summary);
+                patchStageBootstrap({ configuration_state: j.summary });
+            }
+        } catch {
+            // A failed refresh must not break the save it followed; the next load corrects it.
+        }
+    }, [runtimeDepartmentId, patchStageBootstrap]);
+
+    useEffect(() => {
+        if (stageBootstrap?.configuration_state) {
+            setPublicationSummary(stageBootstrap.configuration_state);
+        }
+    }, [stageBootstrap?.configuration_state]);
+
+    useEffect(() => {
+        if (processSection === "work-views" && runtimeDepartmentId) {
+            void refreshConfigurationState();
+        }
+    }, [processSection, runtimeDepartmentId, refreshConfigurationState]);
+
+    const validateConfiguration = useCallback(async () => {
+        if (!runtimeDepartmentId) return;
+        setPublicationBusy(true);
+        setPublicationNotice(null);
+        try {
+            const res = await fetch("/api/admin/business-process/configuration/validate", {
+                ...workspaceDataFetchInit(),
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ department_id: runtimeDepartmentId }),
+            });
+            const j = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                can_publish?: boolean;
+                summary?: LifecycleStageBootstrapPayload["configuration_state"];
+            };
+            if (!res.ok) throw new Error(j.error ?? "Validation failed");
+            if (j.summary) {
+                setPublicationSummary(j.summary);
+                patchStageBootstrap({ configuration_state: j.summary });
+            }
+            setPublicationNotice(
+                j.can_publish
+                    ? "Validated. This configuration is ready to publish."
+                    : "Validation found problems that must be resolved before publishing.",
+            );
+        } catch (e) {
+            setPublicationNotice(e instanceof Error ? e.message : "Validation failed");
+        } finally {
+            setPublicationBusy(false);
+        }
+    }, [runtimeDepartmentId, patchStageBootstrap]);
+
+    const publishConfiguration = useCallback(async () => {
+        if (!runtimeDepartmentId) return;
+        setPublicationBusy(true);
+        setPublicationNotice(null);
+        try {
+            const res = await fetch("/api/admin/business-process/configuration/publish", {
+                ...workspaceDataFetchInit(),
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    department_id: runtimeDepartmentId,
+                    ...((publicationSummary ?? stageBootstrap?.configuration_state)
+                        ? {
+                              draft_revision: (publicationSummary ?? stageBootstrap!.configuration_state!)
+                                  .draft_revision,
+                          }
+                        : {}),
+                }),
+            });
+            const j = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                published?: { revision_number?: number; already_published?: boolean };
+                summary?: LifecycleStageBootstrapPayload["configuration_state"];
+            };
+            if (!res.ok) {
+                if (j.summary) {
+                    setPublicationSummary(j.summary);
+                    patchStageBootstrap({ configuration_state: j.summary });
+                } else await refreshConfigurationState();
+                throw new Error(j.error ?? "Could not apply your changes.");
+            }
+            if (j.summary) {
+                setPublicationSummary(j.summary);
+                patchStageBootstrap({ configuration_state: j.summary });
+            }
+            // Says what CHANGED for the operator, not which revision number was cut. `already_published`
+            // means the request was a no-op because this exact configuration was already live —
+            // telling them "applied" would imply something happened.
+            setPublicationNotice(
+                j.published?.already_published === true
+                    ? "These changes were already applied — nothing to do."
+                    : "Changes applied. Your team is now working from them.",
+            );
+            bumpWorkspaceCache();
+        } catch (e) {
+            setPublicationNotice(e instanceof Error ? e.message : "Could not apply your changes.");
+        } finally {
+            setPublicationBusy(false);
+        }
+    }, [
+        runtimeDepartmentId,
+        publicationSummary,
+        stageBootstrap?.configuration_state,
+        patchStageBootstrap,
+        refreshConfigurationState,
+        bumpWorkspaceCache,
+    ]);
+
+    const reloadConfiguration = useCallback(async () => {
+        setPublicationNotice(null);
+        // A stale draft is resolved by seeing the newer world, not by force-publishing over it.
+        window.location.reload();
+    }, []);
+
     const saveStageUnified = useCallback(async () => {
         const sk = normalizeLifecycleBuilderStageKey(stageKeyRef.current || stageKey);
         const selectedKeys = statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk);
+        const effectiveKeys = effectiveLifecycleStageStatusKeys(sk, selectedKeys);
         if (!runtimeDepartmentId || !sk) {
             setStageSaveError("Select a stage first.");
             setStageSaveState("error");
             return;
         }
-        if (selectedKeys.length < 1) {
-            setStageSaveError("Select at least one status for this stage.");
+        if (effectiveKeys.length < 1) {
+            const message = "Select at least one status for this stage.";
+            setStageSaveError(message);
             setStageSaveState("error");
-            setStatusesError("Select at least one status for this stage.");
+            setStatusesError(null);
+            const statusSection = document.querySelector('[data-testid="lifecycle-stage-statuses-section"]');
+            if (statusSection instanceof HTMLElement) {
+                statusSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                const details = statusSection.querySelector("details");
+                if (details && !details.open) details.open = true;
+            }
             return;
         }
 
         setStageSaveState("saving");
         setStageSaveError(null);
+        setStageSaveNotice(null);
         setStatusesError(null);
 
+        try {
         const handle = workspaceHandleRef.current;
         const fieldRules = handle?.isFieldDirty() ? handle.getFieldDraftRules() : null;
         const queueName =
@@ -786,10 +1004,23 @@ export default function LifecycleActivationBoard({
         const queueMembership = queueMembershipWithSyncedStatusKeys(
             membershipBase,
             sk,
-            selectedKeys,
+            effectiveKeys,
         );
-        const stageOperatingPlan =
+        // D3, drafting half. The editor no longer throws while the request is being assembled;
+        // it returns the plan together with a verdict on what THIS edit did to the graph. Only an
+        // error this edit introduced or worsened stops the save — a stage the operator inherited
+        // broken stays editable, and what remains broken is reported rather than silently endured.
+        const stageOperatingPlanSave =
             handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
+        if (stageOperatingPlanSave?.assessment.blocking.length) {
+            const first = stageOperatingPlanSave.assessment.blocking[0]!;
+            const more = stageOperatingPlanSave.assessment.blocking.length - 1;
+            setStageSaveError(more > 0 ? `${first.message} (+${more} more)` : first.message);
+            setStageSaveState("error");
+            focusStageOperatingPlanControl(first.controlId);
+            return;
+        }
+        const stageOperatingPlan = stageOperatingPlanSave?.plan ?? null;
         const statusRollup =
             handle?.isStatusRollupDirty()
                 ? handle.getStatusRollupDraft()
@@ -801,16 +1032,23 @@ export default function LifecycleActivationBoard({
             department_id: runtimeDepartmentId,
             process_id: processId,
             stage_key: sk,
-            selected_status_keys: selectedKeys,
+            selected_status_keys: effectiveKeys,
             work_unit_name: queueName,
             ...(fieldRules ? { field_rules: fieldRules } : {}),
             queue_membership_v1: queueMembership,
             ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
             ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
             ...(v2Draft ? { stage_v2_draft: v2Draft } : {}),
+            // Both conflict tokens the editor loaded. `draft_revision` catches a colleague editing
+            // the same draft; `base_revision_id` catches a publish that happened underneath us.
+            ...(stageBootstrap?.configuration_state
+                ? {
+                      draft_revision: stageBootstrap.configuration_state.draft_revision,
+                      base_revision_id: stageBootstrap.configuration_state.base_revision_id,
+                  }
+                : {}),
         };
 
-        try {
             const res = await fetch(LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH, {
                 ...workspaceDataFetchInit(),
                 method: "POST",
@@ -822,11 +1060,25 @@ export default function LifecycleActivationBoard({
                 status_stages?: EnrollmentStatusStagesPayload;
                 snapshot?: { selectedStatusKeys?: string[]; synced?: boolean };
                 pipeline?: EnrollmentPipelineWorkUnitSnapshot | null;
+                draft?: { draft_revision?: number; base_revision_id?: string | null };
+                publication_required?: boolean;
+                errors?: { message?: string }[];
             };
-            if (!res.ok) throw new Error(j.error ?? "Save failed");
+            if (!res.ok) {
+                // 409 is a conflict, not a failure: the operator's work is intact, they just need
+                // to reload. 422 carries the touched-reference errors D3 blocks on.
+                if (res.status === 409) {
+                    setPublicationNotice(null);
+                    throw new Error(j.error ?? "This configuration changed while you were editing.");
+                }
+                if (res.status === 422 && j.errors?.length) {
+                    throw new Error(j.errors.map((e) => e.message).filter(Boolean).join(" "));
+                }
+                throw new Error(j.error ?? "Save failed");
+            }
 
             const keys =
-                j.snapshot?.selectedStatusKeys?.length ? j.snapshot.selectedStatusKeys : selectedKeys;
+                j.snapshot?.selectedStatusKeys?.length ? j.snapshot.selectedStatusKeys : effectiveKeys;
             const statusPayload = j.status_stages ?? null;
             if (statusPayload) setStatusesPayload(statusPayload);
             const labels = labelsForKeys(
@@ -910,7 +1162,15 @@ export default function LifecycleActivationBoard({
             }
 
             bumpWorkspaceCache();
+            // The save moved the draft, not runtime. Re-read the publication state so the bar says
+            // "Unpublished changes" rather than leaving a stale "Published".
+            await refreshConfigurationState();
             setStageSaveState("saved");
+            // The draft landed, but the graph may still be short of publishable. Say so plainly —
+            // an operator who is told "Saved" and later refused at publish learns to distrust both.
+            setStageSaveNotice(
+                stageOperatingPlanSave ? remainingIssuesSummary(stageOperatingPlanSave.assessment) : null,
+            );
             setReadyCheckRevision((n) => n + 1);
             stageDirtyRef.current = false;
         } catch (e) {
@@ -931,6 +1191,8 @@ export default function LifecycleActivationBoard({
         saveActivation,
         loadPipeline,
         bumpWorkspaceCache,
+        refreshConfigurationState,
+        stageBootstrap?.configuration_state,
     ]);
 
     useEffect(() => {
@@ -987,13 +1249,10 @@ export default function LifecycleActivationBoard({
 
     const navStages = useMemo(() => {
         if (!processTracks || !builderProcess) return builderStages;
+        // "All" is the process in its canonical order — the same list Overview and Journey count.
+        if (activeTrackKey === ALL_TRACKS_KEY) return activeStagesForProcess(builderProcess);
         return stagesForTrack(builderProcess, activeTrackKey);
     }, [activeTrackKey, builderProcess, builderStages, processTracks]);
-
-    const activeSplitRule = useMemo(() => {
-        if (!builderProcess || !stageKey) return null;
-        return splitRuleForStage(builderProcess, stageKey);
-    }, [builderProcess, stageKey]);
 
     const builderStageKeys = useMemo(() => {
         return builderProcess ? stageKeysForProcess(builderProcess) : [];
@@ -1091,7 +1350,9 @@ export default function LifecycleActivationBoard({
             setProcessTracks(tracks);
             if (tracks?.tracks.length) {
                 setActiveTrackKey((prev) =>
-                    tracks.tracks.some((t) => t.key === prev) ? prev : tracks.tracks[0]!.key,
+                    prev === ALL_TRACKS_KEY || tracks.tracks.some((t) => t.key === prev)
+                        ? prev
+                        : tracks.tracks[0]!.key,
                 );
             }
             if (process) {
@@ -1173,9 +1434,46 @@ export default function LifecycleActivationBoard({
                     }
                 }
             }
-            void saveActivation({ stage_key: stage.key, stage_label: stage.label });
+            // NO durable write here, deliberately.
+            //
+            // This used to end `void saveActivation({ stage_key, stage_label })`, so selecting a
+            // stage to LOOK at it PATCHed the activation bundle and wrote departments.metadata.
+            // `activation.stage_key` is not editor position — the runtime reads it as a binding
+            // (builderOwnedLifecycleRuntime, lifecycleWorkUnitQueueValidation,
+            // lifecycleRuntimeBinding, validateLifecycleActivationRuntime), so browsing the stage
+            // list silently repointed which stage the activation targets.
+            //
+            // Selection is local: the flushSync above owns it and `stageKeyRef` carries it. The
+            // explicit save paths (saveStageUnified, saveStageStatuses) persist `stage_key` when
+            // the operator actually commits a change to that stage, so restore-on-load now
+            // reflects the last stage genuinely configured rather than the last one browsed.
         },
-        [statusesPayload, syncStatusKeysFromPayload, saveActivation, loadStatusStages]
+        [statusesPayload, syncStatusKeysFromPayload, loadStatusStages]
+    );
+
+    /**
+     * Switch which track the stage rail lists.
+     *
+     * Selection has to move with the filter. Leaving `stageKey` pointing at a stage the rail no
+     * longer lists would put the editor on a stage the operator cannot see or navigate back to —
+     * the same class of invisibility this switcher exists to fix. Nothing is written: changing which
+     * stages you are LOOKING at is not a configuration change.
+     */
+    const selectTrack = useCallback(
+        (trackKey: string) => {
+            const key = trackKey.trim();
+            if (!key || key === activeTrackKey) return;
+            setActiveTrackKey(key);
+            if (!builderProcess) return;
+            const next =
+                key === ALL_TRACKS_KEY ? activeStagesForProcess(builderProcess) : stagesForTrack(builderProcess, key);
+            if (!next.length) return;
+            // Keep the current stage when it belongs to the track being opened; otherwise open the
+            // first stage of that track so the editor always points at something the rail shows.
+            if (next.some((st) => st.key === stageKeyRef.current)) return;
+            void selectStage(next[0]!);
+        },
+        [activeTrackKey, builderProcess, selectStage],
     );
 
     const renameLifecycle = useCallback(
@@ -1618,10 +1916,31 @@ export default function LifecycleActivationBoard({
         repairLifecycleWorkUnits,
     ]);
 
+    /**
+     * Publishing rendered actions UP into an ancestor's state is a render loop waiting to happen,
+     * so this seam is now defensive on both counts that made it loop.
+     *
+     * 1. The callback is held in a ref. It is `setContextActions` today, but any parent passing an
+     *    inline handler would otherwise re-fire this effect on every render.
+     * 2. The clear runs on real unmount only. It used to be this effect's cleanup, so every
+     *    dependency change pushed `null` up before pushing the element back — the ancestor's state
+     *    alternated `element → null → element` without end, and each hop re-rendered this subtree.
+     *    That starved the main thread: `/organization/processes` never got past "Loading process…",
+     *    could not be scrolled, and swallowed clicks on the breadcrumb.
+     *
+     * `processContextActions` remains the trigger and must stay memoized on stable deps — see
+     * `handleRepairVisibility` in LifecycleBuilderPrimary for the dependency that broke it.
+     */
+    const onContextActionsChangeRef = useRef(onContextActionsChange);
     useEffect(() => {
-        onContextActionsChange?.(processContextActions);
-        return () => onContextActionsChange?.(null);
-    }, [onContextActionsChange, processContextActions]);
+        onContextActionsChangeRef.current = onContextActionsChange;
+    }, [onContextActionsChange]);
+
+    useEffect(() => {
+        onContextActionsChangeRef.current?.(processContextActions);
+    }, [processContextActions]);
+
+    useEffect(() => () => onContextActionsChangeRef.current?.(null), []);
 
     if (bootLoading && runtimeDepartmentId && processId) {
         return (
@@ -1708,7 +2027,9 @@ export default function LifecycleActivationBoard({
                         activeSection={processSection}
                         onSelectSection={setProcessSection}
                         listColumn={
-                            processSection === "work-views" && processId ?
+                            processSection === "overview" || processSection === "history" ?
+                                null
+                            : processSection === "work-views" && processId ?
                                 <BusinessProcessWorkViewsListColumn />
                             : processSection === "stages" ?
                                 <BusinessProcessStagesListColumn
@@ -1717,6 +2038,9 @@ export default function LifecycleActivationBoard({
                                     onSelect={(s) => void selectStage(s)}
                                     onAddStageClick={() => setShowAddStage((v) => !v)}
                                     addingStage={showAddStage}
+                                    tracks={processTracks?.tracks}
+                                    activeTrackKey={activeTrackKey}
+                                    onSelectTrack={selectTrack}
                                 />
                             : processSection === "actions" ?
                                 <BusinessProcessActionsListColumn
@@ -1737,14 +2061,11 @@ export default function LifecycleActivationBoard({
                     >
                         {processSection === "stages" ?
                         <>
-                            {activeSplitRule ?
-                                <p
-                                    className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2 text-xs text-alloy-midnight/65"
-                                    data-testid="lifecycle-split-rule-hint"
-                                >
-                                    At Decision, choose a path for each child:{" "}
-                                    {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
-                                </p>
+                            {processId ?
+                                <BusinessProcessParticipationCard
+                                    departmentId={runtimeDepartmentId}
+                                    processId={processId}
+                                />
                             :   null}
                             {showAddStage ?
                                 <div className="rounded-lg border border-dashed border-alloy-pine/30 bg-alloy-pine/5 p-3">
@@ -1765,13 +2086,20 @@ export default function LifecycleActivationBoard({
                                     lifecycleName={lifecycleName}
                                     stageRecord={builderStages.find((s) => s.key === stageKey) ?? null}
                                     allStages={builderStages}
+                                    processTracks={builderProcess?.tracks_v1 ?? null}
+                                    process={builderProcess ?? null}
                                     bootstrap={stageBootstrap}
                                     bootstrapLoading={stageBootstrapLoading}
                                     statusesError={statusesError}
-                                    onStatusRollupChange={onStatusRollupChange}
                                     saveState={stageSaveState}
                                     saveError={stageSaveError}
+                                    saveNotice={stageSaveNotice}
                                     onSaveStage={saveStageUnified}
+                                    onValidateConfiguration={validateConfiguration}
+                                    onPublishConfiguration={publishConfiguration}
+                                    onReloadConfiguration={reloadConfiguration}
+                                    publicationBusy={publicationBusy}
+                                    publicationNotice={publicationNotice}
                                     onDirtyChange={(dirty) => {
                                         stageDirtyRef.current = dirty;
                                     }}
@@ -1785,11 +2113,28 @@ export default function LifecycleActivationBoard({
                     :   null}
 
                     {processSection === "work-views" && processId ?
-                        <BusinessProcessWorkViewsSetupWorkspace
-                            departmentId={runtimeDepartmentId}
-                            workUnitId={workUnitId}
-                            queueLanes={workViewQueueLanes}
-                        />
+                        <div className="space-y-0" data-testid="business-process-work-views-with-publication">
+                            <BusinessProcessPublicationBar
+                                state={publicationSummary ?? stageBootstrap?.configuration_state ?? null}
+                                busy={publicationBusy}
+                                notice={publicationNotice}
+                                onValidate={validateConfiguration}
+                                onPublish={publishConfiguration}
+                                onReload={reloadConfiguration}
+                            />
+                            <BusinessProcessWorkViewsSetupWorkspace
+                                workUnitKey={pipeline?.key ?? null}
+                                stageGrains={builderStages.map((s) => s.grain)}
+                                stageGrainByKey={Object.fromEntries(builderStages.map((s) => [s.key, s.grain]))}
+                                queueLanes={workViewQueueLanes}
+                                onDraftSaved={refreshConfigurationState}
+                                projectionDomain={
+                                    isDomainProjectionModel(catalogEntry?.process_model)
+                                        ? catalogEntry.process_model.domain
+                                        : null
+                                }
+                            />
+                        </div>
                     :   null}
 
                     {processSection === "actions" ?
@@ -1856,6 +2201,47 @@ export default function LifecycleActivationBoard({
                                     }}
                                 />
                             :   null}
+                        </div>
+                    :   null}
+
+                    {processSection === "overview" && processId && runtimeDepartmentId ?
+                        <BusinessProcessTrackAdoptionCard
+                            departmentId={runtimeDepartmentId}
+                            processId={processId}
+                            tracksConfigured={Boolean(processTracks?.tracks?.length)}
+                            canEdit={activationOwned}
+                            onAdopted={reloadConfiguration}
+                        />
+                    :   null}
+
+                    {processSection === "overview" ?
+                        <BusinessProcessOverviewPanel
+                            lifecycleName={builderProcess?.name ?? lifecycleName}
+                            isActive={catalogEntry?.workspace.department_is_active ?? true}
+                            stageLabels={builderStages.map((s) => s.label)}
+                            trackLabels={processTracks?.tracks.map((t) => t.label) ?? null}
+                            workViewsCount={workViewQueueLanes.length > 0 ? workViewQueueLanes.length : (
+                                pipeline ? 0 : null
+                            )}
+                            runtimeSummary={runtimeSummary}
+                            onNavigateSection={setProcessSection}
+                        />
+                    :   null}
+
+                    {processSection === "history" ?
+                        <div className="process-config-setup-card p-4" data-testid="business-process-history-workspace">
+                            <header className="mb-3">
+                                <h3 className="text-lg font-semibold text-alloy-midnight">
+                                    {BUSINESS_PROCESS_HISTORY_TITLE}
+                                </h3>
+                            </header>
+                            <p
+                                className="text-sm leading-6 text-alloy-midnight/55"
+                                data-capability="planned"
+                                data-testid="business-process-history-planned"
+                            >
+                                {BUSINESS_PROCESS_HISTORY_PLANNED}
+                            </p>
                         </div>
                     :   null}
                     </BusinessProcessConfigurationShell>

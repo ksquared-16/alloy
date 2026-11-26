@@ -11,7 +11,10 @@ import {
 import { resolveProgramRoomCohort } from "@/lib/orchestration/placement/resolveProgramRoomCohort";
 import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 import { resolvePlacementCandidateSiteId } from "@/lib/orchestration/placement/resolvePlacementCandidateSiteId";
-import { normalizeCustomerMemberNested } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
+import {
+    firstNestedRecord,
+    normalizeCustomerMemberNested,
+} from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 import {
     isChildWaitlistEligibleForPlacementCandidate,
     isPlacementChildWaitlistEligibilityStrict,
@@ -52,7 +55,7 @@ export type PlacementCandidateBackfillRow = {
     program_room_cohort_key: string;
     program_room_group_label: string | null;
     wait_since: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     status: PlacementCandidateStatus;
     seed_key: string;
     metadata: Record<string, unknown>;
@@ -62,8 +65,10 @@ type OcmRow = {
     id: string;
     customer_member_id: string;
     outcome_status_key: string | null;
-    desired_start_date: string | null;
-    desired_program_type: string | null;
+    start_date: string | null;
+    program_category_id: string | null;
+    /** Canonical program key (location_program_categories.key) derived from program_category_id. */
+    program_key: string | null;
     location_id?: string | null;
     program_room_cohort_key?: string | null;
     metadata: Record<string, unknown> | null;
@@ -121,6 +126,7 @@ function resolveWaitSince(opp: OppRow, fallbackCreatedAt: boolean): string | nul
 }
 
 function resolveOppDesiredStart(md: Record<string, unknown>): string | null {
+    // `desired_start_date` here is the opportunity-level legacy metadata key — not the OCM column.
     return (
         parseDateOnly(md.desired_start_date) ??
         parseDateOnly(readNested(md, ["placement_fact_inputs_v1", "desired_start_date"]))
@@ -142,10 +148,12 @@ export function buildPlacementCandidateSeedKey(params: {
 }
 
 function normalizeOcmRow(raw: unknown): OcmRow {
-    const row = raw as Omit<OcmRow, "customer_members"> & {
+    const row = raw as Omit<OcmRow, "customer_members" | "program_key"> & {
         customer_members?: OcmRow["customer_members"] | NonNullable<OcmRow["customer_members"]>[] | null;
+        location_program_categories?: { key?: string | null } | Array<{ key?: string | null }> | null;
     };
     const customerMembers = normalizeCustomerMemberNested(row.customer_members);
+    const categoryKey = firstNestedRecord(row.location_program_categories)?.key;
     return {
         id: String(row.id),
         customer_member_id: String(row.customer_member_id),
@@ -153,8 +161,9 @@ function normalizeOcmRow(raw: unknown): OcmRow {
             typeof row.outcome_status_key === "string" && row.outcome_status_key.trim()
                 ? row.outcome_status_key.trim()
                 : null,
-        desired_start_date: row.desired_start_date ?? null,
-        desired_program_type: row.desired_program_type ?? null,
+        start_date: row.start_date ?? null,
+        program_category_id: row.program_category_id ?? null,
+        program_key: (typeof categoryKey === "string" ? categoryKey.trim() : "") || null,
         location_id: row.location_id ?? null,
         program_room_cohort_key: row.program_room_cohort_key ?? null,
         metadata: row.metadata ?? null,
@@ -221,7 +230,7 @@ function buildCandidateRowsForOpportunity(
                 program_room_cohort_key: cohortFromOpp.program_room_cohort_key,
                 program_room_group_label: cohortFromOpp.program_room_group_label,
                 wait_since: waitSince,
-                desired_start_date: oppDesiredStart,
+                start_date: oppDesiredStart,
                 status: "active",
                 seed_key: buildPlacementCandidateSeedKey({
                     opportunityId: opp.id,
@@ -256,7 +265,7 @@ function buildCandidateRowsForOpportunity(
 
         const cohort = resolvePlacementCandidateCohortFromMember({
                   ocmMetadata: ocmMd,
-                  desiredProgramType: ocm.desired_program_type,
+                  programKey: ocm.program_key,
                   programRoomCohortKey: ocm.program_room_cohort_key,
                   dateOfBirth:
                       ocm.customer_members?.persons?.date_of_birth ??
@@ -265,7 +274,7 @@ function buildCandidateRowsForOpportunity(
                           : null),
               });
 
-        const desiredStart = parseDateOnly(ocm.desired_start_date) ?? oppDesiredStart;
+        const desiredStart = parseDateOnly(ocm.start_date) ?? oppDesiredStart;
 
         out.push({
             org_id: orgId,
@@ -279,7 +288,7 @@ function buildCandidateRowsForOpportunity(
             program_room_cohort_key: cohort.program_room_cohort_key,
             program_room_group_label: cohort.program_room_group_label,
             wait_since: waitSince,
-            desired_start_date: desiredStart,
+            start_date: desiredStart,
             status: "active",
             seed_key: buildPlacementCandidateSeedKey({
                 opportunityId: opp.id,
@@ -361,7 +370,7 @@ export async function runPlacementCandidateBackfill(
         const { data: ocmData, error: ocmErr } = await supabase
             .from("opportunity_customer_members")
             .select(
-                "id, customer_member_id, outcome_status_key, desired_start_date, desired_program_type, location_id, program_room_cohort_key, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
+                "id, customer_member_id, outcome_status_key, start_date, program_category_id, location_program_categories(key), location_id, program_room_cohort_key, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
             )
             .eq("org_id", orgId)
             .eq("opportunity_id", opp.id);

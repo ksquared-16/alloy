@@ -1,0 +1,57 @@
+{
+  "present": true,
+  "box": {
+    "top": 227,
+    "left": 416,
+    "width": 608,
+    "height": 446,
+    "bottom": 673
+  },
+  "viewport": {
+    "w": 1440,
+    "h": 900
+  },
+  "insideViewport": true,
+  "text": "DISCOUNTS CC Certa Certhouse Sibling discount (QA specimen) · 10% Expected $18.50 · 10% of $185.00 Waive discount → Add discount Choose a discount… ▾ Confirm Cancel CC Certb Certhouse Sibling discount (QA specimen) · 10% Expected $145.00 · 10% of $1,450.00 Waive discount → Add discount → Close",
+  "buttons": [
+    {
+      "t": "Waive discount →",
+      "aria": null,
+      "role": null
+    },
+    {
+      "t": "Choose a discount…▾",
+      "aria": "Discount",
+      "role": null
+    },
+    {
+      "t": "Confirm",
+      "aria": null,
+      "role": null
+    },
+    {
+      "t": "Cancel",
+      "aria": null,
+      "role": null
+    },
+    {
+      "t": "Waive discount →",
+      "aria": null,
+      "role": null
+    },
+    {
+      "t": "Add discount →",
+      "aria": null,
+      "role": null
+    },
+    {
+      "t": "Close",
+      "aria": null,
+      "role": null
+    }
+  ],
+  "images": [],
+  "avatarNodes": 2,
+  "nativeControls": 0,
+  "loadingTreatment": 0
+}

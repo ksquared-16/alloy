@@ -1,0 +1,619 @@
+{
+ "build": "2d7f17476b323e4f8b24a70330aac81d42ca0f30",
+ "accounts": {
+  "initial": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $98.00 DUE $40.00 NOT YET DUE $118.00 on Oct 22, 2026 SCHEDULED $40.00 PAST DUE $40.00 RESPONSIBILITY $248.00 PAID $150.00",
+   "topPayment": true,
+   "lens": {
+    "all": "38",
+    "charges": "20",
+    "credits": "1",
+    "funding": "0",
+    "payments": "17"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Nov 1, 2026 | One-time charge | Ana Alvarez | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Nov 1, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Oct 25, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | Cancelled | Split | Materials",
+      "Oct 25, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | Upcoming | Split | Field trip",
+      "Oct 25, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | Cancelled | Split | Materials"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "October 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 14, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Split | Field trip",
+      "Oct 12, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Split | Field trip",
+      "Oct 12, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | posted | Split | Materials",
+      "Oct 2, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Oct 1, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "September 2026",
+     "expanded": "false",
+     "rows": [],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "payments": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $98.00 DUE $40.00 NOT YET DUE $118.00 on Oct 22, 2026 SCHEDULED $40.00 PAST DUE $40.00 RESPONSIBILITY $248.00 PAID $150.00",
+   "topPayment": true,
+   "lens": {
+    "all": "38",
+    "charges": "20",
+    "credits": "1",
+    "funding": "0",
+    "payments": "17"
+   },
+   "periods": [
+    {
+     "label": "September 2026",
+     "expanded": "true",
+     "rows": [
+      "Sep 25, 2026 | Payment | — | — | −$10.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$10.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$45.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$10.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$20.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$40.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$75.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$1.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$40.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$40.00 | Applied | Received | — | Cash · Alvarez Household (demo)"
+     ],
+     "paymentRows": 17
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "charges": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $98.00 DUE $40.00 NOT YET DUE $118.00 on Oct 22, 2026 SCHEDULED $40.00 PAST DUE $40.00 RESPONSIBILITY $248.00 PAID $150.00",
+   "topPayment": true,
+   "lens": {
+    "all": "38",
+    "charges": "20",
+    "credits": "1",
+    "funding": "0",
+    "payments": "17"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Nov 1, 2026 | One-time charge | Ana Alvarez | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Nov 1, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Oct 25, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | Cancelled | Split | Materials",
+      "Oct 25, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | Upcoming | Split | Field trip",
+      "Oct 25, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | Cancelled | Split | Materials"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "October 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 14, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Split | Field trip",
+      "Oct 12, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Split | Field trip",
+      "Oct 12, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | posted | Split | Materials",
+      "Oct 2, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Oct 1, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "September 2026",
+     "expanded": "true",
+     "rows": [
+      "Sep 29, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 28, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 27, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 26, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 25, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 24, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Split | cert_household_fee",
+      "Sep 23, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | reversed | Split | cert_household_fee",
+      "Sep 22, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Dana Alvarez · $120.00 unassigned | cert_household_fee",
+      "Sep 21, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Split | cert_household_fee",
+      "Sep 20, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Dana Alvarez | cert_household_fee"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "tuition": "no option Monthly tuition",
+  "tuitionView": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $98.00 DUE $40.00 NOT YET DUE $118.00 on Oct 22, 2026 SCHEDULED $40.00 PAST DUE $40.00 RESPONSIBILITY $248.00 PAID $150.00",
+   "topPayment": true,
+   "lens": {
+    "all": "38",
+    "charges": "20",
+    "credits": "1",
+    "funding": "0",
+    "payments": "17"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Nov 1, 2026 | One-time charge | Ana Alvarez | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Nov 1, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Oct 25, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | Cancelled | Split | Materials",
+      "Oct 25, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | Upcoming | Split | Field trip",
+      "Oct 25, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | Cancelled | Split | Materials"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "October 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 14, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Split | Field trip",
+      "Oct 12, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Split | Field trip",
+      "Oct 12, 2026 | Consumable fee | Ana Alvarez | 4030 · Supply Fees | $18.00 | posted | Split | Materials",
+      "Oct 2, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Oct 1, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "September 2026",
+     "expanded": "true",
+     "rows": [
+      "Sep 29, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 28, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 27, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 26, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 25, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Split | Registration fee",
+      "Sep 25, 2026 | Payment | — | — | −$10.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$10.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$45.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$10.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$20.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$40.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$75.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$1.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$37.50 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$40.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 25, 2026 | Payment | — | — | −$40.00 | Applied | Received | — | Cash · Alvarez Household (demo)",
+      "Sep 24, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Split | cert_household_fee",
+      "Sep 23, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | reversed | Split | cert_household_fee",
+      "Sep 22, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Dana Alvarez · $120.00 unassigned | cert_household_fee",
+      "Sep 21, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Split | cert_household_fee",
+      "Sep 20, 2026 | One-time charge | Household | 4090 · Other Income | $200.00 | posted | Dana Alvarez | cert_household_fee",
+      "— | Reversal | Household | 4060 · Discounts & Credits | -$200.00 | posted | Not allocated | reversal of charge 94cc53af-2cfd-40d5-a58a-c84952d2788a"
+     ],
+     "paymentRows": 17
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "scheduled": "ok",
+  "scheduledView": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $98.00 DUE $40.00 NOT YET DUE $118.00 on Oct 22, 2026 SCHEDULED $40.00 PAST DUE $40.00 RESPONSIBILITY $248.00 PAID $150.00",
+   "topPayment": true,
+   "lens": {
+    "all": "1",
+    "charges": "1",
+    "credits": "0",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 25, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | Upcoming | Split | Field trip"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "openedRow": "payment:ac3afa62-8757-427b-9491-8872035cad3a",
+  "paymentDetail": {
+   "text": "PAYMENT DETAILS | RECEIVED | Sep 25, 2026 | PAYER | Alvarez Household (demo) | $10.00 | Received · Cash | $10.00 applied | Refund | APPLIED TO | One-time charge | $10.00 | Applied Sep 25, 2026 | Close",
+   "applications": 1,
+   "hold": false,
+   "refund": true,
+   "takeOrRecord": false
+  },
+  "afterEscape": {
+   "paymentDetail": false,
+   "details": true
+  }
+ },
+ "focusCard": {
+  "card": true,
+  "nav": true,
+  "head": "FINANCIALS\n\nCURRENT PERIOD\n\nOctober 2026\n\nCHARGES\n\nTuition\n$1,450.00\nOne-time charge\n$40.00\nConsumable fee\n$18.00\nNET OBLIGATION\n$1,508.00\nAdd\n\nDUE\n\n$2,005.00\n\nNot yet due · $225.00 on Oct 31, 2026\n\nU"
+ },
+ "focus": {
+  "initial": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $2,081.00 DUE $2,005.00 NOT YET DUE $225.00 on Oct 31, 2026 SCHEDULED $2,440.00 PAST DUE $2,005.00 RESPONSIBILITY $2,121.00 PAID $40.00 AVAILABLE PREPAID $125.00",
+   "topPayment": true,
+   "lens": {
+    "all": "101",
+    "charges": "35",
+    "credits": "59",
+    "funding": "0",
+    "payments": "7"
+   },
+   "periods": [
+    {
+     "label": "December 2026",
+     "expanded": "false",
+     "rows": [],
+     "paymentRows": 0
+    },
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 19, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | Draft | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "October 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 20, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Certt Certhouse | Monthly tuition",
+      "Oct 17, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Certt Certhouse | Monthly tuition",
+      "Oct 6, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Not allocated | Monthly tuition",
+      "Oct 6, 2026 | Payment | — | — | −$75.00 | Applied | Received | — | Card · Certhouse Family",
+      "Oct 5, 2026 | Payment | — | — | −$18.00 | Applied | Received | — | Card",
+      "Oct 2, 2026 | Consumable fee | Certb Certhouse | 4030 · Supply Fees | $18.00 | reversed | Not allocated | Materials",
+      "Oct 2, 2026 | Consumable fee | Certa Certhouse | 4030 · Supply Fees | $18.00 | posted | Certt Certhouse | Materials",
+      "Oct 1, 2026 | One-time charge | Certa Certhouse | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Oct 1, 2026 | One-time charge | Certb Certhouse | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Oct 1, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | posted | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 2
+    },
+    {
+     "label": "September 2026",
+     "expanded": "false",
+     "rows": [],
+     "paymentRows": 0
+    },
+    {
+     "label": "August 2026",
+     "expanded": "false",
+     "rows": [],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": false
+  },
+  "payments": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $2,081.00 DUE $2,005.00 NOT YET DUE $225.00 on Oct 31, 2026 SCHEDULED $2,440.00 PAST DUE $2,005.00 RESPONSIBILITY $2,121.00 PAID $40.00 AVAILABLE PREPAID $125.00",
+   "topPayment": true,
+   "lens": {
+    "all": "101",
+    "charges": "35",
+    "credits": "59",
+    "funding": "0",
+    "payments": "7"
+   },
+   "periods": [
+    {
+     "label": "October 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 6, 2026 | Payment | — | — | −$75.00 | Applied | Received | — | Card · Certhouse Family",
+      "Oct 5, 2026 | Payment | — | — | −$18.00 | Applied | Received | — | Card"
+     ],
+     "paymentRows": 2
+    },
+    {
+     "label": "September 2026",
+     "expanded": "true",
+     "rows": [
+      "Sep 30, 2026 | Payment | — | — | −$1,305.00 | Applied | Received | — | Card",
+      "Sep 29, 2026 | Payment | — | — | −$18.00 | Applied | Received | — | Card",
+      "Sep 29, 2026 | Payment | — | — | −$75.00 | Applied | Received | — | Card",
+      "Sep 18, 2026 | Payment | — | — | −$240.00 | Part applied · $125.00 unapplied | Received | — | Cash",
+      "Sep 13, 2026 | Payment | — | — | −$25.00 | Applied | Received | — | Check"
+     ],
+     "paymentRows": 5
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": false
+  },
+  "charges": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $2,081.00 DUE $2,005.00 NOT YET DUE $225.00 on Oct 31, 2026 SCHEDULED $2,440.00 PAST DUE $2,005.00 RESPONSIBILITY $2,121.00 PAID $40.00 AVAILABLE PREPAID $125.00",
+   "topPayment": true,
+   "lens": {
+    "all": "101",
+    "charges": "35",
+    "credits": "59",
+    "funding": "0",
+    "payments": "7"
+   },
+   "periods": [
+    {
+     "label": "December 2026",
+     "expanded": "true",
+     "rows": [
+      "Dec 1, 2026 | One-time charge | Certb Certhouse | 4090 · Other Income | $40.00 | Upcoming | Not allocated | Field trip",
+      "Dec 1, 2026 | One-time charge | Household | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 19, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | Draft | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "October 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 20, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Certt Certhouse | Monthly tuition",
+      "Oct 17, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Certt Certhouse | Monthly tuition",
+      "Oct 6, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Not allocated | Monthly tuition",
+      "Oct 2, 2026 | Consumable fee | Certb Certhouse | 4030 · Supply Fees | $18.00 | reversed | Not allocated | Materials",
+      "Oct 2, 2026 | Consumable fee | Certa Certhouse | 4030 · Supply Fees | $18.00 | posted | Certt Certhouse | Materials",
+      "Oct 1, 2026 | One-time charge | Certa Certhouse | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Oct 1, 2026 | One-time charge | Certb Certhouse | 4090 · Other Income | $40.00 | posted | Not allocated | Field trip",
+      "Oct 1, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | posted | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "September 2026",
+     "expanded": "true",
+     "rows": [
+      "Sep 30, 2026 | Consumable fee | Certb Certhouse | 4030 · Supply Fees | $18.00 | reversed | Not allocated | Materials",
+      "Sep 30, 2026 | Fee | Certa Certhouse | 4010 · Registration Fees | $75.00 | posted | Certt Certhouse | Registration fee",
+      "Sep 29, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 28, 2026 | Consumable fee | Certb Certhouse | 4030 · Supply Fees | $18.00 | reversed | Not allocated | Materials",
+      "Sep 26, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Not allocated | Registration fee",
+      "Sep 25, 2026 | Consumable fee | Certa Certhouse | 4030 · Supply Fees | $18.00 | posted | Not allocated | Materials",
+      "Sep 25, 2026 | Consumable fee | Certb Certhouse | 4030 · Supply Fees | $18.00 | posted | Not allocated | Materials",
+      "Sep 25, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Not allocated | Registration fee",
+      "Sep 22, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 18, 2026 | Fee | Household | 4010 · Registration Fees | $75.00 | posted | Certt Certhouse · $57.00 unassigned | Registration fee",
+      "Sep 18, 2026 | Late pickup | Certa Certhouse | 4040 · Late Pickup Fees | $25.00 | reversed | Not allocated | Late pickup",
+      "Sep 18, 2026 | Fee | Certa Certhouse | 4010 · Registration Fees | $75.00 | posted | Not allocated | Registration fee",
+      "Sep 18, 2026 | Fee | Certb Certhouse | 4010 · Registration Fees | $75.00 | posted | Certt Certhouse · $57.00 unassigned | Registration fee",
+      "Sep 15, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 14, 2026 | Late pickup | Certa Certhouse | 4040 · Late Pickup Fees | $25.00 | posted | Not allocated | Late pickup",
+      "Sep 8, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 2, 2026 | Consumable fee | Certb Certhouse | 4030 · Supply Fees | $18.00 | posted | Not allocated | Materials",
+      "Sep 2, 2026 | Consumable fee | Certa Certhouse | 4030 · Supply Fees | $18.00 | posted | Unassigned | Materials",
+      "Sep 1, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | posted | Not allocated | Monthly tuition",
+      "Sep 1, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 1, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $400.00 | posted | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "August 2026",
+     "expanded": "true",
+     "rows": [
+      "Aug 26, 2026 | Late pickup | Certa Certhouse | 4040 · Late Pickup Fees | $25.00 | Draft | Not allocated | Late pickup",
+      "Aug 26, 2026 | Late pickup | Certb Certhouse | 4040 · Late Pickup Fees | $25.00 | posted | Not allocated | Late pickup",
+      "Aug 26, 2026 | Fee | Certa Certhouse | 4010 · Registration Fees | $75.00 | posted | Not allocated | Registration fee"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": false
+  },
+  "tuition": "ok",
+  "tuitionView": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $2,081.00 DUE $2,005.00 NOT YET DUE $225.00 on Oct 31, 2026 SCHEDULED $2,440.00 PAST DUE $2,005.00 RESPONSIBILITY $2,121.00 PAID $40.00 AVAILABLE PREPAID $125.00",
+   "topPayment": true,
+   "lens": {
+    "all": "12",
+    "charges": "12",
+    "credits": "0",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 19, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | Draft | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "October 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 20, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Certt Certhouse | Monthly tuition",
+      "Oct 17, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Certt Certhouse | Monthly tuition",
+      "Oct 6, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | posted | Not allocated | Monthly tuition",
+      "Oct 1, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | posted | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "September 2026",
+     "expanded": "true",
+     "rows": [
+      "Sep 29, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 22, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 15, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 8, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 1, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | posted | Not allocated | Monthly tuition",
+      "Sep 1, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 1, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $400.00 | posted | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": false
+  },
+  "scheduled": "ok",
+  "scheduledView": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $2,081.00 DUE $2,005.00 NOT YET DUE $225.00 on Oct 31, 2026 SCHEDULED $2,440.00 PAST DUE $2,005.00 RESPONSIBILITY $2,121.00 PAID $40.00 AVAILABLE PREPAID $125.00",
+   "topPayment": true,
+   "lens": {
+    "all": "21",
+    "charges": "8",
+    "credits": "13",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [
+    {
+     "label": "December 2026",
+     "expanded": "true",
+     "rows": [
+      "Dec 1, 2026 | One-time charge | Certb Certhouse | 4090 · Other Income | $40.00 | Upcoming | Not allocated | Field trip"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 19, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | Draft | Not allocated | Monthly tuition"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "September 2026",
+     "expanded": "true",
+     "rows": [
+      "Sep 29, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 22, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 15, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 8, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "Sep 1, 2026 | Tuition | Certa Certhouse | 4000 · Tuition Revenue | $185.00 | Draft | Not allocated | Monthly tuition",
+      "— | Discount | Certa Certhouse | 4060 · Discounts & Credits | -$18.50 | Draft | Not allocated | 10% of $185.00 · Ongoing",
+      "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$7.77 | Draft | Not allocated | One-time · Oracle: goodwill against this obligation",
+      "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$12.34 | Draft | Not allocated | One-time · Certification: goodwill for a closure day",
+      "— | Discount | Certa Certhouse | 4060 · Discounts & Credits | -$40.00 | Draft | Not allocated | 10% of $400.00 · Ongoing",
+      "— | Credit | Certa Certhouse | 4060 · Discounts & Credits | -$0.01 | Draft | Not allocated | One-time · certification: control that this seam accepts a valid payload",
+      "— | Discount | Certa Certhouse | 4060 · Discounts & Credits | -$18.50 | Draft | Not allocated | 10% of $185.00 · Ongoing",
+      "— | Credit | Certa Certhouse | 4060 · Discounts & Credits | -$0.01 | Draft | Not allocated | One-time · certification: control that this seam accepts a valid payload",
+      "— | Discount | Certa Certhouse | 4060 · Discounts & Credits | -$18.50 | Draft | Not allocated | 10% of $185.00 · Ongoing",
+      "— | Discount | Certa Certhouse | 4060 · Discounts & Credits | -$18.50 | Draft | Not allocated | 10% of $185.00 · Ongoing",
+      "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$7.77 | Draft | Not allocated | One-time · Oracle: goodwill against this obligation",
+      "— | Credit | Certb Certhouse | 4060 · Discounts & Credits | -$12.34 | Draft | Not allocated | One-time · Certification: goodwill for a closure day",
+      "— | Discount | Certa Certhouse | 4060 · Discounts & Credits | -$18.50 | Draft | Not allocated | 10% of $185.00 · Ongoing",
+      "— | Discount | Certb Certhouse | 4060 · Discounts & Credits | -$145.00 | Draft | Not allocated | 10% of $1,450.00 · Ongoing · discount · 10% of $1450.00"
+     ],
+     "paymentRows": 0
+    },
+    {
+     "label": "August 2026",
+     "expanded": "true",
+     "rows": [
+      "Aug 26, 2026 | Late pickup | Certa Certhouse | 4040 · Late Pickup Fees | $25.00 | Draft | Not allocated | Late pickup"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": false
+  },
+  "openedRow": "payment:cc8f9f75-78d7-4590-a490-faa84d8c07f5",
+  "paymentDetail": {
+   "text": "PAYMENT DETAILS | RECEIVED | Oct 6, 2026 | PAYER | Certhouse Family | $75.00 | Received · Card | $75.00 applied | Refund | APPLIED TO | Fee | $75.00 | Applied Oct 6, 2026 | Close",
+   "applications": 1,
+   "hold": false,
+   "refund": true,
+   "takeOrRecord": false
+  },
+  "afterEscape": {
+   "paymentDetail": false,
+   "details": true
+  }
+ },
+ "writes": []
+}

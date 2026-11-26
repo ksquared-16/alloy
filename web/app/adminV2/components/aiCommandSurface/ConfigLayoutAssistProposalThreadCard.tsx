@@ -93,7 +93,7 @@ export function ConfigLayoutAssistProposalThreadCard({
                 policyCopy={
                     reviewProposalId ?
                         CONFIG_LAYOUT_ASSIST_SETTINGS_HUB_COPY
-                    :   "Save the proposal to Settings before review."
+                    :   "Save the proposal to Configuration before review."
                 }
                 validationErrors={validationErrors.length ? validationErrors : null}
                 validationWarnings={validationWarnings.length ? validationWarnings : null}
@@ -132,7 +132,7 @@ export function ConfigLayoutAssistProposalThreadCard({
                 :   null}
                 {!reviewProposalId ?
                     <p className="text-[11px] italic" style={{ color: CMD.textLabel }}>
-                        Save the proposal to Settings before review.
+                        Save the proposal to Configuration before review.
                     </p>
                 :   null}
             </OperationalProposalCardFrame>

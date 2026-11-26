@@ -1,6 +1,6 @@
 /**
  * Runtime validation for {@link OperationalRecommendationV1} (Phase 1).
- * @see docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md §3.7
+ * @see docs/sprints/archive/05_2026/bos_operational_recommendation_phase1_execution.md §3.7
  */
 
 import type { AttentionSuggestionActionFamily } from "@/lib/agent/needsAttentionSuggestion/types";

@@ -7,7 +7,10 @@ import {
 } from "@/lib/adminV2/configurationModeNav";
 import { configurationModeNavLucideIcon } from "@/lib/adminV2/configurationModeNavIcons";
 import { ConfigurationContext } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import { ConfigRuntimePrimaryTile } from "@/components/adminV2/settings/configurationRuntime/ConfigurationRuntimePrimitives";
+import {
+    ConfigurationSection,
+    ConfigurationSectionItem,
+} from "@/components/adminV2/settings/configurationPlatform";
 
 export default function SettingsConfigurationHub() {
     return (
@@ -19,31 +22,29 @@ export default function SettingsConfigurationHub() {
                     testId="settings-configuration-context"
                 />
 
-                <div className="settings-configuration-tiles space-y-6" data-testid="settings-configuration-tiles">
-                    {CONFIGURATION_MODE_NAV_GROUPS.map((group, index) => (
-                        <section
-                            key={group.label ?? `hub-group-${index}`}
-                            data-testid={`settings-configuration-group-${index}`}
+                <div className="config-platform-index" data-testid="settings-configuration-sections">
+                    {CONFIGURATION_MODE_NAV_GROUPS.map((group) => (
+                        <ConfigurationSection
+                            key={group.id}
+                            sectionId={group.id}
+                            title={group.label}
+                            description={group.description}
+                            testId={`settings-configuration-section-${group.id}`}
                         >
-                            {group.label ?
-                                <h2 className="config-typo-field-label mb-2 px-0.5">{group.label}</h2>
-                            :   null}
-                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                                {group.items.map((item) => {
-                                    const Icon = configurationModeNavLucideIcon(item.icon);
-                                    return (
-                                        <ConfigRuntimePrimaryTile
-                                            key={item.href}
-                                            href={item.href}
-                                            title={item.label}
-                                            description={item.description}
-                                            icon={<Icon size={18} strokeWidth={1.75} />}
-                                            testId={item.testId.replace("config-mode-nav-", "settings-tile-")}
-                                        />
-                                    );
-                                })}
-                            </div>
-                        </section>
+                            {group.items.map((item) => {
+                                const Icon = configurationModeNavLucideIcon(item.icon);
+                                return (
+                                    <ConfigurationSectionItem
+                                        key={item.href}
+                                        href={item.href}
+                                        title={item.label}
+                                        description={item.description}
+                                        icon={<Icon size={15} strokeWidth={1.75} />}
+                                        testId={item.testId.replace("config-mode-nav-", "settings-section-item-")}
+                                    />
+                                );
+                            })}
+                        </ConfigurationSection>
                     ))}
                 </div>
             </div>

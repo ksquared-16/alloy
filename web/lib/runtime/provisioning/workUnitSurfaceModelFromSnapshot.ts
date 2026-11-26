@@ -1,0 +1,556 @@
+/**
+ * THE SNAPSHOT RENDERER — the frozen D1 answer, rendered by the canonical presentation tree.
+ *
+ * Governing: runtime-implementation-authorization.md — Operational U-O1…U-O7, Preparation U-P1…U-P7;
+ * alloy-runtime-kernel.md §K3 "Focus … hands Presentation the committed world to render.
+ * Presentation never asks Focus for permission and never tells Focus it is ready."
+ *
+ * There is NO second Work Unit UI. This maps `ProvisioningAnswer` onto the existing
+ * `WorkUnitSurfaceModel` so the canonical components render committed truth unchanged. It is a pure
+ * function of the snapshot: no fetch, no effect, no clock, no DOM. Everything the first visible frame
+ * needs is already in the answer — that is what D1 + U-P7 + the row-context enrichment bought.
+ *
+ * THE SETTLEMENT BOUNDARY, RENDERED.
+ * Fields D1 deliberately does not carry are RESERVED, never fetched and never blocking:
+ *   - KPI values  → slots present with `pending: true`; the renderer already holds a stable
+ *                   placeholder in the reserved slot, so a value "never flashes a placeholder that
+ *                   then flips to a real number". Geometry now, value at D5.
+ *   - view counts → `count: null` renders no badge, in reserved space.
+ *   - right rail  → `[]`; RR.SURFACE is a zero-footprint anchor while empty, then reveals at D5.
+ * None of these can gate the commit, because none of them is consulted to build this model.
+ *
+ * READINESS IS NOT A QUESTION HERE. `ready`/`readiness` are all true, unconditionally: this model is
+ * only ever built FROM A COMMITTED TERMINAL. K3 already decided. The six-condition conjunction asked
+ * "is it safe to show yet?" — a question that cannot arise once the surface is composed from a
+ * terminal answer rather than from four races.
+ */
+import type {
+    WorkUnitSurfaceModel,
+    QueueRowModel,
+    WorkViewLinkModel,
+} from "@/lib/presentation/runtime/types";
+import { isKnownOipMetricKey } from "@/lib/metrics/registry";
+import { queueRowModelFromQueueItem } from "@/lib/presentation/runtime/types";
+import { mapQueueRowSurfaceToCompactConfig, type CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
+import {
+    queueRowVariantMatchInputFromContext,
+} from "@/lib/presentation/runtime/queueRowVariantResolve";
+import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
+import { mergeCompactSlotsInheritDefault } from "@/lib/presentation/runtime/mergeCompactSlotsInheritDefault";
+import { stripRedundantChildNameFromSecondary } from "@/lib/presentation/runtime/queueRowVariantResolve";
+import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutV3";
+import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import { resolveQueueRowSubjectFocus } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
+import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
+import type { ProcessCardIcon, ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+import { provisioningErrorKind, type LensSetEntry, type ProvisioningAnswer } from "./workUnitProvisioningAnswer";
+import type { OperationalKpiSlot, OperationalPresentation } from "./operationalPresentation";
+
+/**
+ * P2-B — resolve the applicable published row variant for one row's context. Returns the variant's
+ * compact slots when a variant matches (Work View / stage / status / grain / process / row type), or
+ * undefined so the caller keeps the queue-level default. Pure; never throws.
+ *
+ * Match input MUST come from {@link queueRowVariantMatchInputFromContext} (nested QueueRowContext
+ * paths) — flat keys like `stage_key` / `grain` are not present on frozen row context.
+ * Empty variant columns inherit Default (return undefined → queue-level `rowConfig`).
+ * Slots the variant does not configure inherit from `defaultSlots` (Default children/contact/work).
+ */
+function resolveRowVariantPresentation(
+    context: unknown,
+    variants: readonly QueueRowVariant[],
+    fixedControls: QueueRecordFixedControls | null,
+    workViewId: string | null,
+    workViewKey: string | null,
+    processKey: string | null,
+    defaultSlots: CompactRowSlots,
+): { rowConfig: CompactRowSlots; focus: ReturnType<typeof resolveQueueRowSubjectFocus> | null } | undefined {
+    if (variants.length === 0 || !fixedControls) return undefined;
+    const rowContext = (context ?? {}) as QueueRowContext;
+    const input = queueRowVariantMatchInputFromContext(rowContext, {
+        workViewId,
+        workViewKey,
+    });
+    if (!input.processKey && processKey) {
+        input.processKey = processKey;
+    }
+    const matched = resolveQueueRowVariant(variants, input);
+    if (!matched) return undefined;
+    // Starter / incomplete variants ship empty columns — inherit Default rather than blanking the row.
+    if (!matched.columns.length) return undefined;
+    const variantSlots = mapQueueRowSurfaceToCompactConfig({
+        variant: "operational-row",
+        version: 3,
+        columns: matched.columns,
+        fixedControls: matched.fixedControls ?? fixedControls,
+        variants: undefined,
+    }).slots;
+    const rowGrain =
+        typeof rowContext.row_subject?.subject_type === "string"
+            ? rowContext.row_subject.subject_type
+            : input.grain ?? null;
+    const rowConfig = stripRedundantChildNameFromSecondary(
+        mergeCompactSlotsInheritDefault(variantSlots, defaultSlots, { rowGrain }),
+        rowGrain,
+    );
+    const focus =
+        matched.subjectFocus != null
+            ? resolveQueueRowSubjectFocus(rowContext, matched.subjectFocus)
+            : null;
+    return { rowConfig, focus };
+}
+
+/**
+ * ONE CONFIGURED HEADER SLOT → ITS RESERVED VIEW MODEL.
+ *
+ * Exported because it is the whole of the answerability decision, and the configuration-driven
+ * contract requires that decision to be gated against real configuration specimens rather than
+ * against a second hardcoded copy of today's key set living in a test.
+ */
+export function headerKpiVmFromConfiguredSlot(s: OperationalKpiSlot): WorkspaceHeaderKpiVm {
+    /*
+     * A CONFIGURED KEY THIS BUILD CANNOT ANSWER IS UNAVAILABLE, NOT PENDING.
+     *
+     * The header metric set is configuration, not architecture: it is whatever the published
+     * header layout names. So configuration can legitimately name a key this build's registry
+     * does not define — a metric added to the layout ahead of the code, or one retired from the
+     * registry while a tenant still publishes it.
+     *
+     * Both key-set derivations filter with `isKnownOipMetricKey` BEFORE the request
+     * (`workUnitHeaderKpiKeysFromSlots` for the server seed, `kpiKeySig` for the client), so an
+     * unsupported key is never asked for. The SLOT survives regardless, because it comes from
+     * the layout. `mergeWorkUnitSettlement` then finds no resolved item for it and returns the
+     * slot untouched — leaving `pending: true` set here forever.
+     *
+     * That is a loading placeholder that never terminates, under a KPI region that reports
+     * `resolved` (or `empty`, when every configured key is unsupported) because both are
+     * computed over the FILTERED key set. The operator waits on a slot nothing will ever fill,
+     * and the visible-completion measurement is flattered rather than failed: an unsupported
+     * metric costs 0ms and never settles.
+     *
+     * `pending: false` with the no-data glyph is this type's own documented terminal state —
+     * "once resolved (even to genuine no-data) … the real value, including a real '—', shows".
+     * Unsupported is a real answer: this build cannot compute that metric. It is not zero, it
+     * does not silently vanish from a configured layout, and it does not reserve geometry
+     * forever. The metrics routes already answer unknown keys truthfully via
+     * `findUnknownMetricKeys`; this is the same truth on the path that never reaches them.
+  */
+    const configuredKey = s.sourceKey?.trim() || null;
+    const answerable = configuredKey != null && isKnownOipMetricKey(configuredKey);
+    return {
+        slot: s.slot,
+        label: s.label,
+        icon: (s.icon ?? "chart") as ProcessCardIcon,
+        accent: (s.accent ?? null) as ProcessCardAccent | null,
+        // Reserved geometry — NOT a value. The renderer shows its stable placeholder because
+        // `pending` is true; it never renders a "—" that later flips to a number.
+        formattedValue: answerable ? "" : "—",
+        status: "",
+        sourceKey: s.sourceKey,
+        drillHref: null,
+        pending: answerable,
+    };
+}
+
+/**
+ * U-P7 header composition → the presentation model, with KPI VALUES RESERVED.
+ * `pending: true` is the whole Settlement contract in one flag: the slot is laid out now; D5 fills it.
+ */
+function headerFromPresentation(p: OperationalPresentation): WorkspaceHeaderPresentationModel {
+    const kpis: WorkspaceHeaderKpiVm[] = p.header.kpiSlots.map(headerKpiVmFromConfiguredSlot);
+    return {
+        title: p.header.title,
+        subtitle: p.header.subtitle,
+        identityIcon: (p.header.identityIcon ?? null) as ProcessCardIcon | null,
+        identityAccent: (p.header.identityAccent ?? null) as ProcessCardAccent | null,
+        kpis,
+    };
+}
+
+/**
+ * THE PILL ORDER IS THE OPERATOR'S DECLARED ORDER.
+ *
+ * `LensSetEntry.displayOrder` carries what the builder's Work View ordering means, and until now every
+ * consumer mapped straight over it and dropped it — the strip was in the right order only because
+ * `savedWorkViewsFromDepartmentMetadata` happens to hand the array over pre-sorted. That made a
+ * published, contractual field inert, and left the operator's intent riding on an upstream array
+ * position that nothing promises to preserve. Any consumer that filtered, merged, or re-derived the
+ * lens set would have lost the ordering silently, and the field that looks authoritative would not
+ * have caught it.
+ *
+ * Sorted here, so the declared order is what decides. Ties break on label, matching
+ * `normalizeWorkViewsDisplayOrder` — one rule for lens order, not two.
+ */
+function lensSetInDeclaredOrder(lensSet: readonly LensSetEntry[]): LensSetEntry[] {
+    return [...lensSet].sort((a, b) => a.displayOrder - b.displayOrder || a.label.localeCompare(b.label));
+}
+
+/**
+ * The committed world → the canonical Work Unit model.
+ * Total function: every terminal (`operational` | `empty` | `error` | `contextual`) yields ONE
+ * coherent surface. `contextual` is the one that selected no cohort, and its branch is where the
+ * runtime stops pretending otherwise — see it below.
+ */
+
+/**
+ * ONE row mapping, reachable from both exits of the answer.
+ *
+ * The operational return and a subject-level refusal that kept its cohort (`queueFrame`) render the
+ * SAME rows, so they share this. Duplicating the mapping is how the refusal path would drift into a
+ * second queue owner — the thing the containment repair exists to avoid.
+ */
+function queueRowModelsFrom(
+    rows: readonly { id: string; context: unknown }[],
+    p: OperationalPresentation,
+    activeWorkViewId: string | null,
+    activeWorkViewLabel: string | null,
+    processKey: string | null,
+    entityType: QueueRowModel["entityType"] = "opportunity",
+): QueueRowModel[] {
+    const queueRowVariants = p.queue.rowVariants;
+    return rows
+        .map((r) => {
+            const model = queueRowModelFromQueueItem({ id: r.id, _queue_row_context: r.context }, entityType);
+            if (model && queueRowVariants.length > 0) {
+                const presentation = resolveRowVariantPresentation(
+                    r.context,
+                    queueRowVariants,
+                    p.queue.rowVariantFixedControls,
+                    activeWorkViewId,
+                    activeWorkViewLabel
+                        ? activeWorkViewLabel.trim().toLowerCase().replace(/\s+/g, "_") || null
+                        : null,
+                    processKey,
+                    p.queue.rowSlots,
+                );
+                if (presentation) {
+                    model.rowConfig = presentation.rowConfig;
+                    if (presentation.focus) model.focus = presentation.focus;
+                }
+            }
+            return model;
+        })
+        .filter((r): r is QueueRowModel => r != null);
+}
+
+export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): WorkUnitSurfaceModel {
+    // ── HONEST ERROR (U-O7) — one coherent error surface. Never a false-empty, and never partial
+    //    operational content behind it: there are no rows and no subject.
+    //
+    //    HONEST, NOT FATAL. This branch used to hard-code `workViews: []`, reasoning that an error has
+    //    "no lens set to render". That was true of the ANSWER, not of the world: by the time a
+    //    grain-ambiguous lens is refused, the lens set is already resolved. Discarding it produced a
+    //    measured defect — Firefly's "Active Pipeline" rendered a raw internal sentence with no pill
+    //    strip and no retry, so an operator (sidebar collapsed by default) had no in-surface way to
+    //    reach a working Work View. A refusal states what is wrong; it must not also remove the exit.
+    if (snapshot.terminal === "error") {
+        const frame = snapshot.navigationFrame;
+        // The cohort this refusal did not invalidate — see `queueFrame` on the error terminal.
+        const qf = snapshot.queueFrame ?? null;
+        return {
+            header: qf
+                ? headerFromPresentation(qf.presentation)
+                : {
+                      title: snapshot.workUnit?.name ?? "Work Unit",
+                      subtitle: null,
+                      identityIcon: null,
+                      identityAccent: null,
+                      kpis: [],
+                  },
+            // EVERY count stays null: counts are SETTLEMENT (U-S6) and this answer never reached it. A
+            // pill with no badge is honest; a zero would be a claim this answer cannot make — the same
+            // rule the operational path below already follows for `count`.
+            workViews: lensSetInDeclaredOrder(frame?.lensSet ?? []).map((l): WorkViewLinkModel => ({
+                id: l.id,
+                label: l.label,
+                isActive: l.id === frame?.activeWorkView.id,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+            })),
+            queue: qf
+                ? {
+                      /*
+                       * THE COHORT SURVIVES THE REFUSAL.
+                       *
+                       * `error: null` is the whole repair at this layer. QueueRegion selects its
+                       * render state on exactly that field, so a null error means it renders ROWS —
+                       * the same rows, through the same mapping, that an operational answer would
+                       * have produced. The refusal is not discarded; it moves to `subjectRefusal`
+                       * below, where the Focus Panel owns it.
+                       */
+                      rows: queueRowModelsFrom(
+                          qf.rows,
+                          qf.presentation,
+                          frame?.activeWorkView.id ?? null,
+                          frame?.activeWorkView.label ?? null,
+                          qf.businessProcess.key,
+                      ),
+                      totalCount: null,
+                      loading: false,
+                      error: null,
+                      rowConfig: qf.presentation.queue.rowSlots,
+                  }
+                : {
+                      rows: [],
+                      totalCount: null,
+                      loading: false,
+                      // QueueRegion renders `error` (role="alert") — distinct from `empty` by construction.
+                      error: snapshot.message,
+                      errorKind: provisioningErrorKind(snapshot.code),
+                      rowConfig: EMPTY_ROW_SLOTS,
+                  },
+            activeWorkViewId: frame?.activeWorkView.id ?? null,
+            // Selection stays coherent: the operator asked for this subject and the row must stay lit
+            // while its panel explains why it cannot compose.
+            selectedRecordId: qf?.requestedSubjectId ?? null,
+            selectedSubject: qf?.requestedSubjectId
+                ? { selectedRecordId: qf.requestedSubjectId, source: "url" }
+                : { selectedRecordId: null, source: "empty" },
+            /*
+             * THE NARROWEST CORRECT OWNER. A subject that cannot compose is a Focus Panel fact, so it
+             * is carried as one. Absent when the answer carried no cohort — there the refusal really is
+             * the whole surface, and the queue branch above still says so.
+             */
+            subjectRefusal: qf
+                ? { kind: provisioningErrorKind(snapshot.code), message: snapshot.message }
+                : null,
+            rightRailActions: [],
+            departmentId: null,
+            workUnitId: snapshot.workUnit?.id ?? null,
+            ready: true, // committed: an honest error IS a workable place, not a pending state
+            readiness: READY_ALL,
+        };
+    }
+
+    // ── CONTEXTUAL (no cohort selected) — the operator named a RECORD, not a Work View.
+    //
+    //    Everything below this branch is derived from a chosen lens: the published presentation, the
+    //    rows, the selected subject "source", the actions projection. A contextual answer carries none
+    //    of them, and must not borrow them. The surface it produces is therefore small on purpose:
+    //
+    //      pills   rendered, NONE active — the choice is offered, not pre-made. `isActive` is
+    //              hard-coded `false` rather than compared against something, because there is nothing
+    //              to compare against and a comparison is where a default would eventually creep in.
+    //      queue   `cohortSelected: false`. Not `rows: []` alone — that reads as "this view is empty"
+    //              and QueueRegion would say so about a view nobody selected.
+    //      header  the HOST's name. True (it is the hosting unit) and not a lens claim.
+    //      KPIs    none. KPI slots are a published composition of the lens's presentation; there is no
+    //              presentation here, and reserving slots would promise Settlement values that will
+    //              never come.
+    //      actions the right rail stays empty; `departmentId` still comes from the host unit, which is
+    //              real and is what the command rail scopes against.
+    if (snapshot.terminal === "contextual") {
+        return {
+            header: {
+                title: snapshot.workUnit.name,
+                subtitle: null,
+                identityIcon: null,
+                identityAccent: null,
+                kpis: [],
+            },
+            workViews: lensSetInDeclaredOrder(snapshot.lensSet).map((l): WorkViewLinkModel => ({
+                id: l.id,
+                label: l.label,
+                // NOTHING is selected. See `hasOperatorSelectedWorkView` — one reading of that question.
+                isActive: false,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+            })),
+            queue: {
+                rows: [],
+                totalCount: null,
+                loading: false,
+                // No error: nothing failed. The absence of a cohort is not a fault.
+                error: null,
+                cohortSelected: false,
+                rowConfig: EMPTY_ROW_SLOTS,
+            },
+            // The absence, carried verbatim. No consumer may read this as "resolve the default".
+            activeWorkViewId: null,
+            // NOT the contextual subject. These two fields are QUEUE-ROW selection — the selected rail
+            // and the row-neighbour prewarm — and there are no rows. The operator's subject is real and
+            // reaches the Focus Panel from the answer itself (`ProvisionedWorkUnitSurface`), which is
+            // the one path that does not have to pretend a person is an opportunity row.
+            selectedRecordId: null,
+            selectedSubject: { selectedRecordId: null, source: "no_cohort" },
+            rightRailActions: [],
+            departmentId: snapshot.workUnit.departmentId,
+            workUnitId: snapshot.workUnit.id,
+            ready: true,
+            readiness: READY_ALL,
+        };
+    }
+
+    // ── BP V2 S2: A DOMAIN-PROJECTION COHORT — the same surface, its rows from the projection. ──
+    //
+    //    Same pills, same queue, same compact rows (one mapping, `queueRowModelsFrom`). What differs is
+    //    only what a row IS: `durable_subject`, so nothing opportunity-shaped runs for it, and there is no
+    //    default subject — a projection names no Record of Attention, so the panel waits for a selection
+    //    instead of opening a record the operator did not choose. Counts settle exactly as elsewhere.
+    if (snapshot.terminal === "projection") {
+        const pp = snapshot.presentation;
+        return {
+            header: headerFromPresentation(pp),
+            workViews: lensSetInDeclaredOrder(snapshot.lensSet).map((l): WorkViewLinkModel => ({
+                id: l.id,
+                label: l.label,
+                isActive: l.id === snapshot.activeWorkView.id,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+            })),
+            queue: {
+                rows: queueRowModelsFrom(
+                    snapshot.rows,
+                    pp,
+                    snapshot.activeWorkView.id,
+                    snapshot.activeWorkView.label,
+                    snapshot.businessProcess.key,
+                    "durable_subject",
+                ),
+                // Settlement (U-S6), from the SAME cohort — never the page length.
+                totalCount: null,
+                loading: false,
+                error: null,
+                rowConfig: pp.queue.rowSlots,
+            },
+            activeWorkViewId: snapshot.activeWorkView.id,
+            selectedRecordId: snapshot.selectedRowId,
+            selectedSubject: snapshot.selectedRowId
+                ? { selectedRecordId: snapshot.selectedRowId, source: "url" }
+                : { selectedRecordId: null, source: "empty" },
+            rightRailActions: snapshot.actionsProjection?.actions ?? [],
+            departmentId: snapshot.actionsProjection?.departmentId ?? snapshot.workUnit.departmentId,
+            workUnitId: snapshot.workUnit.id,
+            ready: true,
+            readiness: READY_ALL,
+        };
+    }
+
+    const p = snapshot.presentation;
+    const workViews: WorkViewLinkModel[] = lensSetInDeclaredOrder(snapshot.lensSet).map((l) => ({
+        id: l.id,
+        label: l.label,
+        isActive: l.id === snapshot.activeWorkView.id,
+        // Work View counts are SETTLEMENT (U-S6). `null` renders no badge — reserved, not missing.
+        count: null,
+        attentionCount: null,
+        overdueCount: null,
+        // Grain-bucketed counts are Settlement too (§0.5.1/G7: counts are emitted at the view's one
+        // Row Grain; a supporting count of another grain is a derived bucket, never a second
+        // declared grain). Reserved here, filled at D5 — never a commit gate.
+        primaryGrainCount: null,
+        supportingGrainCount: null,
+        // Work Unit pills select in-page; the lens is an attention movement, never a link.
+        href: null,
+    }));
+
+    const queueRowVariants = p.queue.rowVariants;
+    const rows: QueueRowModel[] =
+        snapshot.terminal === "operational"
+            ? snapshot.rows
+                  .map((r) => {
+                      const model = queueRowModelFromQueueItem({ id: r.id, _queue_row_context: r.context }, "opportunity");
+                      // P2-B: per-row variant. The published queue-row surface may define context-specific
+                      // variants; each row resolves the first matching one and renders the SAME
+                      // CondensedQueueRow with that variant's columns. No match (or no authored variants)
+                      // keeps the queue-level default (`queue.rowConfig`) — so this is behavior-neutral
+                      // until variants are authored, and Runtime-owned selected-row styling is unaffected.
+                      if (model && queueRowVariants.length > 0) {
+                          const presentation = resolveRowVariantPresentation(
+                              r.context,
+                              queueRowVariants,
+                              p.queue.rowVariantFixedControls,
+                              snapshot.activeWorkView.id,
+                              snapshot.activeWorkView.label.trim().toLowerCase().replace(/\s+/g, "_") || null,
+                              snapshot.businessProcess.key,
+                              p.queue.rowSlots,
+                          );
+                          if (presentation) {
+                              model.rowConfig = presentation.rowConfig;
+                              if (presentation.focus) model.focus = presentation.focus;
+                          }
+                      }
+                      return model;
+                  })
+                  .filter((r): r is QueueRowModel => r != null)
+            : [];
+
+    const selectedRecordId =
+        snapshot.terminal === "operational" ? snapshot.recordOfAttention.id : null;
+
+    return {
+        header: headerFromPresentation(p),
+        workViews,
+        queue: {
+            rows,
+            // Totals are SETTLEMENT (U-S6) — reserved, never a commit gate.
+            totalCount: null,
+            // Never loading: this model exists only because a terminal already arrived.
+            loading: false,
+            // AUTHORITATIVE EMPTY (U-O6) is `rows: []` with NO error — QueueRegion's renderState
+            // distinguishes `empty` from `error` on exactly this, so the two can never be confused.
+            error: null,
+            rowConfig: p.queue.rowSlots,
+            // P2-V: carry config-consumption provenance to the model so the DOM can prove WHICH surface
+            // drove the rendered slots (was dropped here before — the observability gap).
+            provenance: {
+                source: p.provenance.queueRowSource,
+                surfaceId: p.provenance.queueRowSurfaceId,
+                resolvedSource: p.provenance.queueRowResolvedSource,
+                variant: p.provenance.queueRowVariant,
+                ineffectiveFieldKeys: p.provenance.queueRowIneffectiveFieldKeys,
+            },
+        },
+        activeWorkViewId: snapshot.activeWorkView.id,
+        selectedRecordId,
+        selectedSubject: {
+            selectedRecordId,
+            source:
+                snapshot.terminal === "operational"
+                    ? snapshot.recordOfAttention.strategySource === "configured"
+                        ? "strategy"
+                        : "first_row"
+                    : "empty",
+        },
+        // B — COMMIT-CRITICAL ACTIONS: the resolved right-rail action set is carried in the answer, so
+        // the count + identities commit WITH the surface (no Actions(0) flash, no post-commit layout
+        // discovery). Settlement still confirms with the same resolver but merges only non-empty results,
+        // so it never clobbers this to zero. The snapshot-owned primary Action is elsewhere and untouched.
+        // Department scope is baked with the projection — Actions (Create Lead) must not wait on Settlement.
+        rightRailActions: snapshot.actionsProjection?.actions ?? [],
+        departmentId: snapshot.actionsProjection?.departmentId ?? null,
+        workUnitId: snapshot.workUnit.id,
+        ready: true,
+        readiness: READY_ALL,
+    };
+}
+
+/** Committed truth is ready by definition — K3 already decided. See the header note. */
+const READY_ALL = {
+    shellReady: true,
+    retainedCompositionReady: true,
+    coldCompositionReady: true,
+    interactionReady: true,
+} as const;
+
+/** All slots visible, no overrides — the generic-context shape, for the error surface. */
+const EMPTY_ROW_SLOTS = {
+    subject: { visible: true },
+    status: { visible: true },
+    contact: { visible: true },
+    attention: { visible: true },
+    work: { visible: true },
+    groupCount: { visible: true },
+} as WorkUnitSurfaceModel["queue"]["rowConfig"];

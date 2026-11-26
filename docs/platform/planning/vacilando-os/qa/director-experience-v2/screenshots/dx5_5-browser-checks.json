@@ -1,0 +1,149 @@
+{
+  "controlPlane": "http://127.0.0.1:3026",
+  "capturedAt": "2026-08-05T15:45:25.147Z",
+  "liveMeta": {
+    "missionId": "msn_f74ed02c126c88d7ff",
+    "postureId": "operator_review",
+    "continuationState": "discovery_review",
+    "recommended": "Request More Discovery",
+    "alts": [
+      "Park Mission",
+      "Close Without Continuing",
+      "Review Findings",
+      "Provide Feedback"
+    ],
+    "hasFeedback": true,
+    "hasFindings": true,
+    "closeLabel": "Close Without Continuing"
+  },
+  "fixtureSummary": {
+    "discovery_complete": {
+      "continuationState": "discovery_complete",
+      "recommended": "Begin Implementation",
+      "alts": [
+        "Request More Discovery",
+        "Park Mission",
+        "Close Without Continuing",
+        "Review Findings",
+        "Provide Feedback"
+      ],
+      "hasFeedback": true,
+      "hasFindings": true,
+      "closeLabel": "Close Without Continuing"
+    },
+    "blocked": {
+      "continuationState": "blocked",
+      "recommended": "Resolve Blockers",
+      "alts": [],
+      "hasFeedback": false,
+      "hasFindings": false
+    },
+    "parked": {
+      "continuationState": "parked",
+      "recommended": "Resume Mission",
+      "alts": [],
+      "hasFeedback": false,
+      "hasFindings": false
+    },
+    "certification_complete": {
+      "continuationState": "certification_ready",
+      "recommended": "Accept and close",
+      "alts": [
+        "Request More Discovery",
+        "Park Mission",
+        "Review Findings",
+        "Provide Feedback"
+      ],
+      "hasFeedback": true,
+      "hasFindings": true,
+      "closeLabel": "Accept and close"
+    }
+  },
+  "shots": {
+    "fixture_discovery_complete": {
+      "path": "dx5_5-fixture-discovery_complete.png",
+      "ok": true,
+      "continuationState": "discovery_complete",
+      "recommended": "Begin Implementation",
+      "alts": [
+        "Request More Discovery",
+        "Park Mission",
+        "Close Without Continuing",
+        "Review Findings",
+        "Provide Feedback"
+      ],
+      "hasFeedback": true,
+      "hasFindings": true,
+      "closeLabel": "Close Without Continuing"
+    },
+    "fixture_blocked": {
+      "path": "dx5_5-fixture-blocked.png",
+      "ok": true,
+      "continuationState": "blocked",
+      "recommended": "Resolve Blockers",
+      "alts": [],
+      "hasFeedback": false,
+      "hasFindings": false
+    },
+    "fixture_parked": {
+      "path": "dx5_5-fixture-parked.png",
+      "ok": true,
+      "continuationState": "parked",
+      "recommended": "Resume Mission",
+      "alts": [],
+      "hasFeedback": false,
+      "hasFindings": false
+    },
+    "fixture_certification_complete": {
+      "path": "dx5_5-fixture-certification_complete.png",
+      "ok": true,
+      "continuationState": "certification_ready",
+      "recommended": "Accept and close",
+      "alts": [
+        "Request More Discovery",
+        "Park Mission",
+        "Review Findings",
+        "Provide Feedback"
+      ],
+      "hasFeedback": true,
+      "hasFindings": true,
+      "closeLabel": "Accept and close"
+    },
+    "live_operator_review": {
+      "path": "dx5_5-live-operator-review.png",
+      "ok": true,
+      "missionId": "msn_f74ed02c126c88d7ff",
+      "postureId": "operator_review",
+      "continuationState": "discovery_review",
+      "recommended": "Request More Discovery",
+      "alts": [
+        "Park Mission",
+        "Close Without Continuing",
+        "Review Findings",
+        "Provide Feedback"
+      ],
+      "hasFeedback": true,
+      "hasFindings": true,
+      "closeLabel": "Close Without Continuing"
+    },
+    "live_feedback": {
+      "path": "dx5_5-live-feedback-panel.png",
+      "ok": true
+    },
+    "live_l1_top": {
+      "path": "dx5_5-live-l1-top.png",
+      "ok": true
+    }
+  },
+  "checks": {
+    "discoveryCompleteRecommendsBeginImplementation": true,
+    "blockedRecommendsResolve": true,
+    "parkedRecommendsResume": true,
+    "closeRenamed": true,
+    "feedbackDistinct": true,
+    "reviewFindingsPresent": true,
+    "liveHasRecommended": true,
+    "liveHasFeedback": true,
+    "liveHasFindings": true
+  }
+}

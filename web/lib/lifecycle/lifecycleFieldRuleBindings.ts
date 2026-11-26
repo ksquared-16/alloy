@@ -29,16 +29,19 @@ export type LifecycleFieldRuleBinding = {
         | "allergies"
         | "medical_notes"
         | "special_instructions";
-    /** inquiry_child / OCM column when value_source is inquiry_child */
+    /** inquiry_child snapshot field when value_source is inquiry_child (OCM column or PI overlay). */
     ocm_field?:
         | "first_name"
         | "last_name"
         | "location_id"
-        | "desired_program_type"
-        | "desired_program_category_id"
+        | "program_category_id"
         | "program_room_cohort_key"
-        | "desired_schedule_type"
-        | "desired_start_date";
+        | "schedule_type"
+        | "start_date"
+        | "requested_days_per_week"
+        | "weekdays"
+        | "tuition_plan_id"
+        | "quote_accepted";
     /** opportunity.values or metadata key when value_source is opportunity* */
     opportunity_field?: string;
     metadata_key?: string;
@@ -116,6 +119,16 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         form_coverage_supported: true,
     },
     {
+        rule_id: "child:gender",
+        entity: "child",
+        field_key: "gender",
+        value_source: "customer_member_profile",
+        customer_member_field: "gender",
+        form_capture_keys: ["child_gender", "Child gender", "Gender", "gender"],
+        runtime_enforced: false,
+        form_coverage_supported: true,
+    },
+    {
         rule_id: "child:age_group",
         entity: "child",
         field_key: "age_group",
@@ -127,12 +140,11 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
     {
         rule_id: "child:program_interest",
         entity: "child",
-        field_key: "desired_program_category_id",
+        field_key: "program_category_id",
         value_source: "inquiry_child",
-        ocm_field: "desired_program_category_id",
+        ocm_field: "program_category_id",
         form_capture_keys: [
-            "desired_program_category_id",
-            "desired_program_type",
+            "program_category_id",
             "Desired program",
             "Program Interest",
             "Program",
@@ -163,22 +175,68 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
     {
         rule_id: "child:desired_schedule",
         entity: "child",
-        field_key: "desired_schedule_type",
+        field_key: "schedule_type",
         value_source: "inquiry_child",
-        ocm_field: "desired_schedule_type",
-        form_capture_keys: ["desired_schedule_type", "Desired schedule", "Schedule Type", "Desired Schedule"],
+        ocm_field: "schedule_type",
+        form_capture_keys: ["schedule_type", "Desired schedule", "Schedule Type", "Desired Schedule"],
         runtime_enforced: true,
         form_coverage_supported: true,
     },
     {
-        rule_id: "child:desired_start_date",
+        rule_id: "child:start_date",
         entity: "child",
-        field_key: "desired_start_date",
+        field_key: "start_date",
         value_source: "inquiry_child",
-        ocm_field: "desired_start_date",
-        form_capture_keys: ["desired_start_date", "Desired start date", "Start Date", "Desired Start Date"],
+        ocm_field: "start_date",
+        form_capture_keys: [
+            "start_date",
+            "Desired start date",
+            "Start Date",
+            "Desired Start Date",
+            "Requested Start",
+        ],
         runtime_enforced: true,
         form_coverage_supported: true,
+    },
+    {
+        rule_id: "child:requested_days_per_week",
+        entity: "child",
+        field_key: "requested_days_per_week",
+        value_source: "inquiry_child",
+        ocm_field: "requested_days_per_week",
+        form_capture_keys: ["requested_days_per_week", "Requested days per week", "Days per week"],
+        runtime_enforced: true,
+        form_coverage_supported: true,
+    },
+    {
+        rule_id: "child:preferred_weekdays",
+        entity: "child",
+        field_key: "weekdays",
+        value_source: "inquiry_child",
+        ocm_field: "weekdays",
+        form_capture_keys: ["weekdays", "Preferred days", "Preferred weekdays"],
+        runtime_enforced: true,
+        form_coverage_supported: true,
+    },
+    {
+        rule_id: "child:tuition_plan",
+        entity: "child",
+        field_key: "tuition_plan_id",
+        value_source: "inquiry_child",
+        ocm_field: "tuition_plan_id",
+        form_capture_keys: ["tuition_plan_id", "Tuition plan", "Tuition Plan"],
+        runtime_enforced: true,
+        form_coverage_supported: false,
+    },
+    {
+        rule_id: "child:quote_accepted",
+        entity: "child",
+        field_key: "quote_accepted",
+        value_source: "inquiry_child",
+        ocm_field: "quote_accepted",
+        form_capture_keys: ["quote_accepted", "Quote accepted"],
+        runtime_enforced: true,
+        form_coverage_supported: false,
     },
     {
         rule_id: "child:classroom",
@@ -187,16 +245,6 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         value_source: "inquiry_child",
         ocm_field: "program_room_cohort_key",
         form_capture_keys: ["program_room_preference", "child_room_cohort", "Classroom", "Room"],
-        runtime_enforced: true,
-        form_coverage_supported: true,
-    },
-    {
-        rule_id: "child:start_date",
-        entity: "child",
-        field_key: "desired_start_date",
-        value_source: "inquiry_child",
-        ocm_field: "desired_start_date",
-        form_capture_keys: ["desired_start_date", "Start Date"],
         runtime_enforced: true,
         form_coverage_supported: true,
     },

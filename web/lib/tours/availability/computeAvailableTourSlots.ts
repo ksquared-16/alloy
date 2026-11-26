@@ -3,14 +3,52 @@ import type { ComputeAvailableTourSlotsParams, TourAvailabilityRuleRow, TourBook
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
 import { computeSlotsFromRulesAndBookings } from "@/lib/tours/availability/internalCompute";
 import { TOUR_BOOKING_BLOCKING_STATUS_KEYS } from "@/lib/tours/constants";
+import { loadOperatingCalendarForInstants } from "@/lib/operatingCalendar/operatingCalendarServer";
 
 /**
  * Load active availability rules + blocking tour bookings, then compute bookable slots.
  * Rules are interpreted in each rule's `timezone`; bookings compared as UTC instants.
+ *
+ * The location's Operating Calendar is applied LAST, to the generated slots: a closed
+ * day offers nothing, a partial closure removes only the slots it overlaps, and modified
+ * hours keep only the slots wholly inside them. This is the only slot authority, so the
+ * operator picker, the public page, invitations and every booking writer
+ * (`assertSlotAvailableForWrite`, the public book/reschedule revalidation) see the same
+ * exclusions. Bookings are counted before the filter and are never touched by it: a
+ * closure hides times, it does not release or cancel what was booked.
+ *
+ * ## Location-specific rules (Tours feedback 2026-10-29)
+ *
+ * New availability comes from the location's OWN rules only. A legacy organization-wide rule
+ * (`location_id` null) stays stored and is no longer shown in Tours configuration, so it no
+ * longer offers new times anywhere: a location with no schedule of its own offers nothing until
+ * one is configured. Bookings already made under such a rule are untouched — they still count
+ * against capacity here, and cancel / complete / no-show / reminders read the booking, not rules.
+ *
+ * `ruleAuthority` is server-controlled and never derived from request input. Its only other
+ * value, `legacy_pending_confirmation`, is passed by `confirmTourBooking` alone, to approve an
+ * existing pending booking at its unchanged time when that time came from a legacy rule.
  */
+export type TourSlotRuleAuthority = "location" | "legacy_pending_confirmation";
+
+/** The rules that may generate slots at `locationId` under `authority`. */
+export function tourRulesForLocation<R extends { location_id?: string | null }>(
+    rules: R[],
+    locationId: string,
+    authority: TourSlotRuleAuthority = "location"
+): R[] {
+    const target = String(locationId ?? "").trim();
+    return rules.filter((r) => {
+        const own = r.location_id != null ? String(r.location_id).trim() : "";
+        if (!own) return authority === "legacy_pending_confirmation";
+        return own === target;
+    });
+}
+
 export async function computeAvailableTourSlots(
     supabase: SupabaseClient,
-    params: ComputeAvailableTourSlotsParams
+    params: ComputeAvailableTourSlotsParams,
+    ruleAuthority: TourSlotRuleAuthority = "location"
 ): Promise<AvailableTourSlot[]> {
     const orgId = String(params.orgId).trim();
     const locationId = String(params.locationId).trim();
@@ -36,10 +74,7 @@ export async function computeAvailableTourSlots(
     }
 
     const rules = (rulesRaw ?? []) as unknown as TourAvailabilityRuleRow[];
-    const rulesForLocation = rules.filter((r) => {
-        if (r.location_id == null || String(r.location_id).trim() === "") return true;
-        return String(r.location_id) === locationId;
-    });
+    const rulesForLocation = tourRulesForLocation(rules, locationId, ruleAuthority);
 
     const blockingKeys = [...TOUR_BOOKING_BLOCKING_STATUS_KEYS];
     const { data: bookingsRaw, error: bErr } = await supabase
@@ -57,11 +92,23 @@ export async function computeAvailableTourSlots(
 
     const bookings = (bookingsRaw ?? []) as unknown as TourBookingOverlapRow[];
 
-    return computeSlotsFromRulesAndBookings(rulesForLocation, bookings, {
+    const slots = computeSlotsFromRulesAndBookings(rulesForLocation, bookings, {
         locationId,
         userId,
         fromUtc: from,
         toUtc: to,
         excludeBookingId: params.excludeBookingId ?? null,
     });
+    if (slots.length === 0) return slots;
+
+    // A failed calendar read throws: offering slots on a day we could not check is
+    // the one wrong answer here.
+    const calendar = await loadOperatingCalendarForInstants(supabase, {
+        orgId,
+        locationId,
+        fromUtc: from,
+        toUtc: new Date(Math.max(to.getTime(), ...slots.map((s) => Date.parse(s.endAt)))),
+        fallbackTimezone: slots[0]!.timezone,
+    });
+    return slots.filter((s) => calendar.isOperating(new Date(s.startAt), new Date(s.endAt)));
 }

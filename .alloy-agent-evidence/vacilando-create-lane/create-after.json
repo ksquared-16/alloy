@@ -1,0 +1,32 @@
+{
+  "viewportH": 660,
+  "main": {
+    "top": 61,
+    "bottom": 592,
+    "h": 531
+  },
+  "mainOverflow": "hidden",
+  "form": {
+    "top": 331,
+    "bottom": 592,
+    "h": 261
+  },
+  "textarea": {
+    "top": 381,
+    "bottom": 493,
+    "h": 112
+  },
+  "submit": {
+    "top": 513,
+    "bottom": 557,
+    "h": 44
+  },
+  "textareaFullyVisible": true,
+  "submitFullyVisible": true,
+  "formClippedByMain": false,
+  "canScrollMain": false,
+  "fields": [
+    "First message"
+  ],
+  "fontPx": 16
+}

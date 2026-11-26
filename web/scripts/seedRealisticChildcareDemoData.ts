@@ -12,7 +12,7 @@
  *   DEMO_CORPORATE_USER_ID, DEMO_REGIONAL_USER_ID, DEMO_DIRECTOR_USER_ID (optional — updates access profiles + roles)
  *   DEMO_STAGING_TIMEZONE (optional IANA, default America/Los_Angeles) — sets org + demo user display timezones when unset
  *
- * @see docs/sprints/05_2026/staging-demo-data-reset-realistic-seed.md
+ * @see docs/sprints/archive/05_2026/staging-demo-data-reset-realistic-seed.md
  *
  * Performance follow-up (135 families = many sequential round-trips):
  * - Bulk upserts / RPC batches for persons, customer_members, opportunities
@@ -577,11 +577,30 @@ async function ensureDepartment(
     description: string | null,
     sortOrder: number
 ): Promise<string> {
-    const { data: existing } = await supabase.from("departments").select("id").eq("org_id", orgId).eq("key", key).maybeSingle();
+    const { data: existing } = await supabase
+        .from("departments")
+        .select("id, metadata")
+        .eq("org_id", orgId)
+        .eq("key", key)
+        .maybeSingle();
     const seedKey = `dept_seed:${key}`;
     const meta = demoSeedMetadata(seedKey);
     if ((existing as { id?: string } | null)?.id) {
-        const id = (existing as { id: string }).id;
+        const row = existing as { id: string; metadata?: unknown };
+        const id = row.id;
+
+        // Demo tooling INITIALIZES; it never replaces an established department.
+        //
+        // This previously wrote `metadata: meta` — a small marker object — over the whole column,
+        // destroying `lifecycle_builder_v1` and every process, stage and work view inside it. Same
+        // class of defect as the one fixed in applyVerticalBootstrap. Demo tooling must never be
+        // able to overwrite publication-owned configuration; existing keys win over seed markers.
+        const existingMeta =
+            row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                ? (row.metadata as Record<string, unknown>)
+                : {};
+        const mergedMeta = { ...meta, ...existingMeta };
+
         const { error: upErr } = await supabase
             .from("departments")
             .update({
@@ -589,7 +608,7 @@ async function ensureDepartment(
                 description,
                 sort_order: sortOrder,
                 is_active: true,
-                metadata: meta,
+                metadata: mergedMeta,
             })
             .eq("id", id);
         if (upErr) throw new Error(`departments update ${key}: ${upErr.message}`);
@@ -972,6 +991,7 @@ async function ensureOpportunity(
             program_label,
             age_group,
             ...(inquiryList.length ? { inquiry_children: inquiryList } : {}),
+            // opportunity-level legacy metadata key — not the OCM column
             desired_start_date: isoDateOnly(desired),
             tour_date: tourDate ? isoDateOnly(tourDate) : null,
             ...(tourTimeValue ? { tour_time: tourTimeValue } : {}),
@@ -1279,7 +1299,34 @@ async function ensureDemoOpportunityCommunications(
     }
 }
 
-async function ensureUserRoleIfAbsent(supabase: SupabaseAdmin, orgId: string, userId: string, role: string): Promise<void> {
+
+/**
+ * W7-F002: a seeded staff login is a named human before it holds a role that can move money —
+ * Person → explicit link → role. The person is a keyed seed fixture (external_source/external_id),
+ * named by the call site, never matched from an email. An existing active link is left as it is.
+ */
+async function ensureSeedPersonLink(supabase: SupabaseAdmin, orgId: string, userId: string, personLabel: string): Promise<void> {
+    const { data: linked } = await supabase.from("user_person_links").select("person_id").eq("org_id", orgId).eq("user_id", userId).eq("status", "active").maybeSingle();
+    if (linked) return;
+    const { data: existing } = await supabase.from("persons").select("id").eq("org_id", orgId)
+        .eq("external_source", "alloy_seed_fixture").eq("external_id", userId).maybeSingle();
+    let personId = (existing as { id: string } | null)?.id ?? null;
+    if (!personId) {
+        const [first, ...rest] = personLabel.split(" ");
+        const { data: created, error } = await supabase.from("persons").insert({
+            org_id: orgId, first_name: first, last_name: rest.join(" ") || "Staff", full_name: personLabel,
+            external_source: "alloy_seed_fixture", external_id: userId,
+        } as never).select("id").single();
+        if (error) throw new Error(`seed person ${personLabel}: ${error.message}`);
+        personId = (created as { id: string }).id;
+    }
+    const { error: linkErr } = await supabase.from("user_person_links").insert({
+        org_id: orgId, user_id: userId, person_id: personId, status: "active", note: `seed fixture: ${personLabel}`,
+    } as never);
+    if (linkErr) throw new Error(`seed person link ${personLabel}: ${linkErr.message}`);
+}
+
+async function ensureUserRoleIfAbsent(supabase: SupabaseAdmin, orgId: string, userId: string, role: string, personLabel: string): Promise<void> {
     const { data: row } = await supabase.from("user_roles").select("user_id").eq("org_id", orgId).eq("user_id", userId).eq("role", role).maybeSingle();
     if (row) return;
     const { data: def } = await supabase.from("role_definitions").select("role_key").eq("org_id", orgId).eq("role_key", role).eq("is_active", true).maybeSingle();
@@ -1287,6 +1334,7 @@ async function ensureUserRoleIfAbsent(supabase: SupabaseAdmin, orgId: string, us
         console.warn(`Skipping role "${role}" — not defined for org.`);
         return;
     }
+    await ensureSeedPersonLink(supabase, orgId, userId, personLabel);
     const { error } = await supabase.from("user_roles").insert({ org_id: orgId, user_id: userId, role } as never);
     if (error) throw new Error(`user_roles ${userId} ${role}: ${error.message}`);
 }
@@ -1954,19 +2002,20 @@ async function wireDemoUserScopes(
     const regional = process.env.DEMO_REGIONAL_USER_ID?.trim();
     const director = process.env.DEMO_DIRECTOR_USER_ID?.trim();
 
+    // Profile first: a membership must have an access profile at commit.
     if (corp) {
-        await ensureUserRoleIfAbsent(supabase, orgId, corp, "admin");
         await applyUserAccessProfile(supabase, orgId, corp, "all", "all", [], []);
+        await ensureUserRoleIfAbsent(supabase, orgId, corp, "admin", "Corporate Admin");
     }
     if (regional) {
-        await ensureUserRoleIfAbsent(supabase, orgId, regional, "ops");
-        await ensureUserRoleIfAbsent(supabase, orgId, regional, "regional_lead");
         await applyUserAccessProfile(supabase, orgId, regional, "all", "restricted", [], [northId, southId]);
+        await ensureUserRoleIfAbsent(supabase, orgId, regional, "ops", "Regional Lead");
+        await ensureUserRoleIfAbsent(supabase, orgId, regional, "regional_lead", "Regional Lead");
     }
     if (director) {
-        await ensureUserRoleIfAbsent(supabase, orgId, director, "ops");
-        await ensureUserRoleIfAbsent(supabase, orgId, director, "school_director");
         await applyUserAccessProfile(supabase, orgId, director, "restricted", "restricted", [enrollmentDeptId], [northId]);
+        await ensureUserRoleIfAbsent(supabase, orgId, director, "ops", "School Director");
+        await ensureUserRoleIfAbsent(supabase, orgId, director, "school_director", "School Director");
     }
 }
 

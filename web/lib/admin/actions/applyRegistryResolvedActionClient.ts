@@ -28,6 +28,8 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPreflightDrawerEvents";
+import { isBosCreateLeadSessionEnabled } from "@/lib/bos/commandSession/bosCreateLeadSessionFlag";
+import { dispatchStartBosCommandSession } from "@/contexts/BosCommandSessionContext";
 import {
     dispatchOpenAddInquiryChildModal,
     isAddInquiryChildActionKey,
@@ -55,6 +57,10 @@ import {
     mapRegistrySurfaceToEnrollmentSource,
     resolveEnrollmentStatusActionFromResolvedAction,
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionClient";
+import {
+    dispatchOpenChangeLeadLocationModal,
+    resolveChangeLeadLocationActionFromResolvedAction,
+} from "@/lib/admin/actions/changeLeadLocationActionClient";
 import type { EnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 
 export type RegistryActionSurfaceContext = {
@@ -65,14 +71,22 @@ export type RegistryActionSurfaceContext = {
     section_key?: string | null;
 };
 
-type DrawerOpenOpts =
-    | { type: "opportunities"; id: string; defaultOpportunitySurface?: "quote_intake" }
-    | { type: "jobs"; id: string; jobRecordSurface?: "drawer" }
-    | { type: "schedules"; id: string };
-
 export type ApplyRegistryResolvedActionHost = {
     router: { push: (href: string) => void; refresh: () => void };
-    openDrawer: (opts: DrawerOpenOpts) => void;
+    /**
+     * Put a record in front of the operator.
+     *
+     * This replaces the host's `openDrawer`. A configured action states WHAT to look at; the
+     * platform resolves WHERE that is worked and moves attention there (`useOperatorRecordFocus`).
+     * An action can no longer name a presentation — "open the record overlay, on the quote-intake
+     * tab" was an implementation instruction living in configuration, and the overlay it named is
+     * gone.
+     */
+    focusRecord: (request: {
+        entity_type: string;
+        entity_id: string;
+        card_focus?: { card_key: string; item_id?: string | null; context_key?: string | null } | null;
+    }) => void;
     openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     /** Work-unit rail: no record selected — open queue record picker before tour modal. */
     openScheduleTourRecordPicker?: () => void;
@@ -92,6 +106,8 @@ export type ApplyRegistryResolvedActionHost = {
         sourceSurface?: import("@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract").EnrollmentStatusTransitionSourceSurface;
         initialScope?: Partial<EnrollmentStatusTransitionScope>;
     }) => void;
+    /** Change lead location — family default site modal. */
+    openChangeLeadLocation?: (input: { opportunityId: string }) => void;
     /** Dedicated modal — household primary contact (requires contact row target). */
     openMakePrimaryContact?: (input: { opportunityId: string; targetPersonId: string }) => void;
     openCreateLead?: () => void;
@@ -222,6 +238,22 @@ export async function applyRegistryResolvedActionClient(
         return { ok: true };
     }
 
+    if (resolveChangeLeadLocationActionFromResolvedAction(a)) {
+        const oid = host.entityId?.trim();
+        if (!oid) {
+            return {
+                ok: false,
+                error: "Select a record first.",
+            };
+        }
+        if (host.openChangeLeadLocation) {
+            host.openChangeLeadLocation({ opportunityId: oid });
+            return { ok: true };
+        }
+        dispatchOpenChangeLeadLocationModal({ opportunity_id: oid });
+        return { ok: true };
+    }
+
     if (isScheduleTourRegistryAction(a) && !host.entityId?.trim()) {
         const delegated = applyScheduleTourWithoutSelectedRecord(a, host);
         if (delegated) return delegated;
@@ -268,6 +300,20 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (formKey === "create_lead") {
+            if (isBosCreateLeadSessionEnabled()) {
+                dispatchStartBosCommandSession({
+                    actionKey: "create_lead",
+                    displayLabel: a.label?.trim() || "Create Lead",
+                    placement: host.workUnitId ? "work_unit_actions" : "workspace_actions_menu",
+                    contextResolution: "bos_proposal",
+                    workspace: {
+                        departmentId: host.departmentId ?? null,
+                        workUnitId: host.workUnitId ?? null,
+                        surface: host.workUnitId ? "work_unit" : "workspace",
+                    },
+                });
+                return { ok: true };
+            }
             if (host.openCreateLead) {
                 host.openCreateLead();
                 return { ok: true };
@@ -330,32 +376,18 @@ export async function applyRegistryResolvedActionClient(
         if (href) window.open(href, "_blank", "noopener,noreferrer");
         return { ok: true };
     }
+    // `open_drawer` is a RETIRED action type kept only so published action definitions keep
+    // resolving. It never opens an overlay: the operator intent underneath it was always "put this
+    // record in front of me", and that is now an attention movement onto the record's host Work Unit.
+    //
+    // `payload.drawer.entityType` of `jobs`/`schedules` is dropped rather than translated. Those
+    // types resolved to the `legacy` drawer route, which `AdminEntityDrawer` rendered as nothing —
+    // the action had no destination before this change either, and inventing one now would be a new
+    // product decision, not a migration.
     if (a.action_type === "open_drawer") {
-        const d =
-            a.payload?.drawer && typeof a.payload.drawer === "object"
-                ? (a.payload.drawer as Record<string, unknown>)
-                : {};
-        const idFrom = d.idFrom != null ? String(d.idFrom) : "";
-        const resolvedId =
-            idFrom === "entity_id" && host.entityId?.trim()
-                ? host.entityId.trim()
-                : host.entityId?.trim() ?? "";
+        const resolvedId = host.entityId?.trim() ?? "";
         if (!resolvedId) return { ok: true };
-        const entityType = String(d.entityType ?? "opportunities").trim().toLowerCase();
-        const defSurf = d.defaultSurface != null ? String(d.defaultSurface) : null;
-        if (entityType === "jobs" || entityType === "job") {
-            host.openDrawer({ type: "jobs", id: resolvedId, jobRecordSurface: "drawer" });
-            return { ok: true };
-        }
-        if (entityType === "schedules" || entityType === "schedule") {
-            host.openDrawer({ type: "schedules", id: resolvedId });
-            return { ok: true };
-        }
-        if (defSurf === "quote_intake" || a.key === "start_quote") {
-            host.openDrawer({ type: "opportunities", id: resolvedId, defaultOpportunitySurface: "quote_intake" });
-            return { ok: true };
-        }
-        host.openDrawer({ type: "opportunities", id: resolvedId });
+        host.focusRecord({ entity_type: "opportunities", entity_id: resolvedId });
         return { ok: true };
     }
     if (a.action_type === "ui_intent") {
@@ -392,6 +424,60 @@ export async function applyRegistryResolvedActionClient(
             }
             if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: eid, action_key: "confirm_tour" });
             else host.router.refresh();
+            return { ok: true };
+        }
+        if (actionKey === "send_tour_invitation" || intent === "send_tour_invitation") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+
+            // Prepare invitation draft (mint + render) WITHOUT sending, then open compose.
+            // Operator edits freely and confirms send through Communications — never auto-send.
+            let draftBody = "";
+            let draftSubject = "";
+            let invitationId = "";
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action_key: "send_tour_invitation",
+                        entity_type: "opportunity",
+                        entity_id: eid,
+                        context: host.context,
+                        payload: { mode: "prepare", idempotency_key: `send_tour_invitation:prepare:${eid}:${crypto.randomUUID()}` },
+                        confirmation: { confirmed: true },
+                    }),
+                });
+                const json = await res.json().catch(() => ({}));
+                const { tourInvitationDetailFromExecutePayload, tourInvitationDraftFromDetail } =
+                    await import("@/lib/tours/tourInvitationPrepareWarmCache");
+                const prepared = tourInvitationDraftFromDetail(
+                    tourInvitationDetailFromExecutePayload(json),
+                );
+                invitationId = prepared?.invitationId ?? "";
+                draftBody = prepared?.emailBody ?? "";
+                draftSubject = prepared?.emailSubject ?? "";
+            } catch {
+                // Compose still opens; operator can write manually if prepare fails.
+            }
+
+            await launchContextualQuickMessage({
+                surface: invocation?.surface ?? "record_drawer",
+                record_id: eid,
+                entity_type: "opportunity",
+                opportunity_id: eid,
+                person_id: invocation?.person_id ?? null,
+                display_name: invocation?.display_name ?? null,
+                email: invocation?.email ?? null,
+                phone: invocation?.phone ?? null,
+                department_id: invocation?.department_id ?? host.departmentId ?? null,
+                work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
+                bos_source_surface: invocation?.bos_source_surface,
+                defaultChannel: "email",
+                draftSubject: draftSubject || null,
+                draftBody: draftBody || null,
+                tourInvitationId: invitationId || null,
+            });
             return { ok: true };
         }
         if (actionKey === "send_email" || intent === "send_email") {
@@ -443,7 +529,12 @@ export async function applyRegistryResolvedActionClient(
             window.location.href = digits ? `tel:${digits}` : `tel:${phone}`;
             return { ok: true };
         }
-        if (actionKey === "create_task" || intent === "create_task") {
+        if (
+            actionKey === "create_task"
+            || actionKey === "create_work_item"
+            || intent === "create_task"
+            || intent === "create_work_item"
+        ) {
             if (eid) {
                 if (host.openCreateWork) {
                     host.openCreateWork({ opportunity_id: eid });
@@ -595,8 +686,8 @@ export async function applyRegistryResolvedActionClient(
                 (actionKey === "assign_classroom" || intent === "assign_classroom"
                     ? "program_room_cohort_key"
                     : actionKey === "assign_schedule" || intent === "assign_schedule"
-                      ? "desired_schedule_type"
-                      : "desired_start_date");
+                      ? "schedule_type"
+                      : "start_date");
             dispatchFocusInquiryChildren(eid, field as InquiryChildrenFocusField);
             return { ok: true };
         }
@@ -604,7 +695,26 @@ export async function applyRegistryResolvedActionClient(
             window.alert(message);
             return { ok: true };
         }
-        return { ok: true };
+        // NO generic success fall-through.
+        //
+        // Reaching here means a provisioned `ui_intent` has no branch above, so
+        // NOTHING was executed — no request was issued, no server result was
+        // validated. Returning `{ ok: true }` here told operators their command
+        // ran when it had not: `send_tour_invitation` reported "completed" while
+        // creating no invitation, no message and no event. A command that cannot
+        // run must say so.
+        //
+        // This is deliberately not special-cased to one action. Any future
+        // provisioned intent without a branch fails loudly on its first click
+        // instead of silently lying for however long it takes someone to notice.
+        console.warn("[applyRegistryResolvedActionClient] unhandled ui_intent — nothing executed", {
+            key: actionKey,
+            intent,
+        });
+        return {
+            ok: false,
+            error: "This command is not available yet. Nothing was sent.",
+        };
     }
 
     const entityId = host.entityId?.trim();
@@ -666,12 +776,10 @@ export async function applyRegistryResolvedActionClient(
         };
     }
     const er = json.data?.execution_result;
+    // Same retirement on the server-returned execution result: the record the action produced is
+    // put in front of the operator on its own operational host, never in an overlay.
     if (er?.kind === "open_drawer") {
-        if (er.drawer?.defaultSurface === "quote_intake") {
-            host.openDrawer({ type: "opportunities", id: entityId, defaultOpportunitySurface: "quote_intake" });
-        } else {
-            host.openDrawer({ type: "opportunities", id: entityId });
-        }
+        host.focusRecord({ entity_type: "opportunities", entity_id: entityId });
         if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: entityId, action_key: a.key });
         else host.router.refresh();
         return { ok: true, execution_result: er };

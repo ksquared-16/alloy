@@ -104,6 +104,7 @@ function minimalViewModel(): OpportunityDrawerViewModel {
             header: [...preload.headerActions.header],
             header_menu: [...preload.headerActions.header],
             manage_menu: [],
+            record_header: null,
         },
         layout: {
             mode: "workflow_v1",
@@ -118,6 +119,9 @@ function minimalViewModel(): OpportunityDrawerViewModel {
                 geometry: {},
                 layout_config_snapshot: {},
             },
+        },
+        activity: {
+            communicationsPreviewVm: null,
         },
         above_fold: {
             render_model: {
@@ -161,7 +165,7 @@ function minimalViewModel(): OpportunityDrawerViewModel {
             record: { id: "opp-1" },
         },
         summaries: {
-            active_tour_bookings: [],
+            active_tour_bookings: [], operator_relevant_tour_booking: null,
             tasks: { state: "loaded", open_tasks: [], open_count: 0 },
             reminders: {
                 state: "empty",
@@ -204,7 +208,7 @@ describe("diffOpportunityDrawerViewModelShadow", () => {
         const legacy = assembleLegacyDrawerOpenShadowSnapshot(preload);
         const vm = extractOpportunityDrawerViewModelShadowSnapshot({
             ...minimalViewModel(),
-            actions: { header: [], header_menu: [], manage_menu: [] },
+            actions: { header: [], header_menu: [], manage_menu: [], record_header: null },
         });
         const diff = diffOpportunityDrawerViewModelShadow(legacy, vm);
         expect(diff.structural_mismatches.some((m) => m.field === "header_action_keys")).toBe(true);
@@ -331,7 +335,7 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
             ok: true,
             viewModel: {
                 ...minimalViewModel(),
-                actions: { header: [], header_menu: [], manage_menu: [] },
+                actions: { header: [], header_menu: [], manage_menu: [], record_header: null },
             },
         });
 

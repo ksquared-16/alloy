@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { filterLinksInActorScope, formsReadScope } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { FORM_PUBLIC_LINK_SAFE_SELECT } from "@/lib/admin/forms/formsAdminDb";
@@ -30,5 +31,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         .filter("metadata->>packet_definition_id", "eq", packetDefId)
         .order("created_at", { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return jsonData(data ?? []);
+    // R2: enrollment links naming a child / recipient / opportunity outside the caller's scope are not listed.
+    return jsonData(await filterLinksInActorScope(supabase, ctx.orgId, await formsReadScope(), (data ?? []) as Array<{ metadata?: unknown }>));
 }

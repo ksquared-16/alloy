@@ -1,0 +1,50 @@
+{
+  "trusted_host_action_id": "tha_9e7b6554604c77",
+  "query_hash": "d74f8e0991eb50bfbfd361873581753707c2fa82e8e6d05bb4dd386e764dd04a",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T19:56:39.868Z",
+    "question_ids": [
+      "operator_account",
+      "operator_org_membership",
+      "project_account_population"
+    ],
+    "questions": {
+      "operator_account": {
+        "question_id": "operator_account",
+        "row_count": null,
+        "rows": [
+          {
+            "accounts_matching": 0,
+            "has_password_set": 0,
+            "email_confirmed": 0,
+            "banned": 0,
+            "ever_signed_in": 0,
+            "created_on": null
+          }
+        ]
+      },
+      "operator_org_membership": {
+        "question_id": "operator_org_membership",
+        "row_count": null,
+        "rows": [
+          {
+            "role_rows": 0,
+            "orgs": 0,
+            "roles": "(none)"
+          }
+        ]
+      },
+      "project_account_population": {
+        "question_id": "project_account_population",
+        "row_count": null,
+        "rows": [
+          {
+            "total_accounts": 11
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

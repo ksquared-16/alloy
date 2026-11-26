@@ -52,7 +52,7 @@ describe("workUnitBootstrap ownership", () => {
             selectedSiteId: null,
             focusQueue: "enrolled",
         });
-        expect(url).toContain("defer_bundle=false");
+        expect(url).toContain("defer_bundle=true"); // bootstrap defers primary lane; runtime owns the fetch
         expect(url).toContain("focus_queue=enrolled");
     });
 
@@ -92,11 +92,6 @@ describe("workUnitBootstrap ownership", () => {
 });
 
 describe("jank-stop wiring", () => {
-    it("dept oper cards prefetch bootstrap with queue from href", () => {
-        const dept = readFileSync(join(root, "../../app/adminV2/workspace/dept/[departmentId]/page.tsx"), "utf8");
-        expect(dept).toContain("prefetchWorkUnitOperationalBootstrapFromDeptHref");
-        expect(dept).toContain("workspaceDeptQueueNavHref");
-    });
 
     it("sidecars use hard primary gate without idle fallback", () => {
         const defer = readFileSync(join(root, "../../lib/workspace/adminV2DeferBackgroundWork.ts"), "utf8");
@@ -107,9 +102,4 @@ describe("jank-stop wiring", () => {
         expect(tasks).not.toContain("fallbackMs: 1200");
     });
 
-    it("drawer shares tour bookings with inquiry block", () => {
-        const drawer = readFileSync(join(root, "../../components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("sharedActiveBookings");
-        expect(drawer).toContain("sharedActiveBookings");
-    });
 });

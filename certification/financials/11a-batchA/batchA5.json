@@ -1,0 +1,38 @@
+[
+  {
+    "id": "3F-4",
+    "what": "the Workspace Add opens at HOUSEHOLD grain, so no sibling list applies",
+    "ok": true,
+    "observed": "grain=\"Household\" (all) boxes=0"
+  },
+  {
+    "id": "3F-2b",
+    "what": "choosing a child in the Workspace reveals the SAME sibling selection",
+    "ok": true,
+    "observed": "grain=\"Certa Certhouse\" boxes=1"
+  },
+  {
+    "id": "3F-5",
+    "what": "the Workspace states the SAME per-child economics",
+    "ok": true,
+    "observed": "$40.00 per child · 2 children · each receives their own charge"
+  },
+  {
+    "id": "3D-4",
+    "what": "the default grain is a NAMED CHILD — blank never implicitly means household",
+    "ok": true,
+    "observed": "default grain=\"Certb Certhouse\" value=46105cd4-6030-417d-a7cb-faf409071c0d"
+  },
+  {
+    "id": "3D-5",
+    "what": "selecting Household is a deliberate, stated grain choice",
+    "ok": true,
+    "observed": "grain=\"Household\" value=all responsibility=Household"
+  },
+  {
+    "id": "3D-6",
+    "what": "household grain drops the per-child sibling list",
+    "ok": true,
+    "observed": "boxes=0"
+  }
+]

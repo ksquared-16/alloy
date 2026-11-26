@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-07-07T23:42:15.998Z",
+  "base_url": "http://127.0.0.1:3001",
+  "runs": [
+    {
+      "label": "cold-run-1",
+      "boot_shell_visible_ms": 1880,
+      "workspace_meaningful_ms": 21532,
+      "saw_blank_screen": false,
+      "saw_generic_loading_text": false,
+      "layout_shift_cls": 0,
+      "duration_ms": 21539
+    },
+    {
+      "label": "cold-run-2",
+      "boot_shell_visible_ms": 1588,
+      "workspace_meaningful_ms": 30370,
+      "saw_blank_screen": false,
+      "saw_generic_loading_text": false,
+      "layout_shift_cls": 0,
+      "duration_ms": 30389
+    },
+    {
+      "label": "cold-run-3",
+      "boot_shell_visible_ms": 4338,
+      "workspace_meaningful_ms": 18108,
+      "saw_blank_screen": false,
+      "saw_generic_loading_text": false,
+      "layout_shift_cls": 0,
+      "duration_ms": 18115
+    }
+  ],
+  "median_boot_shell_visible_ms": 1880,
+  "median_workspace_meaningful_ms": 21532,
+  "any_blank_screen": false,
+  "any_generic_loading_text": false,
+  "median_layout_shift_cls": 0
+}

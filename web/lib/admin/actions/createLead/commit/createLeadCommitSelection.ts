@@ -26,9 +26,9 @@ export type CreateLeadCommitRecord = {
     dob: string | null;
     age_display: string | null;
     program_interest: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     program_room_cohort_key: string | null;
-    desired_schedule_type: string | null;
+    schedule_type: string | null;
     extra_payload_values: Record<string, string>;
     include_in_commit: boolean;
     primary: boolean;
@@ -74,9 +74,9 @@ export type CreateLeadCommitSelectionPatch = Partial<
         | "role"
         | "dob"
         | "program_interest"
-        | "desired_start_date"
+        | "start_date"
         | "program_room_cohort_key"
-        | "desired_schedule_type"
+        | "schedule_type"
         | "extra_payload_values"
         | "include_in_commit"
         | "primary"
@@ -155,9 +155,9 @@ function parentRecordFromCandidate(
         dob: person.dob,
         age_display: personAgeDisplay(person),
         program_interest: person.program_interest,
-        desired_start_date: null,
+        start_date: null,
         program_room_cohort_key: null,
-        desired_schedule_type: null,
+        schedule_type: null,
         extra_payload_values: {},
         include_in_commit: false,
         primary: index === 0,
@@ -190,10 +190,11 @@ function childRecordFromCandidate(
         dob: isoDateOnly(person.dob),
         age_display: personAgeDisplay(person),
         program_interest: person.program_interest ?? household.program_interest,
-        desired_start_date: household.desired_start_date,
+        start_date: household.start_date,
         program_room_cohort_key: null,
-        desired_schedule_type: null,
-        extra_payload_values: {},
+        schedule_type: null,
+        extra_payload_values:
+            person.gender === "female" || person.gender === "male" ? { gender: person.gender } : {},
         include_in_commit: false,
         primary: index === 0,
         validation_state: "unknown",
@@ -242,7 +243,9 @@ export function buildCreateLeadCommitSelection(
         children,
         household_contacts: contacts,
         household_address: householdAddress,
-        address_review_only: Boolean(householdAddress?.lines?.length),
+        // Persist parsed address when present — Create Lead already has household/person
+        // address writers. Review-only used to drop mailing address silently after confirm.
+        address_review_only: false,
     };
 }
 
@@ -302,7 +305,14 @@ export function patchCreateLeadCommitRecord(
                 ...scalarPatch,
                 extra_payload_values: mergedExtra,
             });
-            if (next.validation_state !== "valid" && next.include_in_commit) {
+            // Mid-edit invalidation clears include; becoming valid again must restore it.
+            // Without this, Form rows stay excluded after the first incomplete keystroke and
+            // flat draft sync (Review readiness) never sees primary first/last/email/phone.
+            if (next.validation_state === "valid") {
+                if (record.validation_state !== "valid") {
+                    next.include_in_commit = true;
+                }
+            } else if (next.include_in_commit) {
                 next.include_in_commit = false;
             }
             return next;
@@ -349,14 +359,26 @@ export function toggleCreateLeadCommitInclusion(
     };
 }
 
+/** Primary adult row for Form flat sync — not gated on include_in_commit (mid-edit may exclude). */
+function primaryParentForFlatSync(selection: CreateLeadCommitSelection): CreateLeadCommitRecord | null {
+    return selection.parents.find((p) => p.primary) ?? selection.parents[0] ?? null;
+}
+
+/** Primary child row for Form flat sync — not gated on include_in_commit. */
+function primaryChildForFlatSync(selection: CreateLeadCommitSelection): CreateLeadCommitRecord | null {
+    return selection.children.find((c) => c.primary) ?? selection.children[0] ?? null;
+}
+
 /** Sync flat Create Lead gather values from commit selection (primary members). */
 export function syncCreateLeadValuesFromCommitSelection(
     values: Record<string, string>,
     selection: CreateLeadCommitSelection,
 ): Record<string, string> {
     const next = { ...values };
-    const parent = primaryIncludedParent(selection);
-    const child = primaryIncludedChild(selection);
+    // Always mirror the primary Form rows — include_in_commit flips false while a row is
+    // incomplete mid-edit; gating flats on include clears first/last/email and blocks Review.
+    const parent = primaryParentForFlatSync(selection);
+    const child = primaryChildForFlatSync(selection);
 
     next.first_name = parent?.first_name ?? "";
     next.last_name = parent?.last_name ?? "";
@@ -371,9 +393,9 @@ export function syncCreateLeadValuesFromCommitSelection(
     next.child_last_name = child?.last_name ?? "";
     next.child_date_of_birth = child?.dob ?? "";
     if (child?.program_interest) next.child_program = child.program_interest;
-    if (child?.desired_start_date) next.child_desired_start_date = child.desired_start_date;
+    if (child?.start_date) next.child_start_date = child.start_date;
     if (child?.program_room_cohort_key) next.child_program_room_cohort_key = child.program_room_cohort_key;
-    if (child?.desired_schedule_type) next.child_desired_schedule_type = child.desired_schedule_type;
+    if (child?.schedule_type) next.child_schedule_type = child.schedule_type;
     if (child?.extra_payload_values) {
         for (const [payloadKey, value] of Object.entries(child.extra_payload_values)) {
             if ((value ?? "").trim()) next[payloadKey] = value;
@@ -401,4 +423,122 @@ export function parseCreateLeadCommitSelection(raw: unknown): CreateLeadCommitSe
     const obj = parsed as CreateLeadCommitSelection;
     if (obj.version !== 1 || !Array.isArray(obj.parents) || !Array.isArray(obj.children)) return null;
     return obj;
+}
+
+function newCandidateId(prefix: string): string {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return `${prefix}:${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    }
+    return `${prefix}:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function blankParentRecord(primary: boolean): CreateLeadCommitRecord {
+    const record: CreateLeadCommitRecord = {
+        candidate_id: newCandidateId("parent"),
+        entity_type: "parent",
+        role: "parent",
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        dob: null,
+        age_display: null,
+        program_interest: null,
+        start_date: null,
+        program_room_cohort_key: null,
+        schedule_type: null,
+        extra_payload_values: {},
+        include_in_commit: true,
+        primary,
+        validation_state: "invalid",
+        commit_blockers: parentBlockers({ first_name: "", last_name: "", email: "", phone: "" }),
+        source_fact_ids: [],
+    };
+    return recomputeRecord(record);
+}
+
+function blankChildRecord(primary: boolean): CreateLeadCommitRecord {
+    const record: CreateLeadCommitRecord = {
+        candidate_id: newCandidateId("child"),
+        entity_type: "child",
+        role: "child",
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        dob: null,
+        age_display: null,
+        program_interest: null,
+        start_date: null,
+        program_room_cohort_key: null,
+        schedule_type: null,
+        extra_payload_values: {},
+        include_in_commit: true,
+        primary,
+        validation_state: "invalid",
+        commit_blockers: childBlockers({ first_name: "", last_name: "", dob: null }),
+        source_fact_ids: [],
+    };
+    return recomputeRecord(record);
+}
+
+/** Empty Form selection — one required adult, no children. */
+export function createEmptyCreateLeadCommitSelection(): CreateLeadCommitSelection {
+    return {
+        version: 1,
+        parents: [blankParentRecord(true)],
+        children: [],
+        household_contacts: { email: null, phone: null, invalid_phone: false },
+        address_review_only: false,
+    };
+}
+
+export function addCreateLeadCommitParent(selection: CreateLeadCommitSelection): CreateLeadCommitSelection {
+    return {
+        ...selection,
+        parents: [...selection.parents, blankParentRecord(selection.parents.length === 0)],
+    };
+}
+
+export function addCreateLeadCommitChild(selection: CreateLeadCommitSelection): CreateLeadCommitSelection {
+    return {
+        ...selection,
+        children: [...selection.children, blankChildRecord(selection.children.length === 0)],
+    };
+}
+
+/**
+ * Remove an adult or child. Refuses to remove the last remaining adult entry.
+ * If the removed row was primary, promotes the first remaining sibling.
+ */
+export function removeCreateLeadCommitRecord(
+    selection: CreateLeadCommitSelection,
+    candidateId: string,
+): { selection: CreateLeadCommitSelection; removed: boolean; reason?: string } {
+    const parent = selection.parents.find((p) => p.candidate_id === candidateId);
+    if (parent) {
+        if (selection.parents.length <= 1) {
+            return {
+                selection,
+                removed: false,
+                reason: "At least one parent or guardian is required.",
+            };
+        }
+        let parents = selection.parents.filter((p) => p.candidate_id !== candidateId);
+        if (parent.primary && parents[0]) {
+            parents = parents.map((p, i) => ({ ...p, primary: i === 0 }));
+        }
+        return { selection: { ...selection, parents }, removed: true };
+    }
+    const child = selection.children.find((c) => c.candidate_id === candidateId);
+    if (!child) return { selection, removed: false, reason: "Person not found." };
+    let children = selection.children.filter((c) => c.candidate_id !== candidateId);
+    if (child.primary && children[0]) {
+        children = children.map((c, i) => ({ ...c, primary: i === 0 }));
+    }
+    return { selection: { ...selection, children }, removed: true };
+}
+
+export function isCreateLeadCommitSelection(value: unknown): value is CreateLeadCommitSelection {
+    return parseCreateLeadCommitSelection(value) != null;
 }

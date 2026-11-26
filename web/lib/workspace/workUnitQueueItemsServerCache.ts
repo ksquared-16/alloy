@@ -73,3 +73,11 @@ export function writeWorkUnitQueueItemsServerCache(
 export function clearWorkUnitQueueItemsServerCacheForTests(): void {
     cache.clear();
 }
+
+/** Drop cached queue rows for one work unit after queue-membership mutations. */
+export function invalidateWorkUnitQueueItemsServerCacheForWorkUnit(orgId: string, workUnitId: string): void {
+    const prefix = `${orgId}\u0001${workUnitId}\u0001`;
+    for (const key of cache.keys()) {
+        if (key.startsWith(prefix)) cache.delete(key);
+    }
+}

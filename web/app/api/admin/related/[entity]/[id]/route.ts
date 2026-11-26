@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { actorMayReadDocuments } from "@/lib/documents/assertDocumentAccess";
+import { disclosableDocumentIds } from "@/lib/documents/documentMetadataDisclosure";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { mergeOpportunityPacketDocumentsForRelated } from "@/lib/admin/related/mergeOpportunityPacketDocuments";
@@ -202,7 +207,8 @@ async function getRelatedImpl(
                 ctx.orgId,
                 id,
                 documentsRes.data,
-                OPPORTUNITY_DOC_MERGE_LIMIT
+                OPPORTUNITY_DOC_MERGE_LIMIT,
+                { permissionKeys: ctx.permissionKeys },
             );
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             let discountRedemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[] = [];
@@ -821,14 +827,50 @@ async function getRelatedImpl(
     }
 }
 
+/**
+ * D1b.6: a related-records tab lists documents. It may list only documents the actor may read: it needs
+ * document read admission (`documents.read` or a document role), and it never shows a sensitive document
+ * (medical → health.view, safeguarding evidence → safeguarding view) to an actor without that authority.
+ *
+ * Every entity branch above assembles `documents` its own way, so the rule is applied once, here, to
+ * the response every branch returns. A branch added later cannot skip it.
+ */
+const UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function withDocumentDisclosure(res: NextResponse): Promise<NextResponse> {
+    if (res.status !== 200) return res;
+    const body = (await res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || !Array.isArray(body.documents)) return res;
+    const ctx = await getAdminContextCached();
+    const access = await getAdminAccessContextCached();
+    let documents: unknown[] = [];
+    if (ctx.ok && access.ok && actorMayReadDocuments(access)) {
+        // EN-FI-01: admission, the document's own subject SCOPE and sensitivity clearance, per document — the parent
+        // record's route never checked scope, so a department-restricted reader could list another department's
+        // documents. Synthetic rows (a packet's "submitted record", a non-uuid id) are not documents and stay.
+        const ids = (body.documents as Array<Record<string, unknown>>).map((d) => (typeof d.id === "string" ? d.id : ""));
+        const disclosable = await disclosableDocumentIds(
+            createAdminClient(),
+            ctx.orgId,
+            { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) },
+            ids.filter((id) => UUID_ID.test(id)),
+        );
+        const kept = new Set(ids.filter((id) => id && (!UUID_ID.test(id) || disclosable.has(id))));
+        documents = (body.documents as Array<Record<string, unknown>>).filter(
+            (d) => kept.has(String(d.id ?? "")) && !isDocumentUnavailable(d.status),
+        );
+    }
+    return NextResponse.json({ ...body, documents }, { status: 200 });
+}
+
 /** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
 export async function GET(
     request: NextRequest,
     context: { params: Promise<{ entity: string; id: string }> }
 ) {
-    if (!adminPerfEnabled()) return getRelatedImpl(request, context);
+    if (!adminPerfEnabled()) return withDocumentDisclosure(await getRelatedImpl(request, context));
     const t0 = adminPerfNow();
-    const res = await getRelatedImpl(request, context);
+    const res = await withDocumentDisclosure(await getRelatedImpl(request, context));
     const { entity, id } = await context.params;
     logAdminPerf({ route: "related", entity, id, status: res.status, t0 });
     return res;

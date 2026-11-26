@@ -39,8 +39,13 @@ import {
     LAYOUT_SECTION_SHOW_WHEN_EMPTY_METADATA_KEY,
 } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
 
-const PERSON_LINK: LayoutFieldAdornment = { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" } };
-const CHILD_LINK: LayoutFieldAdornment = { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } };
+// `open_drawer` is RETIRED. The platform defaults are ours, so they stop teaching a value no
+// runtime executes: the icon stays, the inert action does not. Tenant-authored layouts are NOT
+// rewritten — the stored value carries an entity + idPath, and the canonical replacement is an
+// ASPECT on a host record's panel whose host comes from that record's own work_unit_id at runtime.
+// A migration would have to guess, so the parser keeps accepting it and nothing executes it.
+const PERSON_LINK: LayoutFieldAdornment = { position: "left", icon: "person" };
+const CHILD_LINK: LayoutFieldAdornment = { position: "left", icon: "child" };
 const CALENDAR_ICON: LayoutFieldAdornment = { position: "left", icon: "calendar" };
 const HOME_ICON: LayoutFieldAdornment = { position: "left", icon: "home" };
 const LOCATION_ICON: LayoutFieldAdornment = { position: "left", icon: "location" };
@@ -158,10 +163,10 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
         displayMode: "table",
         related: { entityType: "child" },
         columns: [
-            { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
+            { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child" } },
             { label: "DOB / Age", refKey: "child.dob_age", width: "medium" },
             { label: "Program", refKey: "child.program", width: "medium" },
-            { label: "Desired start", refKey: "child.desired_start_date", width: "medium", renderHint: "date" },
+            { label: "Desired start", refKey: "child.start_date", width: "medium", renderHint: "date" },
             { label: "Schedule", refKey: "child.schedule", width: "medium" },
             { label: "Classroom", refKey: "child.room", width: "medium" },
             { label: "Location", refKey: "child.location", width: "medium" },
@@ -293,7 +298,7 @@ export function buildLeadQueueDefaultDoc(): LayoutDoc {
             displayMode: "rows",
             related: { entityType: "child" },
             columns: [
-                { label: "Child", refKey: "child.name", width: "flexible", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
+                { label: "Child", refKey: "child.name", width: "flexible", adornment: { position: "left", icon: "child" } },
                 { label: "Age", refKey: "child.age_band", width: "small" },
                 { label: "Program", refKey: "child.program", width: "medium" },
                 { label: "Status", refKey: "child.status", width: "small", renderHint: "badge" },
@@ -378,7 +383,7 @@ export function buildEnrollmentWaitlistQueueDoc(): LayoutDoc {
             col(id(base, "r1"), 1, HALF, [fieldItem(id(base, "r1c1"), "child.location", "Site / location", "text")]),
         ]),
         row(id(base, "r2"), [
-            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.desired_start_date", "Desired start", "date")]),
+            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.start_date", "Desired start", "date")]),
             col(id(base, "r2"), 1, HALF, [fieldItem(id(base, "r2c1"), "child.room", "Room preference", "text")]),
         ]),
     ]);

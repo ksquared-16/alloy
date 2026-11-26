@@ -22,27 +22,24 @@ function read(rel: string): string {
 }
 
 describe("Batch 0 — Financials navigation domain", () => {
-    it("adds Financials as a first-class nav item with a generic testId", () => {
+    it("hides Financials from primary configuration navigation while route remains available", () => {
         const financials = CONFIGURATION_MODE_NAV_ITEMS.find((i) => i.label === "Financials");
-        expect(financials).toBeDefined();
-        expect(financials?.href).toBe("/settings/financials");
-        expect(financials?.testId).toBe("config-mode-nav-financials");
+        expect(financials).toBeUndefined();
+        expect(read("app/adminV2/settings/financials/page.tsx")).toContain("FinancialsConfigurationPage");
     });
 
-    it("groups Financials under its own labeled domain (sibling to other domains)", () => {
+    it("does not group Financials in the primary configuration IA", () => {
         const group = CONFIGURATION_MODE_NAV_GROUPS.find((g) => g.label === "Financials");
-        expect(group).toBeDefined();
-        expect(group?.items.some((i) => i.label === "Financials")).toBe(true);
+        expect(group).toBeUndefined();
     });
 
-    it("registers a Banknote icon for the financials nav icon", () => {
+    it("retains Banknote icon mapping for legacy/internal references", () => {
         const icons = read("lib/adminV2/configurationModeNavIcons.tsx");
         expect(icons).toContain("financials: Banknote");
     });
 
     it("uses generic financial naming (no childcare-specific route naming)", () => {
         const nav = read("lib/adminV2/configurationModeNav.ts");
-        expect(nav).toContain('settings("financials")');
         expect(nav).not.toMatch(/childcare/i);
     });
 });
@@ -92,10 +89,27 @@ describe("Batch 0 — Financials configuration surfaces", () => {
 });
 
 describe("Batch 0 — Locations operational rule sections", () => {
-    it("Locations page adds an Operational Rules section + panel", () => {
+    it("Locations exposes Operational Rules as a CONCERN, not a section-first destination", () => {
+        // SUPERSEDED, deliberately. Commit 2c6f0f261 made this workspace
+        // object-centric and, in the same commit, flipped this assertion to pin
+        // the panel as unmounted. The word that mattered was "section-first": the
+        // IA changed, the capability did not — the sibling assertion below, that
+        // the panel exposes all four rule families, was left untouched and has
+        // passed ever since.
+        //
+        // What the migration never did was re-home the concern, so canonical
+        // capacity, ratio, operating-window and schedule authoring had NO operator
+        // path at all and could only be reached by a direct API call. Slice 12
+        // restores it through the concern registry.
+        //
+        // The still-valid half of the original assertion is preserved: the
+        // section-first mechanism must stay gone.
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        expect(page).not.toContain('section === "operational_rules"');
+        expect(page).toContain("LOCATION_WORKSPACE_TABS");
+        // And the concern is now genuinely reachable.
         expect(page).toContain("LocationOperationalRulesPanel");
-        expect(page).toContain('section === "operational_rules"');
+        expect(page).toMatch(/activeTab === "operational-rules"/);
     });
 
     it("operational rules panel exposes capacity, ratio, operating windows, schedule rules + resolved preview", () => {
@@ -108,10 +122,10 @@ describe("Batch 0 — Locations operational rule sections", () => {
         expect(panel).toContain("resolveConfigRule");
     });
 
-    it("quarantines the location create drawer to the Locations section (marked for removal)", () => {
+    it("keeps location creation inline and outside a legacy drawer", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(page).toContain('canMutate && section === "locations"');
-        expect(page).toMatch(/marked for removal/i);
+        expect(page).toContain("LocationSiteCreatePanel");
+        expect(page).not.toMatch(/openDrawer|useAdminDrawer/);
     });
 });
 
@@ -281,7 +295,7 @@ describe("Batch 0 — existing surfaces remain intact", () => {
     });
 
     it("documents Batch 0 in the operational configuration sprint doc", () => {
-        const doc = readFileSync(resolve(root, "../docs/sprints/06_2026/operational_configuration_v1.md"), "utf8");
+        const doc = readFileSync(resolve(root, "../docs/sprints/archive/06_2026/operational_configuration_v1.md"), "utf8");
         expect(doc).toMatch(/Batch 0/);
         expect(doc).toMatch(/read-only/i);
     });

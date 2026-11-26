@@ -6,7 +6,6 @@ import { act } from "react";
 
 import {
     isCanonicalAiActivityPath,
-    isCanonicalFormsPath,
     isCanonicalSettingsPath,
     isCanonicalWorkflowsPath,
     isCanonicalWorkspacePath,
@@ -85,15 +84,13 @@ describe("Alloy OS performance pass", () => {
             "/workspace/work-unit/enrollment-new-leads",
             "/workspace/work-unit/enrollment-new-leads/opp-123",
             "/settings/processes",
-            "/admin/forms",
             "/admin/workflows",
         ];
         const inPersistentShellBranch = (path: string) =>
             isCanonicalWorkspacePath(path) ||
             isCanonicalAiActivityPath(path) ||
             isCanonicalSettingsPath(path) ||
-            isCanonicalWorkflowsPath(path) ||
-            isCanonicalFormsPath(path);
+            isCanonicalWorkflowsPath(path);
         for (const route of operatorRoutes) {
             expect(inPersistentShellBranch(route)).toBe(true);
         }
@@ -215,7 +212,7 @@ describe("Alloy OS performance pass", () => {
     });
 
     // 6. Non-active Focus Panel modes can prewarm after active mode.
-    it("selects only non-active modes for prewarm and warms them after a short idle", () => {
+    it("selects only non-active modes for prewarm and warms them after a short idle", async () => {
         expect(selectFocusPanelModesToPrewarm("summary")).toEqual(["work", "activity"]);
         expect(selectFocusPanelModesToPrewarm("activity")).toEqual(["summary", "work"]);
         expect(selectFocusPanelModesToPrewarm("summary")).not.toContain("summary");
@@ -243,6 +240,16 @@ describe("Alloy OS performance pass", () => {
         act(() => {
             vi.advanceTimersByTime(700);
         });
+        /*
+         * Non-active mode prewarm now routes through the canonical deferring scheduler
+         * (`scheduleDrawerVmPrewarm`) so it cannot compete with a selected record's reveal window.
+         * With no reveal active the scheduler pumps straight away, but it runs each task off a
+         * microtask, so the assertion flushes one tick rather than reading the queue synchronously.
+         * The obligation is unchanged: after the idle, every non-active mode warms exactly once.
+         */
+        vi.useRealTimers();
+        await Promise.resolve();
+        await new Promise((r) => setTimeout(r, 0));
         expect(warmWork).toHaveBeenCalledTimes(1);
         expect(warmActivity).toHaveBeenCalledTimes(1);
         h.unmount();

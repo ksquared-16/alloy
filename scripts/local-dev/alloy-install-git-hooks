@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-install-git-hooks — point git at the in-repo hooks this project ships.
+#
+# ONE SETTING, NOT A COPY. It sets core.hooksPath rather than copying files into
+# .git/hooks, so the hooks stay version-controlled and a change to them takes
+# effect without anybody remembering to re-install. Copies drift; a pointer
+# cannot.
+#
+# It covers every worktree at once, because worktrees share one .git and one
+# config. That is the property that made the alternative unattractive: installing
+# into .git/hooks by hand is a step somebody has to repeat per machine and then
+# forget.
+#
+# Reversible: `--uninstall` unsets it and git returns to .git/hooks.
+# =============================================================================
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOKS_REL="scripts/local-dev/hooks/git"
+REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
+
+if [[ "${1:-}" == "--uninstall" ]]; then
+  git -C "$REPO_ROOT" config --unset core.hooksPath || true
+  echo "core.hooksPath unset; git uses .git/hooks again"
+  exit 0
+fi
+
+if [[ "${1:-}" == "--status" ]]; then
+  current="$(git -C "$REPO_ROOT" config --get core.hooksPath || true)"
+  if [[ "$current" == "$HOOKS_REL" ]]; then
+    echo "installed: core.hooksPath=$current"
+    exit 0
+  fi
+  echo "NOT installed (core.hooksPath='${current:-unset}')"
+  exit 1
+fi
+
+git -C "$REPO_ROOT" config core.hooksPath "$HOOKS_REL"
+echo "core.hooksPath=$HOOKS_REL"
+echo "pre-push now delegates to scripts/local-dev/hooks/guard-push.sh for every worktree of this repository."

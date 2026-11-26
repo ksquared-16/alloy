@@ -1,0 +1,62 @@
+{
+  "trusted_host_action_id": "tha_690fca373ff643",
+  "query_hash": "eca44bb0f630fb41ea361e66eb11b7d9666003b5de883b51c2e887c575b246c7",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T23:59:04.094Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_690fca373ff643",
+    "query_hash": "eca44bb0f630fb41ea361e66eb11b7d9666003b5de883b51c2e887c575b246c7",
+    "authorization_id": "grnt_04199501ef2e4c0b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T23:59:05.536Z",
+    "question_ids": [
+      "m120000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m120000": {
+        "question_id": "m120000",
+        "row_count": null,
+        "rows": [
+          "staff_coverage_allocations ~ present ~ present ~ true",
+          "staff_coverage_allocations_no_overlap exclusion ~ present ~ present ~ true",
+          "validate_staff_coverage_place trigger ~ present ~ present ~ true",
+          "staff_coverage RPCs: five ~ present ~ present ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20261011120000 ~ ledgered ~ present ~ true",
+          "20261012120000 ~ ledgered ~ present ~ true",
+          "20261013120000 ~ ledgered ~ absent ~ false"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20261012120000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          479
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}

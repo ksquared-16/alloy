@@ -1,0 +1,29 @@
+[
+  {
+    "viewport": 1280,
+    "cardBottom": 818,
+    "viewportHeight": 900,
+    "cardScrolls": true,
+    "primaryFound": true,
+    "primaryBottom": 846,
+    "primaryInViewport": true
+  },
+  {
+    "viewport": 1440,
+    "cardBottom": 818,
+    "viewportHeight": 900,
+    "cardScrolls": true,
+    "primaryFound": true,
+    "primaryBottom": 846,
+    "primaryInViewport": true
+  },
+  {
+    "viewport": 1680,
+    "cardBottom": 818,
+    "viewportHeight": 900,
+    "cardScrolls": true,
+    "primaryFound": true,
+    "primaryBottom": 846,
+    "primaryInViewport": true
+  }
+]

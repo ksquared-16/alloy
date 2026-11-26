@@ -1,0 +1,5 @@
+{"afterMs":2000,"url":"http://127.0.0.1:3012/settings/surfaces","page":1,"categories":1,"tabOverview":0,"tabEdit":0,"tabHealth":0,"tabHistory":0,"objects":1,"thinking":false}
+{"afterMs":4000,"url":"http://127.0.0.1:3012/settings/surfaces","page":1,"categories":1,"tabOverview":0,"tabEdit":0,"tabHealth":0,"tabHistory":0,"objects":1,"thinking":false}
+{"afterMs":8000,"url":"http://127.0.0.1:3012/settings/surfaces","page":0,"categories":0,"tabOverview":0,"tabEdit":0,"tabHealth":0,"tabHistory":0,"objects":0,"thinking":true}
+{"afterMs":12000,"url":"http://127.0.0.1:3012/settings/surfaces","page":1,"categories":1,"tabOverview":0,"tabEdit":0,"tabHealth":0,"tabHistory":0,"objects":1,"thinking":false}
+{"selected":{"workspace":1,"tabs":{"overview":1,"edit":1,"health":1,"history":1},"tabLabels":["Overview","Edit","Assignments","Versions","Health","History"]}}

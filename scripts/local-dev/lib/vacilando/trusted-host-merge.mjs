@@ -1,0 +1,986 @@
+/**
+ * Bounded trusted-host GitHub merge. No generic shell. No worker tokens.
+ */
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import {
+  hostedEvidenceFreshness,
+  hostedMigrationEvidence,
+  promotionParityGate,
+  requiredVersionsFromFilenames,
+} from "./migration-parity.mjs";
+import { spawnSync } from "node:child_process";
+// The remote-mutation guard is shared: merging is not the only thing here that
+// leaves this machine, and one guard in one place is the point.
+import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
+import {
+  ALLOY_REPOSITORY_ID, eligibleRepositoryRemotes, executionProfileFor, promotionPolicyFor,
+} from "./repository-registry.mjs";
+import { gatewayStateRoot } from "./runtime-roots.mjs";
+
+export { canonicalGatewayRuntimeRoot, liveMergePermitted };
+
+/*
+ * THESE ARE ALLOY'S CONVENTIONS, AND THEY NOW SAY SO.
+ *
+ * As module constants they were GLOBAL: every repository Vacilando merged in
+ * inherited Alloy's staging trunk and Alloy's protected names, whether or not it
+ * had either. Alloy being the primary consumer is not a reason for Alloy's
+ * branch policy to be the runtime's default.
+ *
+ * They remain exported at Alloy's values because existing callers and tests
+ * name them, and S0 changes ownership rather than behaviour. The authority is
+ * `promotionPolicyFor`, resolved per repository; these are what it returns for
+ * the alloy profile.
+ */
+export const ALLOWED_MERGE_METHODS = Object.freeze(["merge", "squash", "rebase"]);
+const ALLOY_POLICY = promotionPolicyFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID });
+export const ALLOWED_TARGET_BRANCHES = Object.freeze([ALLOY_POLICY.promotion_branch]);
+export const BLOCKED_TARGET_BRANCHES = Object.freeze([...ALLOY_POLICY.protected_branches]);
+
+/**
+ * The branch policy governing THIS merge.
+ *
+ * Resolved from the repository the merge names, defaulting to Alloy only while
+ * Alloy is the only registered repository with governed promotion — and saying
+ * which, so a future repository's refusal is legible rather than mysterious.
+ */
+export function mergeBranchPolicyFor(repositoryRecord) {
+  if (repositoryRecord) return promotionPolicyFor(repositoryRecord);
+  return ALLOY_POLICY;
+}
+/*
+ * PROFILE-DECLARED REMOTES, which is a floor and not the universe.
+ *
+ * S2 learned this shape the hard way: deriving a governed set from live host
+ * state alone made a CI runner with an empty registry look like a machine where
+ * Alloy's repository had ceased to exist, and 19 ledger cases failed saying so.
+ * The floor keeps an unseeded host working; it does not decide who else is
+ * eligible, and it is no longer the only source.
+ */
+const PROFILE_REPOS = Object.freeze([executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).remote_slug]);
+
+/**
+ * The canonical form of a GitHub repository reference.
+ *
+ * CASE IS NOT IDENTITY. GitHub addresses owner/name case-insensitively:
+ * `ksquared-16/Alloy` and `ksquared-16/alloy` are one repository, and `gh` and
+ * `git` will both happily use either. The allowlist compared them as exact
+ * strings, so a capital A was refused as "not allowlisted" — a refusal that is
+ * literally true of the string and false of the repository.
+ *
+ * MEASURED: two lanes lost governed pushes to this. One filed the same push
+ * twice over 45 minutes with `ksquared-16/Alloy`, and the refusal it needed to
+ * see never reached it. The duplicate entry that used to sit in this list —
+ * `["ksquared-16/alloy", "ksquared-16/alloy"]`, collapsed by the Set and so
+ * doing nothing — is the fossil of an earlier attempt to fix this by listing a
+ * variant instead of normalising.
+ *
+ * The same normal form settles the remote check further down the push path,
+ * where `git remote get-url` returns whatever the clone happens to say.
+ */
+export function normalizeRepositorySlug(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/^git@github\.com:/i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+/** Is this repository allowlisted, comparing repositories rather than strings? */
+export function isAllowlistedRepository(value) {
+  const want = normalizeRepositorySlug(value);
+  if (!want) return false;
+  return allowlistedRepositories().some((r) => normalizeRepositorySlug(r) === want);
+}
+
+/**
+ * The repositories governed actions may be ASKED about.
+ *
+ * THE REGISTRY IS THE TARGET AUTHORITY. This used to be Alloy's slug plus an
+ * environment variable, which meant a second registered project could never be
+ * pushed to however correctly it was configured -- the S4 seed committed into
+ * `prj_vacilando` and then had nowhere governed to go. An operator who has
+ * registered a project has already said which repository it is; requiring them
+ * to also name it in an env var is asking twice for the same fact.
+ *
+ * ELIGIBILITY IS NOT AUTHORIZATION, and the distinction is the whole design.
+ * Being in this set means "Vacilando knows this repository and will consider a
+ * request about it". Whether the request proceeds is decided afterwards by
+ * governed request creation, policy evaluation, approval and delegation rules,
+ * execution ownership, push protections, audit and repository-state validation
+ * -- none of which this function touches. Registering a project authorizes
+ * nothing; it makes a target addressable.
+ *
+ * Three sources, in descending authority: registered projects, the profile
+ * floor that keeps an unseeded host working, and the environment extras kept as
+ * an explicit compatibility path for hosts that still set them.
+ */
+export function allowlistedRepositories() {
+  const extra = String(process.env.VACILANDO_GITHUB_REPOSITORY || process.env.ALLOY_GITHUB_REPOSITORY || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  let registered = [];
+  try { registered = [...eligibleRepositoryRemotes()]; } catch { registered = []; }
+  return [...new Set([...registered, ...PROFILE_REPOS, ...extra])];
+}
+
+/**
+ * SAY WHAT WOULD HAVE WORKED.
+ *
+ * MEASURED. The Waitlist lane filed the same governed push five times and was
+ * refused every time with "Repository repo_alloy is not allowlisted" — accurate,
+ * and useless. `repo_alloy` is the internal repository REGISTRY id; this action
+ * takes the GitHub `owner/name` slug. The refusal named the wrong value without
+ * ever naming a right one, so each retry repeated the same mistake.
+ *
+ * That is only half of why it repeated. The explanation never reached the lane
+ * at all: the failure notification was refused `provider_prompt_not_ready`
+ * because the lane's own pane was still executing the turn that filed the
+ * action. A refusal nobody can read is indistinguishable from no refusal, which
+ * is exactly how one input error became five identical attempts.
+ */
+export function repositoryRefusalDetail(repository) {
+  const allowed = allowlistedRepositories();
+  const given = String(repository || "");
+  const looksLikeRegistryId = /^repo_[a-z0-9_]+$/i.test(given);
+  const parts = [`Repository ${given} is not allowlisted.`];
+  const caseOnly = allowed.find((r) => r !== given && r.toLowerCase() === given.toLowerCase());
+  if (caseOnly) {
+    // Unreachable once the callers use isAllowlistedRepository, and kept because
+    // a refusal that cannot explain a near miss is how this repeated.
+    parts.push(`Only the case differs from the allowlisted "${caseOnly}".`);
+  }
+  if (looksLikeRegistryId) {
+    parts.push(
+      `"${given}" is a repository registry id, not a GitHub repository. `
+      + "This action takes the owner/name slug.",
+    );
+  }
+  parts.push(`Allowlisted: ${allowed.join(", ")}.`);
+  return parts.join(" ");
+}
+
+const normRepo = normalizeRepositorySlug;
+
+function normSha(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function shaEquals(a, b) {
+  const x = normSha(a);
+  const y = normSha(b);
+  if (!x || !y) return false;
+  const n = Math.min(x.length, y.length, 40);
+  return n >= 7 && x.slice(0, n) === y.slice(0, n);
+}
+
+/**
+ * THE ONE PLACE THAT SAYS HOW A MERGE REQUEST'S INPUTS ARE SPELLED.
+ *
+ * THE DEFECT THIS REMOVES. There were two independent spelling lists for the
+ * same four fields: this executor's, and `proposalForRequest`'s in
+ * governed-action-request, which pins the grant. The executor had already been
+ * widened to accept `pull_request` after a lane proposed `{"pull_request": 522}`
+ * (see the note in validateMergeInputs); the grant issuer never was. So a lane
+ * that spelled it `pull_request` / `head_sha` — which the executor resolves
+ * perfectly well — produced a grant with `pull_request_number: null` and
+ * `expected_head_sha: null`.
+ *
+ * At execution the grant check computes `Number(null)` = 0 against a real 596
+ * and refuses with `grant_pull_request_mismatch`: an operator-approved merge
+ * that could never execute, and whose error named the PR number rather than the
+ * field name that was actually missing. Measured on this host: grants
+ * grnt_bce311bfb0a54567 (gar_71a81af3495a4a) and grnt_e1172652d4774162
+ * (gar_6fc51ddcdb9f1d), both ACTIVE, both pinned to null, both for PR 596.
+ *
+ * Both sides now read through here, so they cannot disagree again. This
+ * function only READS a spelling; every validation rule stays in
+ * validateMergeInputs, and an unreadable field yields null rather than a guess.
+ */
+export function readMergeInputIdentity(inputs = {}) {
+  const rawPullRequest = inputs.pull_request_number
+    ?? inputs.pullRequestNumber
+    ?? inputs.pull_request
+    ?? inputs.pullRequest
+    ?? inputs.pr;
+  const n = Number(rawPullRequest);
+  const sha = normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);
+  const target = inputs.target_branch ?? inputs.targetBranch ?? null;
+  return {
+    pullRequestNumber: Number.isInteger(n) && n > 0 ? n : null,
+    expectedHeadSha: /^[a-f0-9]{7,40}$/.test(sha) ? sha : null,
+    targetBranch: target == null ? null : String(target).trim(),
+    mergeMethod: String(inputs.merge_method || inputs.mergeMethod || "merge").trim(),
+  };
+}
+
+export function validateMergeInputs(inputs = {}) {
+  if (inputs.sql || inputs.statement || inputs.command || inputs.argv || inputs.shell) {
+    return {
+      ok: false,
+      code: "arbitrary_command_rejected",
+      detail: "Only repository.merge_pull_request is allowed; generic shell is not registered.",
+    };
+  }
+  const repository = normRepo(inputs.repository || inputs.repo);
+  if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
+  if (!isAllowlistedRepository(repository)) {
+    return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
+  }
+  // `pull_request` is accepted alongside the other spellings. A lane proposed
+  // `{"pull_request": 522}` — an unambiguous pull request number by any reading —
+  // and got `pull_request_number must be a positive integer`, which describes a
+  // malformed value rather than a field name it did not recognise. The number is
+  // still validated exactly as before; only the ways of naming it widened.
+  const rawPullRequest = inputs.pull_request_number
+    ?? inputs.pullRequestNumber
+    ?? inputs.pull_request
+    ?? inputs.pullRequest
+    ?? inputs.pr;
+  const identity = readMergeInputIdentity(inputs);
+  const pullRequestNumber = identity.pullRequestNumber ?? Number(rawPullRequest);
+  if (!Number.isInteger(pullRequestNumber) || pullRequestNumber < 1) {
+    return {
+      ok: false,
+      code: "invalid_pull_request_number",
+      // Say what arrived, so a near-miss reads as a near-miss.
+      detail: rawPullRequest === undefined
+        ? "a pull request number is required (pull_request_number, pullRequestNumber, pull_request or pr)"
+        : `pull_request_number must be a positive integer; received ${JSON.stringify(rawPullRequest)}`,
+    };
+  }
+  const policy = mergeBranchPolicyFor(inputs.repositoryRecord || null);
+  if (!policy.governed_promotion) {
+    // A repository whose profile has no governed promotion does not get Alloy's.
+    return { ok: false, code: "governed_promotion_not_configured", detail: "this repository's profile declares no governed promotion" };
+  }
+  const targetBranch = identity.targetBranch || policy.promotion_branch;
+  if (policy.protected_branches.includes(targetBranch) || targetBranch === "production") {
+    return { ok: false, code: "production_target_rejected", detail: "Production and default-branch merges are not registered." };
+  }
+  if (targetBranch !== policy.promotion_branch) {
+    return { ok: false, code: "target_branch_not_allowed", detail: `target_branch must be: ${policy.promotion_branch}` };
+  }
+  const expectedHeadSha = identity.expectedHeadSha
+    || normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);
+  if (!/^[a-f0-9]{7,40}$/.test(expectedHeadSha)) {
+    return { ok: false, code: "missing_expected_head_sha", detail: "expected_head_sha is required" };
+  }
+  const mergeMethod = identity.mergeMethod;
+  if (!ALLOWED_MERGE_METHODS.includes(mergeMethod)) {
+    return { ok: false, code: "merge_method_not_allowed", detail: "merge_method must be merge, squash, or rebase" };
+  }
+  if (inputs.force || inputs.admin || inputs.bypass_checks || inputs.bypassChecks) {
+    return { ok: false, code: "force_merge_rejected", detail: "Force merge and check bypass are not allowed." };
+  }
+  const requiredChecksGreen = inputs.required_checks_green ?? inputs.requiredChecksGreen ?? true;
+  if (requiredChecksGreen !== true) {
+    return { ok: false, code: "required_checks_must_be_green", detail: "required_checks_green must be true" };
+  }
+  return {
+    ok: true,
+    normalized: {
+      actionType: "repository.merge_pull_request",
+      repository,
+      pullRequestNumber,
+      targetBranch,
+      expectedHeadSha,
+      mergeMethod,
+      requiredChecksGreen: true,
+      dedupeKey: `merge:${repository}#${pullRequestNumber}#${expectedHeadSha.slice(0, 12)}#${targetBranch}`,
+    },
+  };
+}
+
+function defaultGh(args, { timeout = 60_000 } = {}) {
+  return spawnSync("gh", args, {
+    encoding: "utf8",
+    timeout,
+    env: process.env,
+    maxBuffer: 2 * 1024 * 1024,
+  });
+}
+
+function parseJson(text) {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+const SUCCESS_CONCLUSIONS = new Set(["SUCCESS"]);
+const NEUTRAL_CONCLUSIONS = new Set(["NEUTRAL", "SKIPPED", "STALE"]);
+const FAILING_CONCLUSIONS = new Set([
+  "FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE", "ACTION_REQUIRED",
+]);
+const SUCCESS_STATES = new Set(["SUCCESS"]);
+const FAILING_STATES = new Set(["FAILURE", "ERROR"]);
+const PENDING_STATUSES = new Set([
+  "QUEUED", "IN_PROGRESS", "PENDING", "EXPECTED", "REQUESTED", "WAITING",
+]);
+const PENDING_STATES = new Set(["PENDING", "EXPECTED"]);
+const COMPLETED_STATUSES = new Set(["COMPLETED", "COMPLETE"]);
+const GITHUB_ALLOWS_MERGE = new Set(["CLEAN", "HAS_HOOKS", "UNSTABLE"]);
+
+function asUpper(value) {
+  return String(value == null ? "" : value).trim().toUpperCase();
+}
+
+function checkName(entry = {}) {
+  return String(entry.name || entry.context || entry.contextName || entry.context || "check");
+}
+
+function hasExplicitRequiredFlag(entry = {}) {
+  return typeof entry.isRequired === "boolean"
+    || typeof entry.required === "boolean"
+    || entry.isRequired === "true"
+    || entry.isRequired === "false"
+    || entry.required === "true"
+    || entry.required === "false";
+}
+
+function requiredFlag(entry = {}) {
+  if (typeof entry.isRequired === "boolean") return entry.isRequired;
+  if (typeof entry.required === "boolean") return entry.required;
+  if (entry.isRequired === "true" || entry.required === "true") return true;
+  if (entry.isRequired === "false" || entry.required === "false") return false;
+  return "unknown";
+}
+
+function entryKind(entry = {}) {
+  const typeName = String(entry.__typename || entry.typename || "");
+  if (typeName === "StatusContext") return "status_context";
+  if (typeName === "CheckRun") return "check_run";
+  if (entry.context && entry.state && entry.conclusion == null && entry.status == null) return "status_context";
+  if (entry.conclusion != null || entry.status != null || entry.name) return "check_run";
+  return "unknown";
+}
+
+function classFromState(state) {
+  if (state === "failure") return "failing";
+  if (state === "pending") return "pending";
+  if (state === "unknown") return "unknown";
+  return "complete";
+}
+
+/**
+ * Canonical GitHub check/status normalizer.
+ * Missing conclusion is not pending. StatusContext uses `state`.
+ * CheckRun uses `status` + `conclusion`. Unknown is distinct from pending.
+ */
+export function classifyCheckState(entry = {}) {
+  const name = checkName(entry);
+  const required = requiredFlag(entry);
+  const kind = entryKind(entry);
+  const conclusion = asUpper(entry.conclusion);
+  const state = asUpper(entry.state);
+  const status = asUpper(entry.status);
+
+  let checkState = "unknown";
+  if (FAILING_CONCLUSIONS.has(conclusion) || FAILING_STATES.has(state)) {
+    checkState = "failure";
+  } else if (PENDING_STATUSES.has(status) || PENDING_STATES.has(state)) {
+    checkState = "pending";
+  } else if (SUCCESS_CONCLUSIONS.has(conclusion) || SUCCESS_STATES.has(state)) {
+    checkState = "success";
+  } else if (NEUTRAL_CONCLUSIONS.has(conclusion)) {
+    checkState = "neutral";
+  } else if (COMPLETED_STATUSES.has(status) && conclusion) {
+    checkState = "unknown";
+  } else if (COMPLETED_STATUSES.has(status) && !conclusion) {
+    checkState = "unknown";
+  } else if (!conclusion && !state && !status) {
+    checkState = "unknown";
+  }
+
+  return {
+    name,
+    kind,
+    required,
+    state: checkState,
+    class: classFromState(checkState),
+  };
+}
+
+/** @deprecated Use classifyCheckState. Kept for existing tests. */
+export function classifyStatusCheck(entry = {}) {
+  return classifyCheckState(entry);
+}
+
+export function summarizeCheckRollup(rollup = [], { requiredNames = [] } = {}) {
+  const items = Array.isArray(rollup)
+    ? rollup
+    : (Array.isArray(rollup?.nodes) ? rollup.nodes : (Array.isArray(rollup?.contexts) ? rollup.contexts : []));
+  const requiredSet = new Set((requiredNames || []).map(String).filter(Boolean));
+  const classified = items.filter(Boolean).map((entry) => {
+    const row = classifyCheckState(entry);
+    if (row.required === "unknown" && requiredSet.size) {
+      row.required = requiredSet.has(row.name);
+    }
+    return row;
+  });
+  const required = classified.filter((row) => row.required === true);
+  const scoped = required;
+  // A REQUIRED CONTEXT THAT NEVER REPORTED IS NOT AN ABSENCE OF PROBLEMS.
+  //
+  // Everything below classifies checks that EXIST in the rollup. A context
+  // branch protection requires but which no workflow ever created has no row at
+  // all, so it landed in none of failing, pending or unknown, and `required`
+  // counted the ones that showed up — 2 of 3 reads as "two required checks, both
+  // green". GitHub meanwhile holds the pull request at "Expected — waiting for
+  // status to be reported" and refuses the merge. The gate saw nothing wrong and
+  // could not say why, which is the worst shape a refusal can have.
+  //
+  // This is not hypothetical: a path-filtered workflow was made a required check
+  // and silently blocked every pull request that did not touch its paths.
+  const presentNames = new Set(classified.map((row) => row.name));
+  const missingRequired = [...requiredSet].filter((name) => !presentNames.has(name));
+  return {
+    total: classified.length,
+    // The number of required contexts ACCOUNTED FOR, present or not, so this
+    // never reads as fewer requirements than protection actually imposes.
+    required: scoped.length + missingRequired.length,
+    reported: scoped.length,
+    requirednessKnown: classified.some((row) => row.required === true || row.required === false) || requiredSet.size > 0,
+    passing: scoped.filter((row) => row.state === "success" || row.state === "neutral").length,
+    failing: scoped.filter((row) => row.state === "failure").map((row) => row.name),
+    pending: scoped.filter((row) => row.state === "pending").map((row) => row.name),
+    unknown: scoped.filter((row) => row.state === "unknown").map((row) => row.name),
+    // Named separately from `pending` on purpose. "Running, wait for it" and
+    // "no workflow will ever create this" need different operator actions: the
+    // first resolves itself, the second needs the workflow trigger or the
+    // protection rule changed.
+    missingRequired,
+    unscopedPending: classified.filter((row) => row.required !== true && row.state === "pending").map((row) => row.name),
+    unscopedUnknown: classified.filter((row) => row.required !== true && row.state === "unknown").map((row) => row.name),
+    items: classified,
+  };
+}
+
+function checkSummary(rollup = [], options = {}) {
+  return summarizeCheckRollup(rollup, options);
+}
+
+function checkEvidence(pr = {}) {
+  const checks = pr.checks || {};
+  return {
+    merge_state: pr.mergeStateStatus || null,
+    mergeable: pr.mergeable || null,
+    pending: [...(checks.pending || [])],
+    failing: [...(checks.failing || [])],
+    unknown: [...(checks.unknown || [])],
+  };
+}
+
+const REQUIRED_CHECK_QUERY = "query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){pullRequest(number:$n){mergeStateStatus commits(last:1){nodes{commit{statusCheckRollup{state contexts(last:40){nodes{__typename ... on CheckRun{name status conclusion isRequired(pullRequestNumber:$n)} ... on StatusContext{context state isRequired(pullRequestNumber:$n)}}}}}}}}}}}";
+
+function repoParts(repository) {
+  const [owner, name] = String(repository || "").split("/");
+  return { owner, name };
+}
+
+function graphqlRequiredMap(payload) {
+  const nodes = payload?.data?.repository?.pullRequest?.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes
+    || payload?.data?.repository?.pullRequest?.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes
+    || [];
+  const byName = new Map();
+  for (const node of nodes) {
+    if (!node) continue;
+    const name = node.name || node.context;
+    if (!name || typeof node.isRequired !== "boolean") continue;
+    byName.set(String(name), node.isRequired);
+  }
+  const rollupState = payload?.data?.repository?.pullRequest?.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state
+    || payload?.data?.repository?.pullRequest?.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state
+    || null;
+  return { byName, rollupState };
+}
+
+function protectionRequiredNames(repository, branch, gh) {
+  if (!repository || !branch || typeof gh !== "function") return [];
+  const res = gh(["api", `repos/${repository}/branches/${encodeURIComponent(branch)}/protection/required_status_checks`]);
+  if (res.status !== 0) return [];
+  const body = parseJson(res.stdout);
+  const contexts = Array.isArray(body?.contexts) ? body.contexts : [];
+  const checks = Array.isArray(body?.checks) ? body.checks.map((c) => c?.context).filter(Boolean) : [];
+  return [...new Set([...contexts, ...checks].map(String))];
+}
+
+function enrichRequiredFlags(pr, rollup, { gh, repository } = {}) {
+  if (!Array.isArray(rollup) || !rollup.length || rollup.some(hasExplicitRequiredFlag)) {
+    return { rollup, requiredNames: [] };
+  }
+  const { owner, name } = repoParts(repository);
+  const number = pr?.number;
+  if (owner && name && number && typeof gh === "function") {
+    const gql = gh([
+      "api", "graphql",
+      "-F", `owner=${owner}`,
+      "-F", `name=${name}`,
+      "-F", `n=${number}`,
+      "-f", `query=${REQUIRED_CHECK_QUERY}`,
+    ]);
+    if (gql.status === 0) {
+      const { byName } = graphqlRequiredMap(parseJson(gql.stdout));
+      if (byName.size) {
+        return {
+          rollup: rollup.map((entry) => {
+            if (hasExplicitRequiredFlag(entry)) return entry;
+            const key = checkName(entry);
+            return byName.has(key) ? { ...entry, isRequired: byName.get(key) } : entry;
+          }),
+          requiredNames: [...byName.entries()].filter(([, required]) => required).map(([key]) => key),
+        };
+      }
+    }
+  }
+  return {
+    rollup,
+    requiredNames: protectionRequiredNames(repository, firstDefined(pr.baseRefName, pr.baseRefName), gh),
+  };
+}
+
+function firstDefined(...values) {
+  for (const v of values) {
+    if (v != null && v !== "") return v;
+  }
+  return null;
+}
+
+function rollupFrom(pr = {}) {
+  const raw = firstDefined(
+    pr.statusCheckRollup,
+    pr.statusCheckRollup,
+    pr.status_check_rollup,
+  );
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.contexts)) return raw.contexts;
+  return [];
+}
+
+/**
+ * The migration parity measurement for one pull request.
+ *
+ * Reads the REQUIRED set from the pull request's own tree — what the merged
+ * revision will require — and the PROVEN hosted head from the governed census
+ * records, which are the only sanctioned reader of the deployed primary. It
+ * never opens a database and never holds a credential.
+ *
+ * Every failure to measure returns a non-ok verdict rather than throwing, so a
+ * caller cannot accidentally treat an exception as absence of a problem.
+ */
+// The governed-action store, located the same way every other module here
+// locates it. Deliberately a local copy rather than an import: this file is
+// already imported BY governed-action-request.mjs, so importing its path helper
+// would close a cycle for the sake of one join().
+/*
+ * THE GATEWAY STATE ROOT IS NESTED, AND READING THE PARENT READS NOTHING.
+ *
+ * MEASURED on the running toolkit. `ALLOY_RUNTIME_ROOT` is set by the shipped
+ * config to `~/.local/state/alloy-dev`, but the governed-action store lives one
+ * level deeper, under `.../alloy-dev/gateway/vacilando/governed-actions`. This
+ * function returned the parent, so `governedActionRequestsPath()` named a file
+ * that does not exist, `existsSync` was false, and the parity gate evaluated
+ * against ZERO census records — for every merge, permanently.
+ *
+ * The failure mode is the cruel one: not a crash, but `unknown`, "no census has
+ * positively established the hosted migration head". Running a fresh census
+ * could never clear it, because no census was ever read. PR #848 was denied by
+ * this while a completed census sat in the store 42 minutes old.
+ *
+ * `canonicalGatewayRuntimeRoot()` is already imported into this file and already
+ * knows the right answer. The fix is to stop keeping a second, wrong copy of it:
+ * an explicit root is honoured, and when it names the parent of a real gateway
+ * store, the store is where it actually is.
+ */
+/*
+ * S3: THIS FILE SOLVED IT ALONE, AND THAT IS WHY IT STAYED BROKEN ELSEWHERE.
+ *
+ * The probe this replaces was correct, and was the ONLY one in the tree. Sixty
+ * other executable sites read the same variable with one of two incompatible
+ * meanings and no probe at all, so the tree is right in exactly one of three
+ * configurations: unset breaks the forty that treat it as the state root, set
+ * to the parent breaks all sixty, and this host works only because it happens
+ * to be set to the child.
+ *
+ * The probe now lives in `runtime-roots.mjs` as `gatewayStateRoot()` -- this
+ * function's logic, with its marker directory -- so a caller can no longer get
+ * the depth wrong by not knowing the question existed.
+ */
+function runtimeRoot() {
+  return gatewayStateRoot();
+}
+
+function governedActionRequestsPath(root = runtimeRoot()) {
+  return join(root, "vacilando", "governed-actions", "requests.json");
+}
+
+/**
+ * WHICH REVISION OWES THE DEPLOYED PRIMARY ITS SCHEMA?
+ *
+ * CURRENT PROMOTED STAGING — the branch this candidate is merging INTO, read at
+ * evaluation time. Not the candidate. The candidate's own migrations are an
+ * obligation that begins the moment it lands; requiring them beforehand asks the
+ * merge to have already happened, and that cycle made every migration-bearing PR
+ * unpromotable (see migration-parity.mjs for the measured shape).
+ *
+ * Both revisions are read, because the candidate set is still worth REPORTING:
+ * `candidate_only_migrations` is what becomes due after this merge, and a train
+ * needs to know it even though no gate may demand it yet.
+ */
+export function measureMergeMigrationParity(n, { gh = defaultGh, nowMs = Date.now(), censusRequests = null } = {}) {
+  try {
+    const listAt = (ref) => {
+      const res = gh(["api", `repos/${n.repository}/contents/supabase/migrations?ref=${ref}`, "--jq", "[.[].name]"]);
+      if (res.status !== 0) return null;
+      const names = parseJson(res.stdout);
+      return Array.isArray(names) ? requiredVersionsFromFilenames(names) : null;
+    };
+
+    // THE EXPECTED SET. The target branch is the promoted revision by definition:
+    // validateMergeInputs has already bounded it to `staging`.
+    const expectedRevision = n.targetBranch || ALLOWED_TARGET_BRANCHES[0];
+    const expected = listAt(expectedRevision);
+    if (!expected) {
+      return {
+        gate: "hosted_migration_parity",
+        status: "unknown",
+        promote: false,
+        measured: false,
+        expected_revision: expectedRevision,
+        expected_revision_kind: "promoted_staging",
+        reason: "could not read the promoted revision's migration set",
+      };
+    }
+
+    // Reported, never required. A failure to read it must not block a merge that
+    // the promoted-staging comparison already answered.
+    const candidate = listAt(n.expectedHeadSha);
+
+    if (!expected.length) {
+      return promotionParityGate({ expected, candidate, expectedRevision, nowMs });
+    }
+
+    let records = censusRequests;
+    if (!Array.isArray(records)) {
+      records = [];
+      try {
+        const store = governedActionRequestsPath();
+        if (existsSync(store)) {
+          const parsed = JSON.parse(readFileSync(store, "utf8"));
+          records = Array.isArray(parsed) ? parsed : (parsed?.requests || []);
+        }
+      } catch { /* unreadable proof -> UNKNOWN below */ }
+    }
+    const evidence = hostedMigrationEvidence(records, { artifactPath: "hosted-migration-identity-census.sql" });
+    const freshness = hostedEvidenceFreshness(evidence, { requests: records, nowMs });
+    return promotionParityGate({ expected, candidate, evidence, freshness, expectedRevision, nowMs });
+  } catch (err) {
+    return {
+      gate: "hosted_migration_parity",
+      status: "unknown",
+      promote: false,
+      measured: false,
+      reason: String(err?.message || err).slice(0, 200),
+    };
+  }
+}
+
+export function inspectPullRequest(inputs, { gh = defaultGh, censusRequests = null, nowMs = Date.now() } = {}) {
+  const v = validateMergeInputs(inputs);
+  if (!v.ok) return v;
+  const n = v.normalized;
+  const view = gh([
+    "pr", "view", String(n.pullRequestNumber),
+    "--repo", n.repository,
+    "--json", "number,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName,headRefOid,url,title,statusCheckRollup,reviewDecision,mergeCommit,changedFiles,additions,deletions",
+  ]);
+  if (view.status !== 0) {
+    return {
+      ok: false,
+      code: "pr_lookup_failed",
+      // Line zero is often blank from `gh`. Same defect already closed on the
+      // merge and push paths; this is the read-back call the same promotion makes.
+      detail: firstMeaningfulLine(String(view.stderr || view.stdout || ""), "gh pr view failed").slice(0, 200),
+    };
+  }
+  const pr = parseJson(view.stdout);
+  if (!pr) return { ok: false, code: "pr_unreadable", detail: "GitHub PR payload was not JSON" };
+  const enriched = enrichRequiredFlags(pr, rollupFrom(pr), { gh, repository: n.repository });
+  return {
+    ok: true,
+    normalized: n,
+    // Measured here because this is where `gh` already is, and refused below,
+    // where refusals are enforced. Keeping the two apart is what lets the
+    // verdict be unit-tested without a network.
+    migration_parity: measureMergeMigrationParity(n, { gh, censusRequests, nowMs }),
+    pr: {
+      number: pr.number,
+      title: pr.title,
+      url: pr.url,
+      state: String(pr.state || "").toUpperCase(),
+      draft: Boolean(pr.isDraft ?? pr.isDraft),
+      mergeable: firstDefined(pr.mergeable, pr.mergeable),
+      mergeStateStatus: firstDefined(pr.mergeStateStatus, pr.mergeStateStatus, pr.mergeable_state),
+      baseRefName: firstDefined(pr.baseRefName, pr.baseRefName),
+      headRefOid: firstDefined(pr.headRefOid, pr.headRefOid, pr.headSha),
+      mergeCommitSha: pr.mergeCommit?.oid || pr.mergeCommit || null,
+      reviewDecision: pr.reviewDecision || pr.reviewDecision || null,
+      headRefName: pr.headRefName || null,
+      changedFiles: Number.isFinite(pr.changedFiles) ? pr.changedFiles : null,
+      additions: Number.isFinite(pr.additions) ? pr.additions : null,
+      deletions: Number.isFinite(pr.deletions) ? pr.deletions : null,
+      checks: checkSummary(enriched.rollup, { requiredNames: enriched.requiredNames }),
+    },
+  };
+}
+
+export function evaluateMergeReadiness(inspected) {
+  if (!inspected?.ok) return inspected;
+  const { normalized: n, pr } = inspected;
+  if (pr.state === "MERGED") {
+    const resultSha = String(pr.mergeCommitSha || pr.headRefOid || "");
+    if (shaEquals(pr.headRefOid, n.expectedHeadSha) || shaEquals(resultSha, n.expectedHeadSha)) {
+      return {
+        ok: true,
+        idempotent: true,
+        code: "already_merged",
+        mergeSha: resultSha || n.expectedHeadSha,
+        stagingSha: resultSha || n.expectedHeadSha,
+        pr,
+        normalized: n,
+      };
+    }
+    return {
+      ok: false,
+      code: "already_merged_different_head",
+      detail: "PR is merged, but not at the expected head SHA.",
+      pr,
+      normalized: n,
+    };
+  }
+  if (pr.state !== "OPEN") {
+    return { ok: false, code: "pr_not_open", detail: `PR state is ${pr.state}`, pr, normalized: n };
+  }
+  if (pr.draft) {
+    return { ok: false, code: "pr_is_draft", detail: "Draft PRs cannot be merged through this action.", pr, normalized: n };
+  }
+  if (String(pr.baseRefName) !== n.targetBranch) {
+    return { ok: false, code: "unexpected_base_branch", detail: `PR base is ${pr.baseRefName}, expected ${n.targetBranch}`, pr, normalized: n };
+  }
+  if (!shaEquals(pr.headRefOid, n.expectedHeadSha)) {
+    return {
+      ok: false,
+      code: "stale_expected_head",
+      detail: "PR head SHA does not match expected_head_sha.",
+      evidence: checkEvidence(pr),
+      pr,
+      normalized: n,
+    };
+  }
+  // ── THE SCHEMA THIS REVISION NEEDS MUST BE PROVEN PRESENT ─────────────────
+  //
+  // Enforced HERE, not only as a policy gate, and the difference is the whole
+  // point. A policy gate decides whether the merge may proceed WITHOUT asking a
+  // person; an approval satisfies it. This runs at execution, after any
+  // approval, so no approval can authorise merging application code into an
+  // environment whose schema cannot run it.
+  //
+  // That boundary is deliberate rather than absolute distrust of the Director:
+  // approving a DATABASE MUTATION is a judgement a person can make, because
+  // they can decide the migration is safe to apply. Approving a merge does not
+  // make the schema present — the code would simply run against a database
+  // that cannot serve it — so there is nothing for judgement to fix, and the
+  // right answer is to apply the migration and re-measure, not to override.
+  //
+  // UNKNOWN refuses on the same footing as BEHIND. "I could not establish it"
+  // is not evidence of safety, and treating it as one is the fail-open this
+  // exists to close.
+  //
+  // STALE IS ITS OWN REFUSAL. It blocks exactly as hard, and it says something
+  // different: the measurement is real but has been overtaken, so the action is
+  // "measure again", not "go and deploy something". Reporting stale evidence as
+  // `hosted_migration_behind` would send a Director to apply a migration the
+  // database may already carry — and, because that refusal code is what grants
+  // pre-merge production apply authority, would hand out that authority on the
+  // strength of a document that stopped describing the database.
+  const parity = inspected.migration_parity || null;
+  if (!parity || parity.status !== "ok") {
+    const code = parity?.status === "blocked" ? "hosted_migration_behind"
+      : parity?.status === "stale" ? "hosted_migration_evidence_stale"
+        : "hosted_migration_parity_unknown";
+    return {
+      ok: false,
+      code,
+      detail: parity?.reason
+        || "hosted migration parity could not be established for this promotion",
+      migration_parity: parity,
+      pr,
+      normalized: n,
+    };
+  }
+  const mergeable = String(pr.mergeable || "").toUpperCase();
+  const mergeState = String(pr.mergeStateStatus || "").toUpperCase();
+  const evidence = checkEvidence(pr);
+  if (mergeable === "CONFLICTING" || mergeState === "DIRTY") {
+    return { ok: false, code: "merge_conflict", detail: "PR has conflicts.", evidence, pr, normalized: n };
+  }
+  if (mergeable && mergeable !== "MERGEABLE" && mergeable !== "UNKNOWN") {
+    return { ok: false, code: "not_mergeable", detail: `PR mergeable=${pr.mergeable}`, evidence, pr, normalized: n };
+  }
+  if (pr.checks.failing.length) {
+    return {
+      ok: false,
+      code: "required_checks_failed",
+      detail: `Required checks failed: ${pr.checks.failing.join(", ")}`,
+      evidence,
+      pr,
+      normalized: n,
+    };
+  }
+  if (pr.checks.missingRequired?.length) {
+    return {
+      ok: false,
+      code: "required_checks_never_reported",
+      detail: `Required check(s) never reported: ${pr.checks.missingRequired.join(", ")}. `
+        + "Branch protection requires them and no workflow created them, so GitHub will hold this "
+        + "pull request at \"Expected — waiting for status to be reported\". This does not resolve on "
+        + "its own: either the workflow does not trigger for these changes, or the protection rule "
+        + "names a check that no longer exists.",
+      evidence,
+      pr,
+      normalized: n,
+    };
+  }
+  if (pr.checks.pending.length) {
+    return {
+      ok: false,
+      code: "required_checks_pending",
+      detail: `Required checks pending: ${pr.checks.pending.join(", ")}`,
+      evidence,
+      pr,
+      normalized: n,
+    };
+  }
+  if (pr.checks.unknown.length) {
+    return {
+      ok: false,
+      code: "required_checks_indeterminate",
+      detail: `Required checks could not be classified: ${pr.checks.unknown.join(", ")}`,
+      evidence,
+      pr,
+      normalized: n,
+    };
+  }
+  const githubAllowsMerge = GITHUB_ALLOWS_MERGE.has(mergeState);
+  const requirednessKnown = Boolean(pr.checks.requirednessKnown);
+  const unscopedPending = pr.checks.unscopedPending || [];
+  const unscopedUnknown = pr.checks.unscopedUnknown || [];
+  if (!githubAllowsMerge && !requirednessKnown && (unscopedPending.length || unscopedUnknown.length)) {
+    return {
+      ok: false,
+      code: "required_checks_indeterminate",
+      detail: "Trusted host could not determine required-check status.",
+      evidence: {
+        ...evidence,
+        pending: unscopedPending,
+        unknown: unscopedUnknown,
+      },
+      pr,
+      normalized: n,
+    };
+  }
+  if (mergeState === "BLOCKED") {
+    return { ok: false, code: "branch_policy_denied", detail: "GitHub reports the merge as blocked.", evidence, pr, normalized: n };
+  }
+  return { ok: true, normalized: n, pr, evidence };
+}
+
+export function mergePullRequest(inputs, { gh = defaultGh } = {}) {
+  const inspected = inspectPullRequest(inputs, { gh });
+  const ready = evaluateMergeReadiness(inspected);
+  if (!ready.ok) return ready;
+  const n = ready.normalized;
+  if (ready.idempotent) {
+    return {
+      ok: true,
+      idempotent: true,
+      mergeSha: ready.mergeSha,
+      stagingSha: ready.stagingSha,
+      pullRequestNumber: n.pullRequestNumber,
+      repository: n.repository,
+      targetBranch: n.targetBranch,
+      expectedHeadSha: n.expectedHeadSha,
+      checks: ready.pr.checks,
+      credentialsExposed: false,
+    };
+  }
+  // Everything above this line only READ the pull request. This is the first
+  // statement that changes the repository, so this is where the guard belongs.
+  const permitted = liveMergePermitted({ injectedGh: gh !== defaultGh });
+  if (!permitted.ok) {
+    return { ok: false, code: permitted.code, detail: permitted.detail };
+  }
+  const methodFlag = n.mergeMethod === "squash" ? "--squash" : n.mergeMethod === "rebase" ? "--rebase" : "--merge";
+  const merged = gh([
+    "pr", "merge", String(n.pullRequestNumber),
+    "--repo", n.repository,
+    methodFlag,
+    "--match-head-commit", n.expectedHeadSha,
+  ], { timeout: 120_000 });
+  if (merged.status !== 0) {
+    const err = String(merged.stderr || merged.stdout || "gh pr merge failed");
+    if (/already merged/i.test(err)) {
+      const again = inspectPullRequest(inputs, { gh });
+      const sha = again.pr?.mergeCommitSha || again.pr?.headRefOid || n.expectedHeadSha;
+      return {
+        ok: true,
+        idempotent: true,
+        mergeSha: sha,
+        stagingSha: sha,
+        pullRequestNumber: n.pullRequestNumber,
+        repository: n.repository,
+        targetBranch: n.targetBranch,
+        expectedHeadSha: n.expectedHeadSha,
+        checks: again.pr?.checks || ready.pr.checks,
+        credentialsExposed: false,
+      };
+    }
+    // LINE ZERO IS OFTEN BLANK. `gh` and `git` open with an empty line often
+    // enough that this reported "" for real, named failures — the same defect
+    // already closed on the push path, on the two calls a promotion makes every
+    // single time. firstMeaningfulLine is the canonical primitive for it.
+    return { ok: false, code: "merge_failed", detail: firstMeaningfulLine(err, "merge_failed").slice(0, 240) };
+  }
+  const after = inspectPullRequest(inputs, { gh });
+  const mergeSha = after.pr?.mergeCommitSha || after.pr?.headRefOid || n.expectedHeadSha;
+  return {
+    ok: true,
+    idempotent: false,
+    mergeSha,
+    stagingSha: mergeSha,
+    pullRequestNumber: n.pullRequestNumber,
+    repository: n.repository,
+    targetBranch: n.targetBranch,
+    expectedHeadSha: n.expectedHeadSha,
+    checks: after.pr?.checks || ready.pr.checks,
+    credentialsExposed: false,
+  };
+}
+
+export function publicMergeResult(result) {
+  if (!result) return null;
+  return {
+    pull_request_number: result.pullRequestNumber,
+    repository: result.repository,
+    target_branch: result.targetBranch,
+    expected_head_sha: result.expectedHeadSha,
+    merge_sha: result.mergeSha,
+    staging_sha: result.stagingSha,
+    idempotent: Boolean(result.idempotent),
+    checks: result.checks || null,
+  };
+}

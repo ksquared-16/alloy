@@ -17,6 +17,8 @@ import {
 } from "@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
 import { deriveDocumentTitle, cleanFilenameToTitle } from "@/lib/pos/processingCase/formDraft/deriveDocumentTitle";
+import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
+import { classifyNonFormSource } from "@/lib/pos/processingCase/classification/classifyNonFormSource";
 import {
     dbStoreFormDraftPreview,
     parseStoredFormDraftPreview,
@@ -92,7 +94,26 @@ describe("deriveDocumentTitle — title/display derivation", () => {
     });
     it("falls back to classification label, then Untitled", () => {
         expect(deriveDocumentTitle({ classificationKey: "immunization_record" }).title).toBe("Immunization Record");
-        expect(deriveDocumentTitle({}).title).toBe("Untitled form");
+        // 5b7d780f7 renamed both fallbacks to "Untitled document" (the `unknown` label and the final fallback together),
+        // and `buildDocumentDisplayName` uses the same words. The resolver handles documents, not only forms.
+        expect(deriveDocumentTitle({}).title).toBe("Untitled document");
+    });
+    it("the immunization fallback is the canonical type name, never another medical type's", () => {
+        const title = deriveDocumentTitle({ classificationKey: "immunization_record" }).title;
+        expect(title.toLowerCase()).toBe(CLASSIFICATION_KEY_LABELS.immunization_record.toLowerCase());
+        // The classifier that assigns the key names it the same way.
+        const classified = classifyNonFormSource({ sourceKind: "upload", fileName: "shot-record-immunization.pdf" });
+        expect(classified.classification_key).toBe("immunization_record");
+        expect(title.toLowerCase()).toBe(classified.label.toLowerCase());
+        expect(title).not.toMatch(/medical examination|physical/i);
+    });
+    it("type-first display name: an immunization-classified document is named as an immunization record, with subject and period", () => {
+        const d = deriveDocumentTitle({ classificationKey: "immunization_record", subjectLabel: "Noah Smith", periodLabel: "2026-07-10", fileName: "scan_0042.pdf" });
+        expect(d.title).toBe("Immunization Record — Noah Smith — 2026-07-10");
+    });
+    it("a medical examination report that is not classified keeps its own name (heading, then filename)", () => {
+        expect(deriveDocumentTitle({ extractedText: "Child Medical Examination Report\nChild name: ___" })).toEqual({ title: "Child Medical Examination Report", fromText: true });
+        expect(deriveDocumentTitle({ fileName: "child-medical-examination-report.pdf" })).toEqual({ title: "Child Medical Examination Report", fromText: false });
     });
     it("cleanFilenameToTitle drops extension + separators + trailing index", () => {
         expect(cleanFilenameToTitle("subsidy_voucher_ccap_2026.pdf")).toBe("Subsidy Voucher Ccap 2026");

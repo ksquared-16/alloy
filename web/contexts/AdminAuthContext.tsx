@@ -20,6 +20,19 @@ export interface AdminAuthContextValue {
     roleKeysSource: typeof ADMIN_AUTH_ROLE_KEYS_SOURCE;
     /** True only when membership includes portal `admin` (same bar as `ctx.role === "admin"` on APIs). */
     canMutate: boolean;
+    /**
+     * The principal's resolved capability grants, or `null` when this shell did not supply them.
+     *
+     * `null` and `[]` are different answers and every reader must keep them apart. `[]` is a
+     * principal who holds nothing; `null` is a mount point that did not pass the prop, and there are
+     * several mounts of this provider. A surface that treats the second as the first hides itself
+     * from an operator who has the grant — which is the shape of the defect this initiative began
+     * with, arriving from the other side. See `lib/access/financialsSurfaceVisibility.ts`.
+     *
+     * It is for deciding what to OFFER. Authorization is the server's, on every route and every
+     * registered action, and stays that way.
+     */
+    permissionKeys: string[] | null;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
@@ -30,12 +43,18 @@ export function useAdminAuth() {
     return ctx;
 }
 
+/** Safe when rendered outside AdminAuthProvider (e.g. dev shells). */
+export function useAdminAuthOptional(): AdminAuthContextValue | null {
+    return useContext(AdminAuthContext);
+}
+
 export function AdminAuthProvider({
     userEmail,
     userId,
     orgId,
     role,
     roleKeys,
+    permissionKeys,
     children,
 }: {
     userEmail: string;
@@ -44,6 +63,8 @@ export function AdminAuthProvider({
     role: string;
     /** When provided (non-empty), mutate access follows membership keys — matches admin API gates. */
     roleKeys?: string[];
+    /** Resolved grants for the org. Omit rather than pass `[]` when the shell does not know them. */
+    permissionKeys?: string[] | null;
     children: ReactNode;
 }) {
     const safeEmail = typeof userEmail === "string" ? userEmail : "Unknown";
@@ -53,6 +74,29 @@ export function AdminAuthProvider({
     const keys = Array.isArray(roleKeys) ? roleKeys.map((k) => String(k).trim()).filter(Boolean) : [];
     const normalizedCompatRole = safeRole.trim().toLowerCase();
     const canMutate = keys.length > 0 ? hasPortalAdminMutateAccess(keys) : normalizedCompatRole === "admin";
+    /*
+     * A NESTED MOUNT THAT OMITS THE GRANTS INHERITS THEM FROM THE SHELL ABOVE IT — for the same
+     * principal in the same org only. The Workspace and Settings providers nest inside the root
+     * layout's, which resolved the grants, and each passed none: the inner `null` shadowed the
+     * outer answer, so a surface reading `permissionKeys` (Add Charge's "Change amount", gated on
+     * fin.adjust) hid itself from every operator who held the grant. Inheriting is not deciding:
+     * the keys are the root's own resolution, and every action still authorizes on the server.
+     */
+    const parent = useContext(AdminAuthContext);
+    const inherited =
+        permissionKeys == null
+        && parent?.permissionKeys != null
+        && parent.userId !== ""
+        && parent.userId === safeUserId
+        && parent.orgId !== ""
+        && parent.orgId === safeOrgId
+            ? parent.permissionKeys
+            : null;
+    // Otherwise absent stays absent. Mapping an omitted prop onto `[]` here would erase the
+    // distinction the field exists to carry, one line before every reader receives it.
+    const safePermissionKeys = Array.isArray(permissionKeys)
+        ? permissionKeys.map((k) => String(k).trim()).filter(Boolean)
+        : inherited;
     const value: AdminAuthContextValue = {
         userEmail: safeEmail,
         userId: safeUserId,
@@ -61,6 +105,7 @@ export function AdminAuthProvider({
         roleKeys: keys,
         roleKeysSource: ADMIN_AUTH_ROLE_KEYS_SOURCE,
         canMutate,
+        permissionKeys: safePermissionKeys,
     };
     return (
         <AdminAuthContext.Provider value={value}>

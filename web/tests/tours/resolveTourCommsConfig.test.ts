@@ -68,8 +68,9 @@ describe("resolveTourCommsConfig", () => {
         } as never;
 
         const { config, sources } = await resolveTourCommsConfig(supabase, { orgId: "org-1" });
-        expect(config.enabled).toBe(false);
-        expect(config.reminder_offsets.length).toBeGreaterThan(0);
+        expect(config.enabled).toBe(true);
+        expect(config.reminder_offsets).toHaveLength(1);
+        expect(config.reminder_offsets[0].offset_minutes).toBe(24 * 60);
         expect(sources.org).toBe(false);
         expect(sources.location).toBe(false);
     });

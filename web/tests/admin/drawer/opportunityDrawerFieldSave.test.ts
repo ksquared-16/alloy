@@ -14,7 +14,7 @@ describe("opportunityDrawerFieldSave", () => {
         ).toBe(true);
         expect(
             opportunityBodyHasCustomFieldUpdates({
-                desired_start_date: "2026-09-01",
+                start_date: "2026-09-01",
             })
         ).toBe(true);
     });

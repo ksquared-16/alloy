@@ -12,7 +12,6 @@
  * Pure orchestration over injected deps so it is unit-testable without Supabase.
  */
 
-import { safeParseFormSchema } from "@/lib/forms/schema";
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -22,7 +21,7 @@ import {
     dbMaxVersionNumber,
 } from "@/lib/admin/forms/formsAdminDb";
 import { parseStoredFormDraftPreview } from "./formDraftPreviewDb";
-import { draftFormToFormSchemaV1 } from "./draftFormToFormSchemaV1";
+import { studioSchemaForDraft } from "./studioSchemaForDraft";
 
 export interface FormDraftCreatedLink {
     form_id: string;
@@ -43,11 +42,13 @@ export interface CreateFormDeps {
         metadata: Record<string, unknown>;
     }): Promise<{ id: string }>;
     updateCaseMetadata(args: { orgId: string; caseId: string; metadata: Record<string, unknown> }): Promise<void>;
+    /** File an existing form into a Forms folder (`metadata.admin_category`), merging — never replacing — its metadata. */
+    setFormFolder?(args: { orgId: string; formId: string; folderId: string }): Promise<void>;
     now(): Date;
 }
 
 export type CreateFormResult =
-    | { ok: true; formId: string; formVersionId: string; createdAt: string; alreadyCreated: boolean }
+    | { ok: true; formId: string; formVersionId: string; formName: string; createdAt: string; alreadyCreated: boolean }
     | { ok: false; code: "not_found" | "no_preview" | "invalid_schema"; message: string };
 
 /** Read an already-stored creation link from case metadata (idempotency + read model). */
@@ -66,15 +67,42 @@ export function parseFormDraftCreated(metadata: unknown): FormDraftCreatedLink |
 
 export async function createFormFromCaseDraft(
     deps: CreateFormDeps,
-    args: { orgId: string; caseId: string }
+    args: {
+        orgId: string;
+        caseId: string;
+        /**
+         * The Forms folder chosen at Save to Forms — the same `admin_category` a hand-built form is filed
+         * under. Absent leaves the form unfiled (it still shows under "Generated from documents").
+         */
+        folderId?: string | null;
+    }
 ): Promise<CreateFormResult> {
+    const folderId = args.folderId?.trim() || null;
     const metadata = await deps.loadCaseMetadata(args);
     if (metadata === null) return { ok: false, code: "not_found", message: "Not found" };
 
     // Idempotent: already created → return the existing link, never make a duplicate.
     const existing = parseFormDraftCreated(metadata);
     if (existing) {
-        return { ok: true, formId: existing.form_id, formVersionId: existing.form_version_id, createdAt: existing.created_at, alreadyCreated: true };
+        /*
+         * SAVING AGAIN IS NOT A SECOND FORM.
+         *
+         * The form already exists, so Save to Forms updates where it is filed and returns it. The form's
+         * content is owned by Forms Studio from creation on, and is not rebuilt from the import.
+         */
+        if (folderId && deps.setFormFolder) {
+            await deps.setFormFolder({ orgId: args.orgId, formId: existing.form_id, folderId });
+        }
+        const preview = parseStoredFormDraftPreview(metadata);
+        const formName = preview?.generated_form_name?.trim() || preview?.title?.trim() || "Untitled form";
+        return {
+            ok: true,
+            formId: existing.form_id,
+            formVersionId: existing.form_version_id,
+            formName,
+            createdAt: existing.created_at,
+            alreadyCreated: true,
+        };
     }
 
     const preview = parseStoredFormDraftPreview(metadata);
@@ -82,13 +110,17 @@ export async function createFormFromCaseDraft(
         return { ok: false, code: "no_preview", message: "No form draft preview — run “Create form from document” first." };
     }
 
-    const schema = draftFormToFormSchemaV1(preview);
-    const parsed = safeParseFormSchema(schema);
-    if (!parsed.success) {
+    // The form exactly as Forms Studio has it — the operator's authored schema once they have edited it.
+    const resolved = studioSchemaForDraft(preview);
+    if (!resolved.ok) {
         return { ok: false, code: "invalid_schema", message: "The generated draft did not validate as a form schema." };
     }
+    const parsed = { data: resolved.schema };
 
-    const name = preview.title?.trim() || "Untitled form";
+    const name = preview.generated_form_name?.trim() || preview.title?.trim();
+    if (!name || name === "Untitled document" || name === "Untitled form") {
+        return { ok: false, code: "invalid_schema", message: "A form name is required before generating the native form." };
+    }
     const taken = await deps.listFormKeys(args.orgId);
     const key = allocateUniqueKey(slugKeyFromDisplayName(name), taken);
 
@@ -98,11 +130,25 @@ export async function createFormFromCaseDraft(
         name,
         metadata: {
             source: "document_form_draft",
+            // "From document" in Forms Studio — the provenance the library reads (`formOrigin`).
+            origin: "document",
+            ...(folderId ? { admin_category: folderId } : {}),
             source_case_id: args.caseId,
             source_document_id: preview.source_document_id,
             // Surfaced in POS → Forms so document-originated forms show provenance + size.
             source_document_title: preview.title,
             field_count: preview.fields.length,
+            // Lineage: preserve OCR provenance from source → published form for scanned/image sources.
+            ...(preview.ocr?.derived
+                ? {
+                      ocr_source: {
+                          method: preview.ocr.method,
+                          confidence: preview.ocr.confidence,
+                          low_confidence: preview.ocr.low_confidence,
+                          ...(preview.ocr.source_kind ? { source_kind: preview.ocr.source_kind } : {}),
+                      },
+                  }
+                : {}),
         },
     });
 
@@ -122,7 +168,7 @@ export async function createFormFromCaseDraft(
         metadata: { ...metadata, form_draft_created: { form_id: def.id, form_version_id: ver.id, created_at: createdAt } },
     });
 
-    return { ok: true, formId: def.id, formVersionId: ver.id, createdAt, alreadyCreated: false };
+    return { ok: true, formId: def.id, formVersionId: ver.id, formName: name, createdAt, alreadyCreated: false };
 }
 
 /** Production deps backed by Supabase + the existing Forms DB helpers. Versions are ALWAYS "draft". */
@@ -176,6 +222,24 @@ export function makeCreateFormDepsFromSupabase(supabase: SupabaseClient): Create
                 .eq("org_id", orgId)
                 .eq("id", caseId);
             if (error) throw new Error(error.message);
+        },
+        async setFormFolder({ orgId, formId, folderId }) {
+            const { data, error } = await supabase
+                .from("form_definitions")
+                .select("metadata")
+                .eq("org_id", orgId)
+                .eq("id", formId)
+                .maybeSingle();
+            if (error) throw new Error(error.message);
+            if (!data) return;
+            const current = ((data as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
+            if (current.admin_category === folderId) return;
+            const { error: upErr } = await supabase
+                .from("form_definitions")
+                .update({ metadata: { ...current, admin_category: folderId } })
+                .eq("org_id", orgId)
+                .eq("id", formId);
+            if (upErr) throw new Error(upErr.message);
         },
         now() {
             return new Date();

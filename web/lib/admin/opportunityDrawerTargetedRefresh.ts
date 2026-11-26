@@ -39,6 +39,101 @@ export function parseOpportunityDrawerRecordPatchDetail(ev: Event): OpportunityD
     return { opportunity_id: opportunityId, record };
 }
 
+
+/**
+ * Merge an incoming opportunity drawer record patch into the current display record.
+ * Preserves nested snapshots when the patch was built from a stale truth snapshot.
+ */
+export function mergeOpportunityDrawerDisplayRecordPatch(
+    prev: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...prev, ...incoming };
+
+    if (incoming._opportunity_persons !== undefined) {
+        merged._opportunity_persons = incoming._opportunity_persons;
+    }
+    if (incoming._customer_persons !== undefined) {
+        merged._customer_persons = incoming._customer_persons;
+    }
+    if (incoming._inquiry_children !== undefined) {
+        // Preserve child photo_url when a later patch rebuilds inquiry children without photos
+        // (commit-critical / queue projections omit person metadata.photo_url).
+        const prevChildren = Array.isArray(prev._inquiry_children)
+            ? (prev._inquiry_children as Record<string, unknown>[])
+            : [];
+        const nextChildren = Array.isArray(incoming._inquiry_children)
+            ? (incoming._inquiry_children as Record<string, unknown>[])
+            : [];
+        if (prevChildren.length && nextChildren.length) {
+            merged._inquiry_children = nextChildren.map((row) => {
+                if (!row || typeof row !== "object") return row;
+                const hasPhoto =
+                    typeof row.photo_url === "string" && row.photo_url.trim().length > 0;
+                if (hasPhoto) return row;
+                const id = String(row.id ?? "").trim();
+                const personId = String(row.person_id ?? "").trim();
+                const memberId = String(row.customer_member_id ?? "").trim();
+                const prior = prevChildren.find((p) => {
+                    if (!p || typeof p !== "object") return false;
+                    const pid = String(p.id ?? "").trim();
+                    const pp = String(p.person_id ?? "").trim();
+                    const pm = String(p.customer_member_id ?? "").trim();
+                    return (
+                        (id && (pid === id || pp === id || pm === id))
+                        || (personId && (pp === personId || pid === personId || pm === personId))
+                        || (memberId && (pm === memberId || pid === memberId))
+                    );
+                });
+                const priorPhoto =
+                    prior && typeof prior.photo_url === "string" ? prior.photo_url.trim() : "";
+                if (!priorPhoto) return row;
+                return { ...row, photo_url: priorPhoto };
+            });
+        } else {
+            merged._inquiry_children = incoming._inquiry_children;
+        }
+    }
+
+    // Scheduling projection is a bag with per-member children — merge byMemberId so a
+    // single-child reload after assignment delete refreshes Children / Schedule cards.
+    const prevSched = prev._scheduling_projection;
+    const incSched = incoming._scheduling_projection;
+    if (incSched && typeof incSched === "object" && !Array.isArray(incSched)) {
+        const prevBag =
+            prevSched && typeof prevSched === "object" && !Array.isArray(prevSched)
+                ? (prevSched as Record<string, unknown>)
+                : {};
+        const nextBag: Record<string, unknown> = { ...prevBag, ...(incSched as Record<string, unknown>) };
+        const prevBy = prevBag.byMemberId;
+        const incBy = (incSched as Record<string, unknown>).byMemberId;
+        if (incBy && typeof incBy === "object" && !Array.isArray(incBy)) {
+            nextBag.byMemberId = {
+                ...(prevBy && typeof prevBy === "object" && !Array.isArray(prevBy)
+                    ? (prevBy as Record<string, unknown>)
+                    : {}),
+                ...(incBy as Record<string, unknown>),
+            };
+        }
+        merged._scheduling_projection = nextBag;
+    }
+
+    const prevAddr = prev._person_address_by_id;
+    const incAddr = incoming._person_address_by_id;
+    if (incAddr && typeof incAddr === "object" && !Array.isArray(incAddr)) {
+        const out: Record<string, Record<string, unknown>> =
+            prevAddr && typeof prevAddr === "object" && !Array.isArray(prevAddr)
+                ? { ...(prevAddr as Record<string, Record<string, unknown>>) }
+                : {};
+        for (const [personId, row] of Object.entries(incAddr as Record<string, Record<string, unknown>>)) {
+            out[personId] = { ...(out[personId] ?? {}), ...row };
+        }
+        merged._person_address_by_id = out;
+    }
+
+    return merged;
+}
+
 /** In-place VM / legacy drawer record merge — avoids full drawer reload. */
 export function dispatchOpportunityDrawerRecordPatch(
     opportunityId: string,

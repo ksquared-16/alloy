@@ -1,0 +1,189 @@
+{
+  "trusted_host_action_id": "tha_e80b5e7560fbdb",
+  "query_hash": "1fb500a34c7502c27f4ca8f8e0b2b3d975d6a75a367713c89c47debec8c2c7a6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T00:23:00.422Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e80b5e7560fbdb",
+    "query_hash": "1fb500a34c7502c27f4ca8f8e0b2b3d975d6a75a367713c89c47debec8c2c7a6",
+    "authorization_id": "grnt_b77cdc2212d84469",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T00:23:02.090Z",
+    "question_ids": [
+      "per_org_readiness",
+      "charge_templates",
+      "humanqa_terms",
+      "humanqa_tuition_charges"
+    ],
+    "questions": {
+      "per_org_readiness": {
+        "question_id": "per_org_readiness",
+        "row_count": null,
+        "rows": [
+          {
+            "orgs": [
+              {
+                "id": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "name": "Alloy Bend",
+                "locations": 0,
+                "customers": 0,
+                "opportunities": 0,
+                "enrollment_agreements": 0,
+                "live_tuition_terms": 0,
+                "financial_policies": 0,
+                "proration_policy": false,
+                "due_date_policy": false,
+                "charges": 0,
+                "tuition_charges": 0
+              },
+              {
+                "id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "name": "Firefly Early Learning",
+                "locations": 22,
+                "customers": 11,
+                "opportunities": 7,
+                "enrollment_agreements": 8,
+                "live_tuition_terms": 2,
+                "financial_policies": 3,
+                "proration_policy": false,
+                "due_date_policy": true,
+                "charges": 82,
+                "tuition_charges": 8
+              },
+              {
+                "id": "0bbaad43-1235-401e-88ea-62e0881e950a",
+                "name": "W-17 self-test",
+                "locations": 0,
+                "customers": 0,
+                "opportunities": 0,
+                "enrollment_agreements": 0,
+                "live_tuition_terms": 0,
+                "financial_policies": 0,
+                "proration_policy": false,
+                "due_date_policy": false,
+                "charges": 0,
+                "tuition_charges": 0
+              }
+            ]
+          }
+        ]
+      },
+      "charge_templates": {
+        "question_id": "charge_templates",
+        "row_count": null,
+        "rows": [
+          {
+            "by_org": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "templates": 5,
+                "keys": [
+                  "field_trip",
+                  "late_pickup_fee",
+                  "materials_fee",
+                  "registration_fee",
+                  "tuition"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "humanqa_terms": {
+        "question_id": "humanqa_terms",
+        "row_count": null,
+        "rows": [
+          {
+            "terms": [
+              {
+                "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                "cadence": "monthly",
+                "amount_cents": 145000,
+                "effective_start": "2026-09-01",
+                "effective_end": null,
+                "state": "accepted",
+                "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574"
+              },
+              {
+                "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                "cadence": "weekly",
+                "amount_cents": 18500,
+                "effective_start": "2026-09-01",
+                "effective_end": null,
+                "state": "overridden",
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1"
+              }
+            ]
+          }
+        ]
+      },
+      "humanqa_tuition_charges": {
+        "question_id": "humanqa_tuition_charges",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "agreement": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+                "service_date": "2026-09-01",
+                "status": "posted",
+                "amount_cents": 40000
+              },
+              {
+                "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "service_date": "2026-09-01",
+                "status": "posted",
+                "amount_cents": 145000
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-01",
+                "status": "draft",
+                "amount_cents": 18500
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-08",
+                "status": "draft",
+                "amount_cents": 18500
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-15",
+                "status": "draft",
+                "amount_cents": 18500
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "amount_cents": 18500
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-29",
+                "status": "draft",
+                "amount_cents": 18500
+              },
+              {
+                "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "service_date": "2026-10-01",
+                "status": "draft",
+                "amount_cents": 145000
+              }
+            ],
+            "observed_at": "2026-09-22 00:23:01.88804+00"
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

@@ -10,8 +10,8 @@ import {
 import { createPortal } from "react-dom";
 
 import {
-    ADMINV2_DRAWER_BACKDROP_Z,
-    ADMINV2_DRAWER_PANEL_Z,
+    ADMINV2_WORKSPACE_BOS_BACKDROP_Z,
+    ADMINV2_WORKSPACE_BOS_PANEL_Z,
 } from "@/components/admin/Drawer";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { DRAWER_BACKDROP_LEFT_CSS_VAR } from "@/lib/bos/drawerWorkspaceGeometry";
@@ -39,6 +39,12 @@ export type AdminV2WorkspaceBosModalShellProps = {
 /**
  * Workspace pop-out shell (Inbox, My Tasks) — same BOS-rail drawer band as entity drawers.
  * Does not replace drawer contents; only backdrop, geometry, and panel frame.
+ *
+ * There is no Expand/Restore mode. The panel is always the BOS-rail band at its natural
+ * height: one geometry, one z-order, one Escape behaviour. Expand existed as a second
+ * layout of every workspace that nothing else in the platform reasoned about — it moved
+ * the panel under the command surface and uncapped its height, so a workspace could
+ * render two different chromes for the same content. Escape closes.
  */
 export default function AdminV2WorkspaceBosModalShell({
     open,
@@ -68,7 +74,8 @@ export default function AdminV2WorkspaceBosModalShell({
     useEffect(() => {
         if (!open) return;
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
+            if (e.key !== "Escape") return;
+            onClose();
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
@@ -78,14 +85,18 @@ export default function AdminV2WorkspaceBosModalShell({
         return null;
     }
 
+    // Workspace-above-rail stacking (panel 97) for dialog focus — the only stacking there is.
+    const panelZ = ADMINV2_WORKSPACE_BOS_PANEL_Z;
+    const backdropZ = ADMINV2_WORKSPACE_BOS_BACKDROP_Z;
+
     const backdropStyle: CSSProperties = {
-        zIndex: ADMINV2_DRAWER_BACKDROP_Z,
+        zIndex: backdropZ,
         left: `var(${DRAWER_BACKDROP_LEFT_CSS_VAR})`,
         right: 0,
     };
 
     const panelStyle: CSSProperties = {
-        zIndex: ADMINV2_DRAWER_PANEL_Z,
+        zIndex: panelZ,
         backgroundColor: neutral.surface,
         color: neutral.textPrimary,
         borderTopColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
@@ -106,6 +117,8 @@ export default function AdminV2WorkspaceBosModalShell({
         onClose();
     };
 
+    const heightClass = "max-h-[min(920px,100%)]";
+
     return createPortal(
         <>
             <div
@@ -123,7 +136,7 @@ export default function AdminV2WorkspaceBosModalShell({
                 data-adminv2-bos-modal={dataModalAttr}
                 {...{ [OPERATIONAL_WORKSPACE_ATTR]: "true" }}
                 {...alloySectionDomAttrs("WU-15")}
-                className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 adminv2-drawer-modal-panel--bos-rail ${OPERATIONAL_WORKSPACE_SURFACE_CLASS} ${panelClassName}`.trim()}
+                className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 adminv2-drawer-modal-panel--bos-rail ${heightClass} ${OPERATIONAL_WORKSPACE_SURFACE_CLASS} ${panelClassName}`.trim()}
                 style={panelStyle}
                 onClick={(e) => e.stopPropagation()}
             >

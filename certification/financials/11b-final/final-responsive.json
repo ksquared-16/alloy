@@ -1,0 +1,98 @@
+{
+  "focusPanel_1280": {
+    "card": true,
+    "width": 265,
+    "height": 582,
+    "clipped": false,
+    "detailsTop": 825,
+    "lastButtonBottom": 809,
+    "detailsOnItsOwnRow": true
+  },
+  "assignment_1280": {
+    "discountSection": {
+      "w": 658,
+      "clipped": false
+    },
+    "tuitionSelect": {
+      "w": 0,
+      "clipped": false
+    },
+    "addException": true
+  },
+  "organization_1280": {
+    "horizontalOverflow": false,
+    "sections": [
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Payments",
+      "Accounting",
+      "Simulator",
+      "Funding"
+    ]
+  },
+  "focusPanel_1440": {
+    "card": true,
+    "width": 286,
+    "height": 582,
+    "clipped": false,
+    "detailsTop": 848,
+    "lastButtonBottom": 832,
+    "detailsOnItsOwnRow": true
+  },
+  "assignment_1440": {
+    "discountSection": {
+      "w": 658,
+      "clipped": false
+    },
+    "tuitionSelect": {
+      "w": 0,
+      "clipped": false
+    },
+    "addException": true
+  },
+  "organization_1440": {
+    "horizontalOverflow": false,
+    "sections": [
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Payments",
+      "Accounting",
+      "Simulator",
+      "Funding"
+    ]
+  },
+  "focusPanel_1680": {
+    "card": true,
+    "width": 366,
+    "height": 365,
+    "clipped": false,
+    "detailsTop": 631,
+    "lastButtonBottom": 615,
+    "detailsOnItsOwnRow": true
+  },
+  "assignment_1680": {
+    "discountSection": {
+      "w": 658,
+      "clipped": false
+    },
+    "tuitionSelect": {
+      "w": 0,
+      "clipped": false
+    },
+    "addException": true
+  },
+  "organization_1680": {
+    "horizontalOverflow": false,
+    "sections": [
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Payments",
+      "Accounting",
+      "Simulator",
+      "Funding"
+    ]
+  }
+}

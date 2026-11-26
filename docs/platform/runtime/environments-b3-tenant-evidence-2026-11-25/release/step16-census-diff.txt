@@ -1,0 +1,38 @@
+8a9,11
+> rows:customer_person_role_types|6
+> rows:departments|1
+> rows:field_definitions|9
+11c14,15
+< rows:orgs|1
+---
+> rows:orgs|2
+> rows:locations|20
+13,14c17,18
+< rows:role_definitions|6
+< rows:role_permission_grants|158
+---
+> rows:role_definitions|10
+> rows:role_permission_grants|318
+15a20
+> rows:user_roles|1
+16a22,25
+> rows:workflow_events|1
+> rows:field_section_definitions|1
+> rows:option_sets|1
+> rows:option_set_items|10
+18a28
+> rows:record_drawer_layouts|1
+19a30
+> rows:user_access_profiles|1
+24a36,38
+> rows:configuration_publications|1
+> rows:business_process_revisions|1
+> rows:business_process_drafts|1
+27,29c41,43
+< rows:document_categories|10
+< rows:document_types|13
+< rows:document_type_versions|13
+---
+> rows:document_categories|20
+> rows:document_types|26
+> rows:document_type_versions|26

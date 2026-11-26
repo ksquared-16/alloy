@@ -1,0 +1,44 @@
+{
+  "at": "2026-11-09T00:04:32.626538+00:00",
+  "documents": [],
+  "installations": [
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "b8d9a82e-2222-4d3f-bf2e-e63264083055",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+      "persona": "fixture_admin",
+      "slug": "d9-documents-read-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "843741a7-9d2b-4fd9-abed-14f1322fa325",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-scope-cert"
+    },
+    {
+      "credential_revoke": "already",
+      "disconnect": "already",
+      "installation_id": "630abbf6-1996-4776-ae12-a6628f566d7a",
+      "persona": "cross_org_admin",
+      "slug": "d9-documents-read-cert"
+    }
+  ],
+  "next": [
+    "database.read_census d9-link-audit-census.sql (case 11)",
+    "qa_d9_external_fixture_reset",
+    "environment.qa_run_close #1",
+    "database.read_census d9-residue-census.sql after closed_at (all 15 registered checks)",
+    "environment.qa_run_close #2 naming that census"
+  ],
+  "qa_run_id": "qar_31100f9d04e5",
+  "remaining": [],
+  "verdict": "CLEAN"
+}

@@ -1,0 +1,39 @@
+{
+  "packet": "2f4302a8-76ec-450a-890a-e58b3b817724",
+  "sessions": {
+    "ps_d1": "e49c61e6-362d-477e-ba2f-22cad7af0fae",
+    "ps_d2": "c56c9574-dcd5-41c4-a266-d88e37031250",
+    "ps_ku": "99e44e16-202c-4a1c-b465-c34436d4a9f9"
+  },
+  "packet_links": {
+    "ps_d1": "518baa6d-2b21-44bd-8a54-bbc400aa25e0",
+    "ps_d2": "6a296cd0-2f89-4c14-a69f-84e50d9af48c",
+    "ps_ku": "80d1274a-0912-4f68-b93c-89c855d5dc88"
+  },
+  "form_links": {
+    "fl_d1": "2654483b-36ff-457f-9e95-f363fb4489cd",
+    "fl_d2": "9d69466e-9dd0-4dcb-9e0a-2d7e8f4cc7e4",
+    "fl_none": "a06f7803-7ce0-438d-9da9-4ecc91e1d8d3"
+  },
+  "recipients": {
+    "l1": "53adb449-14a7-4add-bfcb-8915b65c44d2",
+    "l2": "c7a45a10-dbc1-400b-be94-1cb65cdc0c7a"
+  },
+  "r5_subs": {
+    "s_r5_shared": "a76677e3-a4a0-45e9-afa1-8dc21ddcbc87",
+    "s_r5_only": "897cb380-1f7e-4add-9133-6c1dda86fef1",
+    "s_r5_oppa": "ede22f25-4eb0-4c62-beb7-579148e151c6",
+    "s_r5_oppb": "d46f6215-938c-4898-aa96-f8e85de99aa5"
+  },
+  "sf_packet_links": [
+    "07426023-79db-4d4c-a7e0-5e7fd3f0cb02"
+  ],
+  "s_sf_r2": "2127c106-3b06-4241-a799-d65a3c3f9f17",
+  "sa_compose_packet": "6b464616-5522-4cae-8174-f7b748c3e45a",
+  "sa_links": [
+    "a1bbb33d-7cdd-416f-8c14-3bc7786564eb",
+    "2dc50a3f-879c-471a-8b55-a8890d84a5f0"
+  ],
+  "lead_a_deleted": true,
+  "lead_b_deleted": true
+}

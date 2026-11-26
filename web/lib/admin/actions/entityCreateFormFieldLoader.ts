@@ -58,14 +58,74 @@ export async function fetchEntityCreateFormFields(
     if (!res.ok) {
         throw new Error(json.error ?? `Could not load ${entityType} form fields.`);
     }
-    return (json.field_definitions ?? [])
-        .filter(isFormVisible)
-        .map(normalizeRow)
-        .sort((a, b) => {
-            const sk = (a.section_key ?? "").localeCompare(b.section_key ?? "");
-            if (sk !== 0) return sk;
-            return a.sort_order - b.sort_order;
-        });
+    return sortCreateFormFields((json.field_definitions ?? []).filter(isFormVisible).map(normalizeRow));
+}
+
+/*
+ * CREATE-FORM ORDER FOLLOWS MEANING, NOT THE ALPHABET.
+ *
+ * Fields used to be ordered by `section_key` alphabetically, so "contact" and "consent" landed above
+ * "identity" and an operator adding a person met Mobile, Communication preference and Notes before
+ * First and Last Name. Sections are free-form per org (one org files Employer and Notes under
+ * "identity", another under "contact_profile"), so the section alone cannot place a field either.
+ *
+ * Order: a canonical GROUP (identity → contact → address → relationship/operational → other
+ * canonical sections → custom), taken from the field key when it is a known canonical field and from
+ * the section otherwise; then the canonical key order inside the group; then the configured
+ * `sort_order` (what an admin edits); then the label. Custom fields keep their configured order, after
+ * the canonical ones. Nothing here is tenant-specific.
+ */
+const GROUP_IDENTITY = 0;
+const GROUP_CONTACT = 1;
+const GROUP_ADDRESS = 2;
+const GROUP_RELATIONSHIP = 3;
+const GROUP_OTHER_CANONICAL = 4;
+const GROUP_CUSTOM = 5;
+
+/** Canonical fields in their intended order; the index is the order within the group. */
+const CANONICAL_KEY_GROUPS: ReadonlyArray<readonly [number, readonly string[]]> = [
+    [GROUP_IDENTITY, ["first_name", "last_name", "preferred_name", "full_name", "date_of_birth", "dob", "gender"]],
+    [GROUP_CONTACT, ["phone", "mobile", "mobile_phone", "email", "communication_preference", "preferred_contact_method"]],
+    [GROUP_ADDRESS, ["address_line1", "address_line2", "city", "state", "postal_code", "country"]],
+    [
+        GROUP_RELATIONSHIP,
+        ["relationship", "employer", "contact_notes", "notes", "authorized_pickup_notes", "emergency_contact_notes"],
+    ],
+];
+const CANONICAL_KEY_RANK = new Map<string, { group: number; index: number }>();
+for (const [group, keys] of CANONICAL_KEY_GROUPS) keys.forEach((key, index) => CANONICAL_KEY_RANK.set(key, { group, index }));
+
+const SECTION_GROUP: Record<string, number> = {
+    identity: GROUP_IDENTITY,
+    basic: GROUP_IDENTITY,
+    profile: GROUP_IDENTITY,
+    contact: GROUP_CONTACT,
+    contact_profile: GROUP_CONTACT,
+    address: GROUP_ADDRESS,
+    relationship: GROUP_RELATIONSHIP,
+    emergency: GROUP_RELATIONSHIP,
+    operational: GROUP_RELATIONSHIP,
+    child_profile: GROUP_OTHER_CANONICAL,
+    medical: GROUP_OTHER_CANONICAL,
+    consent: GROUP_OTHER_CANONICAL,
+};
+
+function createFormRank(field: EntityCreateFormField): { group: number; index: number } {
+    const canonical = CANONICAL_KEY_RANK.get(field.field_key);
+    if (canonical) return canonical;
+    const section = (field.section_key ?? "").trim().toLowerCase();
+    return { group: SECTION_GROUP[section] ?? GROUP_CUSTOM, index: Number.MAX_SAFE_INTEGER };
+}
+
+export function sortCreateFormFields(fields: EntityCreateFormField[]): EntityCreateFormField[] {
+    return [...fields].sort((a, b) => {
+        const ra = createFormRank(a);
+        const rb = createFormRank(b);
+        if (ra.group !== rb.group) return ra.group - rb.group;
+        if (ra.index !== rb.index) return ra.index - rb.index;
+        if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+        return a.label.localeCompare(b.label);
+    });
 }
 
 /** Merge API form fields with native inquiry_child manifest when API is sparse. */

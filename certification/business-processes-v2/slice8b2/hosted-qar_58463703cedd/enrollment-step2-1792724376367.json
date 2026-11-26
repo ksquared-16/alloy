@@ -1,0 +1,123 @@
+[
+  {
+    "step": "before",
+    "children": {
+      "Ava": {
+        "ocm": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      },
+      "Ben": {
+        "ocm": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      }
+    },
+    "work": [
+      {
+        "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+        "title": "Contact Family",
+        "status": "open",
+        "stage": null,
+        "template": null
+      }
+    ]
+  },
+  {
+    "step": "lead_interested",
+    "result": {
+      "work_id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+      "work_title": "Contact Family",
+      "status": 200,
+      "applied": [
+        {
+          "kind": "move_to_stage",
+          "transition_ref": "lead_to_tour"
+        }
+      ],
+      "failed": [],
+      "errors": [],
+      "outcome": "committed"
+    },
+    "children": {
+      "Ava": {
+        "ocm": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      },
+      "Ben": {
+        "ocm": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      }
+    },
+    "work": [
+      {
+        "id": "d4c2b5de-2c12-4186-8a63-0585742dce7f",
+        "title": "Conduct Tour",
+        "status": "open",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+        "title": "Contact Family",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      }
+    ]
+  },
+  {
+    "step": "tour_completed",
+    "result": {
+      "work_id": "d4c2b5de-2c12-4186-8a63-0585742dce7f",
+      "work_title": "Conduct Tour",
+      "status": 200,
+      "applied": [
+        {
+          "kind": "move_to_stage",
+          "transition_ref": "tour_to_decision"
+        }
+      ],
+      "failed": [],
+      "errors": [],
+      "outcome": "committed"
+    },
+    "children": {
+      "Ava": {
+        "ocm": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      },
+      "Ben": {
+        "ocm": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      }
+    },
+    "work": [
+      {
+        "id": "d4c2b5de-2c12-4186-8a63-0585742dce7f",
+        "title": "Conduct Tour",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+        "title": "Contact Family",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "134466ba-e5d7-4720-b706-af2b6cd8fb53",
+        "title": "Support Enrollment Decision",
+        "status": "open",
+        "stage": null,
+        "template": null
+      }
+    ]
+  }
+]

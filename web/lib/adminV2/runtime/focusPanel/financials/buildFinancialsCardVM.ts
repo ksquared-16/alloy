@@ -1,0 +1,2641 @@
+/**
+ * THE FINANCIALS READ MODEL — one server composition, three densities.
+ *
+ * Compact, summary and expanded all render THIS. React computes no financial truth: every total,
+ * every period placement and every GL code arrives decided, because a card that recomputed a balance
+ * would be a second answer to a question the ledger already answers, and the two would disagree the
+ * first time a category was added.
+ *
+ * ── WHAT THE SUBJECT IS ──
+ *
+ * `charges.billable_source_type = 'enrollment_agreement'` + `billable_source_id`. Child attribution is
+ * DERIVED from there (agreement → `customer_member_id`), which is why no `child_id` column is needed
+ * and none is added. A household's financial picture is the union over its children's agreements.
+ *
+ * ── PAYMENTS ARE REAL HERE ──
+ *
+ * `paymentsCents` was hard-zero, on the stated grounds that `payments.job_id` was NOT NULL and that
+ * payments had never been generalized. The census settled both against the deployed database
+ * (certification/financials/payments-spine-census.sql, tha_be923375ea3595): `job_id` is NULLABLE and
+ * has been since `20260329210000`, and `payment_allocations.charge_id` already applies a payment to a
+ * charge. What was missing was a write path, not a schema.
+ *
+ * So payments received are now READ, by the same rule `jobPaymentBalances` uses for a job: active
+ * applications whose parent payment is POSTED. A pending or failed attempt is money that has not
+ * arrived and reduces nothing. An application is filed under the BILLING PERIOD OF THE CHARGE IT
+ * PAYS, not the date it was applied — a period's balance is what that period's charges still owe, and
+ * a payment made in October against a September charge settles September.
+ *
+ * ── WHAT IS STILL DELIBERATELY ABSENT ──
+ *
+ * Autopay exists only in card-lab fixtures and the concept catalog, so it is reported absent rather
+ * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
+ */
+
+import { paymentGlMappingKey, readPaymentLedgerFacts } from "@/lib/financials/payments/paymentLedgerFacts";
+import { awaitingPostingReason, type AwaitingPostingReason } from "@/lib/financials/posting/awaitingPostingReason";
+import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { selectOpenCollections } from "@/lib/adminV2/runtime/focusPanel/financials/selectOpenCollections";
+import {
+    deriveAccountChargeLedgerRows, reversalBySourceChargeId,
+    type AccountChargeLedgerRow,
+    reductionMapFrom,
+} from "@/lib/financials/account/accountChargeLedger";
+import { railCollectionAvailable } from "@/lib/financials/payments/providerMerchant";
+import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
+import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
+import { heldCentsFor, readHoldsForPayments, type HeldDeposit } from "@/lib/financials/prepaid/heldDeposits";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
+/*
+ * THE REVIEW BOUNDARY'S OTHER HALF. `listFinancialPolicies` reads the org's policies; this resolves
+ * the one that governs a given service. The pair is what makes `posting_review` a configured fact
+ * rather than a template's private opinion, and a restore that brought back only the reader left
+ * the resolver called but undeclared.
+ */
+import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
+import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
+import { resolveCollectiblePositionsForCharges } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { positionFactsFromBundle, readAccountFactBundle, type AccountFactBundle } from "@/lib/financials/workspace/readAccountFactBundle";
+import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
+import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import {
+    catalogChargeOptionsForSubjects,
+    readCatalogChargeConfig,
+} from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import { chargeSitesByChild, HOUSEHOLD_CHARGE_SUBJECT } from "@/lib/financials/catalogCharges/chargeSubjectSite";
+import { loadGlConfigBundle } from "@/lib/financials/gl/glConfigService";
+import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
+import { shapeAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
+import {
+    reductionProvenanceByChargeId,
+    type ReductionPolicyWindow,
+    type ReductionProvenance,
+} from "@/lib/financials/reductions/reductionProvenance";
+import {
+    resolvePayerCandidates,
+    resolvePaymentSetup,
+    type PayerCandidate,
+    type PaymentSetupState,
+} from "@/lib/financials/payments/paymentSubjectModel";
+import {
+    billingPeriodForDate,
+    billingPeriodFromKey,
+    placeInBillingPeriod,
+    sortBillingPeriodKeysDescending,
+    type BillingPeriod,
+    type BillingPeriodBasis,
+} from "@/lib/financials/billingPeriod";
+
+/**
+ * How a category contributes to the reconciliation.
+ *
+ * `charge` raises what the family owes; `reduction` lowers it. The split is by CATEGORY rather than by
+ * the sign of the stored amount, because the sign convention is not enforced by the schema — the only
+ * constraint is `amount_cents <> 0`. Classifying by category and then summing the SIGNED amounts means
+ * the breakdown is readable however a row was written, and the total still reconciles: responsibility
+ * is the sum of every line, so it cannot drift from the rows beneath it.
+ */
+const REDUCTION_CATEGORIES = new Set(["discount", "credit", "subsidy_offset"]);
+const FUNDING_CATEGORIES = new Set(["subsidy_offset"]);
+const ADJUSTMENT_CATEGORIES = new Set(["adjustment"]);
+
+/**
+ * Is this posted row a thing that happens TO an obligation, rather than an obligation?
+ *
+ * Funding, discounts, adjustments and corrections are all already counted inside the net of the
+ * charge they act on — `resolveAllocatableNet` sums them against their `source_charge_id`. Asking
+ * the collectibility resolver about them a second time counts them twice, and because a credit is
+ * negative and its REVERSAL is positive, the double count is asymmetric: the credit is refused as
+ * `not_allocatable` and silently contributes nothing, while its reversal contributes in full.
+ *
+ * Exported so the rule can be bound by a test rather than restated by one.
+ */
+export function isCollectibleOffsetRow(row: Pick<FinancialsLedgerRow, "categoryKey" | "correctsChargeId">): boolean {
+    return (
+        Boolean(row.correctsChargeId)
+        || FUNDING_CATEGORIES.has(row.categoryKey)
+        || REDUCTION_CATEGORIES.has(row.categoryKey)
+        || ADJUSTMENT_CATEGORIES.has(row.categoryKey)
+    );
+}
+
+/** Statuses that count toward what is owed. `draft` is not yet owed; `void` never was. */
+/*
+ * BP V2 S6A — Past due / Not yet due and the owed-status set live in the Financials account domain
+ * (`lib/financials/account/accountDueClassification`), moved there UNCHANGED so the card and every
+ * cross-household reader classify one way. Re-exported here for existing importers.
+ */
+import {
+    OWED_STATUSES,
+    notYetDueFor,
+    pastDueFor,
+    type FinancialsNotYetDue,
+    type FinancialsPastDue,
+} from "@/lib/financials/account/accountDueClassification";
+export { notYetDueFor, pastDueFor, type FinancialsNotYetDue, type FinancialsPastDue };
+
+/** One payment on the account, as the card reads it. */
+export type FinancialsPaymentRow = {
+    paymentId: string;
+    /** inbound = money received; outbound = a refund. */
+    direction: "inbound" | "outbound";
+    /** The receipt this refund reverses, when it is one. */
+    refundsPaymentId: string | null;
+    /**
+     * WHO caused this reversal — `operator` for a refund somebody asked for, `provider` for money a
+     * bank or network took back. Null on a receipt. Without it the surface cannot tell a family's
+     * refund from their bank reversing a debit, and the two mean opposite things about who acted.
+     */
+    reversalOrigin: "operator" | "provider" | null;
+    amountCents: number;
+    currencyCode: string;
+    /** pending | posted | failed | voided. Only `posted` is money. */
+    status: string;
+    method: string;
+    processor: string | null;
+    /** The date the money arrived — not the date it was applied. */
+    receivedAt: string | null;
+    postedAt: string | null;
+    /** Active applications on this payment, summed. Zero for a payment sitting on the account. */
+    appliedCents: number;
+    /**
+     * Received money not currently answering any obligation. NOT a credit and NOT a refund: the
+     * organisation holds it and it can still be applied. Canonical — `readPaymentUnappliedCents`.
+     */
+    unappliedCents: number;
+    /**
+     * How much of THIS receipt is currently restricted by a hold.
+     *
+     * Carried per receipt and not only as the account total, because holding is an act on a receipt:
+     * an operator choosing what to restrict needs to know what is already restricted on the one in
+     * front of them. `unappliedCents - heldCents` is what remains holdable, and the database's own
+     * INVARIANT 2 enforces that bound — this figure exists so the surface agrees with it rather than
+     * offering an act the trigger will refuse.
+     *
+     * OPTIONAL, because it is resolved by a LATER read than the rest of the row. The holds read can
+     * fail on its own — the VM catches that and reports the account as unable to answer rather than
+     * as unrestricted — and a row composed before that read has no honest value to carry. Every
+     * consumer defaults it to zero, which is also the right reading for the callers that never ask
+     * for holds at all.
+     */
+    heldCents?: number;
+    /**
+     * The household the receipt was taken against, named. Null when canonical data cannot name it —
+     * an absent label is never replaced with a guess, because the wrong family on a payment is worse
+     * than no family at all.
+     */
+    payerLabel: string | null;
+    /**
+     * W7-F032: WHO PAID — the payment's own `payer_entity`, named; null when it names nobody (the
+     * household above is then the honest answer). Never the responsible party.
+     */
+    payerName?: string | null;
+    payerKind?: "person" | "agency" | null;
+    /** "Visa •••• 4242" from the collection's stored method; null for a hand-recorded receipt. */
+    methodDisplay?: string | null;
+    /** The settlement account this tender maps to (`gl_account_mappings`), or null when unmapped. */
+    glCode?: string | null;
+    glAccountName?: string | null;
+    glMappingKey?: string | null;
+    /** W7-F042: why the account reads as it does — recorded, none configured then, or pre-stamping history. */
+    glState?: FinancialsPaymentGlState;
+    /** W7-F050: the payment was settled automatically (no charge was chosen). */
+    settledAutomatically?: boolean;
+    /**
+     * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
+     * is doing something; this says WHICH obligations, and which were undone — the difference between
+     * a balance and an explanation, and the thing an operator needs before moving money.
+     */
+    applications: FinancialsPaymentApplication[];
+    reference: string | null;
+    notes: string | null;
+};
+
+export type FinancialsPaymentGlState = "recorded" | "unconfigured_at_receipt" | "before_stamping";
+
+export type FinancialsPaymentApplication = {
+    allocationId: string;
+    chargeId: string | null;
+    chargeLabel: string;
+    chargeServiceDate: string | null;
+    appliedCents: number;
+    /** `active` answers an obligation now; `reversed` is history that no longer counts. */
+    status: string;
+    allocatedAt: string | null;
+    reversedAt: string | null;
+    reversalReason: string | null;
+};
+
+export type FinancialsSubject = {
+    customerMemberId: string;
+    agreementId: string;
+    displayName: string;
+    /** Canonical identity key. The photo is resolved per actor by the route, never here. */
+    personId?: string | null;
+    /** Canonical, already-authorized avatar reference. Null renders initials. */
+    imageUrl?: string | null;
+    /** Agreement status — a closed agreement still owns its history. */
+    agreementStatus: string;
+};
+
+export type FinancialsLedgerRow = {
+    chargeId: string;
+    /** The date this row is FILED under, and which column decided it. */
+    date: string | null;
+    periodKey: string | null;
+    periodBasis: BillingPeriodBasis;
+    subjectMemberId: string | null;
+    subjectName: string | null;
+    categoryKey: string;
+    categoryLabel: string;
+    description: string | null;
+    amountCents: number;
+    currencyCode: string;
+    status: string;
+    /**
+     * DERIVED lifecycle, never a stored status.
+     *
+     * `scheduled` — a draft whose billable date has not arrived.
+     * `reversed`  — posted money that a later correction has fully undone. The row is still `posted`
+     *               in the database and still stands in the ledger; what changed is that it no
+     *               longer represents an open obligation, and no further correction is lawful.
+     */
+    lifecycleStatus: "scheduled" | "draft" | "posted" | "reversed" | "void";
+    /**
+     * W7-F027: WHY AN UNPOSTED ROW IS UNPOSTED — the canonical classifier's answer over the
+     * metadata the posting authority wrote, the same one the Charges workspace reads. Null on every
+     * row that is not a draft. The ledger states this, not a guess from `billable_on`.
+     */
+    awaiting?: AwaitingPostingReason | null;
+    /** The charge this row corrects, when it is a correction. Null for an original charge. */
+    correctsChargeId: string | null;
+    /** `reversal` | `credit` | `replacement` — from the correction's own metadata. */
+    correctionKind: string | null;
+    /** The correction that reversed THIS row, when one exists. Null while the charge stands. */
+    reversedByChargeId: string | null;
+    /**
+     * Whether this row admits a correction — the transition the card renders as `Reverse`.
+     *
+     * Decided HERE, not in the component. The card asks one question of a ledger row and it is a
+     * question about money: posted money that still stands and is not itself a correction. Leaving
+     * that to JSX meant the rule existed twice — once in the component and once in every test and
+     * certification that restated it — and a certification that restates the rule proves only that
+     * it can restate it.
+     */
+    offersReverse: boolean;
+    /**
+     * Money already applied to THIS charge, and what it therefore still owes.
+     *
+     * Not new arithmetic: `appliedByChargeId` is the same map `reconcileRows` and `pastDueFor`
+     * already sum, under the one balance rule (active applications whose parent payment is POSTED).
+     * It is surfaced per row because the card previously had no way to say which charge a payment
+     * settled, and an operator deciding what to collect needs the row's own number rather than the
+     * account total.
+     */
+    appliedCents: number;
+    /** `amountCents − appliedCents`. Zero or negative means nothing is left to collect. */
+    outstandingCents: number;
+    /**
+     * Whether this row can receive a payment — the transition the card renders as `Record payment`.
+     *
+     * Decided HERE for the same reason `offersReverse` is: leaving it to JSX puts the rule in the
+     * component and again in every test that restates it. `payment.record`'s own eligibility check
+     * refuses a draft or void charge, and the database bounds over-application; this is the card's
+     * mirror of that answer, never a second rule.
+     */
+    offersPayment: boolean;
+    dueDate: string | null;
+    /** Operator-facing GL code, or null when nothing maps it. Never silently blank. */
+    glCode: string | null;
+    glAccountName: string | null;
+    /**
+     * WHO OWNS THIS CHARGE'S OBLIGATION — at the grain the model actually has.
+     *
+     * `financial_responsibility_allocations` is keyed by `charge_id`, so responsibility IS
+     * charge-grain and a ledger row can state its own responsible party without inventing one. It
+     * is deliberately NOT the same question as `subjectName`: the subject is the CHILD the charge is
+     * for, the responsible party is the person who owes it, and one child's tuition may be owed by
+     * a parent who is not on any other row. Conflating them is how a surface ends up telling an
+     * operator that a four-year-old owes $1,850.
+     *
+     * Null with `responsibilityUnassigned` false means no allocation exists for the charge at all —
+     * which is different from an allocation that exists and names nobody. Both are real states and
+     * neither is a person.
+     *
+     * NO ARITHMETIC. The name is read; the amounts stay where `readResponsibility` computes them.
+     */
+    responsiblePartyName: string | null;
+    /** An allocation exists for this charge and deliberately names no party. */
+    responsibilityUnassigned: boolean;
+    /*
+     * Owed by a named party on this obligation, and owed by nobody yet — both are true at once.
+     * Optional because a row that has never been through allocation simply has neither; the
+     * projection always supplies them, and absent reads as zero everywhere they are used.
+     */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
+    /** Where the row came from — template key, or the manual service. */
+    source: string | null;
+    /**
+     * WHY THIS REDUCTION EXISTS, where the row IS one.
+     *
+     * Null on an ordinary charge. Present on a discount, credit, adjustment or reversal, carrying
+     * the decision behind the money — which policy, on what basis, one-time or ongoing, and what it
+     * reverses. Derived once by `reductionProvenance` so both deep surfaces state the same meaning.
+     */
+    reduction: ReductionProvenance | null;
+};
+
+export type FinancialsReconciliation = {
+    grossCents: number;
+    discountsCents: number;
+    fundingCents: number;
+    adjustmentsCents: number;
+    /** gross + discounts + funding + adjustments — the sum of every owed line, by construction. */
+    responsibilityCents: number;
+    paymentsCents: number;
+    /** responsibility − payments. */
+    balanceCents: number;
+    /** Drafts whose billable date has not arrived. STATED beside the balance, never inside it. */
+    scheduledCents: number;
+    /**
+     * Drafts whose billable date HAS arrived but which have not been posted.
+     *
+     * Neither owed nor scheduled, and previously counted in neither — so a period holding only
+     * unposted drafts reconciled to zero with nothing on the card explaining where the money went.
+     * A draft is not a debt; it is also not nothing.
+     */
+    draftCents: number;
+};
+
+
+/**
+ * W7-F018: drafts on the account — visible, not posted, and so not balance, Due, Past due or
+ * posted responsibility. The SAME lifecycle classifier the reconciliation uses decides membership
+ * (`scheduled` = waiting for its billing period; `draft` = waiting for something else), summed
+ * across every period, because a draft for next month is still on this account.
+ */
+export type FinancialsUpcoming = {
+    amountCents: number;
+    count: number;
+};
+
+export function upcomingFor(rows: readonly AccountChargeLedgerRow[]): FinancialsUpcoming | null {
+    const drafts = rows.filter(
+        (r) => (r.lifecycleStatus === "scheduled" || r.lifecycleStatus === "draft") && r.amountCents > 0,
+    );
+    if (drafts.length === 0) return null;
+    return { amountCents: drafts.reduce((sum, r) => sum + r.amountCents, 0), count: drafts.length };
+}
+
+
+export type FinancialsPeriodGroup = {
+    period: BillingPeriod;
+    rows: FinancialsLedgerRow[];
+    totalCents: number;
+};
+
+export type FinancialsChargeTemplateOption = {
+    id: string;
+    label: string;
+    categoryKey: string;
+    categoryLabel: string;
+    amountStrategy: string;
+    /** Present only for `fixed` templates; anything else is priced by resolution. */
+    amountCents: number | null;
+    currencyCode: string;
+    /**
+     * WHETHER CONFIRMING THIS TEMPLATE WILL WAIT FOR REVIEW.
+     *
+     * The tenant's `posting_review` Financial Policy resolved for this template's service, OR'd with
+     * the template's own `review_required` — the same disjunction `resolveChargeFromTemplate` applies
+     * when it writes. It is carried here so the command can PREVIEW the act it will perform rather
+     * than describing a mechanism that may not apply.
+     */
+    reviewRequired: boolean;
+    occursOnStrategy: string;
+    billableOnStrategy: string;
+    /**
+     * WHERE THIS OPTION COMES FROM. Manual Add Charge offers the organisation's Catalog
+     * (`commercial_products`) and nothing else — `id` is the catalog item's id, sent as
+     * `catalog_product_id`. A `template` option exists only in `draftTemplates`: it is how an
+     * EXISTING template draft is edited under its own template, never a choice for a new charge.
+     */
+    source: "catalog" | "template";
+    /** A template option's lineage key (`template_key`), shared by every version of that template. */
+    templateKey?: string;
+    /**
+     * `offerable` — may be charged. `unsupported` — billed by another flow. `blocked` — configuration
+     * is incomplete (no account, no price). Only `offerable` can be chosen; the other two are shown
+     * with `unavailableReason` so the operator sees the whole catalog and why an item is not here.
+     */
+    availability: "offerable" | "unsupported" | "blocked";
+    unavailableReason: string | null;
+    /**
+     * The `Applies to` subjects (`HOUSEHOLD_CHARGE_SUBJECT` or a child's member id) this catalog item
+     * may not be charged to, each with the command's reason — it is offered at another site than that
+     * subject's charge is for. Absent for template options.
+     */
+    unavailableForSubjects?: Record<string, string>;
+    /** The account the charge will post to, as `code · name` — the catalog item's own, never a default. */
+    accountLabel: string | null;
+};
+
+/** A fact the platform does not own yet, named rather than rendered as zero. */
+export type FinancialsUnavailable = { fact: string; reason: string };
+
+export type FinancialsCardVM = {
+    /** Null when the subject has no enrollment agreement at all — nothing financial to say. */
+    account: { customerId: string | null; label: string | null } | null;
+    /**
+     * ── THE ORGANISATION'S BUSINESS DATE, RESOLVED SERVER-SIDE ────────────────────────────────
+     *
+     * The operating day this whole model was built against — the same value that chose `period`,
+     * reconciled the rows and decided what is past due.
+     *
+     * It reaches the surface because a command that needs to default an economic date must use the
+     * ORGANISATION's today, and React cannot compute that: the browser's zone is the OPERATOR's,
+     * and an operator may sit in a different zone from the site whose money they are recording.
+     * Carrying the resolved value is also what keeps the surface's default and the server's
+     * reconciliation talking about the same day.
+     */
+    businessDateYmd: string;
+    period: BillingPeriod;
+    subjects: FinancialsSubject[];
+    /**
+     * The manual reductions recorded against this account, newest first.
+     *
+     * The reconciliation already says what they came to. A total cannot be reversed, and reversing
+     * one needs its application id — which an operator cannot be expected to know — so the records
+     * themselves reach the surface.
+     */
+    reductions: AccountReduction[];
+    /** Every row across every period, already placed and presented. */
+    rows: FinancialsLedgerRow[];
+    /** The CURRENT period only. */
+    reconciliation: FinancialsReconciliation;
+    /** The same reconciliation, narrowed per child — keyed by `customer_members.id`. */
+    reconciliationBySubject: Record<string, FinancialsReconciliation>;
+    pastDue: FinancialsPastDue | null;
+    /** W7-F013: posted, collectible, and not due until a later payment event. */
+    notYetDue: FinancialsNotYetDue | null;
+    /** W7-F018: drafts across the account — never balance, Due or posted responsibility. */
+    upcoming: FinancialsUpcoming | null;
+    pastDueBySubject: Record<string, FinancialsPastDue | null>;
+    ledgerPeriods: FinancialsPeriodGroup[];
+    /**
+     * Money received on this account, newest first — receipts AND refunds.
+     *
+     * A refund is not a negative receipt: it is an outbound row naming the receipt it reverses, so
+     * the pair reads as "this arrived, and this much of it went back" rather than as two unrelated
+     * amounts. `appliedCents` is what each one is actually doing to a balance right now, which is
+     * how an operator tells a payment sitting unapplied on the account from one that has settled an
+     * obligation.
+     */
+    payments: FinancialsPaymentRow[];
+    chargeTemplates: FinancialsChargeTemplateOption[];
+    /**
+     * THE TEMPLATES IN EFFECT TODAY — for editing a draft that was written from one, and nothing else.
+     *
+     * A historical template draft keeps its template identity: it is edited under that template (or
+     * the version of the same `template_key` in force now), through `template_id`, exactly as before.
+     * It is never matched to a catalog item by name — two different authorities can share a name.
+     */
+    draftTemplates: FinancialsChargeTemplateOption[];
+    unavailable: FinancialsUnavailable[];
+    /**
+     * Canonical payment state to show the operator, or null when none exists.
+     *
+     * Deliberately NOT the `unavailable` list: that records why the PLATFORM cannot answer, which is
+     * a development finding and never operator copy.
+     *
+     * DERIVED, not declared. This was the literal `null` for the whole life of the card, and the
+     * adapter read it as "no payment method on file" — a claim about a family made from a constant
+     * nobody had ever computed. It now comes from `resolvePaymentSetup`, which looks.
+     */
+    paymentSetup: string | null;
+    /**
+     * The Autopay sentence, from the canonical arrangement (W5). Null means NO arrangement, which
+     * is a measurement — it used to be listed as a platform unavailability because nothing could
+     * answer the question at all.
+     */
+    autopayLine: string | null;
+    autopayHealthy: boolean;
+    /**
+     * WHAT THIS ORGANISATION CAN ACTUALLY DO WITH MONEY, per capability, with a reason when it
+     * cannot. `unsupported` (Alloy has no implementation) and `not_configured` (it has one and this
+     * organisation has not set it up) are deliberately different answers.
+     */
+    paymentCapabilities: PaymentSetupState | null;
+    /**
+     * WHO COULD HAVE PAID — household membership, never responsibility.
+     *
+     * Distinct from `payers`, which is persisted responsibility. A grandparent settling a bill is a
+     * payer and is responsible for nothing; defaulting one to the other is the collapse the payment
+     * model forbids.
+     */
+    payerCandidates: PayerCandidate[];
+    /**
+     * Whether this organization's merchant can actually take a bank debit.
+     *
+     * Resolved from the merchant's provider capability on the SERVER. The browser is told the
+     * answer and never computes it: a surface that decided its own rail availability would offer a
+     * collection the provider then refuses, after the operator had been told it was under way.
+     */
+    achAvailable: boolean;
+    /**
+     * Collections the provider has not finished, as the DATABASE holds them.
+     *
+     * An in-flight card collection lasts seconds and lived happily in component state. A bank debit
+     * lasts days: the operator closes the tab, comes back tomorrow, and must still be told the money
+     * is on its way. Lifecycle that exists only in React disappears on reload and takes the truth
+     * with it, so the open attempts travel on the view model and the surface reads them.
+     *
+     * Recognised collections are absent on purpose — once Thread 8 has the receipt, the payment
+     * history is the truth and an attempt is just how it got there.
+     */
+    openCollections: Array<{
+        attemptId: string;
+        rail: string;
+        processorState: string;
+        providerActionType: string | null;
+        chargeId: string | null;
+        amountCents: number;
+        currencyCode: string;
+        updatedAt: string | null;
+    }>;
+    /**
+     * WHO is responsible for this account, from the canonical `payer` contact role.
+     *
+     * `share` is deliberately nullable and is null today for every payer. Alloy has a payer ROLE
+     * (`customer_person_role_types`, seeded `childcare_contact_role` → `payer`) but NO allocation
+     * store — nothing anywhere records that Jordan carries 70% and Taylor 30%. The card therefore
+     * names the payers and states no split, because a split invented here would assign real money
+     * to real people on no record.
+     */
+    payers: Array<{ personId: string; name: string; share: string | null; method: string | null }>;
+    /**
+     * WHO OWES WHAT, from persisted allocations — never a share invented here.
+     *
+     * Thread 2 shipped `payers[]` with `share: null` for everyone and said so plainly: there was a
+     * payer contact ROLE and no allocation store, so a split rendered here would have assigned real
+     * money to real people on no record. Thread 6 built the record, and this is the read of it.
+     *
+     * `unassignedCents` is not a rounding artefact and is not zero by default: it is money for
+     * which no arrangement names anybody, held in the open rather than handed to whichever adult
+     * the platform could most plausibly blame.
+     */
+    responsibility: {
+        parties: Array<{ personId: string; name: string; assignedCents: number; attributedCents: number; remainingCents: number }>;
+        unassignedCents: number;
+        allocatedCents: number;
+        /** True when at least one charge in the period has no active allocation at all. */
+        hasUnresolvedCharges: boolean;
+    };
+    /** Expected funding attached to responsibility — never a receipt, never a balance. */
+    expectedFunding: Array<{ label: string; sourceType: string; expectedCents: number | null; percentBasisPoints: number | null }>;
+    /**
+     * WHAT SHOULD ACTUALLY BE COLLECTED FROM THIS FAMILY RIGHT NOW.
+     *
+     * Thread 8's outstanding is unchanged and remains the authority for what a charge owes. This is
+     * the governed position beside it: a SUBMITTED subsidy claim may suppress collection for the
+     * amount it attributed, so a family is not chased for money an agency has been asked for. Every
+     * figure is derived server-side by `resolveFamilyCollectible` and simply rendered here — a card
+     * that recomputed any of it could disagree with the operator's own screen.
+     *
+     * `unresolvedVarianceCents` sits BESIDE the collectible figure and is never folded into it:
+     * when an agency short-pays, the difference is a decision somebody owes, not a bill the family
+     * silently inherits.
+     */
+    /**
+     * MONEY THIS ACCOUNT HOLDS THAT IS NOT YET SPENT — and only the part that may be spent.
+     *
+     * Projected by `resolveAccountPrepaidPosition`, which is the authority; nothing here computes
+     * it. UNAPPLIED IS NOT AVAILABLE: a pending receipt is money the platform has been told about,
+     * not money it has, so it is reported separately and never offered.
+     *
+     * `heldSupported: false` means the platform CANNOT TELL a restricted deposit from ordinary
+     * prepaid money. A surface must not render that as "$0 held" — an absent capability is not a
+     * zero measurement, and claiming it would let an operator spend a refundable deposit believing
+     * none was held.
+     *
+     * Since W4 the authority reports `true`, so a zero IS a measurement. The false branch remains
+     * because the empty VM below still uses it: a card that has not read yet has not measured
+     * anything, and that is the same claim.
+     */
+    prepaid: {
+        availableCents: number;
+        pendingCents: number;
+        heldCents: number;
+        heldSupported: boolean;
+        /**
+         * W7-F044: the receipts the figures are made of — the resolver's own classification, so a
+         * prepaid amount can always be traced to the payments behind it. Absent before the read.
+         */
+        positions?: Array<{
+            paymentId: string;
+            availability: "available" | "pending" | "refunding" | "held";
+            unappliedCents: number;
+            heldCents: number;
+        }>;
+    };
+    /**
+     * The held deposits behind `prepaid.heldCents` (Payments V1 · W4).
+     *
+     * Summary needs only the total; DETAILS owns administration and needs the lots — what was
+     * originally held, what became of it, under which terms, and since when. Empty until a hold
+     * exists, which is why Summary can render from the total alone.
+     */
+    heldDeposits: HeldDeposit[];
+    collectible: {
+        outstandingCents: number;
+        expectedSubsidyCents: number;
+        submittedClaimSuppressionCents: number;
+        actualSubsidyReceivedCents: number;
+        unresolvedVarianceCents: number;
+        currentlyCollectibleCents: number;
+    };
+    /** Absent when the subject has no attendable/billable enrolment — the card renders no controls. */
+    unavailableReason: string | null;
+};
+
+/** No id can equal this, so an empty source list selects nothing rather than everything. */
+const NO_SOURCE_SENTINEL = "00000000-0000-0000-0000-000000000000";
+
+/*
+ * THE EXPLICIT BOUNDS, stated rather than inherited from a server default.
+ *
+ * These are not the PostgREST page size — `readAllPages` pages past that. They are the point at
+ * which this reader refuses to answer at all, because beyond them a single account's balance would
+ * cost an unbounded number of round trips. They are deliberately far above any real childcare
+ * account: the largest on the certification tenant holds 2,821 charges after months of generated
+ * tuition, and a bound is only useful if reaching it means something has gone wrong rather than
+ * something has grown.
+ *
+ * Reaching one is reported as an unavailability, never as a smaller number.
+ */
+const ACCOUNT_CHARGE_SCAN_CAP = 25_000;
+const ACCOUNT_PAYMENT_SCAN_CAP = 25_000;
+
+function t(v: unknown): string {
+    return v != null ? String(v).trim() : "";
+}
+
+/**
+ * THE ORGANISATION'S BUSINESS DATE, with the one honest fallback.
+ *
+ * `fetchOrgBusinessDate` already resolves a usable zone for a tenant that has configured none, so
+ * the catch here is for an unreachable read rather than an unconfigured org. A card that cannot
+ * reach the timezone authority still has to render, and the UTC day is the same answer this code
+ * gave before — so the fallback degrades to the old behaviour rather than to no behaviour.
+ */
+async function resolveOperatingDay(supabase: SupabaseClient, orgId: string): Promise<string> {
+    try {
+        return await fetchOrgBusinessDate(supabase, orgId);
+    } catch {
+        return ymdTodayUtcFallback();
+    }
+}
+
+/**
+ * LAST-RESORT UTC DAY. Retained only for the path that has no organisation to ask — see the
+ * resolution in `buildFinancialsCardVMInner`, which prefers the org's business date and falls back
+ * here only if the timezone authority itself fails.
+ */
+function ymdTodayUtcFallback(): string {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function emptyReconciliation(): FinancialsReconciliation {
+    return {
+        grossCents: 0,
+        discountsCents: 0,
+        fundingCents: 0,
+        adjustmentsCents: 0,
+        responsibilityCents: 0,
+        paymentsCents: 0,
+        balanceCents: 0,
+        scheduledCents: 0,
+        draftCents: 0,
+    };
+}
+
+function baseVm(period: BillingPeriod, businessDateYmd: string): FinancialsCardVM {
+    return {
+        account: null,
+        businessDateYmd,
+        period,
+        payers: [],
+        responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
+        expectedFunding: [],
+        prepaid: { availableCents: 0, pendingCents: 0, heldCents: 0, heldSupported: false },
+        heldDeposits: [],
+        collectible: {
+            outstandingCents: 0,
+            expectedSubsidyCents: 0,
+            submittedClaimSuppressionCents: 0,
+            actualSubsidyReceivedCents: 0,
+            unresolvedVarianceCents: 0,
+            currentlyCollectibleCents: 0,
+        },
+        subjects: [],
+        reductions: [],
+        rows: [],
+        reconciliation: emptyReconciliation(),
+        reconciliationBySubject: {},
+        pastDue: null,
+        notYetDue: null,
+        upcoming: null,
+        pastDueBySubject: {},
+        ledgerPeriods: [],
+        payments: [],
+        chargeTemplates: [],
+        draftTemplates: [],
+        unavailable: [],
+        paymentSetup: null,
+        autopayLine: null,
+        autopayHealthy: false,
+        paymentCapabilities: null,
+        payerCandidates: [],
+        achAvailable: false,
+        openCollections: [],
+        unavailableReason: null,
+    };
+}
+
+/**
+ * The unavailabilities that are properties of the PLATFORM rather than of this record.
+ *
+ * Stated on every composition, because "we have no payments for this family" and "this platform
+ * cannot record a payment for this kind of family" are different answers and only one of them is
+ * true. See the schema note in the module docstring.
+ */
+function platformUnavailabilities(): FinancialsUnavailable[] {
+    return [
+        {
+            fact: "payer_split",
+            reason: "responsibility splits are owned by Processing, not by Financials configuration",
+        },
+    ];
+}
+
+/**
+ * The account's payers, from the canonical contact role — never from a guess about who pays.
+ *
+ * `share` comes back null for everyone because no allocation store exists. That is the honest
+ * answer and the card renders no split for it; when Processing gains an allocation, this is the one
+ * place that has to learn to read it.
+ */
+
+/**
+ * RESPONSIBILITY, READ FROM WHAT WAS PERSISTED.
+ *
+ * One query over the account's charges, then the attributions against those allocations, so a
+ * party's remaining share is DERIVED — assigned less attributed — rather than stored. A stored
+ * per-party balance would be the second balance Thread 6 is forbidden to create, and it would drift
+ * from Thread 8's the first time an application was reversed.
+ *
+ * This replaces the payer read Thread 2 shipped, which listed whoever held the `payer` CONTACT role
+ * and stated no share because no allocation store existed. That role is still a way to reach a
+ * human; it is no longer what makes somebody financially responsible.
+ */
+/*
+ * Exported because charge detail asks the same question about one charge that the card asks
+ * about an account's. Two readers of `financial_responsibility_allocations` would be two
+ * chances to disagree about who owes what, so there is one.
+ */
+export type ResponsibilityFactRows = {
+    responsibilityAllocations: ReadonlyArray<Record<string, unknown>>;
+    attributions: ReadonlyArray<Record<string, unknown>>;
+    persons: ReadonlyArray<Record<string, unknown>>;
+    funding: ReadonlyArray<Record<string, unknown>>;
+};
+
+/**
+ * The responsibility answer, over rows however they were acquired.
+ *
+ * This walked its own chain — allocations, then the attributions/names/funding those allocations
+ * name — which was two of the card's dependent waves. The account fact bundle carries both sets,
+ * so the card supplies them and spends no round trip; the cohort path still reads. The RULES below
+ * — what is unassigned, how a party's remaining is derived, which funding counts — are unchanged
+ * and remain the only authority on responsibility.
+ */
+export async function readResponsibility(
+    supabase: SupabaseClient,
+    orgId: string,
+    chargeIds: readonly string[],
+    supplied?: ResponsibilityFactRows,
+): Promise<{
+    responsibility: FinancialsCardVM["responsibility"];
+    payers: FinancialsCardVM["payers"];
+    expectedFunding: FinancialsCardVM["expectedFunding"];
+    /** The same allocations, indexed by charge, so a ledger row can name who owes it. */
+    responsibilityByCharge: Map<string, {
+        name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>;
+}> {
+    const empty = {
+        responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
+        payers: [],
+        expectedFunding: [],
+        /* No allocations read means no row can name a responsible party. It never means nobody owes. */
+        responsibilityByCharge: new Map<string, {
+            name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+        }>(),
+    };
+    if (chargeIds.length === 0) return empty;
+
+    let allocationRows: Array<Record<string, unknown>>;
+    try {
+        allocationRows = supplied
+            ? [...supplied.responsibilityAllocations]
+            : await readInBatches<Record<string, unknown>>(
+            "who is responsible for these charges",
+            [...chargeIds],
+            (batch) => supabase
+                .from("financial_responsibility_allocations")
+                .select("id, charge_id, responsible_party_id, is_unassigned, assigned_amount_cents, share_id")
+                .eq("org_id", orgId)
+                .eq("state", "active")
+                .in("charge_id", batch) as never,
+        );
+    } catch {
+        // A responsibility read that fails is an absence of responsibility on the card, never a
+        // reason to fail the account — the same rule the payer read has always followed.
+        return empty;
+    }
+    const allocations = (allocationRows ?? []) as Array<{
+        id: string;
+        charge_id: string;
+        responsible_party_id: string | null;
+        is_unassigned: boolean;
+        assigned_amount_cents: number;
+        share_id: string | null;
+    }>;
+    if (allocations.length === 0) {
+        return { ...empty, responsibility: { ...empty.responsibility, hasUnresolvedCharges: true } };
+    }
+
+
+    /*
+     * ── ATTRIBUTIONS, NAMES AND FUNDING ALL HANG OFF THE ALLOCATIONS, AND OFF NOTHING ELSE ──────
+     *
+     * Attributions are keyed by allocation id, the names by the responsible party ids ON those
+     * allocations, and expected funding by their share ids. None of the three reads a row another
+     * produced — yet they ran as three consecutive awaits, so this resolver alone was four round
+     * trips deep and the card waited through all of them.
+     *
+     * The keys are derived here, from the allocations only, and the three reads go out together.
+     * Each keeps its own degradation: a missing name still falls back to "Responsible party", and
+     * an absent funding row still means no expected funding rather than an error.
+     */
+    const partyIdsFromAllocations = [
+        ...new Set(
+            allocations
+                .filter((a) => !a.is_unassigned && a.responsible_party_id)
+                .map((a) => a.responsible_party_id as string),
+        ),
+    ];
+    const shareIds = [...new Set(allocations.map((a) => a.share_id).filter((v): v is string => !!v))];
+    const [{ data: attributionRows }, { data: people }, { data: fundingRows }] = supplied
+        ? [
+            { data: supplied.attributions },
+            { data: supplied.persons },
+            { data: supplied.funding },
+        ]
+        : await Promise.all([
+        supabase
+            .from("payment_responsibility_attributions")
+            .select("responsibility_allocation_id, amount_cents")
+            .eq("org_id", orgId)
+            .in("responsibility_allocation_id", allocations.map((a) => a.id)),
+        partyIdsFromAllocations.length
+            ? supabase
+                  .from("persons")
+                  .select("id, first_name, last_name, full_name")
+                  .eq("org_id", orgId)
+                  .in("id", partyIdsFromAllocations)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        shareIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("funding_source_label, funding_source_type, expected_amount_cents, percent_basis_points, state")
+                  .eq("org_id", orgId)
+                  .eq("state", "active")
+                  .in("share_id", shareIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    ] as const);
+    const attributed = new Map<string, number>();
+    for (const row of (attributionRows ?? []) as Array<{ responsibility_allocation_id: string; amount_cents: number }>) {
+        attributed.set(row.responsibility_allocation_id, (attributed.get(row.responsibility_allocation_id) ?? 0) + Number(row.amount_cents));
+    }
+
+    const byParty = new Map<string, { assigned: number; attributed: number }>();
+    let unassignedCents = 0;
+    for (const a of allocations) {
+        const amount = Number(a.assigned_amount_cents);
+        if (a.is_unassigned || !a.responsible_party_id) {
+            unassignedCents += amount;
+            continue;
+        }
+        const seen = byParty.get(a.responsible_party_id) ?? { assigned: 0, attributed: 0 };
+        seen.assigned += amount;
+        seen.attributed += attributed.get(a.id) ?? 0;
+        byParty.set(a.responsible_party_id, seen);
+    }
+
+    const partyIds = [...byParty.keys()];
+    const nameById = new Map(
+        ((people ?? []) as Array<Record<string, unknown>>).map((p) => [
+            t(p.id),
+            t(p.full_name) || [t(p.first_name), t(p.last_name)].filter(Boolean).join(" ") || "Responsible party",
+        ]),
+    );
+
+    const parties = partyIds.map((id) => {
+        const totals = byParty.get(id)!;
+        return {
+            personId: id,
+            name: nameById.get(id) ?? "Responsible party",
+            assignedCents: totals.assigned,
+            attributedCents: totals.attributed,
+            remainingCents: totals.assigned - totals.attributed,
+        };
+    });
+
+    const allocatedCents = parties.reduce((acc, p) => acc + p.assignedCents, 0);
+    const chargesWithAllocations = new Set(allocations.map((a) => a.charge_id));
+
+    /*
+     * ── THE SAME ALLOCATIONS, INDEXED BY CHARGE ────────────────────────────────────────────────
+     *
+     * So a ledger row can say who owes it. Nothing is re-read and nothing is summed: this walks the
+     * rows already in hand. A charge whose allocations name two different people is reported as
+     * SPLIT rather than as one of them — picking a winner would be this projection deciding a
+     * responsibility question the allocations deliberately left as two.
+     */
+    const byCharge = new Map<string, {
+        names: Set<string>; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>();
+    for (const a of allocations) {
+        const entry = byCharge.get(a.charge_id)
+            ?? { names: new Set<string>(), unassigned: false, assignedCents: 0, unassignedCents: 0 };
+        const amount = Number(a.assigned_amount_cents) || 0;
+        if (a.is_unassigned || !a.responsible_party_id) {
+            entry.unassigned = true;
+            entry.unassignedCents += amount;
+        } else {
+            entry.names.add(nameById.get(a.responsible_party_id) ?? "Responsible party");
+            entry.assignedCents += amount;
+        }
+        byCharge.set(a.charge_id, entry);
+    }
+    /*
+     * ── A NAME AND A REMAINDER ARE BOTH TRUE AT ONCE ───────────────────────────────────────────
+     *
+     * A $75.00 obligation resolved under an arrangement naming one $18.00 fixed share produces TWO
+     * allocations: $18.00 owed by a person and $57.00 owed by nobody. This map carried only
+     * `{name, unassigned}`, the surfaces rendered the name, and an operator read a partially
+     * allocated obligation as fully owned by the person named. The $57.00 was invisible.
+     *
+     * The amounts travel with the name so a surface can say PARTIAL without recomputing anything.
+     * They are sums of the allocations already in hand — no second read, and no second opinion
+     * about what is owed.
+     */
+    const responsibilityByCharge = new Map<string, {
+        name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>(
+        [...byCharge].map(([chargeId, entry]) => [
+            chargeId,
+            {
+                name:
+                    entry.names.size === 1 ? [...entry.names][0]!
+                    : entry.names.size > 1 ? "Split"
+                    : null,
+                unassigned: entry.unassigned,
+                assignedCents: entry.assignedCents,
+                unassignedCents: entry.unassignedCents,
+            },
+        ]),
+    );
+
+    return {
+        responsibilityByCharge,
+        responsibility: {
+            parties,
+            unassignedCents,
+            allocatedCents,
+            hasUnresolvedCharges: chargeIds.some((id) => !chargesWithAllocations.has(id)),
+        },
+        payers: parties.map((p) => ({
+            personId: p.personId,
+            name: p.name,
+            // A REAL share, because a real allocation assigned it.
+            share: `$${(p.assignedCents / 100).toFixed(2)}`,
+            /*
+             * Still null HERE, and deliberately so — but no longer for the original reason.
+             *
+             * When this was written there was no stored-method authority at all. Payments W2 then
+             * shipped `payment_methods`, and `vm.paymentCapabilities` on this same VM now carries
+             * the canonical answer, including `summaryLine`. The presentation adapter reads it
+             * from there.
+             *
+             * What is still genuinely absent is a PER-PAYER answer: `methodsOnFile` is scoped to
+             * the household, not to one payer, so a per-payer line cannot be resolved without
+             * widening the canonical model. Leaving this null keeps that honest, and the adapter
+             * falls back to the account-level line rather than to a claim.
+             */
+            method: null,
+        })),
+        expectedFunding: ((fundingRows ?? []) as Array<Record<string, unknown>>).map((f) => ({
+            label: t(f.funding_source_label),
+            sourceType: t(f.funding_source_type),
+            expectedCents: f.expected_amount_cents == null ? null : Number(f.expected_amount_cents),
+            percentBasisPoints: f.percent_basis_points == null ? null : Number(f.percent_basis_points),
+        })),
+    };
+}
+
+/**
+ * MONEY RECEIVED ON THIS ACCOUNT, and what each payment is actually paying.
+ *
+ * ── THE ONE BALANCE RULE ──
+ *
+ * `appliedByChargeId` counts an application only when it is ACTIVE and its parent payment is POSTED.
+ * That predicate is `jobPaymentBalances`'s, quoted rather than re-derived, so the childcare card and
+ * the job drawer cannot answer the same question differently. A pending attempt has not arrived; a
+ * reversed application was given back; neither moves a balance.
+ *
+ * ── WHY THE PAYMENTS ARE FOUND THROUGH THE CHARGES ──
+ *
+ * Applications name a charge, and the charges are already narrowed to this account's billable
+ * sources, so the applications reachable from them are this account's by construction. The
+ * account-level read (`billable_source_id`) additionally picks up payments that have arrived and been
+ * applied to NOTHING yet — money on the account, which a balance-only read would render invisible.
+ */
+async function readAccountPayments(
+    supabase: SupabaseClient,
+    orgId: string,
+    billableSourceIds: readonly string[],
+    chargeIds: readonly string[],
+    /*
+     * The bundle's rows, when the caller has them. Both of these reads hang off ids the bundle
+     * already resolved — the account's billable sources and its charges — so supplying them
+     * spends no round trip. The rules below are untouched: an active allocation is still what
+     * counts as applied, and a read that could not answer is still never a zero balance.
+     */
+    supplied?: {
+        allocations: ReadonlyArray<Record<string, unknown>>;
+        payments: ReadonlyArray<Record<string, unknown>>;
+        /* Every payment an application names, including job-era ones the account read never returns. */
+        paymentsBacking: ReadonlyArray<Record<string, unknown>>;
+    },
+): Promise<{ payments: FinancialsPaymentRow[]; appliedByChargeId: Map<string, number> }> {
+    const appliedByChargeId = new Map<string, number>();
+    const sourceIds = billableSourceIds.length ? [...billableSourceIds] : [NO_SOURCE_SENTINEL];
+
+    const [allocResult, accountPaymentResult] = supplied
+        ? [
+            { data: supplied.allocations as unknown, error: null },
+            { data: supplied.payments as unknown, error: null as { message: string } | null },
+        ]
+        : await Promise.all([
+        /*
+         * Batched, because this list of charge ids goes into the URL. On an account with a few
+         * hundred charges the request came back `414 URI Too Long`, the error was discarded with the
+         * rest of the response, and the card read the empty result as "none of this has been paid" —
+         * showing a family the whole balance again after they had settled it.
+         */
+        readInBatches<Record<string, unknown>>(
+            "money applied to these charges",
+            [...chargeIds],
+            (batch) => supabase
+                .from("payment_allocations")
+                .select("id, payment_id, charge_id, allocated_amount_cents, status")
+                .eq("org_id", orgId)
+                .eq("status", "active")
+                .in("charge_id", batch) as never,
+        ).then((data) => ({ data, error: null })),
+        /*
+         * PAGED, for the reason the charges read is: an account's receipts are a cohort, not a
+         * page, and a receipt the server did not return reads here as money the family never paid.
+         * `received_at` is not unique — a day of recorded cheques shares a timestamp — so the order
+         * ends in `id` or paging could drop one.
+         */
+        readAllPages<Record<string, unknown>>(
+            "account payments",
+            ACCOUNT_PAYMENT_SCAN_CAP,
+            (fromIndex, toIndex) =>
+                supabase
+                    .from("payments")
+                    .select(
+                        "id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, "
+                        + "processor, received_at, posted_at, reference_number, notes",
+                    )
+                    .eq("org_id", orgId)
+                    /*
+                     * The TYPE as well as the id. A billable source id is only unique within its kind, and
+                     * an account read that matched on the id alone would claim a job payment that happened
+                     * to share a uuid. The applications read below is what picks up a job-era payment
+                     * legitimately applied to one of this account's charges.
+                     */
+                    .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+                    .in("billable_source_id", sourceIds)
+                    .order("received_at", { ascending: false })
+                    .order("id", { ascending: true })
+                    .range(fromIndex, toIndex) as never,
+        ).then(({ rows, truncated }) => {
+            if (truncated) {
+                throw new Error(
+                    `this account holds more than ${ACCOUNT_PAYMENT_SCAN_CAP.toLocaleString()} receipts, `
+                    + "which is more than one balance read may carry",
+                );
+            }
+            return { data: rows, error: null as { message: string } | null };
+        }),
+    ] as const);
+
+    /*
+     * A PAYMENTS READ THAT FAILS IS NOT A ZERO BALANCE.
+     *
+     * Returning "nothing has been paid" when the truth is "we could not look" is the exact defect
+     * this model closed for charges. The account read failing is reported by the caller as an
+     * unavailability; it never silently becomes a full balance owed.
+     */
+    if (accountPaymentResult.error) {
+        throw new Error(accountPaymentResult.error.message);
+    }
+    // The allocation read raises on failure inside `selectIn` rather than returning an empty answer,
+    // which is the same rule this block already stated for the account read.
+
+    const allocRows = (allocResult.data ?? []) as unknown as Array<Record<string, unknown>>;
+    const paymentRows = (accountPaymentResult.data ?? []) as unknown as Array<Record<string, unknown>>;
+
+    const statusByPaymentId = new Map(paymentRows.map((r) => [t(r.id), t(r.status).toLowerCase()]));
+    /*
+     * An application can name a payment the ACCOUNT read did not return — a job-era payment whose
+     * billable source is a job, applied to a charge this account owns. Its status still decides
+     * whether it counts, so it is looked up rather than assumed.
+     */
+    const unknownPaymentIds = [
+        ...new Set(
+            allocRows
+                .map((r) => t(r.payment_id))
+                .filter((id) => id && !statusByPaymentId.has(id)),
+        ),
+    ];
+    if (unknownPaymentIds.length && supplied) {
+        /*
+         * The bundle already carries every payment an application names — it is keyed off the
+         * allocations, which is precisely the set this lookup exists to cover. Same statuses, no
+         * round trip. A payment still missing here is one no application named.
+         */
+        for (const r of supplied.paymentsBacking) {
+            statusByPaymentId.set(t(r.id), t(r.status).toLowerCase());
+        }
+    } else if (unknownPaymentIds.length) {
+        /*
+         * Batched for the same reason the applications read is: this id list comes from the
+         * applications and grows with the account, and an over-long URI would be discarded exactly
+         * where a payment's status decides whether it counts.
+         */
+        const extra = await readInBatches<Record<string, unknown>>(
+            "statuses of payments named by applications",
+            unknownPaymentIds,
+            (batch) => supabase
+                .from("payments")
+                .select("id, status")
+                .eq("org_id", orgId)
+                .in("id", batch) as never,
+        );
+        for (const r of extra as unknown as Array<Record<string, unknown>>) {
+            statusByPaymentId.set(t(r.id), t(r.status).toLowerCase());
+        }
+    }
+
+    const appliedByPaymentId = new Map<string, number>();
+    for (const raw of allocRows) {
+        const paymentId = t(raw.payment_id);
+        const chargeId = t(raw.charge_id);
+        if (!paymentId || !chargeId) continue;
+        // Only POSTED money reduces a balance. This is the whole rule, and it lives here once.
+        if (statusByPaymentId.get(paymentId) !== "posted") continue;
+        const cents = Number(raw.allocated_amount_cents) || 0;
+        appliedByChargeId.set(chargeId, (appliedByChargeId.get(chargeId) ?? 0) + cents);
+        appliedByPaymentId.set(paymentId, (appliedByPaymentId.get(paymentId) ?? 0) + cents);
+    }
+
+    const payments: FinancialsPaymentRow[] = paymentRows.map((raw) => {
+        const id = t(raw.id);
+        return {
+            paymentId: id,
+            direction: t(raw.direction) === "outbound" ? "outbound" : "inbound",
+            refundsPaymentId: t(raw.refunds_payment_id) || null,
+            reversalOrigin: (t(raw.reversal_origin) || null) as "operator" | "provider" | null,
+            amountCents: Number(raw.amount_cents) || 0,
+            currencyCode: t(raw.currency) || "USD",
+            status: t(raw.status).toLowerCase(),
+            method: t(raw.payment_method),
+            processor: t(raw.processor) || null,
+            receivedAt: t(raw.received_at) || null,
+            postedAt: t(raw.posted_at) || null,
+            appliedCents: appliedByPaymentId.get(id) ?? 0,
+            // Enriched below from the canonical application composition; a payment read that never
+            // reaches it still renders, with no applications rather than invented ones.
+            unappliedCents: 0,
+            heldCents: 0,
+            payerLabel: null,
+            applications: [],
+            reference: t(raw.reference_number) || null,
+            notes: t(raw.notes) || null,
+        };
+    });
+
+    return { payments, appliedByChargeId };
+}
+
+type FinancialsBuildArgs = {
+    orgId: string;
+    /** The household whose children's agreements make up the account. */
+    customerId?: string | null;
+    /** Narrow the whole model to ONE child. The card's subject filter uses this. */
+    customerMemberId?: string | null;
+    /** Operating day; defaults to today. Certification pins it. */
+    today?: string | null;
+    /**
+     * Server-Timing phase marker, supplied by the route that is already measuring itself.
+     *
+     * Optional and defaulted to a no-op at the single consumption site, so a caller that is not
+     * instrumenting — every test, and the workspace path — passes nothing and measures nothing.
+     * The build does NOT create its own timing authority: it writes into the route's.
+     */
+    mark?: (phase: string) => void;
+};
+
+type FinancialsBuildClock = ReturnType<typeof financialsClock>;
+
+/**
+ * SLICE 12E — the build reports its own internal boundaries.
+ *
+ * Slice 12D measured this function deployed as the card-producer LONG POLE: `financials_build_ms`
+ * 2,423 ms median, 89 % of `card_producers_ms`. It could not say what inside it costs that, because
+ * the whole build was one span over roughly fifteen table reads.
+ *
+ * The wrapper exists so the spans are filed on EVERY exit — the four early returns for "no household
+ * in scope", a failed agreements read and a failed charges read, and a throw. Recording at each
+ * `return` instead would have left the interesting failure paths unmeasured, which is how a boundary
+ * gets called cheap because nobody ever saw its number.
+ */
+export async function buildFinancialsCardVM(
+    supabase: SupabaseClient,
+    args: FinancialsBuildArgs,
+): Promise<FinancialsCardVM> {
+    const clock = financialsClock();
+    try {
+        return await buildFinancialsCardVMInner(supabase, args, clock);
+    } finally {
+        recordFinancialsSpans(clock.spans());
+    }
+}
+
+async function buildFinancialsCardVMInner(
+    supabase: SupabaseClient,
+    args: FinancialsBuildArgs,
+    clock: FinancialsBuildClock,
+): Promise<FinancialsCardVM> {
+    const mark = args.mark ?? (() => {});
+    /*
+     * ── THE OPERATING DAY IS THE ORGANISATION'S, NOT UTC'S ────────────────────────────────────
+     *
+     * This was `new Date().toISOString().slice(0, 10)`, and `today` is not a label here: it chooses
+     * `period` through `billingPeriodForDate`, it reconciles the rows, and it decides what reads as
+     * past due and how many days overdue. For an organisation west of UTC the UTC date rolls over
+     * during the local working afternoon — so from about 5pm in Los Angeles the card would show the
+     * NEXT commercial period as current and age receivables a day early, every day.
+     *
+     * `args.today` still wins; certification pins it, and that is the whole reason it exists.
+     */
+    const today = t(args.today) || (await resolveOperatingDay(supabase, args.orgId));
+    const period = billingPeriodForDate(today);
+    const vm = baseVm(period, today);
+    vm.unavailable = platformUnavailabilities();
+
+    const customerId = t(args.customerId) || null;
+    const memberId = t(args.customerMemberId) || null;
+    if (!customerId && !memberId) {
+        return { ...vm, unavailableReason: "No household or child in scope." };
+    }
+
+    /*
+     * ── SLICE 12E · THE ORG-GRAIN READS START NOW, NOT FOUR AND NINE ROUND TRIPS LATER ───────────
+     *
+     * These depend on `orgId` and on nothing else. They were issued deep inside the build — the GL
+     * configuration behind four serial reads, the merchant behind nine — purely because that is
+     * where their results are first USED. Source order was standing in for a dependency that does
+     * not exist.
+     *
+     * Same queries, same predicates, same rows. `processor = stripe` is kept: `resolvePaymentSetup`
+     * also reads this table, but it takes ANY active merchant, so the two are not the same question
+     * and collapsing them would quietly change which merchant answers for ACH. Hoisted, not deduped.
+     *
+     * `.catch` is attached at creation because the early-return paths below never await these, and
+     * an unawaited rejection must not surface as an unhandled one.
+     */
+    /*
+     * ONE GL CONFIGURATION READ, TWO CONSUMERS. The card resolves a charge's account from it, and the
+     * Catalog it offers resolves each item's account from the same two tables. The catalog reader
+     * used to issue its own `loadGlConfigBundle`, so every card read `gl_accounts` and
+     * `gl_account_mappings` twice. Now the shared reader runs once and both join it — each keeping
+     * its own failure meaning: the card degrades to no account labels (as before, when either read
+     * failed), the catalog still fails closed ("could not be read", never "unmapped").
+     */
+    const glConfigP = loadGlConfigBundle(supabase, args.orgId);
+    glConfigP.catch(() => undefined);
+    const configRead = clock.time("config_ms", () =>
+        Promise.all([
+            glConfigP.then((gl) => ({ data: gl.glAccountMappings as unknown }), () => ({ data: [] as unknown })),
+            glConfigP.then((gl) => ({ data: gl.glAccounts as unknown }), () => ({ data: [] as unknown })),
+            supabase
+                .from("financial_charge_templates")
+                .select(
+                    "id, template_key, label, charge_category, amount_strategy, amount_cents, currency_code, "
+                    /*
+                 * `review_required` and `service_id` are read because the CARD has to be able to
+                 * say what confirming Add will actually do. Without them the command could only
+                 * assume, and it assumed the old universal-draft behaviour — telling an operator
+                 * a charge would wait for review on a tenant that posts it immediately.
+                 */
+                + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end, "
+                + "review_required, service_id",
+                )
+                .eq("org_id", args.orgId)
+                .eq("is_active", true)
+                .order("label", { ascending: true }),
+        ]),
+    ).catch(() => [{ data: [] }, { data: [] }, { data: [] }] as Array<{ data: unknown }>);
+
+    /*
+     * ── SLICE 12F · THE PAYMENT VIEWS NEVER NEEDED THE PAYMENTS READ ─────────────────────────────
+     *
+     * `resolveHouseholdPaymentViews(supabase, { orgId, customerId })` takes those two arguments and
+     * nothing else. It issues its OWN `payments` read and its own allocations, charges and customers
+     * reads, and never touches what `readAccountPayments` returned — the two answers are married
+     * afterwards, by payment id. Slice 12E chained it behind the payments read anyway, on my reading
+     * that the dependency was real. It is not, and the deployed spans put a number on the mistake:
+     * `payment_views_ms` 1,152 ms median, 75 % of `financials_build_ms`, waiting for a read it does
+     * not consume.
+     *
+     * Both inputs are known HERE, before the first await, so this is where it starts. The household
+     * is `args.customerId` — the account this card is about — and when the caller gave only a child
+     * there is no household to resolve views for, exactly as before.
+     *
+     * It resolves to a TAGGED OUTCOME rather than rejecting, because the early-return paths below
+     * never await it and an unawaited rejection must not surface as an unhandled one. The failure
+     * itself is not swallowed: §2's contract is re-imposed at the join, where a views failure still
+     * makes the whole payments answer unavailable.
+     */
+    const household = t(args.customerId) || null;
+    /*
+     * W7-F032: the payer, card and method facts are keyed by the household too, so they leave with
+     * this first wave rather than waiting for the payment ids. Never rejects (absence on failure).
+     */
+    const ledgerFactsP = readPaymentLedgerFacts(supabase, args.orgId, household);
+
+    /*
+     * ── THE TENANT'S POLICIES DEPEND ON THE ORG AND ON NOTHING ELSE ──────────────────────────
+     *
+     * One `financial_policies` read, keyed by `org_id`, and it sat behind the charges, the
+     * collectible position and the whole payments composition — nine-plus round trips deep —
+     * because that is where `reviewPolicyForService` first consults it. Measured on deployed
+     * staging, `policies;dur=` was 106–274 ms spent entirely in series at the end of the response.
+     *
+     * Same query, same predicate, same rows; it is issued here and joined where it is used. The
+     * existing `.catch(() => [])` is kept at the creation site so an early return never leaves an
+     * unawaited rejection, and a policy read that fails still degrades to "no policy resolved"
+     * rather than taking the card down.
+     */
+    /*
+     * ── THE CATALOG MANUAL ADD CHARGE OFFERS — read by the same reader the command validates with ──
+     *
+     * `.catch` at creation for the same reason as the reads above: an early return never awaits it.
+     */
+    const catalogConfigP = readCatalogChargeConfig(supabase, args.orgId, today, glConfigP).then(
+        (config) => ({ ok: true as const, config }),
+        (err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : "catalog read failed" }),
+    );
+    /*
+     * THE SITE EACH CHILD'S CHARGE IS FOR — `site_location_id`, the column
+     * `resolveFinancialPolicyScope` reads for the command, on the agreement `charge.add` writes the
+     * child's charge against (`selectBillableAgreement`: active, else the most recent). Newest first,
+     * the command's own order. Keyed by the household (or the child, when only a child is in scope) so
+     * it goes out in this first wave; the fact bundle does not carry it.
+     */
+    const agreementSitesP = Promise.resolve(
+        supabase
+            .from("child_enrollment_agreements")
+            .select("id, customer_member_id, status, site_location_id, created_at")
+            .eq("org_id", args.orgId)
+            .eq(customerId ? "customer_id" : "customer_member_id", customerId ?? memberId ?? "")
+            .order("created_at", { ascending: false }),
+    ).then(
+        (r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>>, error: r.error?.message ?? null }),
+        (err: unknown) => ({ data: [] as Array<Record<string, unknown>>, error: err instanceof Error ? err.message : "site read failed" }),
+    );
+
+    const financialPoliciesP = clock
+        .time("policies_ms", () => listFinancialPolicies(supabase, args.orgId))
+        .catch(() => [] as Awaited<ReturnType<typeof listFinancialPolicies>>);
+
+    /*
+     * ── KEYED BY THE HOUSEHOLD, WHICH IS KNOWN BEFORE ANY OF THIS ──────────────────────────────
+     *
+     * The payment setup (methods, autopay, merchant readiness) and the payer candidates are org-
+     * and customer-grain: `payment_methods`, `payment_autopay_arrangements` and `customer_persons`
+     * are all keyed by `customer_id`, which the request carried in. They sat in a later wave only
+     * because the functions that consume them are called further down — the same source-order-as-
+     * dependency mistake, one level up. Both go out here now, with the bundle.
+     *
+     * The candidates' `alsoResponsible` flag still joins after the responsibility answer, which is
+     * why that argument is a promise; it decorates rows the query has already chosen.
+     */
+    const accountCustomerIdEarly = customerId;
+    /* The responsible party ids arrive later; the candidates READ does not wait for them. */
+    let resolveResponsiblePersonIds: (v: string[]) => void = () => {};
+    const responsibilityLater = {
+        promise: new Promise<string[]>((res) => { resolveResponsiblePersonIds = res; }),
+    };
+    const setupReadP = accountCustomerIdEarly
+        ? clock
+              .time("payment_setup_ms", () =>
+                  resolvePaymentSetup(supabase, { orgId: args.orgId, customerId: accountCustomerIdEarly }),
+              )
+              .catch(() => null)
+        : Promise.resolve(null);
+
+    const payerReadP = accountCustomerIdEarly
+        ? clock
+              .time("payer_candidates_ms", () =>
+                  resolvePayerCandidates(supabase, {
+                      orgId: args.orgId,
+                      customerId: accountCustomerIdEarly,
+                      responsiblePersonIds: responsibilityLater.promise.catch(() => [] as string[]),
+                  }),
+              )
+              .catch(() => ({ candidates: [] as PayerCandidate[] }))
+        : Promise.resolve({ candidates: [] as PayerCandidate[] });
+
+    const merchantRead = clock
+        .time("merchant_ms", () =>
+            supabase
+                .from("payment_provider_merchants")
+                /* BOTH readiness facts: the rail rule needs merchant-level readiness first. */
+                .select("readiness, ach_readiness")
+                .eq("org_id", args.orgId)
+                .eq("processor", "stripe")
+                .eq("is_active", true)
+                .maybeSingle(),
+        )
+        .catch(() => ({ data: null }));
+
+    /*
+     * ── THE WHOLE DEPENDENT CHAIN, IN ONE ROUND TRIP ────────────────────────────────────────────
+     *
+     * This used to begin five dependent network waves: the agreements named the billable sources,
+     * those named the charges, the charges named their allocations and claim lines, and those
+     * named the payments, people, funding, claims and variances behind them. Every wave genuinely
+     * needed the previous wave's ids, so no amount of client concurrency removed them — measured
+     * on deployed staging, that chain was most of a 2.0-2.4 s response.
+     *
+     * `financials_account_fact_bundle` walks the same chain inside the database, where the hops
+     * cost microseconds, and returns the same rows under the same predicates. Measured on the
+     * certification tenant's largest account — 5,180 charges — it answers in 142-162 ms.
+     *
+     * A bundle that cannot be read THROWS, and the catch below turns that into the same
+     * "Financial records unavailable" the agreements failure produced. An empty bundle is never
+     * silently a zero-balance account: the counts say what was gathered.
+     */
+    let bundle: AccountFactBundle;
+    try {
+        bundle = await clock.time("fact_bundle_ms", () =>
+            readAccountFactBundle(supabase, {
+                orgId: args.orgId,
+                customerId,
+                customerMemberId: memberId,
+            }),
+        );
+    } catch (e) {
+        return { ...vm, unavailableReason: e instanceof Error ? e.message : "Financial records unavailable." };
+    }
+    /*
+     * ── THE VIEWS NO LONGER SCAN THE ORGANISATION TO FIND THIS FAMILY ───────────────────────────
+     *
+     * This resolver used to read every inbound receipt in the tenant and then resolve each
+     * billable source's household one at a time to decide which were ours — measured on the
+     * certification tenant, 3,517 receipts over four pages to keep 3,198, and 65 sequential
+     * lookups to decide, plus the batched applications and charges behind them. Roughly 150
+     * sequential round trips, and 1,131-4,211 ms of the deployed response once everything else on
+     * the card got fast.
+     *
+     * The bundle already resolved this household's billable sources, so its receipts are selected
+     * BY them. The resolver keeps every rule it owns — inbound-only, not-a-refund, what counts as
+     * applied, how a reversal reads, which payer names the receipt — and simply stops paying for
+     * the discovery. It is created AFTER the bundle now, which costs nothing: the bundle is the
+     * first wave, and this was never able to finish before it anyway.
+     */
+    const paymentViewsP: Promise<
+        { ok: true; views: PaymentView[] | null } | { ok: false; error: unknown }
+    > = household
+        ? clock
+              .time("payment_views_ms", () =>
+                  resolveHouseholdPaymentViews(supabase, { orgId: args.orgId, customerId: household }, {
+                      payments: bundle.paymentsForViews,
+                      allocations: bundle.paymentAllocations,
+                      charges: bundle.chargesForAllocations,
+                      payers: bundle.payerCustomers,
+                      refunds: bundle.paymentRefunds,
+                  }),
+              )
+              .then((views) => ({ ok: true as const, views }))
+              .catch((error: unknown) => ({ ok: false as const, error }))
+        : Promise.resolve({ ok: true as const, views: null });
+
+    /*
+     * ── A BALANCE IS STILL NOT ALLOWED TO BE PARTIAL ────────────────────────────────────────────
+     *
+     * The paged read this replaced could be silently truncated by the server's row ceiling, and a
+     * card that computed a balance from the first thousand rows of a longer ledger presented it as
+     * the account's position. The bundle cannot be truncated that way — a jsonb answer has no page
+     * cap — so that defect is closed by construction rather than by paging carefully.
+     *
+     * The platform BOUND is a different thing and is kept: past it, the honest answer is still "we
+     * cannot carry this in one read", never a number computed from part of the ledger.
+     */
+    if (bundle.charges.length > ACCOUNT_CHARGE_SCAN_CAP) {
+        return {
+            ...vm,
+            unavailableReason:
+                `Financial records unavailable: this account holds more than `
+                + `${ACCOUNT_CHARGE_SCAN_CAP.toLocaleString()} charges, which is more than one `
+                + `balance read may carry`,
+        };
+    }
+    if (bundle.paymentsBySource.length > ACCOUNT_PAYMENT_SCAN_CAP) {
+        return {
+            ...vm,
+            unavailableReason:
+                `Financial records unavailable: this account holds more than `
+                + `${ACCOUNT_PAYMENT_SCAN_CAP.toLocaleString()} receipts, which is more than one `
+                + `balance read may carry`,
+        };
+    }
+
+    const agreements = bundle.agreements as unknown as Array<{
+        id: string;
+        customer_member_id: string;
+        customer_id: string | null;
+        status: string;
+    }>;
+    /*
+     * AN ENROLMENT IS ONE BILLABLE SOURCE, NOT ELIGIBILITY FOR FINANCIALS.
+     *
+     * This used to return "No enrollment agreement, so there is nothing billable yet" and replace the
+     * whole card. That encoded a product assumption the business rejects: a family incurs charges
+     * BEFORE they enrol — a waitlist fee, a registration or application fee, a deposit. Gating the
+     * card on an agreement made those charges unreachable and, worse, told the operator the family
+     * had nothing billable when the truth was that we had not looked.
+     *
+     * Whether a PARTICULAR charge needs an agreement belongs to the charge template and the
+     * `charge.add` resolver — tuition may require one, a waitlist fee must not. It is never the
+     * card provider's question.
+     */
+    const resolvedCustomerId = customerId ?? (t(agreements[0]?.customer_id) || null);
+    const memberIds = [...new Set(agreements.map((a) => a.customer_member_id))];
+    const memberByAgreement = new Map(agreements.map((a) => [a.id, a.customer_member_id]));
+    /*
+     * Every id this account can be charged against: its enrolment agreements, and the household.
+     * A charge whose source is the household has no child subject, which the ledger renders as the
+     * account rather than inventing an attribution.
+     */
+    const billableSourceIds = [
+        ...agreements.map((a) => a.id),
+        ...(resolvedCustomerId ? [resolvedCustomerId] : []),
+    ];
+
+    /*
+     * ── SLICE 12E · EVERYTHING THE AGREEMENTS UNLOCK, IN ONE PASS ────────────────────────────────
+     *
+     * Members, reductions and charges each need the agreements and nothing else — yet they ran one
+     * after another, so a card waited three round trips deep for reads that could have gone out
+     * together. None of them consumes another's result: `nameByMember` decorates rows the charges
+     * read produces, and `vm.reductions` is its own history.
+     *
+     * Each keeps its OWN failure behaviour. Reductions still degrade to an empty history rather
+     * than taking the account down; a members read that fails still leaves rows named "Child"; and
+     * a charges failure is still the one that makes the card unavailable, below.
+     */
+    /*
+     * ── THE BUNDLE ALREADY CARRIES THESE ────────────────────────────────────────────────────────
+     *
+     * Members, the reduction history and the charges were three reads that waited on the
+     * agreements. They arrived with them instead. `configRead` stays a read because it is
+     * org-grain — it depends on nothing and has been going out in the first wave since 12E.
+     *
+     * Each keeps its OWN failure behaviour, and the bundle preserves the distinction the old
+     * reads drew: a reduction history that is genuinely empty is an empty array, and a bundle
+     * that could not be read threw above rather than arriving here as an absence.
+     */
+    const memberResult = { data: bundle.members as unknown };
+    /*
+     * The CATEGORY and STATUS of the charge a reduction wrote come from the bundle's own charges,
+     * which is the second read `readAccountReductions` used to spend. Same lookup, same meaning.
+     */
+    const categoryByCharge = new Map<string, string>();
+    const statusByCharge = new Map<string, string>();
+    for (const c of bundle.charges) {
+        const id = t(c.id);
+        if (id) {
+            categoryByCharge.set(id, t(c.charge_category));
+            statusByCharge.set(id, t(c.status));
+        }
+    }
+    const reductions = shapeAccountReductions(bundle.reductionsByAgreement, categoryByCharge, statusByCharge);
+    const configResult = (await configRead) as Array<{ data: unknown }>;
+    const memberRows = (memberResult as { data: unknown }).data;
+    const [glMappingResult, glAccountResult, templateResult] = configResult as Array<{ data: unknown }>;
+    vm.reductions = reductions;
+
+    /*
+     * ── THE POLICIES THOSE REDUCTIONS NAME ────────────────────────────────────────────────────
+     *
+     * Read ONLY for the ids the applications actually carry, so an account with no policy-produced
+     * reductions asks nothing. The window is what makes "ongoing" a fact rather than a guess: a
+     * policy still active with an open end recurs, one whose window closed does not, and an
+     * application whose policy cannot be found reports `unknown` rather than inventing "one-time".
+     */
+    /*
+     * The policy windows arrived with the bundle. This was a wave of its own — and the one the
+     * depth gate could not see, because a fixture with no policy-produced reductions skips the
+     * read entirely. The window is still what makes "ongoing" a fact rather than a guess.
+     */
+    const policyWindows = new Map<string, ReductionPolicyWindow>();
+    for (const p of bundle.commercialPolicies) {
+        policyWindows.set(t(p.id), {
+            id: t(p.id),
+            effectiveStart: t(p.effective_start) || null,
+            effectiveEnd: t(p.effective_end) || null,
+            isActive: p.is_active !== false,
+        });
+    }
+    const provenanceByCharge = reductionProvenanceByChargeId(
+        reductions,
+        policyWindows,
+        today,
+        /*
+         * The basis phrase needs a formatted figure and the VM has no formatter — `money` belongs to
+         * the adapter, which runs later. A local one here keeps the layers where they are; it states
+         * cents in the account's currency and decides nothing about the amount.
+         */
+        (cents) =>
+            (cents / 100).toLocaleString(undefined, {
+                style: "currency",
+                // The reductions' own currency; they are stored with one and it is the row's.
+                currency: reductions[0]?.currencyCode || "USD",
+            }),
+    );
+    const nameByMember = new Map(
+        ((memberRows ?? []) as unknown as Array<Record<string, unknown>>).map((m) => [
+            t(m.id),
+            t(m.display_name) || [t(m.first_name), t(m.last_name)].filter(Boolean).join(" ") || "Child",
+        ]),
+    );
+
+    vm.account = { customerId: resolvedCustomerId, label: null };
+    // `vm.payers` is filled from PERSISTED RESPONSIBILITY once the charges are known — see below.
+    // The `payer` contact role is no longer what makes somebody a payer on this card.
+    vm.payers = [];
+    /*
+     * ── ONE SUBJECT PER CHILD, NOT PER AGREEMENT ──────────────────────────────────────────────
+     *
+     * A household with no enrolment still HAS an account, and Financials answers for it. But this
+     * mapped AGREEMENTS, and a child with more than one — a closed enrolment beside a live one,
+     * or a second placement — became two subjects carrying the same name.
+     *
+     * MEASURED: two children, four entries. Every surface reading `vm.subjects` inherited it. The
+     * Add target rendered four checkboxes, and before the unified control the "Applies to" select
+     * listed each child twice. The defect predates the control; the control made it visible.
+     *
+     * A subject is a CHILD. The agreement carried alongside is the billable source, so an ACTIVE
+     * one is preferred where a child has several — an open agreement is what a new charge belongs
+     * to, and a closed one still owns its history without being what an operator bills against
+     * today. Insertion order is preserved so the list does not reshuffle.
+     */
+    const subjectByMember = new Map<string, { id: string; customer_member_id: string; status: string }>();
+    for (const a of agreements) {
+        const held = subjectByMember.get(a.customer_member_id);
+        if (!held) {
+            subjectByMember.set(a.customer_member_id, a);
+            continue;
+        }
+        const heldActive = (held.status ?? "").trim().toLowerCase() === "active";
+        const thisActive = (a.status ?? "").trim().toLowerCase() === "active";
+        if (!heldActive && thisActive) subjectByMember.set(a.customer_member_id, a);
+    }
+    /*
+     * ── IDENTITY TRAVELS WITH THE SUBJECT, AND THE IMAGE IS RESOLVED ELSEWHERE ────────────────
+     *
+     * `personId` is carried here and the PHOTO is not. This builder holds a service-role client
+     * and no actor, and a resolved photo URL is authorized per actor per request — minting one
+     * here would either leak an unauthorized reference or bake a signed URL into a cached view
+     * model. The route that has the actor projects it onto these subjects through the shared
+     * document helper, which is the same path Records and the Focus Panel already use.
+     */
+    const personIdByMember = new Map(
+        ((memberRows ?? []) as unknown as Array<Record<string, unknown>>).map((m) => [t(m.id), t(m.person_id) || null]),
+    );
+    vm.subjects = [...subjectByMember.values()].map((a) => ({
+        customerMemberId: a.customer_member_id,
+        agreementId: a.id,
+        displayName: nameByMember.get(a.customer_member_id) ?? "Child",
+        agreementStatus: a.status,
+        personId: personIdByMember.get(a.customer_member_id) ?? null,
+        /* Filled by the route that holds the actor. Null renders the canonical initials fallback. */
+        imageUrl: null as string | null,
+    }));
+
+    /*
+     * A charges FAILURE is still the one that makes the card unavailable — it is raised where the
+     * bundle is read now, so a read that could not answer never reaches here as an empty ledger.
+     * There is no truncation to report either: the bundle is not page-capped, so the scan that
+     * used to stop at 1,000 rows and silently under-state a long account cannot.
+     */
+
+    /*
+     * GL: `metadata.gl_mapping_key` → `gl_account_mappings.key` → `gl_accounts`.
+     *
+     * This is the CHARGE's chain. `commercial_revenue_categories → mapped_gl_account_id → gl_accounts`
+     * is real and is the Tuition/Catalog configuration chain, but a charge carries no
+     * `revenue_category_id` and revenue categories have no key column — only a unique label — so
+     * nothing joins a charge to one. Both chains end at `gl_accounts`; this is the one a charge can
+     * actually travel. A charge with no mapping renders `Unmapped`, never a blank.
+     */
+    const accountById = new Map(
+        ((glAccountResult.data ?? []) as unknown as Array<Record<string, unknown>>).map((a) => [
+            t(a.id),
+            { code: t(a.code), name: t(a.name) },
+        ]),
+    );
+    const accountByMappingKey = new Map<string, { code: string; name: string }>();
+    for (const raw of (glMappingResult.data ?? []) as Array<Record<string, unknown>>) {
+        if (raw.is_active === false) continue;
+        const account = accountById.get(t(raw.gl_account_id));
+        if (account) accountByMappingKey.set(t(raw.key), account);
+    }
+
+    /*
+     * THE OPERATOR-FACING LABEL, not the template key.
+     *
+     * `writeTemplateDraftCharge` writes `description: intent.templateKey`, so a charge's stored
+     * description is `field_trip` — an internal key. The tenant already configured "Field trip" as
+     * the template's label, and that is what an operator named it, so the label is resolved here and
+     * the key is never rendered. A charge whose template has since been retired keeps its stored
+     * description rather than losing its identity.
+     */
+    const labelByTemplateId = new Map(
+        ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => [
+            t(row.id),
+            t(row.label),
+        ]),
+    );
+
+    const charges = bundle.charges as unknown as Array<Record<string, unknown>>;
+    /* Gross, status and currency by charge id — the facts a position is computed from. */
+    const chargeById = new Map<string, Record<string, unknown>>(
+        charges.map((c) => [t(c.id), c]),
+    );
+
+    /*
+     * CORRECTION LINEAGE — which posted charge no longer stands.
+     *
+     * A reversal is a NEW row pointing at the original through `source_charge_id`, and the original
+     * is left exactly as posted because posted money is immutable. Read without that link the
+     * ledger shows a charge still reading `posted` beside an unexplained credit — and the card,
+     * which offers a transition per lifecycle state, offered `Reverse` on it a second time. That is
+     * how one charge came to be reversible twice. Projecting the link is what lets the ledger say
+     * `reversed` and the card offer nothing further.
+     *
+     * `status <> 'void'` and `correction_kind = 'reversal'` are the same predicate the database's
+     * unique index uses, so the card and the constraint agree on what a live reversal is.
+     */
+    const reversalBySource = reversalBySourceChargeId(charges);
+
+    /*
+     * THE RECONCILIATION-RELEVANT DERIVATIONS COME FROM THEIR CANONICAL OWNER.
+     *
+     * Period, category and lifecycle used to be decided here, inline, and the first-order runtime
+     * could reach `reconcileRows` but not these — so a second consumer would have had to re-derive
+     * what a period is and when a draft is "scheduled". They now come from
+     * `deriveAccountChargeLedgerRows`, which both surfaces call, and this mapper layers its
+     * PRESENTATION on top: GL account, template label, subject name, reduction provenance.
+     */
+    const canonicalByChargeId = new Map(
+        deriveAccountChargeLedgerRows(charges, today).map((r) => [r.chargeId, r]),
+    );
+
+    const rows: FinancialsLedgerRow[] = charges.map((c) => {
+        const canonical = canonicalByChargeId.get(t(c.id))!;
+        const categoryKey = canonical.categoryKey;
+        const metadata = (c.metadata ?? {}) as Record<string, unknown>;
+        const mappingKey =
+            t(metadata.gl_mapping_key)
+            || CHARGE_CATEGORY_GL_MAPPING_KEY[categoryKey as keyof typeof CHARGE_CATEGORY_GL_MAPPING_KEY]
+            || "";
+        const account = mappingKey ? accountByMappingKey.get(mappingKey) ?? null : null;
+        const placement = placeInBillingPeriod(c);
+        const status = canonical.status;
+        const billableOn = t(c.billable_on) || null;
+        const agreementId = t(c.billable_source_id);
+        const subjectMemberId = memberByAgreement.get(agreementId) ?? null;
+        const correctsChargeId = t(c.source_charge_id) || null;
+        const correctionKind = t(metadata.correction_kind) || null;
+        const reversedByChargeId = reversalBySource.get(t(c.id)) ?? null;
+        const amountCents = Number(c.amount_cents ?? 0);
+        return {
+            chargeId: t(c.id),
+            date: billableOn ?? t(c.occurs_on) ?? t(c.service_date) ?? null,
+            periodKey: canonical.periodKey,
+            periodBasis: placement.basis,
+            subjectMemberId,
+            subjectName: subjectMemberId ? nameByMember.get(subjectMemberId) ?? null : null,
+            categoryKey,
+            categoryLabel: chargeCategoryLabel(categoryKey),
+            description: labelByTemplateId.get(t(c.charge_template_id)) || t(c.description) || null,
+            amountCents,
+            currencyCode: t(c.currency_code) || "USD",
+            status,
+            lifecycleStatus: canonical.lifecycleStatus,
+            awaiting: status === "draft" ? awaitingPostingReason(metadata) : null,
+            correctsChargeId,
+            correctionKind,
+            reversedByChargeId,
+            offersReverse: offersReverseTransition({ status, reversedByChargeId, correctsChargeId }),
+            /*
+             * Filled in below, once the payments read has answered. Until then a row owes its whole
+             * amount and offers nothing — the honest state for a card that has not yet been told
+             * what has been paid, and the state that survives if the payments read fails.
+             */
+            appliedCents: 0,
+            outstandingCents: amountCents,
+            offersPayment: false,
+            dueDate: canonical.dueDate,
+            glCode: account?.code ?? null,
+            glAccountName: account?.name ?? null,
+            /* Filled in below, once the responsibility read has answered. Absent until then. */
+            responsiblePartyName: null,
+            responsibilityUnassigned: false,
+            responsibilityAssignedCents: 0,
+            responsibilityUnassignedCents: 0,
+            /*
+             * PROVENANCE, not a key. `metadata.charge_template_key` is `field_trip`; the operator
+             * configured that template and already sees its LABEL in the description, so this column
+             * says HOW the row came to exist rather than repeating an identifier.
+             */
+            source: t(metadata.source) === "charge_template" ? "Template" : t(metadata.source) ? "Import" : "Manual",
+            /*
+             * The decision behind this row, when the row is a reduction. Looked up by the charge the
+             * application wrote, which is exactly how a reduction reaches the ledger in the first
+             * place. Null for an ordinary charge, and null for a reduction with no application
+             * record — an absence stated rather than a shape invented.
+             */
+            reduction: provenanceByCharge.get(t(c.id)) ?? null,
+        };
+    });
+    // Newest first inside a period; the ledger reads downward through time.
+    rows.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.chargeId.localeCompare(b.chargeId));
+
+    /*
+     * ── THE COLLECTIBLE READ NEEDS THE CHARGE IDS, AND IT HAS THEM HERE ─────────────────────────
+     *
+     * Which charges count toward the period's collectible position is decided by three properties
+     * the rows above already carry — posted, in this period, not an offset — and by nothing that
+     * the payments composition, the responsibility resolution or the payer candidates return. Yet
+     * the read ran after all of them, because that is where the sum is first assembled.
+     *
+     * Driving a HOLDING client through the whole builder counts the waves it makes the operator
+     * wait for, and this was waves six and seven of seven: two round trips whose inputs were ready
+     * at wave two. Started here, they overlap the three waves in between and the build gets two
+     * round trips shallower without issuing one extra query.
+     *
+     * `rows` is only SORTED between here and where the sum is assembled — the filter's three
+     * properties are set when the row is built and never reassigned — so this is the same set of
+     * charges, chosen by the same predicate, read at the same grain.
+     */
+    const collectibleRows = rows.filter(
+        (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
+    );
+    // How many charges the position covers. A duration alone cannot tell one slow read from N
+    // reads, and those two facts want opposite repairs.
+    clock.count("collectible_calls", collectibleRows.length);
+    /*
+     * The facts are already here. The account bundle gathered them in the same round trip that
+     * brought the charges, so this spends no network at all — it is the same arithmetic over the
+     * same rows, which is why `resolveCollectiblePositionsForCharges` still owns every figure.
+     */
+    const collectiblePositionsP = clock
+        .time("collectible_ms", () =>
+            resolveCollectiblePositionsForCharges(supabase, {
+                orgId: args.orgId,
+                charges: collectibleRows.map((row) => {
+                    const c = chargeById.get(row.chargeId);
+                    return {
+                        id: row.chargeId,
+                        currencyCode: t(c?.currency_code) || "USD",
+                        status: t(c?.status),
+                        amountCents: Number(c?.amount_cents ?? 0),
+                    };
+                }),
+                facts: positionFactsFromBundle(bundle, new Set(collectibleRows.map((r) => r.chargeId))),
+            }),
+        )
+        .catch(() => new Map<string, Awaited<ReturnType<typeof resolveFamilyCollectible>>>());
+
+    /*
+     * ── SLICE 12E · EVERY REMAINING READ IS ISSUED HERE, WHERE ITS INPUTS EXIST ──────────────────
+     *
+     * From this point the build made five more trips through the database strictly one after
+     * another — responsibility, the collectibility loop, payments, payment setup, open collections —
+     * and NONE of them consumes another's result. Each needs only the charge ids and the account,
+     * both of which are known now. They were serial because each was awaited where its answer is
+     * first read, which is a statement about the code's layout, not about the data.
+     *
+     * The promises are created here and awaited below in exactly the order they always were, so the
+     * assembly sequence — responsibility onto the rows, then collectibility, then applied money — is
+     * unchanged and every failure still degrades exactly where it did. What changes is only that the
+     * waiting overlaps.
+     *
+     * The collectibility LOOP is deliberately left serial: parallelising a per-obligation subsidy
+     * resolver multiplies concurrent database pressure by the number of obligations, and that is a
+     * money-facing change that deserves its own slice and its own regression rather than a ride on
+     * this one.
+     */
+    const chargeIdsForReads = rows.map((r) => r.chargeId);
+    const accountCustomerId = vm.account.customerId;
+
+    /* Both of responsibility's waves came with the bundle; this spends no network. */
+    const responsibilityP = clock.time("responsibility_ms", () =>
+        readResponsibility(supabase, args.orgId, chargeIdsForReads, {
+            responsibilityAllocations: bundle.responsibilityAllocations,
+            attributions: bundle.responsibilityAttributions,
+            persons: bundle.responsiblePersons,
+            funding: bundle.fundingForResponsibility,
+        }),
+    );
+    /*
+     * The payments read starts here, where ITS inputs exist — the billable sources and the charge
+     * ids. The views have been in flight since entry; this JOINS them.
+     *
+     * The join, not the sequencing, is what carried the contract, and the contract is unchanged:
+     * either read failing means the card cannot say what has been paid, so both still resolve into
+     * ONE outcome and a views failure is re-thrown here rather than quietly becoming an absence.
+     */
+    const paymentsP = clock
+        .time("payments_ms", () =>
+            readAccountPayments(supabase, args.orgId, billableSourceIds, chargeIdsForReads, {
+                /* The ledger counts ACTIVE applications; the bundle carries every status so each
+                   reader keeps its own rule. Filtering here, not in SQL. */
+                allocations: bundle.paymentAllocations.filter((a) => String(a.status ?? "active") === "active"),
+                payments: bundle.paymentsBySource,
+                paymentsBacking: bundle.paymentsBacking,
+            }),
+        )
+        .then(async (received) => {
+            const seen = await paymentViewsP;
+            // A VIEWS FAILURE IS STILL A PAYMENTS FAILURE. Letting it resolve to `null` here would
+            // be the one thing concurrency must not buy: an error presented as "no payment views".
+            if (!seen.ok) throw seen.error;
+            return { ok: true as const, received, views: seen.views };
+        })
+        .catch((e: unknown) => ({ ok: false as const, error: e }));
+    const setupP = setupReadP;
+    /*
+     * NOT chained. The candidates READ is keyed by org and household; the responsible parties only
+     * decorate its rows with `alsoResponsible`, which is why the resolver now takes them as a
+     * promise and joins them after its own query. Chaining made this the card's last round trip,
+     * waiting on a resolution whose answer the query does not consult.
+     */
+    /* Hand the candidates read the responsible ids it was promised, without having blocked it. */
+    void responsibilityP.then(
+        (read) => resolveResponsiblePersonIds((read.responsibility?.parties ?? []).map((pa) => String(pa.personId))),
+        () => resolveResponsiblePersonIds([]),
+    );
+    const payersP = payerReadP;
+    /*
+     * The open collection attempts came with the bundle — charge-keyed and already gathered. The
+     * `canonical_payment_id IS NULL` rule that makes an attempt "open" is applied in the function
+     * exactly as it was in this query; the processor-state list and the ordering stay here, where
+     * they have always lived.
+     *
+     * The 200-charge slice is GONE. It guarded a request that no longer exists — the attempts
+     * arrive with the bundle, gathered set-based in SQL — and what it still did was stop looking
+     * after the two-hundredth charge, with ledger row order deciding which 200 those were. The
+     * selection moved to `selectOpenCollections`, where the boundary is tested directly.
+     */
+    const openCollectionsP = Promise.resolve({
+        data: (() => {
+            const open = selectOpenCollections(bundle.collectionAttempts, chargeIdsForReads.filter(Boolean));
+            /* null is "no charges to ask about"; an empty array is "asked, and none are open". */
+            return chargeIdsForReads.filter(Boolean).length ? (open as Array<Record<string, unknown>>) : null;
+        })(),
+    });
+
+    /*
+     * WHO OWES IT — read once, from what Thread 6 persisted, and shared by every density.
+     *
+     * This is the seam Thread 2 named and deliberately left open: it shipped `payers[]` with a null
+     * share because no allocation store existed, and said the card would have to learn to read one
+     * when Processing gained an allocation. This is that read. Nothing is computed here — the cents
+     * come from the allocations, and what a party still owes is assigned less attributed.
+     */
+    const responsibilityRead = await responsibilityP;
+    /*
+     * The responsible party lands on the ROW, from the allocations already read. A second query
+     * here would be a second answer to the same question; this is the same answer, indexed.
+     */
+    for (const row of rows) {
+        const owned = responsibilityRead.responsibilityByCharge.get(row.chargeId);
+        row.responsiblePartyName = owned?.name ?? null;
+        row.responsibilityUnassigned = owned?.unassigned ?? false;
+        /* Both halves, so a surface can state PARTIAL from canonical truth rather than infer it. */
+        row.responsibilityAssignedCents = owned?.assignedCents ?? 0;
+        row.responsibilityUnassignedCents = owned?.unassignedCents ?? 0;
+    }
+
+    /*
+     * COLLECTIBILITY, SUMMED FROM THE PERIOD'S POSTED OBLIGATIONS.
+     *
+     * One resolver call per posted obligation, added up — not a second implementation of the rule.
+     * Only posted charges are asked about, because a draft owes nothing yet and asking would report
+     * a suppression against money that is not owed.
+     *
+     * ── AND ONLY OBLIGATIONS, WHICH IS NOT THE SAME AS "EVERY POSTED ROW" ──────────────────────
+     *
+     * A reduction and a correction are posted rows too, and they are already counted INSIDE the net
+     * of the charge they reduce — `resolveAllocatableNet` sums them against their `source_charge_id`.
+     * Asking the resolver about them again counts them twice.
+     *
+     * That used to be invisible because it was silent: a reduction is negative, the resolver refuses
+     * a non-tuition charge worth nothing or less with `not_allocatable`, and the catch below turned
+     * the refusal into a zero. So credits vanished from this total and nothing looked wrong.
+     *
+     * REVERSING a reduction is what exposed it. The reversal appends a POSITIVE `adjustment` row,
+     * which reads to the resolver as an ordinary obligation — so the credit contributed nothing on
+     * the way down and its reversal contributed in full on the way up. A household owing $93.00 was
+     * reported as $173.00 collectible, overstated by exactly the reversed credits, while the account
+     * side's own reconciliation had it right the whole time. Two canonical authorities, one wrong
+     * answer, and a demand for money the family did not owe.
+     *
+     * The filter is the same distinction `reconcileRows` already makes: gross is what is owed, and
+     * funding, discounts, adjustments and corrections are things that happen TO it.
+     */
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * The resolver is unchanged and is still the only authority on a family's collectible position;
+     * what changed is that the account no longer waits for each charge in turn. Measured on the
+     * mounted card via Server-Timing: this phase was 1206ms of a 3157ms response — 38% of the whole
+     * Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * Nothing here caches a financial figure or answers the question a second way. The charges are
+     * independent of each other, the sums are addition, and a refusal still contributes nothing.
+     * Concurrency is bounded so a long period cannot open an unbounded number of connections.
+     */
+    const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * Staging parallelised the phases around this one and left this loop serial. Measured on the
+     * mounted card through Server-Timing before that change: 1206ms of a 3157ms response — 38% of
+     * the whole Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * The resolver is untouched and is still the only authority on a family's collectible position.
+     * The charges are independent of one another, the sums are addition, and a refusal still
+     * contributes nothing. Only the waiting is concurrent, and it is bounded so a long period
+     * cannot open an unbounded number of connections. The diagnostics above are staging's and are
+     * kept: the call count is exactly what distinguishes one slow read from N reads.
+     */
+    /*
+     * ── ONCE PER TABLE, NOT ONCE PER CHARGE ────────────────────────────────────────────────────
+     *
+     * This asked `resolveFamilyCollectible` for one charge at a time. That resolver issues about
+     * six round trips per charge, so the Certhouse specimen — 49 posted charges in the period —
+     * cost roughly 294 of them. Bounded concurrency hid some of the latency and none of the work:
+     * measured on deployed staging through Server-Timing, `collectible;dur=2841.7` of a
+     * `total;dur=3755.1` response. 76% of the Details wait, growing with every charge a family
+     * accumulates.
+     *
+     * `resolveFinancialPosition` already read these same facts set-wise for the Accounts cohort —
+     * its own note says `resolveFamilyCollectible` "issues these same queries with `.eq(charge)`"
+     * and calls that a divergence waiting to happen. So this now reaches THAT reader rather than a
+     * second copy of it: one set-based read per table, chunked and fail-closed, and the identical
+     * `computeCollectiblePosition` doing the arithmetic. Same authority, same numbers, one
+     * implementation.
+     */
+    const positionsByCharge = await collectiblePositionsP;
+    {
+        for (const row of collectibleRows) {
+            const position = positionsByCharge.get(row.chargeId);
+            if (!position) {
+                // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
+                // contributes nothing rather than failing the account — the same rule every other
+                // read on this card follows.
+                continue;
+            }
+            collectible.outstandingCents += position.outstandingCents;
+            collectible.expectedSubsidyCents += position.expectedSubsidyCents;
+            collectible.submittedClaimSuppressionCents += position.submittedClaimSuppressionCents;
+            collectible.actualSubsidyReceivedCents += position.actualSubsidyReceivedCents;
+            collectible.unresolvedVarianceCents += position.unresolvedVarianceCents;
+            collectible.currentlyCollectibleCents += position.currentlyCollectibleCents;
+        }
+    }
+    mark("collectible");
+    vm.collectible = collectible;
+    vm.responsibility = responsibilityRead.responsibility;
+    vm.payers = responsibilityRead.payers;
+    vm.expectedFunding = responsibilityRead.expectedFunding;
+
+    vm.rows = rows;
+
+    /*
+     * RECONCILIATION, ONCE PER SCOPE.
+     *
+     * Computed for the whole account AND for each child, because the card's subject filter narrows
+     * the LEDGER and a total that did not narrow with it would sit above rows that do not add up to
+     * it — the exact defect the browser found: "$100.00" over a filtered ledger showing $75. Doing it
+     * here rather than in the card keeps the rule in one place; doing it per subject rather than
+     * re-fetching keeps the filter free of a network round trip.
+     */
+    let appliedByChargeId = new Map<string, number>();
+    const paymentsOutcome = await paymentsP;
+    try {
+        if (!paymentsOutcome.ok) throw paymentsOutcome.error;
+        const received = paymentsOutcome.received;
+        vm.payments = received.payments;
+        appliedByChargeId = received.appliedByChargeId;
+
+        /*
+         * ONE COMPOSITION OWNS APPLICATIONS AND UNAPPLIED MONEY.
+         *
+         * `readAccountPayments` sums active allocations and then discards them, which is all a balance
+         * needs. Rendering "which charge, and was it undone" needs the rows themselves plus the
+         * reversed history it deliberately filters out. Rather than widen that query and grow a second
+         * place where applied money is decided, the canonical composition is asked and merged in by
+         * payment id. It is the same authority the service uses, so the two cannot disagree.
+         */
+        const views = paymentsOutcome.views;
+        if (views) {
+            const byPaymentId = new Map(views.map((v) => [v.paymentId, v]));
+            /* W7-F032: who paid, by what card — started with the first wave, joined here by payment id. */
+            const ledgerFacts = await clock.time("payment_ledger_facts_ms", () => ledgerFactsP);
+            vm.payments = vm.payments.map((row) => {
+                const view = byPaymentId.get(row.paymentId);
+                const facts = ledgerFacts.get(row.paymentId);
+                /*
+                 * W7-F042: THE DESTINATION RECORDED WITH THE RECEIPT — never today's mapping. A
+                 * receipt from before destinations were stamped stays Unmapped rather than being
+                 * re-labelled by configuration that did not exist when the money arrived.
+                 */
+                const stamp = facts?.receiptAccount;
+                const glMappingKey = stamp?.mapping_key ?? paymentGlMappingKey(row.method);
+                const enriched = {
+                    payerName: facts?.payerName ?? null,
+                    payerKind: facts?.payerKind ?? null,
+                    methodDisplay: facts?.methodDisplay ?? null,
+                    settledAutomatically: facts?.settlement === "automatic",
+                    glMappingKey,
+                    glCode: stamp?.gl_account_id ? stamp.code : null,
+                    glAccountName: stamp?.gl_account_id ? stamp.name : null,
+                    glState: (stamp?.gl_account_id
+                        ? "recorded"
+                        : stamp
+                            ? "unconfigured_at_receipt"
+                            : "before_stamping") as FinancialsPaymentGlState,
+                };
+                if (!view) return { ...row, ...enriched };
+                return {
+                    ...row,
+                    ...enriched,
+                    unappliedCents: view.unappliedCents,
+                    payerLabel: view.payerLabel,
+                    applications: view.applications,
+                };
+            });
+
+            /*
+             * THE PREPAID POSITION, FROM THE AUTHORITY THAT OWNS IT.
+             *
+             * Asked here rather than derived in a component: a card that summed unapplied cents
+             * itself would be a second answer to "what may this family spend", and it would get the
+             * PENDING case wrong — which is the one that can offer money that never arrives.
+             */
+            /*
+             * HELD MONEY (Payments V1 · W4), read here and passed IN.
+             *
+             * `availableFunds` sums what canonical authorities report and computes no money of its
+             * own, so it is told how much of each receipt is restricted rather than reading it. A
+             * failed holds read leaves the map empty, which reports held money as zero — the
+             * conservative direction is arguable either way, and this one is chosen because the
+             * alternative is refusing to show a family's prepaid position at all because a
+             * restriction could not be counted. The holds themselves travel to Details separately.
+             */
+            /* Measured: a real awaited read, and the last one in this body without a timer. */
+            const holds = await clock.time("payment_holds_ms", () =>
+                readHoldsForPayments(supabase, {
+                    orgId: args.orgId,
+                    paymentIds: views.map((v) => v.paymentId),
+                }));
+            const heldByPayment: Record<string, number> = {};
+            for (const v of views) {
+                const held = heldCentsFor(v.paymentId, holds);
+                if (held > 0) heldByPayment[v.paymentId] = held;
+            }
+            /*
+             * Folded onto the receipts AFTER the holds are read, because it cannot be known before.
+             * Same authority as the account total below — one read of the lots, two consumers, so a
+             * receipt's held figure cannot disagree with the strip's.
+             */
+            vm.payments = vm.payments.map((row) => ({
+                ...row,
+                heldCents: heldByPayment[row.paymentId] ?? 0,
+            }));
+            vm.prepaid = resolveAccountPrepaidPosition(views, heldByPayment);
+            /* Details owns held-money administration and needs the lots, not just the total. */
+            vm.heldDeposits = holds.filter((h) => h.remainingCents > 0 || h.dispositions.length > 0);
+        }
+    } catch (e) {
+        /*
+         * A payments read that fails must not become "nothing has been paid" — that would show a
+         * family the full amount owed for money they have already sent. The card says it cannot
+         * answer, which is what the `unavailable` list is for.
+         */
+        vm.unavailable = [
+            ...vm.unavailable,
+            { fact: "payments", reason: e instanceof Error ? e.message : String(e) },
+        ];
+    }
+
+    /*
+     * WHAT EACH ROW HAS BEEN PAID, AND WHETHER IT CAN TAKE MORE.
+     *
+     * After the payments read, never before: a row's outstanding amount is not knowable until the
+     * applications are in, and if that read FAILED the rows keep the state they were built with —
+     * owing their whole amount and offering nothing. That is the safe direction. The alternative,
+     * defaulting `offersPayment` to true, would put a Record-payment control on a card that has just
+     * admitted it cannot say what has been paid.
+     */
+    /*
+     * W7-F053: a discounted charge owes its NET — gross minus its discount reductions — and only
+     * then minus money applied. Reductions come from the bundle already read (no new wave). Without
+     * this, a fully paid $1,450 tuition with a −$145 sibling discount read "$145 outstanding" and $145
+     * past due, while the collectible authority (and settlement) correctly found nothing owed.
+     */
+    const reductionByChargeId = reductionMapFrom(bundle.reductionsByCharge as unknown as Array<Record<string, unknown>>);
+    for (const row of rows) {
+        row.appliedCents = appliedByChargeId.get(row.chargeId) ?? 0;
+        row.outstandingCents = row.amountCents - (reductionByChargeId.get(row.chargeId) ?? 0) - row.appliedCents;
+        row.offersPayment = offersPaymentTransition({
+            status: row.status,
+            correctsChargeId: row.correctsChargeId,
+            outstandingCents: row.outstandingCents,
+        });
+    }
+
+    vm.reconciliation = reconcileRows(rows, period.key, today, appliedByChargeId);
+    vm.reconciliationBySubject = Object.fromEntries(
+        vm.subjects.map((s) => [
+            s.customerMemberId,
+            reconcileRows(
+                rows.filter((r) => r.subjectMemberId === s.customerMemberId),
+                period.key,
+                today,
+                appliedByChargeId,
+            ),
+        ]),
+    );
+
+    // ── PAST DUE: real due-date semantics, over owed rows only ───────────────────────────────────
+    vm.pastDue = pastDueFor(rows, today, appliedByChargeId, reductionByChargeId);
+    vm.notYetDue = notYetDueFor(rows, today, appliedByChargeId, reductionByChargeId);
+    vm.upcoming = upcomingFor(rows);
+    vm.pastDueBySubject = Object.fromEntries(
+        vm.subjects.map((s) => [
+            s.customerMemberId,
+            pastDueFor(rows.filter((r) => r.subjectMemberId === s.customerMemberId), today, appliedByChargeId, reductionByChargeId),
+        ]),
+    );
+
+    // ── LEDGER, grouped by billing period ────────────────────────────────────────────────────────
+    const byPeriod = new Map<string, FinancialsLedgerRow[]>();
+    for (const row of rows) {
+        if (!row.periodKey) continue;
+        byPeriod.set(row.periodKey, [...(byPeriod.get(row.periodKey) ?? []), row]);
+    }
+    vm.ledgerPeriods = sortBillingPeriodKeysDescending(byPeriod.keys()).map((key) => {
+        const periodRows = byPeriod.get(key) ?? [];
+        return {
+            period: billingPeriodFromKey(key),
+            rows: periodRows,
+            /*
+             * POSTED MONEY INCLUDES REVERSED MONEY. A reversed original and its reversal are both
+             * posted rows that sum to zero; counting only the ones still reading `posted` would drop
+             * the original and leave the period showing the credit alone — a negative total for a
+             * period in which nothing was refunded.
+             */
+            totalCents: periodRows
+                .filter((r) => isPostedMoney(r.lifecycleStatus))
+                .reduce((sum, r) => sum + r.amountCents, 0),
+        };
+    });
+
+    // ── ADD CHARGE OPTIONS: the tenant's own templates, effective today ──────────────────────────
+    /*
+     * ── THE REVIEW BOUNDARY, RESOLVED ONCE FOR EVERY TEMPLATE ON OFFER ──────────────────────────
+     *
+     * One read of the tenant's financial policies, then a per-service resolution, because
+     * `posting_review` may be scoped to a service. This is the same authority the writer consults;
+     * consulting it here means the command can state what confirming will do instead of assuming.
+     */
+    mark("payments");
+    const financialPolicies = await financialPoliciesP;
+    mark("policies");
+    const reviewPolicyForService = (serviceId: string | null) => {
+        const r = resolveFinancialPolicy(financialPolicies, "posting_review", { serviceId: serviceId ?? undefined }, today);
+        return r.resolved ? r.policy.value.required === true : false;
+    };
+
+    /*
+     * ── ADD CHARGE OFFERS THE CATALOG, JUDGED BY THE COMMAND'S OWN RULE ──────────────────────────
+     *
+     * `evaluateCatalogCharge` is what `charge.add` runs on preview and on write. It is given the same
+     * business date and each `Applies to` subject at the one site that subject's charge is for — the
+     * household at none, each child at the site of the agreement the command would write against — so
+     * an item listed here is one the command accepts for at least one subject, at the price shown, and
+     * `unavailableForSubjects` names the subjects it would refuse. Out-of-scope items (inactive, not in
+     * effect today, no subject's location) are not listed; unsupported and blocked ones are listed and
+     * cannot be chosen.
+     *
+     * `templateResult` is still read: it is what labels charges made from templates before this.
+     */
+    const [catalog, agreementSites] = await Promise.all([catalogConfigP, agreementSitesP]);
+    if (!catalog.ok || agreementSites.error) {
+        /* FAIL CLOSED: an option list judged against a scope we could not read would be a guess. */
+        const why = !catalog.ok ? catalog.error : agreementSites.error;
+        vm.unavailable.push({ fact: "catalog", reason: `The catalog could not be read (${why}).` });
+        vm.chargeTemplates = [];
+    } else {
+        const childIds = vm.subjects.map((sub) => sub.customerMemberId);
+        const sites = chargeSitesByChild(
+            agreementSites.data.map((r) => ({
+                id: t(r.id),
+                customer_member_id: t(r.customer_member_id),
+                status: t(r.status),
+                site_location_id: t(r.site_location_id) || null,
+            })),
+            childIds,
+        );
+        const subjects = [
+            { key: HOUSEHOLD_CHARGE_SUBJECT, locationId: null },
+            ...childIds.map((id) => ({ key: id, locationId: sites.get(id) ?? null })),
+        ];
+        vm.chargeTemplates = catalogChargeOptionsForSubjects(catalog.config, { asOf: today, subjects }, reviewPolicyForService(null));
+    }
+    vm.draftTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
+        .filter((row) => {
+            const start = t(row.effective_start);
+            const end = t(row.effective_end);
+            return (!start || start <= today) && (!end || end >= today);
+        })
+        .map((row) => ({
+            id: t(row.id),
+            templateKey: t(row.template_key),
+            label: t(row.label),
+            categoryKey: t(row.charge_category),
+            categoryLabel: chargeCategoryLabel(t(row.charge_category)),
+            amountStrategy: t(row.amount_strategy),
+            amountCents: row.amount_cents == null ? null : Number(row.amount_cents),
+            currencyCode: t(row.currency_code) || "USD",
+            occursOnStrategy: t(row.occurs_on_strategy),
+            billableOnStrategy: t(row.billable_on_strategy),
+            reviewRequired:
+                reviewPolicyForService(t(row.service_id) || null) || row.review_required === true,
+            source: "template" as const,
+            availability: "offerable" as const,
+            unavailableReason: null,
+            accountLabel: null,
+        }));
+
+    /*
+     * ── WHETHER A BANK DEBIT IS EVEN POSSIBLE HERE ───────────────────────────────────────────────
+     *
+     * Read from the merchant's own recorded capability, on the server, so the browser is told the
+     * answer rather than deciding it. A surface that worked this out for itself would offer a
+     * collection the provider then refuses — after the operator had been told it was under way.
+     * Absent or non-ready is `false`, which is the honest reading of "nobody has asked the provider
+     * about this merchant".
+     */
+    const { data: merchantRow } = await merchantRead;
+    /*
+     * BOTH readiness facts, through the one rule.
+     *
+     * This read `ach_readiness === "ready"` alone, so a merchant that could not accept a single
+     * charge — onboarding unfinished, or restricted by Stripe — still offered the bank rail on the
+     * card. `railCollectionAvailable` asks merchant-level readiness first, in the same order the
+     * collection path does.
+     */
+    const merchantReadiness = merchantRow as { readiness: string | null; ach_readiness: string | null } | null;
+    vm.achAvailable = railCollectionAvailable(
+        merchantReadiness
+            ? { readiness: merchantReadiness.readiness, achReadiness: merchantReadiness.ach_readiness }
+            : null,
+        "ach",
+    );
+
+    /*
+     * ── PAYMENT SETUP, AND WHO COULD HAVE PAID — derived, where a literal used to sit ───────────
+     *
+     * `paymentSetup` was `null` for the life of this reader, with no producer anywhere, and the
+     * card adapter turned that constant into "no payment method on file" and an unhealthy autopay
+     * badge. A hardcoded null was being read as a fact about a family's money.
+     *
+     * Both reads fail soft and independently. Payment setup is context: an operator must still be
+     * able to see what is OWED when the provider tables cannot be read, and a payer chooser that
+     * could not load must not make the account look like it has nobody who can pay — the surfaces
+     * below distinguish "could not be read" from "there are none".
+     */
+    const setup = await setupP;
+    vm.paymentCapabilities = setup;
+    vm.paymentSetup = setup?.summaryLine ?? null;
+    /*
+     * "Healthy" means ON AND NOT ASKING FOR ANYTHING. A paused arrangement is a decision somebody
+     * made rather than a problem, so it is neither healthy nor an alarm — it simply reads as paused.
+     */
+    vm.autopayLine = setup?.autopayArrangement?.summaryLine ?? null;
+    vm.autopayHealthy = setup?.autopayArrangement?.status === "active"
+        && setup.autopayArrangement.needsAttention === false;
+
+    vm.payerCandidates = (await payersP).candidates;
+
+    /*
+     * The collections still in flight for the charges this card is about. Scoped to those charges so
+     * a household's card never reports another household's attempt, and limited to states the
+     * provider has not finished — a recognised attempt has become a payment and is read there.
+     */
+    const { data: attemptRows } = await openCollectionsP;
+    {
+        vm.openCollections = ((attemptRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            attemptId: t(r.id),
+            rail: t(r.rail) || "card",
+            processorState: t(r.processor_state),
+            providerActionType: t(r.provider_action_type) || null,
+            chargeId: t(r.charge_id) || null,
+            amountCents: Number(r.requested_amount_cents) || 0,
+            currencyCode: t(r.currency) || "USD",
+            updatedAt: t(r.updated_at) || null,
+        }));
+    }
+
+    return vm;
+}
+
+
+/**
+ * THE TRANSITION A LEDGER ROW OFFERS — posted money that still stands, and is not itself a
+ * correction.
+ *
+ * One definition, used by the composer and asserted directly by test and certification. A reversed
+ * row fails it (that is the bound: one reversal), and so does a correction (a reversal is not itself
+ * reversed). Drafts are posted, not reversed, and void rows have no lawful next step.
+ */
+export function offersReverseTransition(row: {
+    status: string;
+    reversedByChargeId: string | null;
+    correctsChargeId: string | null;
+}): boolean {
+    return (
+        row.status !== "draft"
+        && row.status !== "void"
+        && !row.reversedByChargeId
+        && !row.correctsChargeId
+    );
+}
+
+/**
+ * THE TRANSITION A LEDGER ROW OFFERS FOR MONEY COMING IN — a posted obligation that still owes
+ * something.
+ *
+ * The mirror of `offersReverseTransition`, and deliberately the same shape: one definition, asserted
+ * directly, never restated in JSX. Three conditions, each of which the domain already enforces and
+ * this only anticipates:
+ *
+ *   - posted. `payment.record`'s eligibility refuses a draft or void charge, because paying a draft
+ *     settles an obligation the family was never told about.
+ *   - not a correction. A reversal or credit is money going the other way; it is not a receivable.
+ *   - still owed. Applying to a settled charge is refused by the allocation bounds trigger, so
+ *     offering it would be offering a refusal.
+ *
+ * A REVERSED row fails the last test by arithmetic rather than by special case: its reversal does not
+ * reduce `outstandingCents`, so a reversed charge can still legitimately show an outstanding amount.
+ * That is correct — the pair nets to zero at the ACCOUNT level, and this row-level question is only
+ * about whether this row can receive money. The service and the database remain the authority; if
+ * they refuse, the card surfaces the refusal rather than having pre-empted it wrongly.
+ */
+export function offersPaymentTransition(row: {
+    status: string;
+    correctsChargeId: string | null;
+    outstandingCents: number;
+}): boolean {
+    return (
+        row.status !== "draft"
+        && row.status !== "void"
+        && !row.correctsChargeId
+        && row.outstandingCents > 0
+    );
+}
+
+/**
+ * Posted money, whether or not a later correction undid it.
+ *
+ * `reversed` is a derived READING of a posted row, not a different kind of row: the charge was
+ * posted, it still stands in the ledger, and its reversal stands beside it. Any total over "what was
+ * posted" has to include both or it reports half of a pair.
+ */
+export function isPostedMoney(lifecycleStatus: FinancialsLedgerRow["lifecycleStatus"]): boolean {
+    return lifecycleStatus === "posted" || lifecycleStatus === "reversed";
+}
+
+/**
+ * THE reconciliation rule, in one place so no scope can compute it differently.
+ *
+ * `appliedByChargeId` is money RECEIVED and applied, keyed by the charge it paid. Passing it per
+ * charge rather than as a total is what makes the subject filter and the period filter work on
+ * payments for free: narrowing the rows narrows the payments with them, so a per-child total can
+ * never sit above a ledger that does not add up to it. An empty map is "nothing has been paid",
+ * which is a different statement from "we cannot say" and is the honest one now that we can.
+ */
+export function reconcileRows(
+    /*
+     * The CANONICAL reconciliation input, not this card's presentation row.
+     *
+     * `FinancialsLedgerRow` structurally satisfies `AccountChargeLedgerRow`, so this card keeps
+     * passing its own richer rows unchanged while the first-order runtime passes the narrow ones
+     * its reader produces. One implementation of the arithmetic, two shapes of caller — rather
+     * than a second reconciliation written against a second row type.
+     */
+    rows: readonly AccountChargeLedgerRow[],
+    periodKey: string,
+    _today: string,
+    appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+): FinancialsReconciliation {
+    const out = emptyReconciliation();
+    for (const row of rows) {
+        if (row.periodKey !== periodKey) continue;
+        if (row.lifecycleStatus === "scheduled") {
+            out.scheduledCents += row.amountCents;
+            continue;
+        }
+        if (row.lifecycleStatus === "draft") {
+            out.draftCents += row.amountCents;
+            continue;
+        }
+        /*
+         * A REVERSED CHARGE IS STILL A LINE IN THE RECONCILIATION. It is not skipped: the original
+         * lands in gross and its reversal lands in reductions, and the two net to zero. Skipping the
+         * original would leave the credit unmatched and drive responsibility NEGATIVE — the ledger
+         * would show money owed TO a family that was only ever charged and refunded.
+         */
+        if (!OWED_STATUSES.has(row.status)) continue;
+        if (FUNDING_CATEGORIES.has(row.categoryKey)) out.fundingCents += row.amountCents;
+        else if (REDUCTION_CATEGORIES.has(row.categoryKey)) out.discountsCents += row.amountCents;
+        else if (ADJUSTMENT_CATEGORIES.has(row.categoryKey)) out.adjustmentsCents += row.amountCents;
+        else out.grossCents += row.amountCents;
+    }
+    // Responsibility is the SUM OF EVERY OWED LINE, so it cannot drift from the rows beneath it.
+    out.responsibilityCents =
+        out.grossCents + out.discountsCents + out.fundingCents + out.adjustmentsCents;
+    /*
+     * PAYMENTS ARE SUMMED OVER THE SAME ROWS, so the balance cannot drift from the ledger beneath it.
+     * A payment against a row this scope excludes — another child, another period — is another
+     * scope's payment, and is not counted twice by being counted here.
+     */
+    for (const row of rows) {
+        if (row.periodKey !== periodKey) continue;
+        if (!OWED_STATUSES.has(row.status)) continue;
+        out.paymentsCents += appliedByChargeId.get(row.chargeId) ?? 0;
+    }
+    out.balanceCents = out.responsibilityCents - out.paymentsCents;
+    return out;
+}
+

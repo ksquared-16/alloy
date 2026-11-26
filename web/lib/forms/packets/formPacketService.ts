@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
+import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { carryForwardSharedValues } from "@/lib/forms/packets/carryForwardSharedValues";
 import { loadPublishedFormEnvelope, type PublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
 import { computePacketOperatorReviewWarnings } from "@/lib/forms/packets/packetOperatorReviewWarnings";
 import { emitOpportunityEnrollmentPacketSubmittedForReviewSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
@@ -44,13 +46,58 @@ export function mergeLaunchFksPreferringSessionCrmSnapshot(
     };
 }
 
-/** Merge only non-null FKs from a submitted step into the stored snapshot (does not clear keys). */
+/**
+ * Participant identity (Slice 3):
+ *
+ * A packet session's `crm_snapshot` carries HOUSEHOLD identity — customer, member, opportunity. When
+ * recipient links share ONE session (`packet_instance_id`), that snapshot is shared by every
+ * participant, so it can never decide WHO is answering: the first link to launch the session would
+ * pin `person_id` for everyone, and every later step would prefer that pin over its own recipient.
+ *
+ * On a shared session the RESOLVING LINK is the participant authority. Its `recipient_person_id` is
+ * validated server-side during FK derivation (`applyOpportunityPacketLinkFkExtras` checks the person
+ * exists in this org) and arrives here as `launchFks.person_id` — it is never client-asserted.
+ *
+ * A session that is NOT shared keeps the previous behaviour exactly: one link, one participant, and
+ * the snapshot supplies continuity across steps.
+ */
+export function resolveParticipantFksForPacketDraft(args: {
+    launchFks: LaunchFkStamp;
+    crmSnapshot: Record<string, unknown>;
+    /** True when the resolving link names its own recipient (Family Packet instance). */
+    linkNamesRecipient: boolean;
+}): LaunchFkStamp {
+    const { launchFks, crmSnapshot, linkNamesRecipient } = args;
+    const s = launchFkStampFromCrmSnapshotRecord(crmSnapshot);
+    return {
+        // Participant: the link wins when it names a recipient; otherwise unchanged behaviour.
+        person_id: linkNamesRecipient ? launchFks.person_id : s.person_id ?? launchFks.person_id,
+        // Household: always the shared snapshot when it knows.
+        customer_id: s.customer_id ?? launchFks.customer_id,
+        customer_member_id: s.customer_member_id ?? launchFks.customer_member_id,
+        opportunity_id: s.opportunity_id ?? launchFks.opportunity_id,
+    };
+}
+
+/** Does this link name its own recipient? Presence only — the id itself is validated at FK derivation. */
+export function linkNamesRecipientPerson(metadata: Record<string, unknown>): boolean {
+    const v = metadata.recipient_person_id;
+    return typeof v === "string" && v.trim().length > 0;
+}
+
+/**
+ * Merge only non-null FKs from a submitted step into the stored snapshot (does not clear keys).
+ *
+ * `householdOnly` withholds `person_id` — the snapshot of a SHARED session must stay household-scoped,
+ * or each submit re-pins the participant for every other recipient.
+ */
 export function mergeNonNullSubmissionFksIntoCrmSnapshot(
     existing: Record<string, unknown>,
-    fks: LaunchFkStamp
+    fks: LaunchFkStamp,
+    options?: { householdOnly?: boolean }
 ): Record<string, unknown> {
     const out = { ...existing };
-    if (fks.person_id) out.person_id = fks.person_id;
+    if (fks.person_id && !options?.householdOnly) out.person_id = fks.person_id;
     if (fks.customer_id) out.customer_id = fks.customer_id;
     if (fks.customer_member_id) out.customer_member_id = fks.customer_member_id;
     if (fks.opportunity_id) out.opportunity_id = fks.opportunity_id;
@@ -65,13 +112,13 @@ export async function syncPacketSessionCrmSnapshotFromSubmission(
 ): Promise<{ error: Error | null }> {
     const { data: sess, error: loadErr } = await supabase
         .from("form_packet_sessions")
-        .select("crm_snapshot, status")
+        .select("crm_snapshot, status, packet_instance_id")
         .eq("id", packetSessionId)
         .eq("org_id", orgId)
         .maybeSingle();
 
     if (loadErr) return { error: new Error(loadErr.message) };
-    const row = sess as { crm_snapshot?: unknown; status?: string } | null;
+    const row = sess as { crm_snapshot?: unknown; status?: string; packet_instance_id?: string | null } | null;
     if (!row || row.status !== "in_progress") {
         return { error: null };
     }
@@ -79,7 +126,10 @@ export async function syncPacketSessionCrmSnapshotFromSubmission(
     const existing = (row.crm_snapshot && typeof row.crm_snapshot === "object" && !Array.isArray(row.crm_snapshot)
         ? row.crm_snapshot
         : {}) as Record<string, unknown>;
-    const merged = mergeNonNullSubmissionFksIntoCrmSnapshot(existing, fks);
+    // Shared session: household facts only. Writing the submitter's person here would re-pin the
+    // participant for every other recipient on their next step.
+    const shared = typeof row.packet_instance_id === "string" && row.packet_instance_id.trim().length > 0;
+    const merged = mergeNonNullSubmissionFksIntoCrmSnapshot(existing, fks, { householdOnly: shared });
 
     const { error: upErr } = await supabase
         .from("form_packet_sessions")
@@ -113,6 +163,8 @@ export type PacketSessionRow = {
     current_sequence_index: number;
     /** Family Packet instance id. When set, recipient links share THIS session. */
     packet_instance_id?: string | null;
+    /** D-95. The Enrollment process_instance this session realizes; NULL for other packets. */
+    process_instance_id?: string | null;
 };
 
 /** Family Packet instance id from link metadata (`packet_instance_id` or `share_group_id`). */
@@ -146,6 +198,12 @@ export type PacketSessionItemRow = {
     sequence_index: number;
     status: string;
     form_submission_id: string | null;
+    /**
+     * D-94. The version this participant transacts against, resolved once at session
+     * realization. NULL only on sessions created before D-94, where what was rendered is
+     * not recoverable and must not be fabricated.
+     */
+    resolved_form_definition_version_id?: string | null;
 };
 
 export function shallowMergeSharedValues(
@@ -181,9 +239,16 @@ export function pickLaunchContextForPacketSession(metadata: Record<string, unkno
     return out;
 }
 
-export function crmSnapshotFromLaunchFks(fks: LaunchFkStamp): Record<string, unknown> {
+/**
+ * Seed a new session's snapshot. `householdOnly` (Family Packet instance) omits `person_id` so the
+ * FIRST recipient link to launch the shared session does not pin the participant for the rest.
+ */
+export function crmSnapshotFromLaunchFks(
+    fks: LaunchFkStamp,
+    options?: { householdOnly?: boolean }
+): Record<string, unknown> {
     return {
-        person_id: fks.person_id,
+        ...(options?.householdOnly ? {} : { person_id: fks.person_id }),
         customer_id: fks.customer_id,
         customer_member_id: fks.customer_member_id,
         opportunity_id: fks.opportunity_id,
@@ -215,6 +280,12 @@ export async function ensurePacketSessionForPublicLink(
         packetDefinitionId: string;
         linkMetadata: Record<string, unknown>;
         launchFks: LaunchFkStamp;
+        /**
+         * D-95. The Enrollment journey this session realizes. Absent for every existing
+         * caller, which keeps non-Enrollment packet launches byte-identical: the column
+         * stays NULL and the one-current-session constraint does not apply to them.
+         */
+        processInstanceId?: string | null;
     }
 ): Promise<{ session: PacketSessionRow; items: PacketSessionItemRow[]; error: Error | null }> {
     const { orgId, linkId, packetDefinitionId, linkMetadata, launchFks } = input;
@@ -223,7 +294,7 @@ export async function ensurePacketSessionForPublicLink(
     const loadSessionWithItems = async (sess: PacketSessionRow) => {
         const { data: items } = await supabase
             .from("form_packet_session_items")
-            .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id")
+            .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id, resolved_form_definition_version_id")
             .eq("packet_session_id", sess.id)
             .order("sequence_index", { ascending: true });
         return { session: sess, items: (items ?? []) as PacketSessionItemRow[], error: null };
@@ -256,7 +327,7 @@ export async function ensurePacketSessionForPublicLink(
     }
 
     const launch_context = pickLaunchContextForPacketSession(linkMetadata);
-    const crm_snapshot = crmSnapshotFromLaunchFks(launchFks);
+    const crm_snapshot = crmSnapshotFromLaunchFks(launchFks, { householdOnly: Boolean(packetInstanceId) });
 
     const { data: insertedSess, error: insErr } = await supabase
         .from("form_packet_sessions")
@@ -265,6 +336,7 @@ export async function ensurePacketSessionForPublicLink(
             packet_definition_id: packetDefinitionId,
             started_via_public_link_id: linkId,
             status: "in_progress",
+            process_instance_id: input.processInstanceId ?? null,
             launch_context,
             crm_snapshot,
             shared_values: {},
@@ -299,12 +371,48 @@ export async function ensurePacketSessionForPublicLink(
 
     const sess = insertedSess as PacketSessionRow;
 
+    // D-94 — resolve the participant's Form versions ONCE, here, at session realization.
+    //
+    // Configuration floats; an active participant transaction pins. Resolving per step at read
+    // time meant a republish mid-session changed what the parent saw next, and left no record of
+    // which version they actually completed or signed. Each step's version is chosen now and
+    // never re-chosen.
+    //
+    // A definition-level pin still wins where an operator set one: that is the operator saying
+    // "this packet always uses this exact version", which is a stronger statement than "whatever
+    // happened to be published when this parent started".
+    const resolvedVersionByItemId = new Map<string, string>();
+    for (const di of defItems) {
+        const pinned = (di as { pinned_form_definition_version_id?: string | null })
+            .pinned_form_definition_version_id;
+        const envelope = await loadPublishedFormEnvelope(
+            supabase,
+            orgId,
+            di.form_definition_id,
+            pinned ?? null,
+        );
+        // Fail closed. A step with no published version cannot be transacted against, and
+        // creating the session anyway would hand a parent a packet that breaks partway through —
+        // after they had already answered questions.
+        if (!envelope) {
+            return {
+                session: null as never,
+                items: [],
+                error: new Error(
+                    `No published version for packet step form ${di.form_definition_id}; session not created.`,
+                ),
+            };
+        }
+        resolvedVersionByItemId.set(di.id, envelope.formDefinitionVersionId);
+    }
+
     const sessionItemsPayload = defItems.map((di, idx) => ({
         org_id: orgId,
         packet_session_id: sess.id,
         packet_item_id: di.id,
         sequence_index: di.sequence_index,
         status: idx === 0 ? "active" : "pending",
+        resolved_form_definition_version_id: resolvedVersionByItemId.get(di.id) ?? null,
     }));
 
     const { error: siErr } = await supabase.from("form_packet_session_items").insert(sessionItemsPayload);
@@ -314,7 +422,7 @@ export async function ensurePacketSessionForPublicLink(
 
     const { data: loadedItems } = await supabase
         .from("form_packet_session_items")
-        .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id")
+        .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id, resolved_form_definition_version_id")
         .eq("packet_session_id", sess.id)
         .order("sequence_index", { ascending: true });
 
@@ -377,8 +485,25 @@ export async function resolveActiveStepEnvelope(
 ): Promise<{ envelope: PublishedFormEnvelope | null; error: Error | null }> {
     const defRow = definitionItems.find((d) => d.id === activeItem.packet_item_id);
     if (!defRow) return { envelope: null, error: new Error("Packet step definition missing") };
+    // D-94 — the session's own resolved version is the authority for an active transaction.
+    //
+    // Precedence, strongest first:
+    //   1. the session item's resolved version  — what THIS parent is transacting against;
+    //   2. the packet definition pin            — pre-D-94 sessions, and explicit operator pins;
+    //   3. latest published                     — pre-D-94 sessions with no pin.
+    //
+    // `followLatestPublished` deliberately does NOT override (1). It exists for operator preview
+    // and packet authoring, where "show me the current form" is the question; honouring it against
+    // a live session would reintroduce exactly the mid-session drift this decision removes.
+    //
+    // Steps 2 and 3 are the compatibility path for sessions created before this column existed,
+    // where the rendered version was never recorded and cannot be recovered.
+    const sessionResolved =
+        (activeItem as { resolved_form_definition_version_id?: string | null })
+            .resolved_form_definition_version_id ?? null;
     const pin =
-        opts?.followLatestPublished ? null : (defRow.pinned_form_definition_version_id as string | null);
+        sessionResolved ??
+        (opts?.followLatestPublished ? null : (defRow.pinned_form_definition_version_id as string | null));
     const env = await loadPublishedFormEnvelope(supabase, orgId, defRow.form_definition_id, pin);
     if (!env) return { envelope: null, error: new Error("No published version for packet step form") };
     return { envelope: env, error: null };
@@ -394,7 +519,14 @@ export async function advancePacketSessionAfterSubmit(
     supabase: SupabaseClient,
     orgId: string,
     submissionId: string,
-    submittedValues: Record<string, unknown>
+    submittedValues: Record<string, unknown>,
+    /**
+     * Which artifact these values came from.
+     *
+     * Supplied, the carry-forward keys each value by its identity rather than by its position in
+     * this Form. Omitted, the historical shallow merge stands.
+     */
+    origin?: { schema: Pick<FormSchemaV1, "fields">; formDefinitionId: string }
 ): Promise<{ result: AdvancePacketResult | null; error: Error | null }> {
     const { data: row, error: findErr } = await supabase
         .from("form_packet_session_items")
@@ -427,9 +559,10 @@ export async function advancePacketSessionAfterSubmit(
         };
     }
 
-    const shared = shallowMergeSharedValues(
+    const shared = carryForwardSharedValues(
         (session.shared_values ?? {}) as Record<string, unknown>,
-        submittedValues
+        submittedValues,
+        origin
     );
 
     const now = new Date().toISOString();

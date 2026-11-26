@@ -1,0 +1,207 @@
+{
+  "trusted_host_action_id": "tha_4fe3122737f87e",
+  "query_hash": "a73d5e248b9a5f3d3a918e28e5d9c3dfc3a875c604ba6ba212d1299503efd19e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-03T02:21:36.211Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_4fe3122737f87e",
+    "query_hash": "a73d5e248b9a5f3d3a918e28e5d9c3dfc3a875c604ba6ba212d1299503efd19e",
+    "authorization_id": "grnt_2f0ce8341ab14a58",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-03T02:21:42.482Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "cadence": "biweekly",
+            "anchor_on": "2026-01-05",
+            "policy_id": "0272bcf5-9168-4545-8672-e1caa8028afd",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "charges": 86,
+            "payments": 0,
+            "reductions": 7,
+            "active_agreements": 4,
+            "locations_live": 2,
+            "id_is_structured_fixture": false,
+            "existing_periods": [
+              {
+                "period_key": "2026-11-09~2026-11-22",
+                "cadence": "biweekly",
+                "starts_on": "2026-11-09",
+                "ends_on": "2026-11-22",
+                "status": "open"
+              },
+              {
+                "period_key": "2026-11-23~2026-12-06",
+                "cadence": "biweekly",
+                "starts_on": "2026-11-23",
+                "ends_on": "2026-12-06",
+                "status": "open"
+              },
+              {
+                "period_key": "2026-12-07~2026-12-20",
+                "cadence": "biweekly",
+                "starts_on": "2026-12-07",
+                "ends_on": "2026-12-20",
+                "status": "open"
+              }
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "cadence": "daily",
+            "anchor_on": "2026-01-05",
+            "policy_id": "d322a255-7941-48d0-b262-68068b660be5",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "charges": 0,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 1,
+            "locations_live": 1,
+            "id_is_structured_fixture": true,
+            "existing_periods": [
+              {
+                "period_key": "2026-11-12~2026-11-12",
+                "cadence": "daily",
+                "starts_on": "2026-11-12",
+                "ends_on": "2026-11-12",
+                "status": "open"
+              },
+              {
+                "period_key": "2026-11-13~2026-11-13",
+                "cadence": "daily",
+                "starts_on": "2026-11-13",
+                "ends_on": "2026-11-13",
+                "status": "open"
+              }
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "cadence": "annual",
+            "anchor_on": "2026-01-05",
+            "policy_id": "c4fa1265-15b1-49e1-a5b0-0402b99043ab",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "charges": 0,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 1,
+            "locations_live": 1,
+            "id_is_structured_fixture": true,
+            "existing_periods": [
+              {
+                "period_key": "2026-01-05~2027-01-04",
+                "cadence": "annual",
+                "starts_on": "2026-01-05",
+                "ends_on": "2027-01-04",
+                "status": "open"
+              },
+              {
+                "period_key": "2027-01-05~2028-01-04",
+                "cadence": "annual",
+                "starts_on": "2027-01-05",
+                "ends_on": "2028-01-04",
+                "status": "open"
+              }
+            ]
+          },
+          {
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "cadence": "weekly",
+            "anchor_on": "2027-03-01",
+            "policy_id": "e984c03b-fa8d-45d2-9aa5-0acdf08b9625",
+            "is_active": true,
+            "effective_start": "2027-03-01",
+            "effective_end": null,
+            "charges": 14,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 3,
+            "locations_live": 1,
+            "id_is_structured_fixture": false,
+            "existing_periods": [
+              {
+                "period_key": "2026-11",
+                "cadence": "monthly",
+                "starts_on": "2026-11-01",
+                "ends_on": "2026-11-30",
+                "status": "open"
+              },
+              {
+                "period_key": "2026-12",
+                "cadence": "monthly",
+                "starts_on": "2026-12-01",
+                "ends_on": "2026-12-31",
+                "status": "open"
+              },
+              {
+                "period_key": "2027-01",
+                "cadence": "monthly",
+                "starts_on": "2027-01-01",
+                "ends_on": "2027-01-31",
+                "status": "open"
+              }
+            ]
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "close_schedules": [
+              {
+                "scheduled_work_id": "2edf2559-d500-4edc-a96c-501c383315de",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "recurrence_kind": "daily",
+                "is_active": true,
+                "next_due_at": "2026-10-04T04:00:00+00:00",
+                "seconds_until_due": 92298
+              }
+            ],
+            "close_occurrences": 0,
+            "clock_last_wake_at": "2026-10-03T02:20:00.892299+00:00",
+            "clock_wake_count": 3251,
+            "clock_last_worker": "worker-2e38e88d",
+            "clock_seconds_since_wake": 101,
+            "db_now": "2026-10-03T02:21:41.664279+00:00",
+            "db_current_date": "2026-10-03"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "time_zone_columns": []
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

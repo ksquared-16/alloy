@@ -7,6 +7,7 @@ import {
     buildSummaryDocFromOrder,
     cycleSummaryCardSpan,
     insertSummaryCard,
+    mergeFocusPanelSummaryWorkingDoc,
     moveSummaryCard,
     moveSummaryCardToIndex,
     readSummaryCardOrder,
@@ -25,7 +26,36 @@ describe("focusPanelSummaryDocOps — local structure operations", () => {
         const defaultGrid = deriveFocusPanelGridFromLayoutDoc(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
         const defaultSeq = defaultGrid.rows.flatMap((row) => row.cells.map((cell) => cell.key));
         expect(flatKeys()).toEqual(defaultSeq);
-        expect(baseOrder.length).toBe(10);
+        expect(baseOrder.length).toBeGreaterThan(0);
+        expect(baseOrder.length).toBe(defaultSeq.length);
+    });
+
+    it("mergeFocusPanelSummaryWorkingDoc preserves untouched metadata on incremental edits", () => {
+        const base = {
+            ...FOCUS_PANEL_SUMMARY_DEFAULT_DOC,
+            metadata: {
+                ...(FOCUS_PANEL_SUMMARY_DEFAULT_DOC.metadata ?? {}),
+                focusPanelCardLinks: [{ id: "link-1", fromCard: "scheduling", toCard: "children" }],
+                customForwardCompat: { keep: true, nested: { a: 1 } },
+                nestedSurfaces: { children_surface: { surfaceId: "children_surface", groups: [] } },
+            },
+        };
+        const order = readSummaryCardOrder(base);
+        const moved = moveSummaryCard(order, order[0]!.instanceId, 1);
+        const merged = mergeFocusPanelSummaryWorkingDoc({
+            base,
+            order: moved,
+            publishedLayoutMetadata: null,
+            nestedSurfaces: null,
+        });
+        expect(merged.metadata?.focusPanelCardLinks).toEqual(base.metadata?.focusPanelCardLinks);
+        expect(merged.metadata?.customForwardCompat).toEqual({ keep: true, nested: { a: 1 } });
+        expect(merged.metadata?.nestedSurfaces).toEqual(base.metadata?.nestedSurfaces);
+        expect(readSummaryCardOrder(merged).map((c) => c.key)).toEqual(moved.map((c) => c.key));
+        // Contrast: rebuild-from-order alone would drop forward-compat keys.
+        const rebuilt = buildSummaryDocFromOrder(moved);
+        expect(rebuilt.metadata?.focusPanelCardLinks).toBeUndefined();
+        expect(rebuilt.metadata?.customForwardCompat).toBeUndefined();
     });
 
     it("moveSummaryCard reorders without adding/removing", () => {

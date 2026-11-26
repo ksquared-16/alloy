@@ -1,0 +1,77 @@
+{
+  "trusted_host_action_id": "tha_52f0a24bac38de",
+  "query_hash": "b238cd3b639846110ac340ad06351a41e5d1a265b561a25cd7643d2244526355",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-03T01:02:17.274Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_52f0a24bac38de",
+    "query_hash": "b238cd3b639846110ac340ad06351a41e5d1a265b561a25cd7643d2244526355",
+    "authorization_id": "grnt_6abc0241ad4f4d5e",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-03T01:02:22.940Z",
+    "question_ids": [
+      "q1",
+      "q3",
+      "q4"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "scheduled_work_id": "2edf2559-d500-4edc-a96c-501c383315de",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "handler_key": "financials.billing_period_close.evaluate",
+            "recurrence_kind": "daily",
+            "is_active": true,
+            "label": "billing_period_commercial_close",
+            "next_due_at": "2026-10-04T04:00:00+00:00",
+            "seconds_until_due": 97058,
+            "domain_ref": {
+              "purpose": "close customer billing periods whose commercial interval has elapsed",
+              "authority": "closeBillingPeriod",
+              "close_actor": "system"
+            }
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "periods_total": 16,
+            "open": 16,
+            "closed": 0,
+            "closed_by_system": 0,
+            "closed_by_operator": 0,
+            "open_and_elapsed": 0,
+            "earliest_open_ends_on": "2026-11-12",
+            "today": "2026-10-03"
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "last_wake_at": "2026-10-03T01:00:00.692664+00:00",
+            "wake_count": 3235,
+            "last_worker_id": "worker-9de4cf04",
+            "seconds_since_last_wake": 141
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

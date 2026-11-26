@@ -1,13 +1,18 @@
+/**
+ * Platform policy for create_lead Location.
+ *
+ * Location is **not** a universal code-owned Create Lead minimum.
+ * It is required only when the resolved ActionIntakeSpec lists `location_id`
+ * (or equivalent) among explicit `record_creation` / required intake fields.
+ */
+
 import { CREATE_LEAD_PLATFORM_REQUIRED_KEYS } from "@/lib/admin/actions/createLeadPlatformGather";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 
-/**
- * Platform policy for create_lead: location_id is always required to create a lead record.
- * Business Process stage rules may add fields but cannot remove this minimum via UI validation.
- */
-export const CREATE_LEAD_PLATFORM_REQUIRES_LOCATION = CREATE_LEAD_PLATFORM_REQUIRED_KEYS.includes(
-    "location_id",
-);
+/** Always false after Location was removed from the platform minimum key set. */
+export const CREATE_LEAD_PLATFORM_REQUIRES_LOCATION = (
+    CREATE_LEAD_PLATFORM_REQUIRED_KEYS as readonly string[]
+).includes("location_id");
 
 /** Pure resolver for tests — platform flag + spec required payload keys. */
 export function resolveCreateLeadLocationRequired(input: {
@@ -18,7 +23,7 @@ export function resolveCreateLeadLocationRequired(input: {
     return input.specRequiredPayloadKeys.includes("location_id");
 }
 
-/** Single source of truth for Create Lead location requirement across modal, checklist, and commit validation. */
+/** Location required only when the effective intake/required key set includes it. */
 export function isCreateLeadLocationRequired(input?: {
     intakeSpec?: ActionIntakeSpec | null;
     requiredPayloadKeys?: readonly string[];

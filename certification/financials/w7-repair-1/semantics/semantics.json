@@ -1,0 +1,68 @@
+[
+  {
+    "option": "Enrollment fee (waived)",
+    "template": "Enrollment fee (waived) ▾",
+    "serviceDate": "Oct 1, 2026",
+    "serviceDateEditable": false,
+    "billingPeriod": "October 2026",
+    "due": "Oct 11, 2026",
+    "amount": "$0.00",
+    "nativeDateInputs": 0,
+    "emojiInControl": false
+  },
+  {
+    "option": "Field trip",
+    "template": "Field trip ▾",
+    "serviceDate": "",
+    "serviceDateEditable": true,
+    "billingPeriod": "October 2026",
+    "due": "No due date",
+    "amount": "$40.00",
+    "nativeDateInputs": 0,
+    "emojiInControl": false
+  },
+  {
+    "option": "Late pickup",
+    "template": "Late pickup ▾",
+    "serviceDate": "Oct 1, 2026",
+    "serviceDateEditable": false,
+    "billingPeriod": "October 2026",
+    "due": "Oct 11, 2026",
+    "amount": "$25.00",
+    "nativeDateInputs": 0,
+    "emojiInControl": false
+  },
+  {
+    "option": "Materials",
+    "template": "Materials ▾",
+    "serviceDate": "Oct 1, 2026",
+    "serviceDateEditable": false,
+    "billingPeriod": "October 2026",
+    "due": "Oct 18, 2026",
+    "amount": "$18.00",
+    "nativeDateInputs": 0,
+    "emojiInControl": false
+  },
+  {
+    "option": "Monthly tuition",
+    "template": "Monthly tuition ▾",
+    "serviceDate": "Resolved at commit",
+    "serviceDateEditable": false,
+    "billingPeriod": "October 2026",
+    "due": "No due date",
+    "amount": "$400.00",
+    "nativeDateInputs": 0,
+    "emojiInControl": false
+  },
+  {
+    "option": "Registration fee",
+    "template": "Registration fee ▾",
+    "serviceDate": "Oct 1, 2026",
+    "serviceDateEditable": false,
+    "billingPeriod": "October 2026",
+    "due": "Oct 11, 2026",
+    "amount": "$75.00",
+    "nativeDateInputs": 0,
+    "emojiInControl": false
+  }
+]

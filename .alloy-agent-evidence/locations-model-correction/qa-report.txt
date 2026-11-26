@@ -1,0 +1,8 @@
+Programs checklist: checked=6 availableNow=6 notOfferedRows=0
+PASS: offerings present
+PASS: Scheduling landing
+PASS: subnav day_types
+PASS: subnav schedule_types
+PASS: subnav hours
+PASS: subnav operating_days
+PASS: subnav patterns

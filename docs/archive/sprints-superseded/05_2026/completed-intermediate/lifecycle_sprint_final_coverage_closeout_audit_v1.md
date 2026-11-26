@@ -1,6 +1,6 @@
 # Lifecycle Configuration & Requirement Engine Sprint — Final Coverage & Closeout Audit v1
 
-**Path:** `docs/sprints/05_2026/lifecycle_sprint_final_coverage_closeout_audit_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/lifecycle_sprint_final_coverage_closeout_audit_v1.md`  
 **Status:** Closeout audit (May 2026) — **no implementation in this pass**  
 **Sprint completed:** Lifecycle alignment, information matrix, requirement engine foundation, action runtime audit, lifecycle action preflight, Pass A (Add Child), Pass B (Add Person), create-lead doctrine, TypeScript cleanup.
 

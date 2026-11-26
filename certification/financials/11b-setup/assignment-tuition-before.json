@@ -1,0 +1,212 @@
+{
+  "state": {
+    "selectPresent": true,
+    "pricedChild": "e408fa51-7261-43c4-8e60-555d17fc9888",
+    "tag": "SELECT",
+    "options": [
+      {
+        "value": "",
+        "text": "Select best match to lock in…"
+      },
+      {
+        "value": "5532489d-eed3-4080-9477-f47a94fde1c6",
+        "text": "Best match — Certa Certhouse: $185.00/weekly"
+      },
+      {
+        "value": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+        "text": "Certb Certhouse: $1,450.00/monthly"
+      }
+    ],
+    "selected": "",
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "scheduling"
+    ]
+  },
+  "opportunityId": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+  "before": {
+    "status": 200,
+    "assignments": [
+      {
+        "child": "Certb Certhouse",
+        "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+        "state": "recommended",
+        "recommended": "$1,450.00/monthly",
+        "applicable": [
+          "$1,450.00/monthly"
+        ],
+        "accepted": {
+          "termId": "2a23f980-26d3-499a-b5bb-394e5c657499",
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d",
+          "enrollmentAgreementId": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+          "termKind": "tuition",
+          "amountCents": 145000,
+          "currencyCode": "USD",
+          "cadenceKey": "monthly",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "source": {
+            "entity": "commercial_tuition_rates",
+            "id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6"
+          },
+          "variantId": "d484dcc8-87e3-4e83-b02c-48e2846161d4",
+          "offeringId": "f7cf7d6c-2dee-4f2a-a745-1844424050e1",
+          "programKey": "preschool",
+          "locationId": null,
+          "payerType": "private_pay",
+          "state": "accepted",
+          "overrideReason": null,
+          "recommendedSourceId": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+          "configVersion": "ae79d05d",
+          "resolutionKey": "b2e43fd1",
+          "acceptedBy": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+          "acceptedAt": "2026-09-19T02:14:15.497095+00:00"
+        },
+        "acceptedIsStale": false
+      },
+      {
+        "child": "Certa Certhouse",
+        "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+        "state": "recommended",
+        "recommended": "$185.00/weekly",
+        "applicable": [
+          "$185.00/weekly"
+        ],
+        "accepted": {
+          "termId": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "enrollmentAgreementId": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+          "termKind": "tuition",
+          "amountCents": 18500,
+          "currencyCode": "USD",
+          "cadenceKey": "weekly",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "source": {
+            "entity": "commercial_tuition_rates",
+            "id": "5532489d-eed3-4080-9477-f47a94fde1c6"
+          },
+          "variantId": "ee157cff-3546-4172-b591-984b96fbec10",
+          "offeringId": "fe7bb68f-1b36-432c-ae0b-e478dbc9f582",
+          "programKey": "school_age",
+          "locationId": null,
+          "payerType": "private_pay",
+          "state": "accepted",
+          "overrideReason": null,
+          "recommendedSourceId": "5532489d-eed3-4080-9477-f47a94fde1c6",
+          "configVersion": "ae79d05d",
+          "resolutionKey": "2f92ec30",
+          "acceptedBy": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+          "acceptedAt": "2026-09-19T02:14:06.43635+00:00"
+        },
+        "acceptedIsStale": false
+      }
+    ]
+  },
+  "saved": "commit disabled — CC\nCerta Certhouse\n4/12/2021 (5y5m)\nNew schedule\nDAYS\nM\nT\nW\nT\nF\nS\nS\nUse a schedule pattern\nDAILY HOURS\n🕒\n–\n🕒\nDifferent times per day\nROOM\nSelect a room\nSelect\nSite · Site\nEFFECTIVE\nStart\nEnd\nOpen-ended\nOngoing — no end date; ends later via a change.\nTUITION\nTuition / quote amount",
+  "after": {
+    "status": 200,
+    "assignments": [
+      {
+        "child": "Certb Certhouse",
+        "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+        "state": "recommended",
+        "recommended": "$1,450.00/monthly",
+        "applicable": [
+          "$1,450.00/monthly"
+        ],
+        "accepted": {
+          "termId": "2a23f980-26d3-499a-b5bb-394e5c657499",
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d",
+          "enrollmentAgreementId": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+          "termKind": "tuition",
+          "amountCents": 145000,
+          "currencyCode": "USD",
+          "cadenceKey": "monthly",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "source": {
+            "entity": "commercial_tuition_rates",
+            "id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6"
+          },
+          "variantId": "d484dcc8-87e3-4e83-b02c-48e2846161d4",
+          "offeringId": "f7cf7d6c-2dee-4f2a-a745-1844424050e1",
+          "programKey": "preschool",
+          "locationId": null,
+          "payerType": "private_pay",
+          "state": "accepted",
+          "overrideReason": null,
+          "recommendedSourceId": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+          "configVersion": "ae79d05d",
+          "resolutionKey": "b2e43fd1",
+          "acceptedBy": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+          "acceptedAt": "2026-09-19T02:14:15.497095+00:00"
+        },
+        "acceptedIsStale": false
+      },
+      {
+        "child": "Certa Certhouse",
+        "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+        "state": "recommended",
+        "recommended": "$185.00/weekly",
+        "applicable": [
+          "$185.00/weekly"
+        ],
+        "accepted": {
+          "termId": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "enrollmentAgreementId": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+          "termKind": "tuition",
+          "amountCents": 18500,
+          "currencyCode": "USD",
+          "cadenceKey": "weekly",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "source": {
+            "entity": "commercial_tuition_rates",
+            "id": "5532489d-eed3-4080-9477-f47a94fde1c6"
+          },
+          "variantId": "ee157cff-3546-4172-b591-984b96fbec10",
+          "offeringId": "fe7bb68f-1b36-432c-ae0b-e478dbc9f582",
+          "programKey": "school_age",
+          "locationId": null,
+          "payerType": "private_pay",
+          "state": "accepted",
+          "overrideReason": null,
+          "recommendedSourceId": "5532489d-eed3-4080-9477-f47a94fde1c6",
+          "configVersion": "ae79d05d",
+          "resolutionKey": "2f92ec30",
+          "acceptedBy": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+          "acceptedAt": "2026-09-19T02:14:06.43635+00:00"
+        },
+        "acceptedIsStale": false
+      }
+    ]
+  },
+  "requests": [
+    {
+      "call": "GET /_next/static/chunks/components_adminV2_scheduling_581c1dce._.js"
+    },
+    {
+      "call": "GET /api/admin/actions/right-rail-bundle?department_id=3933ac47-077a-4de8-aaac-8aed48d80413&work_unit_id=dd5b3a23-376b-4c9f-9236-ae555b44a1b3"
+    },
+    {
+      "call": "GET /api/admin/financial-config/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+    },
+    {
+      "call": "GET /api/admin/financial-config/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+    },
+    {
+      "call": "GET /api/admin/financial-config/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+    }
+  ]
+}

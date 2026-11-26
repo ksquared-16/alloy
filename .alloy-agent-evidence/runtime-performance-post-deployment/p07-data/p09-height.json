@@ -1,0 +1,48 @@
+{
+ "gridDiag": null,
+ "layoutSource": null,
+ "bp": {
+  "card": 232,
+  "wrapper": 325,
+  "wrapperInlineHeight": "325px",
+  "area": "business_process"
+ },
+ "fin": {
+  "card": 325,
+  "wrapper": 325,
+  "wrapperInlineHeight": "325px",
+  "area": "financials"
+ },
+ "allAreas": [
+  {
+   "area": "business_process",
+   "h": 325,
+   "inline": "325px"
+  },
+  {
+   "area": "financials",
+   "h": 325,
+   "inline": "325px"
+  },
+  {
+   "area": "children",
+   "h": 534,
+   "inline": "534px"
+  },
+  {
+   "area": "attendance",
+   "h": 253,
+   "inline": "253px"
+  },
+  {
+   "area": "household",
+   "h": 293,
+   "inline": "293px"
+  },
+  {
+   "area": "health_safety",
+   "h": 271,
+   "inline": "271px"
+  }
+ ]
+}

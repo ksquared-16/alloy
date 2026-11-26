@@ -58,6 +58,11 @@ export type CommunicationTokenDef = {
     group: CommunicationTokenGroup;
     /** Sample value used by previews when no real record is bound. */
     sample: string;
+    /**
+     * False: still RESOLVES for templates that already use it, but is no longer OFFERED in the picker —
+     * an internal id, a field-services path, or a duplicate of a clearer token (token census, Oct 2026).
+     */
+    offered?: boolean;
 };
 
 /**
@@ -74,51 +79,152 @@ export type CommunicationTokenDef = {
  */
 export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
     // family / customer
-    { path: "customer.id", label: "Family ID", group: "family", sample: "fam_1042" },
+    { path: "customer.id", label: "Family ID", group: "family", sample: "fam_1042", offered: false },
     { path: "customer.name", label: "Family name", group: "family", sample: "The Rivera Family" },
     // child
-    { path: "person.first_name", label: "Child first name", group: "child", sample: "Mateo" },
-    { path: "person.name", label: "Child full name", group: "child", sample: "Mateo Rivera" },
-    { path: "person.id", label: "Child / person ID", group: "child", sample: "per_5567" },
+    { path: "person.first_name", label: "Child first name (one child on the lead)", group: "child", sample: "Mateo" },
+    { path: "person.name", label: "Child full name (one child on the lead)", group: "child", sample: "Mateo Rivera" },
+    { path: "person.id", label: "Child / person ID", group: "child", sample: "per_5567", offered: false },
     // contact / guardian (documented workflow merge paths + platform person fields)
-    { path: "contact.id", label: "Parent / contact ID", group: "contact", sample: "con_8821" },
+    { path: "contact.id", label: "Parent / contact ID", group: "contact", sample: "con_8821", offered: false },
     { path: "contact.first_name", label: "Parent first name", group: "contact", sample: "Maria" },
     { path: "contact.last_name", label: "Parent last name", group: "contact", sample: "Rivera" },
     { path: "contact.email", label: "Parent email", group: "contact", sample: "rivera@example.com" },
     { path: "contact.phone", label: "Parent phone", group: "contact", sample: "(555) 010-2048" },
-    { path: "person.last_name", label: "Person last name", group: "contact", sample: "Rivera" },
-    { path: "person.email", label: "Person email", group: "contact", sample: "rivera@example.com" },
-    { path: "person.phone", label: "Person phone", group: "contact", sample: "(555) 010-2048" },
+    { path: "person.last_name", label: "Person last name", group: "contact", sample: "Rivera", offered: false },
+    { path: "person.email", label: "Person email", group: "contact", sample: "rivera@example.com", offered: false },
+    { path: "person.phone", label: "Person phone", group: "contact", sample: "(555) 010-2048", offered: false },
     // location
-    { path: "location.name", label: "Location name", group: "location", sample: "North Campus" },
+    { path: "location.name", label: "Location name", group: "location", sample: "North Campus", offered: false },
     // program
-    { path: "opportunity.program", label: "Program name", group: "program", sample: "Toddlers" },
+    { path: "opportunity.program", label: "Program name", group: "program", sample: "Toddlers", offered: false },
     // enrollment / opportunity
-    { path: "opportunity.id", label: "Opportunity ID", group: "enrollment", sample: "opp_3301" },
+    { path: "opportunity.id", label: "Opportunity ID", group: "enrollment", sample: "opp_3301", offered: false },
     { path: "opportunity.name", label: "Opportunity / child inquiry name", group: "enrollment", sample: "Mateo Rivera inquiry" },
     // schedule / tour / job (documented workflow merge paths)
     {
         path: "opportunity.metadata.tour_date",
+        offered: false,
         label: "Tour date",
         group: "schedule",
         sample: "July 14, 2026",
     },
     {
         path: "opportunity.metadata.tour_time",
+        offered: false,
         label: "Tour time",
         group: "schedule",
         sample: "10:00 AM",
     },
     {
         path: "schedule.start_at",
+        offered: false,
         label: "Scheduled start",
         group: "schedule",
         sample: "July 14, 2026 at 10:00 AM",
     },
-    { path: "job.id", label: "Job ID", group: "schedule", sample: "job_9012" },
-    { path: "job.title", label: "Job title", group: "schedule", sample: "North Campus tour" },
+    { path: "job.id", label: "Job ID", group: "schedule", sample: "job_9012", offered: false },
+    { path: "job.title", label: "Job title", group: "schedule", sample: "North Campus tour", offered: false },
+    // Tour system templates (snake_case merge fields used by Tour lifecycle copy)
+    {
+        path: "invitation_action_url",
+        label: "Choose-tour-time link",
+        group: "schedule",
+        sample: "https://example.com/a/tour",
+    },
+    {
+        path: "add_to_calendar_url",
+        label: "Calendar link",
+        group: "schedule",
+        sample: "https://calendar.google.com/calendar/render?action=TEMPLATE",
+    },
+    {
+        path: "reschedule_url",
+        label: "Reschedule-tour link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/reschedule",
+    },
+    {
+        path: "confirm_attendance_url",
+        label: "Confirm-attendance link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/confirm-coming",
+    },
+    {
+        path: "confirm_reply_instruction",
+        label: "SMS confirm-reply instruction",
+        group: "schedule",
+        sample: " Reply 1 to confirm you're coming.",
+    },
+    {
+        path: "cancel_url",
+        label: "Cancel / manage-tour link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/manage",
+    },
+    {
+        path: "public_booking_url",
+        label: "Public booking link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/book",
+    },
+    {
+        path: "tour_display_label",
+        label: "Tour date and time",
+        group: "schedule",
+        sample: "Monday, August 10 at 10:00 AM",
+    },
+    {
+        path: "tour_date_label",
+        label: "Tour date",
+        group: "schedule",
+        sample: "Monday, August 10",
+    },
+    {
+        path: "tour_time_label",
+        label: "Tour time",
+        group: "schedule",
+        sample: "10:00 AM",
+    },
+    {
+        path: "parent_name",
+        label: "Parent first name (also in tour messages)",
+        group: "contact",
+        sample: "Kelly",
+    },
+    {
+        path: "location_name",
+        label: "Location",
+        group: "location",
+        sample: "North Campus",
+    },
+    {
+        path: "location_address",
+        label: "Location address",
+        group: "location",
+        sample: "123 Main St",
+    },
+    {
+        path: "org_name",
+        label: "Organization name",
+        group: "org",
+        sample: "Bright Beginnings",
+    },
+    {
+        path: "organization_name",
+        offered: false,
+        label: "Organization name (alias)",
+        group: "org",
+        sample: "Bright Beginnings",
+    },
+    {
+        path: "site_line",
+        label: "Site line",
+        group: "location",
+        sample: "North Campus · 123 Main St",
+    },
     // org
-    { path: "org.name", label: "Organization name", group: "org", sample: "Bright Beginnings" },
+    { path: "org.name", label: "Organization name (dot path)", group: "org", sample: "Bright Beginnings", offered: false },
 ] as const;
 
 const TOKEN_BY_PATH: ReadonlyMap<string, CommunicationTokenDef> = new Map(
@@ -142,7 +248,7 @@ export function listCommunicationTokensByGroup(): Array<{
 }> {
     return COMMUNICATION_TOKEN_GROUPS.map((group) => ({
         group,
-        tokens: COMMUNICATION_TOKEN_CATALOG.filter((t) => t.group === group),
+        tokens: COMMUNICATION_TOKEN_CATALOG.filter((t) => t.group === group && t.offered !== false),
     })).filter((g) => g.tokens.length > 0);
 }
 
@@ -154,7 +260,9 @@ export function filterCommunicationTokens(query: string): Array<{
     const q = query.trim().toLowerCase();
     if (!q) return listCommunicationTokensByGroup();
     const matches = COMMUNICATION_TOKEN_CATALOG.filter(
-        (t) => t.label.toLowerCase().includes(q) || t.path.toLowerCase().includes(q) || t.group.includes(q)
+        (t) =>
+            t.offered !== false &&
+            (t.label.toLowerCase().includes(q) || t.path.toLowerCase().includes(q) || t.group.includes(q))
     );
     return COMMUNICATION_TOKEN_GROUPS.map((group) => ({
         group,

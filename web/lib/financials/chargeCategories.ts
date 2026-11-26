@@ -46,7 +46,7 @@ export const CHARGE_CATEGORY_GL_MAPPING_KEY: Record<ChargeCategory, string> = {
  * code-owned invariants (the DB CHECK + billableSource.ts define them); they are
  * NOT tenant-editable. This metadata makes the vocabulary legible under Financials
  * as code-owned reference configuration. See the Charge Category review in
- * docs/sprints/06_2026/operational_configuration_v1.md.
+ * docs/sprints/archive/06_2026/operational_configuration_v1.md.
  */
 export const CHARGE_CATEGORY_REFERENCE: Record<ChargeCategory, { description: string; example: string }> = {
     tuition: { description: "Recurring care/service tuition.", example: "Monthly Full-Time Care" },
@@ -61,8 +61,81 @@ export const CHARGE_CATEGORY_REFERENCE: Record<ChargeCategory, { description: st
     subsidy_offset: { description: "Reduction covered by a third-party payer.", example: "Agency-funded portion" },
 };
 
+/**
+ * A CATEGORY, IN LANGUAGE. Never a stored key on an operator's screen.
+ *
+ * The declared vocabulary answers first. It is not enough on its own: tenants carry categories the
+ * catalog does not enumerate — `late_pickup_fee` and `registration_fee` are both real and neither
+ * is in `CHARGE_CATEGORIES` — and this used to hand those straight back, so a receipt read
+ * "late_pickup_fee" beside the money it settled.
+ *
+ * Humanising lives HERE rather than in one caller, which is where it used to live: the payment
+ * chooser had this rule privately, so the chooser said "Late pickup fee" while the receipt for the
+ * very same charge said `late_pickup_fee`. One rule, every surface.
+ *
+ * `isDeclaredChargeCategory` is the separate question — whether the vocabulary KNOWS this key — for
+ * the callers that genuinely need to tell a declared category from a tenant's own.
+ */
 export function chargeCategoryLabel(category: string): string {
-    return (CHARGE_CATEGORY_LABEL as Record<string, string>)[category] ?? category;
+    const known = (CHARGE_CATEGORY_LABEL as Record<string, string>)[category];
+    if (known) return known;
+    const words = category.replace(/[_-]+/g, " ").trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : category;
+}
+
+/**
+ * ── THE OPERATOR'S NAME FOR A CHARGE ────────────────────────────────────────────────────────────
+ *
+ * A description is what a PERSON typed about this charge, and it wins — rewriting somebody's own
+ * words to look tidier would be the surface editing the record.
+ *
+ * But template-created charges are not written by a person. `charge.add` stores the template's own
+ * key as the description, so the deployed certification tenant carries rows reading
+ *
+ *     categoryKey "late_pickup"   categoryLabel "Late pickup"   description "late_pickup_fee"
+ *
+ * and a payment row said "Move $25.00 from late_pickup_fee". That description is the key wearing a
+ * description's clothes; treating it as a person's words puts a stored identifier in front of an
+ * operator explaining money to a parent.
+ *
+ * So a description that IS a machine key — the category's own key, or that key with a trailing
+ * `_fee`, or any underscore token the catalog can read aloud — yields to the catalog. Anything a
+ * person could have typed still wins, including a description that merely happens to be one word.
+ *
+ * Internal identity is untouched: nothing here rewrites a stored key or description.
+ */
+export function chargeDisplayLabel(
+    description: string | null | undefined,
+    category: string | null | undefined,
+    fallback = "Charge",
+): string {
+    const desc = (description ?? "").trim();
+    const cat = (category ?? "").trim();
+    const catLabel = cat ? chargeCategoryLabel(cat) : "";
+
+    if (desc && !isMachineKeyDescription(desc, cat)) return desc;
+    return catLabel || desc || fallback;
+}
+
+/** A description no person typed: the category key itself, or a bare underscore token. */
+export function isMachineKeyDescription(
+    description: string | null | undefined,
+    category?: string | null | undefined,
+): boolean {
+    const desc = (description ?? "").trim();
+    if (!desc) return false;
+    const cat = (category ?? "").trim();
+    if (cat && (desc === cat || desc === `${cat}_fee`)) return true;
+    /*
+     * An underscore-joined lowercase token is a key. A sentence, a name, a number and anything with
+     * a space are not — a person writing "field trip" writes it with the space.
+     */
+    return /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(desc);
+}
+
+/** Whether the declared vocabulary knows this key, as distinct from whether it can be read aloud. */
+export function isDeclaredChargeCategory(category: string): boolean {
+    return Boolean((CHARGE_CATEGORY_LABEL as Record<string, string>)[category]);
 }
 
 export function listChargeCategories(): {

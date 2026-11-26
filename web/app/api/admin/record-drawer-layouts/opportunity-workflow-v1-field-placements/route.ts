@@ -7,6 +7,7 @@ import {
     type FieldPlacementBehaviorUpdate,
 } from "@/lib/admin/opportunityWorkflowV1FieldPlacements";
 import { persistOpportunityDrawerLayoutConfig } from "@/lib/admin/recordDrawerLayoutPersist";
+import { FIELDS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 /**
  * PATCH: opportunity workflow v1 drawer field placement behavior (required / editability).
@@ -20,9 +21,8 @@ export async function PATCH(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden — admin role required" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, FIELDS_MANAGE);
+    if (denied) return denied;
 
     let body: unknown = {};
     try {

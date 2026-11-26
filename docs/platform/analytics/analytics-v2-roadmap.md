@@ -1,3 +1,11 @@
+---
+owner: analytics
+status: proposed
+last_reviewed: 2026-07-12
+supersedes: []
+status_note: Reclassified 2026-09-30 from canonical. A phased roadmap: Phase 1 is delivered, later phases are not. Forward-looking overall, so not canonical doctrine.
+---
+
 # Analytics V2 Roadmap
 
 ## Phase 1 — Metric Platform Foundation (this delivery)
@@ -35,4 +43,7 @@
 
 `ANALYTICS_V2_METRIC_PLATFORM_ENABLED` / `NEXT_PUBLIC_ANALYTICS_V2_METRIC_PLATFORM_ENABLED`
 
-Default: **off**. V1 unchanged when disabled.
+Default: **on** since 2026-06-24 (`web/lib/metrics/platform/featureFlag.ts` reads each
+var with a `true` default and is commented "active development default ON"). Set either
+var to `0` to opt out locally. V1 is unchanged only when a reader has explicitly
+disabled it — not by default.

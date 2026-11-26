@@ -1,0 +1,33 @@
+{
+  "simulatedSafeAreaTop": 59,
+  "headerBoxTop": 61,
+  "headerPaddingTop": "6px",
+  "headerHeight": 59,
+  "laneNameTop": 72,
+  "deadSpaceAboveLaneName": 72,
+  "threadTop": 128,
+  "bodyPaddingTop": "59px",
+  "contributors": [
+    {
+      "sel": "header.gw-chat-head",
+      "paddingTop": "6px",
+      "marginTop": "0px",
+      "minHeight": "0px",
+      "top": 61
+    },
+    {
+      "sel": "div.view",
+      "paddingTop": "2px",
+      "marginTop": "0px",
+      "minHeight": "0px",
+      "top": 59
+    },
+    {
+      "sel": "body",
+      "paddingTop": "59px",
+      "marginTop": "0px",
+      "minHeight": "0px",
+      "top": 0
+    }
+  ]
+}

@@ -13,9 +13,9 @@ export type CommitRecordFieldKey =
     | "role"
     | "dob"
     | "program_interest"
-    | "desired_start_date"
+    | "start_date"
     | "program_room_cohort_key"
-    | "desired_schedule_type";
+    | "schedule_type";
 
 export type CommitRecordPayloadMapping = {
     payload_key: string;
@@ -36,9 +36,9 @@ const CHILD_MAPPINGS: CommitRecordPayloadMapping[] = [
     { payload_key: "child_date_of_birth", record_key: "dob" },
     { payload_key: "child_age", record_key: "dob", derived: true },
     { payload_key: "child_program", record_key: "program_interest" },
-    { payload_key: "child_desired_start_date", record_key: "desired_start_date" },
+    { payload_key: "child_start_date", record_key: "start_date" },
     { payload_key: "child_program_room_cohort_key", record_key: "program_room_cohort_key" },
-    { payload_key: "child_desired_schedule_type", record_key: "desired_schedule_type" },
+    { payload_key: "child_schedule_type", record_key: "schedule_type" },
 ];
 
 export function commitRecordPayloadMappings(entityType: CreateLeadCommitEntityType): CommitRecordPayloadMapping[] {
@@ -117,14 +117,14 @@ export function payloadDraftToCommitPatch(
                 case "program_interest":
                     patch.program_interest = value.trim() || null;
                     break;
-                case "desired_start_date":
-                    patch.desired_start_date = value.trim() || null;
+                case "start_date":
+                    patch.start_date = value.trim() || null;
                     break;
                 case "program_room_cohort_key":
                     patch.program_room_cohort_key = value.trim() || null;
                     break;
-                case "desired_schedule_type":
-                    patch.desired_schedule_type = value.trim() || null;
+                case "schedule_type":
+                    patch.schedule_type = value.trim() || null;
                     break;
                 default:
                     break;
@@ -163,9 +163,9 @@ export function commitRecordToDraftValues(record: CreateLeadCommitRecord): Recor
         role: readRecordValue(record, "role"),
         dob: readRecordValue(record, "dob"),
         program_interest: readRecordValue(record, "program_interest"),
-        desired_start_date: readRecordValue(record, "desired_start_date"),
+        start_date: readRecordValue(record, "start_date"),
         program_room_cohort_key: readRecordValue(record, "program_room_cohort_key"),
-        desired_schedule_type: readRecordValue(record, "desired_schedule_type"),
+        schedule_type: readRecordValue(record, "schedule_type"),
     };
 }
 

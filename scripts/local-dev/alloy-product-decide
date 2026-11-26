@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-product-decide <key> <decision-id> \
+    --choice <option> \
+    --decided-by <name> \
+    --reason "rationale"
+
+Records a structured product decision and regenerates affected contract sections.
+
+Example:
+  alloy-product-decide locations-settings decision-001 \
+    --choice persistent-details-panel \
+    --decided-by Kelly \
+    --reason "Preserves list context"
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 3 ]] || { usage >&2; exit 2; }
+
+  local key="$1" decision_id="$2"
+  shift 2
+  local choice="" decided_by="" reason=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --choice) [[ $# -ge 2 ]] || alloy_die "--choice requires value"; choice="$2"; shift 2 ;;
+      --choice=*) choice="${1#--choice=}"; shift ;;
+      --decided-by) [[ $# -ge 2 ]] || alloy_die "--decided-by requires value"; decided_by="$2"; shift 2 ;;
+      --decided-by=*) decided_by="${1#--decided-by=}"; shift ;;
+      --reason) [[ $# -ge 2 ]] || alloy_die "--reason requires value"; reason="$2"; shift 2 ;;
+      --reason=*) reason="${1#--reason=}"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+  [[ -n "$choice" && -n "$decided_by" && -n "$reason" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  local decision_path
+  decision_path="$(alloy_product_dir "$key")/decisions/${decision_id}.yaml"
+  [[ -f "$decision_path" ]] || alloy_die "decision not found: $decision_id"
+
+  alloy_initiative_acquire_lock "$key"
+  local now
+  now="$(alloy_iso_now)"
+
+  {
+    cat "$decision_path"
+    printf 'decision: %s\n' "$(node -e "console.log(JSON.stringify(process.argv[1]))" "$choice")"
+    printf 'decided_by: %s\n' "$(node -e "console.log(JSON.stringify(process.argv[1]))" "$decided_by")"
+    printf 'decided_at: %s\n' "$now"
+    printf 'reason: %s\n' "$(node -e "console.log(JSON.stringify(process.argv[1]))" "$reason")"
+    printf 'status: decided\n'
+  } >"${decision_path}.tmp"
+  # Replace status line in original with decided
+  grep -v '^status:' "$decision_path" >"${decision_path}.body" || true
+  {
+    cat "${decision_path}.body"
+    printf 'decision: %s\n' "$(node -e "console.log(JSON.stringify(process.argv[1]))" "$choice")"
+    printf 'decided_by: %s\n' "$(node -e "console.log(JSON.stringify(process.argv[1]))" "$decided_by")"
+    printf 'decided_at: %s\n' "$now"
+    printf 'reason: %s\n' "$(node -e "console.log(JSON.stringify(process.argv[1]))" "$reason")"
+    printf 'status: decided\n'
+  } >"$decision_path"
+  rm -f "${decision_path}.tmp" "${decision_path}.body"
+
+  alloy_product_record_decision_log "$key"
+
+  # Regenerate contract
+  env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+    "${SCRIPT_DIR}/alloy-product-contract" "$key" >/dev/null
+
+  local blocking state
+  blocking="$(alloy_product_blocking_decisions_count "$key")"
+  state="$(alloy_product_current_state "$key")"
+  if [[ "$blocking" -eq 0 && "$state" == "awaiting_decisions" ]]; then
+    alloy_product_transition "$key" "awaiting_product_approval"
+  fi
+
+  alloy_info "Decision recorded: $decision_id"
+  alloy_info "  choice: $choice"
+  alloy_info "  by:     $decided_by"
+  alloy_info "  blocking decisions remaining: $blocking"
+}
+
+main "$@"

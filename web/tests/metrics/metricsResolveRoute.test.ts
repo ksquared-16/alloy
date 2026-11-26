@@ -16,6 +16,8 @@ vi.mock("@/lib/admin/getAdminAccessContext", async () => {
     return {
         ...actual,
         getAdminAccessContextCached: mockGetAdminAccessContextCached,
+        // W-1: the route now gates through `requireAnalyticsReadAccess`, which reads the bundle.
+        loadAdminAccessBundleCached: mockGetAdminAccessContextCached,
     };
 });
 
@@ -78,6 +80,7 @@ describe("GET /api/admin/metrics/resolve", () => {
             orgId,
             userId: "user-1",
             roleKeys: ["admin"],
+            portalEligible: true,
             permissionKeys: [],
             departmentScope: "all",
             allowedDepartmentIds: null,

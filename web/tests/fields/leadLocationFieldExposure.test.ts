@@ -156,7 +156,7 @@ describe("lead location field exposure", () => {
     });
 
     it("does not regress child program cascade metadata", () => {
-        const programMeta = inquiryChildPlacementMetadataForRefKey("inquiry_child.desired_program_type");
+        const programMeta = inquiryChildPlacementMetadataForRefKey("inquiry_child.program_category_id");
         expect(programMeta?.option_source).toBe("programs_for_location");
         expect(programMeta?.depends_on_field_key).toBe("location_id");
         const childLocation = inquiryChildPlacementMetadataForRefKey("inquiry_child.location_id");

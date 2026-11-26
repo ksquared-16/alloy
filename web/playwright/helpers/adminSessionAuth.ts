@@ -13,6 +13,13 @@ function supabaseAuthCookieName(supabaseUrl: string): string {
  * Mints a one-time magic-link session via service role (no password mutation).
  */
 export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
+    if (process.env.PLAYWRIGHT_STORAGE_STATE?.trim()) {
+        await page.goto("/workspace", { waitUntil: "domcontentloaded", timeout: 120_000 });
+        const pathname = new URL(page.url()).pathname;
+        if (pathname !== "/login" && !pathname.startsWith("/unauthorized")) return;
+        throw new Error(`Managed Playwright storage did not unlock workspace (landed on ${pathname})`);
+    }
+
     const email = process.env.PLAYWRIGHT_ADMIN_EMAIL?.trim();
     const password = process.env.PLAYWRIGHT_ADMIN_PASSWORD?.trim();
     if (email && password) {
@@ -133,7 +140,10 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
         }))
     );
 
-    await page.goto("/workspace", { waitUntil: "networkidle", timeout: 120_000 });
+    // NOT networkidle: authenticated surfaces keep long-lived requests open (and the dept
+    // queue-summaries endpoint can hang), so network-idle may never settle. The auth check
+    // only needs the navigation to commit somewhere.
+    await page.goto("/workspace", { waitUntil: "domcontentloaded", timeout: 120_000 });
     const pathname = new URL(page.url()).pathname;
     if (pathname === "/login" || pathname.startsWith("/unauthorized")) {
         throw new Error(`Session cookies did not unlock workspace (landed on ${pathname})`);

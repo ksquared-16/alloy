@@ -57,7 +57,7 @@ describe("layoutBuilderUsabilityPolish", () => {
         });
         doc = patchLayoutEditorRelatedListConfig(created.doc, created.sectionKey, {
             entityType: "children",
-            primaryRow: { fields: ["child.first_name", "child.last_name", "child.age", "inquiry_child.desired_program_type"] },
+            primaryRow: { fields: ["child.first_name", "child.last_name", "child.age", "inquiry_child.program_category_id"] },
         });
 
         expect(validateRelatedListSectionMetadata(doc)).toEqual([]);

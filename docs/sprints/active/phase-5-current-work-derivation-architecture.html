@@ -1,0 +1,201 @@
+<title>Current Work — Derivation Architecture</title>
+<style>
+  :root{
+    --forge:#273F52; --ink:#1f2d3d; --slate:#45506c; --slate-2:#6a7385;
+    --pine:#00A283; --pine-ink:#00745e; --pine-tint:#eef8f5;
+    --gold:#DBC078; --gold-ink:#8a6a20; --gold-tint:#f9f3e2;
+    --ember:#BC4300; --ember-tint:#fbeadf;
+    --river:#F4F6F9; --white:#ffffff; --line:#e3e8ee;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0}
+  .page{background:var(--river);color:var(--ink);font-family:var(--sans);
+    padding:clamp(18px,3vw,40px) clamp(14px,3vw,40px) 48px;max-width:1320px;margin:0 auto;-webkit-font-smoothing:antialiased}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--pine-ink);margin:0 0 9px}
+  h1{font-size:clamp(23px,3.2vw,32px);line-height:1.1;letter-spacing:-.02em;font-weight:680;color:var(--forge);margin:0 0 10px}
+  .contract{font-size:13.5px;color:var(--slate);max-width:104ch;margin:0 0 6px;line-height:1.6}
+  .contract b{color:var(--forge);font-weight:640}
+  .frame{margin-top:20px;border:1px solid var(--line);border-radius:14px;background:var(--white);
+    box-shadow:0 1px 2px rgba(39,63,82,.04),0 10px 30px rgba(39,63,82,.06);padding:8px}
+  .diagram{width:100%;height:auto;display:block}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:16px;font-family:var(--mono);font-size:11.5px;color:var(--slate)}
+  .legend b{color:var(--forge);font-weight:600}
+  .sw{display:inline-flex;align-items:center;gap:7px}
+  .box{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .box.f{background:var(--forge)} .box.p{background:var(--pine)} .box.s{background:var(--slate)}
+  .box.g{background:var(--gold)} .box.e{background:var(--ember)}
+  footer{margin-top:22px;font-size:12px;color:var(--slate-2)}
+
+  /* SVG element styling */
+  .laneBodyF{fill:#eef1f4;stroke:var(--forge);stroke-opacity:.35}
+  .laneBodyP{fill:var(--pine-tint);stroke:var(--pine);stroke-opacity:.35}
+  .laneBodyS{fill:#eef0f4;stroke:var(--slate);stroke-opacity:.35}
+  .hdF{fill:var(--forge)} .hdP{fill:var(--pine)} .hdS{fill:var(--slate)}
+  .hdText{fill:#fff;font-family:var(--sans);font-size:14px;font-weight:660;letter-spacing:.01em}
+  .hdNum{fill:#fff;fill-opacity:.7;font-family:var(--mono);font-size:11px;font-weight:600}
+  .row{fill:var(--white);stroke:var(--line)}
+  .rowLabel{fill:var(--ink);font-family:var(--sans);font-size:12.5px;font-weight:600}
+  .rowType{fill:var(--slate-2);font-family:var(--mono);font-size:10px}
+  .vmBox{fill:var(--white);stroke:var(--pine);stroke-width:2}
+  .vmCap{fill:var(--pine)}
+  .vmTitle{fill:var(--forge);font-family:var(--sans);font-size:16px;font-weight:680}
+  .vmSub{fill:var(--pine-ink);font-family:var(--mono);font-size:11px;font-weight:600}
+  .vmField{fill:var(--ink);font-family:var(--sans);font-size:12px;font-weight:600}
+  .vmType{fill:var(--slate-2);font-family:var(--mono);font-size:10px}
+  .vmFoot{fill:var(--slate);font-family:var(--sans);font-size:11px;font-style:italic}
+  .fpBox{fill:#fbfcfd;stroke:var(--forge);stroke-opacity:.4}
+  .fpHd{fill:var(--forge);font-family:var(--sans);font-size:14px;font-weight:660}
+  .cwBox{fill:var(--white);stroke:var(--pine);stroke-width:1.5}
+  .sibBox{fill:var(--white);stroke:var(--line)}
+  .cwTitle{fill:var(--forge);font-family:var(--sans);font-size:13px;font-weight:660}
+  .cwSub{fill:var(--slate);font-family:var(--sans);font-size:11.5px}
+  .cwNote{fill:var(--slate-2);font-family:var(--sans);font-size:10.5px;font-style:italic}
+  .chip{rx:9}
+  .chipT{font-family:var(--mono);font-size:9.5px;font-weight:600}
+  .arrow{fill:none;stroke:var(--slate-2);stroke-width:1.6}
+  .loop{fill:none;stroke:var(--pine);stroke-width:1.8;stroke-dasharray:1 0}
+  .loopT{fill:var(--pine-ink);font-family:var(--sans);font-size:12px;font-weight:600}
+  .composeT{fill:var(--slate-2);font-family:var(--mono);font-size:10px;letter-spacing:.08em}
+</style>
+
+<div class="page">
+  <p class="eyebrow">Phase 5 · Operator Work · Canonical engineering reference</p>
+  <h1>Current Work — Derivation Architecture</h1>
+  <p class="contract"><b>Business Process configuration</b> + <b>runtime evaluation</b> + <b>canonical record truth</b>
+    compose into one <b>Current Work View Model</b>, which drives the <b>Focus Panel</b>. Every business value is derived;
+    the same model renders any Business Process without process-specific branches.</p>
+
+  <div class="frame">
+  <svg class="diagram" viewBox="0 0 1280 940" xmlns="http://www.w3.org/2000/svg" role="img"
+       aria-label="Current Work derivation architecture: three input planes compose into the Current Work View Model, which drives the Focus Panel, with a recomposition loop.">
+    <defs>
+      <marker id="ah" markerWidth="10" markerHeight="10" refX="7.5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#6a7385"/>
+      </marker>
+      <marker id="ahp" markerWidth="11" markerHeight="11" refX="8" refY="4.2" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L8.5,4.2 L0,8.4 Z" fill="#00A283"/>
+      </marker>
+    </defs>
+
+    <!-- ============ LANE A · Business Process Configuration ============ -->
+    <rect class="laneBodyF" x="40" y="80" width="360" height="214" rx="13"/>
+    <path class="hdF" d="M40,93 a13,13 0 0 1 13,-13 h334 a13,13 0 0 1 13,13 v21 h-360 z"/>
+    <text class="hdNum" x="60" y="102">1</text>
+    <text class="hdText" x="76" y="102">Business Process Configuration</text>
+    <!-- rows -->
+    <g>
+      <rect class="row" x="54" y="118" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="131">Business Process + Stage</text><text class="rowType" x="66" y="143">configured journey · tracks · stages</text>
+      <rect class="row" x="54" y="152" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="165">Work Template</text><text class="rowType" x="66" y="177">StageWorkTemplateV1 · label · description · mode</text>
+      <rect class="row" x="54" y="186" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="199">Configured Outcomes</text><text class="rowType" x="66" y="211">StageCompletionOutcomeV1</text>
+      <rect class="row" x="54" y="220" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="233">Action Placements + Labels</text><text class="rowType" x="66" y="245">action_ref · registered command labels</text>
+      <rect class="row" x="54" y="254" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="267">Required Information</text><text class="rowType" x="66" y="279">configured requirements</text>
+    </g>
+
+    <!-- ============ LANE B · Runtime Evaluation ============ -->
+    <rect class="laneBodyP" x="40" y="312" width="360" height="250" rx="13"/>
+    <path class="hdP" d="M40,325 a13,13 0 0 1 13,-13 h334 a13,13 0 0 1 13,13 v21 h-360 z"/>
+    <text class="hdNum" x="60" y="334">2</text>
+    <text class="hdText" x="76" y="334">Runtime Evaluation</text>
+    <g>
+      <rect class="row" x="54" y="350" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="363">Active Process Subject</text><text class="rowType" x="66" y="375">current stage occupancy</text>
+      <rect class="row" x="54" y="384" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="397">Active Current Work Items</text><text class="rowType" x="66" y="409">StageWorkItemProjection · projectStageWorkRuntime</text>
+      <rect class="row" x="54" y="418" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="431">Command Resolution</text><text class="rowType" x="66" y="443">RegisteredAction</text>
+      <rect class="row" x="54" y="452" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="465">Command Eligibility</text><text class="rowType" x="66" y="477">ActionEligibility</text>
+      <rect class="row" x="54" y="486" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="499">Readiness Evaluation</text><text class="rowType" x="66" y="511">CurrentWorkReadinessVM</text>
+      <rect class="row" x="54" y="520" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="533">Automation State</text><text class="rowType" x="66" y="545">scheduled reminders / sends</text>
+    </g>
+
+    <!-- ============ LANE C · Canonical Record Truth ============ -->
+    <rect class="laneBodyS" x="40" y="580" width="360" height="176" rx="13"/>
+    <path class="hdS" d="M40,593 a13,13 0 0 1 13,-13 h334 a13,13 0 0 1 13,13 v21 h-360 z"/>
+    <text class="hdNum" x="60" y="602">3</text>
+    <text class="hdText" x="76" y="602">Canonical Record Truth</text>
+    <g>
+      <rect class="row" x="54" y="618" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="631">Subject Identity</text><text class="rowType" x="66" y="643">family / child grain</text>
+      <rect class="row" x="54" y="652" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="665">Household + Children</text><text class="rowType" x="66" y="677">record facts</text>
+      <rect class="row" x="54" y="686" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="699">Durable Status</text><text class="rowType" x="66" y="711">enrollment status vocabulary</text>
+      <rect class="row" x="54" y="720" width="332" height="30" rx="7"/><text class="rowLabel" x="66" y="733">Prior Activity</text><text class="rowType" x="66" y="745">last committed outcome</text>
+    </g>
+
+    <!-- ============ compose arrows into VM ============ -->
+    <text class="composeT" x="430" y="424">compose</text>
+    <path class="arrow" d="M400,200 C440,220 452,320 484,352" marker-end="url(#ah)"/>
+    <path class="arrow" d="M400,437 L484,437" marker-end="url(#ah)"/>
+    <path class="arrow" d="M400,684 C444,660 452,560 484,524" marker-end="url(#ah)"/>
+
+    <!-- ============ CURRENT WORK VIEW MODEL ============ -->
+    <rect class="vmBox" x="488" y="300" width="306" height="336" rx="14"/>
+    <path class="vmCap" d="M488,314 a14,14 0 0 1 14,-14 h278 a14,14 0 0 1 14,14 v5 h-306 z"/>
+    <text class="vmTitle" x="506" y="338">Current Work View Model</text>
+    <text class="vmSub" x="506" y="356">CurrentWorkSurfaceVM · buildCurrentWorkSurfaceVM</text>
+    <g>
+      <rect class="row" x="502" y="368" width="278" height="28" rx="7"/><text class="vmField" x="514" y="380">Obligation</text><text class="vmType" x="514" y="391">title</text>
+      <rect class="row" x="502" y="399" width="278" height="28" rx="7"/><text class="vmField" x="514" y="411">Why it matters</text><text class="vmType" x="514" y="422">description</text>
+      <rect class="row" x="502" y="430" width="278" height="28" rx="7"/><text class="vmField" x="514" y="442">Subject</text><text class="vmType" x="514" y="453">named at grain</text>
+      <rect class="row" x="502" y="461" width="278" height="28" rx="7"/><text class="vmField" x="514" y="473">Primary + secondary actions</text><text class="vmType" x="514" y="484">resolved placements</text>
+      <rect class="row" x="502" y="492" width="278" height="28" rx="7"/><text class="vmField" x="514" y="504">Outcomes</text><text class="vmType" x="514" y="515">declare-only</text>
+      <rect class="row" x="502" y="523" width="278" height="28" rx="7"/><text class="vmField" x="514" y="535">Readiness summary</text><text class="vmType" x="514" y="546">ready / still-needed</text>
+      <rect class="row" x="502" y="554" width="278" height="28" rx="7"/><text class="vmField" x="514" y="566">Recent activity + status</text><text class="vmType" x="514" y="577">last outcome · statusLabel</text>
+    </g>
+    <text class="vmFoot" x="506" y="600">One presentation model — every field derived;</text>
+    <text class="vmFoot" x="506" y="616">no business literal hardcoded; any Business Process.</text>
+
+    <!-- VM -> Focus Panel -->
+    <path class="arrow" d="M794,430 C830,400 846,352 878,332" marker-end="url(#ah)"/>
+    <text class="composeT" x="806" y="376">drives</text>
+
+    <!-- ============ FOCUS PANEL ============ -->
+    <rect class="fpBox" x="880" y="170" width="360" height="470" rx="14"/>
+    <text class="fpHd" x="900" y="199">Focus Panel</text>
+
+    <!-- Current Work card -->
+    <rect class="cwBox" x="900" y="216" width="322" height="236" rx="11"/>
+    <text class="cwTitle" x="916" y="240">Current Work card</text>
+    <text class="cwSub" x="916" y="258">renders the View Model · obligation-first</text>
+    <!-- state chips -->
+    <g class="chipT">
+      <rect x="916" y="272" width="70" height="20" rx="9" fill="var(--pine-tint)"/><text x="951" y="285" text-anchor="middle" fill="#00745e">active</text>
+      <rect x="992" y="272" width="78" height="20" rx="9" fill="var(--river)" stroke="var(--line)"/><text x="1031" y="285" text-anchor="middle" fill="#45506c">follow-up</text>
+      <rect x="1076" y="272" width="66" height="20" rx="9" fill="var(--river)" stroke="var(--line)"/><text x="1109" y="285" text-anchor="middle" fill="#45506c">waiting</text>
+      <rect x="916" y="298" width="72" height="20" rx="9" fill="var(--ember-tint)"/><text x="952" y="311" text-anchor="middle" fill="#BC4300">blocked</text>
+      <rect x="994" y="298" width="80" height="20" rx="9" fill="var(--river)" stroke="var(--line)"/><text x="1034" y="311" text-anchor="middle" fill="#45506c">command</text>
+      <rect x="1080" y="298" width="82" height="20" rx="9" fill="var(--gold-tint)"/><text x="1121" y="311" text-anchor="middle" fill="#8a6a20">completed</text>
+      <rect x="916" y="324" width="66" height="20" rx="9" fill="var(--river)" stroke="var(--line)"/><text x="949" y="337" text-anchor="middle" fill="#45506c">settled</text>
+      <rect x="988" y="324" width="86" height="20" rx="9" fill="var(--pine-tint)"/><text x="1031" y="337" text-anchor="middle" fill="#00745e">multi-child</text>
+      <rect x="1080" y="324" width="62" height="20" rx="9" fill="var(--river)" stroke="var(--line)"/><text x="1111" y="337" text-anchor="middle" fill="#45506c">stale</text>
+    </g>
+    <line x1="916" y1="356" x2="1206" y2="356" stroke="var(--line)"/>
+    <text class="cwNote" x="916" y="374">Conditional hierarchy: obligation → why → primary action →</text>
+    <text class="cwNote" x="916" y="389">secondary → readiness / blocker → prior activity → waiting.</text>
+    <text class="cwNote" x="916" y="410">Same model, no process branch. Commands: header surface +</text>
+    <text class="cwNote" x="916" y="425">primary action — one registered capability, one placement.</text>
+    <text class="cwNote" x="916" y="443">No progress meters, no permanent outcome/requirements panels.</text>
+
+    <!-- Sibling cards -->
+    <rect class="sibBox" x="900" y="464" width="322" height="156" rx="11"/>
+    <text class="cwTitle" x="916" y="488">Household · Children · Required Information</text>
+    <text class="cwSub" x="916" y="507">unchanged — authoritative surfaces</text>
+    <text class="cwNote" x="916" y="528">Read canonical record truth directly, never via the View</text>
+    <text class="cwNote" x="916" y="543">Model. Current Work references them; it never duplicates</text>
+    <text class="cwNote" x="916" y="558">their content. Required Information owns the full readiness</text>
+    <text class="cwNote" x="916" y="573">detail; Current Work shows a concise summary of it.</text>
+    <text class="cwNote" x="916" y="597">Recomposition updates a sibling card only when its</text>
+    <text class="cwNote" x="916" y="612">underlying record truth changed.</text>
+
+    <!-- ============ recomposition loop ============ -->
+    <path class="loop" d="M1060,640 L1060,900 L232,900 L232,564" marker-end="url(#ahp)"/>
+    <text class="loopT" x="646" y="892" text-anchor="middle">Recomposition — command / outcome commits → runtime re-evaluates → View Model recomposes → Focus Panel updates · no reload</text>
+  </svg>
+  </div>
+
+  <div class="legend">
+    <span class="sw"><span class="box f"></span><b>Configuration</b> — authored (Midnight Forge)</span>
+    <span class="sw"><span class="box p"></span><b>Runtime / active</b> (Bend Pine)</span>
+    <span class="sw"><span class="box s"></span><b>Record truth</b> (Alloy Slate)</span>
+    <span class="sw"><span class="box g"></span>completed (Alloy Gold)</span>
+    <span class="sw"><span class="box e"></span>blocked (Alloy Ember)</span>
+  </div>
+  <footer>Canonical engineering reference for the Operator Work implementation · reuses only existing concepts · no implementation detail.</footer>
+</div>

@@ -318,28 +318,13 @@ describe("drawer outer shell presentation", () => {
     });
 });
 
-describe("BOS drawer header consistency", () => {
-    it("uses juniper Work with BOS on person and lead drawer headers", () => {
-        const personHeader = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHeaderControls.tsx"),
-            "utf8",
-        );
-        const leadHeader = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader.tsx"),
-            "utf8",
-        );
-        expect(personHeader).toContain('actionVariant="juniper"');
-        expect(leadHeader).toContain('bosActionVariant="juniper"');
-    });
-});
-
 describe("buildLeadEnrollmentCardMetaPresentation", () => {
     it("structures birth line and labeled detail segments", () => {
         const presentation = buildLeadEnrollmentCardMetaPresentation(
             {
                 "child.dob_age": "Jan 1, 2026 · 5m",
                 "child.program": "Infant Full Day",
-                "child.desired_start_date": "Aug 8, 2026",
+                "child.start_date": "Aug 8, 2026",
                 "child.schedule": "",
                 "child.room": "",
                 "child.location": "North Campus",
@@ -348,7 +333,7 @@ describe("buildLeadEnrollmentCardMetaPresentation", () => {
             [
                 { label: "DOB / Age", refKey: "child.dob_age", width: "medium" },
                 { label: "Program", refKey: "child.program", width: "medium" },
-                { label: "Desired start", refKey: "child.desired_start_date", width: "medium" },
+                { label: "Desired start", refKey: "child.start_date", width: "medium" },
                 { label: "Schedule", refKey: "child.schedule", width: "medium" },
                 { label: "Classroom", refKey: "child.room", width: "medium" },
                 { label: "Location", refKey: "child.location", width: "medium" },

@@ -72,7 +72,8 @@ type OcmTraceRow = {
     location_id: string | null;
     location_label: string | null;
     program_room_cohort_key: string | null;
-    desired_program_type: string | null;
+    /** Stable program key derived from the OCM program_category_id FK. */
+    program_key: string | null;
     outcome_status_key: string | null;
 };
 
@@ -250,7 +251,7 @@ async function main() {
     const { data: ocmRows } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, location_id, program_room_cohort_key, desired_program_type, outcome_status_key, customer_members(display_name, person_id, first_name, last_name, persons(first_name, last_name, person_id))"
+            "id, customer_member_id, location_id, program_room_cohort_key, program_category_id, location_program_categories(key, label), outcome_status_key, customer_members(display_name, person_id, first_name, last_name, persons(first_name, last_name, person_id))"
         )
         .eq("org_id", ORG_ID)
         .eq("opportunity_id", opp.id);
@@ -282,7 +283,9 @@ async function main() {
             location_id: trimOrNull(r.location_id),
             location_label: siteLabel(r.location_id),
             program_room_cohort_key: trimOrNull(r.program_room_cohort_key),
-            desired_program_type: trimOrNull(r.desired_program_type),
+            program_key: trimOrNull(
+                (r.location_program_categories as { key?: string | null } | null | undefined)?.key
+            ),
             outcome_status_key: trimOrNull(r.outcome_status_key),
         };
     });
@@ -347,11 +350,11 @@ async function main() {
             if (m.site_mismatch) mismatchFields.push("site");
             if (m.child_name_mismatch) mismatchFields.push("child_name");
             if (
-                matchedOcm.desired_program_type &&
+                matchedOcm.program_key &&
                 c.program_room_cohort_key &&
-                matchedOcm.desired_program_type !== matchedOcm.program_room_cohort_key
+                matchedOcm.program_key !== matchedOcm.program_room_cohort_key
             ) {
-                mismatchFields.push("desired_program_type_vs_ocm_cohort_key");
+                mismatchFields.push("program_key_vs_ocm_cohort_key");
             }
         }
         return {
@@ -483,7 +486,7 @@ async function main() {
                 active_override_kinds: pv2?.active_override_kinds ?? [],
                 active_overrides: pv2?.active_overrides ?? [],
                 wait_since: pv2?.wait_since ?? wr?.wait_since ?? null,
-                desired_start_date: null as string | null,
+                start_date: null as string | null,
                 sort_tuple: sortTuple ?? null,
                 runtime_position: wr?.runtime_position ?? null,
                 runtime_position_total: wr?.runtime_position_total ?? null,

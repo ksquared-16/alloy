@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Gracefully stop the owned Alloy agent dev server.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-stop <worktree-name>
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local name="$1"
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local port="${PORT:-}"
+  local pid_path pid
+  pid_path="$(alloy_pid_path "$name")"
+
+  # SINGLE SOURCE OF TRUTH: a dev server "is running" iff something is LISTENING
+  # on this slot's port — that is exactly what dev-status counts and what server
+  # capacity is measured against. The PID file is only a hint: it can record a
+  # wrapper instead of the real listener, or be missing entirely for a server
+  # started outside the toolkit. So stop is authoritative on the PORT, and never
+  # reports success while a listener survives. (Historically stop trusted the PID
+  # file, silently reported "already stopped" on a miss, and left the real server
+  # running — pinning capacity at max.)
+  local stopped_any=0
+
+  # (1) The recorded PID — a hint. Stop it if it is alive and ours.
+  if [[ -f "$pid_path" ]]; then
+    pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${pid:-}" ]] && alloy_pid_alive "$pid"; then
+      if alloy_pid_belongs_to_worktree "$pid" "$path"; then
+        alloy_info "Stopping recorded PID $pid ($name)..."
+        alloy_stop_pid_tree "$pid" && stopped_any=1
+      else
+        alloy_info "recorded PID $pid does not belong to $path — ignoring the stale record"
+      fi
+    fi
+    rm -f "$pid_path"
+  fi
+
+  # (2) The real listener on this slot's port — the authoritative target. This
+  # catches the wrapper-vs-listener drift and the missing-PID-file case.
+  if [[ -n "$port" ]]; then
+    local lpid
+    lpid="$(alloy_port_listener_pid "$port" 2>/dev/null || true)"
+    if [[ -n "${lpid:-}" ]] && alloy_pid_alive "$lpid"; then
+      if alloy_pid_belongs_to_worktree "$lpid" "$path"; then
+        alloy_info "Stopping the live dev server on :$port (PID $lpid)..."
+        alloy_stop_pid_tree "$lpid" && stopped_any=1
+      else
+        alloy_die "port :$port is held by PID $lpid, which does not appear to belong to $path — refusing to kill it."
+      fi
+    fi
+  fi
+
+  # (3) Verify against the SAME truth dev-status uses. Never claim stopped while a
+  # listener still holds the port.
+  #
+  # LOOPBACK SCOPE, for the same reason the start path uses it. Tailscale Serve
+  # holds each lane's tailnet addresses permanently, so the port-global question
+  # answers "unknown" for every lane port once a Serve route exists. With the
+  # probe failing closed on unknown, this block began refusing to confirm release
+  # for ports that were provably free: measured on :3017, where the port was
+  # empty, alloy-dev-stop still exited 1, and — because the refusal returns
+  # before the audit write — NO stop was recorded. The last stop in the whole
+  # lifecycle audit was 14:12:10 while stops kept being issued for hours.
+  #
+  # That silence is not cosmetic. Desired state is derived from this audit, so
+  # an unrecorded stop reads as "should still be running", which is exactly how
+  # a supervisor would resurrect a server an operator deliberately stopped.
+  local stop_owner
+  stop_owner="$(alloy_rc_loopback_port_owner "$port" 2>/dev/null || printf 'unknown')"
+  if [[ -n "$port" && "$stop_owner" != "free" ]]; then
+    local owner="$stop_owner"
+    if [[ "$owner" == "unknown" ]]; then
+      # Say which of the two it is. "Still listening (PID ?)" reads as a
+      # measurement; this was never measured, and an operator told to force-kill
+      # a PID nobody read is being sent to guess.
+      cat >&2 <<EOF
+error: cannot confirm :$port was released — the listener probe is unavailable, so
+ownership of this port could not be read either way. Not claiming it is stopped.
+Check the probe (lsof) before retrying; do not force-kill an unread PID.
+EOF
+    else
+      local rem="${owner#owned }"
+      cat >&2 <<EOF
+error: a dev server is still listening on :$port (PID ${rem:-?}) after SIGTERM.
+alloy-dev-stop does not send SIGKILL automatically.
+Manual force-kill (only if you have verified ownership):
+  kill -KILL ${rem:-<pid>}
+EOF
+    fi
+    exit 1
+  fi
+
+  alloy_remove_director_route "${PORT:-}"
+  alloy_record_server_lifecycle "stop" "$name" \
+    "$([[ "$stopped_any" == 1 ]] && printf 'ok' || printf 'nothing_to_stop')" \
+    "${ALLOY_SERVER_AUDIT_REASON:-stop requested}" "${pid:-}" ""
+  if [[ "$stopped_any" == 1 ]]; then
+    alloy_info "stopped $name"
+  else
+    alloy_info "no running dev server for $name (nothing to stop)"
+  fi
+  exit 0
+}
+
+main "$@"

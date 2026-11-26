@@ -1,0 +1,65 @@
+[
+  {
+    "request": {
+      "action_key": "billing.resolve_responsibility",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "charge_id": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "$75.00 to divide.",
+            "changes": [
+              "Gross $75.00",
+              "Reductions $0.00"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "cf3e72d6-b5a6-487a-997a-51a3d56bd0fb"
+    }
+  },
+  {
+    "request": {
+      "action_key": "billing.resolve_responsibility",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "charge_id": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "kind": "resolved",
+          "chargeId": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4",
+          "arrangementId": "30d94536-691b-465a-933d-288b5249301c",
+          "allocations": 2,
+          "unassignedCents": 5700,
+          "netCents": 7500
+        },
+        "affected_id": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4"
+      },
+      "correlation_id": "b824a264-a019-4224-bde3-3c6762c9e9eb"
+    }
+  }
+]

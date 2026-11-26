@@ -6,6 +6,7 @@ import { getOrgConfigLocked } from "@/lib/admin/getOrgConfigLocked";
 import { invalidateEntityLabelsOrgCache } from "@/lib/admin/entityLabelsOrgCache";
 import { entityLabelsOrgCacheTag, resolveEntityLabelsForOrgCached } from "@/lib/admin/entityLabelsResolve";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
+import { requireOrganizationVocabularyCapability } from "@/lib/access/organizationVocabularyAuthority";
 
 /** GET: effective labels for org (industry defaults + overrides). Admin + ops can read. */
 export async function GET() {
@@ -41,9 +42,8 @@ export async function PUT(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireOrganizationVocabularyCapability(ctx);
+    if (capDenied) return capDenied;
 
     const locked = await getOrgConfigLocked(ctx.orgId);
     if (locked) {
@@ -112,9 +112,8 @@ export async function DELETE(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireOrganizationVocabularyCapability(ctx);
+    if (capDenied) return capDenied;
 
     const locked = await getOrgConfigLocked(ctx.orgId);
     if (locked) {

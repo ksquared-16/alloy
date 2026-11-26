@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { OPTION_SETS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { logAdminAudit } from "@/lib/adminAuth";
 
 const ITEM_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -25,9 +26,8 @@ export async function POST(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, OPTION_SETS_MANAGE);
+    if (denied) return denied;
 
     const { setKey: rawKey } = await context.params;
     const set_key = decodeSetKeyParam(rawKey ?? "").trim();

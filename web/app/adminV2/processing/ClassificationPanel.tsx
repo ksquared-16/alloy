@@ -31,7 +31,7 @@ import {
 import type { ProcessingClassificationKey } from "@/lib/pos/processingCase/classification/types";
 
 const CONFIDENCE_STYLE: Record<ConfidenceTier, string> = {
-    high: "bg-emerald-50 text-emerald-800",
+    high: "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine",
     medium: "bg-amber-50 text-amber-800",
     low: "bg-amber-50 text-amber-800",
     none: "bg-stone-100 text-stone-600",

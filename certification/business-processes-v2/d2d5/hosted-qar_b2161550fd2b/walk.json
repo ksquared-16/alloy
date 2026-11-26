@@ -1,0 +1,257 @@
+{
+  "steps": [
+    {
+      "name": "decision-open",
+      "text": "D25 b2161550fd2b Family · D25 b2161550fd2b Family Decision QA North Work: 1 Manage ▾ Work Activity WHAT'S NEXT Open Placement / Decision Help the family choose a path, then record the decision outcome. ✕ 0 of 2 children decided Ava D25 b2161550fd2b No path chosen yet Begin Enrolling Waitlist Not Enrolling Ben D25 b2161550fd2b No path chosen yet Begin Enrolling Waitlist Not Enrolling ← Back to actions Not ready to decide? Family Enrolling Close current work item Needs Time Continue Support Enrollment Decision work Wants Waitlist Close current work item Declined Close as Lost HOUSEHOLD Needs contact b2161550fd2b household Updated Oct 23, 2026 QB QA Parent D25 b2161550fd2b Primary First name QA Last name Parent D25 b2161550fd2b Email qa-bp-d25-b2161550fd2b@example.com Phone — 2 Children Add emergency contact → View household → CHILDREN Needs info 2 children 2 children need program & schedul",
+      "net": [],
+      "tasks": [
+        {
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Support Enrollment Decision",
+          "status": "open",
+          "child": null
+        }
+      ]
+    },
+    {
+      "name": "family-enrolling-attempt",
+      "text": "D25 b2161550fd2b Family · D25 b2161550fd2b Family Decision QA North Work: 1 Manage ▾ Work Activity WHAT'S NEXT Open Placement / Decision Help the family choose a path, then record the decision outcome. ✕ 0 of 2 children decided Ava D25 b2161550fd2b No path chosen yet Begin Enrolling Waitlist Not Enrolling Ben D25 b2161550fd2b No path chosen yet Begin Enrolling Waitlist Not Enrolling ← Back to actions Not ready to decide? Family Enrolling Close current work item Needs Time Continue Support Enrollment Decision work Wants Waitlist Close current work item Declined Close as Lost Confirm outcome \"Support Enrollment Decision\" cannot be completed yet — 0 of 2 children decided. Choose a path for each child first. HOUSEHOLD Needs contact b2161550fd2b household Updated Oct 23, 2026 QB QA Parent D25 b2161550fd2b Primary First name QA Last name Parent D25 b2161550fd2b Email qa-bp-d25-b2161550fd2b@exa",
+      "net": [
+        {
+          "status": 400,
+          "url": "/api/admin/lifecycle-builder/complete-stage-work",
+          "ok": null,
+          "changed": false,
+          "error": "\"Support Enrollment Decision\" cannot be completed yet — 0 of 2 children decided. Choose a path for each child first.",
+          "family_work_completed": null,
+          "progress": null
+        }
+      ],
+      "tasks": [
+        {
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Support Enrollment Decision",
+          "status": "open",
+          "child": null
+        }
+      ],
+      "confirmed_with": "/^Confirm/i",
+      "buttons_after_select": [
+        "Begin Enrolling",
+        "Waitlist",
+        "Not Enrolling",
+        "Begin Enrolling",
+        "Waitlist",
+        "Not Enrolling",
+        "← Back to actions",
+        "Family EnrollingClose current work item",
+        "Needs TimeContinue Support Enrollment Decision work",
+        "Wants WaitlistClose current work item",
+        "DeclinedClose as Lost",
+        "Confirm outcome",
+        "QA Parent D25 b2161550fd2b",
+        "2Children",
+        "Add emergency contact →",
+        "View household →",
+        "Ava D25 b2161550fd2b",
+        "Ben D25 b2161550fd2b",
+        "View children →",
+        "AB",
+        "Ava D25 b2161550fd2bNo assignment yetNeeds a room",
+        "BB",
+        "Ben D25 b2161550fd2bNo assignment yetNeeds a room",
+        "Add",
+        "Details"
+      ]
+    },
+    {
+      "name": "ava-waitlist",
+      "text": "D25 b2161550fd2b Family · D25 b2161550fd2b Family Waitlist · Decision QA North Work: 1 Manage ▾ Work Activity WHAT'S NEXT Open Placement / Decision Help the family choose a path, then record the decision outcome. ✕ 1 of 2 children decided Ava D25 b2161550fd2b Waitlist Begin Enrolling Waitlist Not Enrolling Ben D25 b2161550fd2b No path chosen yet Begin Enrolling Waitlist Not Enrolling ← Back to actions Not ready to decide? Family Enrolling Close current work item Needs Time Continue Support Enrollment Decision work Wants Waitlist Close current work item Declined Close as Lost Confirm outcome \"Support Enrollment Decision\" cannot be completed yet — 1 of 2 children decided. Choose a path for each child first. HOUSEHOLD Needs contact b2161550fd2b household Updated Oct 23, 2026 QB QA Parent D25 b2161550fd2b Primary First name QA Last name Parent D25 b2161550fd2b Email qa-bp-d25-b2161550fd2b@ex",
+      "net": [
+        {
+          "status": 200,
+          "url": "/api/admin/lifecycle-builder/participant-decisions",
+          "ok": true,
+          "changed": true,
+          "error": null,
+          "family_work_completed": false,
+          "progress": "1 of 2 children decided"
+        },
+        {
+          "status": 400,
+          "url": "/api/admin/lifecycle-builder/complete-stage-work",
+          "ok": null,
+          "changed": false,
+          "error": "\"Support Enrollment Decision\" cannot be completed yet — 1 of 2 children decided. Choose a path for each child first.",
+          "family_work_completed": null,
+          "progress": null
+        }
+      ],
+      "tasks": [
+        {
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Support Enrollment Decision",
+          "status": "open",
+          "child": null
+        },
+        {
+          "title": "Review waitlist position",
+          "status": "open",
+          "child": "6ec28af5-4728-4375-b041-4a429b6ec406"
+        }
+      ],
+      "confirmed_with": "/^Confirm/i"
+    },
+    {
+      "name": "ben-begin-enrolling",
+      "text": "D25 b2161550fd2b Family Waitlist · Enrolling QA North Work: 2 Manage ▾ Work Activity WHAT'S NEXT Open Waitlist What's Next Completed Waitlist Family Enrolling ✓ Close current work item This work item is complete. View recent activity Continue Work HOUSEHOLD Needs contact b2161550fd2b household Updated Oct 23, 2026 QB QA Parent D25 b2161550fd2b Primary First name QA Last name Parent D25 b2161550fd2b Email qa-bp-d25-b2161550fd2b@example.com Phone — 2 Children Add emergency contact → View household → CHILDREN Needs info 2 children · 1 enrolling, 1 waitlisted 2 children need program & schedule AB Ava D25 b2161550fd2b Waitlist Needs program, schedule & start date BB Ben D25 b2161550fd2b Enrolling Needs program, schedule & start date View children → ASSIGNMENTS 2 children Room · Days · Effective · Time AB Ava D25 b2161550fd2b No assignment yet Needs a room BB Ben D25 b2161550fd2b No assignment",
+      "net": [
+        {
+          "status": 200,
+          "url": "/api/admin/lifecycle-builder/participant-decisions",
+          "ok": true,
+          "changed": true,
+          "error": null,
+          "family_work_completed": false,
+          "progress": "All children have a path"
+        },
+        {
+          "status": 200,
+          "url": "/api/admin/lifecycle-builder/complete-stage-work",
+          "ok": true,
+          "changed": null,
+          "error": null,
+          "family_work_completed": null,
+          "progress": null
+        }
+      ],
+      "tasks": [
+        {
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Send Enrollment Packet",
+          "status": "open",
+          "child": "a87680d4-eba9-457b-a217-87da24ad8522"
+        },
+        {
+          "title": "Support Enrollment Decision",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Review waitlist position",
+          "status": "open",
+          "child": "6ec28af5-4728-4375-b041-4a429b6ec406"
+        }
+      ],
+      "confirmed_with": "/^Confirm/i"
+    },
+    {
+      "name": "family-enrolling-after",
+      "text": "D25 b2161550fd2b Family Waitlist · Enrolling QA North Work: 2 Manage ▾ Work Activity WHAT'S NEXT Open Waitlist What's Next Completed Waitlist Family Enrolling ✓ Close current work item This work item is complete. View recent activity Continue Work HOUSEHOLD Needs contact b2161550fd2b household Updated Oct 23, 2026 QB QA Parent D25 b2161550fd2b Primary First name QA Last name Parent D25 b2161550fd2b Email qa-bp-d25-b2161550fd2b@example.com Phone — 2 Children Add emergency contact → View household → CHILDREN Needs info 2 children · 1 enrolling, 1 waitlisted 2 children need program & schedule AB Ava D25 b2161550fd2b Waitlist Needs program, schedule & start date BB Ben D25 b2161550fd2b Enrolling Needs program, schedule & start date View children → ASSIGNMENTS 2 children Room · Days · Effective · Time AB Ava D25 b2161550fd2b No assignment yet Needs a room BB Ben D25 b2161550fd2b No assignment",
+      "net": [],
+      "tasks": [
+        {
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Send Enrollment Packet",
+          "status": "open",
+          "child": "a87680d4-eba9-457b-a217-87da24ad8522"
+        },
+        {
+          "title": "Support Enrollment Decision",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Review waitlist position",
+          "status": "open",
+          "child": "6ec28af5-4728-4375-b041-4a429b6ec406"
+        }
+      ],
+      "confirmed_with": null
+    },
+    {
+      "name": "ben-record-registration",
+      "text": "BB D25 b2161550fd2b Family · Ben D25 b2161550fd2b Waitlist · Enrolling QA North Work: 2 Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitlist Enrolling Enrolled Closed / Withdrawn ENROLLING Enrolling · Send the enrollment packet / forms for this child. LAST ACTIONFamily · Family Enrolling · Today • 1:56 PM Record outcome Send Enrollment Packet Recent activity 7 ▾ FINANCIALS Responsibility $0.00 Current balance $0.00 Add Details HOUSEHOLD Needs contact b2161550fd2b household Updated Oct 23, 2026 QB QA Parent D25 b2161550fd2b Primary First name QA Last name Parent D25 b2161550fd2b Email qa-bp-d25-b2161550fd2b@example.com Phone — 2 Children Add emergency contact → View household → HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Medication authorization Missing View health details → ",
+      "net": [],
+      "tasks": [
+        {
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Send Enrollment Packet",
+          "status": "open",
+          "child": "a87680d4-eba9-457b-a217-87da24ad8522"
+        },
+        {
+          "title": "Support Enrollment Decision",
+          "status": "completed",
+          "child": null
+        },
+        {
+          "title": "Review waitlist position",
+          "status": "open",
+          "child": "6ec28af5-4728-4375-b041-4a429b6ec406"
+        }
+      ]
+    }
+  ],
+  "view_registration": [
+    "DD25 b2161550fd2b Family · Ben D25 b2161550fd2bEnrolling · EnrollingBe"
+  ],
+  "view_waitlist": [
+    "DD25 b2161550fd2b Family · Ava D25 b2161550fd2bwaitlisted · WaitlistAv"
+  ],
+  "view_decision": []
+}

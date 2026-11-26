@@ -1,0 +1,56 @@
+{
+ "p0_1_workspace": {
+  "rejected_preparing_frames": 0,
+  "thinking_frames": 48,
+  "mark_present_from_first_frame": true,
+  "blank_canvas_frames": 0,
+  "t_processes_ms": 5849,
+  "frames": 242
+ },
+ "p0_5_acknowledgement": {
+  "switches": [
+   {
+    "view": "new_leads",
+    "target_rows": 3,
+    "rows_before": 16,
+    "t_ack_ms": 221,
+    "ack_kind": "pill_selected",
+    "cadence_ms": 8,
+    "frames": 143
+   },
+   {
+    "view": "new_work_view_3",
+    "target_rows": 2,
+    "rows_before": 3,
+    "t_ack_ms": 103,
+    "ack_kind": "pill_selected",
+    "cadence_ms": 8,
+    "frames": 260
+   },
+   {
+    "view": "new_work_view_4",
+    "target_rows": 16,
+    "rows_before": 2,
+    "t_ack_ms": 103,
+    "ack_kind": "pill_selected",
+    "cadence_ms": 8,
+    "frames": 371
+   }
+  ],
+  "worst_ms": 221
+ },
+ "attendance_health": {
+  "final_subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+  "final_attendance": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for them. Details →",
+  "final_health": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Medication authorizatio",
+  "attendance_distinct_texts": 1,
+  "health_distinct_texts": 1,
+  "attendance_texts": [
+   "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance ca"
+  ],
+  "health_texts": [
+   "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health c"
+  ],
+  "frames": 219
+ }
+}

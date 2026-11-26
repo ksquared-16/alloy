@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchCommunicationsBindingsChannelsCached } from "@/lib/communications/communicationsBindingsCache";
+import {
+    isReusableOutboundBindingsSnapshot,
+    resolveDrawerComposerSmsAvailability,
+} from "@/lib/communications/drawerComposerChannelAvailability";
 import DrawerMessagingComposer from "@/components/adminV2/messaging/DrawerMessagingComposer";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import RecordCommunicationsTab from "@/app/adminV2/communications/recordTab/RecordCommunicationsTab";
+import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import type { FamilySendWorkConsequence } from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
 import MessagingThreadMessageBubble from "@/components/adminV2/messaging/MessagingThreadMessageBubble";
 import {
     supportsDrawerCommunicationsComposer,
@@ -20,11 +26,18 @@ import {
     markCommunicationsDrawerPrefetchConsumed,
     invalidateCommunicationsDrawerPrefetch,
 } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import type { CommunicationMessage, DeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 import type { OpportunityComposeContext } from "@/lib/communications/opportunityComposeTemplates";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type {
+    FamilyComposeDraftSeed,
+    FamilyComposeIntent,
+} from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 type ThreadRow = {
     id: string;
     channel: string;
@@ -110,12 +123,26 @@ export interface CommunicationsDrawerSectionProps {
      * @default true
      */
     active?: boolean;
+    /** First-paint Activity communications preview from selected Focus Panel VM. */
+    initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
     /** Warm threads/messages/bindings while drawer Overview is visible (no UI). */
     backgroundPreload?: boolean;
     /** Embedded in overview — compact summary, expand in place, messages only after expand + thread pick. */
     embedded?: boolean;
     /** When embedded inside a drawer section that already shows a "Communication(s)" heading, omit duplicate title. */
     embeddedHeaderMode?: "full" | "description_only";
+    /** Focus Panel Activity embed — compact thread-first layout; Command Center modal stays default. */
+    surfaceVariant?: FamilyWorkspaceSurfaceVariant;
+    /** Current Work Contact Family: post-send returns to What's Next without opening the thread. */
+    entryContext?: "current_work" | null;
+    /** Command-driven New Message vs Activity browse/Reply. */
+    composeIntent?: FamilyComposeIntent | null;
+    /** Prefill for New Message (Tour Invitation, etc.). */
+    draftSeed?: FamilyComposeDraftSeed | null;
+    /** Explicit Business Process consequence of a confirmed send (Current Work only). */
+    workConsequence?: FamilySendWorkConsequence | null;
+    /** Host callback after a successful send is acknowledged (Done). */
+    onSendAcknowledged?: (() => void) | null;
     className?: string;
     /** Opportunity-only: lightweight starter templates when there is no message history yet. */
     opportunityComposeContext?: OpportunityComposeContext | null;
@@ -161,6 +188,22 @@ function userFriendlySendNote(processNote: string, channel?: string): string {
     if (queued) return `${noun} queued for delivery.`;
     if (n.includes("dispatched") || n.includes("backend process trigger")) return `${noun} sent.`;
     return `${noun} queued for delivery.`;
+}
+
+/**
+ * Whether the send advanced the open work, in the operator's terms. Sending and having nothing
+ * happen used to be indistinguishable from sending and advancing the step — the API said which,
+ * but nothing read it.
+ */
+function contactAttemptNote(assoc: unknown): string {
+    if (assoc == null || typeof assoc !== "object") return "";
+    const a = assoc as { associated?: boolean; reason?: string };
+    if (a.associated) return " Contact attempt recorded.";
+    if (a.reason === "no_configured_sufficiency") {
+        return " This step isn’t set up to complete on a sent message, so nothing advanced.";
+    }
+    if (a.reason === "no_open_work") return "";
+    return "";
 }
 
 function channelFacetLabel(channel: string | undefined | null): string {
@@ -221,16 +264,8 @@ function bubbleStatusLine(m: MsgRow): { headline: string; sub?: string } {
 
 /** Display-only US-style phone; does not change stored values. */
 function formatDisplayPhoneUs(raw: string | null | undefined): string {
-    const digits = String(raw ?? "").replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) {
-        const d = digits.slice(1);
-        return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-    }
-    if (digits.length === 10) {
-        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-    }
-    const t = String(raw ?? "").trim();
-    return t || "—";
+    // The platform's one phone formatter (lib/phone/phonePresentation).
+    return formatCanonicalPhone(raw);
 }
 
 function counterpartyLabel(
@@ -359,8 +394,19 @@ function CommunicationsDrawerSectionLegacy({
 
     const emailOutboundReady =
         channelsAvailable.includes("email") && !bindingsErr && !loadingBindings;
-    const smsOutboundReady =
+    const smsProviderReady =
         channelsAvailable.includes("sms") && !bindingsErr && !loadingBindings;
+    const smsAvailability = resolveDrawerComposerSmsAvailability({
+        smsProviderReady,
+        loadingBindings,
+        bindingsError: bindingsErr,
+        recipients,
+        selectedRecipientIds,
+    });
+    /** Provider-level gate for recipient fetch / send plumbing (not the SMS tab). */
+    const smsOutboundReady = smsProviderReady;
+    /** SMS channel toggle — provider + selected/available recipient phone. */
+    const smsComposerReady = smsAvailability.available;
     const anyOutboundReady = emailOutboundReady || smsOutboundReady;
 
     const effectiveComposer = useMemo((): "email" | "sms" => {
@@ -765,13 +811,12 @@ function CommunicationsDrawerSectionLegacy({
                     applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
                     return;
                 }
-                const hasOutbound =
-                    bsnap.channels.includes("email") || bsnap.channels.includes("sms");
-                if (hasOutbound) {
+                // Email-only snapshots (taken before SMS activation) must not lock SMS off.
+                if (!bsnap.error && isReusableOutboundBindingsSnapshot(bsnap.channels)) {
                     applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
                     return;
                 }
-                // Empty outbound snapshot (e.g. prefetch before credentials existed) — fetch fresh.
+                // Empty / email-only outbound snapshot — fetch fresh (force past stale module cache).
             }
 
             setLoadingBindings(true);
@@ -781,8 +826,11 @@ function CommunicationsDrawerSectionLegacy({
                     try {
                         const pb = await peekB.bindings;
                         if (cancelled) return;
-                        applyBindingsPayload(pb, { event: "prefetch_reused", path: "promise" });
-                        return;
+                        if (!pb.error && isReusableOutboundBindingsSnapshot(pb.channels)) {
+                            applyBindingsPayload(pb, { event: "prefetch_reused", path: "promise" });
+                            return;
+                        }
+                        // Partial / email-only promise — fall through to forced network fetch.
                     } catch (e) {
                         if (e instanceof Error && e.name === "AbortError") {
                             if (!cancelled) setLoadingBindings(false);
@@ -793,7 +841,7 @@ function CommunicationsDrawerSectionLegacy({
                 }
                 const peekLate = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
                 const lateSnap = peekLate?.bindings_snapshot;
-                if (lateSnap) {
+                if (lateSnap && !lateSnap.error && isReusableOutboundBindingsSnapshot(lateSnap.channels)) {
                     if (cancelled) return;
                     applyBindingsPayload(lateSnap, {
                         event: "duplicate_prevented",
@@ -803,7 +851,7 @@ function CommunicationsDrawerSectionLegacy({
                     return;
                 }
 
-                const pb = await fetchCommunicationsBindingsChannelsCached();
+                const pb = await fetchCommunicationsBindingsChannelsCached({ force: true });
                 if (!cancelled) applyBindingsPayload(pb, { event: "network_fallback", path: "direct" });
             } catch (e) {
                 if (!cancelled) setBindingsErr(e instanceof Error ? e.message : "Failed to load bindings");
@@ -948,6 +996,7 @@ function CommunicationsDrawerSectionLegacy({
         const subjectTrim = values.subject.trim();
         try {
             let lastNote = "";
+            let lastAssociation: unknown = undefined;
             const optimisticRows: MsgRowWithThread[] = [];
             const nowIso = new Date().toISOString();
             for (const personId of selectedRecipientIds) {
@@ -975,6 +1024,8 @@ function CommunicationsDrawerSectionLegacy({
                     typeof (j as { process_trigger_attempted_note?: string }).process_trigger_attempted_note === "string"
                         ? String((j as { process_trigger_attempted_note: string }).process_trigger_attempted_note)
                         : "";
+                lastAssociation = (j as { contact_attempt_association?: unknown })
+                    .contact_attempt_association;
                 const msgId = String((j as { communication_message_id?: string }).communication_message_id ?? "").trim();
                 const threadId = String((j as { thread_id?: string }).thread_id ?? "").trim();
                 const rec = recipients.find((r) => r.person_id === personId);
@@ -1003,8 +1054,18 @@ function CommunicationsDrawerSectionLegacy({
                     } as MsgRowWithThread);
                 }
             }
-            setSendOkNote(userFriendlySendNote(lastNote, channelSent === "sms" ? "sms" : "email"));
+            setSendOkNote(
+                userFriendlySendNote(lastNote, channelSent === "sms" ? "sms" : "email")
+                    + contactAttemptNote(lastAssociation),
+            );
             invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
+            // The comms cache is not the only reader. Activity surfaces (What's Next "Recent
+            // activity", the Activity timeline) compose from the drawer record, which a send never
+            // recomposed — so a message sent today kept showing last week's activity until some
+            // unrelated refresh happened to land.
+            if (apiEntityType === "opportunities") {
+                dispatchOpportunityDrawerScopedUpdate(entityId, "communications_send", ["activity"]);
+            }
             if (optimisticRows.length > 0) {
                 setMsgs((prev) => {
                     const byId = new Set(prev.map((x) => x.id));
@@ -1176,7 +1237,8 @@ function CommunicationsDrawerSectionLegacy({
                     else onViewFilter(ch);
                 }}
                 emailReady={emailOutboundReady}
-                smsReady={smsOutboundReady}
+                smsReady={smsComposerReady}
+                smsDisabledTitle={smsAvailability.reason ?? "SMS is not available"}
                 bindingsErr={bindingsErr}
                 loadingBindings={loadingBindings}
                 recipients={recipients}
@@ -1388,7 +1450,20 @@ function CommunicationsDrawerSectionLegacy({
 export default function CommunicationsDrawerSection(props: CommunicationsDrawerSectionProps) {
     // PKG-18B: mount the dark RecordCommunicationsTab when comms_v2_record_tab is on; legacy preserved when off.
     if (isCommsV2FlagEnabled("comms_v2_record_tab")) {
-        return <RecordCommunicationsTab entityType={props.apiEntityType} entityId={props.entityId} />;
+        return (
+            <RecordCommunicationsTab
+                entityType={props.apiEntityType}
+                entityId={props.entityId}
+                initialPreviewVm={props.initialPreviewVm}
+                compactActivityLoading={props.embedded}
+                surfaceVariant={props.surfaceVariant}
+                entryContext={props.entryContext}
+                composeIntent={props.composeIntent}
+                draftSeed={props.draftSeed}
+                workConsequence={props.workConsequence}
+                onSendAcknowledged={props.onSendAcknowledged}
+            />
+        );
     }
     return <CommunicationsDrawerSectionLegacy {...props} />;
 }

@@ -1,0 +1,2798 @@
+{
+ "label": "repaired",
+ "base": "https://staging.workwithalloy.com",
+ "sample_ms": 110,
+ "milestones": {
+  "navigation": 0,
+  "first_non_blank": 3165,
+  "destination_shell": 3661,
+  "destination_named": "waitlist",
+  "boot_shell_last": 14916,
+  "work_view_pills": 15031,
+  "queue_shell": 3165,
+  "queue_rows": 15031,
+  "published_structure": 15031,
+  "first_critical_meaning": 15031,
+  "last_critical_meaning": 15031,
+  "trackA_resolving": 15031,
+  "trackA_meaningful": 23703,
+  "final_settlement": 41971
+ },
+ "coherence": {
+  "critical_cards": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety"
+  ],
+  "first_meaningful_per_critical_card": {
+   "business_process": 15031,
+   "financials": 15031,
+   "attendance": 15031,
+   "health_safety": 15031
+  },
+  "CARD_COHERENCE_WINDOW_ms": 0,
+  "budget_ms": 250,
+  "within_budget": true,
+  "trackA_first_meaningful": {
+   "children": 23703,
+   "household": 23703
+  }
+ },
+ "structure": {
+  "structure_present_per_card": {
+   "business_process": 15031,
+   "financials": 15031,
+   "attendance": 15031,
+   "health_safety": 15031,
+   "children": 15031,
+   "household": 15031
+  },
+  "painted_first_per_card": {
+   "business_process": 15031,
+   "financials": 15031,
+   "attendance": 15031,
+   "health_safety": 15031,
+   "children": 23703,
+   "household": 23703
+  },
+  "cells_at_structure_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "cells_at_settlement": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ]
+ },
+ "geometry_final": {
+  "business_process": {
+   "t": 292.5,
+   "h": 299
+  },
+  "financials": {
+   "t": 292.5,
+   "h": 299.2
+  },
+  "children": {
+   "t": 601.5,
+   "h": 534
+  },
+  "attendance": {
+   "t": 601.5,
+   "h": 124
+  },
+  "household": {
+   "t": 1145.5,
+   "h": 293
+  },
+  "health_safety": {
+   "t": 864.5,
+   "h": 141.8
+  }
+ },
+ "operator_text_at": {
+  "t1500": "STAGING — NOT PRODUCTION ⌘K Thinking",
+  "t5000": "STAGING — NOT PRODUCTION ⌘K QS Thinking",
+  "t10000": "STAGING — NOT PRODUCTION 9+ 6 ⌘K All locations ▾ QS Thinking Waitlist"
+ },
+ "latency": {
+  "request_count": 146,
+  "top": [
+   {
+    "path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+    "kind": "fetch",
+    "startRelMs": 24079,
+    "durationMs": 17051,
+    "ttfbMs": 17050,
+    "bytes": null,
+    "status": 200,
+    "blocks": "NOTHING_VISIBLE"
+   },
+   {
+    "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b0…",
+    "kind": "fetch",
+    "startRelMs": 14967,
+    "durationMs": 8732,
+    "ttfbMs": 8627,
+    "bytes": null,
+    "status": 200,
+    "blocks": "SECONDARY_ENRICHMENT"
+   },
+   {
+    "path": "/workspace/work-unit/waitlist",
+    "kind": "document",
+    "startRelMs": 3,
+    "durationMs": 8325,
+    "ttfbMs": 3043,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/work-units/waitlist/provisioning-answer",
+    "kind": "fetch",
+    "startRelMs": 8346,
+    "durationMs": 6579,
+    "ttfbMs": 6522,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+    "kind": "fetch",
+    "startRelMs": 23702,
+    "durationMs": 4241,
+    "ttfbMs": 4184,
+    "bytes": null,
+    "status": 200,
+    "blocks": "SECONDARY_ENRICHMENT"
+   },
+   {
+    "path": "/api/admin/communications/unread-count",
+    "kind": "fetch",
+    "startRelMs": 3818,
+    "durationMs": 3170,
+    "ttfbMs": 3170,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-qu…",
+    "kind": "fetch",
+    "startRelMs": 7171,
+    "durationMs": 3035,
+    "ttfbMs": 3034,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/communications/bindings",
+    "kind": "fetch",
+    "startRelMs": 15223,
+    "durationMs": 2760,
+    "ttfbMs": 2759,
+    "bytes": null,
+    "status": 200,
+    "blocks": "SECONDARY_ENRICHMENT"
+   },
+   {
+    "path": "/api/admin/metrics/resolve",
+    "kind": "fetch",
+    "startRelMs": 14968,
+    "durationMs": 2758,
+    "ttfbMs": 2717,
+    "bytes": null,
+    "status": 200,
+    "blocks": "NOTHING_VISIBLE"
+   },
+   {
+    "path": "/api/admin/entity-labels",
+    "kind": "fetch",
+    "startRelMs": 3838,
+    "durationMs": 2736,
+    "ttfbMs": 2030,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/communications/family-workspace",
+    "kind": "fetch",
+    "startRelMs": 15069,
+    "durationMs": 2231,
+    "ttfbMs": 2230,
+    "bytes": null,
+    "status": 200,
+    "blocks": "SECONDARY_ENRICHMENT"
+   },
+   {
+    "path": "/inner.html",
+    "kind": "document",
+    "startRelMs": 8442,
+    "durationMs": 2142,
+    "ttfbMs": 2139,
+    "bytes": 438,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/departments",
+    "kind": "fetch",
+    "startRelMs": 3820,
+    "durationMs": 1971,
+    "ttfbMs": 1968,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/communications/family-workspace",
+    "kind": "fetch",
+    "startRelMs": 17302,
+    "durationMs": 1971,
+    "ttfbMs": 1969,
+    "bytes": null,
+    "status": 200,
+    "blocks": "SECONDARY_ENRICHMENT"
+   },
+   {
+    "path": "/api/admin/workspace/site-filter",
+    "kind": "fetch",
+    "startRelMs": 3816,
+    "durationMs": 1957,
+    "ttfbMs": 1957,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/queue-view-totals",
+    "kind": "fetch",
+    "startRelMs": 10212,
+    "durationMs": 1892,
+    "ttfbMs": 1890,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/lifecycle-catalog",
+    "kind": "fetch",
+    "startRelMs": 3819,
+    "durationMs": 1780,
+    "ttfbMs": 1780,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/communications/conversations",
+    "kind": "fetch",
+    "startRelMs": 23796,
+    "durationMs": 1755,
+    "ttfbMs": 1748,
+    "bytes": null,
+    "status": 200,
+    "blocks": "SECONDARY_ENRICHMENT"
+   },
+   {
+    "path": "/api/admin/operational-tasks",
+    "kind": "fetch",
+    "startRelMs": 3819,
+    "durationMs": 1738,
+    "ttfbMs": 1738,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/ai/workflow-assist/capabilities",
+    "kind": "fetch",
+    "startRelMs": 3845,
+    "durationMs": 1705,
+    "ttfbMs": 1704,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   },
+   {
+    "path": "/api/admin/communications/family-workspace",
+    "kind": "fetch",
+    "startRelMs": 25552,
+    "durationMs": 1493,
+    "ttfbMs": 1491,
+    "bytes": null,
+    "status": 200,
+    "blocks": "SECONDARY_ENRICHMENT"
+   },
+   {
+    "path": "/api/admin/ai/config-layout-assist/capabilities",
+    "kind": "fetch",
+    "startRelMs": 3845,
+    "durationMs": 1415,
+    "ttfbMs": 1414,
+    "bytes": null,
+    "status": 200,
+    "blocks": "STRUCTURE"
+   }
+  ],
+  "by_class": {
+   "NOTHING_VISIBLE": 15,
+   "SECONDARY_ENRICHMENT": 13,
+   "STRUCTURE": 118
+  }
+ },
+ "trace": [
+  {
+   "dt": 3165,
+   "bootShell": 1,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 37
+  },
+  {
+   "dt": 3661,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 37
+  },
+  {
+   "dt": 4146,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 40
+  },
+  {
+   "dt": 4602,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 40
+  },
+  {
+   "dt": 5065,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 40
+  },
+  {
+   "dt": 5525,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 40
+  },
+  {
+   "dt": 5980,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 58
+  },
+  {
+   "dt": 6439,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 58
+  },
+  {
+   "dt": 6899,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 58
+  },
+  {
+   "dt": 7359,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 7814,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 8274,
+   "bootShell": 2,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 61
+  },
+  {
+   "dt": 8729,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 9185,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 9642,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 10092,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 10548,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 11023,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 11475,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 11932,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 12395,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 12851,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 13308,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 13766,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 14221,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 14683,
+   "bootShell": 1,
+   "destShell": 1,
+   "destUnit": "waitlist",
+   "thinking": true,
+   "provisioned": 0,
+   "pills": 0,
+   "queueRows": 0,
+   "structural": [],
+   "painted": [],
+   "resolving": [],
+   "meaningful": [],
+   "bodyLen": 71
+  },
+  {
+   "dt": 15144,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 15596,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 16048,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 16509,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 16996,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 17459,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1843
+  },
+  {
+   "dt": 17918,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 18386,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 18852,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 19314,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 19772,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 20240,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 20708,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 21168,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 21631,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 22087,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 22552,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 23016,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 23473,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety",
+    "children",
+    "household"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "resolving": [
+    "children",
+    "household"
+   ],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "attendance",
+    "health_safety"
+   ],
+   "bodyLen": 1850
+  },
+  {
+   "dt": 24077,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3199
+  },
+  {
+   "dt": 24531,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3199
+  },
+  {
+   "dt": 24985,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 25444,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 25903,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 26363,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 26831,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 27296,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 27759,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 28226,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 28690,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 29158,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 29623,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 30081,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 30534,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 30987,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 31445,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 31911,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 32371,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 32829,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 33289,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 33748,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 34198,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 34656,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 35122,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 35587,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 36050,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 36520,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 36988,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 37449,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 37910,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 38375,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 38837,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 39299,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 39767,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 40229,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 40694,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 41158,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  },
+  {
+   "dt": 41621,
+   "bootShell": 0,
+   "destShell": 0,
+   "destUnit": null,
+   "thinking": false,
+   "provisioned": 1,
+   "pills": 8,
+   "queueRows": 16,
+   "structural": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "painted": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "resolving": [],
+   "meaningful": [
+    "business_process",
+    "financials",
+    "children",
+    "attendance",
+    "household",
+    "health_safety"
+   ],
+   "bodyLen": 3207
+  }
+ ]
+}

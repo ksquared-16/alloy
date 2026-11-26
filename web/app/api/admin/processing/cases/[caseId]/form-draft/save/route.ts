@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { discloseFormDraftTextPreview } from "@/lib/documents/extractedTextDisclosure";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
-import { buildManualFormDraft, type ManualFieldInput } from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
-import { dbStoreFormDraftPreview, stampFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
+import {
+    buildManualFormDraft,
+    type ManualFieldInput,
+    type SectionDispositionInput,
+} from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
+import { SECTION_DISPOSITIONS, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
+import { dbStoreFormDraftPreview, stampFormDraftPreview, parseStoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
+import { ocrProvenanceFromDocument } from "@/lib/pos/processingCase/formDraft/ocrDraftProvenance";
+import { safeParseFormSchema } from "@/lib/forms/schema";
+
+
+/** D1b: the OCR text preview in a form draft is disclosed only to an actor who may read it. */
+async function textActor() {
+    const access = await getAdminAccessContextCached();
+    return access.ok ? access : { roleKeys: [], permissionKeys: [] };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -18,17 +35,67 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { caseId: rawCaseId } = await params;
     const caseId = parseUuidParam(rawCaseId, "caseId");
     if (caseId instanceof NextResponse) return caseId;
 
-    let body: { title?: unknown; fields?: unknown };
+    let body: {
+        title?: unknown;
+        form_name?: unknown;
+        fields?: unknown;
+        section_dispositions?: unknown;
+        studio_schema?: unknown;
+    };
     try {
         body = (await request.json()) as typeof body;
     } catch {
         return jsonError("Invalid JSON body", 400);
+    }
+
+    /*
+     * FORMS STUDIO SAVE — the form exactly as the Studio has it.
+     *
+     * A document-originated form is edited in the same Forms Studio as a hand-built one, so it is saved
+     * the same way: the whole `FormSchemaV1`, validated by the same schema authority, stored as is. The
+     * importer's fields, sections, provenance, confidence and discovery are left untouched — they are the
+     * imported metadata, and nothing the operator does in Studio is rebuilt from them. `generated_at` is
+     * not restamped: this is an edit of the generated form, not a new generation.
+     */
+    if (body.studio_schema !== undefined) {
+        const parsed = safeParseFormSchema(body.studio_schema);
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: "Invalid form schema", validation_errors: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })) },
+                { status: 422 },
+            );
+        }
+        const supabase = createAdminClient();
+        try {
+            const { data: caseMetaRow, error: caseErr } = await supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", ctx.orgId)
+                .eq("id", caseId)
+                .maybeSingle();
+            if (caseErr) throw new Error(caseErr.message);
+            if (!caseMetaRow) return jsonError("Not found", 404);
+            const prior = parseStoredFormDraftPreview((caseMetaRow as { metadata?: unknown }).metadata);
+            if (!prior) return jsonError("This case has no form draft to edit yet.", 422);
+            const stored = await dbStoreFormDraftPreview(supabase, {
+                orgId: ctx.orgId,
+                caseId,
+                draft: { ...prior, studio_schema: parsed.data, studio_schema_saved_at: new Date().toISOString() },
+            });
+            return jsonData({ caseId, form_draft_preview: await discloseFormDraftTextPreview(supabase, ctx.orgId, await textActor(), stored) });
+        } catch (e) {
+            return NextResponse.json(
+                { error: e instanceof Error ? e.message : "Failed to save form" },
+                { status: 500 },
+            );
+        }
     }
 
     const rawFields = Array.isArray(body.fields) ? body.fields : [];
@@ -51,6 +118,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 type: typeof f.type === "string" ? f.type : undefined,
                 required: f.required === true,
                 section: typeof f.section === "string" ? f.section : undefined,
+                description: typeof f.description === "string" ? f.description : undefined,
                 // Preserve PDF provenance when the reviewed field came from AcroForm detection
                 // or manual mapping.
                 pdf_field_name: typeof f.pdf_field_name === "string" ? f.pdf_field_name : undefined,
@@ -58,6 +126,58 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 bbox,
                 evidence: typeof f.evidence === "string" ? f.evidence : undefined,
                 ...(field_source ? { field_source } : {}),
+                /*
+                 * An accepted conditional relationship. Validated rather than trusted: a client may
+                 * only name a field, an operator, and a literal — anything else is ignored, so a
+                 * posted condition cannot smuggle in a shape the published schema would reject.
+                 */
+                ...(() => {
+                    const vw = (f as { visible_when?: unknown }).visible_when as
+                        | { field_id?: unknown; op?: unknown; value?: unknown }
+                        | undefined;
+                    const fieldId = typeof vw?.field_id === "string" ? vw.field_id.trim() : "";
+                    const op: "eq" | "neq" | null = vw?.op === "eq" ? "eq" : vw?.op === "neq" ? "neq" : null;
+                    const value = vw?.value;
+                    if (!fieldId || !op) return {};
+                    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+                        return { visible_when: { field_id: fieldId, op, value } };
+                    }
+                    return {};
+                })(),
+                /*
+                 * A question's own choices. Rebuilt drafts take their field list from this payload, so
+                 * omitting the choices turns every select into free text — which is how an imported
+                 * "Yes / No / Sometimes" lost its answers on an unrelated mapping change.
+                 */
+                /*
+                 * The width the operator chose. Dropped before, so First name / Last name snapped back
+                 * to their own rows on the next save and side-by-side read as a feature that did not work.
+                 */
+                /*
+                 * The importer's own conclusion about this field. Dropped before, which broke plumbing
+                 * detection and let a Suggested mapping read as settled after any save.
+                 */
+                ...(() => {
+                    const c = (f as { confidence?: unknown }).confidence;
+                    const confidence: ManualFieldInput["confidence"] =
+                        c === "high" || c === "medium" || c === "low" ? c : undefined;
+                    return confidence ? { confidence } : {};
+                })(),
+                ...(() => {
+                    const raw = (f as { layout_width?: unknown }).layout_width;
+                    const w: ManualFieldInput["layout_width"] =
+                        raw === "half" ? "half" : raw === "third" ? "third" : raw === "quarter" ? "quarter" : raw === "full" ? "full" : undefined;
+                    return w ? { layout_width: w } : {};
+                })(),
+                ...(() => {
+                    const raw = (f as { options?: unknown }).options;
+                    if (!Array.isArray(raw)) return {};
+                    const options = raw
+                        .filter((o): o is string => typeof o === "string")
+                        .map((o) => o.trim())
+                        .filter(Boolean);
+                    return options.length ? { options } : {};
+                })(),
             };
         })
         .filter((f) => f.label.trim().length > 0);
@@ -65,6 +185,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (fields.length === 0) {
         return jsonError("Provide at least one field with a label.", 422);
     }
+
+    // Operator-set section dispositions (control the emitted schema — not cosmetic).
+    const rawDisp = Array.isArray(body.section_dispositions) ? body.section_dispositions : [];
+    const parsedDispositions = rawDisp
+        .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
+        .map((d) => {
+            const title = typeof d.title === "string" ? d.title.trim() : "";
+            const sectionId = typeof d.id === "string" ? d.id.trim() : "";
+            const dispo = typeof d.disposition === "string" ? d.disposition : "";
+            const disposition = (SECTION_DISPOSITIONS as string[]).includes(dispo)
+                ? (dispo as SectionDisposition)
+                : ("fields" as SectionDisposition);
+            const static_text = typeof d.static_text === "string" ? d.static_text : undefined;
+            return { title, sectionId, disposition, ...(static_text ? { static_text } : {}) };
+        });
 
     const supabase = createAdminClient();
 
@@ -90,24 +225,83 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const sourceDocumentId = source?.source_kind === "document" && source.source_id ? source.source_id : null;
 
         let docTitle: string | null = null;
+        // OCR provenance is preserved across the operator-review save so the create step keeps
+        // source→OCR→published lineage (the document row is the single source of truth).
+        let ocr: ReturnType<typeof ocrProvenanceFromDocument> = null;
         if (sourceDocumentId) {
             const { data: docRow } = await supabase
                 .from("documents")
-                .select("title, original_filename")
+                .select("title, original_filename, extraction_provider, metadata")
                 .eq("org_id", ctx.orgId)
                 .eq("id", sourceDocumentId)
                 .maybeSingle();
-            const doc = (docRow ?? {}) as { title?: string | null; original_filename?: string | null };
+            const doc = (docRow ?? {}) as {
+                title?: string | null;
+                original_filename?: string | null;
+                extraction_provider?: string | null;
+                metadata?: Record<string, unknown> | null;
+            };
             docTitle = doc.title ?? doc.original_filename ?? null;
+            ocr = ocrProvenanceFromDocument(doc);
         }
 
         const title = (typeof body.title === "string" && body.title.trim()) || docTitle || "Untitled form";
+        const generatedFormName =
+            typeof body.form_name === "string" && body.form_name.trim() ? body.form_name.trim() : null;
 
-        const draft = stampFormDraftPreview(
-            buildManualFormDraft({ title, sourceDocumentId, fields })
+        // Preserve Configuration Discovery across the operator-review save so the generated form
+        // retains source→discovery→binding lineage (FP16). The operator's bindings live in `fields`;
+        // the discovery record explains where each concept came from and how it was matched.
+        const { data: caseMetaRow } = await supabase
+            .from("processing_cases")
+            .select("metadata")
+            .eq("org_id", ctx.orgId)
+            .eq("id", caseId)
+            .maybeSingle();
+        const priorPreview = parseStoredFormDraftPreview((caseMetaRow as { metadata?: unknown } | null)?.metadata);
+        const priorDiscovery = priorPreview?.configuration_discovery;
+        // Relationship collections projected by apply are configuration, not operator-typed questions —
+        // save rebuilds the draft from posted fields, so without this they would be silently dropped
+        // and the generated form would fall back to flat questions (POS-FP17).
+        const priorCollections = priorPreview?.collections;
+        const suppressedByCollection = new Map(
+            (priorPreview?.fields ?? [])
+                .filter((f) => f.suppressed_by_collection)
+                .map((f) => [f.label.trim().toLowerCase(), f.suppressed_by_collection!]),
         );
+
+        /*
+         * Both client payload builders name a section by its ID; only the generate path names it by
+         * title. Reading `title` alone dropped every disposition — and every static text — on every Studio
+         * save. An id resolves through the draft it names.
+         */
+        const priorTitleById = new Map((priorPreview?.sections ?? []).map((sec) => [sec.id, sec.title]));
+        const sectionDispositions: SectionDispositionInput[] = parsedDispositions
+            .map(({ sectionId, ...d }) => ({ ...d, title: d.title || (sectionId ? priorTitleById.get(sectionId)?.trim() ?? "" : "") }))
+            .filter((d) => d.title.length > 0);
+
+        const rebuilt = buildManualFormDraft({ title, sourceDocumentId, fields, sectionDispositions });
+        // Re-apply suppression to the rebuilt questions by label, so a question replaced by a
+        // collection group does not reappear as a flat question after a save.
+        if (suppressedByCollection.size > 0) {
+            for (const f of rebuilt.fields) {
+                const groupId = suppressedByCollection.get(f.label.trim().toLowerCase());
+                if (groupId) f.suppressed_by_collection = groupId;
+            }
+        }
+
+        const draft = stampFormDraftPreview({
+            ...rebuilt,
+            ...(generatedFormName ? { generated_form_name: generatedFormName } : {}),
+            ...(ocr ? { ocr } : {}),
+            ...(priorDiscovery ? { configuration_discovery: priorDiscovery } : {}),
+            ...(priorCollections?.length ? { collections: priorCollections } : {}),
+            // A field-list save rebuilds the importer's view; it never overwrites what Studio authored.
+            ...(priorPreview?.studio_schema ? { studio_schema: priorPreview.studio_schema } : {}),
+            ...(priorPreview?.studio_schema_saved_at ? { studio_schema_saved_at: priorPreview.studio_schema_saved_at } : {}),
+        });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
-        return jsonData({ caseId, form_draft_preview: stored });
+        return jsonData({ caseId, form_draft_preview: await discloseFormDraftTextPreview(supabase, ctx.orgId, await textActor(), stored) });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to save form draft" },

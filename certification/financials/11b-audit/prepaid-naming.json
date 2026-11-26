@@ -1,0 +1,32 @@
+{
+  "w1280": {
+    "labelRendered": "Available prepaid $125.00",
+    "namesPrepaid": true,
+    "clipped": false,
+    "cardClipped": false,
+    "horizontalOverflow": false,
+    "saysHeld": false,
+    "saysDeposit": false,
+    "balanceStillSeparate": true
+  },
+  "w1440": {
+    "labelRendered": "Available prepaid $125.00",
+    "namesPrepaid": true,
+    "clipped": false,
+    "cardClipped": false,
+    "horizontalOverflow": false,
+    "saysHeld": false,
+    "saysDeposit": false,
+    "balanceStillSeparate": true
+  },
+  "w1680": {
+    "labelRendered": "Available prepaid $125.00",
+    "namesPrepaid": true,
+    "clipped": false,
+    "cardClipped": false,
+    "horizontalOverflow": false,
+    "saysHeld": false,
+    "saysDeposit": false,
+    "balanceStillSeparate": true
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schema": "financials.alloy_cert_incident_census_receipt.v2",
+  "request_id": "gar_ed727e30c6854a",
+  "run_id": "erun2_f700decfe159a2a6",
+  "lane_id": "lane_b77b3cbb5840",
+  "toolkit": "20261030-66f2d0dab2c7",
+  "candidate": "061e164b558cfa0755c41275b38886c549298ba6",
+  "census_id": "financials_alloy_cert_incident_20261030_v2",
+  "preflight": {
+    "file_sha256": "dd5dd815e55de1483774b27d0303c4fd58294b4aacc100a03b2d3c39bacea421",
+    "expected_query_hash": "31ce283d585498b6fd4cbd9aede2c33dbba32c584d7a79da28e53e45a8e4ab45",
+    "installed_registration_matches": true,
+    "prior_read_census_requests_for_this_census": 0
+  },
+  "policy_decision": "operator_approved (2026-10-30T20:16:16.339Z)",
+  "terminal_status": "failed",
+  "failure_code": "execution_failed",
+  "failure_reason": "input_validation_failed — financials_alloy_cert_incident_20261030_v2 is registered for the shared alloy-cert stack only, not alloy_deployed_primary",
+  "trusted_host_action_id": null,
+  "executed": false,
+  "counts": null,
+  "database_contact": "none — refused at trusted-host admission before any action was minted",
+  "root_cause": "installed toolkit lib/trusted-host-actions.mjs fulfillDatabaseCensusForMission (line ~1678) builds the trusted-host inputs with databaseTarget: DEFAULT_TARGET (alloy_deployed_primary) and forwards only queryArtifactPath/worktreePath/artifactRoot; censusId, targetBinding and requestLaneId from the request are dropped. The request record carries databaseTarget=alloy_cert and the binding intact. The A741 registry guard (trusted-host-action-registry.mjs:521) then correctly refused the registered shared census on the hosted target. The dispatch call site — the 'fourth leg' — was not wired for CENSUS-SHARED-01.",
+  "owner_of_fix": "OPWORK_25AD3858DE4D_SPRINT_A741F0C6D2E9 (shared-cert census contract)",
+  "refile": "not refiled — an identical request hits the same hardcoded target",
+  "live_hold": "Financials LIVE HOLD remains"
+}

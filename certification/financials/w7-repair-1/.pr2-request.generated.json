@@ -1,0 +1,13 @@
+{
+  "action_key": "promotion.open_pr",
+  "reason_worker_cannot_execute": "This lane holds no GitHub credential; pull requests are opened only from the trusted host.",
+  "reason": "W7 Repair Batch 1 continued \u2014 mounted proof of the deployed repairs, the firefly Node pin integrated, and the date control's emoji glyph replaced.",
+  "inputs": {
+    "repository": "ksquared-16/alloy",
+    "base": "staging",
+    "headBranch": "agent/financials-11c-slice3",
+    "expectedHeadSha": "551cf17fb8ead9eb73db2eef8c1b9ad2da03972d",
+    "title": "fix(financials): the date control draws its calendar, and the deployed repairs are mounted-proven",
+    "body": "Follows #1379, which is merged and deployed as 41d35901d.\n\nMOUNTED PROOF OF #1379 ON THE DEPLOYED BUILD. All of it passes:\nA \u00b7 the Accounts Add command renders OVER the account floor \u2014 data-financials-detail-account preserved, ledger rows preserved, overlays [detail, add_charge] both in the document.\nB \u00b7 a charge resolving to $0.00 cannot be submitted and says why before the primary.\nC \u00b7 a charge that is not a resolved zero (Field trip, $40.00) is NOT blocked.\nD \u00b7 Discounts from Accounts renders priced content.\nE \u00b7 the Focus Panel's Financials card issues its read and leaves the pending frame \u2014 F3 fixed \u2014 and its Discounts drawer opens with content identical to the Accounts drawer.\n\nVERCEL FIREFLY. The red check on #1379 was not flaky, as I had called it. The build log names the cause in one line: Node.js 20.x is discontinued on Vercel. staging already carried the fix (b3c891eba, #1377); this lane had branched before it. Integrated by merging origin/staging.\n\nTHE DATE CONTROL. Mounted inspection showed `SERVICE DATE REQUIRED` followed by an emoji. Across the 24 canonical workspace controls exactly two draw a glyph as an emoji, so it is the exception rather than the idiom \u2014 and an emoji is coloured by the platform's emoji font rather than by currentColor, with metrics that differ per OS. Replaced with an inline svg. AlloyTimeInput carries the same emoji but is consumed by SchedulingCard, outside Financials, and is deliberately left.\n\nAlso carries two read-only censuses of the deployed charge provenance, which correct two things I had reported: schedule_id and subscription_id DO exist on charges, and charges.due_date IS populated on 37 of 125 rows.\n\n\ud83e\udd16 Generated with [Claude Code](https://claude.com/claude-code)\n\nhttps://claude.ai/code/session_01Pbc33MqqfH1NRnkZn5YyKk"
+  }
+}

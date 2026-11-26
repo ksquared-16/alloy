@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveOrgSiteLocationsForAdmin } from "@/lib/admin/resolveOrgSiteLocations";
@@ -23,10 +22,9 @@ export const dynamic = "force-dynamic";
  * Query: site_id, window (rolling_24h|7d|30d), compare (1 = prior-period deltas)
  */
 export async function GET(request: NextRequest) {
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) {
-        return adminContextFailureResponse(access);
-    }
+    const auth = await requireAnalyticsReadAccess();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
 
     const { searchParams } = new URL(request.url);
     const supabase = createAdminClient();

@@ -1,0 +1,9 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"control","control":{"servedSha":"b7c7264c4f6f32945fb4722c8a6b866bd299f6a6","docTokenPresent":true,"navType":"navigate","wuMountsOnWorkspace":null,"fullNavChangesToken":true,"workUnitLinksFound":8,"clientNavKeepsToken":true,"clientNavUrl":"/workspace/work-unit/waitlist","wuMountsAfterOpen":1,"wuMountsBeforeNormalised":0,"wuMountIncremented":true,"lensSwitchKeepsToken":true,"lensSwitchRemountsShell":false,"lensSwitchChangedView":true,"CONTROL_PASS":true}}
+
+[1A[2K  1 passed (40.6s)

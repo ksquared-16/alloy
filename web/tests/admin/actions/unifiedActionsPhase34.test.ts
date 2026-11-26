@@ -53,7 +53,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         const openRelationshipAction = vi.fn();
         const out = await applyRegistryResolvedActionClient(relationshipAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             entityId: "opp-1",
             context: { surface: "record_header" },
@@ -69,7 +69,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
     it("dispatches modal event when host callback is missing", async () => {
         const out = await applyRegistryResolvedActionClient(relationshipAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             entityId: "opp-2",
             context: { surface: "work_unit" },
         });
@@ -94,7 +94,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         });
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             openAddInquiryChild,
             entityId: "opp-1",
@@ -112,7 +112,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
     it("requires entity id for relationship actions", async () => {
         const out = await applyRegistryResolvedActionClient(relationshipAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             context: { surface: "work_unit" },
         });
         expect(out.ok).toBe(false);
@@ -120,7 +120,13 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         expect(out.error).toMatch(/select a record/i);
     });
 
-    it("falls back safely for unknown action keys", async () => {
+    // Renamed from "falls back safely for unknown action keys". It asserted
+    // ok === true together with "no fetch was issued" — i.e. success reported
+    // without anything executing. That is not safe: it is how send_tour_invitation
+    // told operators an invitation had gone out while creating no invitation, no
+    // message and no event. The no-request assertion is kept; the success claim
+    // is inverted, because an unrunnable command must say so.
+    it("refuses unknown action keys instead of reporting success", async () => {
         const fetchSpy = vi.spyOn(globalThis, "fetch");
         const action: ResolvedActionForClient = {
             key: "unknown_custom_action",
@@ -135,12 +141,14 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         };
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             entityId: "opp-1",
             context: { surface: "record_header" },
         });
-        expect(out.ok).toBe(true);
+        expect(out.ok).toBe(false);
         expect(resolveRelationshipActionKeyFromResolvedAction(action)).toBeNull();
+        // Still no request — the command genuinely cannot run. What changed is
+        // that it now admits that rather than claiming completion.
         expect(fetchSpy).not.toHaveBeenCalled();
         fetchSpy.mockRestore();
     });

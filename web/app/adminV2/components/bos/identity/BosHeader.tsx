@@ -6,6 +6,7 @@ import {
     BOS_IDENTITY,
     type BosIdentitySize,
 } from "@/lib/bos/bosIdentityTokens";
+import { neutral } from "@/styles/tokens/colors";
 
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 
@@ -15,6 +16,11 @@ type Props = {
     size?: BosIdentitySize;
     /** On midnight-forge or dark chrome — mark stays pine, no badge container. */
     onDark?: boolean;
+    /**
+     * Header chrome is Bend Pine (`palette.bendPine` / `alloy-bend-pine`).
+     * Mark and title render white for accessible contrast.
+     */
+    onBendPine?: boolean;
     className?: string;
     titleId?: string;
 };
@@ -27,12 +33,15 @@ const MARK_SIZE: Record<BosIdentitySize, BosIdentitySize> = {
 
 /**
  * BOS header — distant focal mark + title stack. No logo lockup containers.
+ *
+ * `onBendPine`: header sits on Bend Pine chrome — white mark/title for contrast.
  */
 export function BosHeader({
     title = BOS_DEFAULT_HEADER_TITLE,
     subtitle = BOS_DEFAULT_HEADER_SUBTITLE,
     size = "md",
     onDark = false,
+    onBendPine = false,
     className = "",
     titleId,
 }: Props) {
@@ -41,22 +50,23 @@ export function BosHeader({
         : size === "sm" ? "text-sm font-semibold"
         : "text-base font-bold tracking-tight";
 
+    const inverse = onBendPine || onDark;
     const subtitleClass =
-        onDark ? "text-[11px] leading-snug text-white/48"
+        inverse ? "text-[11px] leading-snug text-white/70"
         : size === "sm" ? "text-[10px] leading-snug text-alloy-midnight/50"
         : "text-[11px] leading-snug text-alloy-midnight/50";
 
-    const markColor = onDark ? BOS_IDENTITY.bendPine : undefined;
+    const markColor = onBendPine ? neutral.surface : onDark ? BOS_IDENTITY.bendPine : undefined;
 
     return (
-        <div className={`flex min-w-0 items-start gap-3.5 ${className}`.trim()} data-bos-header="true">
+        <div className={`flex min-w-0 items-start gap-3.5 ${className}`.trim()} data-bos-header="true" data-bos-header-on-bend-pine={onBendPine ? "true" : undefined}>
             <div className="shrink-0 pt-0.5" aria-hidden>
                 <BosMark size={MARK_SIZE[size]} horizon color={markColor} />
             </div>
             <div className="min-w-0 flex-1 text-left">
                 <div
                     id={titleId}
-                    className={`${titleClass} ${onDark ? "text-white" : "text-alloy-midnight"}`}
+                    className={`${titleClass} ${inverse ? "text-white" : "text-alloy-midnight"}`}
                 >
                     {title}
                 </div>

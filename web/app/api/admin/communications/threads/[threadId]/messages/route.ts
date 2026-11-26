@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { withoutSupersededDuplicates } from "@/lib/communications/supersededDuplicateMessages";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -10,8 +14,8 @@ export async function GET(
     request: NextRequest,
     context: { params: Promise<{ threadId: string }> }
 ) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
@@ -40,7 +44,11 @@ export async function GET(
     const { data: msgs, error: mErr } = await supabase
         .from("communication_messages")
         .select(
-            "id, created_at, direction, channel, status, body, from_address, to_address, provider, sent_at, provider_message_id, metadata, delivered_at"
+            // `subject` is email truth: an SMS has none, but for an email
+            // conversation it is the first thing an operator reads. It was absent
+            // from this projection, so the Command Center rendered email bodies
+            // with no subject at all — invisible until the browser proved it.
+            "id, created_at, direction, channel, status, subject, body, from_address, to_address, provider, sent_at, provider_message_id, metadata, delivered_at"
         )
         .eq("thread_id", threadId)
         .eq("org_id", ctx.orgId)
@@ -49,7 +57,10 @@ export async function GET(
 
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
 
-    let list = (msgs ?? []) as Record<string, unknown>[];
+    // Duplicate provider deliveries recorded before inbound uniqueness existed are
+    // kept as history but must not read as the parent having said the same thing
+    // twice. Excluded from presentation, never deleted.
+    let list = withoutSupersededDuplicates((msgs ?? []) as Record<string, unknown>[]);
     if (includeViewerRead && ctx.userId && list.length > 0) {
         const ids = list.map((m) => String(m.id ?? "")).filter((id) => UUID_RE.test(id));
         const { data: reads, error: rErr } = await supabase

@@ -1,39 +1,69 @@
 "use client";
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ConfigurationRuntimeIssue } from "@/lib/configPublication/runtimeIssue";
+import {
+    QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+    QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
+    QUEUE_ROW_CARD_SHELL_CLASS,
+    QUEUE_ROW_SELECTED_RAIL_CLASS,
+} from "@/lib/presentation/runtime/queueRowCardShell";
 
 /** Frozen Configuration Runtime V1 shell geometry — see docs/system/configuration-runtime-v1.md */
 export const CONFIGURATION_SHELL_SECTION_QUEUE_WIDTH_PX = 260;
 export const CONFIGURATION_SHELL_OBJECT_QUEUE_WIDTH_PX = 320;
 
-/** Context bar — title, subtitle, and actions above the configuration shell. */
+/** Context bar — compact domain identity above the configuration shell. */
 export function ConfigurationContext({
+    eyebrow,
     title,
     subtitle,
+    titleIcon,
     actions,
     testId = "configuration-context",
     children,
 }: {
+    eyebrow?: string;
     title: string;
     subtitle?: string;
+    /** Optional product icon beside the page title (e.g. Locations MapPin). */
+    titleIcon?: ReactNode;
     actions?: ReactNode;
     testId?: string;
     children?: ReactNode;
 }) {
     return (
-        <header className="process-config-context-bar space-y-2" data-testid={testId}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <header className="process-config-context-bar" data-testid={testId}>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <div className="min-w-0">
-                    <h1 className="config-typo-page-title process-config-context-title">{title}</h1>
+                    {eyebrow ?
+                        <p className="config-platform-hub-eyebrow" data-testid={`${testId}-eyebrow`}>
+                            {eyebrow}
+                        </p>
+                    :   null}
+                    <div className="flex items-center gap-2">
+                        {titleIcon ?
+                            <span
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-alloy-bend-pine/[0.10] text-[#007d68]"
+                                data-testid={`${testId}-title-icon`}
+                                aria-hidden
+                            >
+                                {titleIcon}
+                            </span>
+                        :   null}
+                        <h1 className="config-typo-page-title process-config-context-title">{title}</h1>
+                    </div>
                     {subtitle ?
-                        <p className="config-typo-sublabel process-config-context-summary mt-1 max-w-3xl">{subtitle}</p>
+                        <p className="config-typo-sublabel process-config-context-summary mt-0.5 max-w-3xl">
+                            {subtitle}
+                        </p>
                     :   null}
                 </div>
                 {actions ?
                     <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
                 :   null}
             </div>
-            {children}
+            {children ? <div className="process-config-context-children mt-1.5">{children}</div> : null}
         </header>
     );
 }
@@ -138,35 +168,77 @@ export function ConfigurationQueueItem({
     active,
     title,
     subtitle,
+    leading,
     trailing,
     onClick,
     testId,
     wrapTitle = false,
+    /** Muted / subordinate row (e.g. Inactive objects). */
+    muted = false,
+    /** When true, exposes listbox option semantics (use inside role="listbox"). */
+    listboxOption = false,
+    /** `rail` = Processing-like nav row. `card` = legacy floating tile. */
+    variant = "card",
 }: {
     active: boolean;
     title: string;
-    subtitle?: string;
+    subtitle?: string | null;
+    leading?: ReactNode;
     trailing?: ReactNode;
     onClick: () => void;
     testId?: string;
     wrapTitle?: boolean;
+    muted?: boolean;
+    listboxOption?: boolean;
+    variant?: "card" | "rail";
 }) {
+    const className =
+        variant === "rail" ?
+            `${QUEUE_ROW_CARD_SHELL_CLASS} min-h-[3.6rem] shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine ${
+                active ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS
+            } ${muted && !active ? "opacity-60" : ""}`
+        :   `process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`;
+
     return (
         <button
             type="button"
+            role={listboxOption ? "option" : undefined}
             onClick={onClick}
-            className={`process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`}
+            className={className}
             data-testid={testId}
             aria-current={active ? "true" : undefined}
+            aria-selected={listboxOption ? active : undefined}
         >
-            <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 text-left">
-                    <p className={`config-typo-queue-item-title ${wrapTitle ? "whitespace-normal" : "truncate"}`}>{title}</p>
+            {variant === "rail" && active ?
+                <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} />
+            :   null}
+            <div className="flex min-w-0 w-full items-start gap-2.5">
+                {leading ?
+                    <span className="shrink-0" aria-hidden>
+                        {leading}
+                    </span>
+                :   null}
+                <div className="min-w-0 flex-1 text-left">
+                    <p
+                        className={`${variant === "rail" ? "text-[13px] font-semibold leading-4 text-alloy-midnight" : "config-typo-queue-item-title"} ${
+                            wrapTitle ? "whitespace-normal" : "truncate"
+                        }`}
+                    >
+                        {title}
+                    </p>
                     {subtitle ?
-                        <p className={`config-typo-sublabel mt-0.5 ${wrapTitle ? "whitespace-pre-line" : "truncate"}`}>{subtitle}</p>
+                        <p
+                            className={`${variant === "rail" ? "mt-0.5 text-[11px] leading-4 text-alloy-midnight/60" : "config-typo-sublabel mt-0.5"} ${
+                                wrapTitle ? "whitespace-pre-line" : "truncate"
+                            }`}
+                        >
+                            {subtitle}
+                        </p>
                     :   null}
                 </div>
-                {trailing}
+                {trailing ?
+                    <span className="shrink-0">{trailing}</span>
+                :   null}
             </div>
         </button>
     );
@@ -178,7 +250,43 @@ export function ConfigurationPrimaryButton({
     ...props
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
     return (
-        <button type="button" className={`config-primary-btn ${className}`.trim()} {...props}>
+        <button
+            type="button"
+            className={`inline-flex items-center justify-center rounded-md border border-alloy-bend-pine bg-alloy-bend-pine px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-alloy-bend-pine/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 focus-visible:ring-offset-1 active:bg-alloy-bend-pine/90 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+            {...props}
+        >
+            {children}
+        </button>
+    );
+}
+
+export function ConfigurationSecondaryButton({
+    className = "",
+    children,
+    ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+    return (
+        <button
+            type="button"
+            className={`inline-flex items-center justify-center rounded border border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.08] px-3 py-1.5 text-xs font-medium text-alloy-bend-pine transition-colors hover:bg-alloy-bend-pine/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 focus-visible:ring-offset-1 active:bg-alloy-bend-pine/[0.16] disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+            {...props}
+        >
+            {children}
+        </button>
+    );
+}
+
+export function ConfigurationInlineButton({
+    className = "",
+    children,
+    ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+    return (
+        <button
+            type="button"
+            className={`inline-flex items-center rounded text-xs font-semibold text-alloy-bend-pine transition-colors hover:text-alloy-bend-pine/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+            {...props}
+        >
             {children}
         </button>
     );
@@ -187,19 +295,108 @@ export function ConfigurationPrimaryButton({
 export function ConfigurationEmptyState({
     title,
     description,
+    purpose,
+    examples,
+    setupSteps,
+    issue,
+    actions,
     testId = "configuration-empty-state",
 }: {
     title: string;
     description: string;
+    purpose?: string;
+    examples?: readonly string[];
+    setupSteps?: readonly { label: string; description: string }[];
+    issue?: ConfigurationRuntimeIssue | null;
+    actions?: ReactNode;
     testId?: string;
 }) {
     return (
         <ConfigurationDetailCard testId={testId}>
-            <div className="px-2 py-8 text-center">
-                <p className="config-typo-workspace-title">{title}</p>
-                <p className="config-typo-sublabel mx-auto mt-2 max-w-md">{description}</p>
+            <div className="px-2 py-6">
+                {issue ?
+                    <ConfigurationRuntimeNotice issue={issue} testId={`${testId}-issue`} />
+                :   null}
+                <div className={issue ? "mt-6 text-center" : "text-center"}>
+                    <p className="config-typo-workspace-title">{title}</p>
+                    <p className="config-typo-sublabel mx-auto mt-2 max-w-2xl">{description}</p>
+                    {purpose ?
+                        <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-alloy-midnight/70">
+                            {purpose}
+                        </p>
+                    :   null}
+                </div>
+                {examples?.length || setupSteps?.length ?
+                    <div className="mx-auto mt-6 grid max-w-3xl gap-6 border-t border-alloy-stone/25 pt-5 text-left md:grid-cols-2">
+                        {examples?.length ?
+                            <section>
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                    Common examples
+                                </h3>
+                                <ul className="mt-2 space-y-1.5 text-sm text-alloy-midnight/70">
+                                    {examples.map((example) => (
+                                        <li key={example} className="flex gap-2">
+                                            <span className="text-alloy-bend-pine" aria-hidden>•</span>
+                                            <span>{example}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        :   null}
+                        {setupSteps?.length ?
+                            <section>
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                    How it works
+                                </h3>
+                                <ol className="mt-2 space-y-2.5">
+                                    {setupSteps.map((step, index) => (
+                                        <li key={step.label} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-2">
+                                            <span className="text-xs font-semibold text-alloy-bend-pine">{index + 1}</span>
+                                            <span>
+                                                <span className="block text-sm font-semibold text-alloy-midnight/80">
+                                                    {step.label}
+                                                </span>
+                                                <span className="mt-0.5 block text-xs leading-5 text-alloy-midnight/55">
+                                                    {step.description}
+                                                </span>
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </section>
+                        :   null}
+                    </div>
+                :   null}
+                {actions ?
+                    <div className="mt-4 flex justify-center">{actions}</div>
+                :   null}
             </div>
         </ConfigurationDetailCard>
+    );
+}
+
+export function ConfigurationRuntimeNotice({
+    issue,
+    testId = "configuration-runtime-notice",
+}: {
+    issue: ConfigurationRuntimeIssue;
+    testId?: string;
+}) {
+    return (
+        <aside
+            className="rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.045] px-4 py-3 text-left"
+            role="alert"
+            data-testid={testId}
+        >
+            <p className="text-sm font-semibold text-alloy-midnight">{issue.title}</p>
+            <p className="mt-1 text-sm leading-5 text-alloy-midnight/70">{issue.message}</p>
+            <p className="mt-1 text-xs leading-5 text-alloy-midnight/55">{issue.nextStep}</p>
+            {issue.reference ?
+                <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                    Engineering reference · {issue.reference}
+                </p>
+            :   null}
+        </aside>
     );
 }
 

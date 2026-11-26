@@ -5,11 +5,15 @@
  * Relationship actions share the same actionKey / executor model; layout builder and BOS
  * read from this registry rather than maintaining parallel catalogs.
  *
- * @see docs/system/actions-and-workflows.md
+ * @see docs/archive/2026-06-superseded-system/actions-and-workflows.md
  */
 
 import type { ActionRegistryEntry } from "@/lib/admin/actions/actionDefinitionRegistry";
-import { ACTION_BUTTON_LIBRARY } from "@/lib/admin/actions/actionDefinitionRegistry";
+import {
+    ACTION_BUTTON_LIBRARY,
+    type CapabilityInteractionHost,
+    type CommandSurfaceBody,
+} from "@/lib/admin/actions/actionDefinitionRegistry";
 import type { RelationshipActionKey } from "@/lib/admin/relationship/relationshipActionContract";
 import {
     RELATIONSHIP_ACTION_REGISTRY,
@@ -68,6 +72,15 @@ export type CanonicalActionDefinition = {
     bosProposalSupport: boolean;
     runtimeWired: boolean;
     settingsConfigurable: boolean;
+    /** Capability-declared interaction host; the runtime resolves the host from this, not the key. */
+    interactionHost?: CapabilityInteractionHost;
+    /**
+     * The body the command surface reviews before running, carried from the library declaration.
+     *
+     * Mapped through rather than re-declared: the library is where a capability states how it is
+     * interacted with, and a second place to say it is a second answer.
+     */
+    commandSurfaceBody?: CommandSurfaceBody;
 };
 
 const LAYOUT_CONTEXT_ALL: readonly LayoutEditorActionPickerContext[] = [
@@ -134,6 +147,13 @@ function relationshipCanonicalEntry(entry: RelationshipActionRegistryEntry): Can
         bosProposalSupport: entry.allowedSourceSurfaces.includes("bos_rail"),
         runtimeWired: entry.runtimeWired,
         settingsConfigurable: false,
+        // Capture-first Add Child on What's Next — not the Link existing | Create new wizard.
+        ...(actionKey === "add_child"
+            ? {
+                  interactionHost: "inline_form" as const,
+                  inputSchema: "registry_form" as const,
+              }
+            : {}),
     };
 }
 
@@ -179,6 +199,8 @@ function platformCanonicalEntry(entry: ActionRegistryEntry): CanonicalActionDefi
         bosProposalSupport: entry.category === "bos_native",
         runtimeWired: true,
         settingsConfigurable: entry.settingsConfigurable,
+        interactionHost: entry.interactionHost,
+        commandSurfaceBody: entry.commandSurfaceBody,
     };
 }
 
@@ -198,14 +220,16 @@ const LIFECYCLE_PLATFORM_ACTIONS: CanonicalActionDefinition[] = [
         inputSchema: "registry_form",
         executor: { kind: "admin_execute", definitionKey: "create_lead", formKey: "create_lead" },
         confirmationPolicy: "required",
-        bosProposalSupport: false,
+        // Aligned with RegisteredAction.createLeadAction.bosProposalSupport — BOS may
+        // propose/prepare Create Lead; execution remains the registered action path.
+        bosProposalSupport: true,
         runtimeWired: true,
         settingsConfigurable: true,
     },
     {
         actionKey: "add_child",
         label: "Add child",
-        description: "Add or link a child on this opportunity or household.",
+        description: "Add a child to this family and enrollment case.",
         category: "relationship",
         allowedBusinessProcesses: ["enrollment"],
         allowedStages: ["lead", "new_inquiry", "waitlist"],
@@ -213,12 +237,14 @@ const LIFECYCLE_PLATFORM_ACTIONS: CanonicalActionDefinition[] = [
         allowedLayoutSurfaces: ["opportunity_drawer", "person_drawer"],
         allowedLayoutContexts: ["section_row", "contact_related_list"],
         requiredContext: { entityTypes: ["opportunity", "person"], requiresCustomer: true, requiresOpportunity: true },
-        inputSchema: "relationship_wizard",
+        inputSchema: "registry_form",
         executor: { kind: "relationship_execute", relationshipKey: "add_child" },
         confirmationPolicy: "required",
         bosProposalSupport: true,
         runtimeWired: true,
         settingsConfigurable: true,
+        // What's Next / Current Work: capture-first create form — not the Link existing | Create new wizard.
+        interactionHost: "inline_form",
     },
     {
         actionKey: "update_enrollment_status",

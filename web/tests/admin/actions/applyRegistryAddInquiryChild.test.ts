@@ -19,7 +19,7 @@ describe("applyRegistryResolvedActionClient add sibling legacy path", () => {
 
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openAddInquiryChild,
             entityId: "opp-1",
             context: { surface: "record_section", section_key: "inquiry_children" },

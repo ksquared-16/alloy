@@ -17,13 +17,17 @@ describe("command center live wiring", () => {
         join(process.cwd(), "app", "adminV2", "communications", "CommunicationsWorkspaceKpiContext.tsx"),
         "utf8"
     );
-    const src = `${shellSrc}\n${workspaceSrc}\n${kpiStripSrc}\n${kpiContextSrc}`;
+    const runtimeSrc = readFileSync(
+        join(process.cwd(), "lib", "communications", "v2", "familyWorkspace", "useFamilyCommunicationRuntime.ts"),
+        "utf8"
+    );
+    const src = `${shellSrc}\n${workspaceSrc}\n${kpiStripSrc}\n${kpiContextSrc}\n${runtimeSrc}`;
     it("fetches conversations from the dark API", () => {
         expect(src).toMatch(/\/api\/admin\/communications\/conversations/);
     });
     it("renders metrics, filters, queues, and a timeline", () => {
-        expect(kpiStripSrc).toMatch(/data-comms-workspace-kpi-band/);
-        expect(kpiStripSrc).toMatch(/CompactKpiStrip/);
+        expect(kpiStripSrc).toMatch(/WorkspaceOperationalHealth/);
+        expect(kpiStripSrc).not.toMatch(/WorkspaceMetricTiles|CompactKpiStrip/);
         expect(shellSrc).toMatch(/setInboxKpis/);
         expect(src).toMatch(/data-cc-filters/);
         expect(src).toMatch(/visibleCommandCenterQueues/);
@@ -46,9 +50,10 @@ describe("command center live wiring", () => {
         expect(shellSrc).not.toMatch(/data-cc-loading-overlay/);
         expect(shellSrc).not.toMatch(/Select a family from the queue/);
     });
-    it("loads thread-scoped timeline and hides assignment UI by default", () => {
-        expect(shellSrc).toMatch(/thread_id=\$\{encodeURIComponent\(threadId\)\}/);
-        expect(shellSrc).toMatch(/fetchCommandCenterThreadMessages/);
+    it("loads thread-scoped timeline via shared family runtime and hides assignment UI by default", () => {
+        expect(shellSrc).toMatch(/useFamilyCommunicationRuntime/);
+        expect(shellSrc).toMatch(/surfaceVariant:\s*"workspace_inbox"/);
+        expect(runtimeSrc).toMatch(/prefetchDrawerFamilyWorkspace/);
         expect(shellSrc).toMatch(/showClaim=\{ASSIGNMENT_ENABLED\}/);
         expect(workspaceSrc).not.toMatch(/assignment_state \?\? "—"/);
         expect(shellSrc).not.toMatch(/FALLBACK_QUEUE_EXPLANATION/);
@@ -69,7 +74,7 @@ describe("command center live wiring", () => {
     });
     it("uses conservative health labels and needs-review KPI", () => {
         expect(shellSrc).toMatch(/resolveCommandCenterHealthDisplay/);
-        expect(kpiStripSrc).toMatch(/NEEDS_REVIEW_STATUS_LABEL/);
+        expect(kpiStripSrc).toMatch(/Needs Review/);
         expect(shellSrc).not.toMatch(/Unresponsive/);
     });
     it("resolves business process stage labels via shared drawer batch helper", () => {
@@ -86,10 +91,10 @@ describe("command center live wiring", () => {
         expect(batch).toMatch(/resolveOpportunityStatusDisplay/);
     });
     it("prefetches conversations from shell mount and inbox open", () => {
-        const shell = readFileSync(join(process.cwd(), "app", "adminV2", "components", "AdminV2Shell.tsx"), "utf8");
+        const preload = readFileSync(join(process.cwd(), "lib", "adminV2", "coreSurfacePreloadRegistry.ts"), "utf8");
         const nav = readFileSync(join(process.cwd(), "app", "adminV2", "components", "TopNavBar.tsx"), "utf8");
         const cache = readFileSync(join(process.cwd(), "lib", "communications", "v2", "commandCenterPrefetchCache.ts"), "utf8");
-        expect(shell).toMatch(/scheduleCommunicationsWorkspaceWarm/);
+        expect(preload).toMatch(/scheduleCommunicationsWorkspaceWarm/);
         expect(nav).toMatch(/warmCommunicationsWorkspaceModal/);
         expect(shellSrc).toMatch(/commandCenterPrefetchCache/);
         expect(cache).toMatch(/warmFirstConversationWorkspace/);
@@ -109,5 +114,51 @@ describe("command center live wiring", () => {
     it("does not send or embed a BOS panel", () => {
         expect(src).not.toMatch(/executeCommunicationsSend|enqueueCanonicalOutboundMessage|\/communications\/send/);
         expect(src).not.toMatch(/aiCommandSurface\/[A-Za-z]*Panel/);
+    });
+    it("delegates send/thread/draft lifecycle to the shared runtime (no Command Center fork)", () => {
+        // The shell must not own the send lifecycle — only the runtime hook calls family-send.
+        expect(shellSrc).not.toMatch(/communications\/family-send/);
+        expect(shellSrc).not.toMatch(/orchestrateFamilySend/);
+        expect(shellSrc).toMatch(/useFamilyCommunicationRuntime/);
+        expect(shellSrc).toMatch(/runtime\.send/);
+        expect(runtimeSrc).toMatch(/communications\/family-send/);
+        // Shell must not maintain its own thread/draft/recipient lifecycle state.
+        expect(shellSrc).not.toMatch(/useState[^;]*bodyDraft/);
+        expect(shellSrc).not.toMatch(/useState[^;]*selectedThreadId/);
+    });
+    it("resolves workspace from customer_id or primary entity and never renders a blank selected state", () => {
+        expect(shellSrc).toMatch(/selectedEntity/);
+        expect(shellSrc).toMatch(/selectedLoadable/);
+        expect(shellSrc).toMatch(/isQueueRowLoadable/);
+        expect(shellSrc).toMatch(/resolveQueueWorkspaceError/);
+        expect(shellSrc).toMatch(/flattenLoadableConversationIds/);
+        expect(shellSrc).toMatch(/conversationDisplayTopic/);
+        expect(shellSrc).toMatch(/workspaceLoading/);
+        expect(shellSrc).toMatch(/workspaceError/);
+        expect(shellSrc).not.toMatch(/This conversation could not be loaded/);
+        expect(shellSrc).not.toMatch(/\)\s*:\s*null\}\s*<\/section>/);
+    });
+    it("applies canonical queue scope resolution and review partitioning in enrichment and API", () => {
+        const enrichment = readFileSync(
+            join(process.cwd(), "lib", "communications", "v2", "commandCenterConversationEnrichment.ts"),
+            "utf8"
+        );
+        const route = readFileSync(join(process.cwd(), "app", "api", "admin", "communications", "conversations", "route.ts"), "utf8");
+        expect(enrichment).toMatch(/resolveCommunicationQueueScope/);
+        expect(enrichment).not.toMatch(/"Family"/);
+        expect(route).toMatch(/prepareCommandCenterQueue/);
+    });
+    it("compose new uses canonical runtime composer instead of legacy quick message modal", () => {
+        const inbox = readFileSync(join(process.cwd(), "app", "adminV2", "components", "InboxModal.tsx"), "utf8");
+        const compose = readFileSync(
+            join(process.cwd(), "app", "adminV2", "communications", "ComposeNewCommunicationModal.tsx"),
+            "utf8"
+        );
+        expect(inbox).toContain("ComposeNewCommunicationModal");
+        expect(inbox).not.toContain("QuickMessageModal");
+        expect(compose).toContain("useFamilyCommunicationRuntime");
+        expect(compose).toContain("FamilyCommunicationWorkspaceView");
+        expect(compose).toContain("startNewMessage");
+        expect(compose).not.toContain("/api/admin/communications/send");
     });
 });

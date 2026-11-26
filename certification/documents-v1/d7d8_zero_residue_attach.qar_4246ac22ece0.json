@@ -1,0 +1,98 @@
+{
+ "schema": "alloy.documents_d7d8.zero_residue_attach.v1",
+ "qa_run_id": "qar_4246ac22ece0",
+ "plan": "authz_q1",
+ "target": "alloy_staging_web (hosted)",
+ "registered_census": {
+  "path": "certification/qa-shared/documents-zero-residue-census.sql",
+  "query_sha256": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+  "checks": 15
+ },
+ "census_request": {
+  "request_id": "gar_7082b096e66018",
+  "trusted_host_action_id": "tha_a447315b998fd3",
+  "database_target": "alloy_deployed_primary",
+  "executed_at": "2026-10-28T17:53:00.666Z",
+  "census_run_at": "2026-10-28T17:53:06.934Z",
+  "answers": "15/15 ~ zero ~ true",
+  "retained_by_design": {
+   "mutation_events_qa_shared_rows": 461,
+   "workflow_events_qa_org_rows": 811
+  },
+  "result_file": "certification/qa-shared/documents-zero-residue-census.sql.results.json"
+ },
+ "attach_request": {
+  "request_id": "gar_6c1775d6d4cfc4",
+  "action_key": "environment.qa_run_close",
+  "run_id": "erun2_f8a2b592cdde4d88",
+  "inputs": {
+   "qaRunId": "qar_4246ac22ece0",
+   "residueCensusRequestId": "gar_7082b096e66018"
+  },
+  "status": "complete",
+  "trusted_host_action_id": "tha_2452724b98f3b2",
+  "execution_ended_at": "2026-10-28T17:53:57.646Z",
+  "result_status": "already_closed",
+  "approval": "operator-approved 17:53:57.287Z"
+ },
+ "close": {
+  "request_id": "gar_5cd0eeeeed8b24",
+  "closed_at": "2026-10-28T17:51:33.927Z",
+  "verdict": "ZERO_RESIDUE",
+  "access_clean": true,
+  "sessions_removed": true
+ },
+ "residue_census_now": {
+  "ok": true,
+  "request_id": "gar_7082b096e66018",
+  "executed_at": "2026-10-28T17:53:00.666Z",
+  "checks": [
+   "doc_zr_vendors",
+   "doc_zr_qa_role_grants",
+   "doc_zr_pool_access",
+   "doc_zr_zero_sent",
+   "doc_zr_subjects",
+   "doc_zr_shared_documents",
+   "doc_zr_shared_objects",
+   "doc_zr_shared_dangling_case_sources",
+   "doc_zr_secondary_documents",
+   "doc_zr_secondary_objects",
+   "doc_zr_secondary_cases",
+   "doc_zr_qa_sessions",
+   "doc_zr_d6_requirements",
+   "doc_zr_d6_requirement_versions",
+   "doc_zr_d6_waivers"
+  ],
+  "supplemental": true,
+  "prior_residue_census": null,
+  "attached_at": "2026-10-28T17:53:57.646Z"
+ },
+ "census_after_close": true,
+ "history": [
+  {
+   "at": "2026-10-28T16:29:17.503Z",
+   "event": "opening"
+  },
+  {
+   "at": "2026-10-28T16:29:17.503Z",
+   "event": "open"
+  },
+  {
+   "at": "2026-10-28T17:51:33.927Z",
+   "event": "closing",
+   "detail": "live"
+  },
+  {
+   "at": "2026-10-28T17:51:33.927Z",
+   "event": "closed",
+   "detail": "ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED"
+  },
+  {
+   "at": "2026-10-28T17:53:57.646Z",
+   "event": "census_attached",
+   "detail": "gar_7082b096e66018"
+  }
+ ],
+ "note": "erun2_f8a2b592cdde4d88 is not in the canonical run store; nothing is filed against it.",
+ "recorded_at": "2026-10-28"
+}

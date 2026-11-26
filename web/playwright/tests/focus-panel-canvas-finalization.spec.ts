@@ -24,7 +24,7 @@ const WORK_UNIT_SLUGS = (process.env.CANVAS_SLUGS || "lifecycle-lead,new-leads,l
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-const OUT = path.join(__dirname, "../../../docs/sprints/06_2026/focus-panel-canvas-finalization");
+const OUT = path.join(__dirname, "../../../docs/sprints/archive/06_2026/focus-panel-canvas-finalization");
 const ROW_SELECTOR = "[data-alloy-os-compressed-row='true']";
 
 /** True when card `key` is the one raised in the depth layer (centered Focus Card). */

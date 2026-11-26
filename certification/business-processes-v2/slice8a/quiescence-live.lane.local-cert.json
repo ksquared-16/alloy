@@ -1,0 +1,260 @@
+{
+  "run": "eae6e0cc67ac",
+  "at": "2026-10-22T14:57:14.663Z",
+  "positive": {
+    "org": "0d4086a6-d9b7-4188-bf1c-c01994a1cdce",
+    "actor": "qa-bpq-actor-eae6e0cc67ac@example.com",
+    "actor_fin_grants": [
+      "fin.adjust",
+      "fin.provider",
+      "fin.read",
+      "fin.responsibility",
+      "fin.subsidy",
+      "fin.write"
+    ]
+  },
+  "positive_live": {
+    "census_failing": [
+      "bp_qr_fin_no_draft",
+      "bp_qr_fin_no_open_balance",
+      "bp_qr_fin_no_open_variance"
+    ],
+    "views": {
+      "charges_needing_review": 1,
+      "payment_exceptions": 0,
+      "funding_variances": 1,
+      "payments_due": 1,
+      "overdue_payments": 1
+    }
+  },
+  "positive_commands": [
+    {
+      "key": "charge.cancel_draft",
+      "target": "6244dcbc-2037-4adf-9c3f-c375708af63b",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"5805a714-d259-49f4-9f06-cc26"
+    },
+    {
+      "key": "charge.cancel_draft",
+      "target": "453ede4c-73d0-4022-9b20-6cfbe9d1bdb6",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"48e02180-315a-4e3a-b3bd-db18"
+    },
+    {
+      "key": "payment.record",
+      "target": "885dd967-7237-4b39-8902-9c0da72b8320",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"payment.record\",\"executionOwner\":\"registered_action\",\"invocationId\":\"45eaf5dc-cf79-44d1-bede-26515ae57"
+    },
+    {
+      "key": "subsidy.resolve_variance",
+      "target": "a7cdd3cb-414e-4609-ab6b-82ba0354da7f",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"subsidy.resolve_variance\",\"executionOwner\":\"registered_action\",\"invocationId\":\"085018ac-4648-4de3-8d74"
+    },
+    {
+      "key": "charge.reverse",
+      "target": "af3d40fd-00d2-46a8-bff8-e0bd715adc2f",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"fef892a0-5828-4bdc-948d-716a88e17"
+    },
+    {
+      "key": "charge.reverse",
+      "target": "15d608e6-f1d6-4d89-a024-9f10f249578f",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"ebc7628e-af27-4239-85c9-7af021484"
+    },
+    {
+      "key": "charge.reverse",
+      "target": "b8d96c96-be78-48ed-916e-cdb62ac6d93b",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"5345236e-dd8f-4a0b-ad03-342b54283"
+    }
+  ],
+  "positive_quiesced": {
+    "census": {
+      "bp_qr_00": {
+        "qa_shared": "0d4086a6-d9b7-4188-bf1c-c01994a1cdce",
+        "cleanup": "quiesced_retained",
+        "census_version": 2,
+        "retained_by_design": [
+          "posted financial records (immutable), neutralized and attributed by run",
+          "published process configuration",
+          "access audit history (mutation_events)"
+        ]
+      },
+      "bp_qr_pool_access": true,
+      "bp_qr_zero_sent": true,
+      "bp_qr_org_present": {
+        "qa_shared_present": true
+      },
+      "bp_qr_org_exists": true,
+      "bp_qr_fin_no_merchant": true,
+      "bp_qr_fin_no_usable_method": true,
+      "bp_qr_fin_no_autopay": true,
+      "bp_qr_fin_no_provider_activity": true,
+      "bp_qr_fin_no_active_schedule": true,
+      "bp_qr_fin_no_draft": true,
+      "bp_qr_fin_no_open_balance": true,
+      "bp_qr_fin_no_open_variance": true,
+      "bp_qr_fin_no_unapplied_money": true,
+      "bp_qr_fin_attributed": true,
+      "bp_qr_retained_financial": {
+        "artifact": "posted financial records (immutable)",
+        "status": "retained_by_design",
+        "not_residue": true,
+        "qa_shared_charge_rows": 9,
+        "by_status": {
+          "posted": 7,
+          "void": 2
+        },
+        "reversal_rows": 3,
+        "payment_rows": 1,
+        "variance_rows": 1
+      },
+      "bp_qr_retained_financial_actors": [
+        {
+          "email": "qa-bpq-actor-eae6e0cc67ac@example.com",
+          "day": "2026-10-22",
+          "rows": 11
+        }
+      ],
+      "bp_qr_retained_process_config": {
+        "artifact": "published process configuration",
+        "status": "retained_by_design",
+        "not_residue": true,
+        "qa_shared_configuration_publication_rows": 0
+      },
+      "bp_qr_retained_audit": {
+        "artifact": "access audit history (mutation_events)",
+        "status": "retained_by_design",
+        "not_residue": true,
+        "qa_shared_mutation_event_rows": 0
+      }
+    },
+    "views": {
+      "charges_needing_review": 0,
+      "payment_exceptions": 0,
+      "funding_variances": 0,
+      "payments_due": 0,
+      "overdue_payments": 0
+    }
+  },
+  "positive_history": {
+    "rows_before": 7,
+    "rows_after": 12,
+    "removed": 0,
+    "reversal_rows": 3
+  },
+  "negative": {
+    "org": "ed196278-f476-41d6-a1c9-b4bfc7824aad",
+    "steps": [
+      {
+        "defect": "a pool persona still holds a role",
+        "newly_failing": [
+          "bp_qr_pool_access"
+        ]
+      },
+      {
+        "defect": "a provider merchant is bound",
+        "newly_failing": [
+          "bp_qr_fin_no_merchant"
+        ]
+      },
+      {
+        "defect": "a usable stored payment method",
+        "newly_failing": [
+          "bp_qr_fin_no_usable_method"
+        ]
+      },
+      {
+        "defect": "an active autopay authorization",
+        "newly_failing": [
+          "bp_qr_fin_no_autopay"
+        ]
+      },
+      {
+        "defect": "a provider collection attempt",
+        "newly_failing": [
+          "bp_qr_fin_no_provider_activity"
+        ]
+      },
+      {
+        "defect": "periodic billing activated (no command deactivates it)",
+        "newly_failing": [
+          "bp_qr_fin_no_active_schedule"
+        ]
+      },
+      {
+        "defect": "a draft left awaiting a decision",
+        "newly_failing": [
+          "bp_qr_fin_no_draft"
+        ]
+      },
+      {
+        "defect": "a posted charge still owed (due later, not yet in a view)",
+        "newly_failing": [
+          "bp_qr_fin_no_open_balance"
+        ]
+      },
+      {
+        "defect": "an inbound payment left unapplied (its application reversed)",
+        "newly_failing": [
+          "bp_qr_fin_no_unapplied_money"
+        ]
+      },
+      {
+        "defect": "an unresolved subsidy variance",
+        "newly_failing": [
+          "bp_qr_fin_no_open_variance"
+        ]
+      },
+      {
+        "defect": "a financial row written by no identity (a job, a webhook, a public link)",
+        "newly_failing": [
+          "bp_qr_fin_attributed"
+        ]
+      }
+    ]
+  },
+  "negative_v2_corrections": [
+    {
+      "defect": "controls: queued outbound, received inbound",
+      "org": "8b1ce074-f11c-4bbe-8adc-6dc14ccff529",
+      "failing": []
+    },
+    {
+      "defect": "sent, then transitioned to delivered",
+      "org": "918d6f6b-54c6-4b63-9d3c-b3b735c3c959",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "sent, then bounced",
+      "org": "4495eb46-a1da-473c-b3fe-8889beb4ac00",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "sent_at recorded, status later failed",
+      "org": "6f7cde39-3755-4b1e-a097-9aa9c30624ee",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "accepted by the provider, no sent_at yet",
+      "org": "40426d74-1c73-473b-95c6-59c5a09e092e",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "role removed, access profile left behind",
+      "org": "d951e8fe-4aec-4328-b73c-c639fc5be808",
+      "failing": [
+        "bp_qr_pool_access"
+      ]
+    },
+    {
+      "defect": "the frozen actor's own role and profile (control)",
+      "org": "ee74ba79-d71b-472d-b6d2-6cc56b1069d9",
+      "failing": []
+    }
+  ]
+}

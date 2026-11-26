@@ -4,6 +4,7 @@ import { useLayoutRuntimeCompositionHints } from "@/lib/layout/runtime/layoutRun
 import { summarizeLeadDrawerChildrenStrip } from "@/lib/layout/runtime/leadOverviewComposition";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 
 const CHILDREN_REPEATER_ITEM = {
     id: "children",
@@ -82,8 +83,13 @@ export default function LayoutRuntimeChildrenListWidget({
             <ul className={`flex flex-col ${compact ? "gap-1" : "gap-1.5"}`}>
                 {visibleRows.map((row, index) => {
                     const name = displayValue(row["child.name"]) ?? "—";
-                    const meta = [row["child.program"], row["child.status"]]
-                        .map((v) => displayValue(v))
+                    const meta = [
+                        displayValue(row["child.program"]),
+                        formatLayoutRuntimeStatusLabel(row["child.status"], {
+                            refKey: "child.status",
+                            renderHint: "status",
+                        }),
+                    ]
                         .filter(Boolean)
                         .join(" · ");
                     return (

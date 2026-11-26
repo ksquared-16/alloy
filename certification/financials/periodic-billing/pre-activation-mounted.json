@@ -1,0 +1,23 @@
+{
+  "build": {
+    "gitSha": "c361680a9c7d35bd03c9a42fedd085cbe8cd8339",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1181 from ksquared-16/agent/financials-11c-slice3\n\nfeat(financials): automatic Periodic Billing, bounded at two canonical periods",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-g30w3qwai-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_2oUCtFx7iFYhuYEcwxB3sbErhTpj",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "status": {
+    "status": 200,
+    "body": {
+      "automatic_billing_active": false,
+      "schedule_exists": false,
+      "next_evaluation_at": null,
+      "automatic_catch_up_period_limit": 2
+    }
+  },
+  "flag": "false",
+  "claim": "Recurring tuition is NOT billed automatically for this organization — an operator runs Generate Tuition for each period."
+}

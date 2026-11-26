@@ -1,0 +1,4029 @@
+{
+  "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+  "workspace_processes": {
+    "config": {
+      "version": 1,
+      "primarySignalByProcess": {
+        "enrollment": "enrollment.active_families"
+      },
+      "cardByProcess": {
+        "enrollment": {
+          "title": "Enrollment",
+          "subtitle": "Pipeline",
+          "accent": "pine",
+          "icon": "calendar",
+          "supportingSignalKey": "enrollment.active_leads",
+          "ctaLabel": "Open",
+          "primarySignalLabel": "Family Leads",
+          "supportingSignalLabel": "Children",
+          "metricPresentation": "inline"
+        }
+      },
+      "workViewIconById": {
+        "new_leads": "users",
+        "new_work_view_2": "bolt",
+        "new_work_view_3": "clipboard",
+        "new_work_view_4": "route",
+        "new_work_view_5": "calendar"
+      },
+      "summaryCatalogIds": [
+        "3933ac47-077a-4de8-aaac-8aed48d80413:42be9074-443f-4047-bece-d68cd1d22788"
+      ],
+      "todaysWork": {
+        "visible": true,
+        "maxRows": 0,
+        "sort": "attention",
+        "showCounts": true
+      }
+    },
+    "source": "published"
+  },
+  "lifecycle_catalog": {
+    "items": [
+      {
+        "id": "3933ac47-077a-4de8-aaac-8aed48d80413:42be9074-443f-4047-bece-d68cd1d22788",
+        "config_source": "departments.metadata.lifecycle_builder_v1",
+        "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+        "department_key": "lead_management",
+        "department_name": "Enrollment",
+        "process_id": "42be9074-443f-4047-bece-d68cd1d22788",
+        "process_key": "enrollment",
+        "lifecycle_name": "Enrollment",
+        "source": "builder_owned",
+        "stage_count": 6,
+        "track_count": 0,
+        "work_unit_count": 7,
+        "activation_owned": true,
+        "can_delete": true,
+        "can_repair": false,
+        "workspace": {
+          "backing_department_exists": true,
+          "department_is_active": true,
+          "visible_in_workspace_api": true,
+          "user_has_access": true,
+          "name_matches_tile": true,
+          "runtime_status": "visible",
+          "tile_name": "Enrollment"
+        }
+      }
+    ]
+  },
+  "forms": {
+    "data": [
+      {
+        "id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "key": "firefly_new_lead_inquiry_polish_walk",
+        "name": "Firefly New Lead Inquiry (polish walk)",
+        "description": null,
+        "kind": "center",
+        "is_active": true,
+        "metadata": {
+          "origin": "blank",
+          "source": "processing",
+          "logo_url": null,
+          "brand_name": null,
+          "field_count": 1,
+          "accent_color": "#00A283",
+          "intake_intent": "enrollment_lead",
+          "section_count": 1,
+          "intake_outcome": {
+            "auto_create_opportunity": true,
+            "default_opportunity_status_key": "new_inquiry"
+          },
+          "intake_purpose": "enrollment_lead",
+          "lifecycle_usage_v1": {
+            "version": 1,
+            "stage_key": "lead",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "intake_intent": "enrollment_lead"
+          }
+        },
+        "created_at": "2026-07-22T17:36:49.719603+00:00",
+        "updated_at": "2026-07-22T18:02:32.032262+00:00",
+        "has_published_version": true
+      },
+      {
+        "id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "key": "form",
+        "name": "Missouri State Medical Form",
+        "description": null,
+        "kind": "center",
+        "is_active": true,
+        "metadata": {
+          "source": "processing",
+          "logo_url": null,
+          "brand_name": null,
+          "field_count": 7,
+          "accent_color": "#00A283",
+          "source_case_id": "43e3fb07-bd86-4bdd-a20d-e3d46cb53471",
+          "source_document_id": "fe2d781f-f409-4753-9d43-b70f6a89753f",
+          "source_document_title": "Form",
+          "processing_public_slug": "form",
+          "processing_intake_enabled": true,
+          "processing_public_form_id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "processing_public_form_key": "form"
+        },
+        "created_at": "2026-07-10T20:24:12.223451+00:00",
+        "updated_at": "2026-07-10T20:24:42.26836+00:00",
+        "has_published_version": true
+      },
+      {
+        "id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "key": "lead_enrollment_inquiry_realization_walk",
+        "name": "Lead Enrollment Inquiry (realization walk)",
+        "description": null,
+        "kind": "center",
+        "is_active": true,
+        "metadata": {},
+        "created_at": "2026-07-21T20:32:35.859646+00:00",
+        "updated_at": null,
+        "has_published_version": false
+      },
+      {
+        "id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "key": "lead_form",
+        "name": "Lead Form",
+        "description": "Marketing site lead form",
+        "kind": "center",
+        "is_active": true,
+        "metadata": {
+          "origin": "blank",
+          "source": "processing",
+          "logo_url": null,
+          "brand_name": null,
+          "field_count": 0,
+          "accent_color": "#00A283",
+          "section_count": 1
+        },
+        "created_at": "2026-07-22T15:08:01.111405+00:00",
+        "updated_at": null,
+        "has_published_version": false
+      },
+      {
+        "id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "key": "new_lead_gen",
+        "name": "New Lead Gen",
+        "description": "Marketing site new lead generation form.",
+        "kind": "center",
+        "is_active": true,
+        "metadata": {
+          "origin": "blank",
+          "source": "processing",
+          "intake_intent": "enrollment_lead",
+          "intake_outcome": {
+            "auto_create_opportunity": true,
+            "default_opportunity_status_key": "new_inquiry"
+          },
+          "intake_purpose": "enrollment_lead"
+        },
+        "created_at": "2026-07-10T19:38:18.995456+00:00",
+        "updated_at": "2026-07-22T18:41:20.935+00:00",
+        "has_published_version": true
+      }
+    ]
+  },
+  "action_placements": null,
+  "stage_bootstraps": {
+    "lead": {
+      "_status": 200,
+      "operator_stage": "lead",
+      "stage_operating_plan": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "lead",
+        "journey_segment": "family",
+        "work_templates": [
+          {
+            "template_key": "contact_family",
+            "label": "Contact Family",
+            "required": true,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 1
+            },
+            "owner_strategy": "record_owner",
+            "description": "Reach the family, understand their needs, and determine the next step.",
+            "work_definition_key": "contact_family",
+            "primary": true,
+            "completion_policy": {
+              "min_attempts": 3,
+              "max_attempts": 3,
+              "window_days": 7,
+              "repeat_until_outcome": true,
+              "repeat_due_days": 2
+            },
+            "primary_action": {
+              "action_ref": "quick_message"
+            },
+            "helpful_actions": [
+              {
+                "action_ref": "schedule_tour"
+              },
+              {
+                "action_ref": "send_form"
+              },
+              {
+                "action_ref": "add_child"
+              },
+              {
+                "action_ref": "add_family_member"
+              },
+              {
+                "action_ref": "create_task"
+              }
+            ],
+            "alternate_paths": [
+              {
+                "transition_ref": "move_to_stage:waitlist"
+              },
+              {
+                "transition_ref": "move_to_stage:tour"
+              },
+              {
+                "action_ref": "close_lead"
+              }
+            ],
+            "outcome_refs": [
+              {
+                "outcome_ref": "reached_qualified"
+              },
+              {
+                "outcome_ref": "left_message"
+              },
+              {
+                "outcome_ref": "awaiting_response"
+              },
+              {
+                "outcome_ref": "unable_to_reach"
+              },
+              {
+                "outcome_ref": "contact_closed_lost"
+              }
+            ]
+          }
+        ],
+        "outcomes": [
+          {
+            "outcome_key": "reached_qualified",
+            "label": "Reached / Qualified",
+            "work_template_key": "contact_family",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "left_message",
+            "label": "Left Message",
+            "work_template_key": "contact_family"
+          },
+          {
+            "outcome_key": "awaiting_response",
+            "label": "Awaiting Response",
+            "work_template_key": "contact_family"
+          },
+          {
+            "outcome_key": "unable_to_reach",
+            "label": "Unable To Reach",
+            "work_template_key": "contact_family"
+          },
+          {
+            "outcome_key": "contact_closed_lost",
+            "label": "Closed Lost",
+            "work_template_key": "contact_family"
+          }
+        ],
+        "outcome_rules": [
+          {
+            "rule_key": "reached_move",
+            "when_outcome_key": "reached_qualified",
+            "targets": [
+              {
+                "kind": "update_family_case_status",
+                "status_key": "open"
+              },
+              {
+                "kind": "move_to_stage",
+                "stage_key": "qualification"
+              },
+              {
+                "kind": "mark_stage_work_complete"
+              }
+            ]
+          },
+          {
+            "rule_key": "left_message_repeat",
+            "when_outcome_key": "left_message",
+            "targets": [
+              {
+                "kind": "reopen_work",
+                "template_key": "contact_family",
+                "due_days": 2
+              }
+            ]
+          },
+          {
+            "rule_key": "awaiting_attention",
+            "when_outcome_key": "awaiting_response",
+            "targets": [
+              {
+                "kind": "no_movement"
+              },
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Awaiting family response",
+                "wait_bucket": "waiting_on_family"
+              }
+            ]
+          },
+          {
+            "rule_key": "unable_repeat",
+            "when_outcome_key": "unable_to_reach",
+            "targets": [
+              {
+                "kind": "reopen_work",
+                "template_key": "contact_family",
+                "due_days": 2
+              }
+            ],
+            "when_attempt_count_lt": 3
+          },
+          {
+            "rule_key": "unable_attention",
+            "when_outcome_key": "unable_to_reach",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Unable to reach after 3 attempts",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ],
+            "when_attempt_count_gte": 3
+          },
+          {
+            "rule_key": "contact_closed_lost",
+            "when_outcome_key": "contact_closed_lost",
+            "targets": [
+              {
+                "kind": "update_family_case_status",
+                "status_key": "closed"
+              },
+              {
+                "kind": "mark_stage_work_complete"
+              }
+            ]
+          }
+        ],
+        "attention_rules": [
+          {
+            "rule_key": "review_lead_overdue",
+            "kind": "work_overdue",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Review Lead overdue after 1 day",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ],
+            "label": "Review Lead overdue",
+            "severity": "medium",
+            "threshold": 1,
+            "threshold_duration": {
+              "offset_value": 1,
+              "offset_unit": "days"
+            },
+            "template_key": "review_lead"
+          },
+          {
+            "rule_key": "first_contact_overdue",
+            "kind": "work_overdue",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "First contact overdue after 1 day",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ],
+            "label": "First contact overdue",
+            "severity": "medium",
+            "threshold": 1,
+            "threshold_duration": {
+              "offset_value": 1,
+              "offset_unit": "days"
+            },
+            "template_key": "contact_family"
+          },
+          {
+            "rule_key": "contact_attempts_window",
+            "kind": "no_contact_attempt",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Fewer than 3 contact attempts after 7 days",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ],
+            "label": "Contact Family fewer than 3 attempts after 7 days",
+            "severity": "high",
+            "threshold": 3,
+            "template_key": "contact_family"
+          },
+          {
+            "rule_key": "stage_age_7d",
+            "kind": "stage_age_exceeded",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Lead stage aging beyond 7 days",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ],
+            "label": "Stage age > 7 days",
+            "severity": "medium",
+            "threshold": 7,
+            "threshold_duration": {
+              "offset_value": 7,
+              "offset_unit": "days"
+            }
+          },
+          {
+            "rule_key": "missing_required_fields",
+            "kind": "missing_required_fields",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Missing required Lead stage fields",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ],
+            "label": "Missing required fields",
+            "severity": "medium"
+          }
+        ],
+        "purpose": "Review inbound lead and reach the family."
+      },
+      "actions": [
+        {
+          "action_definition_id": "57ab3caa-8d18-4fd3-80f9-53c533732101",
+          "key": "create_lead",
+          "label": "Create Lead",
+          "base_action_label": "Create Lead",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d481229c-ee1c-432e-ab96-d3e5343c5b23",
+              "surface_label": "Workspace",
+              "placement_label": "Workspace",
+              "is_active": true
+            },
+            {
+              "placement_id": "71bed0e9-e7f9-4a96-8c55-f0e736f72801",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 0
+        },
+        {
+          "action_definition_id": "63a14c85-d616-4447-a811-c1c7752fb1a8",
+          "key": "quick_message",
+          "label": "Message",
+          "base_action_label": "Message",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "4ca24ac8-6c73-4c75-bba9-90100700d949",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 1
+        },
+        {
+          "action_definition_id": "aa713d60-997f-4c5e-847b-0549afd56074",
+          "key": "update_status_add_note",
+          "label": "Update Status",
+          "base_action_label": null,
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "33cd2289-f5c1-461c-9540-1c3bde88b181",
+              "surface_label": "Work Unit Queue Row",
+              "placement_label": "Work Unit Queue Row",
+              "is_active": true
+            },
+            {
+              "placement_id": "e98b2ef6-243d-45a8-9959-cccc3ba42322",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 2
+        },
+        {
+          "action_definition_id": "168eea86-852a-4b65-b245-e126d55f6322",
+          "key": "add_family_member",
+          "label": "Add Parent",
+          "base_action_label": "Add Parent",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "f1af1c21-f6d0-4fc6-8b03-8a7bf26d48f5",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 3
+        },
+        {
+          "action_definition_id": "34194856-217f-4f65-8b4d-ca07ccc00148",
+          "key": "add_child",
+          "label": "Add Child",
+          "base_action_label": "Add Child",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "1344e77b-b30b-4d92-bccf-cfa7f6f99542",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 4
+        },
+        {
+          "action_definition_id": "8da4a59f-7d4c-4624-aadd-f6224e5f42e3",
+          "key": "schedule_tour",
+          "label": "Schedule Tour",
+          "base_action_label": "Schedule Tour",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d17ae98e-d243-47eb-acd2-08a0a01589a4",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            },
+            {
+              "placement_id": "cd042cbf-3eac-4e8f-85cd-824a57f8d50a",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 6
+        },
+        {
+          "action_definition_id": "1327803a-2f9d-4e85-a45b-b651d1171815",
+          "key": "create_task",
+          "label": "Create Task",
+          "base_action_label": "Create Task",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "18956093-7496-4d7c-adfa-d48c7941dc13",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 7
+        }
+      ],
+      "forms": [
+        {
+          "form_id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "form_name": "Firefly New Lead Inquiry (polish walk)",
+          "href": "/adminV2/forms/dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "intake_type_label": "General form",
+          "captures": [
+            "Child first name"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Person",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Schools",
+              "kind": "required",
+              "state": "unknown"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Email",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Phone",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Date of Birth",
+              "kind": "recommended",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Location Id",
+              "kind": "recommended",
+              "state": "unknown"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": true
+        },
+        {
+          "form_id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "form_name": "Lead Enrollment Inquiry (realization walk)",
+          "href": "/adminV2/forms/54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Person",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Schools",
+              "kind": "required",
+              "state": "unknown"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Email",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Phone",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Date of Birth",
+              "kind": "recommended",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Location Id",
+              "kind": "recommended",
+              "state": "unknown"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "form_name": "Lead Form",
+          "href": "/adminV2/forms/844b6d7e-d243-4278-b29a-21d6254991cf",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Person",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Schools",
+              "kind": "required",
+              "state": "unknown"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Email",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Phone",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Date of Birth",
+              "kind": "recommended",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Location Id",
+              "kind": "recommended",
+              "state": "unknown"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "form_name": "Missouri State Medical Form",
+          "href": "/adminV2/forms/d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "intake_type_label": "General form",
+          "captures": [
+            "Childs Name",
+            "Birthdate",
+            "My Child Is In Good Health Is Able To Participate In Group Care Has No Special Health Or Medical Requirements",
+            "My Child Is Able To Participate In Group Care But Has Special Health Or Medical Requirements As Listed Below",
+            "Please List Any Allergies Special Medical Conditions Including Chronic Health Problems Such As Asthma Seizures Behavioral Disorders Special Needs Etc",
+            "Date",
+            "Signature1"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Person",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Schools",
+              "kind": "required",
+              "state": "unknown"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Email",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Person",
+              "field_label": "Phone",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Date of Birth",
+              "kind": "recommended",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Location Id",
+              "kind": "recommended",
+              "state": "unknown"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": true
+        }
+      ],
+      "linkable_forms": [
+        {
+          "id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "name": "Firefly New Lead Inquiry (polish walk)"
+        },
+        {
+          "id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "name": "Missouri State Medical Form"
+        },
+        {
+          "id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "name": "Lead Enrollment Inquiry (realization walk)"
+        },
+        {
+          "id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "name": "Lead Form"
+        },
+        {
+          "id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "name": "New Lead Gen"
+        }
+      ],
+      "statuses": {
+        "entity_type": "opportunities",
+        "stages": {
+          "lead": {
+            "statuses": [
+              {
+                "status_key": "open",
+                "status_label": "Open",
+                "sort_order": 10,
+                "assignment_source": "canonical",
+                "has_metadata_override": false
+              }
+            ],
+            "has_custom_assignments": false
+          },
+          "tour": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "decision": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "waitlist": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolling": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolled": {
+            "statuses": [],
+            "has_custom_assignments": false
+          }
+        },
+        "unassigned": [
+          {
+            "status_key": "closed",
+            "status_label": "Closed",
+            "sort_order": 20,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "inactive",
+            "status_label": "Inactive",
+            "sort_order": 30,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "archived",
+            "status_label": "Archived",
+            "sort_order": 40,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          }
+        ],
+        "stage_keys": [
+          "lead",
+          "tour",
+          "decision",
+          "waitlist",
+          "enrolling",
+          "enrolled"
+        ]
+      },
+      "queue_membership": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "lead",
+        "subject_type": "case",
+        "count_unit": "cases",
+        "included_disposition_keys": [],
+        "included_status_keys": [
+          "open"
+        ],
+        "location_scope_source": null
+      }
+    },
+    "qualification": {
+      "_status": 200,
+      "operator_stage": "qualification",
+      "stage_operating_plan": null,
+      "actions": [
+        {
+          "action_definition_id": "57ab3caa-8d18-4fd3-80f9-53c533732101",
+          "key": "create_lead",
+          "label": "Create Lead",
+          "base_action_label": "Create Lead",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d481229c-ee1c-432e-ab96-d3e5343c5b23",
+              "surface_label": "Workspace",
+              "placement_label": "Workspace",
+              "is_active": true
+            },
+            {
+              "placement_id": "71bed0e9-e7f9-4a96-8c55-f0e736f72801",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 0
+        },
+        {
+          "action_definition_id": "63a14c85-d616-4447-a811-c1c7752fb1a8",
+          "key": "quick_message",
+          "label": "Message",
+          "base_action_label": "Message",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "4ca24ac8-6c73-4c75-bba9-90100700d949",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 1
+        },
+        {
+          "action_definition_id": "aa713d60-997f-4c5e-847b-0549afd56074",
+          "key": "update_status_add_note",
+          "label": "Update Status",
+          "base_action_label": null,
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "33cd2289-f5c1-461c-9540-1c3bde88b181",
+              "surface_label": "Work Unit Queue Row",
+              "placement_label": "Work Unit Queue Row",
+              "is_active": true
+            },
+            {
+              "placement_id": "e98b2ef6-243d-45a8-9959-cccc3ba42322",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 2
+        },
+        {
+          "action_definition_id": "168eea86-852a-4b65-b245-e126d55f6322",
+          "key": "add_family_member",
+          "label": "Add Parent",
+          "base_action_label": "Add Parent",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "f1af1c21-f6d0-4fc6-8b03-8a7bf26d48f5",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 3
+        },
+        {
+          "action_definition_id": "34194856-217f-4f65-8b4d-ca07ccc00148",
+          "key": "add_child",
+          "label": "Add Child",
+          "base_action_label": "Add Child",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "1344e77b-b30b-4d92-bccf-cfa7f6f99542",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 4
+        },
+        {
+          "action_definition_id": "8da4a59f-7d4c-4624-aadd-f6224e5f42e3",
+          "key": "schedule_tour",
+          "label": "Schedule Tour",
+          "base_action_label": "Schedule Tour",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d17ae98e-d243-47eb-acd2-08a0a01589a4",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            },
+            {
+              "placement_id": "cd042cbf-3eac-4e8f-85cd-824a57f8d50a",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 6
+        },
+        {
+          "action_definition_id": "1327803a-2f9d-4e85-a45b-b651d1171815",
+          "key": "create_task",
+          "label": "Create Task",
+          "base_action_label": "Create Task",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "18956093-7496-4d7c-adfa-d48c7941dc13",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 7
+        }
+      ],
+      "forms": [
+        {
+          "form_id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "form_name": "Firefly New Lead Inquiry (polish walk)",
+          "href": "/adminV2/forms/dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "intake_type_label": "General form",
+          "captures": [
+            "Child first name"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Start Date",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "recommended",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "recommended",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        },
+        {
+          "form_id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "form_name": "Lead Enrollment Inquiry (realization walk)",
+          "href": "/adminV2/forms/54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Start Date",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "recommended",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "recommended",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "form_name": "Lead Form",
+          "href": "/adminV2/forms/844b6d7e-d243-4278-b29a-21d6254991cf",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Start Date",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "recommended",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "recommended",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "form_name": "Missouri State Medical Form",
+          "href": "/adminV2/forms/d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "intake_type_label": "General form",
+          "captures": [
+            "Childs Name",
+            "Birthdate",
+            "My Child Is In Good Health Is Able To Participate In Group Care Has No Special Health Or Medical Requirements",
+            "My Child Is Able To Participate In Group Care But Has Special Health Or Medical Requirements As Listed Below",
+            "Please List Any Allergies Special Medical Conditions Including Chronic Health Problems Such As Asthma Seizures Behavioral Disorders Special Needs Etc",
+            "Date",
+            "Signature1"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Desired Start Date",
+              "state": "satisfies"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "recommended",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "recommended",
+              "state": "satisfies"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        }
+      ],
+      "linkable_forms": [
+        {
+          "id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "name": "Firefly New Lead Inquiry (polish walk)"
+        },
+        {
+          "id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "name": "Missouri State Medical Form"
+        },
+        {
+          "id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "name": "Lead Enrollment Inquiry (realization walk)"
+        },
+        {
+          "id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "name": "Lead Form"
+        },
+        {
+          "id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "name": "New Lead Gen"
+        }
+      ],
+      "statuses": {
+        "entity_type": "opportunities",
+        "stages": {
+          "lead": {
+            "statuses": [
+              {
+                "status_key": "open",
+                "status_label": "Open",
+                "sort_order": 10,
+                "assignment_source": "canonical",
+                "has_metadata_override": false
+              }
+            ],
+            "has_custom_assignments": false
+          },
+          "tour": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "decision": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "waitlist": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolling": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolled": {
+            "statuses": [],
+            "has_custom_assignments": false
+          }
+        },
+        "unassigned": [
+          {
+            "status_key": "closed",
+            "status_label": "Closed",
+            "sort_order": 20,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "inactive",
+            "status_label": "Inactive",
+            "sort_order": 30,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "archived",
+            "status_label": "Archived",
+            "sort_order": 40,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          }
+        ],
+        "stage_keys": [
+          "lead",
+          "tour",
+          "decision",
+          "waitlist",
+          "enrolling",
+          "enrolled"
+        ]
+      },
+      "queue_membership": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "qualification",
+        "subject_type": "case",
+        "count_unit": "cases",
+        "included_disposition_keys": []
+      }
+    },
+    "tour": {
+      "_status": 200,
+      "operator_stage": "tour",
+      "stage_operating_plan": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "tour",
+        "journey_segment": "family",
+        "outgoing_transitions": [
+          {
+            "transition_ref": "tour_transition_1",
+            "source_stage_key": "tour",
+            "target_stage_key": "waitlist",
+            "label": "Move to Waitlist",
+            "available": true
+          },
+          {
+            "transition_ref": "tour_transition_2",
+            "source_stage_key": "tour",
+            "target_stage_key": "decision",
+            "label": "Move to Decision",
+            "available": true
+          }
+        ],
+        "work_templates": [
+          {
+            "template_key": "work_1",
+            "label": "Schedule Tour",
+            "required": false,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 1
+            },
+            "owner_strategy": "record_owner",
+            "work_definition_key": "manual_ad_hoc",
+            "primary_action": {
+              "action_ref": "schedule_tour"
+            },
+            "helpful_actions": [
+              {
+                "action_ref": "schedule_tour"
+              },
+              {
+                "action_ref": "quick_message"
+              },
+              {
+                "action_ref": "create_task"
+              }
+            ],
+            "outcome_refs": [
+              {
+                "outcome_ref": "outcome_1"
+              },
+              {
+                "outcome_ref": "outcome_4"
+              },
+              {
+                "outcome_ref": "outcome_2"
+              },
+              {
+                "outcome_ref": "outcome_3"
+              },
+              {
+                "outcome_ref": "outcome_5"
+              }
+            ]
+          },
+          {
+            "template_key": "work_2",
+            "label": "Confirm Tour",
+            "required": false,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 1
+            },
+            "owner_strategy": "record_owner",
+            "work_definition_key": "manual_ad_hoc",
+            "execution_mode": "outcome_led",
+            "outcome_refs": [
+              {
+                "outcome_ref": "outcome_6"
+              }
+            ]
+          },
+          {
+            "template_key": "work_3",
+            "label": "Conduct Tour",
+            "required": false,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 1
+            },
+            "owner_strategy": "record_owner",
+            "work_definition_key": "manual_ad_hoc",
+            "primary": true,
+            "execution_mode": "outcome_led"
+          }
+        ],
+        "outcomes": [
+          {
+            "outcome_key": "outcome_1",
+            "label": "Tour Scheduled",
+            "work_template_key": "work_1",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "outcome_2",
+            "label": "Awaiting Family Response",
+            "work_template_key": "work_1"
+          },
+          {
+            "outcome_key": "outcome_3",
+            "label": "Family Declined Tour",
+            "work_template_key": "work_1",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "outcome_4",
+            "label": "Move to Waitlist",
+            "work_template_key": "work_1",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "outcome_5",
+            "label": "Closed Lost",
+            "work_template_key": "work_1",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "outcome_6",
+            "label": "Tour Confirmed",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "outcome_7",
+            "label": "Tour Completed — Interested"
+          },
+          {
+            "outcome_key": "outcome_8",
+            "label": "Tour Completed — Needs Follow-up"
+          },
+          {
+            "outcome_key": "outcome_9",
+            "label": "Tour Rescheduled"
+          },
+          {
+            "outcome_key": "outcome_10",
+            "label": "No Show"
+          },
+          {
+            "outcome_key": "outcome_11",
+            "label": "Tour Cancelled",
+            "successful": true,
+            "completes_work": true
+          }
+        ],
+        "outcome_rules": [
+          {
+            "rule_key": "outcome_1_automation_1",
+            "when_outcome_key": "outcome_1",
+            "targets": [
+              {
+                "kind": "no_movement"
+              }
+            ]
+          },
+          {
+            "rule_key": "outcome_2_automation_2",
+            "when_outcome_key": "outcome_2",
+            "targets": [
+              {
+                "kind": "no_movement"
+              }
+            ]
+          },
+          {
+            "rule_key": "outcome_4_behavior",
+            "when_outcome_key": "outcome_4",
+            "targets": [
+              {
+                "kind": "move_to_stage",
+                "transition_ref": "tour_transition_1"
+              }
+            ]
+          },
+          {
+            "rule_key": "outcome_5_behavior",
+            "when_outcome_key": "outcome_5",
+            "targets": [
+              {
+                "kind": "move_to_stage",
+                "transition_ref": "tour_transition_1"
+              },
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Needs attention",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ]
+          },
+          {
+            "rule_key": "outcome_7_behavior",
+            "when_outcome_key": "outcome_7",
+            "targets": [
+              {
+                "kind": "move_to_stage",
+                "transition_ref": "tour_transition_2"
+              }
+            ]
+          },
+          {
+            "rule_key": "outcome_11_behavior",
+            "when_outcome_key": "outcome_11",
+            "targets": [
+              {
+                "kind": "no_movement"
+              }
+            ]
+          },
+          {
+            "rule_key": "outcome_10_behavior",
+            "when_outcome_key": "outcome_10",
+            "targets": [
+              {
+                "kind": "no_movement"
+              },
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Family no show.",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ]
+          },
+          {
+            "rule_key": "outcome_8_behavior",
+            "when_outcome_key": "outcome_8",
+            "targets": [
+              {
+                "kind": "move_to_stage",
+                "transition_ref": "tour_transition_2"
+              }
+            ]
+          }
+        ],
+        "attention_rules": [],
+        "purpose": "Book and conduct tours of the facility with interested families."
+      },
+      "actions": [
+        {
+          "action_definition_id": "57ab3caa-8d18-4fd3-80f9-53c533732101",
+          "key": "create_lead",
+          "label": "Create Lead",
+          "base_action_label": "Create Lead",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d481229c-ee1c-432e-ab96-d3e5343c5b23",
+              "surface_label": "Workspace",
+              "placement_label": "Workspace",
+              "is_active": true
+            },
+            {
+              "placement_id": "71bed0e9-e7f9-4a96-8c55-f0e736f72801",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 0
+        },
+        {
+          "action_definition_id": "63a14c85-d616-4447-a811-c1c7752fb1a8",
+          "key": "quick_message",
+          "label": "Message",
+          "base_action_label": "Message",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "4ca24ac8-6c73-4c75-bba9-90100700d949",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 1
+        },
+        {
+          "action_definition_id": "aa713d60-997f-4c5e-847b-0549afd56074",
+          "key": "update_status_add_note",
+          "label": "Update Status",
+          "base_action_label": null,
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "33cd2289-f5c1-461c-9540-1c3bde88b181",
+              "surface_label": "Work Unit Queue Row",
+              "placement_label": "Work Unit Queue Row",
+              "is_active": true
+            },
+            {
+              "placement_id": "e98b2ef6-243d-45a8-9959-cccc3ba42322",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 2
+        },
+        {
+          "action_definition_id": "168eea86-852a-4b65-b245-e126d55f6322",
+          "key": "add_family_member",
+          "label": "Add Parent",
+          "base_action_label": "Add Parent",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "f1af1c21-f6d0-4fc6-8b03-8a7bf26d48f5",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 3
+        },
+        {
+          "action_definition_id": "34194856-217f-4f65-8b4d-ca07ccc00148",
+          "key": "add_child",
+          "label": "Add Child",
+          "base_action_label": "Add Child",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "1344e77b-b30b-4d92-bccf-cfa7f6f99542",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 4
+        },
+        {
+          "action_definition_id": "8da4a59f-7d4c-4624-aadd-f6224e5f42e3",
+          "key": "schedule_tour",
+          "label": "Schedule Tour",
+          "base_action_label": "Schedule Tour",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d17ae98e-d243-47eb-acd2-08a0a01589a4",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            },
+            {
+              "placement_id": "cd042cbf-3eac-4e8f-85cd-824a57f8d50a",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 6
+        },
+        {
+          "action_definition_id": "1327803a-2f9d-4e85-a45b-b651d1171815",
+          "key": "create_task",
+          "label": "Create Task",
+          "base_action_label": "Create Task",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "18956093-7496-4d7c-adfa-d48c7941dc13",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 7
+        }
+      ],
+      "forms": [
+        {
+          "form_id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "form_name": "Firefly New Lead Inquiry (polish walk)",
+          "href": "/adminV2/forms/dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "intake_type_label": "General form",
+          "captures": [
+            "Child first name"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Tour Date and Time",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Date",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Time",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        },
+        {
+          "form_id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "form_name": "Lead Enrollment Inquiry (realization walk)",
+          "href": "/adminV2/forms/54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Tour Date and Time",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Date",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Time",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "form_name": "Lead Form",
+          "href": "/adminV2/forms/844b6d7e-d243-4278-b29a-21d6254991cf",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Tour Date and Time",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Date",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Time",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "form_name": "Missouri State Medical Form",
+          "href": "/adminV2/forms/d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "intake_type_label": "General form",
+          "captures": [
+            "Childs Name",
+            "Birthdate",
+            "My Child Is In Good Health Is Able To Participate In Group Care Has No Special Health Or Medical Requirements",
+            "My Child Is Able To Participate In Group Care But Has Special Health Or Medical Requirements As Listed Below",
+            "Please List Any Allergies Special Medical Conditions Including Chronic Health Problems Such As Asthma Seizures Behavioral Disorders Special Needs Etc",
+            "Date",
+            "Signature1"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Tour Date and Time",
+              "state": "partial"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Date",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Tour Time",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        }
+      ],
+      "linkable_forms": [
+        {
+          "id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "name": "Firefly New Lead Inquiry (polish walk)"
+        },
+        {
+          "id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "name": "Missouri State Medical Form"
+        },
+        {
+          "id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "name": "Lead Enrollment Inquiry (realization walk)"
+        },
+        {
+          "id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "name": "Lead Form"
+        },
+        {
+          "id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "name": "New Lead Gen"
+        }
+      ],
+      "statuses": {
+        "entity_type": "opportunities",
+        "stages": {
+          "lead": {
+            "statuses": [
+              {
+                "status_key": "open",
+                "status_label": "Open",
+                "sort_order": 10,
+                "assignment_source": "canonical",
+                "has_metadata_override": false
+              }
+            ],
+            "has_custom_assignments": false
+          },
+          "tour": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "decision": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "waitlist": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolling": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolled": {
+            "statuses": [],
+            "has_custom_assignments": false
+          }
+        },
+        "unassigned": [
+          {
+            "status_key": "closed",
+            "status_label": "Closed",
+            "sort_order": 20,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "inactive",
+            "status_label": "Inactive",
+            "sort_order": 30,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "archived",
+            "status_label": "Archived",
+            "sort_order": 40,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          }
+        ],
+        "stage_keys": [
+          "lead",
+          "tour",
+          "decision",
+          "waitlist",
+          "enrolling",
+          "enrolled"
+        ]
+      },
+      "queue_membership": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "tour",
+        "subject_type": "case",
+        "count_unit": "cases",
+        "included_disposition_keys": [],
+        "included_status_keys": [
+          "open"
+        ],
+        "location_scope_source": null
+      }
+    },
+    "tour_scheduled": {
+      "_status": 400
+    },
+    "tour_completed": {
+      "_status": 400
+    },
+    "decision_pending": {
+      "_status": 400
+    },
+    "waitlist": {
+      "_status": 200,
+      "operator_stage": "waitlist",
+      "stage_operating_plan": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "waitlist",
+        "journey_segment": "child",
+        "work_templates": [
+          {
+            "template_key": "review_waitlist_position",
+            "label": "Review waitlist position",
+            "required": false,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 3
+            },
+            "owner_strategy": "record_owner"
+          },
+          {
+            "template_key": "offer_spot",
+            "label": "Offer spot",
+            "required": false,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 1
+            },
+            "owner_strategy": "record_owner"
+          }
+        ],
+        "outcomes": [
+          {
+            "outcome_key": "spot_offered",
+            "label": "Spot offered",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "candidate_paused",
+            "label": "Candidate paused"
+          },
+          {
+            "outcome_key": "no_response",
+            "label": "No response to offer"
+          }
+        ],
+        "outcome_rules": [
+          {
+            "rule_key": "offer_to_enrolling",
+            "when_outcome_key": "spot_offered",
+            "targets": [
+              {
+                "kind": "update_child_enrollment_status",
+                "disposition_key": "offer_pending"
+              },
+              {
+                "kind": "move_to_stage",
+                "stage_key": "enrollment"
+              },
+              {
+                "kind": "mark_stage_work_complete"
+              }
+            ]
+          },
+          {
+            "rule_key": "pause_candidate",
+            "when_outcome_key": "candidate_paused",
+            "targets": [
+              {
+                "kind": "update_candidate_status",
+                "candidate_status": "paused"
+              }
+            ]
+          },
+          {
+            "rule_key": "no_response_attention",
+            "when_outcome_key": "no_response",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "No response to waitlist offer",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ]
+          }
+        ],
+        "attention_rules": [],
+        "purpose": "Manage waitlist candidates and spot offers."
+      },
+      "actions": [
+        {
+          "action_definition_id": "57ab3caa-8d18-4fd3-80f9-53c533732101",
+          "key": "create_lead",
+          "label": "Create Lead",
+          "base_action_label": "Create Lead",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d481229c-ee1c-432e-ab96-d3e5343c5b23",
+              "surface_label": "Workspace",
+              "placement_label": "Workspace",
+              "is_active": true
+            },
+            {
+              "placement_id": "71bed0e9-e7f9-4a96-8c55-f0e736f72801",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 0
+        },
+        {
+          "action_definition_id": "63a14c85-d616-4447-a811-c1c7752fb1a8",
+          "key": "quick_message",
+          "label": "Message",
+          "base_action_label": "Message",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "4ca24ac8-6c73-4c75-bba9-90100700d949",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 1
+        },
+        {
+          "action_definition_id": "aa713d60-997f-4c5e-847b-0549afd56074",
+          "key": "update_status_add_note",
+          "label": "Update Status",
+          "base_action_label": null,
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "33cd2289-f5c1-461c-9540-1c3bde88b181",
+              "surface_label": "Work Unit Queue Row",
+              "placement_label": "Work Unit Queue Row",
+              "is_active": true
+            },
+            {
+              "placement_id": "e98b2ef6-243d-45a8-9959-cccc3ba42322",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 2
+        },
+        {
+          "action_definition_id": "168eea86-852a-4b65-b245-e126d55f6322",
+          "key": "add_family_member",
+          "label": "Add Parent",
+          "base_action_label": "Add Parent",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "f1af1c21-f6d0-4fc6-8b03-8a7bf26d48f5",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 3
+        },
+        {
+          "action_definition_id": "34194856-217f-4f65-8b4d-ca07ccc00148",
+          "key": "add_child",
+          "label": "Add Child",
+          "base_action_label": "Add Child",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "1344e77b-b30b-4d92-bccf-cfa7f6f99542",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 4
+        },
+        {
+          "action_definition_id": "8da4a59f-7d4c-4624-aadd-f6224e5f42e3",
+          "key": "schedule_tour",
+          "label": "Schedule Tour",
+          "base_action_label": "Schedule Tour",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d17ae98e-d243-47eb-acd2-08a0a01589a4",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            },
+            {
+              "placement_id": "cd042cbf-3eac-4e8f-85cd-824a57f8d50a",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 6
+        },
+        {
+          "action_definition_id": "1327803a-2f9d-4e85-a45b-b651d1171815",
+          "key": "create_task",
+          "label": "Create Task",
+          "base_action_label": "Create Task",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "18956093-7496-4d7c-adfa-d48c7941dc13",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 7
+        }
+      ],
+      "forms": [
+        {
+          "form_id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "form_name": "Firefly New Lead Inquiry (polish walk)",
+          "href": "/adminV2/forms/dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "intake_type_label": "General form",
+          "captures": [
+            "Child first name"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Site / Location",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        },
+        {
+          "form_id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "form_name": "Lead Enrollment Inquiry (realization walk)",
+          "href": "/adminV2/forms/54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Site / Location",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "form_name": "Lead Form",
+          "href": "/adminV2/forms/844b6d7e-d243-4278-b29a-21d6254991cf",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Site / Location",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "form_name": "Missouri State Medical Form",
+          "href": "/adminV2/forms/d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "intake_type_label": "General form",
+          "captures": [
+            "Childs Name",
+            "Birthdate",
+            "My Child Is In Good Health Is Able To Participate In Group Care Has No Special Health Or Medical Requirements",
+            "My Child Is Able To Participate In Group Care But Has Special Health Or Medical Requirements As Listed Below",
+            "Please List Any Allergies Special Medical Conditions Including Chronic Health Problems Such As Asthma Seizures Behavioral Disorders Special Needs Etc",
+            "Date",
+            "Signature1"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Site / Location",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        },
+        {
+          "form_id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "form_name": "New Lead Gen",
+          "href": "/adminV2/forms/d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "intake_type_label": "Waitlist intake",
+          "captures": [
+            "Parent / guardian first name",
+            "Parent / guardian last name",
+            "Parent email",
+            "Child first name",
+            "Child last name",
+            "Child date of birth"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Program",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Child Identity",
+              "state": "unknown"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Program",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Site / Location",
+              "kind": "required",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        }
+      ],
+      "linkable_forms": [
+        {
+          "id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "name": "Firefly New Lead Inquiry (polish walk)"
+        },
+        {
+          "id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "name": "Missouri State Medical Form"
+        },
+        {
+          "id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "name": "Lead Enrollment Inquiry (realization walk)"
+        },
+        {
+          "id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "name": "Lead Form"
+        },
+        {
+          "id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "name": "New Lead Gen"
+        }
+      ],
+      "statuses": {
+        "entity_type": "opportunities",
+        "stages": {
+          "lead": {
+            "statuses": [
+              {
+                "status_key": "open",
+                "status_label": "Open",
+                "sort_order": 10,
+                "assignment_source": "canonical",
+                "has_metadata_override": false
+              }
+            ],
+            "has_custom_assignments": false
+          },
+          "tour": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "decision": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "waitlist": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolling": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolled": {
+            "statuses": [],
+            "has_custom_assignments": false
+          }
+        },
+        "unassigned": [
+          {
+            "status_key": "closed",
+            "status_label": "Closed",
+            "sort_order": 20,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "inactive",
+            "status_label": "Inactive",
+            "sort_order": 30,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "archived",
+            "status_label": "Archived",
+            "sort_order": 40,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          }
+        ],
+        "stage_keys": [
+          "lead",
+          "tour",
+          "decision",
+          "waitlist",
+          "enrolling",
+          "enrolled"
+        ]
+      },
+      "queue_membership": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "waitlist",
+        "subject_type": "candidate",
+        "count_unit": "candidates",
+        "included_disposition_keys": [
+          "qualified"
+        ],
+        "location_scope_source": "placement_site"
+      }
+    },
+    "enrollment": {
+      "_status": 200,
+      "operator_stage": "enrollment",
+      "stage_operating_plan": {
+        "version": 1,
+        "journey_segment": "child",
+        "purpose": "Complete enrollment paperwork and confirm start.",
+        "work_templates": [
+          {
+            "template_key": "send_enrollment_packet",
+            "label": "Send enrollment packet",
+            "required": true,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 1
+            },
+            "owner_strategy": "record_owner"
+          },
+          {
+            "template_key": "confirm_start_date",
+            "label": "Confirm start date",
+            "required": true,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 3
+            },
+            "owner_strategy": "record_owner"
+          }
+        ],
+        "outcomes": [
+          {
+            "outcome_key": "enrollment_complete",
+            "label": "Enrollment complete",
+            "successful": true
+          },
+          {
+            "outcome_key": "packet_pending",
+            "label": "Packet still pending"
+          },
+          {
+            "outcome_key": "family_withdrew",
+            "label": "Family withdrew"
+          }
+        ],
+        "outcome_rules": [
+          {
+            "rule_key": "complete_to_enrolled",
+            "when_outcome_key": "enrollment_complete",
+            "targets": [
+              {
+                "kind": "update_child_enrollment_status",
+                "disposition_key": "enrolled"
+              },
+              {
+                "kind": "move_to_stage",
+                "stage_key": "enrolled"
+              },
+              {
+                "kind": "mark_stage_work_complete"
+              }
+            ]
+          },
+          {
+            "rule_key": "packet_attention",
+            "when_outcome_key": "packet_pending",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Enrollment packet incomplete",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ]
+          },
+          {
+            "rule_key": "withdrew",
+            "when_outcome_key": "family_withdrew",
+            "targets": [
+              {
+                "kind": "update_child_enrollment_status",
+                "disposition_key": "not_enrolling",
+                "close_reason_key": "family_withdrew"
+              },
+              {
+                "kind": "mark_stage_work_complete"
+              }
+            ]
+          }
+        ],
+        "attention_rules": [
+          {
+            "rule_key": "required_docs_overdue",
+            "kind": "required_work_overdue",
+            "threshold": 1,
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Required enrollment work overdue",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ]
+          }
+        ],
+        "lifecycle_key": "enrollment",
+        "stage_key": "enrollment"
+      },
+      "actions": [
+        {
+          "action_definition_id": "57ab3caa-8d18-4fd3-80f9-53c533732101",
+          "key": "create_lead",
+          "label": "Create Lead",
+          "base_action_label": "Create Lead",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d481229c-ee1c-432e-ab96-d3e5343c5b23",
+              "surface_label": "Workspace",
+              "placement_label": "Workspace",
+              "is_active": true
+            },
+            {
+              "placement_id": "71bed0e9-e7f9-4a96-8c55-f0e736f72801",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 0
+        },
+        {
+          "action_definition_id": "63a14c85-d616-4447-a811-c1c7752fb1a8",
+          "key": "quick_message",
+          "label": "Message",
+          "base_action_label": "Message",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "4ca24ac8-6c73-4c75-bba9-90100700d949",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 1
+        },
+        {
+          "action_definition_id": "aa713d60-997f-4c5e-847b-0549afd56074",
+          "key": "update_status_add_note",
+          "label": "Update Status",
+          "base_action_label": null,
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "33cd2289-f5c1-461c-9540-1c3bde88b181",
+              "surface_label": "Work Unit Queue Row",
+              "placement_label": "Work Unit Queue Row",
+              "is_active": true
+            },
+            {
+              "placement_id": "e98b2ef6-243d-45a8-9959-cccc3ba42322",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 2
+        },
+        {
+          "action_definition_id": "168eea86-852a-4b65-b245-e126d55f6322",
+          "key": "add_family_member",
+          "label": "Add Parent",
+          "base_action_label": "Add Parent",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "f1af1c21-f6d0-4fc6-8b03-8a7bf26d48f5",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 3
+        },
+        {
+          "action_definition_id": "34194856-217f-4f65-8b4d-ca07ccc00148",
+          "key": "add_child",
+          "label": "Add Child",
+          "base_action_label": "Add Child",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "1344e77b-b30b-4d92-bccf-cfa7f6f99542",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 4
+        },
+        {
+          "action_definition_id": "8da4a59f-7d4c-4624-aadd-f6224e5f42e3",
+          "key": "schedule_tour",
+          "label": "Schedule Tour",
+          "base_action_label": "Schedule Tour",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d17ae98e-d243-47eb-acd2-08a0a01589a4",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            },
+            {
+              "placement_id": "cd042cbf-3eac-4e8f-85cd-824a57f8d50a",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 6
+        },
+        {
+          "action_definition_id": "1327803a-2f9d-4e85-a45b-b651d1171815",
+          "key": "create_task",
+          "label": "Create Task",
+          "base_action_label": "Create Task",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "18956093-7496-4d7c-adfa-d48c7941dc13",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 7
+        }
+      ],
+      "forms": [
+        {
+          "form_id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "form_name": "Firefly New Lead Inquiry (polish walk)",
+          "href": "/adminV2/forms/dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "intake_type_label": "General form",
+          "captures": [
+            "Child first name"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Classroom",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Enrollment Start Date",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Enrollment Packet Reviewed",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Classroom or Room",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Enrollment Packet Reviewed",
+              "kind": "recommended",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        },
+        {
+          "form_id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "form_name": "Lead Enrollment Inquiry (realization walk)",
+          "href": "/adminV2/forms/54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Classroom",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Enrollment Start Date",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Enrollment Packet Reviewed",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Classroom or Room",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Enrollment Packet Reviewed",
+              "kind": "recommended",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "form_name": "Lead Form",
+          "href": "/adminV2/forms/844b6d7e-d243-4278-b29a-21d6254991cf",
+          "intake_type_label": "General form",
+          "captures": [],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Classroom",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Enrollment Start Date",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Enrollment Packet Reviewed",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Classroom or Room",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Enrollment Packet Reviewed",
+              "kind": "recommended",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "unknown",
+          "has_published_version": false
+        },
+        {
+          "form_id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "form_name": "Missouri State Medical Form",
+          "href": "/adminV2/forms/d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "intake_type_label": "General form",
+          "captures": [
+            "Childs Name",
+            "Birthdate",
+            "My Child Is In Good Health Is Able To Participate In Group Care Has No Special Health Or Medical Requirements",
+            "My Child Is Able To Participate In Group Care But Has Special Health Or Medical Requirements As Listed Below",
+            "Please List Any Allergies Special Medical Conditions Including Chronic Health Problems Such As Asthma Seizures Behavioral Disorders Special Needs Etc",
+            "Date",
+            "Signature1"
+          ],
+          "requirement_rows": [
+            {
+              "requirement_label": "Child",
+              "state": "partial"
+            },
+            {
+              "requirement_label": "Classroom",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Schedule",
+              "state": "missing"
+            },
+            {
+              "requirement_label": "Enrollment Start Date",
+              "state": "satisfies"
+            },
+            {
+              "requirement_label": "Enrollment Packet Reviewed",
+              "state": "missing"
+            }
+          ],
+          "field_rule_rows": [
+            {
+              "entity_label": "Child",
+              "field_label": "First Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Last Name",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Classroom or Room",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Desired Schedule",
+              "kind": "required",
+              "state": "missing"
+            },
+            {
+              "entity_label": "Child",
+              "field_label": "Start Date",
+              "kind": "required",
+              "state": "satisfies"
+            },
+            {
+              "entity_label": "Opportunity",
+              "field_label": "Enrollment Packet Reviewed",
+              "kind": "recommended",
+              "state": "missing"
+            }
+          ],
+          "field_rules_summary": "partial",
+          "has_published_version": true
+        }
+      ],
+      "linkable_forms": [
+        {
+          "id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "name": "Firefly New Lead Inquiry (polish walk)"
+        },
+        {
+          "id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "name": "Missouri State Medical Form"
+        },
+        {
+          "id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "name": "Lead Enrollment Inquiry (realization walk)"
+        },
+        {
+          "id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "name": "Lead Form"
+        },
+        {
+          "id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "name": "New Lead Gen"
+        }
+      ],
+      "statuses": {
+        "entity_type": "opportunities",
+        "stages": {
+          "lead": {
+            "statuses": [
+              {
+                "status_key": "open",
+                "status_label": "Open",
+                "sort_order": 10,
+                "assignment_source": "canonical",
+                "has_metadata_override": false
+              }
+            ],
+            "has_custom_assignments": false
+          },
+          "tour": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "decision": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "waitlist": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolling": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolled": {
+            "statuses": [],
+            "has_custom_assignments": false
+          }
+        },
+        "unassigned": [
+          {
+            "status_key": "closed",
+            "status_label": "Closed",
+            "sort_order": 20,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "inactive",
+            "status_label": "Inactive",
+            "sort_order": 30,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "archived",
+            "status_label": "Archived",
+            "sort_order": 40,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          }
+        ],
+        "stage_keys": [
+          "lead",
+          "tour",
+          "decision",
+          "waitlist",
+          "enrolling",
+          "enrolled"
+        ]
+      },
+      "queue_membership": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "enrollment",
+        "subject_type": "child",
+        "count_unit": "enrollment_tracks",
+        "included_disposition_keys": [],
+        "location_scope_source": "ocm_site"
+      }
+    },
+    "enrolling": {
+      "_status": 200,
+      "operator_stage": null,
+      "stage_operating_plan": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "enrolling",
+        "journey_segment": "child",
+        "work_templates": [
+          {
+            "template_key": "send_enrollment_packet",
+            "label": "Send enrollment packet",
+            "required": true,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 1
+            },
+            "owner_strategy": "record_owner",
+            "primary": true
+          },
+          {
+            "template_key": "confirm_start_date",
+            "label": "Confirm start date",
+            "required": true,
+            "due_policy": {
+              "kind": "offset_days",
+              "days": 3
+            },
+            "owner_strategy": "record_owner"
+          }
+        ],
+        "outcomes": [
+          {
+            "outcome_key": "enrollment_complete",
+            "label": "Enrollment complete",
+            "successful": true,
+            "completes_work": true
+          },
+          {
+            "outcome_key": "packet_pending",
+            "label": "Packet still pending"
+          },
+          {
+            "outcome_key": "family_withdrew",
+            "label": "Family withdrew"
+          }
+        ],
+        "outcome_rules": [
+          {
+            "rule_key": "complete_to_enrolled",
+            "when_outcome_key": "enrollment_complete",
+            "targets": [
+              {
+                "kind": "update_child_enrollment_status",
+                "disposition_key": "enrolled"
+              },
+              {
+                "kind": "move_to_stage",
+                "stage_key": "enrolled"
+              },
+              {
+                "kind": "mark_stage_work_complete"
+              }
+            ]
+          },
+          {
+            "rule_key": "packet_attention",
+            "when_outcome_key": "packet_pending",
+            "targets": [
+              {
+                "kind": "create_needs_attention",
+                "attention_reason": "Enrollment packet incomplete",
+                "wait_bucket": "waiting_on_staff"
+              }
+            ]
+          },
+          {
+            "rule_key": "withdrew",
+            "when_outcome_key": "family_withdrew",
+            "targets": [
+              {
+                "kind": "update_child_enrollment_status",
+                "disposition_key": "family_withdrew"
+              },
+              {
+                "kind": "move_to_stage",
+                "stage_key": "closed_withdrawn"
+              }
+            ]
+          }
+        ],
+        "attention_rules": [],
+        "purpose": "Complete enrollment paperwork and confirm start."
+      },
+      "actions": [
+        {
+          "action_definition_id": "57ab3caa-8d18-4fd3-80f9-53c533732101",
+          "key": "create_lead",
+          "label": "Create Lead",
+          "base_action_label": "Create Lead",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d481229c-ee1c-432e-ab96-d3e5343c5b23",
+              "surface_label": "Workspace",
+              "placement_label": "Workspace",
+              "is_active": true
+            },
+            {
+              "placement_id": "71bed0e9-e7f9-4a96-8c55-f0e736f72801",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 0
+        },
+        {
+          "action_definition_id": "63a14c85-d616-4447-a811-c1c7752fb1a8",
+          "key": "quick_message",
+          "label": "Message",
+          "base_action_label": "Message",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "4ca24ac8-6c73-4c75-bba9-90100700d949",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 1
+        },
+        {
+          "action_definition_id": "aa713d60-997f-4c5e-847b-0549afd56074",
+          "key": "update_status_add_note",
+          "label": "Update Status",
+          "base_action_label": null,
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "33cd2289-f5c1-461c-9540-1c3bde88b181",
+              "surface_label": "Work Unit Queue Row",
+              "placement_label": "Work Unit Queue Row",
+              "is_active": true
+            },
+            {
+              "placement_id": "e98b2ef6-243d-45a8-9959-cccc3ba42322",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 2
+        },
+        {
+          "action_definition_id": "168eea86-852a-4b65-b245-e126d55f6322",
+          "key": "add_family_member",
+          "label": "Add Parent",
+          "base_action_label": "Add Parent",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "f1af1c21-f6d0-4fc6-8b03-8a7bf26d48f5",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 3
+        },
+        {
+          "action_definition_id": "34194856-217f-4f65-8b4d-ca07ccc00148",
+          "key": "add_child",
+          "label": "Add Child",
+          "base_action_label": "Add Child",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "1344e77b-b30b-4d92-bccf-cfa7f6f99542",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 4
+        },
+        {
+          "action_definition_id": "8da4a59f-7d4c-4624-aadd-f6224e5f42e3",
+          "key": "schedule_tour",
+          "label": "Schedule Tour",
+          "base_action_label": "Schedule Tour",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d17ae98e-d243-47eb-acd2-08a0a01589a4",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            },
+            {
+              "placement_id": "cd042cbf-3eac-4e8f-85cd-824a57f8d50a",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 6
+        },
+        {
+          "action_definition_id": "1327803a-2f9d-4e85-a45b-b651d1171815",
+          "key": "create_task",
+          "label": "Create Task",
+          "base_action_label": "Create Task",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "18956093-7496-4d7c-adfa-d48c7941dc13",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 7
+        }
+      ],
+      "forms": [],
+      "linkable_forms": [],
+      "statuses": {
+        "entity_type": "opportunities",
+        "stages": {
+          "lead": {
+            "statuses": [
+              {
+                "status_key": "open",
+                "status_label": "Open",
+                "sort_order": 10,
+                "assignment_source": "canonical",
+                "has_metadata_override": false
+              }
+            ],
+            "has_custom_assignments": false
+          },
+          "tour": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "decision": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "waitlist": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolling": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolled": {
+            "statuses": [],
+            "has_custom_assignments": false
+          }
+        },
+        "unassigned": [
+          {
+            "status_key": "closed",
+            "status_label": "Closed",
+            "sort_order": 20,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "inactive",
+            "status_label": "Inactive",
+            "sort_order": 30,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "archived",
+            "status_label": "Archived",
+            "sort_order": 40,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          }
+        ],
+        "stage_keys": [
+          "lead",
+          "tour",
+          "decision",
+          "waitlist",
+          "enrolling",
+          "enrolled"
+        ]
+      },
+      "queue_membership": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "enrolling",
+        "subject_type": "child",
+        "count_unit": "enrollment_tracks",
+        "included_disposition_keys": [
+          "qualified"
+        ],
+        "location_scope_source": "ocm_site"
+      }
+    },
+    "enrolled": {
+      "_status": 200,
+      "operator_stage": "enrolled",
+      "stage_operating_plan": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "enrolled",
+        "journey_segment": "child",
+        "work_templates": [],
+        "outcomes": [
+          {
+            "outcome_key": "acknowledged",
+            "label": "Acknowledged",
+            "successful": true,
+            "completes_work": true
+          }
+        ],
+        "outcome_rules": [
+          {
+            "rule_key": "noop",
+            "when_outcome_key": "acknowledged",
+            "targets": [
+              {
+                "kind": "no_movement"
+              }
+            ]
+          }
+        ],
+        "attention_rules": [],
+        "purpose": "Post-enrollment follow-up."
+      },
+      "actions": [
+        {
+          "action_definition_id": "57ab3caa-8d18-4fd3-80f9-53c533732101",
+          "key": "create_lead",
+          "label": "Create Lead",
+          "base_action_label": "Create Lead",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d481229c-ee1c-432e-ab96-d3e5343c5b23",
+              "surface_label": "Workspace",
+              "placement_label": "Workspace",
+              "is_active": true
+            },
+            {
+              "placement_id": "71bed0e9-e7f9-4a96-8c55-f0e736f72801",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 0
+        },
+        {
+          "action_definition_id": "63a14c85-d616-4447-a811-c1c7752fb1a8",
+          "key": "quick_message",
+          "label": "Message",
+          "base_action_label": "Message",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "4ca24ac8-6c73-4c75-bba9-90100700d949",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 1
+        },
+        {
+          "action_definition_id": "aa713d60-997f-4c5e-847b-0549afd56074",
+          "key": "update_status_add_note",
+          "label": "Update Status",
+          "base_action_label": null,
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "33cd2289-f5c1-461c-9540-1c3bde88b181",
+              "surface_label": "Work Unit Queue Row",
+              "placement_label": "Work Unit Queue Row",
+              "is_active": true
+            },
+            {
+              "placement_id": "e98b2ef6-243d-45a8-9959-cccc3ba42322",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 2
+        },
+        {
+          "action_definition_id": "168eea86-852a-4b65-b245-e126d55f6322",
+          "key": "add_family_member",
+          "label": "Add Parent",
+          "base_action_label": "Add Parent",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "f1af1c21-f6d0-4fc6-8b03-8a7bf26d48f5",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 3
+        },
+        {
+          "action_definition_id": "34194856-217f-4f65-8b4d-ca07ccc00148",
+          "key": "add_child",
+          "label": "Add Child",
+          "base_action_label": "Add Child",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "1344e77b-b30b-4d92-bccf-cfa7f6f99542",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 4
+        },
+        {
+          "action_definition_id": "8da4a59f-7d4c-4624-aadd-f6224e5f42e3",
+          "key": "schedule_tour",
+          "label": "Schedule Tour",
+          "base_action_label": "Schedule Tour",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "d17ae98e-d243-47eb-acd2-08a0a01589a4",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            },
+            {
+              "placement_id": "cd042cbf-3eac-4e8f-85cd-824a57f8d50a",
+              "surface_label": "Work Unit Right Rail",
+              "placement_label": "Work Unit Right Rail",
+              "is_active": true
+            }
+          ],
+          "display_order": 6
+        },
+        {
+          "action_definition_id": "1327803a-2f9d-4e85-a45b-b651d1171815",
+          "key": "create_task",
+          "label": "Create Task",
+          "base_action_label": "Create Task",
+          "action_scope": "lifecycle",
+          "operator_stages": [],
+          "placements": [
+            {
+              "placement_id": "18956093-7496-4d7c-adfa-d48c7941dc13",
+              "surface_label": "Overflow Menu",
+              "placement_label": "Overflow Menu",
+              "is_active": true
+            }
+          ],
+          "display_order": 7
+        }
+      ],
+      "forms": [],
+      "linkable_forms": [
+        {
+          "id": "dfb2c774-5b20-4f01-8ecb-584a83c9cbc9",
+          "name": "Firefly New Lead Inquiry (polish walk)"
+        },
+        {
+          "id": "d2c9bd10-5e4c-4585-9d83-03d99888ae04",
+          "name": "Missouri State Medical Form"
+        },
+        {
+          "id": "54fbd294-e8aa-4f9c-b553-d4f31c61505e",
+          "name": "Lead Enrollment Inquiry (realization walk)"
+        },
+        {
+          "id": "844b6d7e-d243-4278-b29a-21d6254991cf",
+          "name": "Lead Form"
+        },
+        {
+          "id": "d112a73e-fd2a-401a-95e8-b76db4be5c9b",
+          "name": "New Lead Gen"
+        }
+      ],
+      "statuses": {
+        "entity_type": "opportunities",
+        "stages": {
+          "lead": {
+            "statuses": [
+              {
+                "status_key": "open",
+                "status_label": "Open",
+                "sort_order": 10,
+                "assignment_source": "canonical",
+                "has_metadata_override": false
+              }
+            ],
+            "has_custom_assignments": false
+          },
+          "tour": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "decision": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "waitlist": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolling": {
+            "statuses": [],
+            "has_custom_assignments": false
+          },
+          "enrolled": {
+            "statuses": [],
+            "has_custom_assignments": false
+          }
+        },
+        "unassigned": [
+          {
+            "status_key": "closed",
+            "status_label": "Closed",
+            "sort_order": 20,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "inactive",
+            "status_label": "Inactive",
+            "sort_order": 30,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          },
+          {
+            "status_key": "archived",
+            "status_label": "Archived",
+            "sort_order": 40,
+            "assignment_source": "unassigned",
+            "has_metadata_override": false
+          }
+        ],
+        "stage_keys": [
+          "lead",
+          "tour",
+          "decision",
+          "waitlist",
+          "enrolling",
+          "enrolled"
+        ]
+      },
+      "queue_membership": {
+        "version": 1,
+        "lifecycle_key": "enrollment",
+        "stage_key": "enrolled",
+        "subject_type": "child",
+        "count_unit": "enrollment_tracks",
+        "included_disposition_keys": [
+          "enrolling",
+          "registration_pending",
+          "paperwork_pending",
+          "start_date_scheduled"
+        ],
+        "location_scope_source": "ocm_site"
+      }
+    },
+    "offered_spot": {
+      "_status": 400
+    },
+    "future_start": {
+      "_status": 400
+    },
+    "closed_lost": {
+      "_status": 400
+    },
+    "closed_withdrawn": {
+      "_status": 400
+    }
+  }
+}

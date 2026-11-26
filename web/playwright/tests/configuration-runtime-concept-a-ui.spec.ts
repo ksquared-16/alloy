@@ -6,7 +6,7 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
-const screenshotDir = path.join(__dirname, "../../../docs/sprints/06_2026/configuration-runtime-concept-a");
+const screenshotDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/configuration-runtime-concept-a");
 
 const STAGE_TAB_CANDIDATES = ["lead", "touring", "tour", "waitlist", "enrolling", "enrolled", "new_leads"];
 

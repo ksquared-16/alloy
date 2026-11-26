@@ -1,6 +1,6 @@
 # Lifecycle Builder — Action Save Fix & Forms Card Removal
 
-**Path:** `docs/sprints/06_2026/lifecycle_action_save_and_forms_removal.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_action_save_and_forms_removal.md`  
 **Date:** 2026-05-31  
 **Status:** Implemented
 

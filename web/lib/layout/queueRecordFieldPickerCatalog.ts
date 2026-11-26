@@ -7,6 +7,7 @@
  * Invariant: pickerVisibleRefs ⊆ validatorAllowedQueueRecordFieldRefKeys
  */
 
+import { resolveCanonicalProviderForConsumer } from "@/lib/fields/consumerCanonicalProviderAssembly";
 import type { LayoutCatalogField, LayoutCatalogGroup, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
 import {
@@ -34,15 +35,20 @@ function queuePickerSurface(isWaitlist: boolean): FieldPickerSurface {
     return isWaitlist ? "waitlist_queue_row" : "pipeline_queue_row";
 }
 
-function catalogFieldForRefKey(refKey: string, surface: FieldPickerSurface): LayoutCatalogField {
+function catalogFieldForRefKey(
+    refKey: string,
+    surface: FieldPickerSurface,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): LayoutCatalogField {
     const [entityKey, ...rest] = refKey.split(".");
-    const fieldLabel = resolveFieldPickerLabel(refKey, surface);
+    const provider = resolveCanonicalProviderForConsumer(refKey, "queue_row", { tenantFieldDefinitions });
+    const fieldLabel = provider?.label ?? resolveFieldPickerLabel(refKey, surface);
     return {
         entityKey: entityKey ?? "opportunity",
         entityLabel: entityKey ?? "opportunity",
         fieldKey: rest.join(".") || refKey,
         fieldLabel,
-        fieldType: "text",
+        fieldType: provider?.fieldType ?? "text",
         refKey,
     };
 }
@@ -110,7 +116,7 @@ export function buildQueueRecordPickerFieldsFromAllowList(
         if (childBlockOnly && !assertChildScopedFieldKey(refKey, relationshipKey)) return [];
         const context = classifyFieldPickerContext(refKey, { surface, isWaitlist });
         if (!context) return [];
-        const field = catalogFieldForRefKey(refKey, surface);
+        const field = catalogFieldForRefKey(refKey, surface, tenantDefs);
         return [{ ...field, entityLabel: FIELD_PICKER_CONTEXT_LABELS[context] }];
     });
 

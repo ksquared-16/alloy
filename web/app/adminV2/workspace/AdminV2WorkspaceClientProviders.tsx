@@ -3,7 +3,6 @@
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminVerticalProvider } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
-import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import AdminV2ClickDebugInstaller from "@/app/adminV2/components/AdminV2ClickDebugInstaller";
 import PlatformSurfacePerfDebugInstaller from "@/app/adminV2/components/PlatformSurfacePerfDebugInstaller";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
@@ -14,6 +13,10 @@ import WorkspaceSiteFilterPersistenceScopeBridge from "@/app/adminV2/workspace/W
 import { OperationalModeEntryProvider } from "@/lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext";
 import { WorkspaceRouteVmProvider } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
 import { EMPTY_WORKSPACE_ROUTE_VM, type WorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
+import { SurfaceHostProvider } from "@/lib/experience/surfaceHost/SurfaceHostContext";
+import { BosRecordSurfaceBridge } from "@/components/adminV2/BosRecordSurfaceBridge";
+import { RuntimeKernelProvider } from "@/lib/runtime/kernel/RuntimeKernelContext";
+import OperatorFocusAttentionListener from "@/components/adminV2/OperatorFocusAttentionListener";
 import type { CSSProperties, ReactNode } from "react";
 
 interface AdminV2WorkspaceClientProvidersProps {
@@ -103,14 +106,37 @@ export default function AdminV2WorkspaceClientProviders({
                   <AdminV2ClickDebugInstaller />
                   <PlatformSurfacePerfDebugInstaller />
                   <div
-                    className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 px-4 py-3 sm:px-5"
+                    className="adminv2-workspace-scroll-surface relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 sm:px-5"
                     style={workspaceScrollStyle}
                   >
                     <WorkspaceRouteVmProvider value={workspaceRouteVm}>
-                      {children}
+                      {/* THE RUNTIME KERNEL — mounted ABOVE the Surface Host and OUTSIDE the route
+                          subtree, so exactly ONE AttentionOwner / ProvisioningRuntime / FocusOwner
+                          governs both retained surfaces and survives every Workspace ⇄ Work Unit
+                          movement. Mounting it inside either surface would recreate the kernel on
+                          navigation and destroy the retention it exists to provide.
+                          tenant/principal are the retention boundary: a retained context may never
+                          cross a tenant. */}
+                      <RuntimeKernelProvider
+                        tenant={typeof orgId === "string" ? orgId : ""}
+                        principal={principalUserId ?? ""}
+                      >
+                        {/* Surface Host (NAV-1 (A)) — the canonical client-context owner of
+                            operational-surface focus. Always mounted; no flag, no parallel mode.
+                            It now assigns surface roles from COMMITTED FOCUS, not the pathname. */}
+                        {/* Search states a destination from the top nav, which mounts ABOVE this
+                            kernel and so cannot hold it. This listener performs the movement through
+                            the one work-unit entry adapter: a Search click is an attention movement,
+                            never a route push — the route is seed-only, and a push blanks the
+                            surface. */}
+                        <OperatorFocusAttentionListener />
+                        {/* BP V2 D9 — tells the shell's BOS presentation controller when a Work Unit
+                            (queue + Focus Panel) is the committed destination. */}
+                        <BosRecordSurfaceBridge />
+                        <SurfaceHostProvider>{children}</SurfaceHostProvider>
+                      </RuntimeKernelProvider>
                     </WorkspaceRouteVmProvider>
                   </div>
-                  <AdminEntityDrawer />
                 </div>
                 </OperationalModeEntryProvider>
               </WorkspaceOrgProvider>

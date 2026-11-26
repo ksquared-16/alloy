@@ -1,0 +1,771 @@
+{
+  "capturedAt": "2026-08-22T04:07:21.297Z",
+  "candidates": [
+    {
+      "id": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "infant",
+      "program_room_group_label": "Infant",
+      "wait_since": "2026-08-07T20:05:50.73002+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+        "person_id": "c256182e-2b25-4a30-b12e-d9da68dd3b44",
+        "display_name": "Wrigley Kurzman"
+      },
+      "link_group": null,
+      "active_overrides": [
+        {
+          "id": "ec6dce10-8bb0-4172-9495-0b7871af56ef",
+          "override_kind": "pin",
+          "reason": "Manual waitlist position adjustment",
+          "expires_at": null,
+          "payload": {
+            "pin_ordinal": 1
+          }
+        }
+      ],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8"
+      }
+    },
+    {
+      "id": "0cad23a8-536b-414e-af1e-0f15ef1e3ca0",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "infant",
+      "program_room_group_label": "infant",
+      "wait_since": "2026-08-07T20:05:50.73002+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+        "person_id": "c256182e-2b25-4a30-b12e-d9da68dd3b44",
+        "display_name": "Wrigley Kurzman"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant",
+          "program_room_group_label": "infant"
+        },
+        "process_instance_id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8"
+      }
+    },
+    {
+      "id": "ee36c3b1-9aba-4923-95d1-31ca5603e34a",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "infant",
+      "program_room_group_label": "Infant",
+      "wait_since": "2026-08-21T19:26:23.073+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "1e30034b-54b2-46e5-ba46-079fd087b945",
+        "person_id": null,
+        "display_name": "PassA Kid"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant",
+          "program_room_group_label": "infant"
+        },
+        "process_instance_id": "8b3689fb-130f-4019-89a4-433a1fd53735"
+      }
+    },
+    {
+      "id": "94984f6c-f269-4f86-8b1b-9a4607cac2c6",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "infant_0_18_months",
+      "program_room_group_label": "Infant — 0–18 months",
+      "wait_since": "2026-08-20T20:58:28.794+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "1e30034b-54b2-46e5-ba46-079fd087b945",
+        "person_id": null,
+        "display_name": "PassA Kid"
+      },
+      "link_group": null,
+      "active_overrides": [
+        {
+          "id": "489a6460-0e20-40ca-9122-87f0bc87c459",
+          "override_kind": "pin",
+          "reason": "Manual waitlist position adjustment",
+          "expires_at": null,
+          "payload": {
+            "pin_ordinal": 2
+          }
+        }
+      ],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "8b3689fb-130f-4019-89a4-433a1fd53735"
+      }
+    },
+    {
+      "id": "ba8cdcf5-73b2-43e6-8a86-aa28f1098c0e",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "toddler",
+      "program_room_group_label": "Toddler",
+      "wait_since": "2026-08-07T20:05:50.73002+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "b247b8a3-7df7-4919-9309-698796b59c3b",
+        "person_id": "794b4bfe-7b69-4e16-bdf8-f9e842dced32",
+        "display_name": "Lennon Kurzman"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "toddler_2_3_years",
+          "program_room_group_label": "Toddler — 2–3 years"
+        },
+        "process_instance_id": "93722453-33e9-4207-8774-8931ee2c855d"
+      }
+    },
+    {
+      "id": "27de6932-6910-4498-9f5f-5f3bc688fd5a",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "toddler",
+      "program_room_group_label": "toddler",
+      "wait_since": "2026-08-07T20:05:50.73002+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "b247b8a3-7df7-4919-9309-698796b59c3b",
+        "person_id": "794b4bfe-7b69-4e16-bdf8-f9e842dced32",
+        "display_name": "Lennon Kurzman"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "toddler",
+          "program_room_group_label": "toddler"
+        },
+        "process_instance_id": "93722453-33e9-4207-8774-8931ee2c855d"
+      }
+    },
+    {
+      "id": "bed8ce49-06a3-46ae-a90a-5579c5307aa7",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-18T20:19:28.399+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "8a8448a2-e90b-4e9e-bf3e-dd24426d1624",
+        "person_id": null,
+        "display_name": "Test Process"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "pre_k_4_5_years",
+          "program_room_group_label": "Pre-K — 4–5 years"
+        },
+        "process_instance_id": "28886626-b6f5-40a5-8ba3-a6c023e8b47a"
+      }
+    },
+    {
+      "id": "448c5dcb-f84b-4cea-ad45-31744bf5513a",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-18T20:27:52.955+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "a38899dd-cb0b-4670-bbfc-d7bf7a1dd24c",
+        "person_id": null,
+        "display_name": "Test Process2"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "school_age_5_years",
+          "program_room_group_label": "School Age — 5+ years"
+        },
+        "process_instance_id": "7db56fb0-4710-4de6-96d4-c6de0a069234"
+      }
+    },
+    {
+      "id": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-19T15:55:45.614+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "c90d7352-fc07-497b-ad23-6af60e06a30a",
+        "person_id": null,
+        "display_name": "Test Process3"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "1c3115b0-d65e-443b-ad81-0f86c01a2721"
+      }
+    },
+    {
+      "id": "504bf3f3-7eb5-4bac-bc4d-c7aca413eab9",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-19T17:47:58.167+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "5535361f-c097-42d6-8aed-9153b2f9a7b4",
+        "person_id": null,
+        "display_name": "Test Process4"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "d2a3b448-296e-43e7-b0a8-28dd918526ac"
+      }
+    },
+    {
+      "id": "a8077c41-34ae-4695-9852-c0df0a3a65b0",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-19T18:24:07.893+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "138b6b1a-52bd-4001-8ce8-433c026d31e6",
+        "person_id": null,
+        "display_name": "Test Process5"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "4e3fb78d-e4fd-4b60-8d0e-e2b0a7132f1d"
+      }
+    },
+    {
+      "id": "85c0259d-d558-446a-b7f5-909f88b8c4f4",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-20T20:58:28.778+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "e907e214-7164-42f3-8f82-eebe6c4db4af",
+        "person_id": null,
+        "display_name": "Test Process7"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "ddc23ed1-824c-41e3-8859-ba702a0efe48"
+      }
+    },
+    {
+      "id": "22357ef1-ac83-41e3-96b9-3d15625d3ace",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-20T20:58:28.771+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "c1cd2074-37ac-43a5-b897-827a84c00f93",
+        "person_id": null,
+        "display_name": "PassB Kid"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "fc00ec9c-c76c-4e98-8010-7f3ddfde6208"
+      }
+    },
+    {
+      "id": "55cf37fb-1fe4-441a-b9d1-5c3665f78a79",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-20T20:58:28.771+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "025a307f-67b5-405e-9223-ee42fb283b32",
+        "person_id": null,
+        "display_name": "Test Process10"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "b0aa7376-9dbe-4dd1-bb9d-6c20d433ebec"
+      }
+    },
+    {
+      "id": "33af29af-4ca3-49ac-b6f7-5f75eeabe1f1",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-20T20:58:28.75+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "28cb6bbb-bf0b-4401-8360-fd904c745f9e",
+        "person_id": null,
+        "display_name": "Test Process6"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "c68e8793-b4d0-457a-8daf-f9cdf9b07445"
+      }
+    },
+    {
+      "id": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-20T20:58:28.789+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "998ffc89-110d-4c33-9a89-2bd343ce3f45",
+        "person_id": null,
+        "display_name": "Test Process8"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "677420ed-943b-4e7a-bcc0-4d2d7f61368f"
+      }
+    },
+    {
+      "id": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-20T20:58:28.81+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "d879b222-7ff7-48cb-8e94-08e0218c636d",
+        "person_id": null,
+        "display_name": "Test Process11"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "ccf803e1-46de-4953-a947-7edb3425f738"
+      }
+    },
+    {
+      "id": "cab180fc-0b21-4e92-a998-4e80cd58efb9",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-20T20:58:29.113+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "0a7a04ba-4c1f-4542-a87b-cd86e1891ce9",
+        "person_id": null,
+        "display_name": "Test Process9"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "infant_0_18_months",
+          "program_room_group_label": "Infant — 0–18 months"
+        },
+        "process_instance_id": "b1e675fd-31a8-4cde-be18-0a24c2350cfa"
+      }
+    },
+    {
+      "id": "4b1b508c-3373-408e-87ff-c7920ee332f8",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-21T21:04:13.447+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "e953b5c3-76a8-4766-8e55-be4eb6aa09b4",
+        "person_id": null,
+        "display_name": "Marisol Vega"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "program_room_group",
+          "label_source": "program_room_group",
+          "program_room_cohort_key": "school_age_5_years",
+          "program_room_group_label": "School Age — 5+ years"
+        },
+        "process_instance_id": "61938ae7-81b9-4e70-9690-dd861c020af6"
+      }
+    },
+    {
+      "id": "dbfd573f-3a4d-41c1-b778-d20736821ff9",
+      "status": "active",
+      "is_synthetic_fallback": false,
+      "program_room_cohort_key": "unknown_program_room",
+      "program_room_group_label": "Program / room not specified",
+      "wait_since": "2026-08-21T23:04:43.166+00:00",
+      "start_date": null,
+      "child": {
+        "opportunity_customer_member_id": null,
+        "customer_member_id": "927a3348-ec46-4378-9bd6-4e659a5539de",
+        "person_id": null,
+        "display_name": "Tomas Rivera"
+      },
+      "link_group": null,
+      "active_overrides": [],
+      "metadata": {
+        "source": "process_instance_waitlist",
+        "site_resolution": {
+          "source": "opportunity",
+          "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "used_opportunity_fallback": true
+        },
+        "cohort_resolution": {
+          "key_source": "fallback",
+          "label_source": "fallback",
+          "program_room_cohort_key": "unknown_program_room",
+          "program_room_group_label": "Program / room not specified"
+        },
+        "process_instance_id": "cf2ea7b8-47f1-4c60-80ad-1e3e3c66018e"
+      }
+    }
+  ],
+  "projection": {
+    "ee36c3b1-9aba-4923-95d1-31ca5603e34a": {
+      "cohort": "infant",
+      "label": "Infant",
+      "section": "infant",
+      "pos": "2/2"
+    },
+    "698f850a-2441-48d5-bed3-0b0870afa848": {
+      "cohort": "infant",
+      "label": "Infant",
+      "section": "infant",
+      "pos": "1/2"
+    },
+    "9e230cf8-d444-4d0c-8f8b-54be3162a6ad": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "3/14"
+    },
+    "bed8ce49-06a3-46ae-a90a-5579c5307aa7": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "1/14"
+    },
+    "a8077c41-34ae-4695-9852-c0df0a3a65b0": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "5/14"
+    },
+    "4b1b508c-3373-408e-87ff-c7920ee332f8": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "13/14"
+    },
+    "e392cb90-29a7-4327-b91e-b063b06fa4b6": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "10/14"
+    },
+    "448c5dcb-f84b-4cea-ad45-31744bf5513a": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "2/14"
+    },
+    "55cf37fb-1fe4-441a-b9d1-5c3665f78a79": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "8/14"
+    },
+    "cab180fc-0b21-4e92-a998-4e80cd58efb9": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "12/14"
+    },
+    "33af29af-4ca3-49ac-b6f7-5f75eeabe1f1": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "6/14"
+    },
+    "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "11/14"
+    },
+    "dbfd573f-3a4d-41c1-b778-d20736821ff9": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "14/14"
+    },
+    "504bf3f3-7eb5-4bac-bc4d-c7aca413eab9": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "4/14"
+    },
+    "85c0259d-d558-446a-b7f5-909f88b8c4f4": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "9/14"
+    },
+    "22357ef1-ac83-41e3-96b9-3d15625d3ace": {
+      "cohort": "unknown_program_room",
+      "label": "Program / room not specified",
+      "section": "unspecified",
+      "pos": "7/14"
+    },
+    "ba8cdcf5-73b2-43e6-8a86-aa28f1098c0e": {
+      "cohort": "toddler",
+      "label": "Toddler",
+      "section": "toddler",
+      "pos": "1/1"
+    }
+  },
+  "rowCount": 17,
+  "terminal": "operational"
+}

@@ -1,6 +1,6 @@
 /**
  * Process env gates for AI enrichment (stub + telemetry). No secrets.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 function truthyEnv(name: string): boolean {

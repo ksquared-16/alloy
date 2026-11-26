@@ -1,157 +1,122 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
-import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
-import type { FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
-import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
-import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
-import { CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
-
-/**
- * UI-6 / UI-6.1 — drawer Family Communication Workspace (no queue). Thin container: fetches the VM by
- * customerId or drawer entity and renders the CANONICAL FamilyCommunicationWorkspaceView (the same
- * markup the full Communications modal uses). All timeline/composer UI lives in the View, once.
- */
-const toWorkspaceMessage = (e: TimelineEventVM): WorkspaceTimelineMessage => ({
-    id: e.id, direction: e.direction, channel: e.channel, body: e.body, created_at: e.createdAt, kind: e.kind, thread_id: e.threadId, status: e.status,
-});
+import type {
+    FamilyCommunicationWorkspacePreviewVM,
+} from "@/lib/communications/v2/familyWorkspace/types";
+import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import type {
+    FamilyComposeDraftSeed,
+    FamilyComposeIntent,
+} from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
+import type { FamilySendWorkConsequence } from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
+import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 
 export default function FamilyCommunicationWorkspace(props: {
     customerId?: string;
     entity?: { entityType: string; entityId: string };
     channel?: "email" | "sms";
+    initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
+    initialThreadId?: string | null;
+    /** Activity cockpit embed — compact loading shell while warm cache resolves. */
+    compactActivityLoading?: boolean;
+    surfaceVariant?: FamilyWorkspaceSurfaceVariant;
+    entryContext?: "current_work" | null;
+    composeIntent?: FamilyComposeIntent | null;
+    draftSeed?: FamilyComposeDraftSeed | null;
+    workConsequence?: FamilySendWorkConsequence | null;
+    onSendAcknowledged?: (() => void) | null;
 }) {
-    const channel = props.channel ?? "email";
-    const [vm, setVm] = useState<FamilyCommunicationWorkspaceVM | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
-    const [subjectDraft, setSubjectDraft] = useState("");
-    const [bodyDraft, setBodyDraft] = useState("");
-    const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
-    const [sendError, setSendError] = useState<string | null>(null);
-    const [sending, setSending] = useState(false);
+    const adminAuth = useAdminAuthOptional();
+    const runtime = useFamilyCommunicationRuntime(props);
+    const isActivityEmbed = props.surfaceVariant === "activity_embed";
 
-    const queryFor = useCallback(
-        (threadId: string | null): string | null => {
-            const base = new URLSearchParams();
-            if (props.customerId) base.set("customer_id", props.customerId);
-            else if (props.entity?.entityId) { base.set("entity_type", props.entity.entityType); base.set("entity_id", props.entity.entityId); }
-            else return null;
-            base.set("composer_channel", channel);
-            if (threadId) base.set("thread_id", threadId);
-            return base.toString();
-        },
-        [props.customerId, props.entity?.entityType, props.entity?.entityId, channel]
-    );
+    if (runtime.error && !runtime.vm) return <div className="p-4 text-xs text-alloy-ember">{runtime.error}</div>;
 
-    const load = useCallback(
-        async (threadId: string | null, resetSelection: boolean) => {
-            const qs = queryFor(threadId);
-            if (!qs) { setLoading(false); return; }
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
-                const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM; error?: string };
-                if (!res.ok || !data.workspace) { setError(data.error ?? "Failed to load"); return; }
-                setVm(data.workspace);
-                if (resetSelection) setSelectedRecipientIds(data.workspace.selectedRecipients);
-            } catch {
-                setError("Failed to load");
-            } finally {
-                setLoading(false);
-            }
-        },
-        [queryFor]
-    );
-
-    useEffect(() => { setSelectedThreadId(null); setSubjectDraft(""); setBodyDraft(""); setSendResult(null); void load(null, true); }, [load]);
-
-    const openThread = useCallback((threadId: string) => { setSelectedThreadId(threadId); void load(threadId, false); }, [load]);
-
-    const runSend = useCallback(
-        async (confirm: boolean) => {
-            const cust = vm?.scope.customerId;
-            if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
-            setSending(true);
-            setSendError(null);
-            try {
-                const res = await fetch("/api/admin/communications/family-send", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
-                });
-                const data = (await res.json()) as FamilySendResult & { error?: string };
-                if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
-                setSendResult(data);
-                if (confirm) await load(selectedThreadId, false);
-            } catch {
-                setSendError("Send failed");
-            } finally {
-                setSending(false);
-            }
-        },
-        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, channel, load]
-    );
-
-    const events: TimelineEventVM[] = vm ? (selectedThreadId ? vm.messages : vm.timelineEvents) : [];
-    const messages = useMemo(() => events.map(toWorkspaceMessage), [events]);
-    const health = useMemo(
-        () => computeCommunicationHealth({ messages: events.filter((e) => !e.kind || e.kind === "message").map((e) => ({ direction: e.direction, created_at: e.createdAt, channel: e.channel, opened_at: e.openedAt, replied_at: e.repliedAt })) }),
-        [events]
-    );
-    const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
-    const healthTone = health.engagementScore >= 66 ? "text-alloy-juniper" : health.engagementScore >= 33 ? "text-alloy-amber" : "text-red-600";
-    const healthDot = health.engagementScore >= 66 ? "bg-alloy-juniper" : health.engagementScore >= 33 ? "bg-alloy-amber" : "bg-red-500";
-
-    if (loading && !vm) return <CommsWorkspacePanelReserve />;
-    if (error && !vm) return <div className="p-4 text-xs text-alloy-ember">{error}</div>;
-    if (!vm) return <div className="p-4 text-xs text-alloy-midnight/45">No conversation.</div>;
-
-    const allRecipients = vm.recipientGroups.flatMap((g) => g.recipients);
-    const childNames = vm.children.map((c) => (c.ageLabel ? `${c.name} (${c.ageLabel})` : c.name));
-    const detail = {
-        owner: vm.family.ownerLabel ?? "Unassigned",
-        contactName: allRecipients[0]?.displayName ?? vm.family.label,
-        program: vm.family.program,
-        stage: vm.family.stage,
-        consent: vm.consentSummary.household,
-    };
-    const selected = { id: vm.scope.customerId, family_label: vm.family.label, sla_state: null, assignment_state: "unassigned" };
+    if (!runtime.vm) {
+        if (props.compactActivityLoading) {
+            return (
+                <section
+                    data-cc-column="workspace"
+                    data-cc-drawer-workspace
+                    data-drawer-family-workspace-warm={runtime.servedFromWarmCache ? "true" : undefined}
+                    className="flex min-h-0 flex-col overflow-hidden"
+                >
+                    <CommsActivityEmbedHydratingShell joining={runtime.loading} />
+                </section>
+            );
+        }
+        if (runtime.loading) return <CommsWorkspacePanelReserve />;
+        return <div className="p-4 text-xs text-alloy-midnight/45">No conversation.</div>;
+    }
 
     return (
-        <section data-cc-column="workspace" data-cc-drawer-workspace className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
+        <section
+            data-cc-column="workspace"
+            data-cc-drawer-workspace
+            data-cc-surface-variant={props.surfaceVariant ?? "default"}
+            data-cc-entry-context={props.entryContext ?? undefined}
+            data-cc-compose-intent={props.composeIntent ?? undefined}
+            data-drawer-family-workspace-warm={runtime.servedFromWarmCache ? "true" : undefined}
+            className={
+                props.entryContext === "current_work"
+                    ? "flex min-h-0 max-h-[min(70vh,640px)] flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+                    : isActivityEmbed
+                      ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+                      : "flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+            }
+        >
             <FamilyCommunicationWorkspaceView
-                selected={selected}
-                detail={detail}
-                childNames={childNames}
-                healthTone={healthTone}
-                healthDot={healthDot}
-                healthLabel={healthLabel}
+                surfaceVariant={props.surfaceVariant}
+                anchorOpportunityId={props.entity?.entityType === "opportunities" ? props.entity.entityId : null}
+                threads={runtime.vm.threads}
+                onNewMessage={runtime.startNewMessage}
+                selected={runtime.selected!}
+                detail={runtime.detail}
+                childNames={runtime.childNames}
+                healthTone={runtime.healthTone}
+                healthDot={runtime.healthDot}
+                healthLabel={runtime.healthLabel}
+                workspaceMode={runtime.workspaceMode}
+                onWorkspaceModeChange={runtime.setWorkspaceMode}
+                workspaceModeAvailability={runtime.workspaceModeAvailability}
                 LIVE_WORKSPACE={true}
-                selectedThreadId={selectedThreadId}
-                messages={messages}
-                liveRecipientGroups={vm.recipientGroups}
-                selectedRecipientIds={selectedRecipientIds}
-                liveChannel={channel}
-                subjectDraft={subjectDraft}
-                bodyDraft={bodyDraft}
-                sendResult={sendResult}
-                sendError={sendError}
-                sending={sending}
+                selectedThreadId={runtime.selectedThreadId}
+                selectedThread={runtime.selectedThread}
+                messages={runtime.messages}
+                timelineMessages={isActivityEmbed ? runtime.timelineMessages : undefined}
+                liveRecipientGroups={runtime.vm.recipientGroups}
+                // Per-person profiles from the workspace VM — read-only here (no write path is
+                // wired on this surface), but what each recipient pill states is their own truth.
+                preferenceProfilesByContact={runtime.vm.consentSummary.preferenceProfilesByContact}
+                selectedRecipientIds={runtime.selectedRecipientIds}
+                liveChannel={runtime.liveChannel}
+                subjectDraft={runtime.subjectDraft}
+                bodyDraft={runtime.bodyDraft}
+                sendResult={runtime.sendResult}
+                sendError={runtime.sendError}
+                sending={runtime.sending}
                 assignBusy={false}
                 onClaim={() => {}}
-                onAllMessages={() => { setSelectedThreadId(null); void load(null, false); }}
-                onOpenThread={openThread}
-                onToggleRecipient={(id) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true))}
-                onSubjectChange={setSubjectDraft}
-                onBodyChange={setBodyDraft}
-                onSendNow={() => void runSend(false)}
-                onConfirmSend={() => void runSend(true)}
-                onDismissSend={() => { setSendResult(null); setSendError(null); }}
+                onAllMessages={runtime.showAllMessages}
+                onOpenThread={runtime.openThread}
+                onToggleRecipient={runtime.toggleRecipient}
+                onSubjectChange={runtime.setSubjectDraft}
+                onBodyChange={runtime.setBodyDraft}
+                onSendNow={() => void runtime.send(false)}
+                onConfirmSend={() => void runtime.send(true)}
+                onDismissSend={runtime.dismissSendResult}
+                onAcknowledgeSendSuccess={runtime.acknowledgeSendSuccess}
+                tourInvitationAck={runtime.tourInvitationAck}
+                onInsertTourInvitationLink={
+                    props.entity?.entityType === "opportunities"
+                        ? () => runtime.insertTourInvitationLink()
+                        : undefined
+                }
+                viewerUserId={adminAuth?.userId ?? null}
+                sendCompleteToken={runtime.sendCompleteToken}
             />
         </section>
     );

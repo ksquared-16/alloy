@@ -1,0 +1,112 @@
+{
+ "bp": [
+  {
+   "tag": "div",
+   "cls": "alloy-os-process",
+   "h": 232,
+   "display": "block",
+   "flexDirection": "row",
+   "alignItems": "normal",
+   "alignSelf": "auto",
+   "flex": "0 1 auto",
+   "height": "231.766px",
+   "minHeight": "auto",
+   "inlineHeight": null
+  },
+  {
+   "tag": "div",
+   "cls": "alloy-os-focus-panel-grid__cell",
+   "h": 325,
+   "display": "flex",
+   "flexDirection": "row",
+   "alignItems": "flex-start",
+   "alignSelf": "auto",
+   "flex": "1 1 auto",
+   "height": "325px",
+   "minHeight": "0px",
+   "inlineHeight": null
+  },
+  {
+   "tag": "div",
+   "cls": "alloy-os-fp-card-intrinsic",
+   "h": 325,
+   "display": "flex",
+   "flexDirection": "column",
+   "alignItems": "normal",
+   "alignSelf": "auto",
+   "flex": "0 1 auto",
+   "height": "325px",
+   "minHeight": "100%",
+   "inlineHeight": null
+  },
+  {
+   "tag": "div",
+   "cls": "alloy-os-fp-grid-area",
+   "h": 325,
+   "display": "flex",
+   "flexDirection": "row",
+   "alignItems": "stretch",
+   "alignSelf": "auto",
+   "flex": "0 1 auto",
+   "height": "325px",
+   "minHeight": "0px",
+   "inlineHeight": "325px"
+  }
+ ],
+ "fin": [
+  {
+   "tag": "div",
+   "cls": "alloy-os-financials",
+   "h": 325,
+   "display": "block",
+   "flexDirection": "row",
+   "alignItems": "normal",
+   "alignSelf": "auto",
+   "flex": "0 1 auto",
+   "height": "325.188px",
+   "minHeight": "auto",
+   "inlineHeight": null
+  },
+  {
+   "tag": "div",
+   "cls": "alloy-os-focus-panel-grid__cell",
+   "h": 325,
+   "display": "flex",
+   "flexDirection": "row",
+   "alignItems": "flex-start",
+   "alignSelf": "auto",
+   "flex": "1 1 auto",
+   "height": "325px",
+   "minHeight": "0px",
+   "inlineHeight": null
+  },
+  {
+   "tag": "div",
+   "cls": "alloy-os-fp-card-intrinsic",
+   "h": 325,
+   "display": "flex",
+   "flexDirection": "column",
+   "alignItems": "normal",
+   "alignSelf": "auto",
+   "flex": "0 1 auto",
+   "height": "325px",
+   "minHeight": "100%",
+   "inlineHeight": null
+  },
+  {
+   "tag": "div",
+   "cls": "alloy-os-fp-grid-area",
+   "h": 325,
+   "display": "flex",
+   "flexDirection": "row",
+   "alignItems": "stretch",
+   "alignSelf": "auto",
+   "flex": "0 1 auto",
+   "height": "325px",
+   "minHeight": "0px",
+   "inlineHeight": "325px"
+  }
+ ],
+ "gridCanvas": "alloy-os-fp-canvas alloy-os-fp-canvas--grid",
+ "hasLegacyGridAncestor": true
+}

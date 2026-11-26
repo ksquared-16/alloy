@@ -17,6 +17,8 @@ export type AvailableTourSlot = {
     endAt: string;
     timezone: string;
     remainingCapacity: number;
+    /** The rule's `max_bookings_per_slot` — the limit the database re-enforces on write. */
+    capacity: number;
     ruleId: string;
     locationId: string;
     userId: string | null;

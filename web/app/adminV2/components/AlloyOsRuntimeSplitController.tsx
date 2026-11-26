@@ -135,25 +135,46 @@ export default function AlloyOsRuntimeSplitController() {
         const root = document.documentElement;
         const apply = () => {
             const deck = document.querySelector<HTMLElement>(ALLOY_OS_CONTROL_DECK_SELECTOR);
-            if (!deck) return;
-            const rect = deck.getBoundingClientRect();
-            const top = Math.round(rect.top);
-            const bottom = Math.round(rect.bottom);
-            const right = Math.round(rect.right);
-            if (bottom > 0) {
-                root.style.setProperty(ALLOY_OS_OP_SURFACE_TOP_VAR, `${bottom}px`);
-                root.style.setProperty(ALLOY_OS_OP_SURFACE_COL_TOP_VAR, `${Math.max(0, top)}px`);
+            const fpSurface = document.querySelector<HTMLElement>(ALLOY_OS_FP_SURFACE_SELECTOR);
+            const wuHeader = document.querySelector<HTMLElement>(ALLOY_OS_WORK_UNIT_HEADER_SELECTOR);
+
+            if (deck) {
+                const rect = deck.getBoundingClientRect();
+                const top = Math.round(rect.top);
+                const bottom = Math.round(rect.bottom);
+                const right = Math.round(rect.right);
+                if (bottom > 0) {
+                    root.style.setProperty(ALLOY_OS_OP_SURFACE_TOP_VAR, `${bottom}px`);
+                    root.style.setProperty(ALLOY_OS_OP_SURFACE_COL_TOP_VAR, `${Math.max(0, top)}px`);
+                }
+                if (right > 0) {
+                    root.style.setProperty(ALLOY_OS_OP_SURFACE_RIGHT_VAR, `${right}px`);
+                }
+                return;
             }
-            // The Focus Panel right edge must align with the Work Unit Context right edge so
-            // both regions end at the same X (the WUC layout is authoritative). Publish the
-            // measured deck right; the panel ends here, not at the BOS-derived band right.
-            if (right > 0) {
-                root.style.setProperty(ALLOY_OS_OP_SURFACE_RIGHT_VAR, `${right}px`);
+
+            // Presentation Runtime V2 — no legacy control deck; anchor from FP.SURFACE top.
+            if (fpSurface) {
+                const fpRect = fpSurface.getBoundingClientRect();
+                const top = Math.round(fpRect.top);
+                const right = Math.round(fpRect.right);
+                if (top > 0) {
+                    root.style.setProperty(ALLOY_OS_OP_SURFACE_TOP_VAR, `${top}px`);
+                }
+                const colTop = wuHeader ?
+                    Math.round(wuHeader.getBoundingClientRect().top)
+                :   top;
+                root.style.setProperty(ALLOY_OS_OP_SURFACE_COL_TOP_VAR, `${Math.max(0, colTop)}px`);
+                if (right > 0) {
+                    root.style.setProperty(ALLOY_OS_OP_SURFACE_RIGHT_VAR, `${right}px`);
+                }
             }
         };
         const raf = requestAnimationFrame(apply);
         window.addEventListener("resize", apply);
-        const deck = document.querySelector<HTMLElement>(ALLOY_OS_CONTROL_DECK_SELECTOR);
+        const deck =
+            document.querySelector<HTMLElement>(ALLOY_OS_CONTROL_DECK_SELECTOR) ??
+            document.querySelector<HTMLElement>(ALLOY_OS_FP_SURFACE_SELECTOR);
         const ro = deck && "ResizeObserver" in window ? new ResizeObserver(apply) : null;
         if (deck && ro) ro.observe(deck);
         // The deck top can also shift on scroll within the surface; keep it fresh cheaply.
@@ -176,6 +197,12 @@ export default function AlloyOsRuntimeSplitController() {
 /** Fixed work-unit header (title + KPI strip + pills + filters). */
 const ALLOY_OS_CONTROL_DECK_SELECTOR =
     '[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck';
+
+/** Presentation Runtime V2 — FP.SURFACE row (queue + inline Focus Panel). */
+const ALLOY_OS_FP_SURFACE_SELECTOR = '[data-alloy-section="FP.SURFACE"]';
+
+/** Presentation Runtime V2 — Work Unit header (column top anchor). */
+const ALLOY_OS_WORK_UNIT_HEADER_SELECTOR = "[data-work-unit-header]";
 
 /** Operational-surface top var — shared top Y for Queue · Focus Panel · BOS (System 1.5). */
 const ALLOY_OS_OP_SURFACE_TOP_VAR = "--alloy-os-op-surface-top";

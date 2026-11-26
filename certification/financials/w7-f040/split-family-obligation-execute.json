@@ -1,0 +1,61 @@
+{
+ "mode": "execute",
+ "today": "2026-10-20",
+ "before": {
+  "rows": [],
+  "balanceCents": 0,
+  "payers": []
+ },
+ "add": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "data": {
+    "execution_result": {
+     "write_status": "created",
+     "resolution_key": "tpl:registration_fee:2026-10-20:fd000000-0000-4000-8000-0000007a0006",
+     "review_required": false,
+     "posted": true
+    },
+    "affected_id": "b3abcaa3-72f1-4b13-b4e4-a5a0c10cffe8"
+   },
+   "correlation_id": "1b31bd0a-7453-4ccf-832e-f949b411b667"
+  }
+ },
+ "chargeId": "b3abcaa3-72f1-4b13-b4e4-a5a0c10cffe8",
+ "resolve": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "data": {
+    "execution_result": {
+     "kind": "resolved",
+     "chargeId": "b3abcaa3-72f1-4b13-b4e4-a5a0c10cffe8",
+     "arrangementId": "8b683baa-dd23-4b72-aec0-a6c231e7eb03",
+     "allocations": 2,
+     "unassignedCents": 0,
+     "netCents": 7500
+    },
+    "affected_id": "b3abcaa3-72f1-4b13-b4e4-a5a0c10cffe8"
+   },
+   "correlation_id": "19505b52-47dc-4537-9d92-32b8d68bcaeb"
+  }
+ },
+ "after": {
+  "rows": [
+   {
+    "chargeId": "b3abcaa3-72f1-4b13-b4e4-a5a0c10cffe8",
+    "label": "Fee",
+    "cents": 7500,
+    "status": "posted",
+    "date": "2026-10-20",
+    "responsible": "Split"
+   }
+  ],
+  "balanceCents": 7500,
+  "payers": [
+   "Rosa Split $18.75",
+   "Dana Split $56.25"
+  ]
+ }
+}

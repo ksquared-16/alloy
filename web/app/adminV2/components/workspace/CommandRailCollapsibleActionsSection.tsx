@@ -13,13 +13,10 @@ type Props = {
 };
 
 /**
- * Compact collapsible Actions section above the BOS dock in the workspace command rail.
+ * Compact collapsible Actions section for workspace / Work Unit header control bands.
  *
- * Collapsed by default — BOS remains the primary expanded surface. When expanded, the actions
- * body renders in a platform floating menu ({@link CommandRailFloatingMenu}) portaled to
- * `document.body` and anchored to this trigger. This keeps the in-rail section a fixed-height
- * trigger (so opening never reflows the BOS overlay anchor) and floats the menu above the BOS
- * command surface instead of being covered by or clipped within the rail layout.
+ * Collapsed by default. When expanded, the actions body renders in a platform floating menu
+ * ({@link CommandRailFloatingMenu}) portaled to `document.body` and anchored to this trigger.
  */
 export function CommandRailCollapsibleActionsSection({ actionCount, children, loading = false }: Props) {
     const [expanded, setExpanded] = useState(false);

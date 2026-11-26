@@ -1,0 +1,61 @@
+{
+  "period": "2026-09",
+  "createTemplate": {
+    "status": 201,
+    "id": "9a4d0578-822b-4aee-af2d-e9bef48bf8d0"
+  },
+  "templateId": "9a4d0578-822b-4aee-af2d-e9bef48bf8d0",
+  "child": {
+    "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+    "agreementId": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+    "displayName": "Certa Certhouse",
+    "agreementStatus": "active"
+  },
+  "addCharge": {
+    "status": 200,
+    "ok": true
+  },
+  "applyDiscounts": {
+    "status": 200,
+    "ok": true,
+    "result": {
+      "period_key": "2026-09",
+      "service_period": {
+        "start": "2026-09-01",
+        "end": "2026-09-30"
+      },
+      "applied": 1,
+      "unchanged": 0,
+      "alreadyPosted": 0,
+      "notEligible": 0,
+      "refused": 0,
+      "refused_outcomes": []
+    }
+  },
+  "discountRows": [
+    {
+      "amount": -4000,
+      "subject": "Certa Certhouse",
+      "period": "2026-09",
+      "reduction": {
+        "applicationId": "5e8cdedc-b5ea-4c8c-b059-7d34fa7f5f01",
+        "concept": "discount",
+        "conceptLabel": "Discount",
+        "recurrence": "ongoing",
+        "recurrenceLabel": "Ongoing",
+        "decidedBy": "policy",
+        "basisSummary": "10% of $400.00",
+        "explanation": "discount · 10% of $400.00",
+        "sourceChargeId": "afe85059-1e5a-48c6-b527-4a2183e0c2ca",
+        "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "periodKey": "2026-09",
+        "periodStart": "2026-09-01",
+        "periodEnd": "2026-09-30",
+        "createdAt": "2026-09-18T16:41:30.804683+00:00",
+        "reversedByApplicationId": null,
+        "reversesApplicationId": null,
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0"
+      }
+    }
+  ]
+}

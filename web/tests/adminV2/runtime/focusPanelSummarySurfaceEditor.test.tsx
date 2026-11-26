@@ -6,7 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
-import SurfacesConfigurationPage from "@/components/adminV2/settings/surfaces/SurfacesConfigurationPage";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { defaultCardFields, conceptOptionsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReference";
@@ -30,25 +29,35 @@ function demoCards() {
 }
 
 describe("Surfaces page — Configuration Runtime shell + naming", () => {
-    const html = renderToStaticMarkup(<SurfacesConfigurationPage />);
     const page = readSrc("components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx");
+    const nav = readSrc("components/adminV2/settings/surfaces/useSurfacesConfigurationSettings.ts");
 
-    it("preserves the Configuration shell (Context → Section → Workspace)", () => {
+    it("preserves the Configuration shell for the Surfaces list (Context → Category → Collection → Workspace)", () => {
         expect(page).toContain("ConfigurationShell");
-        expect(html).toContain('data-testid="surfaces-configuration-context"');
-        expect(html).toContain('data-testid="surfaces-configuration-shell"');
+        expect(page).toContain('testId="surfaces-configuration-context"');
+        expect(page).toContain('testId="surfaces-configuration-shell"');
     });
 
     it("labels the surface object 'Enrollment Focus Panel' (Summary stays internal)", () => {
-        expect(html).toContain('data-testid="surfaces-object-item-enrollment-focus-panel-summary"');
-        expect(html).toContain("Enrollment Focus Panel");
-        expect(html).not.toContain("Opportunity · Summary");
+        expect(page).toContain('surfaces-object-item-${item.id}');
+        expect(nav).toContain("enrollment-focus-panel-summary");
+        expect(nav).toContain("Enrollment Focus Panel");
+        expect(nav).not.toContain("Opportunity · Summary");
     });
 
-    it("collapses navigation while editing (breadcrumb + canvas wins)", () => {
-        expect(page).toContain('data-testid="surfaces-breadcrumb"');
+    it("embeds Focus Panel inside the Selected Surface Edit tab — never a detached full-bleed studio route", () => {
         expect(page).toContain("FocusPanelSummarySurfaceEditor");
-        expect(page).toContain("editing && selectedObject");
+        // The full-bleed studio-navigation path is gone: no router.replace(...) into
+        // `?editor=1&layout=` as the normal Edit journey, and no early return that replaces the
+        // whole page with only the editor.
+        expect(page).not.toContain("enterFocusPanelStudio");
+        expect(page).not.toContain("exitStudio");
+        expect(page).not.toContain("isFullBleedWorkspaceEditor");
+        expect(page).not.toContain("data-focus-panel-builder-wide");
+        expect(page).not.toContain('router.replace(`/settings/surfaces?${params.toString()}`)');
+        // Edit renders inline in the main workspace pane; `onBack` returns to the Surfaces collection.
+        expect(page).toContain('selectedObject.editor === "focus-panel-summary"');
+        expect(page).toContain('<FocusPanelSummarySurfaceEditor onBack={clearSelection} />');
     });
 });
 
@@ -58,16 +67,20 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
 
     // The canvas + inspector are gated on the async layout load (`loaded`), so the static
     // SSR render shows "Loading…"; structure is asserted from source (canvas-first reality).
-    // EB V5: the canvas is the responsive GRID builder.
-    const canvasSrc = readSrc("components/admin/focusPanel/FocusPanelGridCanvasBuilder.tsx");
+    // Runtime-first composer canvas replaces the legacy grid builder chrome.
+    const canvasSrc = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
 
     it("is canvas-first: the Focus Panel canvas IS the editor (no separate lower preview)", () => {
-        expect(editorSrc).toContain('data-surface-canvas-builder="true"');
-        expect(editorSrc).toContain("FocusPanelGridCanvasBuilder");
+        expect(canvasSrc).toContain('data-surface-canvas-builder="true"');
+        expect(canvasSrc).toContain('data-focus-panel-runtime-composer="true"');
+        expect(editorSrc).toContain("FocusPanelRuntimeComposerCanvas");
         // The legacy lower "Focus Panel / Preview" structure editor is removed.
         expect(editorSrc).not.toContain('data-surface-editor-canvas="enrollment-focus-panel-summary"');
         expect(editorSrc).not.toContain("data-focus-panel-canvas-footprint");
         expect(editorSrc).not.toContain("FocusPanelEditableCardFrame");
+        // No builder-grid framing ("Arrange the Focus Panel").
+        expect(editorSrc).not.toContain("FocusPanelGridCanvasBuilder");
+        expect(canvasSrc).not.toContain("Arrange the Focus Panel");
     });
 
     it("uses the Configuration header look (Enrollment Focus Panel, not legacy gray)", () => {
@@ -75,10 +88,13 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
         expect(html).not.toContain("Enrollment Focus Panel Summary");
     });
 
-    it("composition lives on the canvas (drag + direct resize); behavior in the adjacent inspector", () => {
-        // Direct-manipulation composition controls live on the canvas regions (grid resize).
-        expect(canvasSrc).toContain("data-grid-resize-w");
-        expect(canvasSrc).toContain("data-grid-resize-h");
+    it("composition lives on the canvas (subtle hover handles); behavior in the adjacent inspector", () => {
+        // Layout handles appear on composer cells (hover/selection only).
+        expect(canvasSrc).toContain("alloy-os-fp-composer-cell__handle--w");
+        expect(canvasSrc).toContain("alloy-os-fp-composer-cell__handle--h");
+        // Runtime-shaped grid + header (same components as /work-unit).
+        expect(canvasSrc).toContain("FocusPanelCardGrid");
+        expect(canvasSrc).toContain("OpportunityFocusPanelHeader");
         // The inspector sits adjacent to the canvas (behavior).
         expect(editorSrc).toContain('data-surface-inspector="true"');
         expect(editorSrc).toContain("FocusPanelCardInspector");
@@ -87,9 +103,9 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
         expect(editorSrc).not.toContain("data-focus-panel-card-span");
     });
 
-    it("adds cards from the canvas card tray (not '+ line' insertion)", () => {
-        // Unplaced cards live in the canvas tray; the legacy insert line is gone.
-        expect(canvasSrc).toContain('data-grid-tray');
+    it("adds cards from the composer tray (not '+ line' insertion)", () => {
+        // Unplaced cards live in the composer tray; the legacy insert line is gone.
+        expect(canvasSrc).toContain("data-fp-composer-tray");
         expect(editorSrc).not.toContain('data-testid="focus-panel-insert-line"');
         expect(editorSrc).not.toContain('data-testid="focus-panel-add-card-panel"');
         // Selecting a card on the canvas opens the inspector; sections track the canvas.
@@ -110,8 +126,8 @@ describe("Content Mode removed — contextual Inspector instead", () => {
         expect(editorSrc).not.toContain("focus-panel-content-inspector");
         expect(editorSrc).not.toContain("contentModeEnabled");
         expect(editorSrc).not.toContain("editSurface");
-        // Canvas-first: composition is authored on the grid canvas; the inspector owns behavior.
-        expect(editorSrc).toContain("FocusPanelGridCanvasBuilder");
+        // Canvas-first: composition is authored on the runtime-shaped canvas; the inspector owns behavior.
+        expect(editorSrc).toContain("FocusPanelRuntimeComposerCanvas");
         expect(editorSrc).toContain("FocusPanelCardInspector");
     });
 
@@ -200,5 +216,25 @@ describe("buildDemoFocusPanelSummaryViewModel — collections are populated", ()
         expect(record["person.secondary_contact_name"]).toBe("Taylor Johnson");
         expect(Array.isArray(record._inquiry_children)).toBe(true);
         expect((record._inquiry_children as unknown[]).length).toBe(2);
+    });
+
+    it("seeds Current Work preview through the production pipeline (not empty placeholder)", () => {
+        const { vm } = buildDemoFocusPanelSummaryViewModel();
+        expect(vm.workspace.stage_work_runtime).not.toBeNull();
+        expect(vm.workspace.published_stage_inputs).toBeTruthy();
+        expect(vm.actions.record_header?.secondary?.length).toBeGreaterThan(0);
+
+        const cards = deriveOpportunityFocusPanelPresentation({
+            mode: "summary",
+            displayVm: vm,
+            record: vm.above_fold.record as Record<string, unknown>,
+            title: vm.header.title,
+            perspective: null,
+            statusLabel: "Tour scheduled",
+        }).cards;
+
+        const currentWork = cards.get("current_work");
+        expect(currentWork?.insight).toBe("Contact Family");
+        expect(currentWork?.insight).not.toBe("No current work configured");
     });
 });

@@ -1,0 +1,760 @@
+"use client";
+
+import { resolveMarketingConsentLanguage } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+import clsx from "clsx";
+import { useMemo } from "react";
+import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
+import { groupFieldsIntoRows, rowCapacityRemaining, fieldLayoutFlexClass, layoutWidthFromField } from "@/lib/forms/formRowComposition";
+import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
+import { describeCondition } from "@/lib/forms/formBuilderSchema";
+
+/**
+ * "Only asked when …" — the condition, said on the form.
+ *
+ * A conditional question was real to a family and invisible to the operator: the runtime hid it, the
+ * schema carried it, and this canvas never mentioned it. So an operator could not tell which question
+ * was conditional, which question controlled it, or which answer revealed it — and had no way to notice
+ * a condition that was wrong.
+ */
+
+/**
+ * The mapping overlay.
+ *
+ * An imported form carries something a hand-built one does not: Alloy's own understanding of where each
+ * answer belongs. That belongs ON the form — an operator should be able to look at their own document
+ * and see what has been handled — but it must not become the form's design. So it is an overlay the
+ * canvas draws when asked: a left edge and one small word per field, in the existing tokens, over the
+ * same canvas manual forms use. With `show` false the form looks exactly like any other Studio form
+ * while the mapping data stays untouched.
+ */
+export type CanvasMappingState = "mapped" | "suggested" | "needs_mapping" | "form_only" | "derived";
+
+export type CanvasMappingOverlay = {
+    readonly byFieldId: ReadonlyMap<string, CanvasMappingState>;
+    /** Operator's "Show mapping" switch. False = a normal Studio form. */
+    readonly show: boolean;
+    /** Fields outside the current attention filter. De-emphasised, never removed. */
+    readonly dimFieldIds?: ReadonlySet<string>;
+};
+
+/*
+ * Restrained on purpose: a left edge and a faint wash, not a fill.
+ *
+ * Every colour here is an existing Alloy token doing the job it already means, because a mapping
+ * overlay that invents its own palette stops reading as Alloy. Bend Pine (#00A283) is the product's
+ * active/success/selected accent, so it carries SETTLED. Ember is the error/attention token, so it
+ * carries the red line. Gold is the palette's advisory colour, which is exactly what a suggestion is —
+ * proposed and not yet agreed. Midnight is the structural anchor, not a state, and using it as the
+ * mapped signal was simply wrong: it read as black and said nothing.
+ *
+ * Derived is positive but secondary — Alloy filling a value in is a good outcome, and it is not the
+ * same achievement as placing a family's answer on a record — so it takes Bend Pine at lower weight
+ * rather than a neutral it would share with "kept with the form".
+ */
+const MAPPING_EDGE: Record<CanvasMappingState, string> = {
+    mapped: "border-l-[3px] border-l-alloy-bend-pine/70 bg-alloy-bend-pine/[0.035]",
+    needs_mapping: "border-l-[3px] border-l-alloy-ember/70 bg-alloy-ember/[0.04]",
+    suggested: "border-l-[3px] border-l-alloy-gold bg-alloy-gold/[0.10]",
+    form_only: "border-l-[3px] border-l-alloy-stone",
+    derived: "border-l-[3px] border-l-alloy-bend-pine/35 bg-alloy-bend-pine/[0.02]",
+};
+
+const MAPPING_WORD: Record<CanvasMappingState, { readonly text: string; readonly className: string }> = {
+    mapped: { text: "Mapped", className: "text-alloy-bend-pine" },
+    needs_mapping: { text: "Needs mapping", className: "text-alloy-ember" },
+    suggested: { text: "Suggested", className: "text-alloy-gold-dark" },
+    form_only: { text: "Kept with the form", className: "text-alloy-muted" },
+    derived: { text: "Filled in by Alloy", className: "text-alloy-bend-pine/70" },
+};
+
+/** The same state colours, for a control that selects a state (the attention chips). */
+export const MAPPING_STATE_CHIP: Record<CanvasMappingState, string> = {
+    mapped: "bg-alloy-bend-pine text-white",
+    needs_mapping: "bg-alloy-ember text-white",
+    suggested: "bg-alloy-gold-dark text-white",
+    form_only: "bg-alloy-muted text-white",
+    derived: "bg-alloy-bend-pine/70 text-white",
+};
+
+export type CanvasDropTarget = {
+    sectionId: string;
+    fieldId: string | null;
+    position: "before" | "after";
+    rowIntent: "same-line" | "new-line";
+    /** Visual slot when hovering a row — left/center/right for same-line inserts */
+    rowSlot?: "left" | "center" | "right";
+};
+
+function resolveRowDropTarget(
+    e: React.DragEvent,
+    sectionId: string,
+    row: string[],
+    fieldById: Map<string, FormField>
+): CanvasDropTarget {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const relX = (e.clientX - rect.left) / rect.width;
+
+    if (rowCapacityRemaining(row, fieldById) === 0) {
+        const last = row[row.length - 1] ?? null;
+        return { sectionId, fieldId: last, position: "after", rowIntent: "new-line" };
+    }
+
+    if (row.length === 0) {
+        return { sectionId, fieldId: null, position: "after", rowIntent: "new-line" };
+    }
+
+    if (relX < 0.34) {
+        const first = row[0]!;
+        return { sectionId, fieldId: first, position: "before", rowIntent: "same-line", rowSlot: "left" };
+    }
+    if (relX < 0.67 && row.length >= 2) {
+        const mid = row[0]!;
+        return { sectionId, fieldId: mid, position: "after", rowIntent: "same-line", rowSlot: "center" };
+    }
+    const last = row[row.length - 1]!;
+    return { sectionId, fieldId: last, position: "after", rowIntent: "same-line", rowSlot: "right" };
+}
+
+const TYPE_LABELS: Record<string, string> = {
+    text: "Short text",
+    text_block: "Text block",
+    date: "Date",
+    number: "Number",
+    boolean: "Yes / No",
+    select: "Dropdown",
+    multiselect: "Multi-select",
+    signature: "Signature",
+    file_ref: "File upload",
+    marketing_consent: "Marketing consent",
+};
+
+
+/**
+ * A group stays ONE thing on the canvas.
+ *
+ * The schema already knows the difference between five postal lines and five questions, and between a
+ * repeatable guardian and "Parent 1 / Parent 2 / Parent 3" — `address_binding` and `collection_binding`
+ * say so. Drawing a group as a plain row threw that away and put the operator back in front of the flat
+ * list the grouping exists to remove, so the canvas renders the concept: its own frame, its children
+ * inside it, and the add control for a repeatable one.
+ */
+function GroupBlock({
+    field,
+    selected,
+    onSelect,
+    selectedChildId,
+    onSelectChild,
+    mappingState,
+    showMapping,
+    dimmed,
+}: {
+    field: FormField & { type: "group" };
+    selected: boolean;
+    onSelect: () => void;
+    /** The selected line inside this group, if any. */
+    selectedChildId?: string | null;
+    /** Select one line of the group — its own label, mapping and width — rather than the whole group. */
+    onSelectChild?: (childId: string) => void;
+    mappingState?: CanvasMappingState;
+    showMapping?: boolean;
+    dimmed?: boolean;
+}) {
+    const overlay = showMapping && mappingState ? mappingState : null;
+    const repeatable = Boolean(field.repeat || field.collection_binding);
+    const address = Boolean(field.address_binding);
+    return (
+        <div
+            role="button"
+            tabIndex={0}
+            data-canvas-field
+            data-canvas-group={field.id}
+            data-canvas-group-kind={address ? "address" : repeatable ? "repeat" : "plain"}
+            data-canvas-field-selected={selected ? true : undefined}
+            data-canvas-field-mapping={mappingState ?? undefined}
+            data-canvas-field-dimmed={dimmed ? "true" : "false"}
+            data-testid={`form-canvas-group-${field.id}`}
+            onClick={(e) => {
+                e.stopPropagation();
+                onSelect();
+            }}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    onSelect();
+                }
+            }}
+            className={clsx(
+                "relative min-w-0 flex-1 rounded-[10px] border px-3 py-2.5 transition-all duration-150",
+                selected
+                    ? "border-alloy-bend-pine/45 bg-alloy-bend-pine/[0.06] ring-[3px] ring-alloy-bend-pine/25"
+                    : "border-alloy-stone/25 bg-white hover:border-alloy-bend-pine/25",
+                overlay ? MAPPING_EDGE[overlay] : null,
+                dimmed ? "opacity-40" : null
+            )}
+        >
+            <div className="flex flex-wrap items-baseline gap-x-2">
+                <p className="text-[11px] font-semibold text-alloy-midnight">
+                    {field.label}
+                    {field.required ? <span className="text-alloy-ember"> *</span> : null}
+                </p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    {address ? "Address" : repeatable ? "Repeats" : "Group"}
+                </p>
+                {overlay ? (
+                    <p
+                        className={clsx("text-[9px] font-semibold uppercase tracking-wide", MAPPING_WORD[overlay].className)}
+                        data-testid={`form-canvas-mapping-${field.id}`}
+                    >
+                        {MAPPING_WORD[overlay].text}
+                    </p>
+                ) : null}
+            </div>
+            {/*
+              * The group's lines, in the rows their own widths make — the same row authority the
+              * section uses, so an address reads City | State | ZIP here exactly as the family sees it.
+              * Each line is its own selection: an address's City has its own destination and width.
+              */}
+            <div className="mt-2 space-y-1.5 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.05] p-2">
+                {groupFieldsIntoRows(
+                    field.fields.map((c) => c.id),
+                    new Map(field.fields.map((c) => [c.id, c] as const)),
+                ).map((row) => (
+                    <div key={row.join("|")} className="flex flex-wrap gap-2">
+                        {row.map((childId) => {
+                            const child = field.fields.find((c) => c.id === childId)!;
+                            const childSelected = selectedChildId === child.id;
+                            return (
+                                <div
+                                    key={child.id}
+                                    role={onSelectChild ? "button" : undefined}
+                                    tabIndex={onSelectChild ? 0 : undefined}
+                                    data-canvas-group-child={child.id}
+                                    data-canvas-group-child-selected={childSelected ? true : undefined}
+                                    data-testid={`form-canvas-group-child-${child.id}`}
+                                    onClick={(e) => {
+                                        if (!onSelectChild) return;
+                                        e.stopPropagation();
+                                        onSelectChild(child.id);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (!onSelectChild || (e.key !== "Enter" && e.key !== " ")) return;
+                                        e.stopPropagation();
+                                        onSelectChild(child.id);
+                                    }}
+                                    className={clsx(
+                                        "min-w-0 rounded-md px-1 py-0.5",
+                                        fieldLayoutFlexClass(layoutWidthFromField(child)),
+                                        onSelectChild ? "cursor-pointer hover:bg-alloy-bend-pine/[0.05]" : null,
+                                        childSelected ? "ring-2 ring-alloy-bend-pine/35" : null,
+                                    )}
+                                >
+                                    <p className="text-[10px] font-medium text-alloy-midnight/70">
+                                        {child.label}
+                                        {child.required ? <span className="text-alloy-ember"> *</span> : null}
+                                    </p>
+                                    <div className="mt-0.5 h-6 rounded-md border border-alloy-stone/20 bg-white" aria-hidden />
+                                </div>
+                            );
+                        })}
+                    </div>
+                ))}
+            </div>
+            {repeatable ? (
+                <p className="mt-1.5 text-[10px] font-semibold text-alloy-bend-pine" data-testid={`form-canvas-add-another-${field.id}`}>
+                    + Add another
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
+function resolveDropZone(e: React.DragEvent): { position: "before" | "after"; rowIntent: "same-line" | "new-line" } {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const relY = (e.clientY - rect.top) / rect.height;
+    const relX = (e.clientX - rect.left) / rect.width;
+    if (relY < 0.28) return { position: "before", rowIntent: "new-line" };
+    if (relY > 0.72) return { position: "after", rowIntent: "new-line" };
+    return { position: relX < 0.5 ? "before" : "after", rowIntent: "same-line" };
+}
+
+function InlineTokenText({ value }: { value: string }) {
+    const parts = value.split(/(\{[^}]+\})/g).filter(Boolean);
+    return (
+        <span>
+            {parts.map((part, idx) =>
+                part.startsWith("{") && part.endsWith("}") ? (
+                    <span
+                        key={`${part}-${idx}`}
+                        className="mx-0.5 inline-flex rounded-full border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.08] px-1.5 py-0.5 text-[10px] font-semibold text-alloy-bend-pine"
+                    >
+                        {part}
+                    </span>
+                ) : (
+                    <span key={`${part}-${idx}`}>{part}</span>
+                )
+            )}
+        </span>
+    );
+}
+
+function QuestionBlock({
+    field,
+    selected,
+    editable,
+    onSelect,
+    onDragStart,
+    onDragOver,
+    onDrop,
+    dropSameLineBefore,
+    dropSameLineAfter,
+    dropNewLineBefore,
+    dropNewLineAfter,
+    mappingState,
+    showMapping,
+    dimmed,
+    conditionText,
+}: {
+    field: FormField;
+    selected: boolean;
+    editable: boolean;
+    mappingState?: CanvasMappingState;
+    showMapping?: boolean;
+    dimmed?: boolean;
+    conditionText?: string | null;
+    onSelect: () => void;
+    onDragStart?: () => void;
+    onDragOver?: (e: React.DragEvent) => void;
+    onDrop?: () => void;
+    dropSameLineBefore?: boolean;
+    dropSameLineAfter?: boolean;
+    dropNewLineBefore?: boolean;
+    dropNewLineAfter?: boolean;
+}) {
+    const overlay = showMapping && mappingState ? mappingState : null;
+    const isMultiline = field.type === "text" && "multiline" in field && field.multiline;
+    const isTextBlock = field.type === "text_block";
+    return (
+        <div
+            role="button"
+            tabIndex={0}
+            draggable={editable}
+            data-canvas-field
+            data-canvas-field-selected={selected ? true : undefined}
+            data-canvas-field-mapping={mappingState ?? undefined}
+            data-canvas-field-dimmed={dimmed ? "true" : "false"}
+            data-testid={`form-canvas-question-${field.id}`}
+            onClick={(e) => {
+                e.stopPropagation();
+                onSelect();
+            }}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    onSelect();
+                }
+            }}
+            onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                onDragStart?.();
+            }}
+            onDragOver={(e) => {
+                e.preventDefault();
+                onDragOver?.(e);
+            }}
+            onDrop={(e) => {
+                e.preventDefault();
+                onDrop?.();
+            }}
+            className={clsx(
+                "group relative min-w-0 flex-1 rounded-[10px] border px-3 py-2.5 pl-5 transition-all duration-150",
+                selected
+                    ? "border-alloy-bend-pine/45 bg-alloy-bend-pine/[0.08] ring-[3px] ring-alloy-bend-pine/25"
+                    : "border-alloy-stone/25 bg-white hover:border-alloy-bend-pine/25 hover:shadow-sm",
+                overlay ? MAPPING_EDGE[overlay] : null,
+                // Visibly a dependent: a condition is a relationship, and an indent reads as one.
+                conditionText ? "ml-5 border-l-2 border-l-alloy-bend-pine/30" : null,
+                // A filter changes emphasis, never membership: the question stays exactly where it is.
+                dimmed ? "opacity-40" : null
+            )}
+        >
+            {editable ? (
+                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 cursor-grab text-[11px] tracking-tighter text-alloy-midnight/30 opacity-0 transition-opacity group-hover:opacity-100">
+                    ⋮⋮
+                </span>
+            ) : null}
+            {dropSameLineBefore ? (
+                <div className="absolute -left-1 top-2 bottom-2 w-[3px] rounded bg-alloy-bend-pine shadow-[0_0_8px_rgba(0,162,131,0.35)]" />
+            ) : null}
+            {dropSameLineAfter ? (
+                <div className="absolute -right-1 top-2 bottom-2 w-[3px] rounded bg-alloy-bend-pine shadow-[0_0_8px_rgba(0,162,131,0.35)]" />
+            ) : null}
+            {dropNewLineBefore ? (
+                <div className="absolute -top-1 left-0 right-0 h-[3px] rounded bg-alloy-bend-pine shadow-[0_0_8px_rgba(0,162,131,0.35)]" />
+            ) : null}
+            {dropNewLineAfter ? (
+                <div className="absolute -bottom-1 left-0 right-0 h-[3px] rounded bg-alloy-bend-pine shadow-[0_0_8px_rgba(0,162,131,0.35)]" />
+            ) : null}
+            <p className="text-[11px] font-semibold text-alloy-midnight">
+                {field.label}
+                {field.required ? <span className="text-alloy-ember"> *</span> : null}
+                {field.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION ? (
+                    <span
+                        className="ml-1.5 rounded-full border border-alloy-ember/25 bg-alloy-ember/[0.06] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-alloy-ember"
+                        data-testid={`form-canvas-needs-destination-${field.id}`}
+                    >
+                        Needs destination
+                    </span>
+                ) : null}
+            </p>
+            {isTextBlock ? (
+                <div className="mt-2 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.08] px-3 py-2 text-[11px] leading-relaxed text-alloy-midnight/65">
+                    <InlineTokenText value={field.content || "Authorization language…"} />
+                </div>
+            ) : field.type === "marketing_consent" ? (
+                // The boxes families see, unchecked — the exact wording, per offered channel.
+                <ul className="mt-1.5 space-y-1" data-canvas-marketing-consent={field.id}>
+                    {(["email", "sms"] as const)
+                        .filter((c) => field.consent.channels[c])
+                        .map((c) => (
+                            <li key={c} className="flex items-start gap-1.5 text-[10px] leading-snug text-alloy-midnight/65">
+                                <span aria-hidden className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-alloy-stone/40 bg-white" />
+                                <span>{resolveMarketingConsentLanguage(field)[c]}</span>
+                            </li>
+                        ))}
+                </ul>
+            ) : (
+                <div
+                    className={clsx(
+                        "mt-1.5 rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.15]",
+                        isMultiline ? "h-14" : "h-7"
+                    )}
+                    aria-hidden
+                />
+            )}
+            {conditionText ? (
+                <p
+                    className="mt-1.5 flex items-start gap-1 text-[10px] font-semibold text-alloy-bend-pine"
+                    data-canvas-field-condition={field.id}
+                >
+                    <span aria-hidden>└─</span>
+                    <span>{conditionText}</span>
+                </p>
+            ) : null}
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    {field.derived ? "Calculated" : field.type === "text" && isMultiline ? "Long text" : TYPE_LABELS[field.type] ?? field.type}
+                </p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    {field.required ? "Required" : "Optional"}
+                </p>
+                {overlay ? (
+                    <p
+                        className={clsx("text-[9px] font-semibold uppercase tracking-wide", MAPPING_WORD[overlay].className)}
+                        data-testid={`form-canvas-mapping-${field.id}`}
+                    >
+                        {MAPPING_WORD[overlay].text}
+                    </p>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+export default function ProcessingFormCanvas({
+    schema,
+    selectedFieldId,
+    selectedSectionId,
+    editable,
+    collapsedSectionIds,
+    onSelectField,
+    onSelectSection,
+    onToggleSectionCollapse,
+    onAddQuestion,
+    onAddSection,
+    dragFieldId,
+    dropTarget,
+    onDragFieldStart,
+    onDragFieldOver,
+    onDragFieldDrop,
+    onSectionDragOver,
+    mapping,
+    sectionNotices,
+}: {
+    schema: FormSchemaV1;
+    selectedFieldId: string | null;
+    selectedSectionId: string | null;
+    editable: boolean;
+    collapsedSectionIds?: Set<string>;
+    onSelectField: (fieldId: string) => void;
+    onSelectSection: (sectionId: string) => void;
+    onToggleSectionCollapse?: (sectionId: string) => void;
+    onAddQuestion: (sectionId: string) => void;
+    onAddSection: () => void;
+    dragFieldId?: string | null;
+    dropTarget?: CanvasDropTarget | null;
+    onDragFieldStart?: (fieldId: string) => void;
+    onDragFieldOver?: (target: CanvasDropTarget) => void;
+    onDragFieldDrop?: () => void;
+    onSectionDragOver?: (sectionId: string) => void;
+    /** Imported forms only. Absent for a hand-built form, which has no mapping to overlay. */
+    mapping?: CanvasMappingOverlay | null;
+    /**
+     * Section-level warnings, keyed by section id — currently "there is a grid here Alloy could not
+     * represent". Deliberately NOT part of the mapping overlay: this one says what the form is missing,
+     * so it must not disappear when an operator turns mapping colours off or filters their attention.
+     */
+    sectionNotices?: ReadonlyMap<string, string> | null;
+}) {
+    const fieldById = useMemo(() => {
+        const map = new Map<string, FormField>();
+        for (const f of schema.fields) map.set(f.id, f);
+        return map;
+    }, [schema.fields]);
+
+    return (
+        <div className="mx-auto max-w-[720px]" data-surface-canvas-builder="true" data-testid="processing-form-canvas">
+            <h2 className="text-[18px] font-bold tracking-tight text-alloy-midnight">{schema.title}</h2>
+            <p className="mt-1 text-[12px] text-alloy-midnight/40">Families complete this form in your enrollment flow.</p>
+            <div className="mb-6 mt-5 border-b border-alloy-stone/15 pb-5" />
+
+            {schema.sections.map((section: FormSection) => {
+                const rows = groupFieldsIntoRows(section.field_ids, fieldById);
+                const sectionSelected = selectedSectionId === section.id && !selectedFieldId;
+                const collapsed = collapsedSectionIds?.has(section.id) ?? false;
+                return (
+                    <section
+                        key={section.id}
+                        data-surface-composer-canvas={`section-${section.id}`}
+                        data-testid={`form-canvas-section-${section.id}`}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectSection(section.id);
+                        }}
+                        className={clsx(
+                            "group mb-4 overflow-hidden rounded-xl border bg-white shadow-sm transition-all duration-150",
+                            sectionSelected
+                                ? "border-alloy-bend-pine ring-[3px] ring-alloy-bend-pine/30"
+                                : "border-alloy-stone/20 hover:border-alloy-bend-pine/20"
+                        )}
+                    >
+                        <header className="flex items-center gap-2 border-b border-alloy-stone/15 bg-alloy-stone/[0.12] px-3.5 py-2.5">
+                            <span className="cursor-grab text-[13px] tracking-tighter text-alloy-midnight/30">⋮⋮</span>
+                            <button
+                                type="button"
+                                className="rounded p-0.5 text-[11px] text-alloy-midnight/45 hover:bg-white/80"
+                                aria-label={collapsed ? "Expand section" : "Collapse section"}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onToggleSectionCollapse?.(section.id);
+                                }}
+                            >
+                                {collapsed ? "▸" : "▾"}
+                            </button>
+                            <span className="flex-1 text-[12px] font-semibold text-alloy-midnight" data-section-title={section.title}>
+                                {section.title}
+                            </span>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/45">
+                                {section.field_ids.length} question{section.field_ids.length === 1 ? "" : "s"}
+                            </span>
+                            {editable ? (
+                                <button
+                                    type="button"
+                                    className="rounded-md border border-alloy-stone/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/70 hover:border-alloy-bend-pine/30"
+                                    data-canvas-add-field={section.id}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddQuestion(section.id);
+                                    }}
+                                >
+                                    + Question
+                                </button>
+                            ) : null}
+                        </header>
+                        {sectionNotices?.get(section.id) ? (
+                            <p
+                                data-canvas-section-notice={section.id}
+                                className="mx-3.5 mt-2.5 flex items-start gap-1.5 rounded-md border border-alloy-ember/25 bg-alloy-ember/[0.07] px-2.5 py-1.5 text-[11px] leading-snug text-alloy-ember"
+                            >
+                                <span aria-hidden>⚠</span>
+                                <span>{sectionNotices.get(section.id)}</span>
+                            </p>
+                        ) : null}
+                        {!collapsed ? (
+                            <div
+                                className="space-y-3 p-3.5"
+                                onDragOver={(e) => {
+                                    if (!editable || !dragFieldId) return;
+                                    e.preventDefault();
+                                    onSectionDragOver?.(section.id);
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    onDragFieldDrop?.();
+                                }}
+                            >
+                                {rows.length === 0 ? (
+                                    <p className="rounded-lg border border-dashed border-alloy-stone/25 py-6 text-center text-[11px] text-alloy-midnight/40">
+                                        Drag questions here or add from the library.
+                                    </p>
+                                ) : (
+                                    rows.map((row, rowIdx) => {
+                                        const rowDropActive =
+                                            !!dragFieldId &&
+                                            dropTarget?.sectionId === section.id &&
+                                            dropTarget.fieldId != null &&
+                                            row.includes(dropTarget.fieldId);
+                                        const rowFull = rowCapacityRemaining(row, fieldById) === 0;
+                                        return (
+                                        <div
+                                            key={`${section.id}-row-${rowIdx}`}
+                                            className={clsx(
+                                                "group/row relative flex flex-wrap gap-2.5 rounded-lg border bg-white p-1.5 transition-colors",
+                                                rowDropActive && dropTarget?.rowIntent === "same-line"
+                                                    ? "border-alloy-bend-pine/35 bg-alloy-bend-pine/[0.04]"
+                                                    : rowDropActive && dropTarget?.rowIntent === "new-line"
+                                                    ? "border-dashed border-alloy-bend-pine/40"
+                                                    : "border-alloy-stone/15 hover:border-alloy-stone/25"
+                                            )}
+                                            data-canvas-line={rowIdx}
+                                            data-testid={`form-canvas-row-${section.id}-${rowIdx}`}
+                                            onDragOver={(e) => {
+                                                if (!editable || !dragFieldId) return;
+                                                if ((e.target as HTMLElement).closest("[data-canvas-field]")) return;
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                onDragFieldOver?.(resolveRowDropTarget(e, section.id, row, fieldById));
+                                            }}
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                onDragFieldDrop?.();
+                                            }}
+                                        >
+                                            {editable && dragFieldId && !rowFull ? (
+                                                <div className="pointer-events-none absolute inset-1.5 z-10 flex gap-1" aria-hidden>
+                                                    {(["left", "center", "right"] as const).map((slot) => (
+                                                        <div
+                                                            key={slot}
+                                                            className={clsx(
+                                                                "flex flex-1 items-center justify-center rounded-md border border-dashed text-[9px] font-semibold uppercase tracking-wide transition-colors",
+                                                                dropTarget?.rowSlot === slot && rowDropActive
+                                                                    ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/15 text-alloy-bend-pine"
+                                                                    : "border-alloy-stone/20 bg-alloy-stone/[0.04] text-alloy-midnight/25"
+                                                            )}
+                                                        >
+                                                            {slot}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : null}
+                                            {editable && dragFieldId && rowFull ? (
+                                                <div className="pointer-events-none absolute -bottom-3 left-0 right-0 z-10 flex justify-center" aria-hidden>
+                                                    <span
+                                                        className={clsx(
+                                                            "rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                                                            rowDropActive && dropTarget?.rowIntent === "new-line"
+                                                                ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/15 text-alloy-bend-pine"
+                                                                : "border-alloy-stone/20 bg-white text-alloy-midnight/35"
+                                                        )}
+                                                    >
+                                                        New row below
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                            {row.length > 1 ? (
+                                                <span className="pointer-events-none absolute -left-1 top-1/2 -translate-y-1/2 select-none text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/25">
+                                                    Row
+                                                </span>
+                                            ) : null}
+                                            {row.map((fid) => {
+                                                const field = fieldById.get(fid);
+                                                if (!field) return null;
+                                                const width = layoutWidthFromField(field);
+                                                const isTarget = dropTarget?.sectionId === section.id && dropTarget.fieldId === fid;
+                                                return (
+                                                    <div
+                                                        key={fid}
+                                                        className={clsx("relative transition-[flex-basis] duration-150", fieldLayoutFlexClass(width))}
+                                                    >
+                                                        {field.type === "group" ? (
+                                                            <GroupBlock
+                                                                field={field}
+                                                                selected={selectedFieldId === fid}
+                                                                onSelect={() => onSelectField(fid)}
+                                                                selectedChildId={selectedFieldId}
+                                                                onSelectChild={(childId) => onSelectField(childId)}
+                                                                mappingState={mapping?.byFieldId.get(fid)}
+                                                                showMapping={mapping?.show ?? false}
+                                                                dimmed={mapping?.dimFieldIds?.has(fid) ?? false}
+                                                            />
+                                                        ) : (
+                                                        <QuestionBlock
+                                                            field={field}
+                                                            conditionText={describeCondition(schema, field)}
+                                                            mappingState={mapping?.byFieldId.get(fid)}
+                                                            showMapping={mapping?.show ?? false}
+                                                            dimmed={mapping?.dimFieldIds?.has(fid) ?? false}
+                                                            selected={selectedFieldId === fid}
+                                                            editable={editable}
+                                                            onSelect={() => onSelectField(fid)}
+                                                            onDragStart={() => onDragFieldStart?.(fid)}
+                                                            onDragOver={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                const zone = resolveDropZone(e);
+                                                                onDragFieldOver?.({
+                                                                    sectionId: section.id,
+                                                                    fieldId: fid,
+                                                                    ...zone,
+                                                                });
+                                                            }}
+                                                            onDrop={() => onDragFieldDrop?.()}
+                                                            dropSameLineBefore={isTarget && dropTarget.rowIntent === "same-line" && dropTarget.position === "before"}
+                                                            dropSameLineAfter={isTarget && dropTarget.rowIntent === "same-line" && dropTarget.position === "after"}
+                                                            dropNewLineBefore={isTarget && dropTarget.rowIntent === "new-line" && dropTarget.position === "before"}
+                                                            dropNewLineAfter={isTarget && dropTarget.rowIntent === "new-line" && dropTarget.position === "after"}
+                                                        />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        );
+                                    })
+                                )}
+                                {editable ? (
+                                    <button
+                                        type="button"
+                                        className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.04] py-2 text-[11px] font-semibold text-alloy-bend-pine opacity-0 transition-opacity group-hover:opacity-100 hover:bg-alloy-bend-pine/[0.07]"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onAddQuestion(section.id);
+                                        }}
+                                    >
+                                        + Add question
+                                    </button>
+                                ) : null}
+                            </div>
+                        ) : null}
+                    </section>
+                );
+            })}
+
+            {editable ? (
+                <button
+                    type="button"
+                    data-testid="form-canvas-add-section"
+                    onClick={onAddSection}
+                    className="w-full rounded-xl border border-dashed border-alloy-stone/30 py-3.5 text-[12px] font-semibold text-alloy-midnight/45 hover:border-alloy-bend-pine/30 hover:bg-alloy-bend-pine/[0.04] hover:text-alloy-bend-pine"
+                >
+                    + Add section
+                </button>
+            ) : null}
+
+            {dragFieldId ? (
+                <p className="sr-only" aria-live="polite">
+                    Dragging question {dragFieldId}
+                </p>
+            ) : null}
+        </div>
+    );
+}

@@ -1,0 +1,30 @@
+{
+  "L1": {
+    "opp": "67a71059-02e7-4b72-bb24-59e2f395d1e6",
+    "hh": "bdffb245-ffc4-4166-a47e-2803cf0b9158",
+    "deleted": true
+  },
+  "L2": {
+    "opp": "492382e5-7e64-4480-aaa2-87c859f97a72",
+    "hh": "6aec2cb1-37e4-482e-a923-25ddc07cea67",
+    "deleted": true
+  },
+  "K1": "253434fb-7ce3-47cd-bb69-04722c646c3a",
+  "KU": "e9254e81-a832-4e3e-b7db-1b1639e318dd",
+  "form": {
+    "id": "c950f436-1e95-4672-a67c-4ef4b40306a0",
+    "version_id": "b255574b-fd78-475c-8b87-11d285a5179f"
+  },
+  "subs": {
+    "s_opp1": "1bfc1737-3943-4250-89f3-a96d8ad08aa1",
+    "s_opp2": "b9042a6a-110c-48d9-a8da-e126507defc4",
+    "s_ku": "668e3537-be17-459a-a660-5875b54a7fdb",
+    "s_sf_opp1": "8b762d8a-0f0c-45b0-b5f0-1843fd574c23"
+  },
+  "docs": {
+    "plain": "d44e125f-a0ee-43b6-84e5-df4ebc6c89f7",
+    "plain_type": "other",
+    "medical": "4c581771-73a2-4014-ac82-943dae7d64c3"
+  },
+  "fact": "c7b7d29a-8a9c-438e-a8ec-1154ba2ff9cb"
+}

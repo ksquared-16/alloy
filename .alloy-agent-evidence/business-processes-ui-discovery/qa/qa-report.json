@@ -1,0 +1,71 @@
+{
+  "startedAt": "2026-07-23T19:16:52.191Z",
+  "base": "http://127.0.0.1:3012",
+  "checks": {
+    "collection": {
+      "onLogin": false,
+      "rail": 1,
+      "shell": 1,
+      "conceptualCards": false,
+      "noDomainTiles": true
+    },
+    "selected": {
+      "header": 1,
+      "overviewTab": 1,
+      "noDuplicateNav": true
+    },
+    "overview": {
+      "panel": 1,
+      "journey": 1
+    },
+    "stages": {
+      "list": 1
+    },
+    "automationPlanned": 1,
+    "historyPlanned": 1
+  },
+  "errors": [],
+  "steps": [
+    {
+      "name": "01-process-collection",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "02-process-selected-header",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "03-process-overview",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "04-stages",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "05-work-views",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "06-actions",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "07-automation",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "08-health",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "09-history",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    },
+    {
+      "name": "10-narrow",
+      "url": "http://127.0.0.1:3012/settings/processes"
+    }
+  ],
+  "finishedAt": "2026-07-23T19:17:16.614Z"
+}

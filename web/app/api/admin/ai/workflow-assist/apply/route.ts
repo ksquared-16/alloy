@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdmin } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { OPS_WORKFLOWS_WRITE, requireAgentApplyDomainAuthority } from "@/lib/access/agentApplyAuthority";
 import { executeWorkflowAssistApply } from "@/lib/agent/workflowAssist/workflowAssistApplyFromSuggestion";
 import {
     parseWorkflowAssistApplyRequest,
@@ -12,16 +13,32 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 /**
  * POST `/api/admin/ai/workflow-assist/apply` — admin-only apply for Workflow Assist proposals (Card 5).
  *
- * **Gate:** `requireAdmin` only (ops cannot apply workflow mutations).
+ * **Gate:** `ops.workflows.write` — the authority that owns the tables this writes.
  *
  * **Body:** {@link import("@/lib/agent/workflowAssist/workflowAssistProposalV1").WorkflowAssistApplyRequestV1}
  */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdmin();
-    if (forbidden) return forbidden;
-
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    /*
+     * WORKFLOW ASSIST APPLY WRITES `workflows` AND `workflow_actions`, so the
+     * Workflow owner governs it: `ops.workflows.write`.
+     *
+     * This ACTIVATES vocabulary the catalog has carried since Phase 0. The key is
+     * active and granted to admin in 3 of 3 organizations and ops in 2 of 3, and it
+     * was enforced by no source file at all — the same dormant-key shape already
+     * recovered for `fin.read`, `communications.read` and `crm.customers.read`.
+     *
+     * `requireAdmin()` stood here, which is a role TITLE. It admitted an admin whose
+     * package withheld workflow write, and refused a custom Workflow Writer who held
+     * it. No AI authority is compounded in: this route commits a proposal carried in
+     * the request body and invokes no model.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireAgentApplyDomainAuthority(access, OPS_WORKFLOWS_WRITE);
+    if (capDenied) return capDenied;
 
     let body: unknown;
     try {

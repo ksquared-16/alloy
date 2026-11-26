@@ -1,0 +1,40 @@
+{
+  "findings": [
+    {
+      "id": "7C-1",
+      "what": "APPLIES TO offers Household and the child in view, defaulting to Household",
+      "ok": true,
+      "observed": "default=household options=[\"Household — the whole account\",\"Certa Certhouse only\"]"
+    },
+    {
+      "id": "7C-2",
+      "what": "the preview identifies scope, party, amount and effective date",
+      "ok": true,
+      "observed": "Manage responsibility / Who contractually owes this account, from a date. Changing it does not change who has already paid. / Applies to / Household — the whole account / Certa Certhouse only / Effective from / Cert CerthousePrimary contact / 1 responsible par"
+    },
+    {
+      "id": "7C-3",
+      "what": "the payload carries the explicitly selected child, not null and not an inherited grain",
+      "ok": true,
+      "observed": "customer_member_id=e408fa51-7261-43c4-8e60-555d17fc9888 effective=2026-09-19"
+    },
+    {
+      "id": "7C-4",
+      "what": "the arrangement committed",
+      "ok": true,
+      "observed": "done=Responsibility updated. inForce=1 responsible party from Sep 19, 2026. This posted charge is not divided under it."
+    }
+  ],
+  "payload": {
+    "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+    "effective_start": "2026-09-19",
+    "shares": [
+      {
+        "responsible_party_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+        "method": "fixed",
+        "amount_cents": 2500
+      }
+    ]
+  }
+}

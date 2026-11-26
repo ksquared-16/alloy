@@ -16,6 +16,7 @@ import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffec
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import { resolveEffectivePrimaryWorkTemplate } from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import type { StageWorkChildSubject } from "@/lib/lifecycle/stageWorkChildSubject";
 
 async function loadOcmStatusMetadata(
     supabase: SupabaseClient,
@@ -44,6 +45,8 @@ export async function onChildDispositionEntrySpawnWorkIntent(params: {
     opportunityId: string;
     previousStatusKey: string | null;
     nextStatusKey: string | null;
+    /** The child whose disposition changed — their stage work is theirs, not a sibling's. */
+    childSubject?: StageWorkChildSubject | null;
     now?: Date;
 }): Promise<OnStageEntrySpawnWorkIntentResult> {
     const orgId = params.orgId.trim();
@@ -110,6 +113,7 @@ export async function onChildDispositionEntrySpawnWorkIntent(params: {
         departmentId,
         template: primaryTemplate,
         departmentMetadata,
+        childSubject: params.childSubject ?? null,
         now: params.now ?? new Date(),
     });
 

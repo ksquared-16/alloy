@@ -40,6 +40,16 @@ import {
 } from "@/lib/fields/fieldPolicySettingsUi";
 import FieldDefinitionEditModal from "@/components/admin/fields/FieldDefinitionEditModal";
 import FieldRequiredInlineCell from "@/components/admin/fields/FieldRequiredInlineCell";
+import FieldSettingsEntityHeader from "@/components/admin/fields/FieldSettingsEntityHeader";
+import FieldSettingsGroupedView from "@/components/admin/fields/FieldSettingsGroupedView";
+import FieldsSettingsWorkspaceView from "@/components/admin/fields/FieldsSettingsWorkspaceView";
+import type { FieldOwnershipFilter } from "@/components/admin/fields/FieldOwnershipFilterTabs";
+import {
+    buildSettingsFieldCatalogEntries,
+    hubEntityApiTypes,
+    type SettingsFieldCatalogEntry,
+    type SettingsHubEntityKey,
+} from "@/lib/fields/fieldCatalogForSettings";
 import {
     canOperatorEditRequirementInline,
     fieldBehaviorConfiguredOnRecordLayouts,
@@ -48,6 +58,7 @@ import {
     operatorFieldDisplayLabel,
     recordLayoutsSettingsHref,
 } from "@/lib/fields/fieldSettingsOperatorUi";
+import { platformFieldsForEntityExcludingRegistry } from "@/lib/fields/platformFieldCatalog";
 import { resolveInlineRequirementPreset } from "@/lib/fields/fieldRequiredInlineUi";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
@@ -106,6 +117,18 @@ export type EntityFieldsClientProps = {
     adminV2Chrome?: boolean;
     /** When true, page title/subtitle are rendered by the parent route. */
     hideSettingsHeader?: boolean;
+    /** Card view section heading override (Settings → Fields grouped cards). */
+    sectionGroupTitle?: string;
+    /** Platform Configuration workspace — unified platform/custom/computed catalog. */
+    workspaceCatalogMode?: boolean;
+    hubEntity?: SettingsHubEntityKey;
+    ownershipFilter?: FieldOwnershipFilter;
+    onOwnershipFilterChange?: (next: FieldOwnershipFilter) => void;
+    selectedRefKey?: string | null;
+    onSelectCatalogEntry?: (entry: SettingsFieldCatalogEntry) => void;
+    /** Increment to trigger Add Field modal from parent workspace. */
+    createFieldSignal?: number;
+    hideSectionCard?: boolean;
 };
 
 export default function EntityFieldsClient({
@@ -115,6 +138,15 @@ export default function EntityFieldsClient({
     manageOptionSetsHref,
     adminV2Chrome = false,
     hideSettingsHeader = false,
+    sectionGroupTitle,
+    workspaceCatalogMode = false,
+    hubEntity,
+    ownershipFilter = "all",
+    onOwnershipFilterChange,
+    selectedRefKey,
+    onSelectCatalogEntry,
+    createFieldSignal,
+    hideSectionCard = false,
 }: EntityFieldsClientProps) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
@@ -201,6 +233,27 @@ export default function EntityFieldsClient({
 
     const hiddenFieldCount = sortedItems.length - visibleItems.length;
 
+    const platformFields = useMemo(() => {
+        const existingKeys = new Set(items.map((i) => i.field_key.trim().toLowerCase()));
+        if (workspaceCatalogMode && hubEntity) {
+            const out = [];
+            for (const et of hubEntityApiTypes(hubEntity)) {
+                out.push(...platformFieldsForEntityExcludingRegistry(et, existingKeys));
+            }
+            return out;
+        }
+        return platformFieldsForEntityExcludingRegistry(entityType, existingKeys);
+    }, [entityType, hubEntity, items, workspaceCatalogMode]);
+
+    const catalogEntries = useMemo(() => {
+        if (!workspaceCatalogMode || !hubEntity) return [];
+        return buildSettingsFieldCatalogEntries({
+            hubEntity,
+            entityTypes: hubEntityApiTypes(hubEntity),
+            customFields: visibleItems,
+        });
+    }, [hubEntity, visibleItems, workspaceCatalogMode]);
+
     const policySettingsSupported = entityTypeSupportsFieldPolicySettings(entityType);
     const layoutBehaviorOnRecordLayouts = fieldBehaviorConfiguredOnRecordLayouts(entityType);
     const showPolicyColumnsInTable = policySettingsSupported && !layoutBehaviorOnRecordLayouts;
@@ -242,18 +295,24 @@ export default function EntityFieldsClient({
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/field-definitions?entity_type=${encodeURIComponent(entityType)}`);
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load field definitions");
-            const raw = (json as { field_definitions?: Record<string, unknown>[] }).field_definitions ?? [];
-            setItems(raw.map(toFieldDef));
+            const entityTypes =
+                workspaceCatalogMode && hubEntity ? [...hubEntityApiTypes(hubEntity)] : [entityType];
+            const merged: FieldDef[] = [];
+            for (const et of entityTypes) {
+                const res = await fetch(`/api/admin/field-definitions?entity_type=${encodeURIComponent(et)}`);
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load field definitions");
+                const raw = (json as { field_definitions?: Record<string, unknown>[] }).field_definitions ?? [];
+                merged.push(...raw.map(toFieldDef));
+            }
+            setItems(merged);
         } catch (e) {
             setError((e as Error).message);
             setItems([]);
         } finally {
             setLoading(false);
         }
-    }, [entityType]);
+    }, [entityType, hubEntity, workspaceCatalogMode]);
 
     useEffect(() => {
         fetchItems();
@@ -475,6 +534,13 @@ export default function EntityFieldsClient({
     };
 
     useEffect(() => {
+        if (createFieldSignal != null && createFieldSignal > 0) {
+            openCreate();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- signal counter only
+    }, [createFieldSignal]);
+
+    useEffect(() => {
         if (!createOpen || createKeyManuallyEditedRef.current) return;
         const slug = slugifyLabel(createLabel);
         if (slug.length >= 2) setCreateKey(slug);
@@ -671,7 +737,49 @@ export default function EntityFieldsClient({
                             </Link>
                         </p>
                     )}
-                    {adminV2Chrome && showPolicyColumnsInTable && (
+                    {adminV2Chrome && workspaceCatalogMode && hubEntity ? (
+                        <FieldsSettingsWorkspaceView
+                            hubEntity={hubEntity}
+                            entityLabel={sectionGroupTitle ?? title.replace(/\s+fields$/i, "")}
+                            entries={catalogEntries}
+                            ownershipFilter={ownershipFilter}
+                            onOwnershipFilterChange={onOwnershipFilterChange ?? (() => {})}
+                            selectedRefKey={selectedRefKey}
+                            onSelectEntry={(entry) => onSelectCatalogEntry?.(entry)}
+                            onConfigure={(entry) => entry.fieldDef && openEdit(entry.fieldDef)}
+                            onDelete={(entry) => entry.fieldDef && deleteRow(entry.fieldDef)}
+                            deleteSavingId={deleteSavingId}
+                            canMutate={canMutate}
+                            headerActions={addFieldButton}
+                        />
+                    ) : adminV2Chrome ? (
+                        <FieldSettingsGroupedView
+                            entityType={entityType}
+                            items={visibleItems}
+                            platformFields={platformFields}
+                            sectionRegistry={sectionRegistry}
+                            canMutate={canMutate}
+                            onEdit={openEdit}
+                            onDelete={deleteRow}
+                            deleteSavingId={deleteSavingId}
+                            emptyMessage={
+                                sortedItems.length === 0
+                                    ? "No fields yet. Add a field or show workflow and relationship fields."
+                                    : "No fields match this filter. Try showing workflow and relationship fields."
+                            }
+                            headerSlot={
+                                <FieldSettingsEntityHeader
+                                    entityType={entityType}
+                                    entityLabel={sectionGroupTitle ?? title.replace(/\s+fields$/i, "")}
+                                    fieldCount={visibleItems.length}
+                                    hiddenCount={hiddenFieldCount}
+                                    profileNote={subtitle}
+                                />
+                            }
+                        />
+                    ) : (
+                        <>
+                    {showPolicyColumnsInTable && (
                         <p className="mb-3 text-xs leading-relaxed text-alloy-midnight/50">
                             Required and editability apply when staff save the record drawer for supported fields. Status, tour, and
                             pricing fields are managed elsewhere.
@@ -786,6 +894,8 @@ export default function EntityFieldsClient({
                             </tbody>
                         </table>
                     </div>
+                        </>
+                    )}
                     {adminV2Chrome && (
                         <p className="mt-3 text-xs text-alloy-midnight/45">
                             {layoutBehaviorOnRecordLayouts ? (

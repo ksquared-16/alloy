@@ -7,6 +7,10 @@ import ComposerScheduleSendModal from "@/components/adminV2/messaging/ComposerSc
 import MessagingComposerFrame from "@/components/adminV2/messaging/MessagingComposerFrame";
 import { resolveInboxThreadScheduleContext } from "@/lib/adminV2/messaging/messagingComposerScheduleContext";
 import {
+    buildInboxReplySendPayload,
+    resolveInboxReplyOutcome,
+} from "@/lib/communications/inboxReplySend";
+import {
     defaultInboxReplyChannel,
     resolveInboxReplyTarget,
 } from "@/lib/communications/inboxThreadIdentity";
@@ -60,40 +64,57 @@ export default function InboxThreadReplyBox({
 
     const emailDisabled = thread.reply_email_available === false;
     const smsDisabled = thread.reply_sms_available !== true;
-    const smsDisabledReason = !thread.reply_sms_available
-        ? "SMS reply is not available yet for this org or contact."
-        : "No mobile number for this contact.";
+    const unidentified = thread.sender_identity_state === "unidentified";
+    const smsDisabledReason = unidentified
+        ? "This conversation can only be answered on the channel it arrived on."
+        : !thread.reply_sms_available
+          ? "SMS reply is not available yet for this org or contact."
+          : "No mobile number for this contact.";
+
+    // Names the destination without naming the number. "Reply to Jordan Smith"
+    // when Alloy knows; "Reply to ending in 1234" when it does not — the operator
+    // is told plainly that nobody has been identified rather than shown a
+    // formatted phone number sitting where a name belongs.
+    const replyHeading = replyTarget.displayLabel
+        ? `Reply to ${replyTarget.displayLabel}`
+        : "Continue conversation";
 
     const onSend = async () => {
-        if (!replyTarget.canReply || !replyTarget.entityType || !replyTarget.entityId || !body.trim()) return;
+        const payload = buildInboxReplySendPayload({
+            replyTarget,
+            channel: replyChannel,
+            body,
+            subject,
+        });
+        if (!payload) return;
         setBusy(true);
         setError(null);
         setOkNote(null);
         try {
-            const payload: Record<string, unknown> = {
-                entity_type: replyTarget.entityType,
-                entity_id: replyTarget.entityId,
-                channel: replyChannel,
-                body: body.trim(),
-            };
-            if (replyTarget.recipientPersonId) {
-                payload.recipient_person_id = replyTarget.recipientPersonId;
-            }
-            if (replyTarget.toAddress) {
-                payload.to = replyTarget.toAddress;
-            }
-            if (replyChannel === "email" && subject.trim()) {
-                payload.subject = subject.trim();
-            }
-
             const res = await fetch("/api/admin/communications/send", {
                 method: "POST",
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            const json = (await res.json().catch(() => ({}))) as { error?: string; process_trigger_attempted_note?: string };
-            if (!res.ok) throw new Error(json.error ?? `Send failed (${res.status}`);
+            const json = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                ok?: boolean;
+                outcome?: string;
+                message?: string;
+                reason?: string;
+            };
+            if (!res.ok) throw new Error(json.error ?? `Send failed (${res.status})`);
+
+            // A 200 is not a send. The canonical runtime answers `blocked` when
+            // eligibility refuses — an unresolved STOP hold, quiet hours, a
+            // suppressed endpoint — and reporting that as queued would show the
+            // operator an outbound reply that was never dispatched.
+            const outcome = resolveInboxReplyOutcome(json);
+            if (!outcome.sent) {
+                setError(outcome.message);
+                return;
+            }
 
             setBody("");
             setSubject("");
@@ -110,10 +131,23 @@ export default function InboxThreadReplyBox({
 
     return (
         <>
-            <div className="shrink-0 border-t border-alloy-stone/12 bg-white/95 px-3 py-2.5" data-adminv2-inbox-reply="true">
+            <div
+                className="shrink-0 border-t border-alloy-stone/12 bg-white/95 px-3 py-2.5"
+                data-adminv2-inbox-reply="true"
+                data-adminv2-reply-authority={replyTarget.authority}
+                data-adminv2-sender-identity={thread.sender_identity_state}
+            >
+                {thread.routing_notice ? (
+                    <p
+                        className="mb-1.5 rounded-md bg-alloy-stone/8 px-2 py-1 text-[10px] leading-snug text-alloy-midnight/70"
+                        data-adminv2-routing-notice="true"
+                    >
+                        {thread.routing_notice}
+                    </p>
+                ) : null}
                 <MessagingComposerFrame
                     compact
-                    heading="Continue conversation"
+                    heading={replyHeading}
                     headingExtra={
                         onAddRecipient ? (
                             <button

@@ -14,9 +14,9 @@ export function buildProofChildRecord(overrides: Partial<ProofRuntimeRecord> = {
         "child.age_band": "Infant",
         "child.status": "Active",
         "inquiry_child.program": "Infant Full Day",
-        "inquiry_child.desired_program_type": "Infant",
-        "inquiry_child.desired_schedule_type": "Full day",
-        "inquiry_child.desired_start_date": "2026-09-01",
+        "inquiry_child.program_category_id": "Infant",
+        "inquiry_child.schedule_type": "Full day",
+        "inquiry_child.start_date": "2026-09-01",
         "inquiry_child.outcome_status_key": "waitlisted",
         "customer.household_name": "Johnson Household",
         parents: [

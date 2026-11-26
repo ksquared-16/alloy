@@ -3,7 +3,7 @@
  * Server validation and lifecycle checks must use this — not raw DB rows alone.
  */
 
-import type { WorkspaceRootDepartmentRow } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import type { WorkspaceRootDepartmentRow } from "@/lib/workspace/workspaceRootDepartmentTypes";
 import { filterActiveWorkspaceDepartments } from "@/lib/workspace/workspaceActiveDepartments";
 
 export type WorkspaceTilePipelineTrace = {

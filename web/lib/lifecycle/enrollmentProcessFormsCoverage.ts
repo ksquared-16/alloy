@@ -7,7 +7,6 @@ import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressi
 
 export type EnrollmentFormCoverageRow = {
     formName: string;
-    href: string;
     captures: readonly string[];
     satisfies: readonly string[];
     missing: readonly string[];
@@ -65,7 +64,6 @@ export function enrollmentFormCoverageForStage(
         const missing = [...requiredSet].filter((r) => !hint.satisfies.includes(r));
         return {
             formName: hint.formName,
-            href: "/adminV2/forms",
             captures: hint.captures,
             satisfies,
             missing,

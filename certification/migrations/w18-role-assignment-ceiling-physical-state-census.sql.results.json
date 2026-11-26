@@ -1,0 +1,56 @@
+{
+  "trusted_host_action_id": "tha_514697d4900906",
+  "query_hash": "fc81fe5f600ff2ee0cdcfa59c479062697c9db5230182282e8f6841a7752446a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T16:24:57.907Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_514697d4900906",
+    "query_hash": "fc81fe5f600ff2ee0cdcfa59c479062697c9db5230182282e8f6841a7752446a",
+    "authorization_id": "grnt_afa81886b56d4455",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T16:24:59.756Z",
+    "question_ids": [
+      "m915150000",
+      "ledger_version",
+      "ledger_head"
+    ],
+    "questions": {
+      "m915150000": {
+        "question_id": "m915150000",
+        "row_count": null,
+        "rows": [
+          "functions ~ installed ~ ceiling_and_its_resolvers ~ true",
+          "assign_member_role_audited ~ bounded ~ calls_the_ceiling ~ true",
+          "replace_membership_with_access_profile ~ bounded ~ calls_the_ceiling ~ true",
+          "create_membership_with_access_profile ~ bounded ~ calls_the_ceiling ~ true",
+          "create_membership_with_access_profile ~ overload ~ unbounded_three_arg_absent ~ true",
+          "create_membership_with_access_profile ~ overload ~ exactly_one_signature ~ true",
+          "remove_member_role_audited ~ reduction ~ deliberately_unbounded ~ true",
+          "replace_role_permission_grants ~ w18 ~ grant_ceiling_survives ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260915150000 ~ registered ~ present ~ true"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260915150000
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}

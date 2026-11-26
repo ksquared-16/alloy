@@ -12,6 +12,10 @@
  * Doctrine: docs/platform/modules/operational-consumption-platform.md
  */
 
+import type { OperationalFactEntryType } from "@/lib/operationalFacts/factContract";
+
+export type { OperationalFactEntryType } from "@/lib/operationalFacts/factContract";
+
 /** A Consumption Event's runtime status. */
 export const CONSUMPTION_EVENT_STATUSES = ["recorded", "resolved", "no_obligation", "superseded"] as const;
 export type ConsumptionEventStatus = (typeof CONSUMPTION_EVENT_STATUSES)[number];
@@ -123,6 +127,21 @@ export type ConsumptionEventTypeRow = {
  * runtime contract — NOT a charge. Source-family-shaped fields are optional so
  * the same DTO carries enrollment, attendance, schedule, etc. facts later.
  */
+/** The accepted term's money and its lineage, carried into consumption as authority. */
+export type AcceptedTuitionPricing = {
+    termId: string;
+    amountCents: number;
+    currencyCode: string;
+    cadenceKey: string;
+    /** `accepted` or `overridden` — an override is why this may not match the catalog. */
+    state: string;
+    /** The authored option the term names, for provenance. */
+    sourceEntity: string;
+    sourceId: string;
+    configVersion: string | null;
+    resolutionKey: string;
+};
+
 export type OperationalFactDto = {
     sourceFamily: string;
     eventKey: string;
@@ -162,6 +181,15 @@ export type OperationalFactDto = {
     /** Proration inputs (consumed with the proration policy method). */
     proratedDays?: number | null;
     periodDays?: number | null;
+    /**
+     * THE PRICE THE FAMILY AGREED TO, when the fact was raised from an accepted pricing term.
+     *
+     * Present only on the tuition-generation path. When it is present the catalog is NOT consulted:
+     * an accepted term may be an OVERRIDE, and re-resolving the catalog would bill the family the
+     * rate they did not agree to — and would let a catalog edit move what an already-agreed family
+     * owes next month. Absent, everything behaves exactly as before.
+     */
+    acceptedPricing?: AcceptedTuitionPricing | null;
 
     // --- Attendance consumption (Slice 3) ---
     /** Normalized attendance fact type; routes the fact through the attendance interpreter. */
@@ -175,8 +203,21 @@ export type OperationalFactDto = {
     lateThresholdTime?: string | null;
     /** Hours of care (for hourly/extended billing). */
     hours?: number | null;
-    /** Whether the child is vacation-credit eligible (policy-supplied) — gates absence → vacation credit. */
-    vacationEligible?: boolean | null;
+
+    // --- Correction identity (D12a) ---
+    /**
+     * original | correction | reversal. Defaults to 'original'. A correction
+     * re-interprets the corrected values; a reversal yields zero directives and
+     * reconciles the prior obligation by supersession. (Section 5.1/5.2.)
+     */
+    entryType?: OperationalFactEntryType | null;
+    /**
+     * The prior FACT id this correction/reversal restates or voids — for
+     * attendance, the prior `child_attendance_events.id`. Lineage ONLY (never in
+     * the idempotency key, DP-3); maps to the prior consumption event in the
+     * service. Null on a correction/reversal => treated as original.
+     */
+    correctsFactId?: string | null;
 };
 
 /**
@@ -206,6 +247,8 @@ export type ConsumptionEventIntent = {
     status: ConsumptionEventStatus;
     context: Record<string, unknown>;
     idempotencyKey: string;
+    /** D12a: the prior consumption event id this correction/reversal supersedes (lineage). */
+    correctsEventId?: string | null;
 };
 
 /** A draft obligation the consumption event resolves to (preview shape). */
@@ -214,6 +257,15 @@ export type ResolvedObligationIntent = {
     chargeTemplateId: string | null;
     serviceId: string | null;
     amountCents: number | null;
+    /**
+     * THE AGREED COMMERCIAL AMOUNT, when an accepted pricing term decided this obligation.
+     *
+     * Carried separately from `amountCents` because the WRITE re-resolves the template, and a plain
+     * number arriving as `resolvedAmountCents` is a rate hint a `fixed` template is entitled to
+     * ignore. This field is the authority, and it has to survive the trip from resolution to the
+     * draft write or the second pass quietly restores the template's figure.
+     */
+    acceptedAmountCents?: number | null;
     currencyCode: string;
     responsibilityKey: string | null;
     occursOn: string | null;
@@ -225,6 +277,14 @@ export type ResolvedObligationIntent = {
     draftable: boolean;
     status: ResolvedObligationStatus;
     resolutionKey: string | null;
+    /**
+     * The `financial_policies` row that decided this obligation, when one did.
+     *
+     * Carried as a field rather than dug back out of `explanation`, because the downstream writer
+     * needs it programmatically and a reduction that cannot name its authority has no business
+     * being written. Only the vacation-credit path sets it today.
+     */
+    decidedByFinancialPolicyId?: string | null;
     explanation: Record<string, unknown>;
 };
 
@@ -245,6 +305,8 @@ export type ConsumptionEventRow = {
     status: ConsumptionEventStatus;
     context: Record<string, unknown> | null;
     idempotency_key: string;
+    /** D12a lineage: the prior event this correction/reversal supersedes. */
+    corrects_event_id?: string | null;
 };
 
 export type ResolvedObligationRow = {
@@ -266,4 +328,113 @@ export type ResolvedObligationRow = {
     obligation_kind: ObligationKind | null;
     period_start: string | null;
     period_end: string | null;
+    /** D12a: the correction event that superseded this obligation (provenance). */
+    superseded_by_event_id?: string | null;
+};
+
+// ============================================================================
+// D12a — correction reconciliation contract (types)
+// ============================================================================
+
+/** Read-only preview of which prior obligations a correction/reversal would retire. */
+export type SupersededObligationPreview = {
+    id: string;
+    resolutionKey: string | null;
+    obligationKind: string | null;
+    priorAmountCents: number | null;
+};
+
+/** The supersession delta `previewConsumption` returns for a correction/reversal (writes nothing). */
+export type ConsumptionSupersessionDelta = {
+    priorConsumptionEventId: string | null;
+    supersededObligations: SupersededObligationPreview[];
+};
+
+/** The reconciliation outcome `draftConsumption` returns for a correction/reversal. */
+export type ConsumptionSupersededResult = {
+    obligationIds: string[];
+    voidedDraftChargeIds: string[];
+    reparentedObligationIds: string[];
+    priorConsumptionEventId: string | null;
+};
+
+/**
+ * The priced childcare draft-charge FIELDS carried in the reconciliation plan.
+ * Financials-owned (built by childcareChargeService.buildChildcareDraftChargeFields
+ * from the charge-template preview). Deliberately carries NO create/recalc `op` and
+ * NO `draftChargeId`: which charge the reconciliation touches (recalc the live draft
+ * vs create) is decided by the RPC UNDER LOCK from the obligation's own
+ * draft_charge_id — never from a pre-lock plan hint (audit F1/F2). No pricing in the RPC.
+ */
+export type ReconcileChargePlan = {
+    billableSourceType: string;
+    billableSourceId: string | null;
+    chargeType: string;
+    chargeCategory: string | null;
+    currencyCode: string;
+    amountCents: number | null;
+    serviceDate: string | null;
+    occursOn: string | null;
+    billableOn: string | null;
+    chargeTemplateId: string | null;
+    serviceId: string | null;
+    description: string | null;
+    metadata: Record<string, unknown>;
+};
+
+/** One obligation in the reconciliation plan (all values pre-resolved in TS). */
+export type ReconcileObligationPlan = {
+    resolutionKey: string | null;
+    obligationKind: string | null;
+    chargeTemplateId: string | null;
+    serviceId: string | null;
+    amountCents: number | null;
+    currencyCode: string;
+    responsibilityKey: string | null;
+    occursOn: string | null;
+    billableOn: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+    reviewRequired: boolean;
+    status: ResolvedObligationStatus;
+    /** Whether the RPC should mark review_status='stale' (amount/billable changed). */
+    reviewStatusStale: boolean;
+    explanation: Record<string, unknown>;
+    /** Pre-resolved charge op (null => obligation carries no charge). */
+    charge: ReconcileChargePlan | null;
+};
+
+/** The correction's OWN consumption event (fact-anchored idempotency key, DP-3). */
+export type ReconcileCorrectionEventPlan = {
+    idempotencyKey: string;
+    eventTypeId: string | null;
+    eventKey: string;
+    sourceFamily: string;
+    sourceEntityType: string;
+    sourceEntityId: string;
+    subjectType: string | null;
+    subjectId: string | null;
+    locationId: string | null;
+    occursOn: string;
+    effectiveOn: string | null;
+    status: ConsumptionEventStatus;
+    context: Record<string, unknown>;
+};
+
+/** The complete, pre-resolved reconciliation plan handed to the atomic RPC (DP-1). */
+export type ReconcileConsumptionPlan = {
+    /**
+     * Posted contra charges whose obligation this correction supersedes.
+     *
+     * Kept apart from the draft ids the RPC retires, because posted money is answered rather than
+     * retired: the service appends its canonical reversal after the reconciliation commits. The RPC
+     * never sees these, which is how its draft-only rule stays true.
+     */
+    compensateChargeIds?: string[];
+    correctionEvent: ReconcileCorrectionEventPlan;
+    /** The prior FACT id (= prior consumption event's source_entity_id). */
+    priorFactId: string;
+    newObligations: ReconcileObligationPlan[];
+    /** Draft charge ids of orphan obligations to retire (DP-2). */
+    retireChargeIds: string[];
 };

@@ -1,0 +1,15 @@
+WORKSPACE_READY_MS=10111 url=http://127.0.0.1:3015/workspace
+SHOT 01-workspace
+SCHED_MODAL_OPEN_MS=129
+SHOT 02-assignments-modal
+SHOT 03-studio-purposes
+VOCAB purposeLabel=3 typeLabel=0 helper=1
+SHOT 04-purpose-editor
+EDITOR iconPicker=1 sections=6 whatFor=0
+CREATE_MODAL_OPEN_MS=51
+SHOT 05-create-modal
+ROOM evaluating=0 loading=0 roomSelect=0 proposedNote=0 rawAgreement=0 afterMs=163
+SHOT 07-create-editor
+SHOT 09-new-leads
+SHOT 10-focus-kurzman
+WARN no scheduling openers on focus panel

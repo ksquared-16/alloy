@@ -1,0 +1,91 @@
+[
+  {
+    "step": "before",
+    "children": {
+      "Ava": {
+        "ocm": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      },
+      "Ben": {
+        "ocm": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      }
+    },
+    "work": [
+      {
+        "id": "d4c2b5de-2c12-4186-8a63-0585742dce7f",
+        "title": "Conduct Tour",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+        "title": "Contact Family",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "134466ba-e5d7-4720-b706-af2b6cd8fb53",
+        "title": "Support Enrollment Decision",
+        "status": "open",
+        "stage": null,
+        "template": null
+      }
+    ]
+  },
+  {
+    "step": "waitlist_ava",
+    "result": {
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "result": "{\"execution_result\":{\"kind\":\"mutation\",\"mutation_result\":{\"status\":\"committed\",\"mutationId\":\"waitlist-outcome:84d16ebf-7222-4b8e-937c-83f9703dfb40\",\"commandKey\":\"waitlist_child\",\"domain\":\"enrollment_status\",\"subjectId\":\"dc2c0f43-410f-4431-a58a-89923b68d3e3\",\"subjectType\":\"opportunity_customer_member\",\"previousState\":\"\",\"newState\":\"waitlisted\",\"warnings\":[],\"sideEffects\":[{\"kind\":\"automation\",\"description\":\"Child Waitlist outcome progression (disposition + stage)\"}],\"committedAt\":\"2026-10-23T02:59:51.138Z\"}},\"affected_id\":\"dc2c0f43-410f-4431-a58a-89923b68d3e3\"}"
+    },
+    "children": {
+      "Ava": {
+        "ocm": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+        "outcome_status_key": "waitlisted",
+        "updated_at": "2026-10-23T02:59:50.875438+00:00"
+      },
+      "Ben": {
+        "ocm": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      }
+    },
+    "work": [
+      {
+        "id": "d4c2b5de-2c12-4186-8a63-0585742dce7f",
+        "title": "Conduct Tour",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+        "title": "Contact Family",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "134466ba-e5d7-4720-b706-af2b6cd8fb53",
+        "title": "Support Enrollment Decision",
+        "status": "open",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "1545eaa4-510e-40fd-8950-6d5ff8c0dcf8",
+        "title": "Review waitlist position",
+        "status": "open",
+        "stage": null,
+        "template": null
+      }
+    ]
+  }
+]

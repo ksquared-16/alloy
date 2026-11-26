@@ -1,0 +1,371 @@
+<title>Enrollment · Focus Panel</title>
+<style>
+  /* Canonical Alloy tokens — one Bend Pine, light River Stone workspace. */
+  :root{
+    --forge:#273F52; --ink:#1d2b3c; --slate:#5a6478; --slate-2:#8b93a2;
+    --pine:#00A283; --pine-ink:#00745e; --pine-tint:#f0f8f6; --pine-line:#cfe8e1;
+    --gold:#DBC078; --gold-ink:#8f6f24; --gold-tint:#faf4e4;
+    --ember:#BC4300; --ember-ink:#9a3800; --ember-tint:#fbeae0; --ember-line:#eecdbb;
+    --river:#F4F6F9; --white:#ffffff;
+    --line:#e5e9ef; --line-2:#d3d9e2;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0}
+  .page{background:var(--river);color:var(--ink);font-family:var(--sans);line-height:1.5;
+    padding:clamp(18px,3.5vw,44px) clamp(14px,3.5vw,44px) 64px;max-width:1060px;margin:0 auto;-webkit-font-smoothing:antialiased}
+
+  .head{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:6px}
+  .head .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--pine-ink);margin:0 0 10px}
+  h1{font-size:clamp(23px,3.4vw,32px);line-height:1.1;letter-spacing:-.02em;font-weight:680;color:var(--forge);margin:0 0 10px}
+  .head p{font-size:14.5px;color:var(--slate);max-width:60ch;margin:0}
+
+  .cap{display:flex;align-items:center;gap:9px;margin:36px 0 12px;font-size:13px;color:var(--slate)}
+  .cap .n{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--forge);background:var(--white);border:1px solid var(--line-2);border-radius:5px;padding:2px 7px}
+  .cap b{color:var(--forge);font-weight:640}
+
+  /* Focus Panel shell */
+  .panel{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--white);box-shadow:0 1px 2px rgba(39,63,82,.04),0 6px 20px rgba(39,63,82,.05)}
+  .p-head{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--white);border-bottom:1px solid var(--line)}
+  .p-id{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .p-name{font-size:16px;font-weight:660;color:var(--forge);letter-spacing:-.01em}
+  .p-status{font-size:12px;color:var(--slate-2)}
+  .p-status .stg{color:var(--slate);font-weight:600}
+  .p-cmds{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .p-body{background:var(--river);padding:16px;display:grid;grid-template-columns:1.5fr 1fr;gap:14px}
+  @media(max-width:720px){.p-body{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:14px}
+
+  .card{background:var(--white);border:1px solid var(--line);border-radius:11px;padding:15px 16px}
+  .c-title{font-size:12px;font-weight:660;color:var(--forge);margin:0 0 12px;letter-spacing:.005em}
+  .c-title.mut{color:var(--slate)}
+
+  /* work item */
+  .wi{border:1px solid var(--line);border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:11px;position:relative}
+  .wi.active{border-color:var(--pine-line);box-shadow:inset 3px 0 0 var(--pine);padding-left:16px}
+  .wi.blocked{border-color:var(--ember-line);box-shadow:inset 3px 0 0 var(--ember);padding-left:16px}
+  .wi.settled{background:var(--gold-tint);border-color:transparent;padding:11px 14px}
+  .wi.muted{background:#fafbfc}
+  .wi+.wi{margin-top:11px}
+  .wi-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .obl{font-size:15.5px;font-weight:650;color:var(--forge);letter-spacing:-.01em;line-height:1.28}
+  .why{font-size:13px;color:var(--slate);margin-top:-3px}
+  .subj{font-weight:650;color:var(--pine-ink)}
+
+  .flag{font-size:11px;font-weight:600;font-family:var(--mono);letter-spacing:.03em;color:var(--slate-2);white-space:nowrap;padding-top:3px}
+  .flag.now{color:var(--pine-ink)}
+  .flag.wait{color:var(--slate-2)}
+  .flag.done{color:var(--gold-ink)}
+  .flag.block{color:var(--ember-ink)}
+
+  .actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .btn{font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid transparent;font-family:var(--sans);cursor:default}
+  .btn.pri{background:var(--pine);color:#fff}
+  .btn.sec{background:var(--white);color:var(--forge);border-color:var(--line-2)}
+  .btn.off{background:var(--river);color:var(--slate-2);border-color:var(--line)}
+  .hint{font-size:12px;color:var(--slate-2)}
+  .link{font-size:12.5px;font-weight:600;color:var(--pine-ink);display:inline-flex;align-items:center;gap:4px}
+  .link::after{content:"›";font-size:15px;line-height:1}
+
+  /* outcome declaration */
+  .declare{display:flex;flex-direction:column;gap:9px}
+  .declare .q{font-size:12.5px;color:var(--slate)}
+  .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .opt{font-size:13px;color:var(--forge);background:var(--white);border:1px solid var(--line-2);border-radius:8px;padding:7px 13px}
+  .opt.sel{border-color:var(--pine);color:var(--pine-ink);background:var(--pine-tint);font-weight:600}
+
+  /* blocker */
+  .blocker{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--ink)}
+  .blocker .bx{color:var(--ember);font-weight:700;line-height:1.3}
+
+  /* waiting / settled big */
+  .calm{display:flex;flex-direction:column;gap:8px;padding:4px 2px}
+  .calm .lead{font-size:15px;font-weight:640;color:var(--forge);display:flex;align-items:center;gap:9px}
+  .calm .lead .ring{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+  .calm .lead .ring.wait{background:var(--river);border:1.5px solid var(--line-2);color:var(--slate)}
+  .calm .lead .ring.done{background:var(--gold);color:var(--forge)}
+  .calm .line{font-size:13px;color:var(--slate)}
+  .calm .line b{color:var(--forge);font-weight:620}
+
+  /* household / children / required info content */
+  .hh{display:flex;align-items:center;gap:11px}
+  .ava{width:30px;height:30px;border-radius:50%;background:var(--river);border:1px solid var(--line-2);flex:none}
+  .hh-meta{display:flex;flex-direction:column;gap:3px}
+  .hh-name{font-size:13.5px;font-weight:600;color:var(--ink)}
+  .hh-sub{font-size:12px;color:var(--slate)}
+  .kids{display:flex;flex-direction:column;gap:10px}
+  .kid{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .kid-n{font-size:13px;font-weight:600;color:var(--ink)}
+  .kid-a{font-size:12px;color:var(--slate-2);font-family:var(--mono)}
+  .st{font-size:11px;font-weight:600;font-family:var(--mono);padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .st.pine{color:var(--pine-ink);background:var(--pine-tint)}
+  .st.gold{color:var(--gold-ink);background:var(--gold-tint)}
+  .st.slate{color:var(--slate);background:var(--river);border:1px solid var(--line)}
+
+  .req{display:flex;flex-direction:column;gap:0}
+  .req-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .req-row:last-child{border-bottom:none}
+  .rq{width:16px;height:16px;border-radius:5px;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:var(--mono)}
+  .rq.met{background:var(--pine);color:#fff}
+  .rq.need{background:var(--white);border:1.5px solid var(--line-2);color:var(--slate-2)}
+  .rq.att{background:var(--white);border:1.5px solid var(--ember-line);color:var(--ember)}
+  .rq.rec{background:var(--white);border:1.5px dashed var(--line-2);color:var(--slate-2)}
+  .rq-l{font-size:13px;color:var(--ink);flex:1}
+  .rq-s{font-size:11.5px;color:var(--slate-2);font-family:var(--mono)}
+  .rq-s.att{color:var(--ember-ink)}
+
+  /* command open */
+  .cmd{border:1px solid var(--line-2);border-radius:9px;background:var(--white);overflow:hidden}
+  .cmd-h{font-size:12.5px;font-weight:640;color:var(--forge);padding:10px 13px;background:#fbfcfd;border-bottom:1px solid var(--line)}
+  .cmd-b{padding:12px 13px;display:flex;flex-direction:column;gap:10px}
+  .frow{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+  .frow .fk{color:var(--slate)}
+  .frow .fv{color:var(--ink);font-weight:600}
+  .prev{font-size:12.5px;color:var(--slate);border-top:1px dashed var(--line);padding-top:10px}
+  .prev b{color:var(--forge);font-weight:600}
+
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--slate-2)}
+</style>
+
+<div class="page">
+  <header class="head">
+    <p class="k">Alloy · Enrollment · Focus Panel</p>
+    <h1>Operator Work — enrollment states</h1>
+    <p>The real Focus Panel: Operator Work answers <em>“what needs me now, and what do I do next?”</em> Household,
+      Children, and Required information stay authoritative. Bend Pine for action, Alloy Gold for completed, Alloy Ember
+      for blockers.</p>
+  </header>
+
+  <!-- 1 -->
+  <p class="cap"><span class="n">01</span> <b>New family inquiry</b> — one active work item</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Rivera family</span><span class="p-status"><span class="stg">New Lead</span> · inquiry 2 days ago</span></div>
+      <div class="p-cmds"><span class="btn sec">Schedule tour</span><span class="btn sec">Send form</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="wi active">
+          <div class="wi-h"><div><div class="obl">Contact the Rivera family</div></div><span class="flag now">Now</span></div>
+          <div class="why">A new website inquiry came in 2 days ago and no one has reached out yet.</div>
+          <div class="actions"><span class="btn pri">Contact family</span><span class="btn sec">Schedule tour</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">(505) 555‑0142 · maria@…</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="kid-a">age 3</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <p class="cap"><span class="n">02</span> <b>Follow-up</b> — a completed prior attempt and the current next one</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Rivera family</span><span class="p-status"><span class="stg">New Lead</span> · following up</span></div>
+      <div class="p-cmds"><span class="btn sec">Schedule tour</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="wi active">
+          <div class="wi-h"><div><div class="obl">Contact the Rivera family</div></div><span class="flag now">Now</span></div>
+          <div class="why">You left a voicemail yesterday — time to try again.</div>
+          <div class="actions"><span class="btn pri">Contact family</span><span class="btn sec">Send form</span></div>
+        </div>
+        <div class="wi settled">
+          <div class="wi-h"><div class="obl" style="font-size:13.5px">Left a voicemail</div><span class="flag done">✓ Yesterday</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">(505) 555‑0142</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="kid-a">age 3</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <p class="cap"><span class="n">03</span> <b>Scheduled tour</b> — waiting state</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Rivera family</span><span class="p-status"><span class="stg">Tour</span> · booked Tue 10:00</span></div>
+      <div class="p-cmds"><span class="btn sec">Reschedule</span><span class="btn sec">Cancel tour</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="calm">
+          <span class="lead"><span class="ring wait">◷</span> Nothing needs you right now.</span>
+          <span class="line">The tour is booked for <b>Tuesday 10:00</b> and the family is confirmed.</span>
+          <span class="line">A reminder sends <b>Monday morning</b> automatically.</span>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">confirmed by text</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="kid-a">age 3</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <p class="cap"><span class="n">04</span> <b>Outcome declaration</b> — after the tour</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Rivera family</span><span class="p-status"><span class="stg">Tour</span> · toured this morning</span></div>
+      <div class="p-cmds"><span class="btn sec">Message</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="wi active">
+          <div class="wi-h"><div><div class="obl">Record the tour outcome</div></div><span class="flag now">Now</span></div>
+          <div class="why">The family toured this morning — how did it go?</div>
+          <div class="declare">
+            <span class="q">Choose what happened:</span>
+            <div class="opts"><span class="opt sel">Tour completed</span><span class="opt">No show</span><span class="opt">Needs follow-up</span><span class="opt">Family declined</span></div>
+          </div>
+          <div class="actions"><span class="btn pri">Record outcome</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">toured 10:00–10:40</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="kid-a">age 3</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <p class="cap"><span class="n">05</span> <b>Multi-child household</b> — two different active work items</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Rivera family</span><span class="p-status">3 children · work on 2</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="wi active">
+          <div class="wi-h"><div><div class="obl">Send <span class="subj">Sofia’s</span> enrollment packet</div></div><span class="flag now">Now</span></div>
+          <div class="why">Sofia is enrolling and the packet hasn’t gone out yet.</div>
+          <div class="actions"><span class="btn pri">Send enrollment packet</span></div>
+        </div>
+        <div class="wi muted">
+          <div class="wi-h"><div><div class="obl" style="font-size:14px">Conduct the family tour</div><div class="why">A tour for baby Mateo is booked Tuesday 9:30.</div></div><span class="flag wait">Tue</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">one address · one contact</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids">
+          <div class="kid"><span class="kid-n">Aisha Rivera</span><span class="st gold">Enrolled</span></div>
+          <div class="kid"><span class="kid-n">Sofia Rivera</span><span class="st pine">Enrolling</span></div>
+          <div class="kid"><span class="kid-n">Mateo Rivera</span><span class="st slate">Inquiry · Tour</span></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <p class="cap"><span class="n">06</span> <b>Child enrollment work</b> — with Required information beside it</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Sofia Rivera</span><span class="p-status"><span class="stg">Enrolling</span> · Rivera family</span></div>
+      <div class="p-cmds"><span class="btn sec">Send enrollment packet</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="wi active">
+          <div class="wi-h"><div><div class="obl">Send <span class="subj">Sofia’s</span> enrollment packet</div></div><span class="flag now">Now</span></div>
+          <div class="why">Get the forms to the family so enrollment can finish.</div>
+          <div class="actions"><span class="btn pri">Send enrollment packet</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Required information</p><div class="req">
+          <div class="req-row"><span class="rq met">✓</span><span class="rq-l">Child</span><span class="rq-s">on file</span></div>
+          <div class="req-row"><span class="rq need"></span><span class="rq-l">Classroom</span><span class="rq-s">needed</span></div>
+          <div class="req-row"><span class="rq need"></span><span class="rq-l">Schedule</span><span class="rq-s">needed</span></div>
+          <div class="req-row"><span class="rq need"></span><span class="rq-l">Enrollment start date</span><span class="rq-s">needed</span></div>
+          <div class="req-row"><span class="rq rec">◦</span><span class="rq-l">Enrollment packet reviewed</span><span class="rq-s">recommended</span></div>
+        </div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="st pine">Enrolling</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <p class="cap"><span class="n">07</span> <b>Blocked work</b></p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Sofia Rivera</span><span class="p-status"><span class="stg">Enrolling</span> · Rivera family</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="wi blocked">
+          <div class="wi-h"><div><div class="obl">Finish <span class="subj">Sofia’s</span> enrollment</div></div><span class="flag block">Blocked</span></div>
+          <div class="blocker"><span class="bx">!</span><span>Sofia can’t be enrolled yet — no <b>classroom</b> is assigned, and her <b>schedule</b> isn’t set.</span></div>
+          <div class="actions"><span class="link">Set these in Required information</span></div>
+          <div class="actions"><span class="btn off">Enroll Sofia</span><span class="hint">available once a classroom and schedule are set</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Required information</p><div class="req">
+          <div class="req-row"><span class="rq att">!</span><span class="rq-l">Classroom</span><span class="rq-s att">needs attention</span></div>
+          <div class="req-row"><span class="rq att">!</span><span class="rq-l">Schedule</span><span class="rq-s att">needs attention</span></div>
+          <div class="req-row"><span class="rq met">✓</span><span class="rq-l">Child</span><span class="rq-s">on file</span></div>
+        </div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="st pine">Enrolling</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <p class="cap"><span class="n">08</span> <b>Command open</b> — inside the Focus Panel</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Sofia Rivera</span><span class="p-status"><span class="stg">Enrolling</span> · Rivera family</span></div>
+      <div class="p-cmds"><span class="btn sec">Send enrollment packet</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="wi active">
+          <div class="wi-h"><div><div class="obl">Send <span class="subj">Sofia’s</span> enrollment packet</div></div><span class="flag now">In progress</span></div>
+          <div class="cmd">
+            <div class="cmd-h">Send enrollment packet</div>
+            <div class="cmd-b">
+              <div class="frow"><span class="fk">Packet</span><span class="fv">Enrollment forms</span></div>
+              <div class="frow"><span class="fk">To</span><span class="fv">Maria Rivera · email</span></div>
+              <div class="prev">The family receives the enrollment packet by email. This work closes as <b>packet sent</b>.</div>
+            </div>
+          </div>
+          <div class="actions"><span class="btn pri">Send packet</span><span class="btn sec">Cancel</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">maria@…</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="st pine">Enrolling</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <p class="cap"><span class="n">09</span> <b>Successful recomposition</b> — same action, no reload</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Sofia Rivera</span><span class="p-status"><span class="stg">Enrolling</span> · Rivera family</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="calm">
+          <span class="lead"><span class="ring wait">◷</span> Nothing needs you right now.</span>
+          <span class="line">Packet sent — waiting on the family to return it.</span>
+          <span class="line"><b>3 items</b> remain in Required information before Sofia can enroll.</span>
+        </div>
+        <div class="wi settled">
+          <div class="wi-h"><div class="obl" style="font-size:13.5px">Enrollment packet sent</div><span class="flag done">✓ Just now</span></div>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">no change</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="st pine">Enrolling</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10 -->
+  <p class="cap"><span class="n">10</span> <b>No active work</b> — a calm settled state</p>
+  <div class="panel">
+    <div class="p-head"><div class="p-id"><span class="p-name">Sofia Rivera</span><span class="p-status"><span class="stg">Enrolled</span> · Rivera family</span></div></div>
+    <div class="p-body">
+      <div class="col"><div class="card"><p class="c-title">Current work</p>
+        <div class="calm">
+          <span class="lead"><span class="ring done">✓</span> Sofia is enrolled.</span>
+          <span class="line">Started <b>September 3</b>. Nothing needs you here.</span>
+        </div>
+      </div></div>
+      <div class="col">
+        <div class="card"><p class="c-title">Household</p><div class="hh"><span class="ava"></span><div class="hh-meta"><span class="hh-name">Maria &amp; Luis Rivera</span><span class="hh-sub">1 enrolled</span></div></div></div>
+        <div class="card"><p class="c-title">Children</p><div class="kids"><div class="kid"><span class="kid-n">Sofia Rivera</span><span class="st gold">Enrolled</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Alloy · Enrollment Focus Panel · configured composition · canonical tokens</footer>
+</div>

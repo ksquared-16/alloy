@@ -1,0 +1,90 @@
+[
+  {
+    "trail": ".first_paint.data.record_visible",
+    "name": "Kurzman Family",
+    "id": "df771481-841f-4329-b7bb-c0a03d9fb621"
+  },
+  {
+    "trail": ".first_paint.data.record_visible._opportunity_persons[0]",
+    "name": "Kelly Kurzman",
+    "id": "1624a9ea-c295-43fb-8523-98827dc7f731",
+    "role": "family_member"
+  },
+  {
+    "trail": ".first_paint.data.record_visible._opportunity_persons[1]",
+    "name": "Kristi Kurzman",
+    "id": "0e850943-2d68-46c7-8008-d24a389cff07",
+    "role": "family_member"
+  },
+  {
+    "trail": ".first_paint.data.record_visible._inquiry_children[0]",
+    "name": "Lennon Kurzman",
+    "id": "9cee6c6f-d30e-46f0-bde3-69d1cc5dbe04"
+  },
+  {
+    "trail": ".first_paint.data.record_visible._inquiry_children[1]",
+    "name": "Wrigley Kurzman",
+    "id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810"
+  },
+  {
+    "trail": ".first_paint.data.record_visible._scheduling_projection.byMemberId.05cf9138-7f4f-482c-a839-4644359985d1.child",
+    "name": "Lennon Kurzman"
+  },
+  {
+    "trail": ".first_paint.data.record_visible._scheduling_projection.byMemberId.2049414a-868f-4609-ad47-dce793d75421.child",
+    "name": "Wrigley Kurzman"
+  },
+  {
+    "trail": ".first_paint.data.inquiry_children[0]",
+    "name": "Lennon Kurzman",
+    "id": "9cee6c6f-d30e-46f0-bde3-69d1cc5dbe04"
+  },
+  {
+    "trail": ".first_paint.data.inquiry_children[1]",
+    "name": "Wrigley Kurzman",
+    "id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810"
+  },
+  {
+    "trail": ".first_paint.data.scheduling_projection.byMemberId.05cf9138-7f4f-482c-a839-4644359985d1.child",
+    "name": "Lennon Kurzman"
+  },
+  {
+    "trail": ".first_paint.data.scheduling_projection.byMemberId.2049414a-868f-4609-ad47-dce793d75421.child",
+    "name": "Wrigley Kurzman"
+  },
+  {
+    "trail": ".above_fold.record",
+    "name": "Kurzman Family",
+    "id": "df771481-841f-4329-b7bb-c0a03d9fb621"
+  },
+  {
+    "trail": ".above_fold.record._opportunity_persons[0]",
+    "name": "Kelly Kurzman",
+    "id": "1624a9ea-c295-43fb-8523-98827dc7f731",
+    "role": "family_member"
+  },
+  {
+    "trail": ".above_fold.record._opportunity_persons[1]",
+    "name": "Kristi Kurzman",
+    "id": "0e850943-2d68-46c7-8008-d24a389cff07",
+    "role": "family_member"
+  },
+  {
+    "trail": ".above_fold.record._inquiry_children[0]",
+    "name": "Lennon Kurzman",
+    "id": "9cee6c6f-d30e-46f0-bde3-69d1cc5dbe04"
+  },
+  {
+    "trail": ".above_fold.record._inquiry_children[1]",
+    "name": "Wrigley Kurzman",
+    "id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810"
+  },
+  {
+    "trail": ".above_fold.record._scheduling_projection.byMemberId.05cf9138-7f4f-482c-a839-4644359985d1.child",
+    "name": "Lennon Kurzman"
+  },
+  {
+    "trail": ".above_fold.record._scheduling_projection.byMemberId.2049414a-868f-4609-ad47-dce793d75421.child",
+    "name": "Wrigley Kurzman"
+  }
+]

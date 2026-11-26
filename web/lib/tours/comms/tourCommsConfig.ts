@@ -3,6 +3,9 @@
  * Org/location overrides live in metadata JSON — see resolveTourCommsConfig.
  */
 
+import type { WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
+import { parseTourAutomationConditions } from "@/lib/tours/comms/tourCommsAutomationConditions";
+
 /** Allowed `communication_scheduled_sends.source` for tour reminder rows (Batch 1 migration). */
 export const TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE = "tour_scheduling" as const;
 
@@ -18,12 +21,17 @@ export const TOUR_COMMS_SCHEDULED_SEND_METADATA = {
     locationId: "location_id",
     reason: "reason",
     quietHoursAdjusted: "quiet_hours_adjusted",
+    /** Platform MessageCategory frozen at schedule time for enqueue eligibility. */
+    messageCategory: "message_category",
+    purpose: "purpose",
 } as const;
 
 /** Metadata keys on immediate outbound messages (Batch 5+). */
 export const TOUR_COMMS_OUTBOUND_METADATA = {
     source: "source",
     tourBookingId: "tour_booking_id",
+    /** Set instead of `tourBookingId` for `tour_invitation` — an invitation has no booking yet. */
+    tourInvitationId: "tour_invitation_id",
     opportunityId: "opportunity_id",
     eventKey: "event_key",
     channel: "channel",
@@ -45,6 +53,7 @@ export const TOUR_COMMS_CHANNELS: readonly TourCommsChannel[] = ["email", "sms"]
  * Distinct from workflow `event_type` strings on tour_bookings.
  */
 export type TourCommsEventKey =
+    | "tour_invitation"
     | "tour_confirmation"
     | "tour_reminder"
     | "tour_reschedule"
@@ -53,6 +62,8 @@ export type TourCommsEventKey =
     | "tour_pending_internal";
 
 export const TOUR_COMMS_EVENT_KEYS: readonly TourCommsEventKey[] = [
+    // `tour_invitation` precedes a booking; every other key describes one that already exists.
+    "tour_invitation",
     "tour_confirmation",
     "tour_reminder",
     "tour_reschedule",
@@ -87,17 +98,33 @@ export type TourReminderOffset = {
     channels: TourCommsChannel[];
 };
 
-export type TourCommsHostRecipientPolicy = {
-    /** Send staff/host notifications when policy allows. */
+/**
+ * Internal staff who receive Tour calendar/notification artifacts (not parent-facing mail).
+ * Configured recipients — not a Tour Host ownership model.
+ */
+export type TourCommsInternalRecipientsPolicy = {
     enabled: boolean;
-    /** Email host from `tour_availability_rules.user_id` when present. */
-    notify_rule_host: boolean;
+    /** Canonical staff auth user ids. Supports 0 / 1 / many. */
+    user_ids: string[];
 };
 
+/**
+ * Who receives automated parent-facing Tour communications (confirmation, reminder, etc.).
+ * Operator-initiated Send Tour Invitation still allows composer recipient override.
+ */
+export type TourCommsParentRecipientPolicy = "primary_contact";
+
 export type TourCommsIcsPolicy = {
-    /** Link or embed ICS in confirmation email (Batch 3+). */
+    /**
+     * Whether the family's tour messages (confirmation, reschedule) carry the "Add to calendar" link.
+     * Default true. Consumed by the orchestrator; false omits the link and its line. Staff calendar
+     * invitations are governed by `internal_recipients`, not by this setting.
+     */
     include_in_confirmation_email: boolean;
-    /** Allow token-scoped public ICS download (Batch 3+). */
+    /**
+     * RESERVED — no consumer. Intended to allow a token-scoped public .ics download, but no such route
+     * exists (`buildTourIcsDownloadPath` names one); setting it changes nothing. Owner: Tours.
+     */
     public_download_enabled: boolean;
 };
 
@@ -112,14 +139,38 @@ export type TourCommsTemplates = Partial<Record<TourCommsEventKey, Partial<Recor
 export type TourCommsConfig = {
     /** Master switch for automated tour comms (orchestrator Batch 5+). */
     enabled: boolean;
+    /**
+     * Channel master switches. Reminder rows still declare their own `channels`;
+     * effective send = intersection with this map and recipient eligibility.
+     */
     channels: Record<TourCommsChannel, boolean>;
+    /**
+     * Zero or more reminder timers before `tour_bookings.start_at`.
+     * Seed one 24h entry; orgs may add 48h/72h (or any offset_minutes) without schema change.
+     */
     reminder_offsets: TourReminderOffset[];
     quiet_hours: TourCommsQuietHoursConfig;
-    host_recipient: TourCommsHostRecipientPolicy;
+    /**
+     * Staff calendar/notification recipients for scheduled Tours.
+     * Independent of parent templates — delivery policy, not content ownership.
+     */
+    internal_recipients: TourCommsInternalRecipientsPolicy;
+    /** Default recipient policy for automated Tour parent messages. */
+    parent_recipient_policy: TourCommsParentRecipientPolicy;
+    /**
+     * When true, reminder templates may include Confirm I'm coming / Reply 1.
+     * When false, reminder is informational only. Never gates booking validity.
+     */
+    ask_parent_confirm_attendance: boolean;
     ics: TourCommsIcsPolicy;
     templates: TourCommsTemplates;
     /** Do not schedule reminders closer than this many minutes before start (default 15). */
     min_reminder_lead_minutes: number;
+    /**
+     * Zero or more AND conditions gating automated Tour reminder scheduling.
+     * Same shape as Work View `filters_v1`; empty = no gate.
+     */
+    automation_conditions_v1: WorkViewFilterV1[];
 };
 
 /** JSON shape under `org_settings.metadata.tour_comms` or `locations.metadata.tour_comms`. */
@@ -141,11 +192,12 @@ export type ResolveTourCommsConfigResult = {
 const HH_MM_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 
 export const DEFAULT_TOUR_COMMS_CONFIG: TourCommsConfig = {
-    enabled: false,
+    // Platform seed — tenants override via org_settings.metadata.tour_comms (or location).
+    enabled: true,
     channels: { email: true, sms: false },
     reminder_offsets: [
+        // Single seeded timer; add more rows (48h/72h/…) via config — do not hardcode forever.
         { reminder_key: "tour_reminder_24h", offset_minutes: 24 * 60, channels: ["email"] },
-        { reminder_key: "tour_reminder_2h", offset_minutes: 2 * 60, channels: ["email"] },
     ],
     quiet_hours: {
         enabled: true,
@@ -156,16 +208,19 @@ export const DEFAULT_TOUR_COMMS_CONFIG: TourCommsConfig = {
         defer_policy: "next_morning",
         next_morning_time: "08:00",
     },
-    host_recipient: {
+    internal_recipients: {
         enabled: true,
-        notify_rule_host: true,
+        user_ids: [],
     },
+    parent_recipient_policy: "primary_contact",
+    ask_parent_confirm_attendance: true,
     ics: {
         include_in_confirmation_email: true,
         public_download_enabled: true,
     },
     templates: {},
     min_reminder_lead_minutes: 15,
+    automation_conditions_v1: [],
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -230,12 +285,27 @@ function parseQuietHours(raw: unknown, base: TourCommsQuietHoursConfig): TourCom
     };
 }
 
-function parseHostRecipient(raw: unknown, base: TourCommsHostRecipientPolicy): TourCommsHostRecipientPolicy {
-    if (!isRecord(raw)) return { ...base };
+function parseInternalRecipients(
+    raw: unknown,
+    base: TourCommsInternalRecipientsPolicy,
+): TourCommsInternalRecipientsPolicy {
+    if (!isRecord(raw)) return { ...base, user_ids: [...base.user_ids] };
+    const userIds: string[] = [];
+    if (Array.isArray(raw.user_ids)) {
+        for (const item of raw.user_ids) {
+            const id = typeof item === "string" ? item.trim() : "";
+            if (id && !userIds.includes(id)) userIds.push(id);
+        }
+    }
     return {
         enabled: typeof raw.enabled === "boolean" ? raw.enabled : base.enabled,
-        notify_rule_host: typeof raw.notify_rule_host === "boolean" ? raw.notify_rule_host : base.notify_rule_host,
+        user_ids: userIds,
     };
+}
+
+function parseParentRecipientPolicy(raw: unknown, base: TourCommsParentRecipientPolicy): TourCommsParentRecipientPolicy {
+    if (raw === "primary_contact") return "primary_contact";
+    return base;
 }
 
 function parseIcs(raw: unknown, base: TourCommsIcsPolicy): TourCommsIcsPolicy {
@@ -285,11 +355,28 @@ export function parseTourCommsConfigFragment(raw: unknown): TourCommsConfigMetad
     if (isRecord(raw.channels)) fragment.channels = parseChannelsRecord(raw.channels, DEFAULT_TOUR_COMMS_CONFIG.channels);
     if (raw.reminder_offsets !== undefined) fragment.reminder_offsets = parseReminderOffsets(raw.reminder_offsets, DEFAULT_TOUR_COMMS_CONFIG.reminder_offsets);
     if (isRecord(raw.quiet_hours)) fragment.quiet_hours = parseQuietHours(raw.quiet_hours, DEFAULT_TOUR_COMMS_CONFIG.quiet_hours);
-    if (isRecord(raw.host_recipient)) fragment.host_recipient = parseHostRecipient(raw.host_recipient, DEFAULT_TOUR_COMMS_CONFIG.host_recipient);
+    if (isRecord(raw.internal_recipients)) {
+        fragment.internal_recipients = parseInternalRecipients(
+            raw.internal_recipients,
+            DEFAULT_TOUR_COMMS_CONFIG.internal_recipients,
+        );
+    }
+    if (raw.parent_recipient_policy !== undefined) {
+        fragment.parent_recipient_policy = parseParentRecipientPolicy(
+            raw.parent_recipient_policy,
+            DEFAULT_TOUR_COMMS_CONFIG.parent_recipient_policy,
+        );
+    }
+    if (typeof raw.ask_parent_confirm_attendance === "boolean") {
+        fragment.ask_parent_confirm_attendance = raw.ask_parent_confirm_attendance;
+    }
     if (isRecord(raw.ics)) fragment.ics = parseIcs(raw.ics, DEFAULT_TOUR_COMMS_CONFIG.ics);
     if (isRecord(raw.templates)) fragment.templates = parseTemplates(raw.templates, DEFAULT_TOUR_COMMS_CONFIG.templates);
     if (typeof raw.min_reminder_lead_minutes === "number" && Number.isFinite(raw.min_reminder_lead_minutes)) {
         fragment.min_reminder_lead_minutes = Math.max(0, Math.floor(raw.min_reminder_lead_minutes));
+    }
+    if (raw.automation_conditions_v1 !== undefined) {
+        fragment.automation_conditions_v1 = parseTourAutomationConditions(raw.automation_conditions_v1);
     }
     return fragment;
 }
@@ -320,18 +407,6 @@ function mergeQuietHours(
     return out;
 }
 
-function mergeHostRecipient(
-    org: TourCommsHostRecipientPolicy,
-    location: TourCommsHostRecipientPolicy | undefined,
-    base: TourCommsHostRecipientPolicy
-): TourCommsHostRecipientPolicy {
-    if (!location) return org;
-    const out = { ...org };
-    if (location.enabled !== base.enabled) out.enabled = location.enabled;
-    if (location.notify_rule_host !== base.notify_rule_host) out.notify_rule_host = location.notify_rule_host;
-    return out;
-}
-
 function mergeIcs(org: TourCommsIcsPolicy, location: TourCommsIcsPolicy | undefined, base: TourCommsIcsPolicy): TourCommsIcsPolicy {
     if (!location) return org;
     const out = { ...org };
@@ -350,15 +425,29 @@ export function mergeTourCommsConfig(
 ): TourCommsConfig {
     const base = DEFAULT_TOUR_COMMS_CONFIG;
     const orgQuiet = orgFragment.quiet_hours ?? base.quiet_hours;
-    const orgHost = orgFragment.host_recipient ?? base.host_recipient;
     const orgIcs = orgFragment.ics ?? base.ics;
+    const internal =
+        locationFragment.internal_recipients
+        ?? orgFragment.internal_recipients
+        ?? base.internal_recipients;
 
     return {
         enabled: locationFragment.enabled ?? orgFragment.enabled ?? base.enabled,
         channels: parseChannelsRecord(locationFragment.channels ?? orgFragment.channels, base.channels),
         reminder_offsets: locationFragment.reminder_offsets ?? orgFragment.reminder_offsets ?? base.reminder_offsets,
         quiet_hours: mergeQuietHours(orgQuiet, locationFragment.quiet_hours, base.quiet_hours),
-        host_recipient: mergeHostRecipient(orgHost, locationFragment.host_recipient, base.host_recipient),
+        internal_recipients: {
+            enabled: internal.enabled,
+            user_ids: [...internal.user_ids],
+        },
+        parent_recipient_policy:
+            locationFragment.parent_recipient_policy
+            ?? orgFragment.parent_recipient_policy
+            ?? base.parent_recipient_policy,
+        ask_parent_confirm_attendance:
+            locationFragment.ask_parent_confirm_attendance
+            ?? orgFragment.ask_parent_confirm_attendance
+            ?? base.ask_parent_confirm_attendance,
         ics: mergeIcs(orgIcs, locationFragment.ics, base.ics),
         templates: {
             ...(orgFragment.templates ?? {}),
@@ -366,5 +455,9 @@ export function mergeTourCommsConfig(
         },
         min_reminder_lead_minutes:
             locationFragment.min_reminder_lead_minutes ?? orgFragment.min_reminder_lead_minutes ?? base.min_reminder_lead_minutes,
+        automation_conditions_v1:
+            locationFragment.automation_conditions_v1
+            ?? orgFragment.automation_conditions_v1
+            ?? base.automation_conditions_v1,
     };
 }

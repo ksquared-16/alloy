@@ -1,0 +1,13 @@
+{
+  "action_key": "database.read_census",
+  "artifact_refs": [
+    "certification/financials/w7-repair-1/w7-preservation-census.sql"
+  ],
+  "reason_worker_cannot_execute": "This lane holds no hosted database credentials; the deployed acceptance store is reachable only from the trusted host.",
+  "reason": "W7 Repair Batch 1 \u00a712 \u2014 FINAL preservation proof against the deployed build f329419e9. Kelly's add_charge_honours_review_boundary must still read FAIL / PRODUCT_DEFECT on its ORIGINAL revision ea596e61, with zero automatic PASS created by this batch. Read-only; no QA record touched.",
+  "inputs": {
+    "expectedQueryHash": "d94562f9a7b1d1caa2993a8b6a391be44e66abaf487c81f3149cb2af2831d776",
+    "databaseTarget": "alloy_deployed_primary",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/financials"
+  }
+}

@@ -1,0 +1,96 @@
+{
+ "rowA": "ddc23ed1",
+ "rowB": "4e3fb78d",
+ "t_A_click_rel_ms": 0,
+ "t_A_meaningful_rel_ms": 3177,
+ "t_B_click_rel_ms": 3177,
+ "gap_A_meaningful_to_B_click_ms": 0,
+ "provisioning_requests": [
+  {
+   "i": 12,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b",
+   "subj": null,
+   "start": -23335,
+   "end": -18418,
+   "dur": 4917
+  },
+  {
+   "i": 40,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=ddc23ed1-824c-41e3-8859-ba702a0efe48&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "ddc23ed1",
+   "start": 103,
+   "end": 6166,
+   "dur": 6063
+  },
+  {
+   "i": 41,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=8b3689fb-130f-4019-89a4-433a1fd53735&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "8b3689fb",
+   "start": 247,
+   "end": 5884,
+   "dur": 5637
+  },
+  {
+   "i": 42,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=4e3fb78d-e4fd-4b60-8d0e-e2b0a7132f1d&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "4e3fb78d",
+   "start": 247,
+   "end": 5480,
+   "dur": 5233
+  },
+  {
+   "i": 43,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=d2a3b448-296e-43e7-b0a8-28dd918526ac&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "d2a3b448",
+   "start": 247,
+   "end": 5656,
+   "dur": 5409
+  },
+  {
+   "i": 44,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=c68e8793-b4d0-457a-8daf-f9cdf9b07445&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "c68e8793",
+   "start": 3311,
+   "end": 8542,
+   "dur": 5231
+  }
+ ],
+ "inflight_at_B_click": [
+  {
+   "i": 40,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=ddc23ed1-824c-41e3-8859-ba702a0efe48&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "ddc23ed1",
+   "start": 103,
+   "end": 6166,
+   "dur": 6063
+  },
+  {
+   "i": 41,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=8b3689fb-130f-4019-89a4-433a1fd53735&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "8b3689fb",
+   "start": 247,
+   "end": 5884,
+   "dur": 5637
+  },
+  {
+   "i": 42,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=4e3fb78d-e4fd-4b60-8d0e-e2b0a7132f1d&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "4e3fb78d",
+   "start": 247,
+   "end": 5480,
+   "dur": 5233
+  },
+  {
+   "i": 43,
+   "u": "/api/admin/work-units/waitlist/provisioning-answer?subject_id=d2a3b448-296e-43e7-b0a8-28dd918526ac&dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b&summary_cfg=aa22a972-a518-43e3-8709-49cb64d98bba%3A153",
+   "subj": "d2a3b448",
+   "start": 247,
+   "end": 5656,
+   "dur": 5409
+  }
+ ],
+ "B_joined_existing_warm": true,
+ "requests_after_B": 1,
+ "t_B_panel_meaningful_ms": 2483,
+ "t_B_rows_active_ms": 65
+}

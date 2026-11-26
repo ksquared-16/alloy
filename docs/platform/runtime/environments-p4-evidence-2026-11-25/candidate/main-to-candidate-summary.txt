@@ -1,0 +1,33 @@
+# git diff --name-status --no-renames origin/main..candidate, counted
+15375 A
+5086 D
+2472 M
+# by top-level path
+9245 web
+4314 docs
+3457 certification
+2775 backend
+1038 scripts
+ 784 sync
+ 518 .alloy-agent-evidence
+ 412 qa
+ 353 supabase
+  10 .github
+   5 .cursor
+   4 demos
+   2 contracts
+   2 .vscode
+   2 .claude
+   1 tsconfig.execgraphui.json
+   1 package.json
+   1 package-lock.json
+   1 RUNTIME-V1-REALIZATION-LEDGER.md
+   1 README.md
+   1 PRE_COMMIT_SHIP_CHECK.md
+   1 HANDOFF-runtime-v1-polish.md
+   1 CLOSEOUT-prefetch-gap-investigation.md
+   1 CLAUDE.md
+   1 .gitignore
+   1 .githooks
+   1 .DS_Store
+# sha256 of the full list: 19cfe9b4c61ffce2372d2db6bc490e90727de6ec2091ca810e08ec595035ce5b

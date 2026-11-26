@@ -28,8 +28,14 @@ export const ENROLLMENT_TEMPLATE_WORK_DEFINITION_DEFAULTS: Readonly<
     send_tour_reminder: "contact_family",
     follow_up_decision: "contact_family",
     confirm_offer_response: "contact_family",
-    review_waitlist_position: "contact_family",
-    offer_spot: "contact_family",
+    // NOT `contact_family`: the family's Lead-stage Contact Family work binds there too, so sharing
+    // the definition let the stage-move reconciler carry that work forward as though it already
+    // satisfied Waitlist entry — and the review was never created.
+    review_waitlist_position: "review_waitlist_position",
+    // NOT `contact_family`: work identity is (definition, subject), so sharing a definition with
+    // the review work standing beside it made the two indistinguishable and starting an offer
+    // deduped onto the review.
+    offer_spot: "offer_spot",
     confirm_child_info: "collect_missing_information",
     confirm_location_program: "collect_missing_information",
     review_child_paths: "collect_missing_information",

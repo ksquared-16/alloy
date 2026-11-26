@@ -6,9 +6,9 @@ import StageEditorV2, {
 } from "@/components/adminV2/settings/lifecycle/StageEditorV2";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
-import type { StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
-import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
+import type { LifecycleBuilderProcessRecord, LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { ReactNode } from "react";
 
 export type { StageEditorV2Handle as LifecycleStageConfigurationHandle };
@@ -21,17 +21,24 @@ export default function LifecycleStageConfiguration({
     lifecycleName: _lifecycleName,
     stageRecord,
     allStages,
+    processTracks,
+    process,
     bootstrap,
     bootstrapLoading,
     statusesError,
-    onStatusRollupChange,
     validationSlot: _validationSlot,
     saveState,
     saveError,
+    saveNotice,
     onSaveStage,
     onDirtyChange,
     onDeleteStage,
     workspaceHandleRef,
+    onValidateConfiguration,
+    onPublishConfiguration,
+    onReloadConfiguration,
+    publicationBusy,
+    publicationNotice,
 }: {
     departmentId: string;
     businessProcessKey: string;
@@ -40,18 +47,25 @@ export default function LifecycleStageConfiguration({
     lifecycleName: string;
     stageRecord?: LifecycleBuilderStageRecord | null;
     allStages?: LifecycleBuilderStageRecord[];
+    processTracks?: ProcessTracksV1 | null;
+    process?: LifecycleBuilderProcessRecord | null;
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     statusesError: string | null;
-    onStatusRollupChange: (rollup: StatusRollupV1, flatKeys: string[]) => void;
     validationSlot?: ReactNode;
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
     onDeleteStage?: () => void;
     workspaceHandleRef?: React.RefObject<StageEditorV2Handle | null>;
+    onValidateConfiguration?: () => void | Promise<void>;
+    onPublishConfiguration?: () => void | Promise<void>;
+    onReloadConfiguration?: () => void | Promise<void>;
+    publicationBusy?: boolean;
+    publicationNotice?: string | null;
 }) {
     const localRef = useRef<StageEditorV2Handle | null>(null);
     const ref = workspaceHandleRef ?? localRef;
@@ -66,16 +80,23 @@ export default function LifecycleStageConfiguration({
                 stageLabel={stageLabel}
                 stageRecord={stageRecord}
                 allStages={allStages}
+                processTracks={processTracks ?? null}
+                process={process ?? null}
                 bootstrap={bootstrap}
                 bootstrapLoading={bootstrapLoading}
                 statusesError={statusesError}
-                onStatusRollupChange={onStatusRollupChange}
                 saveState={saveState}
                 saveError={saveError}
+                saveNotice={saveNotice ?? null}
                 onSaveStage={onSaveStage}
                 onDirtyChange={onDirtyChange}
                 onDeleteStage={onDeleteStage}
                 entityDisplayLabels={bootstrap?.entity_display_labels ?? undefined}
+                onValidateConfiguration={onValidateConfiguration}
+                onPublishConfiguration={onPublishConfiguration}
+                onReloadConfiguration={onReloadConfiguration}
+                publicationBusy={publicationBusy}
+                publicationNotice={publicationNotice}
             />
         </div>
     );

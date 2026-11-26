@@ -3,7 +3,13 @@
  * Shape matches `resolveLayoutRuntimeActivityTimeline` raw event rows.
  */
 
+import { collapseBusinessEventMechanics } from "@/lib/admin/collapseBusinessEventMechanics";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import {
+    collapseTourActivityDuplicates,
+    OPPORTUNITY_RELATED_TOUR_ACTIVITY_EVENT_TYPES,
+} from "@/lib/admin/opportunityTourActivityEvents";
 
 export type QueueActivityTimelineEventRow = {
     id: string;
@@ -19,7 +25,7 @@ function rowPayload(raw: unknown): Record<string, unknown> | null {
     return raw as Record<string, unknown>;
 }
 
-/** @internal Exported for unit tests — groups pre-sorted desc rows by entity. */
+/** @internal Exported for unit tests — newest-first per entity (sorts + dedupes by id). */
 export function collapseTopEventsPerEntity(
     rows: Array<{
         id?: unknown;
@@ -31,12 +37,22 @@ export function collapseTopEventsPerEntity(
     maxPerEntity: number,
 ): Map<string, QueueActivityTimelineEventRow[]> {
     const byEntity = new Map<string, QueueActivityTimelineEventRow[]>();
-    for (const row of rows) {
+    const seenIds = new Set<string>();
+    const sorted = [...rows].sort((a, b) => {
+        const at = Date.parse(String(a.occurred_at ?? "")) || 0;
+        const bt = Date.parse(String(b.occurred_at ?? "")) || 0;
+        return bt - at;
+    });
+    for (const row of sorted) {
         const entityId = row.entity_id != null ? String(row.entity_id).trim() : "";
         if (!entityId) continue;
+        const id = row.id != null ? String(row.id).trim() : "";
+        if (id) {
+            if (seenIds.has(id)) continue;
+            seenIds.add(id);
+        }
         const list = byEntity.get(entityId) ?? [];
         if (list.length >= maxPerEntity) continue;
-        const id = row.id != null ? String(row.id).trim() : "";
         list.push({
             id: id || `${entityId}-${list.length}`,
             occurred_at: row.occurred_at != null ? String(row.occurred_at) : null,
@@ -46,6 +62,19 @@ export function collapseTopEventsPerEntity(
         byEntity.set(entityId, list);
     }
     return byEntity;
+}
+
+function remapRelatedRowsToOpportunityEntity(
+    rows: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+    return rows.map((row) => {
+        const payload = row.payload;
+        const oppId =
+            payload && typeof payload === "object" && !Array.isArray(payload)
+                ? String((payload as Record<string, unknown>).opportunity_id ?? "").trim()
+                : "";
+        return { ...row, entity_id: oppId || row.entity_id };
+    });
 }
 
 /** Batch-load recent opportunity workflow_events grouped by entity_id (newest first per row). */
@@ -65,22 +94,55 @@ export async function fetchQueueActivityTimelineEventsByOpportunityId(
     for (let i = 0; i < unique.length; i += chunkSize) {
         const chunk = unique.slice(i, i + chunkSize);
         const limit = Math.min(6000, Math.max(200, chunk.length * maxPerEntity * 4));
-        const { data, error } = await supabase
-            .from("workflow_events")
-            .select("id, occurred_at, event_type, entity_id, payload")
-            .eq("org_id", orgId)
-            .eq("entity_type", "opportunities")
-            .in("entity_id", chunk)
-            .order("occurred_at", { ascending: false })
-            .limit(limit);
+        const [directRes, relatedChildRes, relatedTourRes] = await Promise.all([
+            supabase
+                .from("workflow_events")
+                .select("id, occurred_at, event_type, entity_id, payload")
+                .eq("org_id", orgId)
+                .eq("entity_type", "opportunities")
+                .in("entity_id", chunk)
+                .order("occurred_at", { ascending: false })
+                .limit(limit),
+            // Child stage moves emit on opportunity_customer_members with payload.opportunity_id.
+            supabase
+                .from("workflow_events")
+                .select("id, occurred_at, event_type, entity_id, payload")
+                .eq("org_id", orgId)
+                .eq("event_type", "child_lifecycle_status_changed")
+                .in("payload->>opportunity_id", chunk)
+                .order("occurred_at", { ascending: false })
+                .limit(limit),
+            supabase
+                .from("workflow_events")
+                .select("id, occurred_at, event_type, entity_id, payload")
+                .eq("org_id", orgId)
+                .in("event_type", [...OPPORTUNITY_RELATED_TOUR_ACTIVITY_EVENT_TYPES])
+                .in("payload->>opportunity_id", chunk)
+                .order("occurred_at", { ascending: false })
+                .limit(limit),
+        ]);
 
-        if (error) {
-            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${error.message}`);
+        if (directRes.error) {
+            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${directRes.error.message}`);
+        }
+        if (relatedChildRes.error) {
+            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${relatedChildRes.error.message}`);
+        }
+        if (relatedTourRes.error) {
+            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${relatedTourRes.error.message}`);
         }
 
-        const grouped = collapseTopEventsPerEntity(data ?? [], maxPerEntity);
+        const relatedAsOpportunity = [
+            ...remapRelatedRowsToOpportunityEntity((relatedChildRes.data ?? []) as Array<Record<string, unknown>>),
+            ...remapRelatedRowsToOpportunityEntity((relatedTourRes.data ?? []) as Array<Record<string, unknown>>),
+        ];
+
+        const grouped = collapseTopEventsPerEntity(
+            [...(directRes.data ?? []), ...relatedAsOpportunity],
+            maxPerEntity * 2,
+        );
         for (const [entityId, events] of grouped) {
-            out.set(entityId, events);
+            out.set(entityId, collapseBusinessEventMechanics(collapseTourActivityDuplicates(events)).slice(0, maxPerEntity));
         }
     }
 

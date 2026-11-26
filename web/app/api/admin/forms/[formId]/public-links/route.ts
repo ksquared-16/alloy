@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { filterLinksInActorScope, formsReadScope, formsSubjectInActorScope, namedSubject } from "@/lib/forms/formSubmissionScope";
+import { formsDestinationInActorScope, linkMetadataDestination } from "@/lib/forms/formsDestinationScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
@@ -6,7 +8,15 @@ import {
     dbGetVersion,
     dbInsertFormPublicLink,
     dbListPublicLinksForForm,
+    dbUpdateFormPublicLinkForForm,
+    type FormPublicLinkSafeRow,
 } from "@/lib/admin/forms/formsAdminDb";
+import {
+    SHARE_EMBED_PATH_META_KEY,
+    planDistributionLink,
+    plaintextTokenFromEmbedPath,
+    readShareEmbedPath,
+} from "@/lib/admin/forms/distributionLinkReuse";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { generateSecureFormLinkPlaintext, buildPublicFormEmbedPath } from "@/lib/admin/forms/formPublicLinkToken";
@@ -17,12 +27,28 @@ import {
 import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/mintExistingRecordFormLinkForAdmin";
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 import { buildLocationSpecificLinkMetadata, readUuid } from "@/lib/forms/locationSpecificPublicLinkMetadata";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { TOURS_CONFIGURE, requireToursCapability } from "@/lib/access/toursAuthority";
+import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+import {
+    buildTourCalendarLinkConfig,
+    stripTourCalendarLinkConfig,
+    TOUR_CALENDAR_LINK_METADATA_KEY,
+} from "@/lib/tours/publicCalendar/tourCalendarLinkConfig";
 
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    if (!host?.trim()) return null;
-    const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
-    return `${proto}://${host.trim()}`;
+/**
+ * The origin these public/embed links are built on.
+ *
+ * It is read from the ONE canonical public-origin authority and NOT from the request.
+ * These links are copied into emails, texts and third-party pages, so their origin has to
+ * be a property of the environment rather than of whichever host the operator's browser
+ * happened to reach — and a `Host` / `X-Forwarded-Host` header is caller-supplied, so
+ * deriving from it let a spoofed header choose where a recipient's link points.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 async function validatePinnedVersion(
@@ -57,14 +83,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data, error } = await dbListPublicLinksForForm(supabase, ctx.orgId, formId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return jsonData(data ?? []);
+    // R2: a link launched from a record outside the caller's department/site scope is not listed (its metadata names it).
+    return jsonData(await filterLinksInActorScope(supabase, ctx.orgId, await formsReadScope(), (data ?? []) as Array<{ metadata?: unknown }>));
 }
 
 /** POST /api/admin/forms/[formId]/public-links — create link; returns plaintext token once. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { formId: rawFormId } = await params;
     const formId = parseUuidParam(rawFormId, "formId");
@@ -125,10 +153,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
     }
 
-    const clientMetadata: Record<string, unknown> =
+    // The public tour calendar flag is never client metadata — only `tour_calendar: true` sets it.
+    const clientMetadata: Record<string, unknown> = stripTourCalendarLinkConfig(
         body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
             ? { ...(body.metadata as Record<string, unknown>) }
-            : {};
+            : {}
+    );
+    const publishTourCalendar = body.tour_calendar === true;
+    if (publishTourCalendar) {
+        const deniedTours = requireToursCapability(ctx, TOURS_CONFIGURE);
+        if (deniedTours) return deniedTours;
+    }
     delete clientMetadata.prefill_field_map;
 
     const locationId =
@@ -183,6 +218,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         clientMetadata.default_work_unit_id = workUnitId;
     }
 
+    // R2: subjects named by the caller's OWN metadata are destinations too — the public prefill and the submission's
+    // subject are derived from them (`source_entity_*`, opportunity, selected child, recipient). Without a launch they
+    // must be in scope on their own; with one, they are checked in the launch branch against its roster.
+    const launchGiven = body.launch_from_entity !== undefined && body.launch_from_entity !== null;
+    if (!launchGiven && !(await formsDestinationInActorScope(supabase, ctx.orgId, await formsReadScope(), linkMetadataDestination(clientMetadata)))) {
+        return jsonError("Not found", 404);
+    }
+
     const formRow = form as { key: string; metadata?: Record<string, unknown> };
     const metadata = await mergePublicLinkMetadataForCreate(supabase, {
         orgId: ctx.orgId,
@@ -198,13 +241,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const entityId = parseUuidParam(parsedLaunch.entityId, "launch_from_entity.entity_id");
         if (entityId instanceof NextResponse) return entityId;
+        // R2: a link prefilled from a record only for a record inside the caller's department/site scope.
+        const launchSubject = namedSubject(parsedLaunch.entityType, entityId);
+        if (!launchSubject || !(await formsSubjectInActorScope(supabase, ctx.orgId, await formsReadScope(), launchSubject))) return jsonError("Not found", 404);
+        if (!(await formsDestinationInActorScope(supabase, ctx.orgId, await formsReadScope(), linkMetadataDestination(clientMetadata, launchSubject)))) {
+            return jsonError("Not found", 404);
+        }
 
         const mint = await mintExistingRecordFormLinkForAdmin({
             supabase,
             orgId: ctx.orgId,
             formDefinitionId: formId,
             launch: { ...parsedLaunch, entityId },
-            embedBaseUrl: deriveEmbedBaseUrl(request),
+            embedBaseUrl: deriveEmbedBaseUrl(),
             clientMetadata,
             label:
                 typeof body.label === "string"
@@ -235,7 +284,74 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (linkLabel && !metadata.label) metadata.label = linkLabel;
 
+    if (publishTourCalendar) {
+        // S7 — the location comes from this link; acceptance from its Processing intake.
+        if (!locationId) {
+            return jsonError("A public tour calendar needs a location-specific link", 400, { code: "TOUR_CALENDAR_NEEDS_LOCATION" });
+        }
+        if (!linkRequiresLeadCapture(metadata)) {
+            return jsonError("A public tour calendar needs a lead-capture intake link", 400, { code: "TOUR_CALENDAR_NEEDS_INTAKE" });
+        }
+        if (body.distribution === true) {
+            // A reused distribution link would silently skip the flag; publish on an existing link via PATCH.
+            return jsonError("Publish a tour calendar on an existing link with PATCH tour_calendar", 400, {
+                code: "TOUR_CALENDAR_USE_PATCH",
+            });
+        }
+        metadata[TOUR_CALENDAR_LINK_METADATA_KEY] = buildTourCalendarLinkConfig({ enabled: true, actorUserId: ctx.userId ?? null });
+    }
+
     const is_active = typeof body.is_active === "boolean" ? body.is_active : true;
+
+    // Distribution-mode (the Processing "Create distribution link(s)" panel): make create idempotent,
+    // retrievable, and self-healing. Reuse the existing active link for this scope, collapse duplicates,
+    // and — with `regenerate` — rotate to a fresh token. Other callers of this route are unaffected.
+    // A distribution link is a standing URL embedded on a website, so it always serves the latest
+    // published version: it is never pinned, and a reused link that is still pinned is un-pinned.
+    const distributionMode = body.distribution === true;
+    if (distributionMode) {
+        pinnedId = null;
+        const { data: existingLinks } = await dbListPublicLinksForForm(supabase, ctx.orgId, formId);
+        const plan = planDistributionLink({
+            links: (existingLinks ?? []) as FormPublicLinkSafeRow[],
+            locationId: locationId ?? null,
+            regenerate: body.regenerate === true,
+        });
+        for (const staleId of plan.deactivateIds) {
+            await dbUpdateFormPublicLinkForForm(supabase, ctx.orgId, formId, staleId, { is_active: false });
+        }
+        if (plan.reuse) {
+            const sharePath = readShareEmbedPath(plan.reuse.metadata);
+            if (sharePath) {
+                let reused = plan.reuse;
+                if (plan.unpinReuse) {
+                    const { data: unpinned, error: unpinErr } = await dbUpdateFormPublicLinkForForm(
+                        supabase,
+                        ctx.orgId,
+                        formId,
+                        reused.id,
+                        { pinned_form_definition_version_id: null }
+                    );
+                    if (unpinErr || !unpinned) {
+                        return NextResponse.json({ error: unpinErr?.message ?? "Unpin failed" }, { status: 500 });
+                    }
+                    reused = unpinned as FormPublicLinkSafeRow;
+                }
+                const base = deriveEmbedBaseUrl();
+                return jsonData(
+                    {
+                        ...(reused as unknown as Record<string, unknown>),
+                        plaintext_token: plaintextTokenFromEmbedPath(sharePath),
+                        embed_path: sharePath,
+                        embed_url: base ? `${base}${sharePath}` : null,
+                        reused: true,
+                    },
+                    { status: 200 }
+                );
+            }
+        }
+        // No retrievable link to reuse — fall through to mint a fresh, retrievable one below.
+    }
 
     const maxAttempts = 5;
     let lastErr: { message?: string; code?: string } | null = null;
@@ -244,6 +360,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const plaintextToken = generateSecureFormLinkPlaintext();
         const token_hash = hashFormLinkToken(plaintextToken);
         const token_prefix = plaintextToken.length > 12 ? plaintextToken.slice(0, 12) : plaintextToken;
+        const embed_path = buildPublicFormEmbedPath(plaintextToken);
+        // Persist the reconstructable path so the link stays retrievable for any operator, any session.
+        const persistedMetadata = { ...metadata, [SHARE_EMBED_PATH_META_KEY]: embed_path };
 
         const { data: row, error } = await dbInsertFormPublicLink(supabase, {
             org_id: ctx.orgId,
@@ -254,12 +373,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             is_active,
             expires_at,
             allowed_embed_origins,
-            metadata,
+            metadata: persistedMetadata,
         });
 
         if (!error && row) {
-            const embed_path = buildPublicFormEmbedPath(plaintextToken);
-            const base = deriveEmbedBaseUrl(request);
+            const base = deriveEmbedBaseUrl();
             return jsonData(
                 {
                     ...(row as Record<string, unknown>),

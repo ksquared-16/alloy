@@ -37,7 +37,7 @@ describe("field catalog picker — childcare starter catalog", () => {
 
     it("never emits mis-grained child participation refKeys", () => {
         const refKeys = leadPickerFromCuratedFallback().flatMap((g) => g.fields.map((f) => f.refKey));
-        for (const blocked of ["child.program", "child.desired_start_date", "opportunity.location"]) {
+        for (const blocked of ["child.program", "child.start_date", "opportunity.location"]) {
             expect(refKeys).not.toContain(blocked);
         }
     });

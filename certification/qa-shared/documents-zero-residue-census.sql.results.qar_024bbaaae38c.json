@@ -1,0 +1,186 @@
+{
+  "trusted_host_action_id": "tha_5246823af9ed78",
+  "query_hash": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-28T04:46:44.806Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5246823af9ed78",
+    "query_hash": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+    "authorization_id": "grnt_1724a9897d614180",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-28T04:46:53.126Z",
+    "question_ids": [
+      "doc_zr_00",
+      "doc_zr_vendors",
+      "doc_zr_qa_role_grants",
+      "doc_zr_pool_access",
+      "doc_zr_zero_sent",
+      "doc_zr_retained_audit",
+      "doc_zr_subjects",
+      "doc_zr_shared_documents",
+      "doc_zr_shared_objects",
+      "doc_zr_shared_dangling_case_sources",
+      "doc_zr_secondary_documents",
+      "doc_zr_secondary_objects",
+      "doc_zr_secondary_cases",
+      "doc_zr_qa_sessions",
+      "doc_zr_retained_d1a_audit",
+      "doc_zr_d6_requirements",
+      "doc_zr_d6_requirement_versions",
+      "doc_zr_d6_waivers"
+    ],
+    "questions": {
+      "doc_zr_00": {
+        "question_id": "doc_zr_00",
+        "row_count": null,
+        "rows": [
+          {
+            "qa_shared": "4acc9386-c485-486f-aa1f-05d83499d142",
+            "qa_secondary": "ad53fee2-2570-460f-9300-f0e106c473b6",
+            "cleanup": "zero_residue",
+            "retained_by_design": [
+              "access audit history (mutation_events) written by the audited functions"
+            ]
+          }
+        ]
+      },
+      "doc_zr_vendors": {
+        "question_id": "doc_zr_vendors",
+        "row_count": null,
+        "rows": [
+          "vendors ~ alloy_qa_fixture ~ zero ~ true"
+        ]
+      },
+      "doc_zr_qa_role_grants": {
+        "question_id": "doc_zr_qa_role_grants",
+        "row_count": null,
+        "rows": [
+          "role_permission_grants ~ qa_custom_roles ~ zero ~ true"
+        ]
+      },
+      "doc_zr_pool_access": {
+        "question_id": "doc_zr_pool_access",
+        "row_count": null,
+        "rows": [
+          "user_roles ~ qa_orgs_non_actor ~ zero ~ true"
+        ]
+      },
+      "doc_zr_zero_sent": {
+        "question_id": "doc_zr_zero_sent",
+        "row_count": null,
+        "rows": [
+          "communication_messages ~ status_sent ~ zero ~ true"
+        ]
+      },
+      "doc_zr_retained_audit": {
+        "question_id": "doc_zr_retained_audit",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "access audit history (mutation_events)",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "qa_shared_mutation_event_rows": 440
+          }
+        ]
+      },
+      "doc_zr_subjects": {
+        "question_id": "doc_zr_subjects",
+        "row_count": null,
+        "rows": [
+          "opportunities_work_units_departments ~ aa000000_fixture ~ zero ~ true"
+        ]
+      },
+      "doc_zr_shared_documents": {
+        "question_id": "doc_zr_shared_documents",
+        "row_count": null,
+        "rows": [
+          "documents ~ qa_shared_qa_authz_tagged_or_on_fixture ~ zero ~ true"
+        ]
+      },
+      "doc_zr_shared_objects": {
+        "question_id": "doc_zr_shared_objects",
+        "row_count": null,
+        "rows": [
+          "storage_objects ~ qa_shared_qa_authz_tagged ~ zero ~ true"
+        ]
+      },
+      "doc_zr_shared_dangling_case_sources": {
+        "question_id": "doc_zr_shared_dangling_case_sources",
+        "row_count": null,
+        "rows": [
+          "processing_case_sources ~ qa_shared_document_source_without_document ~ zero ~ true"
+        ]
+      },
+      "doc_zr_secondary_documents": {
+        "question_id": "doc_zr_secondary_documents",
+        "row_count": null,
+        "rows": [
+          "documents ~ qa_secondary_all ~ zero ~ true"
+        ]
+      },
+      "doc_zr_secondary_objects": {
+        "question_id": "doc_zr_secondary_objects",
+        "row_count": null,
+        "rows": [
+          "storage_objects ~ qa_secondary_all ~ zero ~ true"
+        ]
+      },
+      "doc_zr_secondary_cases": {
+        "question_id": "doc_zr_secondary_cases",
+        "row_count": null,
+        "rows": [
+          "processing_cases ~ qa_secondary_all ~ zero ~ true"
+        ]
+      },
+      "doc_zr_qa_sessions": {
+        "question_id": "doc_zr_qa_sessions",
+        "row_count": null,
+        "rows": [
+          "auth_sessions ~ seven_qa_identities ~ zero ~ true"
+        ]
+      },
+      "doc_zr_retained_d1a_audit": {
+        "question_id": "doc_zr_retained_d1a_audit",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "D1a document audit (workflow_events)",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "qa_org_rows": 585
+          }
+        ]
+      },
+      "doc_zr_d6_requirements": {
+        "question_id": "doc_zr_d6_requirements",
+        "row_count": null,
+        "rows": [
+          "document_requirements ~ qa_fixture_keys ~ zero ~ true"
+        ]
+      },
+      "doc_zr_d6_requirement_versions": {
+        "question_id": "doc_zr_d6_requirement_versions",
+        "row_count": null,
+        "rows": [
+          "document_requirement_versions ~ qa_fixture_or_orphan ~ zero ~ true"
+        ]
+      },
+      "doc_zr_d6_waivers": {
+        "question_id": "doc_zr_d6_waivers",
+        "row_count": null,
+        "rows": [
+          "document_requirement_waivers ~ qa_fixture_or_unresolved_subject ~ zero ~ true"
+        ]
+      }
+    },
+    "row_count": 18
+  }
+}

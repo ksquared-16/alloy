@@ -1,0 +1,52 @@
+{
+  "schema": "alloy.documents_d7d8.r3_certification_environment_handoff.v1",
+  "status": "BLOCKED ON AN ENVIRONMENT DEPENDENCY — measured 2026-10-28 by lane_aa660dc9554d (run erun2_f0187aac21534654). Nothing was applied, started, stopped or written to any certification database; no .env.certification.local was created.",
+  "objective": "OPWORK_AA660DC9554D_SPRINT_6389E3AA927A — R3",
+  "need": "run the Forms / Medical / Enrollment / Business Process live suites against a database carrying the D5–D8 schema, on the repair candidate",
+
+  "measured": {
+    "shared_stack": "alloy-cert (10 containers, healthy)",
+    "lease_holder": "wt4-enrollment-phase2-participant-anchor-ecv2_claude_654bfd49 since 2026-10-28T12:03:59Z (alloy-stack status)",
+    "ledger_head": "20261210090000 (read-only: select max(version) from supabase_migrations.schema_migrations, via docker exec)",
+    "missing_migrations_in_order": [
+      "20261210093500_documents_d5_filing.sql",
+      "20261211090000_tour_booking_slot_capacity_guard.sql",
+      "20261212090000_documents_d6_requirements.sql",
+      "20261213090000_documents_d7_review_validity.sql",
+      "20261214090000_documents_d8_forms_evidence.sql"
+    ],
+    "all_five_on_staging": "yes — merged and applied to alloy_deployed_primary (staging 8125ac3f9); the repair batch adds NO migration",
+    "lane_env_file": "absent: /Users/vacilando/Code/alloy-worktrees/documents/.env.certification.local (the live suites read ../../../.env.certification.local and skip without it)",
+    "cert_server_config": "certification/supabase/config.toml (db port 54422); certification/supabase/migrations is a symlink to supabase/migrations"
+  },
+
+  "why_not_done_here": [
+    "the stack is leased by another lane: applying five migrations under it changes the schema that lane is certifying against (the instruction forbids applying to a leased database)",
+    "a lane may not fabricate .env.certification.local; it is issued with the environment"
+  ],
+
+  "governed_paths": [
+    {
+      "path": "A — shared alloy-cert, after the lease is released",
+      "who": "the lease holder releases (alloy-stack release) or the Director sequences it",
+      "then": "database.apply_migration { environment: \"certification\", expectedSha: <repair candidate>, migrations: [the five above, in order, as objects] } filed by this lane; parity proven non-destructively with `npx supabase db diff --workdir certification --local --schema public`; the lane's .env.certification.local issued by the stack owner",
+      "risk": "shared-stack volatility (other lanes' rows and unmerged migrations); never supabase db reset"
+    },
+    {
+      "path": "B — an isolated certification environment (preferred by the toolkit's S9 doctrine)",
+      "who": "trusted host via environment.build_certification_baseline { repository: ksquared-16/alloy, baseBranch: staging, expectedBaseSha: 8125ac3f9f2737c9185f526d2d43acb025889e0b }",
+      "then": "the environment carries every merged migration by construction; retire with environment.retire_certification_environment after the run",
+      "gap": "no lane-facing way was found to point web/ live suites at a builder environment (no env-file issuance in the installed toolkit 20261028-0d6680bdf731). The toolkit owner must expose the environment's connection to the lane (the equivalent of .env.certification.local) before path B can run these suites."
+    }
+  ],
+
+  "suites_to_run_once_available": {
+    "health": ["tests/health/live/medicalRowsBrowserAccess.live.test.ts", "tests/health/live/healthRecordsBrowserAccess.live.test.ts", "tests/health/live/medicalCompleteness.live.test.ts"],
+    "enrollment": ["tests/enrollment/live/enrollmentFeeLifecycle.live.test.ts", "tests/enrollment/live/enrollmentFeeProjection.live.test.ts", "tests/enrollment/live/primaryTuitionFacts.live.test.ts", "tests/enrollment/live/participantMedicalConvergence.live.test.ts", "tests/enrollment/live/enrollmentPricingTerms.live.test.ts", "tests/enrollment/live/c1PricingFactsProbe.live.test.ts"],
+    "business_processes": ["tests/businessProcesses/*.live.test.ts (12)"],
+    "forms": ["tests/access/live/formsCapabilityAuthority.live.test.ts (the only Forms live suite; tests/forms has none)"],
+    "documents_postgres_invariants": "certification/invariants/run-d7-d8-local.sh (rollback-only; already 10/10 + 7/7 on the D7/D8 candidate, re-run on the repair candidate when the stack is reachable — the repair adds no SQL)"
+  },
+
+  "independently_safe_work_done_meanwhile": "R1/R2/R5 implemented and locally certified without a database (route-level suites over an in-memory database that evaluates the routes' real filters), typecheck, typecheck:tests, six prebuild guards, affected sweep vs base, production build."
+}

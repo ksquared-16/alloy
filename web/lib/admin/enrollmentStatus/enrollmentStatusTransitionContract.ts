@@ -30,6 +30,8 @@ export type EnrollmentStatusDestinationKey =
 export type EnrollmentStatusTransitionScope = {
     grain: EnrollmentStatusTransitionGrain;
     opportunityId: string;
+    /** Child subject = customer_members.id. Threaded so movement targets the process instance directly. */
+    customerMemberId?: string | null;
     opportunityCustomerMemberId?: string | null;
     placementCandidateId?: string | null;
     /** Pre-selected child display name when known. */

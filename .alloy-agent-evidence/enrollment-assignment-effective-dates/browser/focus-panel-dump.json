@@ -1,0 +1,135 @@
+{
+  "h2": "Kurzman Family",
+  "cellCount": 7,
+  "cards": [
+    {
+      "tag": "DIV",
+      "key": "current_work",
+      "text": "What's NextOpenContact FamilyReach the family, understand their needs, and determine the next step.MessageSchedule tourS",
+      "attrs": [
+        "data-focus-panel-grid-cell",
+        "data-fp-width-units"
+      ]
+    },
+    {
+      "tag": "ARTICLE",
+      "key": "current_work",
+      "text": "What's NextOpenContact FamilyReach the family, understand their needs, and determine the next step.MessageSchedule tourS",
+      "attrs": [
+        "data-universal-card",
+        "data-universal-card-density",
+        "data-universal-card-tier",
+        "data-card-role",
+        "data-card-archetype",
+        "data-system5-card",
+        "data-universal-card-span",
+        "data-universal-card-key"
+      ]
+    },
+    {
+      "tag": "DIV",
+      "key": "billing_preview",
+      "text": "Billing Preview",
+      "attrs": [
+        "data-focus-panel-grid-cell",
+        "data-fp-width-units"
+      ]
+    },
+    {
+      "tag": "DIV",
+      "key": "children",
+      "text": "ChildrenNeeds info2 children2 children need program & scheduleLKLennon Kurzman—Program—Date of birthApr 2, 2024Gender——→",
+      "attrs": [
+        "data-focus-panel-grid-cell",
+        "data-fp-width-units"
+      ]
+    },
+    {
+      "tag": "ARTICLE",
+      "key": "children",
+      "text": "ChildrenNeeds info2 children2 children need program & scheduleLKLennon Kurzman—Program—Date of birthApr 2, 2024Gender——→",
+      "attrs": [
+        "data-universal-card",
+        "data-universal-card-density",
+        "data-universal-card-tier",
+        "data-card-role",
+        "data-card-archetype",
+        "data-system5-card",
+        "data-universal-card-span",
+        "data-universal-card-key"
+      ]
+    },
+    {
+      "tag": "DIV",
+      "key": "household",
+      "text": "HouseholdNeeds contactKurzman householdKKKelly KurzmanPrimarykelly.kurzman@gmail.com(602) 290-48162Children0Emergency co",
+      "attrs": [
+        "data-focus-panel-grid-cell",
+        "data-fp-width-units"
+      ]
+    },
+    {
+      "tag": "ARTICLE",
+      "key": "household",
+      "text": "HouseholdNeeds contactKurzman householdKKKelly KurzmanPrimarykelly.kurzman@gmail.com(602) 290-48162Children0Emergency co",
+      "attrs": [
+        "data-universal-card",
+        "data-universal-card-density",
+        "data-universal-card-tier",
+        "data-card-role",
+        "data-card-archetype",
+        "data-system5-card",
+        "data-universal-card-span",
+        "data-universal-card-key"
+      ]
+    }
+  ],
+  "allDataKeys": [
+    "current_work",
+    "children",
+    "household"
+  ],
+  "bodyHasSchedule": true,
+  "buttons": [
+    "1",
+    "5",
+    "KK",
+    "Actions (2)▶",
+    "Leads0",
+    "Active Pipeline0",
+    "Registration0",
+    "Waitlist0",
+    "Tours0",
+    "All Leads0",
+    "Filters",
+    "MMygrant Family4dLeadLeigh Mygrant · (433) 444-3333Harry Mygrant (7m) | Bessy Mygrant (3y4m)2 children",
+    "AAlex Lyons Family4dLeadAlex Lyons · (480) 282-3383Jaxon Lyons (4y8m)1 child",
+    "WWenc Family3wLeadTaryn Wenc · (408) 885-9652Jarek Wenc (4y3m) | Blake Wenc (2y6m)2 children",
+    "JJenn Chapmap Family6dLeadJenn Chapmap · (445) 858-9989Billie Champan (1y5m)1 child",
+    "RRavi Almead Family1wLeadRavi Almead · (556) 965-2536Rayia Almead (1m) | Kai Almead (2y1m)2 children",
+    "BBrian Fitz Family5dLeadBrian Fitz · (654) 654-6547Ember Fitz (2y1m)1 child",
+    "KKurzman Family4wLeadKelly Kurzman · (602) 290-4816Lennon Kurzman (2y4m) | Wrigley Kurzman (4m)2 children",
+    "DDigan Family3wLeadRob Digan · (480) 484-4844Robbie Digan (3y4m) | Zara Digan (1y2m)2 children",
+    "Work",
+    "Activity",
+    "Message",
+    "Schedule tour",
+    "Send form",
+    "Record outcome",
+    "Children→",
+    "○First Name",
+    "○Last Name",
+    "○Program",
+    "Required information→",
+    "○Location",
+    "View in Work Items",
+    "View details →",
+    "Lennon Kurzman",
+    "—→",
+    "Wrigley Kurzman",
+    "—→",
+    "View children →",
+    "2Children",
+    "0Emergency contacts"
+  ]
+}

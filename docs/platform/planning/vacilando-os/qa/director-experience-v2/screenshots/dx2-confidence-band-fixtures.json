@@ -1,0 +1,99 @@
+{
+  "high": {
+    "percent": 88,
+    "band": "high",
+    "recommendation": "Proceed when ready",
+    "supporting": [
+      "12 of 12 deliverables accepted",
+      "8 of 8 criteria covered by evidence",
+      "4 phases · 8 acceptance criteria",
+      "3/3 validation runs passed · 5 QA artifacts",
+      "2 workers healthy",
+      "Dependencies clear"
+    ],
+    "reducing": [],
+    "uncertainty": [],
+    "increase": [],
+    "blocking": false
+  },
+  "medium": {
+    "percent": 53,
+    "band": "developing",
+    "recommendation": "Proceed only if you accept remaining uncertainty",
+    "supporting": [
+      "2 phases · 2 acceptance criteria",
+      "1 worker healthy",
+      "Dependencies clear"
+    ],
+    "reducing": [
+      "2 of 4 deliverables accepted",
+      "1 of 2 criteria covered by evidence",
+      "1 QA artifacts · no formal validation runs"
+    ],
+    "uncertainty": [
+      {
+        "text": "2 of 4 deliverables accepted",
+        "blocking": false
+      },
+      {
+        "text": "1 of 2 criteria covered by evidence",
+        "blocking": true
+      },
+      {
+        "text": "1 QA artifacts · no formal validation runs",
+        "blocking": true
+      }
+    ],
+    "increase": [
+      "Accept remaining deliverables",
+      "Attach evidence that covers outstanding acceptance criteria",
+      "Add validation runs or QA evidence (tests, typecheck, build, browser)"
+    ],
+    "blocking": true
+  },
+  "low": {
+    "percent": 32,
+    "band": "at_risk",
+    "recommendation": "Resolve uncertainty before treating work as ready",
+    "supporting": [
+      "No worker telemetry yet"
+    ],
+    "reducing": [
+      "No deliverables assigned yet",
+      "No acceptance criteria mapped yet",
+      "Brief incomplete",
+      "No validation or QA evidence yet",
+      "No dependency graph yet"
+    ],
+    "uncertainty": [
+      {
+        "text": "No deliverables assigned yet",
+        "blocking": true
+      },
+      {
+        "text": "No acceptance criteria mapped yet",
+        "blocking": true
+      },
+      {
+        "text": "Brief incomplete",
+        "blocking": true
+      },
+      {
+        "text": "No validation or QA evidence yet",
+        "blocking": true
+      },
+      {
+        "text": "No dependency graph yet",
+        "blocking": false
+      }
+    ],
+    "increase": [
+      "Accept remaining deliverables",
+      "Attach evidence that covers outstanding acceptance criteria",
+      "Strengthen the Mission Brief (phases, acceptance criteria, constraints)",
+      "Add validation runs or QA evidence (tests, typecheck, build, browser)",
+      "Clear blocked/paused work and resolve open decisions"
+    ],
+    "blocking": true
+  }
+}

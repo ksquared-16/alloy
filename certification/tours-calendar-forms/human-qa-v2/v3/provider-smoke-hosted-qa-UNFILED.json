@@ -1,0 +1,21 @@
+{
+  "_status": "PREPARED, NOT FILED. Filing needs the Director to name an email address and a phone the Director owns (no approved QA recipient list exists) and to authorize hosted staging QA. Filing only opens a hosted QA session; it sends nothing.",
+  "lane_id": "lane_2cea84351d90",
+  "action_key": "environment.qa_run_open",
+  "purpose": "Human QA V2 Part H real-provider smoke on hosted staging: one consent-eligible marketing email and one marketing SMS to Director-owned recipients only, email unsubscribe, SMS STOP, then one blocked follow-up send per channel. No family or arbitrary recipient.",
+  "reason_worker_cannot_execute": "Hosted staging QA uses the real email/SMS providers and the hosted database; it requires a governed hosted QA session and the Director's recipients.",
+  "hosted_qa_authority": {
+    "declared": true,
+    "reason": "Real provider delivery, unsubscribe and STOP exist only on hosted staging; the isolated QA preview has no messaging providers."
+  },
+  "inputs": {
+    "plan": "<registered plan id — to be confirmed with the Director>",
+    "target": "alloy_staging_web",
+    "leaseHours": 4
+  },
+  "director_inputs_required": [
+    "approved QA email recipient (Director-owned)",
+    "approved QA SMS recipient (Director-owned phone)",
+    "hosted staging QA authorization"
+  ]
+}

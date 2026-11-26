@@ -2,6 +2,7 @@
  * Idempotent repair: align placement_candidates.site_id / program_room_cohort_key with OCM child scope (Card 3).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { firstNestedRecord } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 
 export type PlacementCandidateOcmRepairOptions = {
@@ -39,9 +40,16 @@ type OcmRow = {
     id: string;
     location_id: string | null;
     program_room_cohort_key: string | null;
-    desired_program_type?: string | null;
+    program_category_id?: string | null;
+    location_program_categories?: { key?: string | null } | Array<{ key?: string | null }> | null;
     metadata?: Record<string, unknown> | null;
 };
+
+/** Canonical program key from the embedded program category (FK path only). */
+function ocmProgramKey(ocm: OcmRow): string | null {
+    const key = firstNestedRecord(ocm.location_program_categories)?.key;
+    return (typeof key === "string" ? key.trim() : "") || null;
+}
 
 function safeMeta(raw: unknown): Record<string, unknown> {
     if (raw != null && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
@@ -100,7 +108,7 @@ export function planPlacementCandidateOcmRepair(params: {
     const resolvedCohort = ocmCohort
         ? resolvePlacementCandidateCohortFromMember({
               ocmMetadata: safeMeta(params.ocm.metadata),
-              desiredProgramType: params.ocm.desired_program_type ?? null,
+              programKey: ocmProgramKey(params.ocm),
               programRoomCohortKey: ocmCohort,
           })
         : null;
@@ -250,7 +258,7 @@ export async function runPlacementCandidateOcmRepair(
     if (ocmIds.length) {
         const { data: ocmRows, error: ocmErr } = await supabase
             .from("opportunity_customer_members")
-            .select("id, location_id, program_room_cohort_key, desired_program_type, metadata")
+            .select("id, location_id, program_room_cohort_key, program_category_id, location_program_categories(key), metadata")
             .eq("org_id", orgId)
             .in("id", ocmIds);
         if (ocmErr) {

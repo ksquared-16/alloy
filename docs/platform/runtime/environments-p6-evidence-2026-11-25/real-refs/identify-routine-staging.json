@@ -1,0 +1,17 @@
+{
+  "ok": false,
+  "failures": [
+    "main does not fast-forward to the candidate: main has 7 commit(s) the candidate lacks — integrate them first (P4 procedure)"
+  ],
+  "candidate": {
+    "sha": "8321949771f7fb6b2f04de6feb1fdd6ccb8e1484",
+    "tree": "286f6c77ca604a8a30b2a451da5e170f08d355f3",
+    "staging_sha": "8321949771f7fb6b2f04de6feb1fdd6ccb8e1484",
+    "production_before_sha": "bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2",
+    "fast_forward": false,
+    "commits_ahead_of_main": 7783,
+    "tree_diff_from_staging": []
+  },
+  "migrations": 557,
+  "baseline_migrations": 229
+}

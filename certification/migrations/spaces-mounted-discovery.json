@@ -1,0 +1,65 @@
+{
+  "steps": [
+    {
+      "name": "site_selected",
+      "tabs": [
+        "STAGING — NOT PRODUCTION",
+        "⌘K",
+        "QS",
+        "Organization",
+        "locations",
+        "Locations",
+        "Add location",
+        "3 shown",
+        "Search locations",
+        "North Campus",
+        "Bend, Oregon",
+        "Active",
+        "1 needs attention",
+        "South Campus",
+        "Bend, Oregon",
+        "Active",
+        "1 needs attention",
+        "West Campus",
+        "Bend, Oregon",
+        "Active",
+        "1 needs attention",
+        "Locations",
+        "›",
+        "North Campus",
+        "North Campus",
+        "● Active",
+        "Bend, Oregon",
+        "Pacific Time",
+        "Edit location",
+        "Overview",
+        "Programs",
+        "Rooms",
+        "Scheduling",
+        "Operational Rules",
+        "Tours",
+        "Placement",
+        "Access",
+        "About this Location",
+        "123 Main Street, Bend OR 97701",
+        "9956632215"
+      ]
+    },
+    {
+      "name": "rooms_tab",
+      "excerpt": "STAGING — NOT PRODUCTION\n⌘K\nQS\nOrganization\nlocations\nLocations\nAdd location\n\n3 shown\n\nSearch locations\nNorth Campus\nBend, Oregon\nActive\n1 needs attention\nSouth Campus\nBend, Oregon\nActive\n1 needs attention\nWest Campus\nBend, Oregon\nActive\n1 needs attention\nLocations\n›\nNorth Campus\nNorth Campus\n● Active\nBend, Oregon\nPacific Time\nEdit location\nOverview\nPrograms\nRooms\nScheduling\nOperational Rules\nTours\nPlacement\nAccess\nRooms\n\n9 rooms\n\n+ Add room\n\nInfant A\n\nClassroom · Active · 8 capacity · 1 program\n\nInfant B\n\nClassroom · Active · 8 capacity · 1 program\n\nPlayground\n\nShared space · Active\n\nPre-K\n\nClassroom · Room 1 · Active · 15 capacity · 1 program\n\nPreschool 1\n\nClassroom · Active · 12 capacity · 1 program\n\nPreschool 2\n\nClassroom · Active · 12 capacity · 1 program\n\nRoom 1\n\nPhysical room · Active\n\nToddler 1\n\nClassroom · Room 1 · Active · 10 capacity · 1 program\n\nToddler 2\n\nClassroom · Room 1 · Active · 10 capacity · 1 program\n\nInfant A\n● Active\n\nAt North Campus\n\nEdit room\n\nTYPE\n\nClassroom\n\nSITE\n\nNorth Campus\n\nPROGRAMS\n\nInfant\n\nSCHEDULE PATTERN\n\nNone\n\nSTATUS\n\nActive\n\nCapacity\n\nNo capacity configured for this room.\n\nManage capacity rules →\nActions (2)\n▶\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nSummarize this Location\nExplain the selected Location and what it offers\nWhich Programs are offered here?\nList active and scheduled Programs at this Location\nShow upcoming availability changes\nList Programs scheduled to begin or end at this Location\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+    },
+    {
+      "name": "room_detail",
+      "excerpt": "STAGING — NOT PRODUCTION\n⌘K\nQS\nOrganization\nlocations\nLocations\nAdd location\n\n3 shown\n\nSearch locations\nNorth Campus\nBend, Oregon\nActive\n1 needs attention\nSouth Campus\nBend, Oregon\nActive\n1 needs attention\nWest Campus\nBend, Oregon\nActive\n1 needs attention\nLocations\n›\nNorth Campus\nNorth Campus\n● Active\nBend, Oregon\nPacific Time\nEdit location\nOverview\nPrograms\nRooms\nScheduling\nOperational Rules\nTours\nPlacement\nAccess\nRooms\n\n9 rooms\n\n+ Add room\n\nInfant A\n\nClassroom · Active · 8 capacity · 1 program\n\nInfant B\n\nClassroom · Active · 8 capacity · 1 program\n\nPlayground\n\nShared space · Active\n\nPre-K\n\nClassroom · Room 1 · Active · 15 capacity · 1 program\n\nPreschool 1\n\nClassroom · Active · 12 capacity · 1 program\n\nPreschool 2\n\nClassroom · Active · 12 capacity · 1 program\n\nRoom 1\n\nPhysical room · Active\n\nToddler 1\n\nClassroom · Room 1 · Active · 10 capacity · 1 program\n\nToddler 2\n\nClassroom · Room 1 · Active · 10 capacity · 1 program\n\nToddler 1\n● Active\n\nAt North Campus\n\nEdit room\n\nTYPE\n\nClassroom\n\nSITE\n\nNorth Campus\n\nINSIDE\n\nRoom 1\n\nPROGRAMS\n\nToddler\n\nSCHEDULE PATTERN\n\nNone\n\nSTATUS\n\nActive\n\nCapacity\nManage capacity rules →\nActions (2)\n▶\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nSummarize this Location\nExplain the selected Location and what it offers\nWhich Programs are offered here?\nList active and scheduled Programs at this Location\nShow upcoming availability changes\nList Programs scheduled to begin or end at this Location\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+    },
+    {
+      "name": "operational_rules",
+      "excerpt": "STAGING — NOT PRODUCTION\n⌘K\nQS\nOrganization\nlocations\nLocations\nAdd location\n\n3 shown\n\nSearch locations\nNorth Campus\nBend, Oregon\nActive\n1 needs attention\nSouth Campus\nBend, Oregon\nActive\n1 needs attention\nWest Campus\nBend, Oregon\nActive\n1 needs attention\nLocations\n›\nNorth Campus\nNorth Campus\n● Active\nBend, Oregon\nPacific Time\nEdit location\nOverview\nPrograms\nRooms\nScheduling\nOperational Rules\nTours\nPlacement\nAccess\n\nOperational rules are versioned, effective-dated configuration. Editing creates a new version on a chosen date and closes the prior one — history is preserved and future-dated changes are supported.\n\nResolved per location\n\nWhat resolves today (most-specific-wins: Room → Program → Location → Org default). “Org default” means inherited; a more specific label means overridden here.\n\nNorth Campus\n\nCapacity: no rule — fallback applies\n\nRatio: no rule — fallback applies\n\nCapacity Rules (3)\nCapacity · Licensed · Room: Toddler 2\nCurrent\nSep 19, 2026 → ongoing\nCapacity 10 · licensed\nCreate future version\nRetire\nCapacity · Licensed · Room: Toddler 1\nCurrent\nSep 20, 2026 → ongoing\nCapacity 10 · licensed\nCreate future version\nRetire\nCapacity · Physical · Room: Infant B\nCurrent\nSep 19, 2026 → ongoing\nCapacity 8 · physical\nCreate future version\nRetire\nAdd capacity rule\n\nNo versions yet.\n\nAdd capacity rule\nRatio Rules (1)\nRatio · Age all · Room: Infant A\nCurrent\nJan 1, 2026 → ongoing\n1:1 ≤ 4, 1:2 ≤ 8, 1:3 ≤ 12\nCreate future version\nRetire\nAdd ratio rule\n\nNo versions yet.\n\nAdd ratio rule\nOperating Windows (0)\nAdd operating window\n\nNo versions yet.\n\nAdd operating window\nSchedule Rules (0)\nAdd schedule rule\n\nNo versions yet.\n\nAdd schedule rule\nBOS\n\nOperational Intelligence\n\nReset\nPin\nClose\nAttention\n· No urgent issues\nHere are some ways I can help\n▾\nSummarize this Location\nExplain the selected Location and what it offers\nWhich Programs are offered here?\nList active and scheduled Programs at this Location\nShow upcoming availability changes\nList Programs scheduled to begin or end at this Location\n/ commands · ↵ to send · ⇧↵ new line\n\nBOS uses AI. Review for accuracy."
+    },
+    {
+      "name": "console_errors",
+      "errs": []
+    }
+  ]
+}

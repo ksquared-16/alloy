@@ -1,6 +1,6 @@
 /**
  * Configuration Mode — settings visual token drift prevention.
- * @see docs/sprints/06_2026/configuration-runtime-settings-visual-token-audit.md
+ * @see docs/sprints/archive/06_2026/configuration-runtime-settings-visual-token-audit.md
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";

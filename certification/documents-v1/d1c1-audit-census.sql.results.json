@@ -1,0 +1,146 @@
+{
+  "trusted_host_action_id": "tha_08d633a9748e54",
+  "query_hash": "b113955c5d5060ba496cb76aa30d3d6df18dca5e8278261bf2bb8693cd346dc1",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T14:44:03.608Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_08d633a9748e54",
+    "query_hash": "b113955c5d5060ba496cb76aa30d3d6df18dca5e8278261bf2bb8693cd346dc1",
+    "authorization_id": "grnt_c3f0ed8c88814fa7",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T14:44:08.202Z",
+    "question_ids": [
+      "v00_identity",
+      "v01_count",
+      "v02_screening_event",
+      "v03_release_follows_quarantine"
+    ],
+    "questions": {
+      "v00_identity": {
+        "question_id": "v00_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T14:44:07.5402+00:00",
+            "events_qa_orgs": 37,
+            "quarantine_or_release_outside_qa_orgs": 0
+          }
+        ]
+      },
+      "v01_count": {
+        "question_id": "v01_count",
+        "row_count": null,
+        "rows": [
+          {
+            "event": "document_delete_authorized",
+            "org": "qa_secondary",
+            "route": "admin/pos/documents/delete",
+            "events": 1
+          },
+          {
+            "event": "document_delete_authorized",
+            "org": "qa_shared",
+            "route": "admin/pos/documents/delete",
+            "events": 7
+          },
+          {
+            "event": "document_link_issued",
+            "org": "qa_secondary",
+            "route": "admin/documents/signed-url",
+            "events": 2
+          },
+          {
+            "event": "document_link_issued",
+            "org": "qa_shared",
+            "route": "admin/documents/signed-url",
+            "events": 17
+          },
+          {
+            "event": "document_link_issued",
+            "org": "qa_shared",
+            "route": "admin/vendors/documents/signed-url",
+            "events": 1
+          },
+          {
+            "event": "document_quarantined",
+            "org": "qa_shared",
+            "route": "admin/documents/upload",
+            "events": 1
+          },
+          {
+            "event": "document_released",
+            "org": "qa_shared",
+            "route": "admin/documents/screening/release",
+            "events": 1
+          },
+          {
+            "event": "document_uploaded",
+            "org": "qa_secondary",
+            "route": null,
+            "events": 1
+          },
+          {
+            "event": "document_uploaded",
+            "org": "qa_shared",
+            "route": null,
+            "events": 6
+          }
+        ]
+      },
+      "v02_screening_event": {
+        "question_id": "v02_screening_event",
+        "row_count": null,
+        "rows": [
+          {
+            "event": "document_quarantined",
+            "document_id": "f3d8f8aa-ed9d-4ebb-93e2-6f657a460880",
+            "route": "admin/documents/upload",
+            "engine": "alloy-structural-screening-v1",
+            "reason": "active_content",
+            "findings": [
+              "pdf:/JavaScript",
+              "pdf:/JS"
+            ],
+            "screening_reason": null,
+            "release_reason_present": true,
+            "actor_present": true,
+            "at": "2026-10-23T14:35:52.954963+00:00"
+          },
+          {
+            "event": "document_released",
+            "document_id": "f3d8f8aa-ed9d-4ebb-93e2-6f657a460880",
+            "route": "admin/documents/screening/release",
+            "engine": null,
+            "reason": "D1c-1 hosted certification: reviewed findings (synthetic script)",
+            "findings": [
+              "pdf:/JavaScript",
+              "pdf:/JS"
+            ],
+            "screening_reason": "active_content",
+            "release_reason_present": true,
+            "actor_present": true,
+            "at": "2026-10-23T14:36:18.505975+00:00"
+          }
+        ]
+      },
+      "v03_release_follows_quarantine": {
+        "question_id": "v03_release_follows_quarantine",
+        "row_count": null,
+        "rows": [
+          {
+            "released": 1,
+            "released_without_prior_quarantine": 0
+          }
+        ]
+      }
+    },
+    "row_count": 13
+  }
+}

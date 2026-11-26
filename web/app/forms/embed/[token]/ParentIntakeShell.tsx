@@ -11,6 +11,8 @@
  * rest of Alloy: guided, fast, premium, human — never a raw form.
  */
 
+import type { CSSProperties } from "react";
+import { participantBrandStyle, type ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import type { ReactNode } from "react";
 import clsx from "clsx";
 import { Check } from "lucide-react";
@@ -46,30 +48,58 @@ function BrandMark({ className }: { className?: string }) {
  * Used by every parent-facing state (loading, form, completion).
  */
 export function IntakeFrame({
+    brand,
     children,
     packetName,
     previewBanner,
     contentClassName,
+    chrome = "full",
 }: {
+    /**
+     * The tenant's authored brand.
+     *
+     * The frame wraps EVERY participant phase — the conversation and the artifact review are both
+     * inside it — so theming here is what makes them one experience rather than two that happen to
+     * agree. Null falls back to the platform mark, which is what an unbranded tenant should see.
+     */
+    brand?: ParticipantBrand | null;
     children: ReactNode;
     packetName?: string | null;
     previewBanner?: ReactNode;
     contentClassName?: string;
+    /**
+     * `none` when the form is shown INSIDE another page (an organization's site embeds it): that page
+     * already says who and where, so the frame's brand bar is redundant chrome. A standalone link keeps it.
+     */
+    chrome?: "full" | "none";
 }) {
     return (
-        <div className="min-h-screen bg-gradient-to-b from-white via-white to-alloy-stone/50">
+        <div
+            className="min-h-screen bg-gradient-to-b from-white via-white to-alloy-stone/50"
+            style={brand ? (participantBrandStyle(brand) as CSSProperties) : undefined}
+            data-participant-brand={brand ? "tenant" : "platform"}
+        >
             {previewBanner}
+            {chrome === "none" ? null : (
             <header className="sticky top-0 z-10 border-b border-alloy-midnight/[0.07] bg-white/85 backdrop-blur-sm">
                 <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3 sm:px-6">
-                    <BrandMark />
+                    {brand?.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={brand.logoUrl} alt="" className="h-6 w-6 rounded object-contain" />
+                    ) : (
+                        <BrandMark />
+                    )}
                     <div className="min-w-0 leading-tight">
-                        <div className="text-[13px] font-semibold tracking-tight text-alloy-midnight">{BRAND}</div>
+                        <div className="text-[13px] font-semibold tracking-tight text-alloy-midnight">
+                            {brand?.brandName ?? BRAND}
+                        </div>
                         {packetName ? (
                             <div className="truncate text-[11px] text-alloy-midnight/45">{packetName}</div>
                         ) : null}
                     </div>
                 </div>
             </header>
+            )}
             <main className={clsx("mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6 sm:pt-8", contentClassName)}>
                 {children}
             </main>
@@ -106,7 +136,7 @@ export function IntakeProgress({
         <div className="mb-5">
             <div className="mb-2 flex items-center justify-between gap-3">
                 {phaseLabel ? (
-                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-alloy-juniper">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-participant-accent-ink">
                         {phaseLabel}
                     </span>
                 ) : (
@@ -122,7 +152,7 @@ export function IntakeProgress({
                         key={i}
                         className={clsx(
                             "h-1.5 flex-1 rounded-full transition-colors duration-500",
-                            i <= stepIndex ? "bg-alloy-juniper" : "bg-alloy-midnight/[0.09]"
+                            i <= stepIndex ? "bg-participant-accent" : "bg-alloy-midnight/[0.09]"
                         )}
                     />
                 ))}
@@ -148,21 +178,21 @@ export function IntakeChips({ known, missing, uploads }: { known: number; missin
     if (known <= 0 && missing <= 0 && uploads <= 0) return null;
     return (
         <div className="mb-5 flex flex-wrap gap-2">
-            {known > 0 ? <Chip tone="juniper" label={`${known} already filled in`} /> : null}
+            {known > 0 ? <Chip tone="accent" label={`${known} already filled in`} /> : null}
             {missing > 0 ? <Chip tone="amber" label={`${missing} to add`} /> : null}
             {uploads > 0 ? <Chip tone="sky" label={`${uploads} to sign or upload`} /> : null}
         </div>
     );
 }
 
-function Chip({ tone, label }: { tone: "juniper" | "amber" | "sky"; label: string }) {
+function Chip({ tone, label }: { tone: "accent" | "amber" | "sky"; label: string }) {
     const cls =
-        tone === "juniper"
-            ? "bg-alloy-juniper/10 text-alloy-juniper"
+        tone === "accent"
+            ? "bg-participant-accent/10 text-participant-accent-ink"
             : tone === "amber"
               ? "bg-amber-50 text-amber-700"
               : "bg-sky-50 text-sky-700";
-    const dot = tone === "juniper" ? "bg-alloy-juniper" : tone === "amber" ? "bg-amber-500" : "bg-sky-500";
+    const dot = tone === "accent" ? "bg-participant-accent" : tone === "amber" ? "bg-amber-500" : "bg-sky-500";
     return (
         <span className={clsx("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium", cls)}>
             <span className={clsx("h-1.5 w-1.5 rounded-full", dot)} />
@@ -192,7 +222,7 @@ export function IntakePacketChecklist({
                         className={clsx(
                             "flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors",
                             active
-                                ? "border-alloy-juniper/30 bg-alloy-juniper/[0.06]"
+                                ? "border-participant-accent/30 bg-participant-accent/[0.06]"
                                 : "border-alloy-midnight/[0.06] bg-white"
                         )}
                     >
@@ -200,9 +230,9 @@ export function IntakePacketChecklist({
                             className={clsx(
                                 "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
                                 done
-                                    ? "bg-alloy-juniper text-white"
+                                    ? "bg-participant-accent text-participant-on-accent"
                                     : active
-                                      ? "bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/40"
+                                      ? "bg-participant-accent/15 text-participant-accent-ink ring-1 ring-participant-accent/40"
                                       : "bg-alloy-midnight/[0.06] text-alloy-midnight/40"
                             )}
                         >
@@ -221,7 +251,7 @@ export function IntakePacketChecklist({
                             {s.form_name}
                         </span>
                         {active ? (
-                            <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-alloy-juniper">
+                            <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-participant-accent-ink">
                                 Now
                             </span>
                         ) : null}
@@ -279,7 +309,7 @@ export function IntakeFooter({
                     disabled={primaryDisabled}
                     aria-busy={primaryBusy}
                     onClick={onPrimary}
-                    className="flex-1 rounded-xl bg-alloy-juniper py-3.5 text-[14px] font-semibold text-white shadow-[0_2px_10px_rgba(0,162,131,0.28)] transition-colors hover:bg-[#009276] disabled:cursor-not-allowed disabled:bg-alloy-midnight/25 disabled:shadow-none"
+                    className="flex-1 rounded-xl bg-participant-accent py-3.5 text-[14px] font-semibold text-participant-on-accent shadow-[0_2px_10px_rgba(24,39,58,0.18)] transition-shadow hover:shadow-[0_4px_16px_rgba(24,39,58,0.28)] disabled:cursor-not-allowed disabled:bg-alloy-midnight/25 disabled:text-white disabled:shadow-none sm:ml-auto sm:min-w-[10rem] sm:flex-none sm:px-8"
                 >
                     {primaryLabel}
                 </button>
@@ -305,7 +335,7 @@ export function IntakeCompletion({
             <div
                 className={clsx(
                     "mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full",
-                    tone === "success" ? "bg-alloy-juniper/12 text-alloy-juniper" : "bg-alloy-midnight/[0.06] text-alloy-midnight/60"
+                    tone === "success" ? "bg-participant-accent/12 text-participant-accent-ink" : "bg-alloy-midnight/[0.06] text-alloy-midnight/60"
                 )}
             >
                 <Check className="h-8 w-8" strokeWidth={2.5} />
@@ -327,7 +357,7 @@ export function IntakeNotice({ children, tone = "muted" }: { children: ReactNode
             )}
         >
             {tone === "muted" ? (
-                <span className="h-6 w-6 animate-spin rounded-full border-2 border-alloy-juniper/30 border-t-alloy-juniper" aria-hidden />
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-participant-accent/30 border-t-participant-accent" aria-hidden />
             ) : null}
             {children}
         </div>

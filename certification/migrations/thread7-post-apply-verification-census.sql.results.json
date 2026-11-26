@@ -1,0 +1,111 @@
+{
+  "trusted_host_action_id": "tha_e08f579b686d40",
+  "query_hash": "40a64d2e8e91ee2a83bf22e5b1bba8886e1bc4351154bbd4985b92ff132fa3ec",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T18:54:17.979Z",
+    "question_ids": [
+      "m170000",
+      "column_detail",
+      "fk_detail",
+      "kind_chk_definition",
+      "ledger_version",
+      "ledger_version_count",
+      "ledger_integrity",
+      "ledger_head",
+      "ledger_total",
+      "rows"
+    ],
+    "questions": {
+      "m170000": {
+        "question_id": "m170000",
+        "row_count": null,
+        "rows": [
+          "financial_reduction_applications ~ column ~ financial_policy_id_uuid_nullable ~ true",
+          "financial_policy_id ~ fk ~ financial_policies_id_on_delete_restrict ~ true",
+          "financial_policy_id ~ comment ~ present ~ true",
+          "financial_reduction_applications_policy_kind_check ~ vocabulary ~ admits_vacation_credit ~ true",
+          "financial_reduction_applications_policy_kind_check ~ vocabulary ~ keeps_the_three_it_had ~ true",
+          "financial_reduction_applications_kind_chk ~ policy_branch ~ exclusive_or_over_both_authorities ~ true",
+          "financial_reduction_applications_kind_chk ~ manual_branch ~ carries_no_policy_authority ~ true"
+        ]
+      },
+      "column_detail": {
+        "question_id": "column_detail",
+        "row_count": null,
+        "rows": [
+          "financial_policy_id ~ declared_type ~ uuid"
+        ]
+      },
+      "fk_detail": {
+        "question_id": "fk_detail",
+        "row_count": null,
+        "rows": [
+          "financial_policy_id ~ fk_delete_action ~ restrict"
+        ]
+      },
+      "kind_chk_definition": {
+        "question_id": "kind_chk_definition",
+        "row_count": null,
+        "rows": [
+          "financial_reduction_applications_kind_chk ~ installed_definition ~ CHECK ((((reduction_kind = 'policy'::text) AND (policy_kind IS NOT NULL) AND ((commercial_policy_id IS NOT NULL) <> (financial_policy_id IS NOT NULL))) OR ((reduction_kind = 'manual'::text) AND (NULLIF(btrim(COALESCE(reason, ''::text)), ''::text) IS NOT NULL) AND (commercial_policy_id IS NULL) AND (financial_policy_id IS NULL))))"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260911170000 ~ registered ~ present ~ true"
+        ]
+      },
+      "ledger_version_count": {
+        "question_id": "ledger_version_count",
+        "row_count": null,
+        "rows": [
+          "20260911170000 ~ occurrences ~ 1"
+        ]
+      },
+      "ledger_integrity": {
+        "question_id": "ledger_integrity",
+        "row_count": null,
+        "rows": [
+          "supabase_migrations.schema_migrations ~ 20260911170000 ~ registered_exactly_once ~ true"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260911170000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          405
+        ]
+      },
+      "rows": {
+        "question_id": "rows",
+        "row_count": null,
+        "rows": [
+          "financial_reduction_applications ~ total_rows ~ 0"
+        ]
+      }
+    },
+    "row_count": 16
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-11T18:54:16.361Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_dc0bf775c0f38e",
+    "authorization_id": "grnt_5843ab1141654449",
+    "query_hash": "40a64d2e8e91ee2a83bf22e5b1bba8886e1bc4351154bbd4985b92ff132fa3ec",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "trusted_host_action_id": "tha_7150f21a65f12e",
+  "query_hash": "dacaa7786857da630516a9261aab009dcef6954d79b2e31149603a2b79545cb9",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T23:34:57.000Z",
+    "question_ids": [
+      "m200000",
+      "m210000",
+      "m220000",
+      "m230000",
+      "m240000",
+      "m250000",
+      "m260000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m200000": {
+        "question_id": "m200000",
+        "row_count": null,
+        "rows": [
+          "replace_role_permission_grants ~ present ~ present ~ true",
+          "trigger:mutation_events_append_only ~ present ~ present ~ true"
+        ]
+      },
+      "m210000": {
+        "question_id": "m210000",
+        "row_count": null,
+        "rows": [
+          "replace_membership_with_access_profile ~ present ~ present ~ true",
+          "create_role_definition_audited ~ present ~ present ~ true",
+          "remove_member_access_audited ~ present ~ present ~ true",
+          "replace_member_access_scope_audited ~ present ~ present ~ true"
+        ]
+      },
+      "m220000": {
+        "question_id": "m220000",
+        "row_count": null,
+        "rows": [
+          "narrow:replace_role_permission_grants(uuid,text,text[]) ~ absent ~ absent ~ true",
+          "narrow:save_role_definition_and_grants(uuid,text,text,boolean,text[]) ~ absent ~ absent ~ true",
+          "narrow:replace_membership_with_access_profile(uuid,uuid,text) ~ absent ~ absent ~ true"
+        ]
+      },
+      "m230000": {
+        "question_id": "m230000",
+        "row_count": null,
+        "rows": [
+          "save_role_definition_and_grants:array_append ~ present ~ present ~ true"
+        ]
+      },
+      "m240000": {
+        "question_id": "m240000",
+        "row_count": null,
+        "rows": [
+          "remove_member_access_audited:previous_state ~ present ~ present ~ true"
+        ]
+      },
+      "m250000": {
+        "question_id": "m250000",
+        "row_count": null,
+        "rows": [
+          "save_role_definition_and_grants:access.role.updated ~ present ~ present ~ true"
+        ]
+      },
+      "m260000": {
+        "question_id": "m260000",
+        "row_count": null,
+        "rows": [
+          "replace_role_permission_grants:self_authority_lockout ~ present ~ present ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260911200000 ~ ledgered ~ absent ~ false",
+          "20260911210000 ~ ledgered ~ absent ~ false",
+          "20260911220000 ~ ledgered ~ absent ~ false",
+          "20260911230000 ~ ledgered ~ absent ~ false",
+          "20260911240000 ~ ledgered ~ absent ~ false",
+          "20260911250000 ~ ledgered ~ absent ~ false",
+          "20260911260000 ~ ledgered ~ absent ~ false"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260911170000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          405
+        ]
+      }
+    },
+    "row_count": 22
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-11T23:34:56.198Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_21faa429b2750b",
+    "authorization_id": "grnt_8f0bfe20b7254e1a",
+    "query_hash": "dacaa7786857da630516a9261aab009dcef6954d79b2e31149603a2b79545cb9",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  }
+}

@@ -6,8 +6,15 @@ import LifecycleBuilderPrimary from "@/components/adminV2/settings/lifecycle/Lif
 /**
  * Configuration Mode — Processes surface.
  * Context → Configuration Queue → Configuration Workspace → BOS (shell-owned).
+ * Collection → Selected Process → Focused Workspace pattern (same family as Access/Tuition).
  */
-export default function ProcessesConfigurationPage() {
+export default function ProcessesConfigurationPage({
+    initialSection,
+    initialProcessId,
+}: {
+    initialSection?: string;
+    initialProcessId?: string;
+}) {
     const [contextActions, setContextActions] = useState<ReactNode>(null);
 
     return (
@@ -15,6 +22,8 @@ export default function ProcessesConfigurationPage() {
             <LifecycleBuilderPrimary
                 contextActions={contextActions}
                 onContextActionsChange={setContextActions}
+                initialSection={initialSection}
+                initialProcessId={initialProcessId}
             />
         </div>
     );

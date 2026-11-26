@@ -1,0 +1,32 @@
+{
+  "L1": {
+    "opp": "d18524e6-0706-4d78-a601-c4ca08e9777c",
+    "hh": "1e692a12-d48e-4b22-8956-43f5f442e327",
+    "deleted": true
+  },
+  "L2": {
+    "opp": "ca129a37-f036-43d3-90fd-d1c71e392012",
+    "hh": "7b99481b-df65-4d00-99e4-455715903105",
+    "deleted": true
+  },
+  "K1": "8df8f710-8bb4-466f-a954-cd4d022726de",
+  "K2": "3e39892b-e386-470e-91fc-25387b0818b8",
+  "KU": "d1cd7d61-b4b3-486b-8cd2-fbf914c82d3d",
+  "L3": {
+    "opp": "3b3bf5d8-1ab8-4bee-9579-f4df4de0bf69",
+    "hh": "e7bf6e73-64cf-4d6a-99a3-3135156f0ae0",
+    "same_household": false,
+    "deleted": true
+  },
+  "form": {
+    "id": "8dd68ff9-fad9-49c1-8bda-e998571faddf",
+    "version_id": "bfd9c542-692a-44e2-8434-51bfa9037643"
+  },
+  "subs": {
+    "s_opp1": "1599490c-8975-47b0-8418-0b0868c7b319",
+    "s_opp2": "715ade06-0cbb-45dc-8a8a-3df8d2b5a334",
+    "s_k1": "3ea71149-9a82-41d9-a295-e6ed21175fc6",
+    "s_k2": "d51ca956-c1dd-45d6-a770-99f3c6b6ecf0",
+    "s_unrel": "9a0b1eec-391d-42c4-9c64-b58fd7b78a56"
+  }
+}

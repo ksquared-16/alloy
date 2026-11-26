@@ -1,0 +1,1294 @@
+/**
+ * Vacilando Core — durable Development Lane identity.
+ *
+ * A Development Lane is an operator-owned specialist area. It is not a
+ * worktree, branch, tmux session, sprint, or Claude conversation.
+ *
+ * Runtime binding is Alloy-local for now and is re-validated against the
+ * substrate before consequential operations. Binding metadata is not Git/tmux truth.
+ */
+import { randomUUID } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+
+import { localNodeId } from "./execution-node.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
+import { isManagedSlot } from "./managed-slots.mjs";
+// The stamp only, from the dependency-free leaf. Importing it from the resolver
+// instead would make the registry and the resolver import each other, and that
+// cycle survives today only by accident of hoisting order.
+import { LANE_BOOTSTRAP_CONTRACT_VERSION, laneBootstrapStamp } from "./lane-bootstrap-contract.mjs";
+import { instructionBaselineVersion } from "./agent-configuration.mjs";
+import { gatewayStateRoot } from "./runtime-roots.mjs";
+
+export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
+export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
+export const LANE_NAME_MAX = 80;
+export const IDENTITY_TMUX = "alloy-identity";
+export const IDENTITY_LANE_NAME = "Access & Identity";
+export const IDENTITY_LANE_ID = "lane_955fe041d417";
+export const VACILANDO_LANE_NAME = "Vacilando";
+export const VACILANDO_LANE_ALIAS = "vacilando";
+export const WORK_CLASS_PRODUCT = "product";
+export const WORK_CLASS_RUNTIME_SELF = "runtime_self";
+export const RUNTIME_SELF_RESOURCE_PRIORITY = -10;
+
+function runtimeRoot() {
+  /*
+   * THE GATEWAY ROOT, NOT ITS PARENT -- and S3 got this backwards at first.
+   *
+   * This reads `<root>/vacilando/development-lanes.json`, so the root it wants
+   * is the one that CONTAINS `vacilando/`, which is the Gateway's. S3 mapped it
+   * to `stateRoot()` because the old expression's FALLBACK named the parent --
+   * but that fallback was the latent half of the two-depth defect, right only
+   * when the variable was unset. On this host the variable is set to the child,
+   * so the old code landed correctly and the "fix" moved it one level up.
+   *
+   * The live Gateway reported ZERO LANES. `durableLanesEnabled()` three lines
+   * below is the tell that was there all along: it tests that the configured
+   * root ends in `/gateway`.
+   */
+  return gatewayStateRoot();
+}
+
+export function durableLanesEnabled() {
+  if (process.env.VACILANDO_DURABLE_LANES === "0") return false;
+  if (process.env.VACILANDO_DURABLE_LANES === "1") return true;
+  const root = (process.env.ALLOY_RUNTIME_ROOT || "").trim().replace(/\/+$/, "");
+  return /(^|\/)gateway$/.test(root);
+}
+
+/** Resolve aliases (legacy tmux id) to the durable store key. */
+export function canonicalLaneStoreId(laneId, root = runtimeRoot()) {
+  const id = String(laneId || "");
+  if (!id) return id;
+  if (!durableLanesEnabled()) return id;
+  return getDurableLane(id, root)?.lane_id || id;
+}
+
+function iso(ms) {
+  return new Date(ms ?? Date.now()).toISOString();
+}
+
+function atomicWrite(path, obj) {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
+  renameSync(tmp, path);
+}
+
+export function developmentLaneStorePath(root = runtimeRoot()) {
+  return join(root, "vacilando", "lanes", "lanes.json");
+}
+
+function emptyStore() {
+  return { schema_version: DEVELOPMENT_LANE_SCHEMA, lanes: {}, folders: {} };
+}
+
+export function readDevelopmentLaneStore(root = runtimeRoot()) {
+  // Readers stay lenient so a surface renders empty instead of throwing.
+  // MUTATIONS must not — see readLaneStoreGuarded below.
+  return readLaneStoreGuarded(root).store;
+}
+
+/**
+ * THE SAME DEFECT THAT COST THE RUN STORE, IN THE LANE STORE.
+ *
+ * This returned `emptyStore()` for every failure, and every mutation is read →
+ * modify → atomic whole-file overwrite. So one unreadable read persists an empty
+ * lane universe on the very next write.
+ *
+ * It is not hypothetical here either. At 15:45:58 this file and
+ * execution-runs/runs.json were emptied IN THE SAME SECOND — 20 registered lanes
+ * and every run gone — while admissions.json (2265 entries), agent-sessions.json
+ * and governed-actions/requests.json were untouched. What the emptied pair had
+ * in common was this exact read-then-clobber shape; the survivors did not. The
+ * Gateway had been up for half an hour, so a restart was not involved.
+ *
+ * ABSENT AND UNREADABLE ARE DIFFERENT ANSWERS. A missing file is legitimately an
+ * empty store: first boot has no lanes to lose. A file that EXISTS and cannot be
+ * parsed is a fact we do not have, and overwriting it turns a recoverable
+ * problem into a permanent one.
+ */
+export function readLaneStoreGuarded(root = runtimeRoot()) {
+  const path = developmentLaneStorePath(root);
+  if (!existsSync(path)) return { ok: true, store: emptyStore(), absent: true };
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    return { ok: false, error: "lane_store_unreadable", detail: e?.message || String(e), store: emptyStore() };
+  }
+  try {
+    const raw = JSON.parse(text);
+    if (!raw || typeof raw !== "object") {
+      return { ok: false, error: "lane_store_malformed", detail: "top level is not an object", store: emptyStore() };
+    }
+    return {
+      ok: true,
+      store: {
+        schema_version: DEVELOPMENT_LANE_SCHEMA,
+        lanes: raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {},
+        // This normalisation drops every top-level key it does not name, so a
+        // store shape that is not listed here is silently erased on the next
+        // write. Folders live in the same file and must be carried forward.
+        folders: raw.folders && typeof raw.folders === "object" ? raw.folders : {},
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: "lane_store_malformed", detail: e?.message || String(e), store: emptyStore() };
+  }
+}
+
+/** Read for a MUTATION, or refuse. Null means the caller must not proceed. */
+function readStoreForMutation(root) {
+  const read = readLaneStoreGuarded(root);
+  return read.ok ? read.store : null;
+}
+
+function writeStore(store, root) {
+  /*
+   * Keep one generation behind the current file, for the same reason the run
+   * store does: the write itself is atomic, so this is not about torn files. It
+   * is about a mutation that was already wrong before it arrived. Without it the
+   * only copy of the lane registry is the one being replaced — which is exactly
+   * why the 15:45:58 loss was unrecoverable.
+   */
+  const path = developmentLaneStorePath(root);
+
+  /*
+   * NEVER OVERWRITE A STORE WE COULD NOT READ.
+   *
+   * Guarded at the single write choke point rather than at each of the ten
+   * mutations, so a caller added later cannot forget. A refused write is
+   * recoverable — the caller's change is simply not persisted, and the operator
+   * retries. A clobbered registry is not: 20 lanes went at 15:45:58 and the only
+   * copy was the one being replaced.
+   *
+   * Deliberately not a throw. This runs inside the Gateway, and converting a
+   * transient read failure into an uncaught exception trades one outage for
+   * another. Declining to write is the conservative half of fail-closed.
+   */
+  const current = readLaneStoreGuarded(root);
+  if (!current.ok) return store;
+
+  try {
+    if (existsSync(path)) copyFileSync(path, `${path}.prev`);
+  } catch { /* a missing backup must never block the write that keeps lanes alive */ }
+  atomicWrite(path, store);
+  return store;
+}
+
+/** Same writer, exported so lane-folders.mjs persists through one code path. */
+export function writeDevelopmentLaneStore(store, root = runtimeRoot()) {
+  return writeStore(store, root);
+}
+
+export function newDurableLaneId() {
+  return `lane_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+}
+
+/**
+ * A lane's first name comes from its first message.
+ *
+ * Creating a lane used to demand a name up front, before the operator had said
+ * what the lane was for — a form to fill in before a conversation could start.
+ * Starting a chat should not require naming it: the opening message already
+ * says what this is, and Rename Lane is there when it stops fitting.
+ */
+export function deriveLaneNameFromInstruction(raw, { max = 48 } = {}) {
+  for (const line of String(raw ?? "").split("\n")) {
+    const text = line
+      .replace(/^\s*#{1,6}\s*/, "")      // markdown heading
+      .replace(/^\s*[-*+]\s+/, "")        // bullet
+      .replace(/^\s*\d+[.)]\s+/, "")      // ordered item
+      .replace(/[`*_>]/g, "")              // inline emphasis / quote marks
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text) continue;
+    if (text.length <= max) return text;
+    // Cut on a word boundary so the name reads like a phrase, not a truncation.
+    const cut = text.slice(0, max);
+    const space = cut.lastIndexOf(" ");
+    return (space > max * 0.5 ? cut.slice(0, space) : cut).trim() + "…";
+  }
+  return "";
+}
+
+export function validateLaneName(raw) {
+  const name = String(raw ?? "").trim().replace(/\s+/g, " ");
+  if (!name) return { ok: false, error: "name_empty" };
+  if (name.length > LANE_NAME_MAX) return { ok: false, error: "name_too_large" };
+  if (/[\u0000-\u001f]/.test(name)) return { ok: false, error: "name_invalid" };
+  return { ok: true, name };
+}
+
+/**
+ * A slot on a durable binding, bounded by the TOPOLOGY OWNER.
+ *
+ * This carried the same literal `n <= 6` that produced the asSlot defect, and
+ * here it is worse: asSlot corrupted a computation, while this corrupts
+ * PERSISTED state. A lane legitimately placed on slots 7-12 had its binding
+ * silently written as null.
+ *
+ * Measured live: `payments` owns slot 7 and its durable binding read null.
+ *
+ * Found by the standing slot-bound guard rather than by another outage, which
+ * is what the guard is for.
+ */
+function coerceSlot(value, fallback = null) {
+  if (value == null || value === "") return fallback;
+  const n = Number(value);
+  return Number.isInteger(n) && isManagedSlot(n) ? n : fallback;
+}
+
+export function coerceWorkClass(value, fallback = WORK_CLASS_PRODUCT) {
+  const v = String(value || "").trim();
+  if (v === WORK_CLASS_RUNTIME_SELF) return WORK_CLASS_RUNTIME_SELF;
+  if (v === WORK_CLASS_PRODUCT) return WORK_CLASS_PRODUCT;
+  return fallback;
+}
+
+export function scarceResourcePriorityForLane(laneId, root = runtimeRoot()) {
+  const rec = getDurableLane(laneId, root);
+  if (typeof rec?.scarce_resource_priority === "number") return rec.scarce_resource_priority;
+  if (rec?.work_class === WORK_CLASS_RUNTIME_SELF) return RUNTIME_SELF_RESOURCE_PRIORITY;
+  return 0;
+}
+
+function normalizeBinding(binding, { root, previous = null } = {}) {
+  if (!binding) return null;
+  const nodeId = binding.node_id || localNodeId(root);
+  return {
+    type: binding.type || previous?.type || "alloy_local",
+    node_id: nodeId,
+    worktree_path: binding.worktree_path || previous?.worktree_path || null,
+    worktree_name: binding.worktree_name || previous?.worktree_name || null,
+    branch: binding.branch || previous?.branch || null,
+    tmux_session: Object.prototype.hasOwnProperty.call(binding, "tmux_session")
+      ? (binding.tmux_session || null)
+      : (previous?.tmux_session || null),
+    tmux_pane: Object.prototype.hasOwnProperty.call(binding, "tmux_pane")
+      ? (binding.tmux_pane || null)
+      : (previous?.tmux_pane || null),
+    slot: Object.prototype.hasOwnProperty.call(binding, "slot")
+      ? coerceSlot(binding.slot, null)
+      : coerceSlot(previous?.slot, null),
+    provider: normalizeExecutionProvider(binding.provider || previous?.provider, "claude") || "claude",
+    stale: false,
+    status: "bound",
+    last_node_id: previous?.node_id && previous.node_id !== nodeId ? previous.node_id : (previous?.last_node_id || null),
+  };
+}
+
+export function isDurableLaneId(id) {
+  return DURABLE_LANE_ID_RE.test(String(id || ""));
+}
+
+/**
+ * Statuses that mean "this lane is finished and is not part of the working set".
+ *
+ * A CLOSED lane has had its worktree retired by the explicit lane-close path.
+ * Its record and its whole run history stay in the store — closing a lane is
+ * not deleting its history — but it is no longer navigation, no longer
+ * dispatchable, and no longer counted as fleet capacity. Listing it kept three
+ * disposable certification lanes in front of the operator forever.
+ */
+export const RETIRED_LANE_STATUSES = Object.freeze(["ARCHIVED", "CLOSED"]);
+
+export function isRetiredLaneStatus(status) {
+  return RETIRED_LANE_STATUSES.includes(String(status || "").toUpperCase());
+}
+
+export function listDurableLanes(root = runtimeRoot(), { includeRetired = false } = {}) {
+  return Object.values(readDevelopmentLaneStore(root).lanes || {})
+    .filter((l) => l && (includeRetired || !isRetiredLaneStatus(l.status)));
+}
+
+export function getDurableLane(laneId, root = runtimeRoot()) {
+  const id = String(laneId || "");
+  if (!id) return null;
+  const store = readDevelopmentLaneStore(root);
+  if (store.lanes[id]) return store.lanes[id];
+  for (const rec of Object.values(store.lanes)) {
+    if (rec?.status === "ARCHIVED") continue;
+    if ((rec.aliases || []).includes(id)) return rec;
+    if (rec.binding?.tmux_session === id) return rec;
+    if (rec.binding?.worktree_name === id) return rec;
+  }
+  return null;
+}
+
+export function laneAliases(rec) {
+  if (!rec) return [];
+  const out = new Set([rec.lane_id, ...(rec.aliases || [])]);
+  if (rec.binding?.tmux_session) out.add(rec.binding.tmux_session);
+  return [...out].filter(Boolean);
+}
+
+export function findLaneByBinding({ worktreePath, tmuxSession, root = runtimeRoot() } = {}) {
+  const path = worktreePath ? String(worktreePath) : "";
+  const session = tmuxSession ? String(tmuxSession) : "";
+  for (const rec of listDurableLanes(root)) {
+    if (path && rec.binding?.worktree_path === path) return rec;
+    if (session && rec.binding?.tmux_session === session) return rec;
+  }
+  return null;
+}
+
+export function isRuntimeAdoptionBlocked(binding = {}) {
+  const name = String(binding.worktree_name || binding.name || "");
+  const path = String(binding.worktree_path || "");
+  const tmux = String(binding.tmux_session || "");
+  if (tmux === "alloy-runtime") return true;
+  const blob = `${name} ${path}`.toLowerCase();
+  // Control-plane hosts only. Product sprints may legally contain "runtime"
+  // (e.g. wt5-runtime-performance-ux-completion).
+  if (/(^|[/_-])alloy-runtime([/_-]|$)/.test(blob)) return true;
+  if (/(^|[/_-])wt-runtime([/_-]|$)/.test(blob)) return true;
+  return false;
+}
+
+/* ── the instruction baseline pointer ────────────────────────────────────── */
+
+/**
+ * WHICH CANONICAL INSTRUCTION THIS LANE LAST RESOLVED.
+ *
+ * THE GAP THIS CLOSES. DevOps 8 shipped the hash (`instructionBaselineVersion`),
+ * the drift detector (`detectInstructionDrift`, which reads
+ * `lane.instruction_baseline.baseline_version`) and the health surface that
+ * reports it — and no writer anywhere. Every lane therefore read UNRECORDED for
+ * ever, which is indistinguishable from "we have never looked" and is precisely
+ * the silence drift detection exists to break. Measured 2026-09-12: 13 active
+ * lanes, 13 UNRECORDED, 0 DRIFTED, while all thirteen worktrees carried a
+ * byte-identical CLAUDE.md. The fleet was in perfect agreement and the system
+ * could not say so.
+ *
+ * A POINTER, NEVER THE TEXT. What is persisted is a content-derived hash, the
+ * byte length and where it was read — enough to answer "did the instruction
+ * change since this lane resolved it?" and nothing more. Copying the instruction
+ * onto every lane would create N configurations that drift apart, which is the
+ * failure the single canonical CLAUDE.md exists to prevent.
+ *
+ * ABSENT IS NOT ZERO. A lane whose worktree or CLAUDE.md cannot be read gets
+ * `null` and stays UNRECORDED. A stamp that guessed would be worse than no
+ * stamp, because the drift detector would then compare a measurement against a
+ * fiction and report agreement.
+ */
+export function instructionBaselineStampFor(worktreePath, nowMs = Date.now()) {
+  if (!worktreePath) return null;
+  const path = join(worktreePath, "CLAUDE.md");
+  let text = null;
+  try { text = existsSync(path) ? readFileSync(path, "utf8") : null; } catch { text = null; }
+  if (!text) return null;
+  return {
+    baseline_version: instructionBaselineVersion(text),
+    source: "repository_claude_md",
+    path,
+    bytes: text.length,
+    measured_at: iso(nowMs),
+  };
+}
+
+export const BASELINE_RECORD = Object.freeze({
+  UNMEASURED: "UNMEASURED",
+  RECORDED: "RECORDED",
+  UNCHANGED: "UNCHANGED",
+  UPDATED: "UPDATED",
+});
+
+/**
+ * Record — or revalidate — one lane's instruction baseline pointer.
+ *
+ * This is the ONE canonical writer of the field. New lanes get it at creation
+ * (below); a resumed or existing lane gets it here, by measuring its own
+ * worktree rather than being told what to write. There is no parameter for the
+ * value on purpose: a caller that could supply the hash could also supply the
+ * wrong one, and the whole point of a content-derived version is that nobody
+ * types it.
+ *
+ * It touches `instruction_baseline` and `updated_at`. It does not touch mission,
+ * progress, decisions, blockers or any durable history — a changed prompt
+ * version does not invalidate a recorded decision, and DevOps 8 says so
+ * explicitly.
+ */
+export function recordLaneInstructionBaseline(laneId, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const worktreePath = rec.binding?.worktree_path || null;
+  const stamp = instructionBaselineStampFor(worktreePath, nowMs);
+  if (!stamp) {
+    return {
+      ok: true,
+      state: BASELINE_RECORD.UNMEASURED,
+      lane_id: rec.lane_id,
+      written: false,
+      reason: worktreePath
+        ? `no readable CLAUDE.md under ${worktreePath}`
+        : "the lane has no bound worktree to measure",
+    };
+  }
+  const previous = rec.instruction_baseline?.baseline_version ?? null;
+  if (previous === stamp.baseline_version) {
+    // Nothing to write. Re-stamping an unchanged pointer would churn
+    // `updated_at` on every lane on every sweep and make a quiet fleet look busy.
+    return { ok: true, state: BASELINE_RECORD.UNCHANGED, lane_id: rec.lane_id, written: false, baseline_version: previous };
+  }
+  rec.instruction_baseline = previous
+    ? { ...stamp, previous_version: previous }
+    : stamp;
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return {
+    ok: true,
+    state: previous ? BASELINE_RECORD.UPDATED : BASELINE_RECORD.RECORDED,
+    lane_id: rec.lane_id,
+    written: true,
+    baseline_version: stamp.baseline_version,
+    previous_version: previous,
+  };
+}
+
+/**
+ * Stamp the bootstrap contract version onto a lane that has PROVEN it satisfies
+ * the contract.
+ *
+ * THE PROOF IS THE ARGUMENT, NOT A FLAG. This takes the resolver's own result
+ * object and checks it: same lane, current contract version, and an empty
+ * `unresolved` list. A boolean parameter would let a caller assert compliance it
+ * never measured, and stamping a lane that does not meet the contract is worse
+ * than leaving it stale — it converts a visible gap into a false claim, and the
+ * health check that would have caught it goes green.
+ *
+ * `lane-bootstrap` owns the revalidation; this owns the write.
+ */
+export function stampLaneBootstrapContract(laneId, { revalidation = null, nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  if (!revalidation || revalidation.ok !== true) {
+    return { ok: false, error: "revalidation_missing", detail: "a bootstrap stamp requires the resolver's own result" };
+  }
+  if (revalidation.lane_id !== rec.lane_id) {
+    return { ok: false, error: "revalidation_lane_mismatch", detail: `proof is for ${revalidation.lane_id}` };
+  }
+  if (revalidation.contract_version !== LANE_BOOTSTRAP_CONTRACT_VERSION) {
+    return { ok: false, error: "revalidation_contract_mismatch", detail: `proof names ${revalidation.contract_version}` };
+  }
+  if (!Array.isArray(revalidation.unresolved) || revalidation.unresolved.length > 0) {
+    return {
+      ok: false,
+      error: "lane_does_not_satisfy_contract",
+      unresolved: revalidation.unresolved || null,
+      detail: "the lane has unresolved baseline gaps; stamping would record a compliance it does not have",
+    };
+  }
+  if (rec.bootstrap?.contract_version === LANE_BOOTSTRAP_CONTRACT_VERSION) {
+    return { ok: true, state: "UNCHANGED", lane_id: rec.lane_id, written: false };
+  }
+  rec.bootstrap = { ...laneBootstrapStamp(nowMs), revalidated: true };
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, state: "STAMPED", lane_id: rec.lane_id, written: true, contract_version: LANE_BOOTSTRAP_CONTRACT_VERSION };
+}
+
+export function createDurableLane({
+  name,
+  description = null,
+  binding = null,
+  aliases = [],
+  mission_id = null,
+  origin = "adopted",
+  work_class = WORK_CLASS_PRODUCT,
+  scarce_resource_priority = null,
+  preferred_provider = null,
+  repository_id = null,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const named = validateLaneName(name);
+  if (!named.ok) return named;
+  if (binding?.worktree_path && (String(binding.worktree_path).includes("..") || /[;|&]/.test(String(binding.worktree_path)))) {
+    return { ok: false, error: "path_refused" };
+  }
+  if (binding?.worktree_path && !existsSync(binding.worktree_path)) {
+    return { ok: false, error: "worktree_missing" };
+  }
+  if (binding?.worktree_path || binding?.tmux_session) {
+    const existing = findLaneByBinding({
+      worktreePath: binding.worktree_path,
+      tmuxSession: binding.tmux_session,
+      root,
+    });
+    if (existing) {
+      return {
+        ok: false,
+        error: "already_connected",
+        lane: existing,
+        lane_id: existing.lane_id,
+        name: existing.name,
+      };
+    }
+  }
+  if (isRuntimeAdoptionBlocked(binding || {})) {
+    return { ok: false, error: "runtime_adoption_blocked" };
+  }
+  const rec = {
+    schema_version: DEVELOPMENT_LANE_SCHEMA,
+    lane_id: newDurableLaneId(),
+    name: named.name,
+    description: description ? String(description).slice(0, 240) : null,
+    status: "ACTIVE",
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+    origin,
+    aliases: [...new Set((aliases || []).filter(Boolean))],
+    mission_id: mission_id ? String(mission_id) : null,
+    mission_bound_at: mission_id ? iso(nowMs) : null,
+    work_class: coerceWorkClass(work_class),
+    scarce_resource_priority: typeof scarce_resource_priority === "number"
+      ? scarce_resource_priority
+      : (coerceWorkClass(work_class) === WORK_CLASS_RUNTIME_SELF ? RUNTIME_SELF_RESOURCE_PRIORITY : 0),
+    preferred_provider: normalizeExecutionProvider(
+      preferred_provider || binding?.provider,
+      "claude",
+    ) || "claude",
+    binding: binding ? normalizeBinding(binding, { root }) : null,
+    folder_id: null,
+    // Which repository this lane executes in. A folder is presentation; this is
+    // the execution boundary, and it is never changed by reorganising a list.
+    repository_id: repository_id ? String(repository_id) : null,
+    /*
+     * WHICH BOOTSTRAP CONTRACT THIS LANE WAS INITIALISED UNDER.
+     *
+     * The one fact about a lane's baseline that cannot be derived, because it is
+     * historical rather than current: everything else in the contract is
+     * resolved from whichever owner already holds it, but "which contract was in
+     * force when this lane was created" is only knowable if it was recorded at
+     * the time.
+     *
+     * It is a STAMP, not a copy of the baseline. Copying the baseline onto every
+     * lane is how a fleet ends up with N independently maintained configurations
+     * that quietly disagree; `resolveLaneBootstrap` derives the baseline fresh on
+     * every read, so this stays one short version string for ever.
+     *
+     * A lane without it is stale, not broken — every lane created before this
+     * contract existed is in that state by definition, and DevOps 2 owns what to
+     * do about it.
+     */
+    bootstrap: laneBootstrapStamp(nowMs),
+    /*
+     * WHICH CANONICAL INSTRUCTION THIS LANE WAS CREATED UNDER.
+     *
+     * Same reasoning as `bootstrap` above, for the other half of the baseline: a
+     * lane can derive everything else fresh on every read, but "which
+     * instruction was in force when this lane resolved it" is only knowable if
+     * it was recorded at the time. Null when the worktree carries no readable
+     * CLAUDE.md — unmeasured, never assumed.
+     */
+    instruction_baseline: instructionBaselineStampFor(binding?.worktree_path || null, nowMs),
+  };
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec };
+}
+
+export function bindDurableLane(laneId, binding, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  if (!binding || (!binding.worktree_path && !binding.tmux_session)) {
+    return { ok: false, error: "binding_incomplete" };
+  }
+  if (binding.worktree_path && (String(binding.worktree_path).includes("..") || /[;|&]/.test(String(binding.worktree_path)))) {
+    return { ok: false, error: "path_refused" };
+  }
+  if (isRuntimeAdoptionBlocked(binding)) {
+    return { ok: false, error: "runtime_adoption_blocked" };
+  }
+  const existing = findLaneByBinding({
+    worktreePath: binding.worktree_path,
+    tmuxSession: binding.tmux_session,
+    root,
+  });
+  if (existing && existing.lane_id !== rec.lane_id) {
+    return { ok: false, error: "already_connected", lane: existing };
+  }
+  rec.binding = normalizeBinding(binding, { root, previous: rec.binding });
+  /*
+   * BINDING IS WHEN A LANE LEARNS WHICH INSTRUCTION IT READS.
+   *
+   * A lane's canonical instruction comes from its worktree, so the moment the
+   * worktree is (re)bound is the moment the baseline is knowable — and it is the
+   * resumed-lane seam DevOps 8 names. Measured here rather than carried over:
+   * rebinding to a different worktree can legitimately change the baseline, and
+   * keeping the old pointer would report agreement with a file this lane no
+   * longer reads.
+   *
+   * Unmeasurable stays unrecorded. A binding with no readable CLAUDE.md leaves
+   * whatever was there alone rather than erasing a good pointer with a null.
+   */
+  const stamp = instructionBaselineStampFor(rec.binding?.worktree_path || null, nowMs);
+  if (stamp && stamp.baseline_version !== (rec.instruction_baseline?.baseline_version ?? null)) {
+    const previous = rec.instruction_baseline?.baseline_version ?? null;
+    rec.instruction_baseline = previous ? { ...stamp, previous_version: previous } : stamp;
+  }
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec };
+}
+
+export function directorRuntimeRoot() {
+  const explicit = process.env.ALLOY_DIRECTOR_RUNTIME_ROOT?.trim();
+  if (explicit) return explicit;
+  const home = join(homedir(), ".local", "state", "alloy-dev");
+  const current = (process.env.ALLOY_RUNTIME_ROOT || "").trim().replace(/\/+$/, "");
+  if (current === join(home, "gateway")) return home;
+  return current || home;
+}
+
+function projectMissionsFromLog(logPath) {
+  let lines = [];
+  try { lines = readFileSync(logPath, "utf8").split("\n").filter(Boolean); } catch { return []; }
+  const byId = new Map();
+  for (const line of lines) {
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    const id = e.mission_id;
+    if (!id) continue;
+    if (e.event === "created") {
+      const { event: _e, ...rec } = e;
+      byId.set(id, rec);
+    } else {
+      const cur = byId.get(id);
+      if (cur) {
+        const { event: _ev, mission_id: _mid, ...p } = e;
+        Object.assign(cur, p);
+      }
+    }
+  }
+  return [...byId.values()];
+}
+
+export function resolveMissionRecord(missionId, root = runtimeRoot()) {
+  const id = String(missionId || "").trim();
+  if (!id) return null;
+  const roots = [...new Set([root, directorRuntimeRoot()].filter(Boolean))];
+  for (const r of roots) {
+    const list = projectMissionsFromLog(join(r, "vacilando", "missions", "missions.jsonl"));
+    const hit = list.find((m) => m.mission_id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+export function resolveIdentityMissionId(root = runtimeRoot()) {
+  const envId = process.env.VACILANDO_IDENTITY_MISSION_ID?.trim();
+  if (envId) return envId;
+  const roots = [...new Set([root, directorRuntimeRoot()].filter(Boolean))];
+  const live = [];
+  for (const r of roots) {
+    for (const m of projectMissionsFromLog(join(r, "vacilando", "missions", "missions.jsonl"))) {
+      if (m?.archived) continue;
+      const title = String(m.title || "");
+      if (/demo|certification|fixture/i.test(title)) continue;
+      if (!/Access & Identity V2/i.test(title)) continue;
+      if (/Operational Closeout/i.test(title)) continue;
+      if (["completed", "failed", "stopped", "closed"].includes(m.status)) continue;
+      live.push(m);
+    }
+  }
+  const exactExecuting = live.find((m) =>
+    /^Access & Identity V2$/i.test(String(m.title || ""))
+    && (m.status === "executing" || m.status === "running")
+  );
+  if (exactExecuting) return exactExecuting.mission_id;
+  const executing = live.find((m) => m.status === "executing" || m.status === "running");
+  return executing?.mission_id || live[0]?.mission_id || null;
+}
+
+export function bindLaneMission(laneId, missionId, {
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  requireExisting = false,
+  origin = "operator",
+} = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const id = String(missionId || "").trim();
+  if (!id) return { ok: false, error: "missing_mission_id" };
+  if (requireExisting && !resolveMissionRecord(id, root)) {
+    return { ok: false, error: "mission_not_found" };
+  }
+  const previous = rec.mission_id || null;
+  rec.mission_id = id;
+  rec.mission_bound_at = iso(nowMs);
+  rec.mission_bound_origin = origin;
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec, previous_mission_id: previous, rebound: Boolean(previous && previous !== id) };
+}
+
+export function missionIdForLane(laneId, root = runtimeRoot()) {
+  return getDurableLane(laneId, root)?.mission_id || null;
+}
+
+/**
+ * Bind known persistent lanes to existing durable missions. Does not create missions.
+ */
+export function ensureKnownLaneMissionBindings({ nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(IDENTITY_LANE_ID, root)
+    || getDurableLane(IDENTITY_TMUX, root)
+    || listDurableLanes(root).find((l) => l.name === IDENTITY_LANE_NAME);
+  if (!rec) return { ok: true, bound: false, skipped: "no_identity_lane" };
+  if (rec.mission_id) return { ok: true, bound: true, skipped: "already_bound", lane: rec };
+  const missionId = resolveIdentityMissionId(root);
+  if (!missionId) return { ok: false, error: "identity_mission_not_found" };
+  return bindLaneMission(rec.lane_id, missionId, {
+    nowMs,
+    root,
+    requireExisting: true,
+    origin: "backfill",
+  });
+}
+
+export function renameDurableLane(laneId, name, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const named = validateLaneName(name);
+  if (!named.ok) return named;
+  const previous = rec.name;
+  rec.name = named.name;
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec, previous_name: previous, substrate_mutated: false };
+}
+
+export function setLanePreferredProvider(laneId, provider, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const next = normalizeExecutionProvider(provider, "");
+  if (!next) return { ok: false, error: "unsupported_provider" };
+  rec.preferred_provider = next;
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec };
+}
+
+export function setDurableLaneExecutionCapacity(laneId, capacity, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  rec.execution_capacity = capacity && typeof capacity === "object" ? { ...capacity } : null;
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec };
+}
+
+/**
+ * Free temporary slot/tmux ownership. Keep durable identity and worktree/branch.
+ * Does not delete Git worktrees or branches.
+ */
+export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const previousSlot = rec.binding?.slot ?? null;
+  rec.binding = {
+    type: rec.binding?.type || "alloy_local",
+    node_id: rec.binding?.node_id || null,
+    worktree_path: rec.binding?.worktree_path || null,
+    worktree_name: rec.binding?.worktree_name || null,
+    branch: rec.binding?.branch || null,
+    tmux_session: null,
+    tmux_pane: null,
+    // THE SLOT IS LANE-LIFETIME, NOT CAPACITY-LIFETIME.
+    //
+    // This nulled it, and the worktree registration did not: the registry said
+    // Runtime Performance was slot 1 while its own lane binding said it had no
+    // slot at all. Two answers to one question, and the Gateway could read
+    // either. What a capacity release ends is the SESSION — tmux, pane,
+    // admission — not the lane's ownership of its slot and port, which end only
+    // when the lane itself closes.
+    slot: rec.binding?.slot ?? null,
+    port: rec.binding?.port ?? null,
+    provider: normalizeExecutionProvider(rec.binding?.provider, "claude") || "claude",
+    stale: true,
+    status: "idle",
+    last_node_id: rec.binding?.node_id || rec.binding?.last_node_id || null,
+  };
+  rec.execution_capacity = {
+    state: "IDLE",
+    released_at: iso(nowMs),
+    // The CAPACITY holds no slot once released; the LANE still owns one.
+    slot: null,
+  };
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec, previous_slot: previousSlot };
+}
+
+function remapJsonFile(path, from, to) {
+  if (!existsSync(path) || from === to) return false;
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8"));
+    const text = JSON.stringify(raw);
+    if (!text.includes(from)) return false;
+    const next = JSON.parse(JSON.stringify(raw));
+    if (next.lanes && next.lanes[from] && !next.lanes[to]) {
+      next.lanes[to] = next.lanes[from];
+      delete next.lanes[from];
+      if (Array.isArray(next.lanes[to]?.runs)) {
+        for (const run of next.lanes[to].runs) {
+          if (run && run.lane_id === from) run.lane_id = to;
+        }
+      }
+      if (Array.isArray(next.lanes[to]?.sessions)) {
+        for (const s of next.lanes[to].sessions) {
+          if (s && s.lane_id === from) s.lane_id = to;
+        }
+      }
+    }
+    atomicWrite(path, next);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function remapGovernorLaneIdentity(fromId, toId, root = runtimeRoot()) {
+  const from = String(fromId || "");
+  const to = String(toId || "");
+  if (!from || !to || from === to) return { ok: true, remapped: [] };
+  const base = join(root, "vacilando");
+  const remapped = [];
+  for (const rel of [
+    ["execution-runs", "runs.json"],
+    ["execution-runs", "agent-sessions.json"],
+    ["lane-runtime", "sends.json"],
+  ]) {
+    const p = join(base, ...rel);
+    if (remapJsonFile(p, from, to)) remapped.push(rel.join("/"));
+  }
+  const admissionPath = join(base, "execution-runs", "admissions.json");
+  if (existsSync(admissionPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(admissionPath, "utf8"));
+      let changed = false;
+      for (const rec of raw.requests || []) {
+        if (rec?.lane_id === from) {
+          rec.lane_id = to;
+          changed = true;
+        }
+      }
+      if (changed) {
+        atomicWrite(admissionPath, raw);
+        remapped.push("admissions.json");
+      }
+    } catch { /* */ }
+  }
+  const reqPath = join(base, "execution-runs", "resource-requests.json");
+  if (existsSync(reqPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(reqPath, "utf8"));
+      let changed = false;
+      for (const rec of raw.requests || []) {
+        if (rec?.lane_id === from) {
+          rec.lane_id = to;
+          changed = true;
+        }
+      }
+      if (changed) {
+        atomicWrite(reqPath, raw);
+        remapped.push("resource-requests.json");
+      }
+    } catch { /* */ }
+  }
+  const exclusivePath = join(base, "execution-runs", "machine-exclusive.json");
+  if (existsSync(exclusivePath)) {
+    try {
+      const raw = JSON.parse(readFileSync(exclusivePath, "utf8"));
+      if (raw?.window?.lane_id === from) {
+        raw.window.lane_id = to;
+        atomicWrite(exclusivePath, raw);
+        remapped.push("machine-exclusive.json");
+      }
+    } catch { /* */ }
+  }
+  const handoffPath = join(base, "execution-runs", "agent-handoffs.json");
+  if (existsSync(handoffPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(handoffPath, "utf8"));
+      let changed = false;
+      for (const rec of Object.values(raw?.handoffs || {})) {
+        if (rec?.lane_id === from) {
+          rec.lane_id = to;
+          changed = true;
+        }
+      }
+      if (changed) {
+        atomicWrite(handoffPath, raw);
+        remapped.push("agent-handoffs.json");
+      }
+    } catch { /* */ }
+  }
+  return { ok: true, remapped };
+}
+
+export function adoptLegacyIdentityLane({
+  observation = null,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const existing = getDurableLane(IDENTITY_TMUX, root) || findLaneByBinding({
+    tmuxSession: IDENTITY_TMUX,
+    worktreePath: observation?.worktree?.path,
+    root,
+  });
+  if (existing) return { ok: true, lane: existing, migrated: false };
+  const created = createDurableLane({
+    name: IDENTITY_LANE_NAME,
+    origin: "migrated",
+    aliases: [IDENTITY_TMUX],
+    nowMs,
+    root,
+    binding: {
+      type: "alloy_local",
+      worktree_path: observation?.worktree?.path || null,
+      worktree_name: observation?.worktree?.name || "wt1-access-identity-v2",
+      branch: observation?.git?.branch || null,
+      tmux_session: IDENTITY_TMUX,
+      tmux_pane: observation?.tmux?.pane_id || null,
+      slot: observation?.slot ?? 1,
+      provider: normalizeExecutionProvider(observation?.provider, "claude") || "claude",
+    },
+  });
+  if (!created.ok) return created;
+  remapGovernorLaneIdentity(IDENTITY_TMUX, created.lane.lane_id, root);
+  return { ok: true, lane: created.lane, migrated: true };
+}
+
+export function connectExistingWork({
+  candidate,
+  name,
+  startClaude = false,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  if (!candidate?.worktree_path && !candidate?.tmux_session) {
+    return { ok: false, error: "candidate_incomplete" };
+  }
+  const path = String(candidate.worktree_path || "");
+  if (path && (path.includes("..") || /[;|&]/.test(path))) {
+    return { ok: false, error: "path_refused" };
+  }
+  if (isRuntimeAdoptionBlocked(candidate)) {
+    return { ok: false, error: "runtime_adoption_blocked" };
+  }
+  const bound = findLaneByBinding({
+    worktreePath: candidate.worktree_path,
+    tmuxSession: candidate.tmux_session,
+    root,
+  });
+  if (bound) {
+    return {
+      ok: false,
+      error: "already_connected",
+      lane: bound,
+      lane_id: bound.lane_id,
+      name: bound.name,
+    };
+  }
+  const aliases = [];
+  if (candidate.tmux_session) aliases.push(candidate.tmux_session);
+  const created = createDurableLane({
+    name: name || candidate.suggested_name || candidate.worktree_name,
+    origin: "adopted",
+    aliases,
+    nowMs,
+    root,
+    binding: {
+      worktree_path: candidate.worktree_path,
+      worktree_name: candidate.worktree_name,
+      branch: candidate.branch,
+      tmux_session: candidate.tmux_session || null,
+      tmux_pane: candidate.tmux_pane || null,
+      slot: candidate.slot,
+      provider: normalizeExecutionProvider(candidate.provider, "claude") || "claude",
+    },
+  });
+  if (!created.ok) return created;
+  if (candidate.tmux_session) {
+    remapGovernorLaneIdentity(candidate.tmux_session, created.lane.lane_id, root);
+  }
+  return {
+    ok: true,
+    lane: created.lane,
+    start_claude: Boolean(startClaude),
+    start_claude_implemented: false,
+    substrate_mutated: false,
+  };
+}
+
+export function validateRuntimeBinding(rec, observation) {
+  const blockers = [];
+  const binding = rec?.binding;
+  if (binding?.stale || binding?.status === "stale" || binding?.status === "unbound") {
+    blockers.push({ code: "binding_stale", detail: "Execution binding is stale and must be rebound on this node" });
+  }
+  if (!binding?.worktree_path) blockers.push({ code: "missing_worktree", detail: "Lane has no worktree binding" });
+  else if (!existsSync(binding.worktree_path)) blockers.push({ code: "worktree_missing", detail: "Bound worktree path does not exist" });
+  if (observation?.worktree?.path && binding?.worktree_path && observation.worktree.path !== binding.worktree_path) {
+    blockers.push({ code: "worktree_mismatch", detail: "Live pane cwd is not the bound worktree" });
+  }
+  if (binding?.tmux_session && observation?.tmux?.session && observation.tmux.session !== binding.tmux_session) {
+    blockers.push({ code: "tmux_mismatch", detail: "Live tmux session does not match binding" });
+  }
+  return { ok: blockers.length === 0, blockers, binding };
+}
+
+/**
+ * Mark host-specific binding fields invalid without deleting the lane.
+ * Keeps last-known worktree/branch as historical context.
+ */
+export function invalidateStaleExecutionBindings({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  reason = "host_rebinding",
+  currentNodeId = null,
+} = {}) {
+  const store = readDevelopmentLaneStore(root);
+  let invalidated = 0;
+  for (const rec of Object.values(store.lanes || {})) {
+    if (!rec || rec.status === "ARCHIVED") continue;
+    if (!rec.binding) continue;
+    const nodeMatch = currentNodeId && rec.binding.node_id === currentNodeId && rec.binding.stale !== true;
+    if (nodeMatch && reason !== "restored_onto_different_node") continue;
+    rec.binding = {
+      ...rec.binding,
+      tmux_session: null,
+      tmux_pane: null,
+      slot: null,
+      stale: true,
+      status: "stale",
+      last_node_id: rec.binding.node_id || rec.binding.last_node_id || null,
+      node_id: null,
+      invalidated_at: iso(nowMs),
+      invalidated_reason: reason,
+    };
+    rec.updated_at = iso(nowMs);
+    store.lanes[rec.lane_id] = rec;
+    invalidated += 1;
+  }
+  writeStore(store, root);
+  return { ok: true, invalidated };
+}
+
+/**
+ * Same durable lane, new execution substrate on the current node.
+ * Does not create a new lane. Does not mutate Git.
+ */
+export function rebindDurableLane(laneId, binding, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const out = bindDurableLane(laneId, binding, { nowMs, root });
+  if (!out.ok) return out;
+  return { ...out, lane_id: rec.lane_id, substrate_mutated: false, git_mutated: false };
+}
+
+export function findVacilandoSpecialistLane(root = runtimeRoot()) {
+  for (const rec of listDurableLanes(root)) {
+    if ((rec.aliases || []).includes(VACILANDO_LANE_ALIAS)) return rec;
+    if (rec.work_class === WORK_CLASS_RUNTIME_SELF && rec.name === VACILANDO_LANE_NAME) return rec;
+  }
+  return null;
+}
+
+/**
+ * Permanent specialist lane for Vacilando-runtime work. Same identity model
+ * as other specialist lanes — not a special-cased object type.
+ */
+export function ensureVacilandoSpecialistLane({
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const existing = findVacilandoSpecialistLane(root);
+  if (existing) {
+    let dirty = false;
+    if (existing.work_class !== WORK_CLASS_RUNTIME_SELF) {
+      existing.work_class = WORK_CLASS_RUNTIME_SELF;
+      dirty = true;
+    }
+    if (typeof existing.scarce_resource_priority !== "number"
+        || existing.scarce_resource_priority > RUNTIME_SELF_RESOURCE_PRIORITY) {
+      existing.scarce_resource_priority = RUNTIME_SELF_RESOURCE_PRIORITY;
+      dirty = true;
+    }
+    const aliases = new Set(existing.aliases || []);
+    if (!aliases.has(VACILANDO_LANE_ALIAS)) {
+      aliases.add(VACILANDO_LANE_ALIAS);
+      existing.aliases = [...aliases];
+      dirty = true;
+    }
+    if (dirty) {
+      existing.updated_at = iso(nowMs);
+      const store = readDevelopmentLaneStore(root);
+      store.lanes[existing.lane_id] = existing;
+      writeStore(store, root);
+    }
+    return { ok: true, lane: existing, created: false };
+  }
+  return {
+    ...createDurableLane({
+      name: VACILANDO_LANE_NAME,
+      description: "Owns Vacilando development-runtime improvements. Lower scarce-resource priority than Alloy product work.",
+      origin: "created",
+      aliases: [VACILANDO_LANE_ALIAS],
+      work_class: WORK_CLASS_RUNTIME_SELF,
+      scarce_resource_priority: RUNTIME_SELF_RESOURCE_PRIORITY,
+      nowMs,
+      root,
+    }),
+    created: true,
+  };
+}
+
+export function publicDurableLane(rec) {
+  if (!rec) return null;
+  return {
+    lane_id: rec.lane_id,
+    name: rec.name,
+    description: rec.description,
+    status: rec.status,
+    aliases: rec.aliases || [],
+    binding: rec.binding,
+    origin: rec.origin,
+    work_class: rec.work_class || WORK_CLASS_PRODUCT,
+    scarce_resource_priority: typeof rec.scarce_resource_priority === "number"
+      ? rec.scarce_resource_priority
+      : (rec.work_class === WORK_CLASS_RUNTIME_SELF ? RUNTIME_SELF_RESOURCE_PRIORITY : 0),
+    created_at: rec.created_at,
+    updated_at: rec.updated_at,
+    mission_id: rec.mission_id || null,
+    mission_bound_at: rec.mission_bound_at || null,
+    preferred_provider: normalizeExecutionProvider(rec.preferred_provider || rec.binding?.provider, "claude") || "claude",
+    execution_capacity: rec.execution_capacity || null,
+    folder_id: rec.folder_id || null,
+    repository_id: rec.repository_id || null,
+  };
+}
+
+/**
+ * Attribute a lane to a repository.
+ *
+ * Deliberately NOT reachable from folder reorganisation: moving a lane between
+ * folders is presentation, moving it between repositories changes where its
+ * provider is allowed to run. `expectCurrent` makes a rebind explicit — a
+ * caller must state what it believes the current attribution is.
+ */
+export function setLaneRepository(laneId, repositoryId, {
+  expectCurrent = undefined,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const store = readDevelopmentLaneStore(root);
+  const id = canonicalLaneStoreId(laneId, root);
+  const rec = store.lanes?.[id] || store.lanes?.[String(laneId || "")];
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const current = rec.repository_id || null;
+  if (expectCurrent !== undefined && current !== expectCurrent) {
+    return { ok: false, error: "repository_attribution_conflict", current };
+  }
+  rec.repository_id = repositoryId ? String(repositoryId) : null;
+  rec.updated_at = iso(nowMs);
+  writeStore(store, root);
+  return { ok: true, lane_id: rec.lane_id, repository_id: rec.repository_id, previous: current };
+}
+
+/**
+ * A TEST RESET MAY NEVER WIPE THE LIVE CONTROL PLANE.
+ *
+ * This defaulted to `runtimeRoot()`, which is `ALLOY_RUNTIME_ROOT` — and in any
+ * worker shell that variable points at the LIVE gateway root. So every test that
+ * called this without an explicit root wrote an empty store over the real lane
+ * registry, and eleven call sites across six suites do exactly that.
+ *
+ * That is what actually destroyed state on this host: lanes.json and runs.json
+ * emptied in the same second, twice, each time moments after a test sweep ran —
+ * 20 registered lanes and every run, gone. It was diagnosed at first as a
+ * transient unreadable read being persisted as emptiness. It was not. It was the
+ * test helper doing precisely what it was asked to do, against production.
+ *
+ * Refusing loudly rather than silently: a suite that tries to wipe the live
+ * control plane has a bug worth failing on, and a silent no-op would leave it
+ * reading real state while believing it had a clean one. Runs with no
+ * ALLOY_RUNTIME_ROOT set are unaffected.
+ */
+export function assertResettableRoot(root, what = "store") {
+  if (/(^|\/)gateway\/?$/.test(String(root || ""))) {
+    throw new Error(
+      `refusing to reset the ${what} at ${root}: that is the live gateway root, not a test root. `
+      + "Pass an explicit temporary root to the reset helper.",
+    );
+  }
+}
+
+export function resetDevelopmentLanesForTests(root = runtimeRoot()) {
+  assertResettableRoot(root, "development lane store");
+  writeStore(emptyStore(), root);
+}
+
+/**
+ * Host-portability rebind: same durable lane, new execution substrate.
+ * Not remote workload migration.
+ */
+export const HOST_REBIND_CONTRACT = Object.freeze({
+  implemented: true,
+  retains: [
+    "durable lane_id",
+    "operator name",
+    "aliases",
+    "work_class",
+    "historical Execution Runs",
+    "historical Agent Sessions",
+  ],
+  invalidates: [
+    "tmux session",
+    "slot",
+    "pane",
+    "live node claim",
+  ],
+});
+
+export const FUTURE_REBIND_CONTRACT = Object.freeze({
+  implemented: false,
+  requires: [
+    "no active Execution Run or an explicit continuation policy",
+    "no GRANTED scarce resource",
+    "no DELIVERING continuation",
+    "old runtime binding detached",
+    "new binding uniquely owned",
+  ],
+  retains: [
+    "durable lane_id",
+    "operator name",
+    "historical Execution Runs",
+    "historical Agent Sessions",
+    "cost/usage history",
+    "notification identity",
+  ],
+});

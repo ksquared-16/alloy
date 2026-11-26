@@ -10,7 +10,6 @@ import {
     Calendar,
     ChevronDown,
     ChevronRight,
-    ClipboardList,
     Database,
     DollarSign,
     FileText,
@@ -35,7 +34,6 @@ import {
 } from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
-import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
 import {
     EntityLabelsProvider,
@@ -64,30 +62,26 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         label: "Data model",
         icon: Database,
         items: [
-            { href: "/legacy-admin/system/option-sets", label: "Option sets" },
-            { href: "/legacy-admin/system/field-sections", label: "Field sections" },
-            { href: "/admin/settings/layouts", label: "Layouts (V2)" },
+            { href: "/settings/option-sets", label: "Option sets" },
+            { href: "/settings/field-sections", label: "Field sections" },
+            { href: "/settings/surfaces", label: "Surfaces" },
             {
                 label: "Fields",
                 subItems: [
-                    { href: "/legacy-admin/system/person-fields", label: "Person fields" },
-                    { href: "/legacy-admin/system/location-fields", label: "Location fields" },
-                    { href: "/legacy-admin/system/customer-fields", label: "Customer fields" },
-                    { href: "/legacy-admin/system/job-fields", label: "Job fields" },
-                    { href: "/legacy-admin/system/opportunity-fields", label: "Opportunity fields" },
-                    { href: "/legacy-admin/system/vendor-fields", label: "Vendor fields" },
-                    { href: "/legacy-admin/system/schedule-fields", label: "Schedule fields" },
-                    { href: "/legacy-admin/system/document-fields", label: "Document fields" },
+                    { href: "/settings/fields?entity=person", label: "Person fields" },
+                    { href: "/settings/fields?entity=location", label: "Location fields" },
+                    { href: "/settings/fields?entity=customer", label: "Customer fields" },
+                    { href: "/settings/fields?entity=opportunity", label: "Lead fields" },
+                    { href: "/settings/fields", label: "All fields" },
                 ],
             },
-            { href: "/legacy-admin/system/statuses", label: "Statuses" },
-            { href: "/legacy-admin/system/pipelines", label: "Pipelines & stages" },
+            { href: "/settings/statuses", label: "Statuses" },
+            { href: "/settings/processes", label: "Processes" },
             {
                 label: "Relationships",
                 subItems: [
-                    { href: "/legacy-admin/system/customer-person-roles", label: "Customer person roles" },
-                    { href: "/legacy-admin/system/person-relationship-types", label: "Person relationship types" },
-                    { href: "/legacy-admin/system/db-relationships", label: "DB relationships" },
+                    { href: "/settings/relationships?tab=family-roles", label: "Family roles" },
+                    { href: "/settings/relationships?tab=person-relationships", label: "Person relationships" },
                 ],
             },
         ],
@@ -116,7 +110,6 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                     { href: "/legacy-admin/locations", label: "Locations", entityType: "locations" },
                 ],
             },
-            { href: "/admin/forms", label: "Forms" },
             { href: "/legacy-admin/documents", label: "Documents", entityType: "documents" },
             {
                 label: "Money",
@@ -142,21 +135,19 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         icon: LayoutTemplate,
         items: [
             { href: "/workspace", label: "V2 workspace (cleaning slice)" },
-            { href: "/legacy-admin/system/entity-labels", label: "Entity labels" },
+            { href: "/settings/entities", label: "Entities" },
         ],
     },
     {
         label: "Organization",
         icon: Building2,
         items: [
-            { href: "/legacy-admin/system", label: "System overview" },
-            { href: "/legacy-admin/system/access-control", label: "Access control" },
+            { href: "/settings", label: "Platform Configuration" },
+            { href: "/settings/users-roles", label: "Users & Roles" },
             { href: "/legacy-admin/users", label: "Users" },
-            { href: "/legacy-admin/system/roles", label: "Roles" },
+            { href: "/settings/work-units", label: "Work units (diagnostic)" },
             { href: "/legacy-admin/verticals", label: "Verticals" },
-            { href: "/legacy-admin/system/verticals-industries", label: "Industries" },
-            { href: "/legacy-admin/system/departments", label: "Departments" },
-            { href: "/legacy-admin/system/work-units", label: "Work units" },
+            { href: "/legacy-admin/system/verticals-industries", label: "Industries (diagnostic)" },
             { href: "/legacy-admin/operations/recurrence", label: "Recurrence" },
             {
                 label: "Commercial",
@@ -189,7 +180,6 @@ function getLinkIcon(href: string, _label: string, nestedLabel?: string): IconCo
         "/admin/opportunities": LayoutGrid,
         "/admin/jobs": Briefcase,
         "/admin/schedules": Calendar,
-        "/adminV2/forms": ClipboardList,
         "/admin/documents": FileText,
         "/admin/locations": MapPin,
         "/admin/messaging": MessageSquare,
@@ -327,7 +317,6 @@ function AdminLayoutInner({ children, userEmail, role }: { children: ReactNode; 
             "/admin/system/opportunity-fields",
             "/admin/system/vendor-fields",
             "/admin/system/schedule-fields",
-            "/admin/system/document-fields",
         ];
         if (customFieldPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev["Data model::Fields"] === false ? prev : { ...prev, "Data model::Fields": false }));
@@ -621,7 +610,6 @@ function AdminLayoutInner({ children, userEmail, role }: { children: ReactNode; 
                     <div className="p-8 flex-1">
                         <AdminDrawerProvider>
                             {children}
-                            <AdminEntityDrawer />
                         </AdminDrawerProvider>
                     </div>
                 </main>

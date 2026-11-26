@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { draftConsumption, previewConsumption } from "@/lib/operationalConsumption/consumptionService";
 import type { OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
 import {
+    commercialTuitionSeed,
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
     type OperationalEnrollmentMockStore,
+    withCanonicalBillingChain,
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
 
 const TODAY = "2026-06-29";
@@ -48,15 +50,25 @@ function eventTypes() {
     ];
 }
 function setup(over?: Partial<OperationalEnrollmentMockStore>) {
-    const store = createOperationalEnrollmentMockStore({
+    // Phase 9 — Commercial config reproduces the attendance rates (drop_in=9000/day, hourly=1500/hr).
+    const commercial = commercialTuitionSeed({
+        orgId: ORG_ID,
+        agreementId: AGREEMENT,
+        rates: [
+            { basis: "drop_in", cadenceKey: "daily", rateCents: 9000 },
+            { basis: "hourly", cadenceKey: "hourly", rateCents: 1500 },
+        ],
+    });
+    const store = createOperationalEnrollmentMockStore(withCanonicalBillingChain({
         financial_charge_templates: charkeTemplates(),
         childcare_rate_plans: [ratePlan()],
         childcare_rate_rules: rateRules(),
         consumption_event_types: eventTypes(),
         child_enrollment_agreements: [{ id: AGREEMENT, org_id: ORG_ID, site_location_id: SITE, status: "active", start_date: "2026-01-01", customer_member_id: "mem-1" }],
         financial_policies: [{ id: "pol-rev", org_id: ORG_ID, scope_type: "org", policy_type: "posting_review", value: { required: false }, is_active: true, effective_start: "2026-01-01", effective_end: null, metadata: {} }],
+        ...commercial,
         ...over,
-    });
+    }));
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
 }
 
@@ -131,9 +143,17 @@ describe("attendance consumption — other scenarios through the same pipeline",
         expect(store.charges[0]).toMatchObject({ amount_cents: 4500 });
     });
 
-    it("absence + vacation eligibility → a preview-only vacation credit (no draft charge)", async () => {
-        const { store, supabase } = setup();
-        const r = await draftConsumption(supabase, ORG_ID, attFact({ attendanceFactType: "absence", vacationEligible: true }), TODAY, "user-1");
+    it("absence under a vacation_credit policy → a preview-only vacation credit (no draft charge)", async () => {
+        // The credit now comes from configuration, so the store must carry it.
+        const { store, supabase } = setup({
+            financial_policies: [{
+                id: "pol-vac", org_id: ORG_ID, policy_type: "vacation_credit", scope_type: "org",
+                location_id: null, service_id: null, rate_plan_id: null,
+                value: { treatment: "credit" }, effective_start: "2026-01-01", effective_end: null,
+                label: null, description: null, metadata: {},
+            }],
+        });
+        const r = await draftConsumption(supabase, ORG_ID, attFact({ attendanceFactType: "absence" }), TODAY, "user-1");
         expect(r.resolution.obligations[0]).toMatchObject({ obligationKind: "vacation_credit", draftable: false });
         expect(store.charges).toHaveLength(0);
     });

@@ -1,0 +1,591 @@
+{
+  "schema": "alloy.qa_workflow_setup.vectors.v1",
+  "contract": "alloy.qa_workflow_setup.v1",
+  "judge": "web/scripts/qa/qaWorkflowSetupContract.mjs judgeQaSetupRecord",
+  "accept": [
+    {
+      "name": "historical: one admin session, auth probe, preview",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      }
+    },
+    {
+      "name": "isolated: one sessionless admin, no preview",
+      "record": {
+        "workflow": "financials_isolated_tests",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": false
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "none",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": false
+      }
+    }
+  ],
+  "refuse": [
+    {
+      "name": "today's bp_v2 open (4 personas, 11 identities, custom role, 4 /workspace renders)",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          },
+          {
+            "key": "director",
+            "identity": "qa_pool_02",
+            "roles": [
+              "ops",
+              "school_director"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-02@example.com"
+          },
+          {
+            "key": "restricted_operator",
+            "identity": "qa_pool_03",
+            "roles": [
+              "ops",
+              "school_director"
+            ],
+            "scope": "restricted",
+            "session": true,
+            "identity_email": "qa-pool-03@example.com"
+          },
+          {
+            "key": "no_finance_operator",
+            "identity": "qa_pool_04",
+            "roles": [
+              "qa_bp_no_finance"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-04@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01",
+          "qa_pool_02",
+          "qa_pool_03",
+          "qa_pool_04",
+          "qa_pool_05",
+          "qa_pool_06",
+          "qa_pool_07",
+          "qa_pool_08",
+          "qa_pool_09",
+          "qa_secondary_admin"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [
+          "qa_bp_no_finance"
+        ],
+        "session_verification": {
+          "kind": "preview_page_render",
+          "page_renders": [
+            "/workspace",
+            "/workspace",
+            "/workspace",
+            "/workspace"
+          ]
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_page_render"
+    },
+    {
+      "name": "an email or SMS was sent",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 1,
+        "preview": true
+      },
+      "code": "qa_setup_send"
+    },
+    {
+      "name": "session verified by rendering /workspace",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": [
+            "/workspace"
+          ]
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_page_render"
+    },
+    {
+      "name": "an undeclared persona",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          },
+          {
+            "key": "director",
+            "identity": "qa_pool_02",
+            "roles": [
+              "ops"
+            ],
+            "scope": "all",
+            "session": false
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_undeclared_persona"
+    },
+    {
+      "name": "the declared persona is missing",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_declared_persona_missing"
+    },
+    {
+      "name": "the persona holds an extra role",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin",
+              "ops"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_persona_roles_mismatch"
+    },
+    {
+      "name": "the persona is site-restricted",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "restricted",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_persona_scope_mismatch"
+    },
+    {
+      "name": "every registry identity was created",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01",
+          "qa_pool_02",
+          "qa_secondary_admin"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_undeclared_identity"
+    },
+    {
+      "name": "an undeclared custom role",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [
+          "qa_bp_no_finance"
+        ],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_undeclared_custom_role"
+    },
+    {
+      "name": "session verification by a page, not the auth probe",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "preview_page_render",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_session_verification_not_minimal"
+    },
+    {
+      "name": "a session minted for a sessionless workflow",
+      "record": {
+        "workflow": "financials_isolated_tests",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "none",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": false
+      },
+      "code": "qa_setup_undeclared_session"
+    },
+    {
+      "name": "the declared session was not verified",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": false,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_declared_session_unverified"
+    },
+    {
+      "name": "the identity email is not bound for the session persona",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_identity_email_not_bound"
+    },
+    {
+      "name": "a preview for a workflow that renders nothing",
+      "record": {
+        "workflow": "financials_isolated_tests",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": false
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "none",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_preview_mismatch"
+    },
+    {
+      "name": "an unknown workflow",
+      "record": {
+        "workflow": "other",
+        "personas": [
+          {
+            "key": "admin",
+            "identity": "qa_pool_01",
+            "roles": [
+              "admin"
+            ],
+            "scope": "all",
+            "session": true,
+            "identity_email": "qa-pool-01@example.com"
+          }
+        ],
+        "identities_created": [
+          "qa_shared_actor",
+          "qa_pool_01"
+        ],
+        "org_actor": "qa_shared_actor",
+        "custom_roles": [],
+        "session_verification": {
+          "kind": "auth_user_probe",
+          "page_renders": []
+        },
+        "sends": 0,
+        "preview": true
+      },
+      "code": "qa_setup_workflow_unknown"
+    },
+    {
+      "name": "a malformed record",
+      "record": {
+        "workflow": "financials_historical_draft",
+        "personas": "admin"
+      },
+      "code": "qa_setup_record_malformed"
+    }
+  ]
+}

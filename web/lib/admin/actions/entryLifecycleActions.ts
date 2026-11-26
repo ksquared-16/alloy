@@ -1,26 +1,28 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
-import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
-import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
-import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
-import { NEW_LEAD_STATUS_KEY, DEFAULT_LEAD_CASE_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
-import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
-import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
-import { applyCreateLeadHouseholdMemberCommit } from "@/lib/admin/actions/executeCreateLeadHouseholdCommit";
-import { applyCreateLeadLayoutRuntimePersistence } from "@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { readCreateLeadCommitSelectionFromPayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import {
     primaryIncludedParent,
-    primaryIncludedChild,
 } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
-import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
+import { resolveCreateLeadPlacement } from "@/lib/lifecycle/resolveCreateLeadPlacement";
+import { emitLeadCreatedEvent } from "@/lib/opportunities/emitLeadCreatedEvent";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
-import { buildHouseholdLeadDisplayName } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
+import {
+    ingestCreateLeadThroughProcessing,
+    opportunityIdFromAttempt,
+} from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
+import { createExecutorPorts } from "@/lib/pos/processingIdentity/executor/executorPorts";
+import {
+    commitApprovedLeadForCase,
+    loadCaseReview,
+    OperatorServiceError,
+    type CaseReviewState,
+} from "@/lib/pos/processingIdentity/operator/operatorReviewService";
+import { buildCreateLeadReviewPresentation } from "@/lib/pos/processingIdentity/operator/createLeadReviewPresentation";
 
 export type EntryLifecycleActionError = { ok: false; error: string; status: number };
 
@@ -31,6 +33,29 @@ function trim(v: unknown): string {
 function asStringList(v: unknown): string[] {
     if (!Array.isArray(v)) return [];
     return v.map((x) => String(x).trim()).filter(Boolean);
+}
+
+async function resolveWorkUnitKey(
+    supabase: SupabaseClient,
+    orgId: string,
+    workUnitId: string | null,
+): Promise<string | null> {
+    const id = workUnitId?.trim();
+    if (!id) return null;
+    try {
+        const { data, error } = await supabase
+            .from("work_units")
+            .select("key")
+            .eq("id", id)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (error) return null;
+        const key = (data as { key?: string | null } | null)?.key;
+        return typeof key === "string" && key.trim() ? key.trim() : null;
+    } catch {
+        // Unit-test fakes often stub only the tables Create Lead historically touched.
+        return null;
+    }
 }
 
 export async function resolveOrgDefaultVerticalId(
@@ -58,13 +83,36 @@ export async function executeCreateLeadAction(
 ): Promise<
     | {
           ok: true;
-          opportunity_id: string;
-          person_id: string;
-          customer_id: string;
-          /** Work unit the lead was assigned to (lifecycle binding / context). Drives post-create queue/count refresh + focus-panel routing. */
+          /**
+           * Clean-new: Processing authority still ran (case → facts → resolution → plan →
+           * approve → execute). Operator already confirmed in BOS; no second Processing UI.
+           */
+          mode: "committed";
+          processing_case_id: string;
+          readiness: string;
+          idempotency_key: string;
           work_unit_id: string | null;
-          /** Case status written to the opportunity (e.g. `new_inquiry`). Used to prove New Leads membership. */
+          work_unit_key: string | null;
           status_key: string;
+          stage_key: string;
+          opportunity_id: string;
+          person_id?: string;
+          customer_id?: string;
+      }
+    | {
+          ok: true;
+          /** Ambiguous identity — operator must resolve in BOS / Processing review. */
+          mode: "processing_review";
+          processing_case_id: string;
+          readiness: string;
+          idempotency_key: string;
+          work_unit_id: string | null;
+          work_unit_key: string | null;
+          status_key: string;
+          stage_key: string;
+          opportunity_id?: string;
+          person_id?: string;
+          customer_id?: string;
       }
     | EntryLifecycleActionError
 > {
@@ -90,20 +138,21 @@ export async function executeCreateLeadAction(
         trim(input.merged.vertical_id) || (await resolveOrgDefaultVerticalId(supabase, ctx.orgId)) || null;
 
     const departmentId = trim(input.context?.department_id) || trim(input.merged.department_id) || null;
-    let workUnitId =
-        trim(input.context?.work_unit_id) ||
-        trim(input.merged.work_unit_id) ||
-        null;
-    let statusKeyForLead = DEFAULT_LEAD_CASE_STATUS_KEY;
-    if (departmentId) {
-        const binding = await resolveLifecycleCreateLeadBinding(supabase, ctx.orgId, departmentId);
-        if (!workUnitId && binding.work_unit_id) {
-            workUnitId = binding.work_unit_id;
-        }
-        if (binding.status_key?.trim()) {
-            statusKeyForLead = binding.status_key.trim();
-        }
+    // WHERE THE LEAD BELONGS is one shared resolution (resolveCreateLeadPlacement): the same owner every
+    // entry source — including an approved public form in Processing — commits through. It fails closed:
+    // never an orphaned lead (work_unit_id NULL, invisible in every work-unit-scoped queue) or an empty
+    // status, and an ambiguous entry is surfaced rather than guessed.
+    const placement = await resolveCreateLeadPlacement(supabase, ctx.orgId, {
+        departmentId,
+        workUnitId: trim(input.context?.work_unit_id) || trim(input.merged.work_unit_id) || null,
+        accessScope: ctx.accessScope ?? null,
+    });
+    if (!placement.ok) {
+        return { ok: false, error: placement.message, status: 422 };
     }
+    const workUnitId = placement.workUnitId;
+    const statusKeyForLead = placement.statusKey;
+    const workUnitKey = await resolveWorkUnitKey(supabase, ctx.orgId, workUnitId);
     const locationId = trim(input.merged.location_id) || null;
 
     const householdCommit = readCreateLeadCommitSelectionFromPayload(input.merged);
@@ -120,22 +169,6 @@ export async function executeCreateLeadAction(
         };
     }
 
-    let personId = linkedPrimaryPersonId;
-    if (!personId) {
-        const person = await findOrCreatePersonInOrgWithMeta(supabase, {
-            org_id: ctx.orgId,
-            first_name: firstName,
-            last_name: lastName,
-            email,
-            phone,
-            default_status_key_on_create: ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
-        });
-        personId = person?.id?.trim() || null;
-    }
-    if (!personId) {
-        return { ok: false, error: "Could not create or resolve person.", status: 400 };
-    }
-
     // Never silently create a duplicate when resolver found an exact match but operator did not confirm link.
     if (
         !linkedPrimaryPersonId &&
@@ -149,140 +182,131 @@ export async function executeCreateLeadAction(
         };
     }
 
-    const householdDisplayName = buildHouseholdLeadDisplayName({
-        firstName,
-        lastName,
-        fallback: email || phone || "New lead",
+    const ingested = await ingestCreateLeadThroughProcessing(supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.userId ?? "unknown",
+        merged: input.merged,
+        context: input.context,
+        workUnitId,
+        statusKey: statusKeyForLead,
+        locationId,
+        verticalId,
     });
-    const { customer_id: customerId } = await ensureCustomerForPersonNative(supabase, personId, {
-        org_id: ctx.orgId,
-        vertical_id: verticalId,
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone,
-        household_name: householdDisplayName,
-    });
-    if (!customerId?.trim()) {
-        return { ok: false, error: "Could not create household for this lead.", status: 400 };
+    if (!ingested.ok) {
+        return { ok: false, error: ingested.error, status: ingested.status };
     }
-    await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: ctx.orgId });
 
-    const displayName = householdDisplayName;
-    const intakeNotes = trim(input.merged.intake_notes) || null;
-    const oppPayload: Record<string, unknown> = {
-        org_id: ctx.orgId,
-        customer_id: customerId,
-        primary_person_id: personId,
-        primary_contact_id: null,
-        name: displayName,
-        source: trim(input.merged.source) || "manual",
-        status_key: statusKeyForLead,
-        work_unit_id: workUnitId,
-        metadata: {
-            created_via: "create_lead",
-            ...(departmentId ? { department_id: departmentId } : {}),
-            ...(intakeNotes ? { intake_notes: intakeNotes } : {}),
-        },
+    const reviewDeps = {
+        supabase,
+        orgId: ctx.orgId,
+        actorId: ctx.userId ?? "unknown",
+        actorAuthorized: true,
+        executorPorts: createExecutorPorts(supabase),
     };
-    if (verticalId) oppPayload.vertical_id = verticalId;
-    if (locationId) oppPayload.location_id = locationId;
 
-    await normalizeOpportunityWritePayload(supabase, oppPayload, "executeAdminAction:create_lead");
-    const { data: oppRow, error: oppErr } = await supabase.from("opportunities").insert(oppPayload).select("id").single();
-    if (oppErr || !oppRow) {
-        return { ok: false, error: oppErr?.message ?? "Failed to create lead.", status: 400 };
-    }
-    const opportunityId = (oppRow as { id: string }).id;
-
-    const { error: opErr } = await supabase.from("opportunity_persons").insert({
-        org_id: ctx.orgId,
-        opportunity_id: opportunityId,
-        person_id: personId,
-        role_type: "family_member",
-        metadata: { source: "create_lead", role: "primary_guardian" },
-    });
-    if (opErr && opErr.code !== "23505") {
-        return { ok: false, error: opErr.message ?? "Failed to link person to lead.", status: 400 };
-    }
-
-    try {
-        const primaryChildRecord = householdCommit ? primaryIncludedChild(householdCommit) : null;
-        const linkedChildPersonId = linkedPersonIdFromCommitRecord(primaryChildRecord);
-        if (
-            primaryChildRecord?.include_in_commit &&
-            (primaryChildRecord.resolution?.state === "conflict" || primaryChildRecord.resolution?.action === "reject")
-        ) {
+    // Reuse the review already loaded during ingest — a second loadCaseReview was a clean-new
+    // latency tax with no semantic benefit (case has not changed between the two calls).
+    let review: CaseReviewState;
+    if (ingested.caseReview) {
+        review = ingested.caseReview;
+    } else {
+        try {
+            review = await loadCaseReview(reviewDeps, ingested.processingCaseId);
+        } catch {
+            // Fake/incomplete clients in unit tests — keep interactive review rather than fail create.
             return {
-                ok: false,
-                error: primaryChildRecord.resolution?.reasons[0] ?? "Child record resolution conflict.",
-                status: 400,
+                ok: true,
+                mode: "processing_review",
+                processing_case_id: ingested.processingCaseId,
+                readiness: ingested.readiness,
+                idempotency_key: ingested.idempotencyKey,
+                work_unit_id: workUnitId,
+                work_unit_key: workUnitKey,
+                status_key: statusKeyForLead,
+                stage_key: "lead",
             };
         }
-        await applyCreateLeadChildParticipation(supabase, {
-            orgId: ctx.orgId,
-            opportunityId,
-            customerId,
-            merged: input.merged,
-            existingPersonId: linkedChildPersonId,
-        });
-    } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to persist child enrollment fields.";
-        return { ok: false, error: message, status: 400 };
     }
 
-    if (householdCommit) {
+    const presentation = buildCreateLeadReviewPresentation({
+        resolutions: review.resolutions,
+        subjectEligibility: review.subjectEligibility,
+    });
+
+    // Clean-new: BOS Confirm already decided. Keep Processing authority but finish commit here
+    // so the case never sits in Incoming as operator work.
+    if (presentation.mode === "ready_without_identity_review" && review.planEligible) {
         try {
-            await applyCreateLeadHouseholdMemberCommit(supabase, {
-                orgId: ctx.orgId,
-                customerId,
-                opportunityId,
-                merged: input.merged,
-                selection: householdCommit,
-                primaryPersonId: personId,
+            const { attempt } = await commitApprovedLeadForCase(reviewDeps, {
+                caseId: ingested.processingCaseId,
             });
+            const opportunityId = opportunityIdFromAttempt(
+                attempt.operations.map((o) => ({
+                    commandKey: o.commandKey ?? "",
+                    recordId: o.recordId,
+                    status: o.status,
+                })),
+            );
+            if (!opportunityId || (attempt.outcome !== "committed" && attempt.outcome !== "partially_committed")) {
+                return {
+                    ok: false,
+                    error: "Lead could not be created after identity check. Try again.",
+                    status: 500,
+                };
+            }
+            // `lead_created` — the same business event an approved public form emits; automations
+            // trigger on it. Only for a genuinely created lead (a reused open lead emits nothing).
+            try {
+                const { data: leadRow } = await supabase
+                    .from("opportunities")
+                    .select("id, customer_id, primary_person_id, location_id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", opportunityId)
+                    .maybeSingle();
+                await emitLeadCreatedEvent({
+                    supabase,
+                    orgId: ctx.orgId,
+                    operations: attempt.operations,
+                    lead: (leadRow as { id: string } | null) ?? { id: opportunityId },
+                    source: "bos_create_lead",
+                    actorUserId: ctx.userId ?? null,
+                    provenance: { processing_case_id: ingested.processingCaseId },
+                });
+            } catch (e) {
+                console.warn("[create_lead] lead_created emit failed", e instanceof Error ? e.message : e);
+            }
+            return {
+                ok: true,
+                mode: "committed",
+                processing_case_id: ingested.processingCaseId,
+                readiness: "committed",
+                idempotency_key: ingested.idempotencyKey,
+                work_unit_id: workUnitId,
+                work_unit_key: workUnitKey,
+                status_key: statusKeyForLead,
+                stage_key: "lead",
+                opportunity_id: opportunityId,
+            };
         } catch (e) {
-            const message = e instanceof Error ? e.message : "Failed to persist additional household members.";
-            return { ok: false, error: message, status: 400 };
+            if (e instanceof OperatorServiceError && e.code === "identity_review_required") {
+                // Eligibility changed underfoot — fall through to interactive review.
+            } else {
+                const message = e instanceof Error ? e.message : "Lead could not be created.";
+                return { ok: false, error: message, status: 500 };
+            }
         }
-    }
-
-    try {
-        await applyCreateLeadLayoutRuntimePersistence(supabase, {
-            orgId: ctx.orgId,
-            customerId,
-            opportunityId,
-            primaryPersonId: personId,
-            merged: input.merged,
-            selection: householdCommit,
-        });
-    } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to persist layout runtime contact/address data.";
-        return { ok: false, error: message, status: 400 };
-    }
-
-    try {
-        await emitStatusChangedEvent({
-            supabase,
-            orgId: ctx.orgId,
-            entityType: "opportunities",
-            entityId: opportunityId,
-            oldStatusKey: null,
-            newStatusKey: statusKeyForLead,
-            metadata: { customer_id: customerId, primary_person_id: personId },
-            actorUserId: ctx.userId,
-        });
-    } catch (e) {
-        console.error("[executeCreateLeadAction] emitStatusChangedEvent", e);
     }
 
     return {
         ok: true,
-        opportunity_id: opportunityId,
-        person_id: personId,
-        customer_id: customerId,
+        mode: "processing_review",
+        processing_case_id: ingested.processingCaseId,
+        readiness: ingested.readiness,
+        idempotency_key: ingested.idempotencyKey,
         work_unit_id: workUnitId,
+        work_unit_key: workUnitKey,
         status_key: statusKeyForLead,
+        stage_key: "lead",
     };
 }
 

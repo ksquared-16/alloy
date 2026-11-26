@@ -1,0 +1,5 @@
+URL=http://127.0.0.1:3015/organization
+SHOT 01-all-family-leads
+KURZMAN_COUNT=0
+ERROR=Kurzman row not found
+SHOT error

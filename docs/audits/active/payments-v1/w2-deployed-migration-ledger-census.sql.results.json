@@ -1,0 +1,40 @@
+{
+  "trusted_host_action_id": "tha_b6860c5991239e",
+  "query_hash": "8e620c66133c509be9d58d7151caf8d3611d5239888cd45e5f669ae2a0d391b5",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T10:57:20.586Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b6860c5991239e",
+    "query_hash": "8e620c66133c509be9d58d7151caf8d3611d5239888cd45e5f669ae2a0d391b5",
+    "authorization_id": "grnt_3dcfa8d485b149af",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T10:57:22.184Z",
+    "question_ids": [
+      "deployed_ledger"
+    ],
+    "questions": {
+      "deployed_ledger": {
+        "question_id": "deployed_ledger",
+        "row_count": null,
+        "rows": [
+          {
+            "has_20260919160000": 1,
+            "has_20260920120000_w1": 1,
+            "has_20260921120000_w2_create": 0,
+            "has_20260921130000_w2_drop": 0,
+            "newest_applied": "20260920120000",
+            "total_applied": 457
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

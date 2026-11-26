@@ -1,0 +1,1687 @@
+{
+ "out": {
+  "rowA": "9ab36f48",
+  "rowB": "8b3689fb",
+  "A_imgCount": 6,
+  "A_identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+  "A_imgs": [
+   {
+    "src": "/brand/alloy-brandmark-gradient.svg",
+    "alt": ""
+   },
+   {
+    "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+    "alt": ""
+   },
+   {
+    "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+    "alt": ""
+   },
+   {
+    "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+    "alt": ""
+   },
+   {
+    "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+    "alt": ""
+   },
+   {
+    "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+    "alt": ""
+   }
+  ],
+  "t_activeRow": 121,
+  "t_subjectAttr": 5960,
+  "t_identityText": null,
+  "t_imgs_changed": 5960,
+  "stale_identity_frames": 508,
+  "total_frames": 508,
+  "final_identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+  "final_imgCount": 5
+ },
+ "A": {
+  "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "activeRow": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "imgCount": 6,
+  "imgs": [
+   {
+    "src": "/brand/alloy-brandmark-gradient.svg",
+    "alt": ""
+   },
+   {
+    "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+    "alt": ""
+   },
+   {
+    "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+    "alt": ""
+   },
+   {
+    "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+    "alt": ""
+   },
+   {
+    "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+    "alt": ""
+   },
+   {
+    "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+    "alt": ""
+   }
+  ],
+  "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+  "railMarkers": []
+ },
+ "frames": [
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 3
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 344
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 629
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 933
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 1239
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 1526
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 1831
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 2128
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 2425
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 2720
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 3020
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 3308
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 3589
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 3885
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 4181
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 4465
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 4753
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 5049
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 5336
+  },
+  {
+   "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 6,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTM4fQ.oQG0yBpku5ji_DGt7-tj09zuRxV2g6Od3MZZW-f1IlM",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 5621
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 6015
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 6292
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 6568
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 6849
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 7132
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 7411
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 7694
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 7988
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 8271
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 8571
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 8868
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 9166
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 9464
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 9759
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 10059
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 10348
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 10638
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 10929
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 11235
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 11529
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 11829
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 12131
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 12421
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 12715
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 13018
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 13315
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 13595
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 13889
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 14186
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 14480
+  },
+  {
+   "subject": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "activeRow": "8b3689fb-130f-4019-89a4-433a1fd53735",
+   "imgCount": 5,
+   "imgs": [
+    {
+     "src": "/brand/alloy-brandmark-gradient.svg",
+     "alt": ""
+    },
+    {
+     "src": "NTUwfQ.oL77PohnUd6Z6ZvFxg6Jbr5kuR039ZWXdn4ecQQ3Z88",
+     "alt": ""
+    },
+    {
+     "src": "NTE3fQ.KZSp_zeKYvvERvoUtgaRwsccnp2AWBbo-91ClRfhrbU",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    },
+    {
+     "src": "NTE4fQ.JzHjeyTSjCvc3N2z_4UMNAQAOcJGexswxcEuALDJeBE",
+     "alt": ""
+    }
+   ],
+   "identity": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolli",
+   "railMarkers": [],
+   "dt": 14774
+  }
+ ]
+}

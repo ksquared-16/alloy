@@ -1,8 +1,11 @@
 /**
- * Enrollment New Leads — backward-compatible opportunity status aliases.
+ * Enrollment New Leads — backward-compatible opportunity status aliases (LEGACY, S4 collapse).
  *
- * Fresh Create Lead writes `new_inquiry`; legacy/demo rows may still use `open` or `new`.
- * Queue filters must include both without requiring a data migration.
+ * As of the S4 status collapse, durable case status is `open`|`closed` and the pipeline position is
+ * the persisted `stage_key` column — "New Lead" now means the LEAD STAGE (`stage_key = 'lead'`), not a
+ * status. Fresh Create Lead writes `status_key = 'open'` + `stage_key = 'lead'`. These alias helpers
+ * remain only so lingering legacy `new_inquiry`/`new`/`new_lead` rows keep resolving/labeling until they
+ * are migrated; new membership decisions key off `stage_key`, not these aliases.
  */
 
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
@@ -40,7 +43,10 @@ export function expandEnrollmentNewLeadsQueueStatusKeys(statusKeys: readonly str
  */
 export function canonicalNewLeadStatusLabel(statusKey: string | null | undefined): string | null {
     const k = normalizeStatusKey(statusKey ?? "");
-    return k === "new_inquiry" || k === "new_lead" ? "New Lead" : null;
+    if (k === "new_inquiry" || k === "new_lead") return "New Lead";
+    // Legacy bare `new` still appears on some rows / activity previews — never render lowercase.
+    if (k === "new") return "New";
+    return null;
 }
 
 export function isEnrollmentNewLeadsQueueKey(queueKey: string): boolean {

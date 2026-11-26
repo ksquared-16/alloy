@@ -1,21 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { emitHouseholdPrimaryContactChangedEvent } from "@/lib/admin/person/emitHouseholdPrimaryContactChangedEvent";
 import { resolveCustomerHouseholdPrimaryContactPersonId } from "@/lib/admin/person/householdPrimaryContact";
 import { setHouseholdPrimaryContactForCustomer } from "@/lib/admin/person/setHouseholdPrimaryContact";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 /** PATCH: set household primary contact on customer_persons; sync opportunities.primary_person_id. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     const { id: customerId } = await context.params;
     if (!customerId?.trim()) {

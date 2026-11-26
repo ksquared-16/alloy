@@ -36,8 +36,7 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
             DEMO_CHILDCARE_ENROLLMENT_LEAD_INTAKE_LINK_METADATA.default_work_unit_id,
             { highlightQueueKey: "new_leads" }
         );
-        expect(href).toContain("/adminV2/workspace/dept/");
-        expect(href).toContain("primary_queue_key=new_leads");
+        expect(href).toBe("/workspace/work-unit/new-leads");
     });
 
     it("detects runtime mismatch when last submission used another link", () => {
@@ -175,6 +174,7 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
                     stage_label: "Lead",
                     intent_label: "Capture new enrollment lead",
                     entity_groups: [],
+                missing_required_labels: [],
                 },
             },
         });
@@ -225,6 +225,7 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
                     stage_label: "Lead",
                     intent_label: "Capture new enrollment lead",
                     entity_groups: [],
+                missing_required_labels: [],
                 },
             },
         });

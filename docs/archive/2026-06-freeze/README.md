@@ -7,7 +7,7 @@
 
 | Old assumption | Canonical replacement |
 |----------------|----------------------|
-| Department-first operator navigation | **`docs/system/navigation-doctrine.md`** — Lifecycle → Work Unit → Record |
+| Department-first operator navigation | **`docs/archive/2026-06-superseded-system/navigation-doctrine.md`** — Lifecycle → Work Unit → Record |
 | `/adminV2/workspace` as product URL | **`docs/system/routing-doctrine.md`** — `/workspace`, `/admin` |
 | `/adminV2/settings` in product hrefs | `/admin/settings/*` (rewrites to filesystem) |
 | Performance details only in sprint closeouts | **`docs/system/platform-performance-doctrine.md`** |
@@ -15,7 +15,7 @@
 
 ## Historical sprint docs (retained, not doctrine)
 
-Sprint folders under `docs/sprints/06_2026/` remain execution history. For platform truth, prefer:
+Sprint folders under `docs/sprints/archive/06_2026/` remain execution history. For platform truth, prefer:
 
 - `docs/system/repository-state-2026-06.md`
 - `docs/system/legacy-architecture-inventory.md`

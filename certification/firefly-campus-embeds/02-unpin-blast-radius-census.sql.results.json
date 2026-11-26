@@ -1,0 +1,44 @@
+{
+  "trusted_host_action_id": "tha_e23a2c4098481d",
+  "query_hash": "6e7d086a53c99fc23fc94827810b580d865ea464f98a68250c3f6e961f9fb3fc",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-15T20:16:17.669Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e23a2c4098481d",
+    "query_hash": "6e7d086a53c99fc23fc94827810b580d865ea464f98a68250c3f6e961f9fb3fc",
+    "authorization_id": "grnt_8e9375c350ea416a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-15T20:16:23.608Z",
+    "question_ids": [
+      "unpin_scope"
+    ],
+    "questions": {
+      "unpin_scope": {
+        "question_id": "unpin_scope",
+        "row_count": null,
+        "rows": [
+          {
+            "would_unpin": 3,
+            "by_org_form": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "form_name": "School of Enrichment",
+                "links": 3,
+                "any_behind_latest": true
+              }
+            ],
+            "pinned_active_links_total": 4
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

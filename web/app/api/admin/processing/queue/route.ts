@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { loadUnworkedFlags } from "@/lib/pos/processingCaseAttention";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
     makeDefaultSourceDisplayResolverRegistry,
     makeProcessingCaseReadDeps,
@@ -93,7 +96,12 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     const deps = makeProcessingCaseReadDeps(supabase);
-    const registry = makeDefaultSourceDisplayResolverRegistry(supabase, ctx.orgId);
+    // EN-FI-01: source-document labels are disclosed per document to a reader who may read it.
+    const access = await getAdminAccessContextCached();
+    const documentActor = access.ok
+        ? { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) }
+        : null;
+    const registry = makeDefaultSourceDisplayResolverRegistry(supabase, ctx.orgId, documentActor);
 
     try {
         const [queue, counts] = await Promise.all([
@@ -103,6 +111,7 @@ export async function GET(request: NextRequest) {
         // Enrichment is isolated: if it throws, the queue still returns rows/counts.
         let recommendations: Record<string, QueueRecommendationSummary> = {};
         let classifications: Record<string, ClassificationBadgeVM> = {};
+        let unworked: Record<string, true> = {};
         try {
             const caseIds = queue.rows.map((r) => r.id);
             [recommendations, classifications] = await Promise.all([
@@ -116,11 +125,12 @@ export async function GET(request: NextRequest) {
                 ),
                 enrichClassifications(supabase, ctx.orgId, caseIds),
             ]);
+            unworked = await loadUnworkedFlags(supabase, ctx.orgId, queue.rows);
         } catch (enrichErr) {
             console.error("[api/admin/processing/queue] enrichment failed (non-fatal):", enrichErr);
         }
         return NextResponse.json({
-            data: { rows: queue.rows, next_cursor: queue.nextCursor, counts, recommendations, classifications },
+            data: { rows: queue.rows, next_cursor: queue.nextCursor, counts, recommendations, classifications, unworked },
         });
     } catch (e) {
         // TEMP DIAGNOSTIC (POS-FP3): surface the true underlying error/stack in the

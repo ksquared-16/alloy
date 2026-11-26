@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Entity model
 
 **Status:** Canonical (June 2026 freeze). Conceptual model — column detail in `docs/schema/schema-columns.md`.
@@ -23,6 +30,23 @@ All tenant-owned rows scope by **`org_id`**. Admin APIs resolve org via `getAdmi
 
 ---
 
+## Inbound identity resolution
+
+Processing resolves provisional parent, child, and household subjects onto the canonical graph; it does not introduce a parallel identity entity.
+
+| Entity | Role |
+|--------|------|
+| `processing_cases` / `processing_case_sources` | Durable source-scoped intake work and replay boundary |
+| `processing_facts` | Immutable normalized facts with evidence lineage |
+| `processing_resolutions` | Subject candidates, conflicts, and operator decisions |
+| `processing_commit_plans` / `processing_plan_operations` | Versioned immutable proposed mutations using registered semantic commands |
+| `processing_approvals` | Approval bound to exact plan version and content hash |
+| `processing_commit_attempts` / `processing_exceptions` | Execution audit, retry/compensation state, and operator-visible failures |
+
+Parent and Guardian remain roles, Child remains a `customer_members` record (optionally person-backed), and Family/Household remains the `customers` account shell plus relationships. Email and phone are matching signals, not universal unique identity keys.
+
+---
+
 ## CRM pipeline
 
 | Entity | Role |
@@ -31,6 +55,8 @@ All tenant-owned rows scope by **`org_id`**. Admin APIs resolve org via `getAdmi
 | `opportunity_customer_members` | Per-child inquiry/enrollment rows |
 | `tour_bookings` | Confirmed tour appointments (not `schedules`) |
 | `placement_candidates` | Waitlist candidate grain (preview/triage) |
+
+**Delete Lead (hard delete):** opportunity-scoped graph deletion via `executeDeleteOpportunityLead`. Does **not** delete `work_units`. Person/customer rows are removed only when unreferenced after the graph; otherwise retained. No supported restore path. Command Runtime facade cutover: `delete_lead` (P4.S3); direct `POST .../opportunities/:id/delete` remains.
 
 ---
 

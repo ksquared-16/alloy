@@ -1,0 +1,22 @@
+{
+  "summary": {
+    "nodes": [
+      "Available $125.00"
+    ],
+    "balance": "Balance -$37.13 Paid $75.00 Unassigned $"
+  },
+  "details": {
+    "nodes": [
+      "AVAILABLE PREPAID $125.00"
+    ],
+    "balance": "Balance $0.00 OCTOBER 2026 Balance $80.0"
+  },
+  "accounts": {
+    "nodes": [
+      "AVAILABLE $125.00"
+    ],
+    "balance": "Balance $0.00 ACTIONS DATE TYPE CHILD GL",
+    "accountCard": true,
+    "financialsCard": true
+  }
+}

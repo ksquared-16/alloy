@@ -27,15 +27,18 @@ import {
     LAYOUT_SECTION_SHOW_WHEN_EMPTY_METADATA_KEY,
 } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
 
+// `open_drawer` is RETIRED. The platform defaults are ours, so they stop teaching a value no
+// runtime executes: the icon stays, the inert action does not. Tenant-authored layouts are NOT
+// rewritten — the stored value carries an entity + idPath, and the canonical replacement is an
+// ASPECT on a host record's panel whose host comes from that record's own work_unit_id at runtime.
+// A migration would have to guess, so the parser keeps accepting it and nothing executes it.
 const CHILD_LINK: LayoutFieldAdornment = {
     position: "left",
-    icon: "child",
-    action: { type: "open_drawer", entity: "child", idPath: "child.id" },
+    icon: "child"
 };
 const PERSON_LINK: LayoutFieldAdornment = {
     position: "left",
-    icon: "person",
-    action: { type: "open_drawer", entity: "person", idPath: "person.id" },
+    icon: "person"
 };
 const HOME_ICON: LayoutFieldAdornment = { position: "left", icon: "home" };
 const CALENDAR_ICON: LayoutFieldAdornment = { position: "left", icon: "calendar" };
@@ -146,12 +149,12 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
             row(id(peBase, "r0"), [
                 col(id(peBase, "r0"), 0, HALF, [
                     fieldItem(peBase, "inquiry_child.program", "Program", "text", undefined, false),
-                    fieldItem(peBase, "inquiry_child.desired_program_type", "Program type", "text"),
+                    fieldItem(peBase, "inquiry_child.program_category_id", "Program", "text"),
                     fieldItem(peBase, "inquiry_child.program_room_cohort_key", "Classroom / cohort", "text"),
                 ]),
                 col(id(peBase, "r0"), 1, HALF, [
-                    fieldItem(peBase, "inquiry_child.desired_start_date", "Desired start", "date", CALENDAR_ICON),
-                    fieldItem(peBase, "inquiry_child.desired_schedule_type", "Schedule", "text"),
+                    fieldItem(peBase, "inquiry_child.start_date", "Desired start", "date", CALENDAR_ICON),
+                    fieldItem(peBase, "inquiry_child.schedule_type", "Schedule", "text"),
                     fieldItem(peBase, "inquiry_child.outcome_status_key", "Enrollment status", "status"),
                     fieldItem(peBase, "child.status", "Child status", "status", undefined, false),
                 ]),
@@ -179,7 +182,7 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
                 label: "Name",
                 refKey: "person.primary_contact_name",
                 width: "medium",
-                adornment: { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "person.id" } },
+                adornment: { position: "left", icon: "person" },
             },
             { label: "Role", refKey: "person.household_role", width: "medium" },
             { label: "Phone", refKey: "person.primary_phone", width: "medium", renderHint: "phone" },

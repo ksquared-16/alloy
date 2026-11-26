@@ -1,0 +1,41 @@
+{
+  "trusted_host_action_id": "tha_ebd1c1093629f0",
+  "query_hash": "3272f9b53f200bc09345f61f333d0bfb6557455df093f6a190672d3e39a8babc",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T18:34:31.871Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ebd1c1093629f0",
+    "query_hash": "3272f9b53f200bc09345f61f333d0bfb6557455df093f6a190672d3e39a8babc",
+    "authorization_id": "grnt_d34ce92f30a14193",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T18:34:33.666Z",
+    "question_ids": [
+      "reading2"
+    ],
+    "questions": {
+      "reading2": {
+        "question_id": "reading2",
+        "row_count": null,
+        "rows": [
+          {
+            "reading": 2,
+            "wake_count": 0,
+            "first_wake_at": null,
+            "last_wake_at": null,
+            "last_worker_id": null,
+            "last_summary": null,
+            "observed_at": "2026-09-21 18:34:33.619416+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

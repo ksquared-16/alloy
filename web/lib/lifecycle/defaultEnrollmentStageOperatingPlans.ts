@@ -25,155 +25,135 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
     lead: {
         version: 1,
         journey_segment: "family",
-        purpose: "Review inbound lead and reach the family.",
+        purpose: "Reach the family and determine next steps.",
+        outgoing_transitions: [
+            {
+                transition_ref: "lead_to_tour",
+                source_stage_key: "lead",
+                target_stage_key: "tour",
+                label: "Continue to Tour",
+                available: true,
+                status_key: "open",
+            },
+            {
+                transition_ref: "lead_to_closed_lost",
+                source_stage_key: "lead",
+                target_stage_key: "closed_lost",
+                label: "Close as Lost",
+                available: true,
+                status_key: "closed",
+                closes_record: true,
+            },
+        ],
         work_templates: [
             {
-                template_key: "review_lead",
-                label: "Review Lead",
+                template_key: "contact_family",
+                label: "Contact Family",
+                description: "Reach the family, understand their needs, and determine the next step.",
                 required: true,
                 primary: true,
                 due_policy: { kind: "offset_days", days: 1 },
                 owner_strategy: "record_owner",
-                work_definition_key: "collect_missing_information",
-            },
-            {
-                template_key: "contact_family",
-                label: "Contact Family",
-                required: true,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
                 work_definition_key: "contact_family",
+                execution_mode: "direct_action",
+                // Command-result sufficiency (R2): an objective integrated send is
+                // "contact attempted" (left_message, stays in stage) — configuration,
+                // not code, decides this. The operator is never asked to re-declare it.
                 completion_policy: {
-                    min_attempts: 3,
-                    max_attempts: 3,
-                    window_days: 7,
-                    repeat_until_outcome: true,
-                    repeat_due_days: 2,
+                    sufficient_command_results: [
+                        {
+                            capability: "communications_send",
+                            result: "sent",
+                            satisfies_outcome_key: "left_message",
+                        },
+                        {
+                            // Confirmed tour booking is objective success for schedule_tour.
+                            // Maps to Tour Scheduled → outcome rules own stage movement.
+                            capability: "schedule_tour",
+                            result: "confirmed",
+                            satisfies_outcome_key: "tour_scheduled",
+                        },
+                    ],
                 },
+                primary_action: { action_ref: "quick_message", override_label: "Contact Family" },
+                helpful_actions: [
+                    { action_ref: "schedule_tour" },
+                    { action_ref: "send_tour_invitation" },
+                    { action_ref: "send_form" },
+                ],
+                outcome_refs: [
+                    { outcome_ref: "reached_family" },
+                    { outcome_ref: "left_message" },
+                    { outcome_ref: "needs_follow_up" },
+                    { outcome_ref: "interested" },
+                    { outcome_ref: "tour_scheduled" },
+                    { outcome_ref: "not_interested" },
+                ],
             },
         ],
         outcomes: [
-            { outcome_key: "qualified", label: "Qualified", work_template_key: "review_lead", successful: true },
-            { outcome_key: "needs_more_information", label: "Needs More Information", work_template_key: "review_lead" },
-            { outcome_key: "duplicate", label: "Duplicate", work_template_key: "review_lead" },
-            { outcome_key: "closed_lost", label: "Closed Lost", work_template_key: "review_lead" },
-            { outcome_key: "reached_qualified", label: "Reached / Qualified", work_template_key: "contact_family", successful: true },
-            { outcome_key: "left_message", label: "Left Message", work_template_key: "contact_family" },
-            { outcome_key: "awaiting_response", label: "Awaiting Response", work_template_key: "contact_family" },
-            { outcome_key: "unable_to_reach", label: "Unable To Reach", work_template_key: "contact_family" },
-            { outcome_key: "contact_closed_lost", label: "Closed Lost", work_template_key: "contact_family" },
+            { outcome_key: "reached_family", label: "Reached Family", successful: true },
+            { outcome_key: "left_message", label: "Left Message" },
+            { outcome_key: "needs_follow_up", label: "Needs Follow-up" },
+            { outcome_key: "interested", label: "Interested", successful: true },
+            {
+                outcome_key: "tour_scheduled",
+                label: "Tour Scheduled",
+                successful: true,
+                completes_work: true,
+            },
+            { outcome_key: "not_interested", label: "Not Interested", completes_work: true },
         ],
         outcome_rules: [
             {
-                rule_key: "qualified_move",
-                when_outcome_key: "qualified",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "open" },
-                    { kind: "move_to_stage", stage_key: "qualification" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                rule_key: "reached_family_to_tour",
+                when_outcome_key: "reached_family",
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
             },
             {
-                rule_key: "needs_more_info_stay",
-                when_outcome_key: "needs_more_information",
+                rule_key: "interested_to_tour",
+                when_outcome_key: "interested",
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
+            },
+            {
+                rule_key: "tour_scheduled_remain",
+                when_outcome_key: "tour_scheduled",
+                // Booked Tour is an overlapping operational fact — do not leave Lead/Waitlist
+                // solely because a tour_bookings row was confirmed. Tours Work View is booking-based.
                 targets: [{ kind: "no_movement" }],
             },
             {
-                rule_key: "duplicate_close",
-                when_outcome_key: "duplicate",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                // Domain signal from confirmed booking — keep current stage; Tours lane uses bookings.
+                rule_key: "domain_tour_booking_scheduled_remain",
+                when_domain_signal: { domain: "tour_booking", signal: "scheduled" },
+                targets: [{ kind: "no_movement" }],
             },
             {
-                rule_key: "review_closed_lost",
-                when_outcome_key: "closed_lost",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                rule_key: "not_interested_close",
+                when_outcome_key: "not_interested",
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_closed_lost" }],
             },
             {
-                rule_key: "reached_move",
-                when_outcome_key: "reached_qualified",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "open" },
-                    { kind: "move_to_stage", stage_key: "qualification" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-            {
-                rule_key: "left_message_repeat",
+                rule_key: "left_message_remain",
                 when_outcome_key: "left_message",
-                targets: [{ kind: "reopen_work", template_key: "contact_family", due_days: 2 }],
+                targets: [{ kind: "no_movement" }],
             },
             {
-                rule_key: "awaiting_attention",
-                when_outcome_key: "awaiting_response",
-                targets: [
-                    { kind: "no_movement" },
-                    {
-                        kind: "create_needs_attention",
-                        attention_reason: "Awaiting family response",
-                        wait_bucket: "waiting_on_family",
-                    },
-                ],
-            },
-            {
-                rule_key: "unable_repeat",
-                when_outcome_key: "unable_to_reach",
-                when_attempt_count_lt: 3,
-                targets: [{ kind: "reopen_work", template_key: "contact_family", due_days: 2 }],
-            },
-            {
-                rule_key: "unable_attention",
-                when_outcome_key: "unable_to_reach",
-                when_attempt_count_gte: 3,
-                targets: [
-                    {
-                        kind: "create_needs_attention",
-                        attention_reason: "Unable to reach after 3 attempts",
-                        wait_bucket: "waiting_on_staff",
-                    },
-                ],
-            },
-            {
-                rule_key: "contact_closed_lost",
-                when_outcome_key: "contact_closed_lost",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                rule_key: "needs_follow_up_remain",
+                when_outcome_key: "needs_follow_up",
+                targets: [{ kind: "no_movement" }],
             },
         ],
         attention_rules: [
-            {
-                rule_key: "review_lead_overdue",
-                kind: "work_overdue",
-                label: "Review Lead overdue",
-                severity: "medium",
-                threshold: 1,
-                template_key: "review_lead",
-                targets: attention("Review Lead overdue after 1 day"),
-            },
             {
                 rule_key: "first_contact_overdue",
                 kind: "work_overdue",
                 label: "First contact overdue",
                 severity: "medium",
                 threshold: 1,
+                threshold_duration: { offset_value: 1, offset_unit: "days" },
                 template_key: "contact_family",
                 targets: attention("First contact overdue after 1 day"),
-            },
-            {
-                rule_key: "contact_attempts_window",
-                kind: "no_contact_attempt",
-                label: "Contact Family fewer than 3 attempts after 7 days",
-                severity: "high",
-                threshold: 3,
-                template_key: "contact_family",
-                targets: attention("Fewer than 3 contact attempts after 7 days"),
             },
             {
                 rule_key: "stage_age_7d",
@@ -181,104 +161,146 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 label: "Stage age > 7 days",
                 severity: "medium",
                 threshold: 7,
+                threshold_duration: { offset_value: 7, offset_unit: "days" },
                 targets: attention("Lead stage aging beyond 7 days"),
             },
             {
                 rule_key: "missing_required_fields",
-                kind: "missing_required_fields",
+                kind: "missing_requirements",
                 label: "Missing required fields",
                 severity: "medium",
                 targets: attention("Missing required Lead stage fields"),
             },
         ],
     },
-    qualification: {
-        version: 1,
-        journey_segment: "family",
-        purpose: "Confirm fit and gather enrollment details.",
-        work_templates: [
-            {
-                template_key: "confirm_child_info",
-                label: "Confirm child information",
-                required: true,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
-                work_definition_key: "collect_missing_information",
-            },
-            {
-                template_key: "confirm_location_program",
-                label: "Confirm desired location, program, and start date",
-                required: true,
-                due_policy: { kind: "offset_days", days: 2 },
-                owner_strategy: "record_owner",
-            },
-        ],
-        outcomes: [
-            { outcome_key: "qualified", label: "Qualified", successful: true },
-            { outcome_key: "not_qualified", label: "Not qualified" },
-            { outcome_key: "needs_more_info", label: "Needs more information" },
-        ],
-        outcome_rules: [
-            {
-                rule_key: "qualified_to_tour",
-                when_outcome_key: "qualified",
-                targets: [{ kind: "move_to_stage", stage_key: "tour" }, { kind: "mark_stage_work_complete" }],
-            },
-            {
-                rule_key: "not_qualified_closed",
-                when_outcome_key: "not_qualified",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-            {
-                rule_key: "needs_info_attention",
-                when_outcome_key: "needs_more_info",
-                targets: attention("Missing qualification information"),
-            },
-        ],
-        attention_rules: [
-            {
-                rule_key: "required_work_overdue",
-                kind: "required_work_overdue",
-                threshold: 1,
-                targets: attention("Qualification work overdue"),
-            },
-        ],
-    },
+    // `qualification` stage removed (Part 9): confirming fit is lead work, not a separate stage.
     tour: {
         version: 1,
         journey_segment: "family",
-        purpose: "Legacy coarse tour stage — prefer tour_scheduled / tour_completed / decision_pending.",
-        work_templates: [],
+        purpose: "Conduct the tour and record what happened.",
+        outgoing_transitions: [
+            {
+                transition_ref: "tour_to_decision",
+                source_stage_key: "tour",
+                target_stage_key: "decision",
+                label: "Continue to Decision",
+                available: true,
+                status_key: "open",
+            },
+            {
+                transition_ref: "tour_to_waitlist",
+                source_stage_key: "tour",
+                target_stage_key: "waitlist",
+                label: "Move to Waitlist",
+                available: true,
+            },
+            {
+                transition_ref: "tour_to_closed_lost",
+                source_stage_key: "tour",
+                target_stage_key: "closed_lost",
+                label: "Close as Lost",
+                available: true,
+                status_key: "closed",
+                closes_record: true,
+            },
+        ],
+        work_templates: [
+            {
+                template_key: "conduct_tour",
+                label: "Conduct Tour",
+                description: "Guide the family through the tour, then record the outcome.",
+                required: true,
+                primary: true,
+                due_policy: { kind: "same_day" },
+                owner_strategy: "record_owner",
+                work_definition_key: "record_tour_outcome",
+                execution_mode: "outcome_led",
+                helpful_actions: [
+                    { action_ref: "schedule_tour" },
+                    { action_ref: "send_confirmation" },
+                    { action_ref: "send_reminder" },
+                    { action_ref: "reschedule" },
+                    { action_ref: "quick_message" },
+                ],
+                outcome_refs: [
+                    { outcome_ref: "tour_scheduled" },
+                    { outcome_ref: "tour_completed" },
+                    { outcome_ref: "no_show" },
+                    { outcome_ref: "needs_follow_up" },
+                    { outcome_ref: "family_declined" },
+                    { outcome_ref: "no_availability" },
+                ],
+            },
+        ],
         outcomes: [
-            { outcome_key: "tour_completed", label: "Tour completed", successful: true },
-            { outcome_key: "no_show", label: "No show" },
-            { outcome_key: "reschedule", label: "Reschedule tour" },
-            { outcome_key: "not_interested", label: "Not interested" },
+            { outcome_key: "tour_scheduled", label: "Tour Scheduled" },
+            {
+                outcome_key: "tour_completed",
+                label: "Tour Completed",
+                successful: true,
+                completes_work: true,
+            },
+            { outcome_key: "no_show", label: "No Show", completes_work: true },
+            { outcome_key: "needs_follow_up", label: "Needs Follow-up" },
+            { outcome_key: "family_declined", label: "Family Declined", completes_work: true },
+            { outcome_key: "no_availability", label: "No Availability" },
         ],
         outcome_rules: [
             {
-                rule_key: "completed_decision_pending",
+                rule_key: "tour_completed_to_decision",
                 when_outcome_key: "tour_completed",
-                targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "tour_completed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                targets: [{ kind: "move_to_stage", transition_ref: "tour_to_decision" }],
             },
             {
-                rule_key: "no_show_attention",
+                rule_key: "no_show_follow_up",
                 when_outcome_key: "no_show",
-                targets: attention("Tour no-show — follow up required"),
+                targets: [
+                    { kind: "no_movement" },
+                    {
+                        kind: "create_next_work",
+                        template_key: "conduct_tour",
+                        follow_up_due_policy: {
+                            anchor: "outcome_recorded_at",
+                            offset_value: 2,
+                            offset_unit: "hours",
+                            direction: "after",
+                            missing_anchor_behavior: "use_outcome_recorded_at",
+                        },
+                    },
+                ],
             },
             {
-                rule_key: "not_interested_closed",
-                when_outcome_key: "not_interested",
+                rule_key: "needs_follow_up_attention",
+                when_outcome_key: "needs_follow_up",
                 targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
+                    { kind: "no_movement" },
+                    {
+                        kind: "create_needs_attention",
+                        attention_reason: "Tour needs follow-up",
+                        wait_bucket: "waiting_on_staff",
+                        follow_up_due_policy: {
+                            anchor: "outcome_recorded_at",
+                            offset_value: 3,
+                            offset_unit: "days",
+                            direction: "after",
+                        },
+                    },
                 ],
+            },
+            {
+                rule_key: "family_declined_close",
+                when_outcome_key: "family_declined",
+                targets: [{ kind: "move_to_stage", transition_ref: "tour_to_closed_lost" }],
+            },
+            {
+                rule_key: "no_availability_waitlist",
+                when_outcome_key: "no_availability",
+                targets: [{ kind: "move_to_stage", transition_ref: "tour_to_waitlist" }],
+            },
+            {
+                rule_key: "tour_scheduled_remain",
+                when_outcome_key: "tour_scheduled",
+                targets: [{ kind: "no_movement" }],
             },
         ],
         attention_rules: [],
@@ -286,30 +308,111 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
     decision: {
         version: 1,
         journey_segment: "family",
-        purpose: "Choose each child's enrollment path after the family tour.",
+        purpose: "Support the family enrollment decision.",
+        outgoing_transitions: [
+            {
+                transition_ref: "decision_to_waitlist",
+                source_stage_key: "decision",
+                target_stage_key: "waitlist",
+                label: "Move to Waitlist",
+                available: true,
+            },
+            {
+                transition_ref: "decision_to_closed_lost",
+                source_stage_key: "decision",
+                target_stage_key: "closed_lost",
+                label: "Close as Lost",
+                available: true,
+                status_key: "closed",
+                closes_record: true,
+            },
+        ],
         work_templates: [
             {
-                template_key: "review_child_paths",
-                label: "Review each child's path",
+                template_key: "support_enrollment_decision",
+                label: "Support Enrollment Decision",
+                description: "Help the family choose a path, then record the decision outcome.",
                 required: true,
+                primary: true,
                 due_policy: { kind: "offset_days", days: 2 },
                 owner_strategy: "record_owner",
+                work_definition_key: "contact_family",
+                execution_mode: "outcome_led",
+                helpful_actions: [
+                    { action_ref: "quick_message" },
+                    { action_ref: "send_form" },
+                ],
+                outcome_refs: [
+                    { outcome_ref: "family_enrolling" },
+                    { outcome_ref: "needs_time" },
+                    { outcome_ref: "wants_waitlist" },
+                    { outcome_ref: "declined" },
+                ],
             },
         ],
         outcomes: [
-            { outcome_key: "paths_chosen", label: "Child paths chosen", successful: true },
-            { outcome_key: "needs_follow_up", label: "Needs follow-up" },
+            {
+                outcome_key: "family_enrolling",
+                label: "Family Enrolling",
+                successful: true,
+                completes_work: true,
+            },
+            { outcome_key: "needs_time", label: "Needs Time" },
+            {
+                outcome_key: "wants_waitlist",
+                label: "Wants Waitlist",
+                successful: true,
+                completes_work: true,
+            },
+            { outcome_key: "declined", label: "Declined", completes_work: true },
         ],
         outcome_rules: [
             {
-                rule_key: "paths_chosen_complete",
-                when_outcome_key: "paths_chosen",
-                targets: [{ kind: "mark_stage_work_complete" }],
+                rule_key: "family_enrolling_move",
+                when_outcome_key: "family_enrolling",
+                targets: [
+                    /*
+                     * NO FAMILY MOVEMENT. `enrolling` is the CHILD's Enrollment stage, and this
+                     * outcome used to move the family Opportunity onto it — the family case and
+                     * the child's enrollment occupying one stage is what made `enrolling` look
+                     * family-grain and put child completion out of reach.
+                     *
+                     * The canonical family track is lead -> tour -> decision -> closed, and it
+                     * declares no "converted" transition out of decision: closing the family case
+                     * is its own governed decision (`executeGovernedFamilyClose`), not a
+                     * side-effect of one child starting paperwork. A family with three children
+                     * enrolling one of them has not finished its own case.
+                     */
+                    { kind: "no_movement" },
+                    /*
+                     * CHILD effect, at the child grain: the child's Enrollment execution begins.
+                     * One outcome, two grains, stated separately — collapsing them is what put a
+                     * child journey into the family `lead` stage in the first place.
+                     *
+                     * NO STAGE IS NAMED HERE, deliberately. The child entry stage is already
+                     * declared by the tenant in `entry_points_v1.by_intent.enrollment_start`, and
+                     * this target begins the journey with that same intent so Start Enrollment and
+                     * a family decision land on one stage by construction. A stage_key here would
+                     * be a second, silently-winning answer to a question the configuration has
+                     * already answered — which is exactly the defect this replaced.
+                     */
+                    { kind: "enter_child_enrollment" },
+                ],
             },
             {
-                rule_key: "follow_up_attention",
-                when_outcome_key: "needs_follow_up",
-                targets: attention("Decision follow-up required"),
+                rule_key: "needs_time_remain",
+                when_outcome_key: "needs_time",
+                targets: [{ kind: "no_movement" }],
+            },
+            {
+                rule_key: "waitlist_move",
+                when_outcome_key: "wants_waitlist",
+                targets: [{ kind: "move_to_stage", transition_ref: "decision_to_waitlist" }],
+            },
+            {
+                rule_key: "declined_close",
+                when_outcome_key: "declined",
+                targets: [{ kind: "move_to_stage", transition_ref: "decision_to_closed_lost" }],
             },
         ],
         attention_rules: [],
@@ -323,17 +426,52 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         outcome_rules: [{ rule_key: "noop", when_outcome_key: "acknowledged", targets: [{ kind: "no_movement" }] }],
         attention_rules: [],
     },
+    /**
+     * CHILD Enrollment-in-progress. One stage, child grain, and the only place a child's
+     * Enrollment can be completed.
+     *
+     * This stage used to be declared `journey_segment: "family"` while a SECOND stage named
+     * `enrollment` carried the child-grain completion plan. Nothing routed to `enrollment`, so
+     * the completion outcome sat on a stage no child could reach, and `Complete Enrollment`
+     * matched no rule and reported success having changed nothing.
+     *
+     * The canonical durable-state vocabulary has said all along that `enrolling` is child grain
+     * over `opportunity_customer_members` — `resolveStageGrain` simply ranks a stage's own plan
+     * above that vocabulary, so the plan's wrong declaration won and the disagreement was never
+     * surfaced. The plan is now the one that agrees.
+     */
     enrolling: {
         version: 1,
         journey_segment: "child",
-        purpose: "Complete enrollment paperwork and confirm start.",
+        purpose: "Complete enrollment paperwork and confirm start for this child.",
+        outgoing_transitions: [
+            {
+                transition_ref: "enrolling_to_enrolled",
+                source_stage_key: "enrolling",
+                target_stage_key: "enrolled",
+                label: "Complete Enrollment",
+                available: true,
+            },
+            {
+                transition_ref: "enrolling_to_closed_withdrawn",
+                source_stage_key: "enrolling",
+                target_stage_key: "closed_withdrawn",
+                label: "Close as Withdrawn",
+                available: true,
+            },
+        ],
         work_templates: [
             {
                 template_key: "send_enrollment_packet",
-                label: "Send enrollment packet",
+                label: "Send Enrollment Packet",
+                description: "Send the enrollment packet / forms for this child.",
                 required: true,
+                primary: true,
                 due_policy: { kind: "offset_days", days: 1 },
                 owner_strategy: "record_owner",
+                work_definition_key: "contact_family",
+                execution_mode: "direct_action",
+                primary_action: { action_ref: "send_form", override_label: "Send Enrollment Packet" },
             },
             {
                 template_key: "confirm_start_date",
@@ -344,7 +482,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             },
         ],
         outcomes: [
-            { outcome_key: "enrollment_complete", label: "Enrollment complete", successful: true },
+            { outcome_key: "enrollment_complete", label: "Enrollment complete", successful: true, completes_work: true },
+            { outcome_key: "packet_sent", label: "Packet sent", successful: true },
             { outcome_key: "packet_pending", label: "Packet still pending" },
             { outcome_key: "family_withdrew", label: "Family withdrew" },
         ],
@@ -353,10 +492,17 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "complete_to_enrolled",
                 when_outcome_key: "enrollment_complete",
                 targets: [
+                    // Paperwork-completion fact → process-instance Enrollment Date (not opportunity).
+                    { kind: "stamp_enrollment_date" },
                     { kind: "update_child_enrollment_status", disposition_key: "enrolled" },
-                    { kind: "move_to_stage", stage_key: "enrolled" },
+                    { kind: "move_to_stage", transition_ref: "enrolling_to_enrolled" },
                     { kind: "mark_stage_work_complete" },
                 ],
+            },
+            {
+                rule_key: "packet_sent_noted",
+                when_outcome_key: "packet_sent",
+                targets: [{ kind: "no_movement" }],
             },
             {
                 rule_key: "packet_attention",
@@ -367,12 +513,20 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "withdrew",
                 when_outcome_key: "family_withdrew",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
-                    { kind: "move_to_stage", stage_key: "closed_withdrawn" },
+                    { kind: "update_child_enrollment_status", disposition_key: "not_enrolling", close_reason_key: "family_withdrew" },
+                    { kind: "move_to_stage", transition_ref: "enrolling_to_closed_withdrawn" },
+                    { kind: "mark_stage_work_complete" },
                 ],
             },
         ],
-        attention_rules: [],
+        attention_rules: [
+            {
+                rule_key: "required_docs_overdue",
+                kind: "required_work_overdue",
+                threshold: 1,
+                targets: attention("Required enrollment work overdue"),
+            },
+        ],
     },
     closed_withdrawn: {
         version: 1,
@@ -413,8 +567,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "offer_to_enrolling",
                 when_outcome_key: "spot_offered",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "offer_pending" },
-                    { kind: "move_to_stage", stage_key: "enrollment" },
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
+                    { kind: "move_to_stage", stage_key: "enrolling" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },
@@ -430,64 +584,6 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             },
         ],
         attention_rules: [],
-    },
-    enrollment: {
-        version: 1,
-        journey_segment: "child",
-        purpose: "Complete enrollment paperwork and confirm start.",
-        work_templates: [
-            {
-                template_key: "send_enrollment_packet",
-                label: "Send enrollment packet",
-                required: true,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
-            },
-            {
-                template_key: "confirm_start_date",
-                label: "Confirm start date",
-                required: true,
-                due_policy: { kind: "offset_days", days: 3 },
-                owner_strategy: "record_owner",
-            },
-        ],
-        outcomes: [
-            { outcome_key: "enrollment_complete", label: "Enrollment complete", successful: true },
-            { outcome_key: "packet_pending", label: "Packet still pending" },
-            { outcome_key: "family_withdrew", label: "Family withdrew" },
-        ],
-        outcome_rules: [
-            {
-                rule_key: "complete_to_enrolled",
-                when_outcome_key: "enrollment_complete",
-                targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "enrolled" },
-                    { kind: "move_to_stage", stage_key: "enrolled" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-            {
-                rule_key: "packet_attention",
-                when_outcome_key: "packet_pending",
-                targets: attention("Enrollment packet incomplete"),
-            },
-            {
-                rule_key: "withdrew",
-                when_outcome_key: "family_withdrew",
-                targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-        ],
-        attention_rules: [
-            {
-                rule_key: "required_docs_overdue",
-                kind: "required_work_overdue",
-                threshold: 1,
-                targets: attention("Required enrollment work overdue"),
-            },
-        ],
     },
     enrolled: {
         version: 1,
@@ -563,11 +659,14 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         ],
         outcome_rules: [
             {
-                rule_key: "reached_to_qualification",
+                // `qualification` was removed from the enrollment template (Part 9). The stale
+                // move_to_stage target is removed here so this default path no longer references a
+                // stage absent from the current template. Reaching the family marks the contact
+                // work complete; stage advancement is a configured transition, not a code default.
+                rule_key: "reached_family_qualified",
                 when_outcome_key: "reached_family",
                 targets: [
                     { kind: "update_family_case_status", status_key: "open" },
-                    { kind: "move_to_stage", stage_key: "qualification" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },
@@ -665,7 +764,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "completed_to_decision",
                 when_outcome_key: "tour_completed",
                 targets: [
-                    { kind: "update_family_case_status", status_key: "decision_pending" },
+                    // Case status collapses to `open` (S4); the decision phase is a stage move.
+                    { kind: "update_family_case_status", status_key: "open" },
                     { kind: "move_to_stage", stage_key: "decision_pending" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -679,7 +779,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "not_interested_closed",
                 when_outcome_key: "not_interested",
                 targets: [
-                    { kind: "update_family_case_status", status_key: "not_a_fit" },
+                    { kind: "update_family_case_status", status_key: "closed", close_reason_key: "not_a_fit" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },
@@ -710,7 +810,9 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "to_enrolling",
                 when_outcome_key: "enrolling",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "offer_pending" },
+                    // Decision → enrolling: child disposition becomes `enrolling` and the
+                    // child track moves to the enrolling stage (S4/S8).
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
                     { kind: "move_to_stage", stage_key: "enrolling" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -728,7 +830,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "declined_closed",
                 when_outcome_key: "declined",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
+                    { kind: "update_child_enrollment_status", disposition_key: "not_enrolling", close_reason_key: "not_moving_forward" },
                     { kind: "move_to_stage", stage_key: "withdrawn" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -768,7 +870,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "accepted_enrolling",
                 when_outcome_key: "accepted",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "registration_pending" },
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
                     { kind: "move_to_stage", stage_key: "enrolling" },
                     { kind: "mark_stage_work_complete" },
                 ],

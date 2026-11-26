@@ -1,5 +1,8 @@
 import { canConfirmStatusesStep } from "@/lib/lifecycle/lifecycleActivationStep3";
 import {
+    stageRequiresManualStatusSelection,
+} from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import {
     isStatusDraftDirtyForStage,
     normalizeLifecycleBuilderStageKey,
     statusDraftKeysForStage,
@@ -35,12 +38,14 @@ export function resolveLifecycleStatusesSaveState(params: {
         statusesLoading: params.statusesLoading,
         statusesSaving: params.statusesSaving,
         draftCount: saveDraftKeys.length,
+        stageKey: params.stageKey,
     });
     const disabledReason = resolveStatusesSaveDisabledReason({
         normalizedStageKey,
         draftCount: saveDraftKeys.length,
         statusesLoading: params.statusesLoading,
         statusesSaving: params.statusesSaving,
+        stageKey: params.stageKey,
     });
     const dirty = isStatusDraftDirtyForStage(params.statusDraftDirtyByStage, normalizedStageKey);
     return {
@@ -60,11 +65,13 @@ export function resolveStatusesSaveDisabledReason(params: {
     draftCount: number;
     statusesLoading: boolean;
     statusesSaving: boolean;
+    stageKey?: string;
 }): string | null {
     if (!params.normalizedStageKey) return "no_active_stage";
     if (params.statusesLoading) return "statuses_loading";
     if (params.statusesSaving) return "statuses_saving";
-    if (params.draftCount < 1) return "no_status_selected";
+    const sk = params.stageKey?.trim() || params.normalizedStageKey;
+    if (params.draftCount < 1 && stageRequiresManualStatusSelection(sk)) return "no_status_selected";
     return null;
 }
 

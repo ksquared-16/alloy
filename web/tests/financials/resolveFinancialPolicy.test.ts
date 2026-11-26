@@ -12,6 +12,7 @@ function policy(p: Partial<FinancialPolicyRow> & { scope_type: FinancialPolicyRo
         location_id: p.location_id ?? null,
         service_id: p.service_id ?? null,
         rate_plan_id: p.rate_plan_id ?? null,
+        customer_id: p.customer_id ?? null,
         policy_type: p.policy_type,
         label: null,
         description: null,

@@ -1,3 +1,10 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Experience Doctrine
 
 **Path:** `docs/platform/experience/operational-experience-doctrine.md`
@@ -147,7 +154,7 @@ This doctrine **does not weaken** the locked performance/reveal infrastructure â
 - "Queue/sidebar remains mounted," "warm navigation," "hold prior payload," "URL sync without remount" from `platform-performance-doctrine.md` are **Laws 2 and 3**.
 - The optimistic save coordinator is **Laws 4 and 5's** foundation.
 
-Where this doctrine asks for *more* than the locked docs currently enforce (universal soft navigation, KPI in-gate, universal dirty-guard, cross-surface optimism), those deltas are scoped in the [Sprint Roadmap](../../sprints/06_2026/premium-operational-experience/sprint-roadmap.md) and must update the locked docs in the same change that implements them (per documentation governance).
+Where this doctrine asks for *more* than the locked docs currently enforce (universal soft navigation, KPI in-gate, universal dirty-guard, cross-surface optimism), those deltas are scoped in the Sprint Roadmap (historical: `../../sprints/archive/06_2026/premium-operational-experience/sprint-roadmap.md`) and must update the locked docs in the same change that implements them (per documentation governance).
 
 ---
 

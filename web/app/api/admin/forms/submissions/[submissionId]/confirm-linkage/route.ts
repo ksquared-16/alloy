@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formSubmissionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbGetSubmission, dbPatchSubmission } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_SUBMISSIONS_CONFIRM, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST — operator confirms auto-linked CRM rows are correct (payload.meta only; no CRM mutation). */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin" && ctx.role !== "ops") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS_CONFIRM);
+    if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");
@@ -18,6 +21,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const { data: sub, error: sErr } = await dbGetSubmission(supabase, ctx.orgId, submissionId);
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
     if (!sub) return jsonError("Not found", 404);
+    // R2: the same 404 for a submission outside the caller's department/site scope as for one that does not exist.
+    if (!(await formSubmissionReadableById(supabase, ctx.orgId, submissionId))) return jsonError("Not found", 404);
 
     const row = sub as {
         status: string;

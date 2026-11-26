@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
-import { listMetricDefinitions } from "@/lib/metrics/registry";
+import { CANONICAL_MATERIALIZATION_SCOPE } from "@/lib/metrics/metricScopeGuard";
+import { getMetricDefinition, isLiveOnlyMetric, listMetricDefinitions } from "@/lib/metrics/registry";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
 import { writeMetricSnapshot } from "@/lib/metrics/snapshots/writeMetricSnapshot";
 import type { MetricSnapshotScopeType } from "@/lib/metrics/snapshots/types";
@@ -51,7 +51,6 @@ function scopeTargets(includeSiteScopes: boolean, siteIds: string[]): MetricSnap
 export async function writeOrgMetricSnapshots(params: {
     supabase: SupabaseClient;
     orgId: string;
-    scope?: AdminAccessScopeDimensions;
     windows?: MetricTimeWindowKey[];
     metricKeys?: OipMetricKey[];
     includeSiteScopes?: boolean;
@@ -59,7 +58,15 @@ export async function writeOrgMetricSnapshots(params: {
     orgMetadata?: unknown;
 }): Promise<WriteOrgMetricSnapshotsResult> {
     const windows = params.windows ?? DEFAULT_WINDOWS;
-    const metricKeys = params.metricKeys ?? listMetricDefinitions().map((d) => d.key);
+    /*
+     * Live-only metrics are excluded HERE, after the caller's own list, not only
+     * from the default. A caller naming keys explicitly — a backfill script, a
+     * test, a future scheduler — must not be able to persist a current-state
+     * value, because the row it writes is indistinguishable afterwards from a
+     * legitimate historical one and would then be servable as "now".
+     */
+    const requestedKeys = params.metricKeys ?? listMetricDefinitions().map((d) => d.key);
+    const metricKeys = requestedKeys.filter((key) => !isLiveOnlyMetric(key));
     const computedAtIso = (params.computedAt ?? new Date()).toISOString();
     const includeSiteScopes = params.includeSiteScopes !== false;
 
@@ -72,21 +79,32 @@ export async function writeOrgMetricSnapshots(params: {
 
     for (const window of windows) {
         for (const target of targets) {
+            // A metric whose source data carries no site linkage can only be
+            // answered org-wide. Snapshotting the org number under a site scope
+            // would persist a row that READS as a site figure and is not one, so
+            // those keys are skipped for narrowed targets rather than written.
+            const keysForTarget =
+                target.scopeType === "org"
+                    ? metricKeys
+                    : metricKeys.filter((key) => !getMetricDefinition(key).orgScopeOnly);
+            if (keysForTarget.length === 0) continue;
+
             const resolved = await resolveMetrics({
                 ctx: {
                     supabase: params.supabase,
                     orgId: params.orgId,
-                    scope: params.scope ?? {
-                        departmentScope: "all",
-                        allowedDepartmentIds: [],
-                        siteScope: "all",
-                        allowedSiteLocationIds: [],
-                    },
+                    /*
+                     * WS0-A — ALWAYS CANONICAL. Rows are labelled `org` or one site and are read
+                     * back by everyone entitled to that scope; the operator who triggered the run
+                     * must not be able to store their narrowed figure under the org label. Read
+                     * paths apply `snapshotReadableForScope` instead.
+                     */
+                    scope: CANONICAL_MATERIALIZATION_SCOPE,
                     window,
                     siteLocationId: target.scopeType === "site" ? target.scopeId : null,
                     mode: "live",
                 },
-                keys: metricKeys,
+                keys: keysForTarget,
                 orgMetadata: params.orgMetadata,
                 includeKpi: false,
             });

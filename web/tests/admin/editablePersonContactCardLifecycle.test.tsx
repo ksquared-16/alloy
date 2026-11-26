@@ -16,7 +16,7 @@ import {
     runEditableCardContract,
     setNativeInputValue,
     type EditableCardContractAdapter,
-} from "../../experience/editing/editableCardContractHarness";
+} from "../experience/editing/editableCardContractHarness";
 
 /**
  * EditablePersonContactCard verified against the reusable Editable Card Runtime contract

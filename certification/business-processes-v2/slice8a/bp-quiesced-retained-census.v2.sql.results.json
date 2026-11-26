@@ -1,0 +1,207 @@
+{
+  "trusted_host_action_id": "tha_930f45aa5a9147",
+  "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-22T14:59:56.979Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_930f45aa5a9147",
+    "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "authorization_id": "grnt_9ad8c5103396433a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-22T15:00:03.694Z",
+    "question_ids": [
+      "bp_qr_00",
+      "bp_qr_pool_access",
+      "bp_qr_zero_sent",
+      "bp_qr_org_present",
+      "bp_qr_org_exists",
+      "bp_qr_fin_no_merchant",
+      "bp_qr_fin_no_usable_method",
+      "bp_qr_fin_no_autopay",
+      "bp_qr_fin_no_provider_activity",
+      "bp_qr_fin_no_active_schedule",
+      "bp_qr_fin_no_draft",
+      "bp_qr_fin_no_open_balance",
+      "bp_qr_fin_no_open_variance",
+      "bp_qr_fin_no_unapplied_money",
+      "bp_qr_fin_attributed",
+      "bp_qr_retained_financial",
+      "bp_qr_retained_financial_actors",
+      "bp_qr_retained_process_config",
+      "bp_qr_retained_audit"
+    ],
+    "questions": {
+      "bp_qr_00": {
+        "question_id": "bp_qr_00",
+        "row_count": null,
+        "rows": [
+          {
+            "qa_shared": "4acc9386-c485-486f-aa1f-05d83499d142",
+            "cleanup": "quiesced_retained",
+            "census_version": 2,
+            "retained_by_design": [
+              "posted financial records (immutable), neutralized and attributed by run",
+              "published process configuration",
+              "access audit history (mutation_events)"
+            ]
+          }
+        ]
+      },
+      "bp_qr_pool_access": {
+        "question_id": "bp_qr_pool_access",
+        "row_count": null,
+        "rows": [
+          "user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ true"
+        ]
+      },
+      "bp_qr_zero_sent": {
+        "question_id": "bp_qr_zero_sent",
+        "row_count": null,
+        "rows": [
+          "communication_messages ~ outbound_send_evidence ~ zero ~ true"
+        ]
+      },
+      "bp_qr_org_present": {
+        "question_id": "bp_qr_org_present",
+        "row_count": null,
+        "rows": [
+          {
+            "qa_shared_present": true
+          }
+        ]
+      },
+      "bp_qr_org_exists": {
+        "question_id": "bp_qr_org_exists",
+        "row_count": null,
+        "rows": [
+          "orgs ~ qa_shared ~ present ~ true"
+        ]
+      },
+      "bp_qr_fin_no_merchant": {
+        "question_id": "bp_qr_fin_no_merchant",
+        "row_count": null,
+        "rows": [
+          "payment_provider_merchants ~ any ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_usable_method": {
+        "question_id": "bp_qr_fin_no_usable_method",
+        "row_count": null,
+        "rows": [
+          "payment_methods ~ usable ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_autopay": {
+        "question_id": "bp_qr_fin_no_autopay",
+        "row_count": null,
+        "rows": [
+          "payment_autopay_arrangements ~ active_or_paused ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_provider_activity": {
+        "question_id": "bp_qr_fin_no_provider_activity",
+        "row_count": null,
+        "rows": [
+          "payment_collection_attempts+payment_provider_refunds+provider_payments ~ any ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_active_schedule": {
+        "question_id": "bp_qr_fin_no_active_schedule",
+        "row_count": null,
+        "rows": [
+          "scheduled_work ~ financials_or_payments_active ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_draft": {
+        "question_id": "bp_qr_fin_no_draft",
+        "row_count": null,
+        "rows": [
+          "charges ~ draft ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_open_balance": {
+        "question_id": "bp_qr_fin_no_open_balance",
+        "row_count": null,
+        "rows": [
+          "charges ~ owed_unreversed_uncovered ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_open_variance": {
+        "question_id": "bp_qr_fin_no_open_variance",
+        "row_count": null,
+        "rows": [
+          "financial_subsidy_variances ~ unresolved ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_no_unapplied_money": {
+        "question_id": "bp_qr_fin_no_unapplied_money",
+        "row_count": null,
+        "rows": [
+          "payments ~ inbound_posted_unapplied ~ zero ~ true"
+        ]
+      },
+      "bp_qr_fin_attributed": {
+        "question_id": "bp_qr_fin_attributed",
+        "row_count": null,
+        "rows": [
+          "charges+payments+variances ~ non_qa_actor ~ zero ~ true"
+        ]
+      },
+      "bp_qr_retained_financial": {
+        "question_id": "bp_qr_retained_financial",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "posted financial records (immutable)",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "qa_shared_charge_rows": 0,
+            "by_status": {},
+            "reversal_rows": 0,
+            "payment_rows": 0,
+            "variance_rows": 0
+          }
+        ]
+      },
+      "bp_qr_retained_financial_actors": {
+        "question_id": "bp_qr_retained_financial_actors",
+        "row_count": null,
+        "rows": [
+          []
+        ]
+      },
+      "bp_qr_retained_process_config": {
+        "question_id": "bp_qr_retained_process_config",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "published process configuration",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "qa_shared_configuration_publication_rows": 0
+          }
+        ]
+      },
+      "bp_qr_retained_audit": {
+        "question_id": "bp_qr_retained_audit",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "access audit history (mutation_events)",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "qa_shared_mutation_event_rows": 0
+          }
+        ]
+      }
+    },
+    "row_count": 19
+  }
+}

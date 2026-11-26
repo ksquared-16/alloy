@@ -8,6 +8,8 @@ import {
     type ResolveTourCommsConfigResult,
 } from "@/lib/tours/comms/tourCommsConfig";
 
+export type { ResolveTourCommsConfigInput, ResolveTourCommsConfigResult };
+
 function requireOrgId(orgId: string): string {
     const id = String(orgId ?? "").trim();
     if (!id) throw new Error("resolveTourCommsConfig: orgId is required");

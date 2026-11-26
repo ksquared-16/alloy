@@ -18,20 +18,10 @@ export type ProviderChannel = "email" | "sms";
 export type ProviderName = "resend" | "twilio" | "google" | "microsoft";
 
 /** Canonical, provider-neutral inbound shape (consumed by PKG-07 normalization). */
-export type ProviderInboundNormalized = {
-    channel: ProviderChannel;
-    fromAddress: string;
-    toAddress: string;
-    subject?: string | null;
-    body: string;
-    occurredAt?: string;
-};
-
 export interface ProviderAdapter {
     readonly provider: ProviderName;
     readonly channel: ProviderChannel;
     /** Map a provider-specific status/webhook event name to the canonical vocabulary, or null if unknown. */
     mapStatusEvent(rawEvent: string): DeliveryEventType | null;
     /** Normalize a provider-specific inbound payload to canonical shape, or null if not an inbound message. */
-    normalizeInbound(payload: unknown): ProviderInboundNormalized | null;
 }

@@ -1,0 +1,154 @@
+<title>Scheduling — schedule command</title>
+<style>
+  :root{
+    --pine:#00A283;--pine-hover:#009276;--forge:#273F52;--ink:#18273A;--slate:#4b5563;--muted:#59678b;
+    --stone:#F4F6F9;--gold:#DBC078;--gold-dark:#d0ad50;--ember:#BC4300;--blue:#00458C;--page:#EEF2F8;--border:#e5e9ef;
+    --font:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --mid-45:rgba(39,63,82,.45);--mid-40:rgba(39,63,82,.40);--mid-35:rgba(39,63,82,.35);--mid-25:rgba(39,63,82,.25);--mid-70:rgba(39,63,82,.70);
+    color-scheme:light;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.45}
+  .tab{font-variant-numeric:tabular-nums} h1,h2,h3{margin:0} button{font-family:inherit;cursor:pointer;border:none;background:none}
+  .frame{max-width:540px;margin:0 auto;padding:22px 18px 48px}
+  .switch{display:flex;gap:6px;margin-bottom:14px;justify-content:center;flex-wrap:wrap}
+  .sw{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:11.5px;font-weight:500;padding:6px 12px;border-radius:999px;transition:all .15s}
+  .sw:hover{border-color:var(--pine);color:var(--pine)} .sw[aria-selected="true"]{border-color:var(--pine);background:rgba(0,162,131,.08);color:var(--pine);font-weight:600}
+  .sw:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .toggle{display:flex;justify-content:center;margin-bottom:12px} .tg{border:1px solid var(--mid-25);background:#fff;color:var(--slate);font-size:11px;font-weight:600;padding:5px 12px} .tg:first-child{border-radius:8px 0 0 8px} .tg:last-child{border-radius:0 8px 8px 0;border-left:none} .tg.on{background:rgba(0,162,131,.08);color:var(--pine);border-color:var(--pine)}
+  .cmd{background:#fff;border:1px solid var(--mid-25);border-radius:12px;box-shadow:0 8px 26px rgba(39,63,82,.12);overflow:hidden}
+  .cmd-hd{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border)} .cmd-t{font-size:13px;font-weight:600;color:var(--forge)} .cmd-sub{font-size:10.5px;color:var(--muted)} .cmd-x{margin-left:auto;color:var(--mid-40)}
+  .step{padding:11px 14px;border-bottom:1px solid #f1f3f6} .step:last-of-type{border-bottom:none} .lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid-40);margin-bottom:7px;display:flex;align-items:center;gap:6px} .lbl .cfg{margin-left:auto;font-size:8.5px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0}
+  .days{display:flex;gap:5px;flex-wrap:wrap} .day{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:10.5px;font-weight:600;color:var(--muted);background:var(--stone);border:1px solid var(--border)} .day.on{background:rgba(0,162,131,.10);color:var(--pine);border-color:rgba(0,162,131,.35)} .day.closed{opacity:.45;background:repeating-linear-gradient(45deg,#fff,#fff 4px,rgba(39,63,82,.04) 4px,rgba(39,63,82,.04) 8px);cursor:not-allowed}
+  .hours{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--forge);font-weight:600} .roompill{font-size:11px;color:var(--slate);background:var(--stone);border:1px solid var(--border);border-radius:8px;padding:4px 9px}
+  .ovr{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--forge);background:var(--stone);border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-top:6px} .ovr .od{font-weight:600} .ovr .ot{color:var(--slate)} .ovr .ox{margin-left:auto;color:var(--mid-40);font-size:11px} .addovr{font-size:11.5px;font-weight:600;color:var(--pine);margin-top:8px;display:inline-block}
+  .field{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--mid-25);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--forge)} .field .fx{color:var(--mid-40);font-size:11px}
+  /* rate options */
+  .rate{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #f6f8fa;cursor:pointer} .rate:last-child{border-bottom:none}
+  .rr{width:15px;height:15px;border-radius:50%;border:2px solid var(--mid-25);flex:0 0 auto;margin-top:2px;position:relative} .rate.on .rr{border-color:var(--pine)} .rate.on .rr::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--pine)}
+  .rn{font-size:12.5px;font-weight:600;color:var(--forge)} .rate.off .rn{font-weight:500;color:var(--mid-70)}
+  .ra{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--forge);flex:0 0 auto} .rmeta{font-size:10.5px;color:var(--muted);margin-top:1px} .rrec{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--pine);margin-left:8px}
+  .subhdr{font-size:10px;font-weight:600;color:var(--mid-40);margin:8px 0 2px}
+  /* financial preview (NEUTRAL) */
+  .fin{border:1px solid var(--border);border-radius:11px;background:#fff;overflow:hidden}
+  .fin-hd{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--slate);padding:9px 13px 4px}
+  .frow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:5px 13px;font-size:12.5px} .frow .fk{color:var(--slate)} .frow .fv{color:var(--forge);font-weight:500;font-variant-numeric:tabular-nums}
+  .frow.disc .fv{color:var(--forge)} .frow.fund .fv{color:var(--forge)}
+  .frow.pending .fv{color:var(--muted);font-style:italic;font-weight:500}
+  .frow.rate .fv{font-weight:600}
+  .fdiv{height:1px;background:#f1f3f6;margin:4px 0}
+  .frow.total{padding:8px 13px;background:rgba(0,162,131,.04);border-top:1px solid #eef0f3} .frow.total .fk{font-weight:600;color:var(--forge)} .frow.total .fv{font-size:15px;font-weight:700;color:var(--forge)}
+  .fin-ft{padding:8px 13px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted)} .billlink{color:var(--blue);font-weight:600} .begins{margin-right:auto}
+  .chip{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:999px} .chip.rec{background:rgba(0,162,131,.10);color:var(--pine)} .chip.pend{background:rgba(39,63,82,.06);color:var(--muted)} .chip.warn{background:rgba(188,67,0,.10);color:var(--ember)}
+  /* warning banner (reserved) */
+  .warn{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ember);background:rgba(188,67,0,.06);border:1px solid rgba(188,67,0,.28);border-radius:9px;padding:8px 11px} .warn button{margin-left:auto;font-weight:600;color:var(--ember);text-decoration:underline;font-size:11px}
+  .warn.block{color:#7a4a00;background:rgba(219,192,120,.12);border-color:rgba(208,173,80,.4)}
+  /* before/after table */
+  .ba{width:100%;border-collapse:collapse} .ba th,.ba td{text-align:left;font-size:12px;padding:6px 8px;border-bottom:1px solid #f1f3f6} .ba th{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mid-40);font-weight:600} .ba td.n{text-align:right;font-variant-numeric:tabular-nums} .ba .now{color:var(--muted)} .ba .next{color:var(--forge);font-weight:600} .ba tr.total td{border-top:1px solid #e5e9ef;font-weight:700;color:var(--forge)}
+  .basum{font-size:12px;color:var(--forge);background:rgba(0,162,131,.05);border-radius:8px;padding:8px 11px;margin-top:8px} .basum b{font-weight:600}
+  .cmd-ft{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--stone)} .cmd-note{font-size:10.5px;color:var(--muted)} .bp{display:inline-flex;align-items:center;gap:6px;border-radius:7px;background:var(--pine);padding:7px 13px;font-size:12px;font-weight:600;color:#fff;margin-left:auto} .bp.dis{background:var(--mid-25);cursor:not-allowed}
+  .screen{display:none}.screen.on{display:block} .lab{font-size:11px;color:var(--muted);text-align:center;margin-top:8px}
+</style>
+
+<div class="frame">
+  <div class="switch" role="tablist" aria-label="Screens">
+    <button class="sw" role="tab" aria-selected="true" data-s="week">Week &amp; pattern</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="rate">Rate choice</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="override">Override</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="preview">Financial preview</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="change">Before / after</button>
+    <button class="sw" role="tab" aria-selected="false" data-s="temp">Temporary · future · stale</button>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<script>
+(function(){
+  var weekStart='sun';
+  function dayrow(){
+    var order = weekStart==='sun' ? ['S','M','T','W','T','F','S'] : ['M','T','W','T','F','S','S'];
+    var on = weekStart==='sun' ? [0,1,1,1,1,1,0] : [1,1,1,1,1,0,0]; // Mon-Fri active
+    var closed = weekStart==='sun' ? [1,0,0,0,0,0,1] : [0,0,0,0,0,1,1];
+    return order.map(function(d,i){var c=closed[i]?'closed':(on[i]?'on':'');return '<span class="day '+c+'">'+d+'</span>';}).join('');
+  }
+  function cmdwrap(title,sub,body,ft){return '<div class="cmd"><div class="cmd-hd"><div><div class="cmd-t">'+title+'</div>'+(sub?'<div class="cmd-sub">'+sub+'</div>':'')+'</div><span class="cmd-x">✕</span></div>'+body+(ft||'')+'</div>';}
+
+  function WEEK(){
+    return cmdwrap('Create schedule · Ethan','Maple Street',
+      '<div class="step"><div class="lbl">Days<span class="cfg">week from configuration</span></div><div class="days">'+dayrow()+'</div><div style="font-size:10.5px;color:var(--muted);margin-top:6px">Sat &amp; Sun are closed at this location.</div></div>'
+      +'<div class="step"><div class="lbl">Default hours &amp; room</div><div class="hours">8:30 AM <span style="color:var(--mid-40)">–</span> 5:30 PM <span class="roompill">Room Sunshine</span></div><div class="ovr"><span class="od">Tuesday</span><span class="ot">9:30 AM – 5:30 PM</span><span class="ox">✕</span></div><span class="addovr">+ Add a day override</span></div>'
+      +'<div class="step"><div class="lbl">Effective</div><span class="field">from Jul 28<span class="fx">▾</span></span></div>',
+      '<div class="cmd-ft"><span class="cmd-note">Configure the minimum; override only exceptions.</span><button class="bp">Continue to rate →</button></div>')
+      +'<div class="lab">Week order and visible/closed days come from configuration — not hardcoded. The Tuesday override is one assignment in the same schedule.</div>';
+  }
+
+  var RATE=cmdwrap('Create schedule · Ethan — rate','Billing evaluates the schedule',
+    '<div class="step"><div class="lbl">Rate<span class="cfg">from Billing</span></div>'
+    +'<div class="rate on"><span class="rr"></span><div style="min-width:0;flex:1"><span class="rn">Toddler · Full Week</span><span class="rrec">Recommended</span><div class="rmeta">Mon–Fri full-day matches the Full Week rate</div></div><span class="ra tab">$980/mo</span></div>'
+    +'<div class="subhdr">Other eligible rates</div>'
+    +'<div class="rate off"><span class="rr"></span><div style="min-width:0;flex:1"><span class="rn">Toddler · Contracted Full Week</span><div class="rmeta">requires override authorization</div></div><span class="ra tab">$925/mo</span></div>'
+    +'<div class="rate off"><span class="rr"></span><div style="min-width:0;flex:1"><span class="rn">Toddler · Legacy Rate</span><div class="rmeta">requires override authorization</div></div><span class="ra tab">$900/mo</span></div>'
+    +'</div>',
+    '<div class="cmd-ft"><span class="cmd-note">Only rates valid for Ethan\'s program, days and agreement are shown.</span><button class="bp">Continue →</button></div>')
+    +'<div class="lab">Billing returns the eligible rates and a recommended default. Scheduling never names or computes a rate; the recommendation is preselected.</div>';
+
+  var OVERRIDE=cmdwrap('Override rate · Ethan','authorized · Site Director',
+    '<div class="step"><div class="lbl">Selected rate</div><div class="rate on"><span class="rr"></span><div style="flex:1"><span class="rn">Toddler · Contracted Full Week</span><div class="rmeta">override of the recommended Full Week</div></div><span class="ra tab">$925/mo</span></div></div>'
+    +'<div class="step"><div class="lbl">Reason (required)</div><div class="field" style="width:100%">Family contract signed 2025 · honored through term</div></div>'
+    +'<div class="step"><div class="lbl">Effective</div><span class="field">from Jul 28<span class="fx">▾</span></span> <span class="field">until term end<span class="fx">▾</span></span></div>'
+    +'<div class="step"><div class="warn block">⚠ This override needs Director approval before it takes effect. It will show as <b>pending approval</b> until then.</div></div>',
+    '<div class="cmd-ft"><span class="cmd-note">Billing owns the override record, approval and audit.</span><button class="bp">Submit for approval</button></div>')
+    +'<div class="cmd" style="margin-top:10px;box-shadow:none"><div class="cmd-hd"><div class="cmd-t">Override rate · Ethan</div><span class="cmd-x">✕</span></div><div class="step"><div class="warn">⚠ You don\'t have permission to override rates. Ask a Site Director.<button>Request override</button></div></div><div class="step"><div class="rate off" style="cursor:not-allowed"><span class="rr"></span><div style="flex:1"><span class="rn">Toddler · Legacy Rate</span><div class="rmeta">override not available for your role</div></div><span class="ra tab" style="color:var(--muted)">$900/mo</span></div></div></div>'
+    +'<div class="lab">Override is a controlled, permissioned, approval-gated path — not free rate entry. Unauthorized operators see a safe reason, not a silent block.</div>';
+
+  function finprev(pending){
+    return '<div class="fin"><div class="fin-hd">Recurring tuition</div>'
+      +'<div class="frow rate"><span class="fk">Rate</span><span class="fv">Toddler · Full Week <span class="chip rec">Recommended</span></span></div>'
+      +'<div class="frow"><span class="fk">Base amount</span><span class="fv">$1,100 / month</span></div>'
+      +'<div class="frow disc"><span class="fk">Sibling discount</span><span class="fv">−$120 / month</span></div>'
+      +(pending
+        ? '<div class="frow fund pending"><span class="fk">State subsidy</span><span class="fv">Pending determination</span></div><div class="fdiv"></div><div class="frow total"><span class="fk">Family responsibility</span><span class="fv">Pending <span class="chip pend">awaiting funding</span></span></div>'
+        : '<div class="frow fund"><span class="fk">State subsidy</span><span class="fv">−$650 / month</span></div><div class="fdiv"></div><div class="frow total"><span class="fk">Family responsibility</span><span class="fv tab">$330 / month</span></div>')
+      +'<div class="fin-ft"><span class="begins">Begins Jul 28</span><span class="billlink">View details in Billing →</span></div></div>';
+  }
+  var PREVIEW=cmdwrap('Create schedule · Ethan — review','write-free until commit',
+    '<div class="step">'+finprev(false)+'</div>'
+    +'<div class="step"><div class="lbl">When funding isn\'t determined yet</div>'+finprev(true)+'</div>',
+    '<div class="cmd-ft"><span class="cmd-note">Amounts come from Billing. Nothing is a bill.</span><button class="bp">Commit schedule</button></div>')
+    +'<div class="lab">Real financial values — base, numeric discount, numeric funding, family responsibility — in neutral styling. Unknown funding is honestly "Pending", never faked.</div>';
+
+  var CHANGE=cmdwrap('Change schedule · Ethan','Mon–Fri → Mon–Thu · from Aug 4',
+    '<div class="step"><table class="ba"><thead><tr><th></th><th style="text-align:right">Current</th><th style="text-align:right">Beginning Aug 4</th></tr></thead><tbody>'
+    +'<tr><td>Pattern</td><td class="n now">Mon–Fri</td><td class="n next">Mon–Thu</td></tr>'
+    +'<tr><td>Rate</td><td class="n now">Full Week</td><td class="n next">Part Week</td></tr>'
+    +'<tr><td>Base tuition</td><td class="n now">$1,100</td><td class="n next">$900</td></tr>'
+    +'<tr><td>Discounts</td><td class="n now">−$120</td><td class="n next">−$100</td></tr>'
+    +'<tr><td>Funding</td><td class="n now">−$650</td><td class="n next">−$550</td></tr>'
+    +'<tr class="total"><td>Family responsibility</td><td class="n now">$330</td><td class="n next">$250</td></tr>'
+    +'</tbody></table><div class="basum">Family responsibility <b>decreases by $80/month</b> beginning Aug 4.</div></div>',
+    '<div class="cmd-ft"><span class="cmd-note">Preview only. Future invoices reflect the change — owned by Billing.</span><button class="bp">Commit change</button></div>')
+    +'<div class="lab">Before → after: operational and financial consequence together. Write-free until commit.</div>';
+
+  var TEMP='<div class="cmd"><div class="cmd-hd"><div class="cmd-t">Ethan · schedule &amp; tuition</div><span class="cmd-x">✕</span></div>'
+    +'<div class="step"><div class="lbl">Upcoming · from Sep 2</div><div class="frow" style="padding:2px 0"><span class="fk">Rainbow · Mon–Fri · fall rate</span><span class="fv tab">$1,040 / month</span></div></div>'
+    +'<div class="step"><div class="lbl">Temporary · Jul 24 – Aug 15</div><div class="frow" style="padding:2px 0"><span class="fk">Rainbow on Thursdays (room change)</span><span class="fv" style="color:var(--muted)">No tuition change</span></div></div>'
+    +'<div class="step"><div class="lbl">Temporary reduction · Jul 24 – Aug 15</div><div class="frow" style="padding:2px 0"><span class="fk">Drops Fridays for the window</span><span class="fv">Family responsibility −$60 for the window</span></div><div style="font-size:10px;color:var(--muted);margin-top:4px">Billing prorates. Reverts Aug 16.</div></div>'
+    +'<div class="step"><div class="warn">↻ The numbers changed since you opened this — a rate update was published. <button>Refresh projection</button></div></div>'
+    +'<div class="cmd-ft"><span class="cmd-note">Projections follow the schedule\'s effective dates.</span><button class="bp dis">Commit</button></div></div>'
+    +'<div class="lab">Future and temporary tuition align to effective dates; Billing owns proration. A stale projection warns (reserved warning color) and blocks commit until refreshed.</div>';
+
+  var S={week:WEEK,rate:RATE,override:OVERRIDE,preview:PREVIEW,change:CHANGE,temp:TEMP};
+  var stage=document.getElementById('stage');
+  function render(k){ stage.innerHTML = (typeof S[k]==='function'?S[k]():S[k]); if(k==='week'){ wireWeek(); } }
+  function wireWeek(){
+    var t='<div class="toggle"><button class="tg '+(weekStart==='sun'?'on':'')+'" data-w="sun">Sunday-first</button><button class="tg '+(weekStart==='mon'?'on':'')+'" data-w="mon">Monday-first</button></div>';
+    stage.innerHTML = t + stage.innerHTML;
+    stage.querySelectorAll('.tg').forEach(function(b){b.addEventListener('click',function(){weekStart=b.dataset.w; render('week');});});
+  }
+  document.querySelectorAll('.sw').forEach(function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('.sw').forEach(function(x){x.setAttribute('aria-selected',x.dataset.s===b.dataset.s?'true':'false');});
+    render(b.dataset.s);
+  });});
+  render('week');
+})();
+</script>

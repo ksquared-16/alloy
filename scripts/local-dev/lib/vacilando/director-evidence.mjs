@@ -1,0 +1,510 @@
+/**
+ * Deterministic evidence for Director authority decisions.
+ *
+ * THE RULE THAT MAKES THIS SAFE: a fact this collector cannot MEASURE is
+ * returned as null, and a null gate escalates. So an incomplete collector can
+ * only ever produce more operator approvals, never fewer — integrating it
+ * cannot regress the current behaviour, only improve on it as measurement
+ * improves.
+ *
+ * Nothing here reads a claim made by the worker. The worker declares what it
+ * wants; the evidence is gathered from sources the worker does not control.
+ */
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { repositoryStorePath } from "./repository-registry.mjs";
+import { governedActionStorePath } from "./governed-action-request.mjs";
+import { executionRunStorePath } from "./execution-run.mjs";
+import { developmentLaneStorePath } from "./development-lane.mjs";
+import { branchIsReferenced } from "./branch-reference.mjs";
+import * as migrationGate from "./migration-parity.mjs";
+import { isSafeCorrection, WITHHELD_CORRECTION_KINDS } from "./reconciliation-apply.mjs";
+import { observeRetirementCandidates } from "./worktree-retirement-observe.mjs";
+import { homedir } from "node:os";
+import {
+  measureClosePullRequestGates,
+  measureHostedMigrationParity,
+  measureMergePullRequestGates,
+  measureDeleteRemoteBranchGates,
+  isNeverDeletable,
+} from "./trusted-host-repository-housekeeping.mjs";
+import { measureProviderCeilingGates } from "./trusted-host-provider-ceiling.mjs";
+import { measureToolkitConvergence } from "./toolkit-convergence.mjs";
+import { measureDeployedRestoreGates } from "./deployed-qa-session-restore-action.mjs";
+import { measureLaneDispatchGates } from "./lane-dispatch.mjs";
+import { getDurableLane } from "./development-lane.mjs";
+import { activeRunForLane } from "./execution-run.mjs";
+// The census gates re-run the registry's own validator rather than reimplement
+// it. Importing the registry here is safe in both directions: the registry
+// imports no evidence, and this module already reaches governed-action-request.
+import { getActionDefinition } from "./trusted-host-action-registry.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
+
+const PROTECTED = ["staging", "main", "master", "production"];
+
+/** Files whose presence in a diff means credential material is moving. */
+const CREDENTIAL_PATTERNS = [
+  /(^|\/)\.env(\.|$)/i, /(^|\/)id_(rsa|ed25519)(\.|$)/i, /\.pem$/i, /\.p12$/i, /\.pfx$/i,
+  /(^|\/)service-account.*\.json$/i, /(^|\/)credentials(\.|$)/i, /\.keystore$/i,
+];
+
+function git(args, cwd) {
+  try {
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 15000 }).trim();
+  } catch { return null; }
+}
+
+function readJson(path) {
+  try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; }
+}
+
+/** Is this a repository Vacilando manages? Read from the registry, not the request. */
+export function managedRepository(remoteOrName, stateRoot) {
+  // Ask the registry for its own path. Hand-joining it was wrong in exactly
+  // the way that matters here: a missed file reads as "not a managed
+  // repository", which is a REFUSAL, so the bug hid as conservatism.
+  let path = null;
+  try { path = repositoryStorePath(stateRoot); } catch { path = null; }
+  const reg = path ? readJson(path) : null;
+  // The registry stores repositories as an object keyed by repository_id;
+  // older snapshots used an array. Accept both, and return null if neither
+  // shape yields entries, because "cannot tell" must escalate.
+  const raw = reg?.repositories;
+  const list = Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : []);
+  if (!list.length) return null;
+  const want = String(remoteOrName || "").toLowerCase();
+  if (!want) return null;
+  return list.some((r) =>
+    String(r.remote_normalized || "").toLowerCase().includes(want)
+    || String(r.remote || "").toLowerCase().includes(want)
+    || String(r.name || "").toLowerCase() === want);
+}
+
+/**
+ * Does this change carry credential material? Measured against the real diff.
+ * If the diff cannot be computed the answer is null, never "no".
+ */
+export function credentialMaterialInRange(worktree, baseRef, headSha) {
+  if (!worktree || !existsSync(worktree) || !headSha) return null;
+  const files = git(["diff", "--name-only", `${baseRef}...${headSha}`], worktree);
+  if (files == null) return null;
+  const list = files.split("\n").map((s) => s.trim()).filter(Boolean);
+  return list.some((f) => CREDENTIAL_PATTERNS.some((re) => re.test(f)));
+}
+
+/** The remote's actual head for a branch. Null when the remote cannot be read. */
+export function remoteHead(worktree, branch) {
+  if (!worktree || !existsSync(worktree) || !branch) return null;
+  const out = git(["ls-remote", "origin", `refs/heads/${branch}`], worktree);
+  if (out == null || out === "") return out === "" ? "" : null;
+  return out.split(/\s+/)[0] || null;
+}
+
+/** Files changed, so a governance-policy edit can be SEEN rather than trusted. */
+export function changedFiles(worktree, baseRef, headSha) {
+  if (!worktree || !existsSync(worktree) || !headSha) return null;
+  const out = git(["diff", "--name-only", `${baseRef}...${headSha}`], worktree);
+  return out == null ? null : out.split("\n").map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Gather what can be proven for a governed request.
+ *
+ * Deliberately returns null for anything not measurable here — including the
+ * durability and certification gates, which need a recorded validation result
+ * rather than an assumption. Until those are wired, push and open-PR escalate
+ * exactly as they do today.
+ */
+function gateEvidence(measured, gateName, field) {
+  const g = (measured?.gates || []).find((x) => x.gate === gateName);
+  if (!g || !g.measured) return null;
+  return g.evidence ? g.evidence[field] ?? null : null;
+}
+
+export function collectDirectorEvidence(rec, {
+  stateRoot,
+  worktree = null,
+  baseRef = "origin/staging",
+  durabilityGatesPassed = null,
+  certificationSuitePassed = null,
+  operatorHold = false,
+  governanceExceptionActive = false,
+} = {}) {
+  const inputs = rec?.inputs || {};
+  const branch = inputs.branch || inputs.headBranch || inputs.head_branch || null;
+  const sha = inputs.expectedHeadSha || inputs.expected_head_sha || inputs.expectedSha || null;
+  const repository = inputs.repository || null;
+  const environment = String(inputs.environment || inputs.base || inputs.targetBranch || rec?.target || "").toLowerCase() || null;
+  const wt = worktree || rec?.worktree_path || null;
+
+  const evidence = {
+    repository,
+    managed_repository: repository ? managedRepository(repository, stateRoot) : null,
+    branch,
+    source_sha: sha,
+    environment,
+    base_branch: (inputs.base || inputs.targetBranch || null),
+    credential_material_detected: credentialMaterialInRange(wt, baseRef, sha),
+    changed_files: changedFiles(wt, baseRef, sha),
+    remote_head_sha: null,
+    // Not assumptions: these must be supplied from a recorded result, or the
+    // gate stays unmeasured and the action escalates.
+    durability_gates_passed: durabilityGatesPassed,
+    certification_suite_passed: certificationSuitePassed,
+    governance_exception_active: governanceExceptionActive === true,
+    operator_hold: operatorHold === true,
+  };
+
+  // OWNERSHIP, MEASURED RATHER THAN INFERRED FROM A NAME.
+  //
+  // The push and open-PR policies used to prove ownership with a branch-name
+  // pattern, which is a proxy: it is satisfied by anything named correctly and
+  // says nothing about who actually holds the branch. What the guard is really
+  // for is "this lane is pushing its own work", and that is directly
+  // observable — the requesting worktree is checked out on this branch, at
+  // this exact sha. A lane cannot fake being on a branch it is not on.
+  //
+  // Both readings come from the worktree the REQUEST RECORD names, never from
+  // inputs, because a worker that could name its own worktree could name
+  // somebody else's and push their branch.
+  if (wt && branch) {
+    const head = git(["rev-parse", "HEAD"], wt);
+    const onBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], wt);
+    evidence.requesting_worktree_branch = onBranch;
+    evidence.requesting_worktree_head = head;
+    evidence.branch_owned_by_requesting_lane = (onBranch == null || head == null)
+      ? null
+      : (String(onBranch) === String(branch)
+        && (sha == null || String(head).toLowerCase() === String(sha).toLowerCase()));
+  } else {
+    evidence.branch_owned_by_requesting_lane = null;
+  }
+  // Repository housekeeping measures REAL GitHub state. Anything unreadable
+  // stays null, and a null gate escalates — a cleanup that cannot be proven
+  // safe is never a cleanup the Director performs.
+  // A PRIVILEGED READ, RE-MEASURED AT THE MOMENT OF DECISION.
+  //
+  // The census was the single largest source of Director interruption — 182
+  // approvals in the 23 days to 2026-09-11, 73 of them in the last 7, and not
+  // one denial in the whole window. It escalated because `alloy_deployed_primary`
+  // is an operator-only ENVIRONMENT, checked before any policy could be matched,
+  // so no gate ever got to answer the only question that matters here: is this
+  // actually a read, and is it the read it says it is.
+  //
+  // MEASURED BY THE REGISTRY'S OWN VALIDATOR, DELIBERATELY. Re-running
+  // `getActionDefinition(...).validateInputs` is not a second implementation of
+  // the rules — it IS the rule, the same code the trusted host runs before it
+  // executes. A gate that re-derived "is this SQL read-only" would be a fork of
+  // validateReadOnlySql, and the two would eventually disagree; the one that
+  // disagreed silently would be this one.
+  //
+  // RE-MEASURED, not remembered. The request passed this same validator when it
+  // was filed, but a decision taken now must rest on what is true now: the
+  // artifact is a file on disk and can change between filing and deciding.
+  //
+  // Every field is null on anything unreadable, and a null gate escalates, so a
+  // census that cannot be proven a read is still the operator's.
+  if (rec?.action_key === "database.read_census") {
+    evidence.census_target = rec?.target || null;
+    evidence.census_mode_read_only = rec?.requested_mode
+      ? String(rec.requested_mode) === "read_only"
+      : null;
+    // An explicitly pinned hash is what makes the artifact an identity rather
+    // than a filename. The validator will also ACCEPT a hash carried inside the
+    // JSON artifact itself, which proves the file is internally consistent and
+    // nothing about what the requester intended — so this gate asks the REQUEST
+    // to have named one.
+    const pinned = inputs.expectedQueryHash || inputs.expected_query_hash || null;
+    evidence.census_query_hash_pinned = Boolean(pinned);
+    try {
+      const def = getActionDefinition("database.read_census");
+      const validated = def?.validateInputs ? def.validateInputs({
+        ...inputs,
+        queryArtifactPath: (rec?.artifact_refs || [])[0] || inputs.queryArtifactPath || null,
+        databaseTarget: rec?.target || null,
+        ...(wt ? { worktreePath: wt, worktree_path: wt } : {}),
+      }) : null;
+      if (validated) {
+        evidence.census_artifact_validates = validated.ok === true;
+        evidence.census_sql_read_only = validated.ok === true
+          ? validated.normalized?.validation?.ok === true
+          : false;
+        // The target the executor will ACTUALLY use, not the one that was asked
+        // for. They are the same value today, and this gate exists so that they
+        // must still be the same value on the day a second target exists.
+        evidence.census_target_exact = validated.ok === true
+          ? String(validated.normalized?.databaseTarget || "") === String(rec?.target || "")
+          : false;
+        evidence.census_artifact_inside_worktree = validated.ok === true
+          ? Boolean(validated.normalized?.artifactRoot)
+          : false;
+        evidence.census_refusal_code = validated.ok === true ? null : (validated.code || "invalid");
+      }
+    } catch {
+      // Unreadable is not safe. Leaving these null escalates, which is correct.
+    }
+  }
+  // Reconciliation metadata. Everything here is derived from the PLAN the
+  // request carries; whether that plan still describes reality is re-checked by
+  // the executor, and its fingerprint is a gate in its own right.
+  if (rec?.action_key === "vacilando.apply_reconciliation_plan") {
+    const corrections = Array.isArray(inputs.corrections) ? inputs.corrections : null;
+    const withheld = Array.isArray(inputs.withheld) ? inputs.withheld : [];
+    evidence.reconciliation_plan_readable = corrections != null && Boolean(inputs.planFingerprint);
+    // Currency is asserted by the request and PROVEN again at execution; an
+    // absent fingerprint leaves this unmeasured, which escalates.
+    evidence.reconciliation_plan_current = /^[0-9a-f]{32}$/.test(String(inputs.planFingerprint || "")) ? true : null;
+    if (corrections) {
+      evidence.all_corrections_allowlisted = corrections.every((c) => isSafeCorrection(c?.kind));
+      evidence.destructive_corrections = corrections.filter((c) => WITHHELD_CORRECTION_KINDS.includes(c?.kind)).length;
+      evidence.live_process_affecting = corrections.filter((c) => c?.affects_live_process === true).length;
+    }
+    // Withheld findings may EXIST. What must be zero is any of them appearing
+    // among the corrections, which the two counts above already establish.
+    evidence.foreign_owner_mutations = corrections ? corrections.filter((c) => c?.kind === "reassign_port").length : null;
+    evidence.ambiguous_owner_mutations = corrections ? corrections.filter((c) => c?.kind === "any_correction").length : null;
+    evidence.withheld_count = withheld.length;
+    evidence.metadata_store_known = Boolean(stateRoot);
+  }
+  // Worktree retirement. Every value here is a MEASUREMENT of the worktree the
+  // request names, taken now — not a restatement of what the requester claimed.
+  // The safety snapshot travels with the request so a decision can be audited,
+  // but the gates below read the freshly measured half.
+  if (rec?.action_key === "vacilando.retire_worktree") {
+    const wt = inputs.worktree || null;
+    evidence.branch = inputs.branch || null;
+    evidence.retirement_fingerprint = inputs.safetyFingerprint || null;
+    // Asking to delete a branch as part of retiring a worktree is malformed,
+    // and stays visible as a gate rather than being silently dropped.
+    evidence.requests_branch_deletion = Boolean(inputs.deleteBranch || inputs.deleteRemoteBranch);
+    try {
+      // The evidence must be gathered about the project the request names. The
+      // literal here meant a retirement request for any project was checked
+      // against Alloy's worktrees, which is evidence about the wrong directory.
+      const evidenceScope = projectScope(inputs.repositoryId || ALLOY_REPOSITORY_ID);
+      const parent = inputs.worktreeParent || evidenceScope.worktree_parent
+        || join(homedir(), "Code", "alloy-worktrees");
+      const gitList = (() => {
+        try {
+          return execFileSync("git", ["worktree", "list", "--porcelain"], {
+            cwd: inputs.canonicalRoot || evidenceScope.root || join(homedir(), "Alloy"), encoding: "utf8",
+            timeout: 20000, stdio: ["ignore", "pipe", "ignore"],
+          }).split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
+        } catch { return null; }
+      })();
+      const inGit = gitList == null ? null : gitList.some((x) => x.replace(/\/+$/, "").split("/").pop() === wt);
+      let processes = [];
+      try {
+        processes = execFileSync("ps", ["-Ao", "pid=,args="], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 15000 })
+          .split("\n").map((l) => { const m = l.trim().match(/^(\d+)\s+(.*)$/); return m ? { pid: Number(m[1]), command: m[2] } : null; })
+          .filter(Boolean);
+      } catch { processes = []; }
+      const measured = observeRetirementCandidates({
+        root: stateRoot,
+        s7Worktrees: [{ path: wt, state: inputs.s7State || "retirable", in_git_worktree_list: inGit, reasons: [] }],
+        processes,
+        worktreeParent: parent,
+        // THE REQUESTER COMES FROM THE RECORD, never from inputs. A worker
+        // that could name its own requester could name someone else's and
+        // retire the tree it is running in. This is the same rule defaultExecute
+        // applies; wiring it in two of the three places left not_self_retirement
+        // unmeasured here, which changed the gate set and therefore the
+        // fingerprint, and a correct request was refused as stale.
+        requestingWorktree: rec?.worktree_path || inputs.requestingWorktree || null,
+        repository: inputs.repository || "repo_alloy",
+      })[0];
+      if (measured) {
+        evidence.retirement_safety_measured = measured.unmeasured.length === 0;
+        evidence.retirement_state = measured.state;
+        evidence.worktree_dirty_paths = gateEvidence(measured, "tree_clean_or_handled", "dirty_paths")?.length ?? null;
+        const liveRefs = ["no_live_provider", "no_live_dev_server", "no_active_execution_run",
+          "no_active_governed_action", "no_active_lane"]
+          .map((g) => measured.gates.find((x) => x.gate === g))
+          .filter((g) => g && g.measured);
+        evidence.live_worktree_references = liveRefs.length === 5
+          ? liveRefs.filter((g) => !g.passed).length
+          : null;
+        evidence.branch_durability = measured.durability;
+        evidence.unique_work_at_risk = measured.durability === "unknown"
+          ? null
+          : measured.durability === "unique_local_commits";
+        const untracked = gateEvidence(measured, "no_untracked_unreproducible", "untracked");
+        const reproducible = gateEvidence(measured, "no_untracked_unreproducible", "reproducible");
+        evidence.untracked_unreproducible = untracked == null ? null : (reproducible === true ? 0 : untracked.length);
+        const selfGate = measured.gates.find((g) => g.gate === "not_self_retirement");
+        evidence.self_retirement = selfGate && selfGate.measured ? !selfGate.passed : null;
+        // The fingerprint must still describe what was just measured.
+        if (evidence.retirement_fingerprint && measured.fingerprint !== evidence.retirement_fingerprint) {
+          evidence.retirement_safety_measured = false;
+          evidence.retirement_state = "stale";
+        }
+      }
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "repository.merge_pull_request") {
+    // The merge policy has always named these gates and nothing measured them,
+    // so every merge escalated and the operator approved it by reading exactly
+    // the state this now reads. Measuring it is what makes the click removable.
+    try {
+      Object.assign(evidence, measureMergePullRequestGates({
+        repository,
+        pullRequestNumber: Number(inputs.pullRequestNumber ?? inputs.pull_request_number),
+        expectedHeadSha: sha,
+      }));
+      // head_sha_still_matches compares the PR head against the sha the
+      // REQUEST named, so the request's claim must be the one on trial.
+      if (evidence.source_sha == null) evidence.source_sha = sha;
+    } catch { /* unmeasured -> escalates */ }
+    // The schema gate is measured separately: a failure to read the migration
+    // set must not also lose the pull-request evidence above, and vice versa.
+    try {
+      // The census records ARE the proof, so they are read from where the
+      // census was recorded rather than copied into a second store. Read
+      // directly: importing the request module's readers here would close a
+      // cycle, since governed-action-request already imports this file.
+      let censusRequests = [];
+      const store = governedActionStorePath(stateRoot);
+      if (existsSync(store)) {
+        const parsed = JSON.parse(readFileSync(store, "utf8"));
+        censusRequests = Array.isArray(parsed) ? parsed : (parsed?.requests || []);
+      }
+      Object.assign(evidence, measureHostedMigrationParity({
+        repository,
+        expectedHeadSha: sha,
+        // The branch being merged INTO is the promoted revision, and it is what
+        // the parity obligation is drawn from. Defaulted rather than assumed
+        // present: this action's target is already allowlisted to staging.
+        targetBranch: inputs.target_branch || inputs.targetBranch || inputs.base || "staging",
+      }, {
+        censusRequests,
+        gate: migrationGate,
+        provenFrom: (rows) => migrationGate.provenHostedHeadFromCensusRecords(rows, {
+          artifactPath: "hosted-migration-identity-census.sql",
+        }),
+      }));
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "lane.dispatch_measurement_instruction") {
+    // Wired here, not only written. The collector existing is not the same as
+    // the collector being CALLED, and a unit test that invokes it directly
+    // cannot tell those apart — which is how this very action nearly shipped
+    // with six permanently unmeasured gates.
+    try {
+      Object.assign(evidence, measureLaneDispatchGates(inputs, {
+        missionId: rec.mission_id || null,
+        lookupLane: (laneId) => {
+          try { return getDurableLane(laneId, stateRoot); } catch { return null; }
+        },
+        activeRunFor: (laneId) => {
+          try { return activeRunForLane(laneId, stateRoot); } catch { return null; }
+        },
+      }));
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "host.install_toolkit") {
+    // The third occurrence of one defect: gates were named and a policy written
+    // while nothing collected the evidence, so every convergence escalated with
+    // "required gates were not measured". measureToolkitConvergence already
+    // produces exactly these fields; it was simply never called from here.
+    try {
+      Object.assign(evidence, measureToolkitConvergence());
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "environment.restore_deployed_qa_session") {
+    // The FOURTH place this defect would have appeared. `defineEnvironmentRestoreDeployedQaSession`
+    // names six gates; without this call every one of them reads `undefined`, the authority
+    // evaluation sees unmeasured gates, and the Director is told a deployed restore cannot be
+    // authorized for reasons that are actually "nobody measured".
+    try {
+      Object.assign(evidence, measureDeployedRestoreGates(
+        inputs.deployed_target || inputs.deployedTarget || inputs.target_key || null,
+      ));
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "capacity.set_provider_ceiling") {
+    // Same defect merge had: the policy named six gates and nothing collected
+    // them, so every ceiling move escalated for want of a measurement the
+    // canonical reader already prints.
+    try {
+      Object.assign(evidence, measureProviderCeilingGates(inputs));
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "repository.close_pull_request") {
+    try {
+      const n = {
+        repository,
+        pullRequestNumber: Number(inputs.pullRequestNumber ?? inputs.pull_request_number),
+        expectedHeadBranch: inputs.expectedHeadBranch || inputs.headBranch || null,
+        expectedHeadSha: sha,
+        expectedBaseBranch: inputs.expectedBaseBranch || inputs.base || null,
+        expectedHeadRepository: inputs.expectedHeadRepository || null,
+      };
+      Object.assign(evidence, measureClosePullRequestGates(n));
+    } catch { /* unmeasured -> escalates */ }
+    // A governed merge still legitimately targeting this PR blocks closure.
+    evidence.active_governed_merge = activeGovernedMergeFor(stateRoot, repository, inputs.pullRequestNumber ?? inputs.pull_request_number);
+  }
+  if (rec?.action_key === "repository.delete_remote_branch") {
+    const br = inputs.branch || inputs.branchName || null;
+    evidence.branch = br;
+    evidence.branch_never_protected_name = br == null ? null : !isNeverDeletable(br);
+    try {
+      Object.assign(evidence, measureDeleteRemoteBranchGates({ repository, branch: br, expectedHeadSha: sha }));
+    } catch { /* unmeasured -> escalates */ }
+    // STRUCTURED REFERENCES ONLY. The previous implementation serialised every
+    // non-terminal run and asked whether the branch NAME appeared in the JSON,
+    // so a run whose instruction text merely mentioned the branch counted as
+    // depending on it — including the run doing the deleting, which meant the
+    // gate blocked itself. Prose is not a reference.
+    let lanesPath = null; let runsPath = null; let gaPath2 = null;
+    try { lanesPath = developmentLaneStorePath(stateRoot); } catch { lanesPath = null; }
+    try { runsPath = executionRunStorePath(stateRoot); } catch { runsPath = null; }
+    try { gaPath2 = governedActionStorePath(stateRoot); } catch { gaPath2 = null; }
+    evidence.active_lane_reference = branchIsReferenced({
+      branch: br, repository, lanesPath, runsPath, governedActionsPath: gaPath2,
+      excludeGovernedActionId: rec?.request_id || null,
+    });
+    // Unique work is only "not at risk" when the branch head is reachable from
+    // the canonical branch. Unreachable or unmeasurable stays null.
+    evidence.unique_work_at_risk = uniqueWorkAtRisk(wt, sha);
+  }
+  if (rec?.action_key === "promotion.open_pr") {
+    evidence.remote_head_sha = remoteHead(wt, branch);
+  }
+  if (branch != null) {
+    evidence.protected_branch = PROTECTED.includes(String(branch).toLowerCase());
+  }
+  return evidence;
+}
+
+/** Is a governed merge still legitimately targeting this pull request? */
+function activeGovernedMergeFor(stateRoot, repository, prNumber) {
+  if (!prNumber) return null;
+  // Ask the owner. Reconstructing a canonical Vacilando store path by hand is
+  // how this gate came back unmeasured in the first place.
+  let gaPath = null;
+  try { gaPath = governedActionStorePath(stateRoot); } catch { gaPath = null; }
+  const db = gaPath ? readJson(gaPath) : null;
+  const rows = Array.isArray(db) ? db : (db?.requests || db?.records || (db && Object.values(db).find(Array.isArray)) || null);
+  if (!Array.isArray(rows)) return null;                       // cannot tell -> escalate
+  const pending = ["requested", "awaiting_director", "awaiting_operator", "awaiting_control_plane_refresh", "executing"];
+  return rows.some((r) => r
+    && r.action_key === "repository.merge_pull_request"
+    && pending.includes(r.status)
+    && Number(r.inputs?.pullRequestNumber ?? r.inputs?.pull_request_number) === Number(prNumber));
+}
+
+
+/** Would deleting this head lose work no canonical branch can reach? */
+function uniqueWorkAtRisk(worktree, sha) {
+  if (!worktree || !existsSync(worktree) || !sha) return null;
+  const merged = git(["merge-base", "--is-ancestor", sha, "origin/staging"], worktree);
+  if (merged !== null) return false;                           // reachable from staging
+  const branches = git(["branch", "-r", "--contains", sha], worktree);
+  if (branches == null) return null;                           // unmeasurable -> escalate
+  const others = branches.split("\n").map((x) => x.trim()).filter((x) => x && !/->/.test(x));
+  // Reachable only from the branch about to be deleted means the commits go
+  // with it. That is exactly the case a human should decide.
+  return others.length <= 1;
+}

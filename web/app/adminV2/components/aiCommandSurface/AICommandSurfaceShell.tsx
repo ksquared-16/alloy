@@ -1,6 +1,7 @@
 "use client";
 
 import { ADMIN_AI_ACTIVITY_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -33,6 +34,17 @@ import {
   BosRailHeader,
   BosRailStarterCards,
 } from "@/app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation";
+import { BosCommandSessionHost } from "@/app/adminV2/components/aiCommandSurface/commandSession/BosCommandSessionHost";
+import {
+  dispatchStartBosCommandSession,
+  useBosCommandSessionOptional,
+} from "@/contexts/BosCommandSessionContext";
+import {
+  isBosSlashComposerQuery,
+  queryBosSlashCatalog,
+} from "@/lib/bos/commandSession/slash";
+import type { BosSlashCommandDescriptor } from "@/lib/bos/commandSession/types";
+import { useBosProcessEffectiveCommandKeys } from "@/app/adminV2/components/aiCommandSurface/commandSession/useBosProcessEffectiveCommandKeys";
 import {
   JobLayoutOperationalProposalCard,
   type JobLayoutCardUiState,
@@ -55,6 +67,7 @@ import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferB
 import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { resolveBosCommandSurfaceContextLabel } from "@/lib/adminV2/bos/bosCommandSurfaceContextPresentation";
+import { buildBosContextPills } from "@/lib/bos/buildBosContextPills";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
   buildTaskAssistCommandBootstrap,
@@ -649,10 +662,13 @@ export default function AICommandSurfaceShell({
 }: {
   presentation?: AICommandSurfacePresentation;
 }) {
+  const pathname = usePathname();
   const shellRootRef = useRef<HTMLElement | null>(null);
   const adminDrawer = useAdminDrawerOptional();
 
   const globalAssistant = useGlobalAssistantOptional();
+  const bosCommandSession = useBosCommandSessionOptional();
+  const activeCommandSession = bosCommandSession?.session ?? null;
   const { labels: entityLabelMap } = useEntityLabelsOptional();
   const opportunitySingular = entityLabelMap.opportunities?.singular ?? "Lead";
   const siteFilter = useWorkspaceSiteFilter();
@@ -661,6 +677,66 @@ export default function AICommandSurfaceShell({
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [commandText, setCommandText] = useState("");
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const workspaceDepartmentId =
+    globalAssistant?.workspaceScope?.department_id?.trim() || null;
+  const { keys: processEffectiveCommandKeys } =
+    useBosProcessEffectiveCommandKeys(workspaceDepartmentId);
+  const slashItems = useMemo(() => {
+    if (!isBosSlashComposerQuery(commandText)) return [];
+    return queryBosSlashCatalog({
+      query: commandText,
+      processEffectiveCommandKeys,
+    });
+  }, [commandText, processEffectiveCommandKeys]);
+  useEffect(() => {
+    setSlashActiveIndex(0);
+  }, [commandText]);
+  const selectSlashCommand = useCallback(
+    (item: BosSlashCommandDescriptor) => {
+      if (!item.eligible) return;
+      setCommandText("");
+      const ws = globalAssistant?.workspaceScope;
+      dispatchStartBosCommandSession({
+        actionKey: item.actionKey,
+        displayLabel: item.displayLabel,
+        placement: "bos_slash",
+        contextResolution: "bos_proposal",
+        workspace: {
+          departmentId: ws?.department_id?.trim() || null,
+          workUnitId: ws?.work_unit_id?.trim() || null,
+          surface: ws?.work_unit_id?.trim() ? "work_unit" : "workspace",
+        },
+      });
+    },
+    [globalAssistant?.workspaceScope]
+  );
+  const onSlashKeyNavigate = useCallback(
+    (direction: "up" | "down" | "enter" | "escape") => {
+      if (direction === "escape") {
+        setCommandText("");
+        return true;
+      }
+      if (slashItems.length === 0) return false;
+      if (direction === "down") {
+        setSlashActiveIndex((i) => Math.min(i + 1, slashItems.length - 1));
+        return true;
+      }
+      if (direction === "up") {
+        setSlashActiveIndex((i) => Math.max(i - 1, 0));
+        return true;
+      }
+      if (direction === "enter") {
+        const item = slashItems[slashActiveIndex] ?? slashItems[0];
+        if (item?.eligible) {
+          selectSlashCommand(item);
+          return true;
+        }
+      }
+      return false;
+    },
+    [selectSlashCommand, slashActiveIndex, slashItems]
+  );
   const [localThread, setLocalThread] = useState<CommandSurfaceThreadState>(() => createEmptyThreadState());
   const [localJobCardUi, setLocalJobCardUi] = useState<
     Record<
@@ -698,6 +774,11 @@ export default function AICommandSurfaceShell({
   const [configLayoutAssistCaps, setConfigLayoutAssistCaps] = useState<ConfigLayoutAssistCapabilitiesV1 | null>(
     null
   );
+  // The AI-assist capability probes (workflow-assist + config-layout-assist) are DESTINATION-triggered:
+  // /workspace boot must not fetch AI capabilities (the operator hasn't touched the command surface).
+  // Flip on first engagement — typing a command, expanding the thread, or a focus-command-bar event —
+  // which is well before any assist action can be submitted, so the capability is ready in time.
+  const [hasEngagedCommandSurface, setHasEngagedCommandSurface] = useState(false);
   const [viewportH, setViewportH] = useState(900);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -1684,7 +1765,14 @@ export default function AICommandSurfaceShell({
     [proposeWorkflowAssistBody]
   );
 
+  // Engagement detector: any real interaction with the command surface arms the capability probes.
   useEffect(() => {
+    if (hasEngagedCommandSurface) return;
+    if (commandText.trim().length > 0 || threadExpanded) setHasEngagedCommandSurface(true);
+  }, [commandText, threadExpanded, hasEngagedCommandSurface]);
+
+  useEffect(() => {
+    if (!hasEngagedCommandSurface) return; // destination-triggered — not on /workspace boot
     let cancelled = false;
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
@@ -1707,9 +1795,10 @@ export default function AICommandSurfaceShell({
       cancelled = true;
       cancelDefer();
     };
-  }, []);
+  }, [hasEngagedCommandSurface]);
 
   useEffect(() => {
+    if (!hasEngagedCommandSurface) return; // destination-triggered — not on /workspace boot
     let cancelled = false;
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
@@ -1727,7 +1816,7 @@ export default function AICommandSurfaceShell({
       cancelled = true;
       cancelDefer();
     };
-  }, []);
+  }, [hasEngagedCommandSurface]);
 
   const runSubmittedCommandRef = useRef<(cmd: string) => Promise<void>>(async () => { });
   const runBosAssistHandoffRef = useRef<
@@ -1819,6 +1908,40 @@ export default function AICommandSurfaceShell({
           case "task_assist":
             await runTaskAssistRoute(cmd, routed.taskAssistIntent, routed.slots);
             break;
+          case "operational_question": {
+            try {
+              const res = await fetch("/api/admin/operational-questions/bos", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: cmd }),
+              });
+              const json = (await res.json()) as {
+                transcript_lines?: string[];
+                clarify?: string | null;
+                error?: string;
+              };
+              const lines =
+                json.transcript_lines && json.transcript_lines.length > 0
+                  ? json.transcript_lines
+                  : [json.clarify || json.error || "I couldn’t answer that operational question."];
+              for (const line of lines) {
+                setThread((prev) =>
+                  appendThreadTurn(prev, {
+                    kind: "assistant_notice",
+                    text: line,
+                  }),
+                );
+              }
+            } catch {
+              setThread((prev) =>
+                appendThreadTurn(prev, {
+                  kind: "assistant_notice",
+                  text: "I couldn’t reach Operational Intelligence for that question.",
+                }),
+              );
+            }
+            break;
+          }
         }
       } finally {
         setBusy(false);
@@ -2050,6 +2173,7 @@ export default function AICommandSurfaceShell({
   useEffect(() => {
     const onFocusBar = (ev: Event) => {
       const detail = (ev as CustomEvent<AdminV2FocusCommandBarDetail>).detail ?? {};
+      setHasEngagedCommandSurface(true); // arm the capability probes on real command-surface engagement
       shellRootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       if (detail.preferMode && globalAssistant) {
         globalAssistant.setCommandSurfaceMode(detail.preferMode);
@@ -2160,14 +2284,36 @@ export default function AICommandSurfaceShell({
     ]
   );
 
+  const bosContextPills = useMemo(
+    () =>
+      buildBosContextPills({
+        currentContext: globalAssistant?.currentContext ?? null,
+        workspaceScope: globalAssistant?.workspaceScope ?? null,
+        surfaceOperationalLabel: globalAssistant?.surfaceOperationalLabel ?? null,
+        opportunitySingular,
+      }),
+    [
+      globalAssistant?.currentContext,
+      globalAssistant?.workspaceScope,
+      globalAssistant?.surfaceOperationalLabel,
+      opportunitySingular,
+    ]
+  );
+
   const bosRailStarterSuggestions = useMemo(
     () =>
       resolveCommandSurfaceRailStarterSuggestions({
         hasWorkUnitScope: Boolean(globalAssistant?.workspaceScope?.work_unit_id?.trim()),
         hasOpportunityContext: globalAssistant?.currentContext?.entity_type === "opportunities",
         opportunitySingular,
+        pathname,
+        isConfigurationContext:
+          pathname === "/organization"
+          || pathname.startsWith("/organization/")
+          || pathname === "/settings"
+          || pathname.startsWith("/settings/"),
       }),
-    [globalAssistant?.workspaceScope?.work_unit_id, globalAssistant?.currentContext, opportunitySingular]
+    [globalAssistant?.workspaceScope?.work_unit_id, globalAssistant?.currentContext, opportunitySingular, pathname]
   );
 
   const bosRailAttention = useMemo(
@@ -2190,7 +2336,15 @@ export default function AICommandSurfaceShell({
     <SurfaceCard expanded={surfaceExpanded} presentation={presentation} rootRef={shellRootRef}>
       {presentation === "rail" ?
         <>
-          <BosRailHeader contextDisplayLine={bosContextDisplayLine} statusLabel={threadStatusLabel} />
+          <BosRailHeader
+            contextDisplayLine={bosContextDisplayLine}
+            contextPills={bosContextPills}
+            statusLabel={threadStatusLabel}
+          />
+          {activeCommandSession && activeCommandSession.phase !== "discarded" ? (
+            <BosCommandSessionHost />
+          ) : (
+            <>
           <div className="bos-rail-upper shrink-0">
             <BosRailAttentionSection attention={bosRailAttention} onCta={onBosRailAttentionCta} />
             {hasThread ? null : (
@@ -2255,7 +2409,14 @@ export default function AICommandSurfaceShell({
             onChange={setCommandText}
             onSubmit={() => void handleSubmit()}
             inputRef={inputRef}
+            slashItems={slashItems}
+            slashActiveIndex={slashActiveIndex}
+            onSlashHighlight={setSlashActiveIndex}
+            onSlashSelect={selectSlashCommand}
+            onSlashKeyNavigate={onSlashKeyNavigate}
           />
+            </>
+          )}
         </>
       :   null}
       {presentation !== "rail" && hasThread ? (

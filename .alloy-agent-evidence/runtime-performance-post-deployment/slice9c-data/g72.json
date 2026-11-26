@@ -1,0 +1,39 @@
+{
+ "out": {
+  "rowA": "9ab36f48",
+  "rowB": "8b3689fb",
+  "A_imgs": [
+   "LzD1SkS9tUJEPlQK95eXWWZaCByCDQVek17ipYbI"
+  ],
+  "A_text": "Wrigley Kurzman Waitlist · Enrolling · Tour Scheduled ",
+  "t_row_selection_ms": 231,
+  "t_header_text_identity_ms": 231,
+  "t_avatar_identity_ms": 231,
+  "t_panel_settlement_ms": 6371,
+  "FORBIDDEN_B_identity_with_A_image_frames": 0,
+  "forbidden_window_ms": null,
+  "stale_img_frames_any": 6,
+  "frames": 488,
+  "final_imgs": [],
+  "final_text": "PK PassA Kid Waitlist · Enrolling · Tour Scheduled Nor"
+ },
+ "rapid": {
+  "rowC": "ddc23ed1",
+  "A_imgs_before": [
+   "LzD1SkS9tUJEPlQK95eXWWZaCByCDQVek17ipYbI"
+  ],
+  "final_activeRow": "ddc23ed1",
+  "C_owns_active_row": true,
+  "final_imgs": [],
+  "final_text": "TP Test Process7 Waitlist · Enrolling · Tour Scheduled",
+  "frames_showing_A_image_after_C_click": 2
+ },
+ "A": {
+  "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "activeRow": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "hdrImgs": [
+   "LzD1SkS9tUJEPlQK95eXWWZaCByCDQVek17ipYbI"
+  ],
+  "hdrText": "Wrigley Kurzman Waitlist · Enrolling · Tour Scheduled "
+ }
+}

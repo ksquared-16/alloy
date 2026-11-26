@@ -1,0 +1,11 @@
+{
+  "medical": {
+    "id": "408fecf9-d290-45e7-92e4-3864c0f7a62b",
+    "owner": "fixture_admin"
+  },
+  "medical_declared": {
+    "id": "f6cf58f0-b345-4611-bbb0-fa54a9098e38",
+    "owner": "fixture_admin",
+    "raised": true
+  }
+}

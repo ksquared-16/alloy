@@ -8,7 +8,7 @@
  *
  * No execution, no React — just copy derivation so it is unit-testable without a DOM.
  *
- * @see docs/sprints/06_2026/command_surface_v2.md
+ * @see docs/sprints/archive/06_2026/command_surface_v2.md
  */
 
 import type {

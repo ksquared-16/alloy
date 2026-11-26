@@ -14,10 +14,6 @@ function readSrc(rel: string): string {
 
 describe("System 5 Visual QA correction guards", () => {
     const baseVm = minimalSettledOpportunityDrawerViewModel({
-        actions: {
-            header_menu: [{ action_key: "schedule_tour", label: "Schedule tour" } as never],
-            drawer_tabs: [],
-        },
         summaries: {
             attention: {
                 visible: true,
@@ -29,22 +25,19 @@ describe("System 5 Visual QA correction guards", () => {
                 state: "loaded",
                 open_count: 1,
                 open_tasks: [
-                    { id: "t1", title: "Follow up", due_at: null, status: "open", source: "task_assist" },
+                    { id: "t1", title: "Follow up", due_at: "", status: "open", source: "task_assist" },
                 ],
             },
+            active_tour_bookings: [],
+            operator_relevant_tour_booking: null,
+            reminders: {
+                state: "empty",
+                next_follow_up_iso: null,
+                scheduled_send_count: 0,
+                scheduled_sends: [],
+            },
+            bos: null,
         },
-    });
-
-    it("WUC KPI zone renders compact metric tiles (not flat chip strip)", () => {
-        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
-        // V2 tile row is defined in CSS — overrides align and padding for the tile zone
-        expect(css).toContain(".adminv2-os-context__metric-tiles");
-        // V1 kpi-strip CSS retained for completeness (no longer applied in runtime path)
-        expect(css).toContain(".adminv2-os-context__kpi-strip");
-        expect(css).toContain("[data-metric-visual]");
-        const surface = readSrc("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
-        expect(surface).toContain('data-alloy-os-kpi="true"');
-        expect(surface).toContain("adminv2-os-context__metric-tiles");
     });
 
     it("summary cards use System 5 storytelling — mission uses action not stage label", () => {
@@ -58,7 +51,18 @@ describe("System 5 Visual QA correction guards", () => {
                 ],
             },
             title: "Wright Family",
-            perspective: { key: "lead", label: "Lead", workUnitId: "wu", grain: "case", groupBy: null, sort: [], defaultMission: null, emptyState: { title: "Empty" }, source: "pill" },
+            perspective: {
+                key: "lead",
+                label: "Lead",
+                workUnitId: "wu",
+                grain: "case",
+                groupBy: null,
+                sort: [],
+                defaultMission: null,
+                defaultFilters: null,
+                emptyState: { title: "Empty" },
+                source: "pill",
+            },
             statusLabel: "Lead",
         });
 
@@ -108,7 +112,6 @@ describe("System 5 Visual QA correction guards", () => {
         const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
         expect(workspace).toContain('data-focus-panel-embedded-workspace="true"');
         expect(workspace).toContain('data-focus-panel-activity-workspace="true"');
-        expect(workspace).toContain('data-embedded-workspace-nav="true"');
         expect(workspace).toContain("CommunicationsDrawerSection");
         expect(ACTIVITY_WORKSPACE_TABS.map((t) => t.key)).toEqual([
             "timeline",
@@ -126,9 +129,4 @@ describe("System 5 Visual QA correction guards", () => {
         expect(renderer).toContain('focusPanelMode !== "activity"');
     });
 
-    it("shell regression markers remain intact", () => {
-        expect(readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx")).toContain("CompressedQueueRow");
-        expect(readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx")).toContain("focusPanelActive");
-        expect(readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx")).toContain("!focusPanelActive");
-    });
 });

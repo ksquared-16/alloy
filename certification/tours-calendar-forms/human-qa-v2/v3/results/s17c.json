@@ -1,0 +1,34 @@
+{
+ "A1_tzBefore": "",
+ "C_tab": "Scheduling",
+ "C_zone_check": 1,
+ "C_zone": "Dates and times are this location’s: America/Los_Angeles",
+ "C1_impact": "Before you save | Northwind — Riverside Campus · 1 date | Thu, Nov 5, 2026: Ordinary hours → Closed | Save | Back",
+ "C1_notice": "Saved. Nothing was sent to families, and existing bookings were not changed.",
+ "C3_impact": "Before you save | Northwind — Riverside Campus · 1 date | Wed, Nov 4, 2026: Ordinary hours → Open 12:00 AM – 9:00 AM, 10:00 AM – midnight | 1 existing tour booking falls in this change | They will not be cancelled, moved or messaged. They will be listed here as needing attention. | Wed, Nov 4, 2026 · 9:30 AM PST · Outside that day's hours (QA Partial closure) · Open record | Save | Back",
+ "C3_notice": "Saved. Nothing was sent to families, and existing bookings were not changed.",
+ "C_entries": "QA Partial closure | Wed, Nov 4, 2026 · Closed 9:00 AM – 10:00 AM | This location | Edit | Reopen | QA Holiday | Thu, Nov 5, 2026 · Closed all day | This location | Edit | Reopen",
+ "errors": [],
+ "A5_hostedHasName": true,
+ "day3_disabled": false,
+ "day3_times": [
+  "9:00 AM",
+  "9:30 AM",
+  "10:00 AM",
+  "10:30 AM",
+  "1:00 PM",
+  "1:30 PM",
+  "2:00 PM",
+  "2:30 PM"
+ ],
+ "day4_disabled": false,
+ "day4_times": [
+  "10:00 AM",
+  "10:30 AM",
+  "1:00 PM",
+  "1:30 PM",
+  "2:00 PM",
+  "2:30 PM"
+ ],
+ "day5_disabled": true
+}

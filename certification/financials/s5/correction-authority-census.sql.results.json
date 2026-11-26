@@ -1,0 +1,321 @@
+{
+  "trusted_host_action_id": "tha_6755bdd90fda97",
+  "query_hash": "c49092bd4f9b9cccda83c80b4f80e3346c7e798de3dedc298ec99989f5eb6a9f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-03T01:15:17.301Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_6755bdd90fda97",
+    "query_hash": "c49092bd4f9b9cccda83c80b4f80e3346c7e798de3dedc298ec99989f5eb6a9f",
+    "authorization_id": "grnt_8cc4265c21a24781",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-03T01:15:22.931Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "application_id": "98e1b0f6-7a86-49d0-94c8-f8f36a0dc84a",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": -1234,
+            "reason": "Certification: goodwill for a closure day",
+            "created_at": "2026-09-14T11:09:00.015348+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "6fe4f79e-23ac-4c43-85fb-770b0f6a0ce6",
+            "contra_status": "posted",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "ddb588df-aaf6-42d4-9554-f87510e482cb",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": 1234,
+            "reason": "Certification: recorded against the wrong enrolment",
+            "created_at": "2026-09-14T11:09:24.198735+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "9752d248-9dee-4cca-af1c-430e54e045f0",
+            "contra_status": "posted",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "4bcc7c9a-1de2-4af8-ad33-79bbf637aed0",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": -777,
+            "reason": "Oracle: goodwill against this obligation",
+            "created_at": "2026-09-14T11:12:45.786379+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "5882e81b-053b-4869-91a9-e9ddbe91dce9",
+            "contra_status": "posted",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "a700c2b7-1381-433c-ba27-c2c713909fec",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": -777,
+            "reason": "Oracle: goodwill against this obligation",
+            "created_at": "2026-09-14T11:13:39.964379+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "26b91a27-9ced-42f9-a1aa-7a19cba04c09",
+            "contra_status": "draft",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "c195baf0-fd08-42ea-aa0d-be0d0ef3981e",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": -777,
+            "reason": "Oracle: goodwill against this obligation",
+            "created_at": "2026-09-14T11:14:10.149998+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "9a882511-7bf6-40ed-82f6-3513c1801bd7",
+            "contra_status": "draft",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "7c3ad4fe-2310-49dd-9f15-a941f71ea2e0",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": -777,
+            "reason": "Oracle: goodwill against this obligation",
+            "created_at": "2026-09-14T11:14:46.781629+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "26947342-a2f5-4711-9714-52087be488ae",
+            "contra_status": "posted",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "43158f15-3541-4232-a01d-75bc7d7a1a95",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": -777,
+            "reason": "Oracle: goodwill against this obligation",
+            "created_at": "2026-09-14T11:15:31.020367+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "33f906d1-f770-493f-958e-3bc8c2a99d8c",
+            "contra_status": "posted",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "79a33ab4-752f-4492-8d33-426cb4427bb0",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": -1234,
+            "reason": "Certification: goodwill for a closure day",
+            "created_at": "2026-09-14T11:47:26.716006+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "82a4c6b6-3d5d-4ae7-88e7-ec6a2d3d0b72",
+            "contra_status": "posted",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          },
+          {
+            "application_id": "b579ce84-a41a-4848-b7c4-05c745fb7c65",
+            "reduction_kind": "manual",
+            "policy_kind": null,
+            "amount_cents": 1234,
+            "reason": "Certification: recorded against the wrong enrolment",
+            "created_at": "2026-09-14T11:48:02.249464+00:00",
+            "correction_generation": "legacy",
+            "correction_period_key": "2026-09",
+            "correction_legacy_key": "2026-09",
+            "correction_billing_period_id": null,
+            "source_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "source_status": "posted",
+            "source_generation": "legacy",
+            "source_legacy_key": "2026-08",
+            "source_billing_period_id": null,
+            "source_service_date": "2026-08-26",
+            "contra_charge_id": "c03df42e-0a19-4ef8-9ff4-b5b04a4bf0de",
+            "contra_status": "posted",
+            "contra_service_date": "2026-09-14",
+            "contra_source_charge_id": null,
+            "contra_generation": "legacy",
+            "contra_legacy_key": "2026-09"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "applications_with_source": 40,
+            "cross_period": 9,
+            "same_period": 31,
+            "by_reduction_kind": [
+              {
+                "kind": "manual",
+                "n": 33
+              },
+              {
+                "kind": "policy",
+                "n": 7
+              }
+            ],
+            "source_in_closed_period": 0,
+            "source_in_open_period": 0,
+            "source_has_no_canonical_period": 40
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "applications_total": 51,
+            "with_a_source_charge": 40,
+            "source_is_legacy_generation": 40,
+            "source_is_canonical_generation": 0,
+            "source_fk_definition": "FOREIGN KEY (source_charge_id) REFERENCES charges(id) ON DELETE RESTRICT",
+            "charges_with_canonical_period": 4,
+            "charges_legacy": 132
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_level_lineage_trigger": [
+              "trg_enforce_charge_correction_lineage"
+            ],
+            "charges_with_source_charge_id": 9,
+            "reversal_charges": 9,
+            "contra_charges_from_reductions": 51,
+            "contra_charges_with_charge_level_source": 0,
+            "sources_with_multiple_applications": 3,
+            "max_applications_against_one_source": 13
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "uniques_on_applications": [
+              "financial_reduction_applications_pkey :: PRIMARY KEY (id)"
+            ],
+            "distinct_idempotency_keys": 51,
+            "rows": 51
+          }
+        ]
+      }
+    },
+    "row_count": 13
+  }
+}

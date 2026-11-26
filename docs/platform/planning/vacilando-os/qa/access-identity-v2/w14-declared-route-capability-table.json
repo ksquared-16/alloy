@@ -1,0 +1,130 @@
+{
+  "title": "Access & Identity V2 — W-14 execution record, and the progress report at that state",
+  "supersedes": "post-merge-certification-reconciliation.json for the progress and certification sections. That file's findings A (the tranche is on staging), B (W-8 crossed a promotion-binding announcement gate) and C (migration apply state is unverifiable from this session) all STAND UNCHANGED — nothing in this session touched promotion, migrations or the shared environment.",
+  "mission": {
+    "mission_id": "msn_f74ed02c126c88d7ff",
+    "mission_version": 1,
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "assignment": "asg_0232d36df9694c",
+    "worktree": "/Users/Kelly/Code/alloy-worktrees/wt6-director-experience-dx5-5-continuation",
+    "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+    "head_at_report": "ff3b1f88d",
+    "origin_staging_at_report": "e26cb49db",
+    "generated": "2026-08-10"
+  },
+
+  "why_this_workstream_and_not_promotion": {
+    "reasoning": "Every remaining promotion and certification step is credentialed or operator-owned: OD-1 (no actor in the worker system holds the shared database URL), OD-2 (database.read_census is Director-side by design), OD-3 (a 36-key vocabulary deletion is a product decision). None of them became executable this session. W-14 is the one item on the critical path that the accepted architecture already fully determines, and the assignment is explicit that remaining-plan work should continue rather than stop at the end of a worker list.",
+    "dependency_note": "03…:331 sequences W-13 → W-14. W-14's deliverable is a declaration MECHANISM and a pilot; it does not consume portal.access and is not blocked by D2/AD-2, which decides only which roles receive that grant. Building W-14 first also removes a stated blocker from W-13's own QA: W-13's tier A conformance is a lookup against this table."
+  },
+
+  "what_shipped": {
+    "commit": "ff3b1f88d",
+    "promoted": false,
+    "files": [
+      "web/scripts/checkRouteCapabilities.mjs — the check, and the prebuild gate",
+      "web/scripts/routeCapabilities.declared.json — the declared table",
+      "web/tests/access/routeCapabilityDeclaration.test.ts — RL-10, 11 assertions",
+      "web/package.json — prebuild chain + three scripts; audit:authority-paths removed",
+      "web/scripts/auditAuthorityPaths.mjs — DELETED per 03…§8"
+    ],
+    "mechanism": "Every exported handler under web/app/api carries a declaration with status 'declared' (requires a seeded catalog capability), 'none' (reviewed, requires none, reason >= 40 chars) or 'pending' (W-15 backlog, ratcheted downward only).",
+    "grain": "exported HTTP method, not file — 05…§9's first limit made structural if ignored",
+    "subject": "discovered from disk on every run; the route set is never enumerated in the check"
+  },
+
+  "measurements": {
+    "route_files": 572,
+    "exported_handlers": 751,
+    "file_grain_blind_spot_percent": 31,
+    "file_grain_blind_spot_note": "751 handlers across 572 files. A file-grained table would assert one answer for an average of 1.31 handlers, and would be structurally unable to express the admin/users finding below.",
+    "declared": 25,
+    "reviewed_none": 1,
+    "pending": 725,
+    "pending_ratchet_ceiling": 725,
+    "plan_denominator_drift": "sized at 539 routes, M2 amendment measured 559, 572 today — which is why RL-10's exit criterion is a property ('every route file appears') and not a count."
+  },
+
+  "pilot_slice": {
+    "basis": "Every entry was read at the ENFORCER, not inferred from the route. The capability key came from the helper's own exported constant.",
+    "capabilities": {
+      "settings.users_roles": "12 handlers — lib/admin/canManageUsersAndRoles.ts (requireUsersRolesManageAuth / requirePortalOrUsersRolesManageAuth)",
+      "reports.read": "3 handlers — lib/admin/canReadAnalytics.ts (requireAnalyticsReadAccess). W-1's analytics slice.",
+      "documents.read": "2 handlers — lib/documents/assertDocumentAccess.ts",
+      "communications.send": "6 handlers — lib/communications/communicationPermissions.ts (assertCommunicationsSendAllowed)",
+      "settings.read / settings.manage": "2 handlers — canReadProgramPublication / canWriteProgramPublication"
+    },
+    "reviewed_none": "app/api/admin/ai/config-layout-assist/capabilities/route.ts GET — reports the caller's OWN capability booleans; gating a capability projection on the capability it projects would leave the UI unable to say what a user cannot do."
+  },
+
+  "finding_the_method_grain_found_immediately": {
+    "id": "W14-F1",
+    "severity": "MEDIUM — product decision, not a defect this workstream may fix",
+    "route": "app/api/admin/users/route.ts",
+    "what": "POST requires settings.users_roles via requireUsersRolesManageAuth (route.ts:69). GET requires only getAdminContextCached() (route.ts:23) — portal admission — and returns the full org member roster including every member's email address (route.ts:22-65).",
+    "why_it_matters": "A file-grained census counts this file as capability-gated because POST is. This is exactly the weakness 05…§9 predicted, found on the first pass of the new grain, in the Users & Roles surface itself — the one surface whose whole purpose is managing access.",
+    "what_was_done": "Declared 'pending' with the finding recorded inline. NOT declared 'none': asserting that roster read legitimately requires no capability is a product decision for W-15, and this workstream has no authority to give that answer.",
+    "not_escalated_because": "It is a pre-existing behaviour, unchanged by this commit, and W-15 owns the remedy. It is recorded so the sweep cannot miss it."
+  },
+
+  "w11_tier_a_check_now_expressible": {
+    "plan_text": "03…§7: 'This check is only meaningful after W-14 supplies the declared set — so W-11 lands the data change and W-14 lands the check that keeps it true.'",
+    "status": "LANDED. RL-10 joins every declared capability to discoverCatalog(). All 25 declared capabilities resolve to seeded catalog keys.",
+    "what_it_prevents": "A route declaring a capability the catalog does not hold is a permanent 403 that reads like a gate — unsatisfiable by any grant."
+  },
+
+  "verification": {
+    "command": "npx vitest run tests/access tests/admin/permissionGrid.test.ts tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts",
+    "cwd": "web",
+    "at_commit": "ff3b1f88d",
+    "result": "14 test files passed, 1 skipped; 211 passed, 0 failed, 6 skipped",
+    "delta": "200 -> 211 passed. The 11 new tests are RL-10.",
+    "the_6_skips": "membershipProfileInvariant.integration.test.ts — tier C, describe.skipIf(!SUPABASE_SERVICE_ROLE_KEY). Skips by construction, not by policy.",
+    "non_vacuity": "RL-10 carries five negative fixtures that each prove the check FAILS: undeclared route, undeclared method on a declared route, declaration outliving its route, unreasoned 'none', and a lowered ratchet ceiling. They run against a temp copy — an earlier draft mutate-and-restored the committed table, which would have left the repository dirty if a run were killed mid-test.",
+    "unexercised": "The .mjs CLI branch (argv parsing, exit codes, --seed, --suggest) is not exercised by the test, which imports runRouteCapabilityCheck directly. The module parses and its top-level executes under vitest, so a syntax error would surface; the branch bodies would first execute in prebuild. `node` is not on this session's command allowlist.",
+    "typecheck": "NOT RUN — unchanged from the prior report. npm run typecheck cannot run on this host and gh is not permitted, so CI remains the only typecheck authority. The new TypeScript is one test file; the check itself is .mjs and outside the typecheck graph."
+  },
+
+  "progress": {
+    "basis": "Verified product state against the plan of record's own denominator (63 workstreams W-0…W-62 across 15 waves). Not assignment completion.",
+    "denominator_source": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+    "overall_implemented_percent": 22,
+    "overall_implemented_and_promoted_percent": 21,
+    "overall_product_certified_percent": 0,
+    "reconciliation": "14 of 63 workstreams now have code (22%); 13 of those are on staging (21%). W-14 is committed locally and unpromoted. Zero of ten certification requirements are certified against the shared environment. The gap remains migrations and live-environment proof, not code.",
+    "areas": [
+      { "area": "Specification", "status": "complete", "percent": 100, "note": "Docs 00–07 plus the M2 rewrite. Still the only area genuinely done." },
+      { "area": "Waves 0–1 foundation", "status": "merged to staging", "percent": 95, "note": "W-0…W-4 on staging. Unchanged this session." },
+      { "area": "Scope / membership", "status": "code on staging; migrations unapplied", "percent": 55, "note": "W-8 live and enforcing, with its announcement gate still open (finding B). W-7 switch deliberately unthrown pending M1. Unchanged this session." },
+      { "area": "Catalog / vocabulary", "status": "partly live; M5 awaiting review", "percent": 70, "note": "Up 5: W-11's tier A check is now expressible and green, which §7 said had to wait for W-14. M5 still unauthored pending OD-3." },
+      { "area": "Admission", "status": "W-14 built locally", "percent": 30, "note": "Wave 4 is W-13, W-14, W-15. W-14 — the mechanism and the critical path's long pole — is complete and committed. W-13 needs D2/AD-2. W-15 is sized L and untouched." },
+      { "area": "Enforcement", "status": "measurable for the first time", "percent": 10, "note": "Up 5, and the increase is instrumentation, not enforcement. 25 of 751 handlers declare a capability; 725 are pending. What changed is that the number is now sound — the census it replaces over-reported ~30x, so no prior enforcement figure in this program was trustworthy." },
+      { "area": "Role-model cleanup", "status": "not started", "percent": 0, "note": "Wave 5 — W-16…W-22. Needs D3 and D4." },
+      { "area": "Authentication / revocation", "status": "not started", "percent": 0, "note": "Waves 6 and 8 — thirteen workstreams. GAP-1 remains the program's only S1 defect." },
+      { "area": "Migration promotion", "status": "unblocked in principle, unexecuted", "percent": 0, "note": "M1/M2/M6 on staging as files (C3 satisfied). Apply state unverifiable from any worker session. M5 unauthored. Unchanged this session." },
+      { "area": "Runtime certification", "status": "tiers A+B green", "percent": 45, "note": "Up 5: 211 passed / 0 failed at the new tree, with RL-10's five negative fixtures. Tier C structurally unavailable to any worker." },
+      { "area": "Product certification", "status": "not achievable in current state", "percent": 5, "note": "3 of 10 matrix requirements certified tree-only; 0 against the shared environment." }
+    ]
+  },
+
+  "certification_matrix_delta": {
+    "note": "Only the row this session moved is restated. All other rows stand exactly as recorded in post-merge-certification-reconciliation.json.",
+    "requirement": "direct-route / API enforcement",
+    "was": "NOT CERTIFIED — RL-1 green over 92 of 570 routes that resolve a raw access context. W-14 and W-15 unstarted.",
+    "now": "NOT CERTIFIED — but for the first time the denominator is sound and complete. All 751 exported handlers are enumerated and declared; 25 assert a capability, 1 asserts none with a reason, 725 are pending review. RL-10 makes an undeclared handler a build failure, so the surface can no longer drift silently — the plan measured 20 new undeclared routes in 8 days. Certification still requires W-15's sweep and live-principal proof against the shared environment."
+  },
+
+  "operator_decisions_required": {
+    "unchanged": "OD-1 (migration apply channel), OD-2 (W-8's Q6 identity query — URGENT, a promotion-binding gate was crossed), OD-3 (36-key catalog deletion review), OD-4 (which document is the plan of record), OD-6 (AD-22 / AD-25, the four-layer directive). All five stand exactly as recorded in post-merge-certification-reconciliation.json. None became executable by a worker this session.",
+    "new": "None. W14-F1 is recorded for W-15, not escalated."
+  },
+
+  "what_this_session_changed": [
+    "Built W-14: the declared route capability table, its build-time check, and RL-10.",
+    "Established the real enforcement denominator — 751 handlers across 572 files — and that the file grain is blind to 31% of it.",
+    "Found W14-F1: admin/users GET returns the member roster on portal admission alone while its POST requires settings.users_roles.",
+    "Landed W-11's tier A catalog join, which the plan recorded as inexpressible until W-14 existed.",
+    "Deleted auditAuthorityPaths.mjs, the ~30x-over-reporting census, per 03…§8.",
+    "No push, no merge, no PR, no migration applied, no shared-environment write, no change to promotion or certification state."
+  ]
+}

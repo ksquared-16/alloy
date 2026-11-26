@@ -1,0 +1,231 @@
+{
+  "onEntry": {
+    "laneNameTop": 72,
+    "header": {
+      "top": 61,
+      "h": 59,
+      "w": 373,
+      "x": 10
+    },
+    "thread": {
+      "top": 128,
+      "h": 300,
+      "w": 373,
+      "x": 10
+    },
+    "composer": {
+      "top": 436,
+      "h": 156,
+      "w": 373,
+      "x": 10
+    },
+    "firstMsgVisible": 225,
+    "threadScrollTop": 0,
+    "threadScrollH": 587,
+    "asideOpen": false,
+    "aside": {
+      "x": 393,
+      "visibility": "hidden",
+      "pointerEvents": "none",
+      "inert": true,
+      "ariaHidden": "true"
+    },
+    "stageWidth": 373,
+    "docScrollX": 0,
+    "diagnosticsBeforeChat": false
+  },
+  "closedPanelHitTest": {
+    "tag": "DIV",
+    "cls": "view",
+    "insideAside": false
+  },
+  "focusOrder": {
+    "countInClosedPanel": 9,
+    "allVisibilityHidden": true,
+    "inert": true
+  },
+  "tabProbe": {
+    "focusEnteredClosedPanel": false
+  },
+  "asideOpened": {
+    "laneNameTop": 72,
+    "header": {
+      "top": 61,
+      "h": 59,
+      "w": 373,
+      "x": 10
+    },
+    "thread": {
+      "top": 128,
+      "h": 300,
+      "w": 373,
+      "x": 10
+    },
+    "composer": {
+      "top": 436,
+      "h": 156,
+      "w": 373,
+      "x": 10
+    },
+    "firstMsgVisible": 225,
+    "threadScrollTop": 0,
+    "threadScrollH": 587,
+    "asideOpen": true,
+    "aside": {
+      "x": 31,
+      "visibility": "visible",
+      "pointerEvents": "auto",
+      "inert": false,
+      "ariaHidden": null
+    },
+    "stageWidth": 373,
+    "docScrollX": 0,
+    "diagnosticsBeforeChat": false
+  },
+  "backFromDetails": {
+    "hash": "#/lanes/lane_db3431e755a8",
+    "asideOpen": false,
+    "stillInLane": true,
+    "focusOnToggle": true
+  },
+  "otherLaneEntry": {
+    "laneNameTop": 72,
+    "header": {
+      "top": 61,
+      "h": 59,
+      "w": 373,
+      "x": 10
+    },
+    "thread": {
+      "top": 128,
+      "h": 300,
+      "w": 373,
+      "x": 10
+    },
+    "composer": {
+      "top": 436,
+      "h": 156,
+      "w": 373,
+      "x": 10
+    },
+    "firstMsgVisible": 225,
+    "threadScrollTop": 0,
+    "threadScrollH": 2011,
+    "asideOpen": false,
+    "aside": {
+      "x": 393,
+      "visibility": "hidden",
+      "pointerEvents": "none",
+      "inert": true,
+      "ariaHidden": "true"
+    },
+    "stageWidth": 373,
+    "docScrollX": 0,
+    "diagnosticsBeforeChat": false
+  },
+  "reEntry": {
+    "laneNameTop": 72,
+    "header": {
+      "top": 61,
+      "h": 59,
+      "w": 373,
+      "x": 10
+    },
+    "thread": {
+      "top": 128,
+      "h": 300,
+      "w": 373,
+      "x": 10
+    },
+    "composer": {
+      "top": 436,
+      "h": 156,
+      "w": 373,
+      "x": 10
+    },
+    "firstMsgVisible": 225,
+    "threadScrollTop": 0,
+    "threadScrollH": 587,
+    "asideOpen": false,
+    "aside": {
+      "x": 393,
+      "visibility": "hidden",
+      "pointerEvents": "none",
+      "inert": true,
+      "ariaHidden": "true"
+    },
+    "stageWidth": 373,
+    "docScrollX": 0,
+    "diagnosticsBeforeChat": false
+  },
+  "longEntry": {
+    "laneNameTop": 72,
+    "header": {
+      "top": 61,
+      "h": 59,
+      "w": 373,
+      "x": 10
+    },
+    "thread": {
+      "top": 128,
+      "h": 300,
+      "w": 373,
+      "x": 10
+    },
+    "composer": {
+      "top": 436,
+      "h": 156,
+      "w": 373,
+      "x": 10
+    },
+    "firstMsgVisible": 225,
+    "threadScrollTop": 0,
+    "threadScrollH": 2011,
+    "asideOpen": false,
+    "aside": {
+      "x": 393,
+      "visibility": "hidden",
+      "pointerEvents": "none",
+      "inert": true,
+      "ariaHidden": "true"
+    },
+    "stageWidth": 373,
+    "docScrollX": 0,
+    "diagnosticsBeforeChat": false
+  },
+  "longContent": {
+    "reportChars": 2638,
+    "threadScrollable": true,
+    "reachedBottom": true,
+    "composerVisible": true
+  },
+  "keyboard": {
+    "vvh": 363,
+    "headerVisible": true,
+    "headerTop": 61,
+    "composerBottom": 295,
+    "appBottom": 329,
+    "withinAppBox": true,
+    "withinViewport": true,
+    "fontPx": 16,
+    "assistantVisiblePx": 15,
+    "diag": {
+      "thread": {
+        "top": 124,
+        "h": 73
+      },
+      "threadScrollTop": 1703,
+      "threadScrollH": 1776,
+      "assistant": {
+        "top": -1579,
+        "h": 1776
+      },
+      "body": {
+        "top": -1501,
+        "h": 1640
+      },
+      "userHidden": "none"
+    }
+  },
+  "errors": []
+}

@@ -1,0 +1,14 @@
+{
+  "lane_id": "lane_2cea84351d90",
+  "action_key": "product.activate_candidate_preview",
+  "purpose": "Serve the final Human QA V2 candidate 964da7ef7392f3188ef24538d06af6276de6641e (Marketing consent question, Studio Preview fix 927707010, owner docs, /dev/tours-qa guide) on this lane's isolated preview, rebased onto the new certification baseline certenv-3669337690 (staging 1045a8ce0794).",
+  "reason_worker_cannot_execute": "Activating a candidate preview starts a trusted-host served process bound to an isolated certification environment and requires governed authorization.",
+  "inputs": {
+    "target": "alloy.candidate.enrollment",
+    "candidateSha": "964da7ef7392f3188ef24538d06af6276de6641e",
+    "environmentId": "certenv-3669337690",
+    "databaseMode": "isolated",
+    "previewMode": "production",
+    "reason": "Director Human QA V2 on the new baseline: isolated database certenv-3669337690 (staging 1045a8ce0, 550 migrations), no hosted data or providers; the current preview serves b84a37a3d, which predates the Studio Preview fix."
+  }
+}

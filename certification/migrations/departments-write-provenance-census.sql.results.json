@@ -1,0 +1,116 @@
+{
+  "trusted_host_action_id": "tha_afad47f8d9b68c",
+  "query_hash": "594ef953b2d96241d7ef12617365467efef4a96886635a3c8798fb8483b93581",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T18:45:14.736Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_afad47f8d9b68c",
+    "query_hash": "594ef953b2d96241d7ef12617365467efef4a96886635a3c8798fb8483b93581",
+    "authorization_id": "grnt_28a1ab7125cc47ec",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T18:45:15.533Z",
+    "question_ids": [
+      "row_enrollment",
+      "row_finance",
+      "row_lead_management",
+      "row_operations",
+      "row_system",
+      "unmarked_rows",
+      "meta_key",
+      "bp_revisions_by_marker",
+      "work_units_by_marker",
+      "nonvacuity"
+    ],
+    "questions": {
+      "row_enrollment": {
+        "question_id": "row_enrollment",
+        "row_count": null,
+        "rows": [
+          "active=false created=2026-04-22 updated=2026-07-28 builder_owned=false activation_owned=false builder_doc=false attention_rules=true meta_keys=5"
+        ]
+      },
+      "row_finance": {
+        "question_id": "row_finance",
+        "row_count": null,
+        "rows": [
+          "active=true created=2026-04-22 updated=2026-04-22 builder_owned=false activation_owned=false builder_doc=false attention_rules=false meta_keys=2"
+        ]
+      },
+      "row_lead_management": {
+        "question_id": "row_lead_management",
+        "row_count": null,
+        "rows": [
+          "active=true created=2026-06-02 updated=2026-09-12 builder_owned=true activation_owned=false builder_doc=true attention_rules=false meta_keys=6"
+        ]
+      },
+      "row_operations": {
+        "question_id": "row_operations",
+        "row_count": null,
+        "rows": [
+          "active=true created=2026-04-22 updated=2026-04-22 builder_owned=false activation_owned=false builder_doc=false attention_rules=false meta_keys=2"
+        ]
+      },
+      "row_system": {
+        "question_id": "row_system",
+        "row_count": null,
+        "rows": [
+          "active=true created=2026-04-22 updated=2026-04-22 builder_owned=false activation_owned=false builder_doc=false attention_rules=false meta_keys=2"
+        ]
+      },
+      "unmarked_rows": {
+        "question_id": "unmarked_rows",
+        "row_count": null,
+        "rows": [
+          "rows_with_no_lifecycle_marker=4 of_total=5"
+        ]
+      },
+      "meta_key": {
+        "question_id": "meta_key",
+        "row_count": null,
+        "rows": [
+          "audience x1",
+          "growth_capabilities x1",
+          "lifecycle_actions_matrix_order_v1 x1",
+          "lifecycle_activation_v1 x1",
+          "lifecycle_builder_owned_v1 x1",
+          "lifecycle_builder_stage_field_rules_v1 x1",
+          "lifecycle_builder_v1 x1",
+          "lifecycle_progression_requirements_v1 x1",
+          "onboarding_lane x1",
+          "opportunity_attention_rules x1",
+          "scaffold_note x3",
+          "tenant_slice x4"
+        ]
+      },
+      "bp_revisions_by_marker": {
+        "question_id": "bp_revisions_by_marker",
+        "row_count": null,
+        "rows": [
+          "on_lifecycle_marked_departments=31 on_unmarked=0 total=31"
+        ]
+      },
+      "work_units_by_marker": {
+        "question_id": "work_units_by_marker",
+        "row_count": null,
+        "rows": [
+          "on_lifecycle_marked_departments=7 on_unmarked=2 total=9"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "departments=5 orgs=1 bp_revisions=31"
+        ]
+      }
+    },
+    "row_count": 21
+  }
+}

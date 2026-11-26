@@ -1,205 +1,1159 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
+import { eligibleInsideOptions } from "@/lib/locations/roomTypeVocabulary";
+import { useLocationOperationalRules } from "@/components/adminV2/settings/locations/useLocationOperationalRules";
+import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import {
     ConfigurationContext,
-    ConfigurationEmptyState,
     ConfigurationPrimaryButton,
-    ConfigurationQueue,
     ConfigurationQueueItem,
+    ConfigurationSecondaryButton,
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import {
+    ConfigChildObjectMasterDetail,
+    ConfigDetailRuntime,
+    ConfigObjectHeader,
+    ConfigScopeContextBar,
+} from "@/components/adminV2/settings/configurationRuntime/workspace";
+import LocationAddProgramPanel from "@/components/adminV2/settings/locations/LocationAddProgramPanel";
+import LocationProgramsOfferedPanel from "@/components/adminV2/settings/locations/LocationProgramsOfferedPanel";
+import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
 import LocationOperationalRulesPanel from "@/components/adminV2/settings/locations/LocationOperationalRulesPanel";
-import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
+import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
+import LocationSchedulingSurface from "@/components/adminV2/settings/locations/LocationSchedulingSurface";
+import { LocationOperatingCalendarPanel } from "@/components/adminV2/settings/locations/LocationOperatingCalendarPanel";
+import { warmLocationSchedulingDayTypes } from "@/lib/locations/useLocationSchedulingVm";
+import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
 import {
-    LOCATION_CONFIG_SECTIONS,
-    useLocationsConfigurationSettings,
-} from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
+    LocationAccessPanel,
+    LocationPlacementPanel,
+    LocationToursPanel,
+} from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
+import { LocationIdentityFactsRow } from "@/components/adminV2/settings/locations/LocationIdentityFactsRow";
+import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
+import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
+import { LocationsObjectSelector } from "@/components/adminV2/settings/locations/LocationsObjectSelector";
+import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
+import LocationsLanding from "@/components/adminV2/settings/locations/LocationsLanding";
+import { useConfigurationContinuityOptional } from "@/components/adminV2/settings/configurationRuntime/ConfigurationContinuityProvider";
+import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
+import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
+import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
+import {
+    buildLocationWorkspaceModel,
+    buildLocationsCollectionModel,
+    LOCATION_WORKSPACE_TABS,
+    locationsLandingHref,
+    type LocationWorkspaceTab,
+} from "@/lib/locations/locationWorkspaceModel";
+import {
+    getLocationConcernDefinition,
+    locationConcernHref,
+    parseLocationConcernTab,
+    resolveActiveLocationConcern,
+} from "@/lib/locations/locationConcernContract";
+import { resolveLocationsConcernState } from "@/lib/locations/locationsSelectionAdapter";
+import {
+    invalidateLocationConcernCaches,
+    loadLocationOwnedSetup,
+    loadLocationAccessMembers,
+    loadLocationPlacementPolicy,
+    loadLocationTourRules,
+    peekLocationOwnedSetup,
+} from "@/lib/locations/locationConcernCache";
+import { invalidateLocationsCollection } from "@/lib/locations/locationsCollectionCache";
+import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
+import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
+import { formatSchedulePatternSummary } from "@/lib/locations/schedulePatternPresentation";
+import { operationalEnrollmentClientTodayYmd } from "@/lib/childcareOperational/fetchOperationalEnrollmentMutations";
 
-const LOCATIONS_SUBTITLE = "Configure campuses, programs, classrooms, and scheduling resources.";
-
-function sectionListTitle(section: (typeof LOCATION_CONFIG_SECTIONS)[number]["key"]): string {
-    if (section === "locations") return "Locations";
-    if (section === "programs") return "Programs";
-    if (section === "rooms") return "Rooms";
-    if (section === "operational_rules") return "Operational Rules";
-    return "Schedule Templates";
-}
-
-function sectionEmptyListCopy(section: (typeof LOCATION_CONFIG_SECTIONS)[number]["key"]): string {
-    if (section === "locations") return "No locations yet. Add a campus to get started.";
-    if (section === "programs") return "No programs yet. Programs are configured per location.";
-    if (section === "rooms") return "No rooms yet. Add classrooms under a location.";
-    if (section === "operational_rules") return "Operational rules are shown in the workspace.";
-    return "No schedule templates yet.";
-}
-
-export default function LocationsConfigurationPage() {
-    const { canMutate } = useAdminAuth();
-    const { openDrawer } = useAdminDrawer();
+export default function LocationsConfigurationPage({
+    initialLocationId = null,
+    initialTab = "overview",
+    initialItemId = null,
+}: {
+    initialLocationId?: string | null;
+    initialTab?: LocationWorkspaceTab;
+    initialItemId?: string | null;
+}) {
+    const router = useRouter();
+    const { canMutate, orgId: authOrgId } = useAdminAuth();
+    const continuity = useConfigurationContinuityOptional();
+    const orgId = continuity?.orgId || authOrgId || "";
+    const retainedLocationId = continuity?.selection?.locationId ?? null;
+    const retainedConcernTab = continuity?.selection?.locationTab ?? null;
+    const retainedConcernItemId = continuity?.selection?.locationItemId ?? null;
+    const [creatingSite, setCreatingSite] = useState(false);
+    const [editingSite, setEditingSite] = useState(false);
+    const [creatingRoom, setCreatingRoom] = useState(false);
+    const [creatingProgram, setCreatingProgram] = useState(false);
+    const [pendingAssociatedProgramId, setPendingAssociatedProgramId] = useState<string | null>(null);
+    const [creatingSchedule, setCreatingSchedule] = useState(false);
+    const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
+        Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
+    >({});
+    const ownedConcernRequestSeq = useRef(0);
+    const [activeTab, setActiveTab] = useState<LocationWorkspaceTab>(initialTab);
+    const [search, setSearch] = useState("");
+    const [showInactive, setShowInactive] = useState(false);
+    const [selectedRoomId, setSelectedRoomId] = useState<string | null>(initialTab === "rooms" ? initialItemId : null);
+    const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
+        initialTab === "programs" ? initialItemId : null,
+    );
+    const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
+        initialTab === "schedule" ? initialItemId : null,
+    );
+    const [toursKeepAlive, setToursKeepAlive] = useState(initialTab === "tours");
+    const [placementKeepAlive, setPlacementKeepAlive] = useState(initialTab === "placement");
+    const [accessKeepAlive, setAccessKeepAlive] = useState(initialTab === "access");
     const {
-        section,
-        setSection,
         selectedId,
         setSelectedId,
+        shouldSyncRoute,
         loading,
         error,
         setError,
-        listItems,
+        siteRows,
+        roomRows,
+        programCategories,
+        schedulePatterns,
+        rows: topologyRows,
         siteLabelById,
         selectedSite,
-        selectedProgram,
-        selectedRoom,
-        selectedSchedulePattern,
+        createSiteLocation,
+        createRoomUnit,
         patchLocation,
         patchProgramCategory,
+        refresh,
+        refreshPrograms,
         roomCapacitySummaryForSite,
         programOptionsForSite,
-        ageUnitSelectOptions,
         setSchedulePatterns,
-    } = useLocationsConfigurationSettings();
+    } = useLocationsConfigurationSettings({
+        initialLocationId,
+        orgId,
+        retainedLocationId,
+    });
 
-    // Create drawer is quarantined to the Locations section only (create-only) and
-    // marked for removal once inline create lands (Operational Configuration V1).
-    const contextActions =
-        canMutate && section === "locations" ?
-            <ConfigurationPrimaryButton
-                className="config-primary-btn--sm"
-                data-testid="locations-add-location"
-                onClick={() => openDrawer({ type: "locations", id: "new" })}
-            >
-                Add Location
-            </ConfigurationPrimaryButton>
+    // Retained Continuity must not restore selection against an empty URL (Programs parity).
+    // URL search params (page props) remain the selection authority for Back/Forward + soft-nav.
+    useEffect(() => {
+        const active = resolveActiveLocationConcern(initialTab);
+        const localItemId =
+            activeTab === "rooms" ? selectedRoomId
+            : activeTab === "programs" ? selectedProgramId
+            : activeTab === "schedule" ? selectedScheduleId
+            : null;
+        const projected = resolveLocationsConcernState({
+            routeTab: active.concern,
+            routeItemId: initialItemId,
+            localTab: activeTab,
+            localItemId,
+            routeLocationId: initialLocationId,
+            localLocationId: selectedId,
+        });
+        setActiveTab(projected.tab);
+        if (projected.tab === "tours") setToursKeepAlive(true);
+        if (projected.tab === "placement") setPlacementKeepAlive(true);
+        if (projected.tab === "access") setAccessKeepAlive(true);
+        setSelectedRoomId(projected.tab === "rooms" ? projected.itemId : null);
+        setSelectedProgramId(projected.tab === "programs" ? projected.itemId : null);
+        setSelectedScheduleId(projected.tab === "schedule" ? projected.itemId : null);
+        if (active.normalized && selectedId) {
+            router.replace(locationConcernHref(selectedId, projected.tab, projected.itemId));
+        }
+        // Route props are authoritative; omit local tab/item from deps to avoid loops.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- history projection
+    }, [initialTab, initialItemId, initialLocationId, router, selectedId]);
+
+    const visibleSites = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        return siteRows.filter((site) => {
+            if (!showInactive && site.is_active === false) return false;
+            if (!query) return true;
+            return [site.label, site.city, site.state]
+                .map((value) => String(value ?? "").toLowerCase())
+                .some((value) => value.includes(query));
+        });
+    }, [search, showInactive, siteRows]);
+
+    const selectedPrograms = useMemo(
+        () =>
+            selectedSite ?
+                programCategories
+                    .filter((program) => program.location_id === selectedSite.id)
+                    .sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100) || a.label.localeCompare(b.label))
+            :   [],
+        [programCategories, selectedSite],
+    );
+
+    const selectedRooms = useMemo(
+        () =>
+            selectedSite ?
+                rowsBelongingToSite(roomRows, selectedSite.id)
+                    .slice()
+                    .sort((a, b) => String(a.label ?? "").localeCompare(String(b.label ?? "")))
+            :   [],
+        [roomRows, selectedSite],
+    );
+
+    const selectedSchedules = useMemo(
+        () =>
+            selectedSite ?
+                schedulePatterns
+                    .filter((pattern) => pattern.site_location_id === selectedSite.id)
+                    .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label))
+            :   [],
+        [schedulePatterns, selectedSite],
+    );
+
+    const effectiveRoomId =
+        selectedRoomId && selectedRooms.some((room) => room.id === selectedRoomId) ?
+            selectedRoomId
+        :   (selectedRooms[0]?.id ?? null);
+    const effectiveProgramId =
+        selectedProgramId && selectedPrograms.some((program) => program.id === selectedProgramId) ?
+            selectedProgramId
+        :   (selectedPrograms[0]?.id ?? null);
+    const effectiveScheduleId =
+        selectedScheduleId && selectedSchedules.some((schedule) => schedule.id === selectedScheduleId) ?
+            selectedScheduleId
+        :   (selectedSchedules[0]?.id ?? null);
+    const selectedRoom = selectedRooms.find((room) => room.id === effectiveRoomId) ?? null;
+    const selectedSchedule = selectedSchedules.find((schedule) => schedule.id === effectiveScheduleId) ?? null;
+
+    // After in-context assign/create, select the Location LPC tied to the Organization program.
+    useEffect(() => {
+        if (!pendingAssociatedProgramId || !selectedSite) return;
+        const match = selectedPrograms.find(
+            (row) => String(row.program_id ?? "").trim() === pendingAssociatedProgramId,
+        );
+        if (!match) return;
+        setPendingAssociatedProgramId(null);
+        setSelectedProgramId(match.id);
+        continuity?.rememberLocationSelection({
+            locationId: selectedSite.id,
+            tab: "programs",
+            itemId: match.id,
+        });
+        router.replace(locationConcernHref(selectedSite.id, "programs", match.id));
+    }, [continuity, pendingAssociatedProgramId, router, selectedPrograms, selectedSite]);
+
+    const refreshOwnedConcernSetup = useCallback(
+        async (locationId: string) => {
+            if (!orgId) return;
+            const requestSeq = ++ownedConcernRequestSeq.current;
+            const peeked = peekLocationOwnedSetup(orgId, locationId);
+            if (peeked) {
+                setOwnedConcernSetupByLocation((current) => ({
+                    ...current,
+                    [locationId]: {
+                        tours: peeked.toursConfigured ?? undefined,
+                        access: peeked.accessConfigured ?? undefined,
+                    },
+                }));
+            }
+            try {
+                const { snapshot } = await loadLocationOwnedSetup(orgId, locationId, { force: !peeked });
+                if (requestSeq !== ownedConcernRequestSeq.current) return;
+                setOwnedConcernSetupByLocation((current) => ({
+                    ...current,
+                    [locationId]: {
+                        tours: snapshot.toursConfigured ?? undefined,
+                        access: snapshot.accessConfigured ?? undefined,
+                    },
+                }));
+            } catch {
+                /* overview setup badges degrade gracefully */
+            }
+        },
+        [orgId],
+    );
+
+    const selectedSiteId = selectedSite?.id ?? null;
+    useEffect(() => {
+        if (!selectedSiteId) return;
+        const timeout = window.setTimeout(() => {
+            void refreshOwnedConcernSetup(selectedSiteId);
+        }, 0);
+        return () => window.clearTimeout(timeout);
+    }, [refreshOwnedConcernSetup, selectedSiteId]);
+
+    useEffect(() => {
+        if (!orgId || !selectedSiteId) return;
+        warmLocationSchedulingDayTypes(orgId);
+    }, [orgId, selectedSiteId]);
+
+    // Canonical capacity rules drive coverage, room capacity standing and the
+    // Add Room debt stop. One org-scoped read, shared by every surface below.
+    const {
+        capacityRules,
+        ratioRules,
+        ratioRuleTiers,
+        refresh: refreshCapacityRules,
+    } = useLocationOperationalRules();
+    const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
+    const model =
+        selectedSite ?
+            buildLocationWorkspaceModel({
+                site: selectedSite,
+                rooms: selectedRooms,
+                programs: selectedPrograms,
+                schedules: selectedSchedules,
+                capacityRules,
+                ownedConcernSetup: {
+                    ...ownedConcernSetup,
+                    placement: selectedRooms.some((room) => room.is_active !== false),
+                },
+            })
         :   null;
 
-    const sectionQueue = (
-        <ConfigurationQueue testId="locations-section-queue" title="Sections">
-            {LOCATION_CONFIG_SECTIONS.map((s) => (
-                <ConfigurationQueueItem
-                    key={s.key}
-                    active={s.key === section}
-                    title={s.label}
-                    onClick={() => {
-                        setSection(s.key);
-                        setSelectedId(null);
-                    }}
-                    testId={`locations-section-${s.key}`}
-                />
-            ))}
-        </ConfigurationQueue>
+    const locationsCollection = useMemo(
+        () =>
+            buildLocationsCollectionModel({
+                capacityRules,
+                sites: siteRows,
+                rooms: roomRows,
+                programs: programCategories,
+                schedules: schedulePatterns,
+            }),
+        [capacityRules, programCategories, roomRows, schedulePatterns, siteRows],
     );
 
-    const itemList = (
-        <ConfigurationQueue testId="locations-item-queue" title={sectionListTitle(section)}>
-            {listItems.length === 0 ?
-                <p className="config-typo-sublabel">{sectionEmptyListCopy(section)}</p>
-            :   listItems.map((item) => (
-                    <ConfigurationQueueItem
-                        key={item.id}
-                        active={item.id === selectedId}
-                        title={item.title}
-                        subtitle={item.subtitle}
-                        onClick={() => setSelectedId(item.id)}
-                        testId={`locations-item-${item.id}`}
-                    />
-                ))
+    const openLocation = (locationId: string, tab: LocationWorkspaceTab = "overview") => {
+        setSelectedId(locationId);
+        setEditingSite(false);
+        setCreatingSite(false);
+        setCreatingRoom(false);
+        setCreatingProgram(false);
+        setCreatingSchedule(false);
+        // Prefetch Tours / Placement / Access so concern tabs paint immediately.
+        setToursKeepAlive(true);
+        if (tab === "placement") setPlacementKeepAlive(true);
+        if (tab === "access") setAccessKeepAlive(true);
+        setActiveTab(tab);
+        continuity?.rememberLocationSelection({ locationId, tab, itemId: null });
+        const href = locationConcernHref(locationId, tab);
+        router.push(href, { scroll: false });
+        if (typeof window !== "undefined") {
+            const current = `${window.location.pathname}${window.location.search}`;
+            if (current !== href) {
+                window.history.replaceState(window.history.state, "", href);
             }
-        </ConfigurationQueue>
+        }
+        if (orgId) {
+            void loadLocationTourRules(orgId, locationId).catch(() => undefined);
+            void loadLocationOwnedSetup(orgId, locationId).catch(() => undefined);
+        }
+    };
+
+    const returnToLocations = () => {
+        setSelectedId(null);
+        setEditingSite(false);
+        setCreatingRoom(false);
+        setCreatingProgram(false);
+        setCreatingSchedule(false);
+        setActiveTab("overview");
+        continuity?.rememberLocationSelection({ locationId: null, tab: null, itemId: null });
+        const href = locationsLandingHref();
+        router.push(href, { scroll: false });
+        if (typeof window !== "undefined") {
+            const current = `${window.location.pathname}${window.location.search}`;
+            if (current !== href) {
+                window.history.replaceState(window.history.state, "", href);
+            }
+        }
+    };
+
+    const navigate = useCallback(
+        (tab: LocationWorkspaceTab, itemId?: string | null) => {
+            if (!selectedSite) return;
+            setActiveTab(tab);
+            setEditingSite(false);
+            setCreatingRoom(false);
+            setCreatingProgram(false);
+            setCreatingSchedule(false);
+            if (tab === "tours") setToursKeepAlive(true);
+            if (tab === "placement") setPlacementKeepAlive(true);
+            if (tab === "access") setAccessKeepAlive(true);
+            continuity?.rememberLocationSelection({
+                locationId: selectedSite.id,
+                tab,
+                itemId: itemId ?? null,
+            });
+            // Nested concern navigation — push for Back/Forward between concerns.
+            router.push(locationConcernHref(selectedSite.id, tab, itemId));
+        },
+        [continuity, router, selectedSite],
     );
 
-    const workspace = (() => {
-        if (loading) {
+    const prefetchConcernIntent = useCallback(
+        (tab: LocationWorkspaceTab) => {
+            if (!selectedSite || !orgId) return;
+            const def = getLocationConcernDefinition(tab);
+            if (def.prefetch === "none") return;
+            // Advisory route warm — never authoritative.
+            void router.prefetch(locationConcernHref(selectedSite.id, tab));
+            if (tab === "tours" || tab === "access") {
+                void loadLocationOwnedSetup(orgId, selectedSite.id).catch(() => undefined);
+            }
+            if (tab === "access") {
+                void loadLocationAccessMembers(orgId, selectedSite.id).catch(() => undefined);
+            }
+            if (tab === "placement") {
+                void loadLocationPlacementPolicy(orgId).catch(() => undefined);
+            }
+        },
+        [orgId, router, selectedSite],
+    );
+
+    const showSetupDestination = (tab: LocationWorkspaceTab | "general") => {
+        if (tab === "general") {
+            setEditingSite(true);
+            return;
+        }
+        navigate(tab);
+    };
+
+    const beginAddLocation = useCallback(() => {
+        setCreatingSite(true);
+        setEditingSite(false);
+        setError(null);
+    }, [setError]);
+
+    const addRoom = useCallback(() => {
+        if (!selectedSite || !canMutate) return;
+        setActiveTab("rooms");
+        setEditingSite(false);
+        setCreatingSchedule(false);
+        setCreatingProgram(false);
+        setCreatingRoom(true);
+        setError(null);
+        router.replace(locationConcernHref(selectedSite.id, "rooms"));
+    }, [canMutate, router, selectedSite, setError]);
+
+    const addProgram = useCallback(() => {
+        if (!selectedSite || !canMutate) return;
+        setActiveTab("programs");
+        setEditingSite(false);
+        setCreatingRoom(false);
+        setCreatingSchedule(false);
+        setCreatingProgram(true);
+        setSelectedProgramId(null);
+        setError(null);
+        router.replace(locationConcernHref(selectedSite.id, "programs"));
+    }, [canMutate, router, selectedSite, setError]);
+
+    const firstRoomNeedingCapacityId = useMemo(() => {
+        const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
+        return match?.id ?? null;
+    }, [selectedRooms]);
+
+    const operatingSnapshot = useMemo(
+        () => ({
+            scheduleName: selectedSchedules[0]?.label?.trim() || null,
+            hoursLabel:
+                selectedSchedules.length > 0 ? formatWeekdaySelection(selectedSchedules[0]!.weekdays) : null,
+            programNames: selectedPrograms
+                .filter((program) => program.is_active !== false)
+                .map((program) => program.label.trim())
+                .filter(Boolean),
+            activeRoomCount: model?.activeRoomCount ?? 0,
+            capacityCoverage: model?.capacityCoverage ?? { total: 0, confirmed: 0, needsReview: 0, unset: 0 },
+        }),
+        [model?.activeRoomCount, model?.capacityCoverage, selectedPrograms, selectedSchedules],
+    );
+
+    const railActions = useMemo(
+        () =>
+            buildLocationsRailActions({
+                activeTab,
+                canMutate,
+                model,
+                selectedSite: Boolean(selectedSite),
+                scheduleCount: selectedSchedules.length,
+                roomCount: selectedRooms.length,
+                programCount: selectedPrograms.length,
+                hasSelectedProgram: Boolean(effectiveProgramId),
+                hasSelectedRoom: Boolean(effectiveRoomId),
+                roomsNeedingCapacity: model?.roomsNeedingCapacity ?? 0,
+                firstRoomNeedingCapacityId,
+                onAddLocation: beginAddLocation,
+                onEditLocation: () => setEditingSite(true),
+                onAddRoom: addRoom,
+                onAddProgram: addProgram,
+                onNavigate: navigate,
+                onCreateSchedule: () => {
+                    if (!canMutate) return;
+                    setCreatingSchedule(true);
+                },
+            }),
+        [
+            activeTab,
+            addProgram,
+            addRoom,
+            beginAddLocation,
+            canMutate,
+            effectiveProgramId,
+            effectiveRoomId,
+            firstRoomNeedingCapacityId,
+            model,
+            navigate,
+            selectedPrograms.length,
+            selectedRooms.length,
+            selectedSchedules.length,
+            selectedSite,
+        ],
+    );
+
+    const locationSummaryById = useMemo(() => {
+        const map = new Map(locationsCollection.locations.map((location) => [location.id, location]));
+        return map;
+    }, [locationsCollection.locations]);
+
+    const scheduleSummary =
+        selectedSchedules.length > 0 ?
+            formatWeekdaySelection(selectedSchedules[0]!.weekdays)
+        :   "Not set up yet";
+
+    const tabBody = (() => {
+        if (!selectedSite) return null;
+        if (editingSite) {
             return (
-                <ConfigurationEmptyState
-                    testId="locations-loading"
-                    title="Loading locations"
-                    description="Fetching campuses, programs, rooms, and schedule templates."
-                />
+                <div className="space-y-3">
+                    <button
+                        type="button"
+                        className="text-xs font-semibold text-[#007d68]"
+                        onClick={() => setEditingSite(false)}
+                    >
+                        ← Back to {model?.displayName ?? "location"}
+                    </button>
+                    <LocationSiteDetailPanel
+                        site={selectedSite}
+                        capacityCoverage={model?.capacityCoverage ?? { total: 0, confirmed: 0, needsReview: 0, unset: 0 }}
+                        canMutate={canMutate}
+                        onSave={patchLocation}
+                    />
+                </div>
             );
         }
-        if (section === "locations") {
+        if (activeTab === "overview" && model) {
             return (
-                <LocationSiteDetailPanel
-                    site={selectedSite}
-                    capacitySummary={selectedSite ? roomCapacitySummaryForSite(selectedSite.id) : 0}
+                <div className="space-y-3">
+                    <LocationOverviewSurface
+                        model={model}
+                        scheduleSummary={scheduleSummary}
+                        operatingSnapshot={operatingSnapshot}
+                        onResolveAttention={showSetupDestination}
+                        onSelectReadinessArea={showSetupDestination}
+                        onOpenTab={navigate}
+                    />
+                </div>
+            );
+        }
+        if (activeTab === "programs") {
+            return (
+                <LocationProgramsOfferedPanel
+                    locationId={selectedSite.id}
+                    locationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                    offerings={selectedPrograms}
+                    schedulePatterns={selectedSchedules.map((pattern) => ({
+                        id: pattern.id,
+                        label: pattern.label,
+                        is_active: pattern.is_active,
+                    }))}
+                    rooms={selectedRooms.map((room) => ({
+                        id: room.id,
+                        label: String(room.label ?? "").trim() || "Untitled space",
+                        is_active: room.is_active !== false,
+                        metadata: room.metadata,
+                    }))}
                     canMutate={canMutate}
-                    onSave={patchLocation}
-                />
-            );
-        }
-        if (section === "programs") {
-            return (
-                <LocationProgramDetailPanel
-                    program={selectedProgram}
-                    siteLabel={
-                        selectedProgram ?
-                            siteLabelById.get(selectedProgram.location_id) ?? "Unknown location"
-                        :   ""
+                    selectedOfferingId={creatingProgram ? null : effectiveProgramId}
+                    onSelectOffering={(offeringId) => {
+                        setSelectedProgramId(offeringId);
+                        setCreatingProgram(false);
+                        continuity?.rememberLocationSelection({
+                            locationId: selectedSite.id,
+                            tab: "programs",
+                            itemId: offeringId,
+                        });
+                    }}
+                    onPatchOffering={patchProgramCategory}
+                    onRefresh={refreshPrograms}
+                    onAddProgram={canMutate ? addProgram : undefined}
+                    createDetail={
+                        creatingProgram ?
+                            <LocationAddProgramPanel
+                                activeLocationId={selectedSite.id}
+                                activeLocationLabel={model?.displayName ?? selectedSite.label ?? ""}
+                                locations={siteRows
+                                    .filter((site) => site.is_active !== false)
+                                    .map((site) => ({
+                                        id: site.id,
+                                        label: site.label?.trim() || siteLabelById.get(site.id) || "Location",
+                                    }))}
+                                associatedProgramIds={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.program_id ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                associatedProgramKeys={
+                                    new Set(
+                                        selectedPrograms
+                                            .map((row) => String(row.key ?? "").trim())
+                                            .filter(Boolean),
+                                    )
+                                }
+                                onCancel={() => setCreatingProgram(false)}
+                                onComplete={async ({ programId }) => {
+                                    setCreatingProgram(false);
+                                    if (orgId) {
+                                        invalidateProgramsCollection(orgId, "program-make-available", {
+                                            publishBus: true,
+                                        });
+                                        invalidateLocationsCollection(orgId, "program-make-available", {
+                                            publishBus: true,
+                                        });
+                                    }
+                                    if (programId) {
+                                        setPendingAssociatedProgramId(programId);
+                                    }
+                                    await refreshPrograms();
+                                }}
+                            />
+                        :   undefined
                     }
-                    canMutate={canMutate}
-                    onSave={patchProgramCategory}
                 />
             );
         }
-        if (section === "operational_rules") {
-            return <LocationOperationalRulesPanel siteLabelById={siteLabelById} canMutate={canMutate} />;
-        }
-        if (section === "rooms") {
-            const parentSiteId = selectedRoom?.parent_location_id ?? "";
+        if (activeTab === "rooms") {
             return (
                 <LocationRoomDetailPanel
                     room={selectedRoom}
-                    siteLabel={parentSiteId ? siteLabelById.get(parentSiteId) ?? "Unknown location" : ""}
-                    programOptions={parentSiteId ? programOptionsForSite(parentSiteId) : []}
-                    ageUnitSelectOptions={ageUnitSelectOptions}
+                    siteLabel={model?.displayName ?? ""}
+                    topologyRows={topologyRows}
+                    siteId={selectedSite.id}
+                    insideOptions={eligibleInsideOptions(roomRows, selectedSite.id, {
+                        excludeLocationId: selectedRoom?.id ?? null,
+                    })}
+                    capacityRules={capacityRules}
+                    ratioRules={ratioRules}
+                    ratioTiers={ratioRuleTiers}
+                    todayYmd={operationalEnrollmentClientTodayYmd()}
+                    onCapacityChanged={async () => {
+                        await refreshCapacityRules();
+                        await refresh({ force: true });
+                    }}
+                    programOptions={programOptionsForSite(selectedSite.id)}
+                    schedulePatterns={selectedSchedules}
                     canMutate={canMutate}
                     onSave={patchLocation}
+                    rooms={selectedRooms}
+                    selectedRoomId={creatingRoom ? null : effectiveRoomId}
+                    onSelectRoom={(roomId) => {
+                        setSelectedRoomId(roomId);
+                        navigate("rooms", roomId);
+                    }}
+                    onAddRoom={canMutate ? addRoom : undefined}
+                    createDetail={
+                        creatingRoom ?
+                            <LocationRoomCreatePanel
+                                siteLabel={model?.displayName ?? ""}
+                                programOptions={programOptionsForSite(selectedSite.id)}
+                                schedulePatterns={selectedSchedules}
+                                insideOptions={eligibleInsideOptions(roomRows, selectedSite.id)}
+                                onCancel={() => setCreatingRoom(false)}
+                                onCreate={async (input) => {
+                                    const newId = await createRoomUnit(selectedSite.id, input);
+                                    // The space has to exist before a rule can point at it,
+                                    // so capacity is a second call rather than part of the
+                                    // payload. A failure here leaves a real space with no
+                                    // capacity — visibly empty on the object, and fixable
+                                    // by typing the number again.
+                                    if (input.capacity != null) {
+                                        await fetch("/api/admin/operational-config/capacity-rules", {
+                                            method: "POST",
+                                            credentials: "include",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                                action: "set_object_capacity",
+                                                room_location_id: newId,
+                                                unit_role: input.unit_role,
+                                                capacity: input.capacity,
+                                            }),
+                                        });
+                                        await refreshCapacityRules();
+                                    }
+                                    setCreatingRoom(false);
+                                    setSelectedRoomId(newId);
+                                    navigate("rooms", newId);
+                                }}
+                            />
+                        :   undefined
+                    }
                 />
             );
         }
-        return (
-            <LocationScheduleTemplateDetailPanel
-                pattern={selectedSchedulePattern}
-                siteLabel={
-                    selectedSchedulePattern ?
-                        siteLabelById.get(selectedSchedulePattern.site_location_id) ?? "Unknown location"
-                    :   ""
-                }
-                canMutate={canMutate}
-                onUpdated={(row) => {
-                    setSchedulePatterns((prev) => prev.map((p) => (p.id === row.id ? row : p)));
-                }}
-                onError={setError}
-            />
-        );
+        if (activeTab === "schedule") {
+            const siteMetadata =
+                selectedSite.metadata != null &&
+                typeof selectedSite.metadata === "object" &&
+                !Array.isArray(selectedSite.metadata) ?
+                    (selectedSite.metadata as Record<string, unknown>)
+                :   null;
+            const patternsPanel = (
+                <div className="space-y-3" data-testid="locations-schedule">
+                    <ConfigChildObjectMasterDetail
+                        listTitle="Schedule Patterns"
+                        listSummary={`${selectedSchedules.length} ${
+                            selectedSchedules.length === 1 ? "pattern" : "patterns"
+                        }`}
+                        testId="locations-schedule-patterns"
+                        listActions={
+                            canMutate ?
+                                <ConfigurationPrimaryButton
+                                    className="px-2 py-1 text-[11px]"
+                                    onClick={() => setCreatingSchedule(true)}
+                                    data-testid="locations-schedule-add"
+                                >
+                                    + Add Pattern
+                                </ConfigurationPrimaryButton>
+                            :   null
+                        }
+                        list={
+                            selectedSchedules.length > 0 ?
+                                selectedSchedules.map((schedule) => {
+                                    const selected = schedule.id === effectiveScheduleId && !creatingSchedule;
+                                    return (
+                                        <ConfigurationQueueItem
+                                            key={schedule.id}
+                                            variant="rail"
+                                            active={selected}
+                                            muted={!schedule.is_active}
+                                            title={schedule.label}
+                                            subtitle={`${schedule.is_active ? "Active" : "Inactive"} · ${formatSchedulePatternSummary(
+                                                {
+                                                    label: schedule.label,
+                                                    scheduleTypeKey: schedule.schedule_type_key,
+                                                    weekdays: schedule.weekdays,
+                                                    metadata: schedule.metadata ?? null,
+                                                },
+                                            )}`}
+                                            leading={
+                                                <span
+                                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                                                        !schedule.is_active ?
+                                                            "bg-alloy-midnight/[0.04] text-alloy-midnight/35"
+                                                        : selected ?
+                                                            "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                                        :   "bg-alloy-midnight/[0.04] text-alloy-bend-pine"
+                                                    }`}
+                                                >
+                                                    <CalendarDays className="h-4 w-4" strokeWidth={2} />
+                                                </span>
+                                            }
+                                            onClick={() => {
+                                                setCreatingSchedule(false);
+                                                setSelectedScheduleId(schedule.id);
+                                                navigate("schedule", schedule.id);
+                                            }}
+                                            testId={`locations-schedule-${schedule.id}`}
+                                        />
+                                    );
+                                })
+                            :   <p className="config-typo-sublabel">No recurring patterns yet.</p>
+                        }
+                        detail={
+                            creatingSchedule ?
+                                <LocationSchedulePatternCreatePanel
+                                    locationId={selectedSite.id}
+                                    operatingDays={
+                                        siteMetadata ?
+                                            (
+                                                siteMetadata.location_scheduling_v1 as
+                                                    | { operating_days?: number[] }
+                                                    | undefined
+                                            )?.operating_days
+                                        :   undefined
+                                    }
+                                    onCancel={() => setCreatingSchedule(false)}
+                                    onCreated={(created) => {
+                                        setSchedulePatterns((current) => [...current, created]);
+                                        if (orgId) {
+                                            invalidateLocationsCollection(orgId, "schedule-pattern-created");
+                                        }
+                                        setSelectedScheduleId(created.id);
+                                        setCreatingSchedule(false);
+                                        navigate("schedule", created.id);
+                                    }}
+                                />
+                            :   <LocationScheduleTemplateDetailPanel
+                                    pattern={selectedSchedule}
+                                    siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
+                                    canMutate={canMutate}
+                                    operatingDays={
+                                        siteMetadata ?
+                                            (
+                                                siteMetadata.location_scheduling_v1 as
+                                                    | { operating_days?: number[] }
+                                                    | undefined
+                                            )?.operating_days
+                                        :   undefined
+                                    }
+                                    onUpdated={(row) => {
+                                        setSchedulePatterns((prev) =>
+                                            prev.map((pattern) => (pattern.id === row.id ? row : pattern)),
+                                        );
+                                        if (orgId) {
+                                            invalidateLocationsCollection(orgId, "schedule-pattern-updated");
+                                        }
+                                    }}
+                                    onError={setError}
+                                />
+                        }
+                    />
+                </div>
+            );
+            return (
+                <div className="space-y-4">
+                    <LocationSchedulingSurface
+                        orgId={orgId}
+                        locationId={selectedSite.id}
+                        locationMetadata={siteMetadata}
+                        patternCount={selectedSchedules.length}
+                        canMutate={canMutate}
+                        onAddPattern={() => setCreatingSchedule(true)}
+                        onSaveMetadata={async (metadata) => {
+                            await patchLocation(selectedSite.id, { metadata });
+                        }}
+                        patternsPanel={patternsPanel}
+                    />
+                    {/* Dated exceptions to the weekly pattern: holidays, closures, changed hours. */}
+                    <LocationOperatingCalendarPanel key={selectedSite.id} orgId={orgId} locationId={selectedSite.id} />
+                </div>
+            );
+        }
+        if (activeTab === "operational-rules") {
+            // The canonical authoring destination for typed capacity, ratio,
+            // operating-window and schedule rules. It was left unmounted by the
+            // object-centric rewrite (2c6f0f261), which retired the section-first
+            // IA without re-homing this concern — so the capability existed with
+            // no operator path to it at all.
+            //
+            // Scoped to the selected site: the panel's resolved preview and site
+            // list follow the workspace you are standing in, rather than the
+            // org-wide list the old section-first surface showed.
+            return (
+                <LocationOperationalRulesPanel
+                    siteLabelById={new Map([[selectedSite.id, model?.displayName ?? selectedSite.label ?? "Location"]])}
+                    siteId={selectedSite.id}
+                    canMutate={canMutate}
+                />
+            );
+        }
+        if (activeTab === "tours") {
+            return null;
+        }
+        if (activeTab === "placement") {
+            return null;
+        }
+        if (activeTab === "access") {
+            return null;
+        }
+        return null;
     })();
 
     return (
         <div className="process-config-page min-h-0 flex-1" data-testid="locations-configuration-page">
-            <ConfigurationContext
-                title="Locations"
-                subtitle={LOCATIONS_SUBTITLE}
-                actions={contextActions}
-                testId="locations-configuration-context"
-            />
+            <LocationsCommandRailActions actions={railActions} />
+
+            {!selectedSite && !initialLocationId ?
+                <div className="w-full" data-testid="locations-content-column">
+                    <ConfigurationContext
+                        title="Locations"
+                        titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
+                        testId="locations-configuration-context"
+                    >
+                        {!loading ?
+                            <div
+                                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-alloy-stone/25 pt-2"
+                                data-testid="locations-collection-posture"
+                            >
+                                <div className="flex min-w-0 flex-col gap-1.5">
+                                    <ConfigScopeContextBar
+                                        mode="organization"
+                                        organizationLabel="Organization"
+                                        objectLabel="Location"
+                                        ownershipHint="Programs & Locations · delivery"
+                                        onModeChange={(mode) => {
+                                            if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                                        }}
+                                    />
+                                    <ul
+                                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/52"
+                                        aria-label="Locations breadcrumb"
+                                    >
+                                        <li>
+                                            <Link
+                                                href="/organization/programs-locations"
+                                                className="font-medium hover:text-alloy-bend-pine"
+                                                data-testid="locations-breadcrumb-programs-locations"
+                                            >
+                                                Programs & Locations
+                                            </Link>
+                                            <span className="mx-1.5 text-alloy-midnight/35" aria-hidden>
+                                                ›
+                                            </span>
+                                            <span className="font-semibold text-alloy-midnight/70">Locations</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/52">
+                                    <li>
+                                        <strong className="font-semibold text-alloy-midnight">
+                                            {locationsCollection.activeLocationCount}
+                                        </strong>{" "}
+                                        Active Locations
+                                    </li>
+                                    <li>
+                                        <strong className="font-semibold text-alloy-midnight">
+                                            {locationsCollection.totalPrograms}
+                                        </strong>{" "}
+                                        Programs Offered
+                                    </li>
+                                    <li>
+                                        <strong className="font-semibold text-alloy-midnight">
+                                            {locationsCollection.totalRooms}
+                                        </strong>{" "}
+                                        Rooms
+                                    </li>
+                                </ul>
+                            </div>
+                        :   null}
+                    </ConfigurationContext>
+                </div>
+            :   null}
 
             {error ?
-                <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+                <p
+                    className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                    role="alert"
+                >
                     {error}
                 </p>
             :   null}
 
-            <ConfigurationShell
-                testId="locations-configuration-shell"
-                queueColumn={sectionQueue}
-                listColumn={section === "operational_rules" ? undefined : itemList}
-            >
-                {workspace}
+            <ConfigurationShell testId="locations-configuration-shell">
+                {loading && siteRows.length === 0 && !error ?
+                    <div
+                        className="grid items-start gap-4 pb-4 xl:grid-cols-[20.5rem_minmax(0,1fr)]"
+                        data-testid="locations-loading"
+                    >
+                        <div className="hidden min-h-[24rem] rounded-xl border border-alloy-forge/10 bg-white/70 xl:block" />
+                        <div className="min-h-[16rem] rounded-xl border border-alloy-forge/10 bg-white/70" />
+                    </div>
+                : creatingSite ?
+                    <LocationSiteCreatePanel
+                        canMutate={canMutate}
+                        onCancel={() => {
+                            setCreatingSite(false);
+                            if (!selectedSite) router.replace(locationsLandingHref());
+                        }}
+                        onCreate={async (input) => {
+                            const newId = await createSiteLocation(input);
+                            setCreatingSite(false);
+                            setSelectedId(newId);
+                            setActiveTab("overview");
+                            router.replace(canonicalLocationSettingsHref(newId));
+                            return newId;
+                        }}
+                    />
+                : siteRows.length === 0 ?
+                    <LocationsLanding
+                        collection={locationsCollection}
+                        onOpenLocation={(locationId, tab) =>
+                            openLocation(locationId, tab === "general" || tab == null ? "overview" : tab)
+                        }
+                        onAddLocation={beginAddLocation}
+                        canMutate={canMutate}
+                    />
+                :   <div className="grid items-start gap-4 pb-4 xl:grid-cols-[20.5rem_minmax(0,1fr)]">
+                        <LocationsObjectSelector
+                            sites={visibleSites}
+                            selectedId={selectedId}
+                            showInactive={showInactive}
+                            onShowInactiveChange={setShowInactive}
+                            search={search}
+                            onSearchChange={setSearch}
+                            canMutate={canMutate}
+                            onAddLocation={beginAddLocation}
+                            locationSummaryById={locationSummaryById}
+                            onSelect={(locationId) => {
+                                openLocation(locationId, activeTab === "overview" ? "overview" : activeTab);
+                            }}
+                        />
+
+                        <main
+                            className="min-w-0 space-y-2.5"
+                            data-testid={selectedSite ? "locations-selected-location" : "locations-composition"}
+                        >
+                            {selectedSite ?
+                                <div className="xl:hidden">
+                                    <label className="config-typo-field-label" htmlFor="locations-mobile-selector">
+                                        Location
+                                    </label>
+                                    <select
+                                        id="locations-mobile-selector"
+                                        className="config-runtime-select mt-1"
+                                        value={selectedSite.id}
+                                        onChange={(event) => {
+                                            openLocation(event.target.value, activeTab);
+                                        }}
+                                    >
+                                        {siteRows.map((site) => (
+                                            <option key={site.id} value={site.id}>
+                                                {String(site.label ?? "").trim() || "Untitled location"}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            :   null}
+
+                            {!selectedSite ?
+                                <LocationsLanding
+                                    collection={locationsCollection}
+                                    onOpenLocation={(locationId, tab) =>
+                                        openLocation(locationId, tab === "general" || tab == null ? "overview" : tab)
+                                    }
+                                    onAddLocation={beginAddLocation}
+                                    canMutate={canMutate}
+                                />
+                            :   <ConfigDetailRuntime<LocationWorkspaceTab>
+                                    header={
+                                        <ConfigObjectHeader
+                                            size="hero"
+                                            name={model?.displayName ?? "Location"}
+                                            status={{
+                                                label: selectedSite.is_active === false ? "Inactive" : "Active",
+                                                tone: selectedSite.is_active === false ? "inactive" : "active",
+                                            }}
+                                            breadcrumb={
+                                                <nav
+                                                    className="flex flex-wrap items-center gap-1.5 text-[11px] text-alloy-midnight/45"
+                                                    aria-label="Location ownership"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline"
+                                                        onClick={returnToLocations}
+                                                        data-testid="locations-breadcrumb-collection"
+                                                    >
+                                                        Locations
+                                                    </button>
+                                                    <span aria-hidden="true">›</span>
+                                                    <span className="font-semibold text-alloy-midnight/65">
+                                                        {model?.displayName ?? "Location"}
+                                                    </span>
+                                                </nav>
+                                            }
+                                            factsContent={
+                                                <LocationIdentityFactsRow
+                                                    city={selectedSite.city}
+                                                    state={selectedSite.state}
+                                                    timezoneIana={model?.timezone}
+                                                />
+                                            }
+                                            actions={
+                                                canMutate && !editingSite ?
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                                        onClick={() => setEditingSite(true)}
+                                                        data-testid="locations-edit-location"
+                                                    >
+                                                        Edit location
+                                                    </button>
+                                                :   undefined
+                                            }
+                                            testId="locations-object-header"
+                                        />
+                                    }
+                                    tabs={LOCATION_WORKSPACE_TABS}
+                                    activeSection={activeTab}
+                                    onSectionChange={navigate}
+                                    onSectionIntent={prefetchConcernIntent}
+                                    testId="locations-detail-runtime"
+                                    headerTestId="locations-hero"
+                                    tabAriaLabel="Location configuration"
+                                    tabTestIdPrefix="locations-tab"
+                                >
+                                    {tabBody}
+                                    {toursKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "tours" ? undefined : "hidden"}
+                                            data-testid="locations-tours-keepalive"
+                                        >
+                                            <LocationToursPanel
+                                                key={selectedSite.id}
+                                                orgId={orgId}
+                                                locationId={selectedSite.id}
+                                                locationLabel={model?.displayName ?? ""}
+                                                onMutationCommitted={() => {
+                                                    invalidateLocationConcernCaches(orgId, "tours", {
+                                                        locationId: selectedSite.id,
+                                                        reason: "tours-mutated",
+                                                    });
+                                                    return refreshOwnedConcernSetup(selectedSite.id);
+                                                }}
+                                            />
+                                        </div>
+                                    :   null}
+                                    {placementKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "placement" ? undefined : "hidden"}
+                                            data-testid="locations-placement-keepalive"
+                                        >
+                                            <LocationPlacementPanel
+                                                orgId={orgId}
+                                                rooms={selectedRooms}
+                                                onReviewRooms={() => navigate("rooms")}
+                                                canMutate={canMutate}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+                                            />
+                                        </div>
+                                    :   null}
+                                    {accessKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "access" ? undefined : "hidden"}
+                                            data-testid="locations-access-keepalive"
+                                        >
+                                            <LocationAccessPanel
+                                                key={selectedSite.id}
+                                                orgId={orgId}
+                                                locationId={selectedSite.id}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+                                            />
+                                        </div>
+                                    :   null}
+                                </ConfigDetailRuntime>
+                            }
+                        </main>
+                    </div>
+                }
             </ConfigurationShell>
+
         </div>
     );
 }

@@ -1,0 +1,64 @@
+{
+  "schema": "documents.r4.zero_residue_census.v1",
+  "qa_run": "qar_bc811ffc7da1",
+  "stage": "POST-CLEANUP closure sample (after resets gar_14477ac6a0bcd8 / gar_704378fa66897c and phase-1 close gar_62d1347398cf93)",
+  "request_id": "gar_bcf58ca61c3f22",
+  "successor_of": "gar_0ce4df9bd575b3",
+  "execution_run": "erun2_003abb3b9e959fb1",
+  "trusted_host_action_id": "tha_600d2394d06f41",
+  "not_replay_of": "tha_89eab7be17c753",
+  "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+  "database_target": "alloy_deployed_primary",
+  "census_run_at": "2026-10-29T23:03:41.849Z",
+  "after_phase1_close": "2026-10-29T22:34:53.061Z",
+  "checks": {
+    "doc_zr_vendors": "vendors ~ alloy_qa_fixture ~ zero ~ true",
+    "doc_zr_qa_role_grants": "role_permission_grants ~ qa_custom_roles ~ zero ~ true",
+    "doc_zr_pool_access": "user_roles ~ qa_orgs_non_actor ~ zero ~ true",
+    "doc_zr_zero_sent": "communication_messages ~ status_sent ~ zero ~ true",
+    "doc_zr_subjects": "opportunities_work_units_departments ~ aa000000_fixture ~ zero ~ true",
+    "doc_zr_shared_documents": "documents ~ qa_shared_qa_authz_tagged_or_on_fixture ~ zero ~ true",
+    "doc_zr_shared_objects": "storage_objects ~ qa_shared_qa_authz_tagged ~ zero ~ true",
+    "doc_zr_shared_dangling_case_sources": "processing_case_sources ~ qa_shared_document_source_without_document ~ zero ~ true",
+    "doc_zr_secondary_documents": "documents ~ qa_secondary_all ~ zero ~ true",
+    "doc_zr_secondary_objects": "storage_objects ~ qa_secondary_all ~ zero ~ true",
+    "doc_zr_secondary_cases": "processing_cases ~ qa_secondary_all ~ zero ~ true",
+    "doc_zr_qa_sessions": "auth_sessions ~ seven_qa_identities ~ zero ~ true",
+    "doc_zr_d6_requirements": "document_requirements ~ qa_fixture_keys ~ zero ~ true",
+    "doc_zr_d6_requirement_versions": "document_requirement_versions ~ qa_fixture_or_orphan ~ zero ~ true",
+    "doc_zr_d6_waivers": "document_requirement_waivers ~ qa_fixture_or_unresolved_subject ~ zero ~ true",
+    "doc_zr_forms_definitions": "form_definitions ~ qa_run_keys ~ zero ~ true",
+    "doc_zr_forms_definition_versions": "form_definition_versions ~ qa_run_keys ~ zero ~ true",
+    "doc_zr_forms_submissions": "form_submissions ~ qa_run_forms ~ zero ~ true",
+    "doc_zr_forms_links_and_packets": "form_public_links_form_packet_definitions_sessions ~ qa_run_keys ~ zero ~ true",
+    "doc_zr_health_facts_active_on_missing_subject": "person_health_facts ~ active_on_missing_qa_child ~ zero ~ true"
+  },
+  "true": 20,
+  "total": 20,
+  "retained_by_design": {
+    "doc_zr_retained_audit": {
+      "artifact": "access audit history (mutation_events)",
+      "status": "retained_by_design",
+      "not_residue": true,
+      "qa_shared_mutation_event_rows": 519
+    },
+    "doc_zr_retained_d1a_audit": {
+      "artifact": "D1a document audit (workflow_events)",
+      "status": "retained_by_design",
+      "not_residue": true,
+      "qa_org_rows": 936
+    },
+    "doc_zr_retained_health_facts": {
+      "artifact": "person_health_facts on deleted QA children (append-only)",
+      "status": "retained_by_design",
+      "not_residue": true,
+      "by_status": {
+        "ended": 4
+      }
+    }
+  },
+  "prior_samples": [
+    "r4_zero_residue_census.pre_reset.qar_bc811ffc7da1.json (gar_2585f5ebf4e7a6, 13/20 pre-reset)",
+    "gar_29a81808fb6b6d (replay, not a measurement)"
+  ]
+}

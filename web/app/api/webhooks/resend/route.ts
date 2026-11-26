@@ -6,6 +6,47 @@ import {
     type ProviderDeliveryApplyResult,
 } from "@/lib/communications/providerDeliveryPersistence";
 import { resendTypeToCanonical } from "@/lib/communications/v2/deliveryReceiptMapping";
+import { normalizeResendReceivedEvent } from "@/lib/communications/email/inboundEmailNormalization";
+import { ingestResendInboundEmail } from "@/lib/communications/email/inboundEmailIngestion";
+import { fetchReceivedEmail } from "@/lib/communications/email/resendReceivingClient";
+import type { ResendRetrievalResult } from "@/lib/communications/email/resendReceivingClient";
+import { resolveInboundRetrievalCredential } from "@/lib/communications/email/inboundRetrievalCredential";
+
+/** Provider timestamp when supplied, otherwise now. */
+function occurredAtOf(data: Record<string, unknown>): string {
+    const raw = data.created_at;
+    return typeof raw === "string" && raw.trim() ? raw : new Date().toISOString();
+}
+
+/**
+ * The credential used to RETRIEVE received email content.
+ *
+ * Resolved from the OWNING BINDING, after ownership — never from the environment alone.
+ * An organization that connected its own Resend account holds its credential in Vault and
+ * its binding names it `vault:…`; reading `process.env.RESEND_API_KEY` here ignored that
+ * entirely and failed such a tenant with `missing_api_key`.
+ *
+ * An org-owned reference is terminal: if it will not resolve, this fails closed rather than
+ * substituting the deployment key, because doing so would keep a revoked connection alive
+ * under a credential the organization never granted. See `inboundRetrievalCredential.ts`.
+ */
+async function retrieveReceivedEmailForOwner(
+    supabase: ReturnType<typeof createAdminClient>,
+    emailId: string,
+    owner: { orgId: string; secretRef: string | null }
+): Promise<ResendRetrievalResult> {
+    const credential = await resolveInboundRetrievalCredential({
+        supabase,
+        orgId: owner.orgId,
+        secretRef: owner.secretRef,
+    });
+    if (!credential.ok) {
+        // Retryable, and deliberately so: both reasons are configuration the operator can
+        // still fix, and the receipt must stay pending so the message is not discarded.
+        return { ok: false, retryable: true, reason: credential.reason };
+    }
+    return fetchReceivedEmail({ emailId, apiKey: credential.apiKey });
+}
 
 function providerMessageIdTail(id: string): string {
     const t = id.trim();
@@ -89,6 +130,43 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+
+    // ------------------------------------------------------------- INBOUND
+    //
+    // A received email, not a delivery receipt for one Alloy sent. It shares this
+    // route because it shares the thing that makes the route trustworthy: Svix
+    // verification against RESEND_WEBHOOK_SECRET, already done above. A second
+    // route would mean a second copy of that, and provider authenticity should
+    // have exactly one implementation.
+    //
+    // Provider parsing stays here at the edge; everything downstream is the
+    // channel-neutral canonical runtime.
+    if (type === "email.received") {
+        const event = normalizeResendReceivedEvent(data, { receivedAtFallback: occurredAtOf(data) });
+        if (!event) {
+            // Unusable shape. Acknowledged rather than refused: redelivering it
+            // would produce the same unusable shape forever.
+            return NextResponse.json({ ok: true, ignored: true, reason: "unusable_received_payload" });
+        }
+
+        const outcome = await ingestResendInboundEmail(event, {
+            supabase,
+            retrieve: (id, owner) => retrieveReceivedEmailForOwner(supabase, id, owner),
+        });
+
+        // The ONLY case that refuses the webhook. Resend retries, and the retry
+        // finds the receipt already claimed and continues from there rather than
+        // starting again — which is why a 5xx here is safe.
+        if (outcome.status === "retrieval_pending") {
+            return NextResponse.json(
+                { ok: false, status: outcome.status, reason: outcome.reason },
+                { status: 503 }
+            );
+        }
+
+        return NextResponse.json({ ok: true, status: outcome.status });
+    }
+
     const canonical = resendTypeToCanonical(type);
     const occurredAt = typeof data.created_at === "string" && data.created_at.trim() ? data.created_at : new Date().toISOString();
     const providerEventId = typeof evt.id === "string" && evt.id.trim() ? evt.id.trim() : undefined;

@@ -1,0 +1,17 @@
+{
+  "at": "2026-08-13T18:36:21.265Z",
+  "out": {
+    "lifecycle_tour": {
+      "status": 200,
+      "total": 1,
+      "items": [
+        "Kurzman Family"
+      ]
+    },
+    "lifecycle_lead": {
+      "status": 200,
+      "total": 0,
+      "items": []
+    }
+  }
+}

@@ -1,0 +1,161 @@
+9+
+6
+⌘K
+All locations
+▾
+QS
+Firefly Early Learning
+
+Operational Workspace
+
+6
+Needs attention
+6
+Overdue work
+20
+Pipeline Children
+Actions (1)
+▶
+Enrollment
+
+Pipeline
+
+No signal
+
+4
+
+Family Leads
+
+20
+
+Children
+
+TODAY'S WORK
+
+Waitlist
+Children that want to start but no available space.
+16
+›
+All
+Catch all including all open leads.
+7
+›
+New
+All new leads that need attention
+3
+›
+Registration
+Children in the enrollment process.
+3
+›
+Enrolled children
+2
+›
+Active Pipeline
+Leads that have actively been worked in the last 15 days.
+0
+›
+Tours
+Tours in the next 7 days
+0
+›
+Open
+→
+BOS
+
+Operational Intelligence
+
+Reset
+Pin
+Close
+
+Helping with
+
+Subject: Overview — All sites
+Attention
+· No urgent issues
+Here are some ways I can help
+▾
+Summarize this queue
+Get a quick overview of details and history
+Identify missing information
+See what's needed to move forward
+Draft follow-up
+Create a personalized follow-up message
+/ commands · ↵ to send · ⇧↵ new line
+
+BOS uses AI. Review for accuracy.
+
+Financials
+
+All sites · operational
+
+Site
+All sites
+▾
+Close
+Work
+Studio
+Overview
+Accounts
+Charges
+Payments
+Subsidy
+Activity
+
+MONEY RIGHT NOW
+
+$417.82
+Outstanding
+$417.82
+Collectible now
+$245.87
+Gross charges posted
+$68.00
+Payments received
+
+NEEDS A DECISION
+
+8Charges awaiting posting
+
+Drafts do not owe anything until they are posted.
+
+Review charges
+
+$0.00Unapplied payments
+
+Money that arrived and is not settling any obligation yet.
+
+Review payments
+
+$0.00Unresolved subsidy variance
+
+An agency paid something other than what was claimed, and nobody has decided what happens.
+
+Review subsidy
+
+RECENT MONEY MOVEMENT
+
+All activity
+Charge posted
+Certhouse Family
+$18.00
+Sep 17, 2026
+Charge posted
+Certhouse Family
+$25.00
+Sep 14, 2026
+Charge posted
+Certhouse Family
+$40.00
+Sep 14, 2026
+Charge posted
+Certhouse Family
+$18.00
+Sep 14, 2026
+Charge corrected
+Certhouse Family
+$7.77
+Sep 14, 2026
+
+All sites · figures resolved from the Financials metric pack.

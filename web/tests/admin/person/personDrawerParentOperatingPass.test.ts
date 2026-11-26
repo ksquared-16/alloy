@@ -110,60 +110,6 @@ describe("parent operating surface", () => {
         expect(model.groups[0]?.emergency_contacts[0]?.display_name).toBe("Pat Lee");
     });
 
-    it("parent summary renders editable contact fields", () => {
-        const summary = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerParentSummary.tsx"),
-            "utf8"
-        );
-        expect(summary).toContain("PersonDrawerParentSummary");
-        expect(summary).toContain("patchPersonDrawerFields");
-        expect(summary).toContain('aria-label="Parent email"');
-        expect(summary).toContain("communication_opt_out");
-    });
-
-    it("shared household section uses two-column guardians and children layout", () => {
-        const household = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
-            "utf8"
-        );
-        expect(household).toContain('data-person-drawer-household-child-link="true"');
-        expect(household).toContain("md:grid-cols-2");
-        expect(household).toContain("Guardians");
-        expect(household).toContain("Children");
-        expect(household).toContain("Emergency contacts");
-        expect(household).toContain("Authorized pickups");
-        expect(household).toContain("Primary");
-    });
-
-    it("parent IA lock removes Basic, Communication Preferences, and duplicate status", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).not.toContain("PersonDrawerParentCommunicationPrefs");
-        expect(drawer).toContain("personDrawerParentOperatingOverviewSections");
-        expect(drawer).toMatch(
-            /personParentGuardianChrome\)\s*\?\s*undefined\s*:\s*drawerStatusBadge/
-        );
-        expect(drawer).toContain("!personParentGuardianChrome");
-        expect(drawer).toMatch(/enrollmentActivity[\s\S]{0,200}!personParentGuardianChrome/);
-    });
-
-    it("parent module navigation stays in parent drawer", () => {
-        const rail = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerParentLifecycleRail.tsx"),
-            "utf8"
-        );
-        expect(rail).not.toContain("onOpenOpportunityCommunications");
-        expect(rail).not.toContain("openDrawer");
-        expect(rail).toContain('onSelectTab("communications")');
-
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain('apiEntityType="persons"');
-        expect(drawer).toContain("data-person-drawer-parent-comms");
-        expect(drawer).not.toContain("PersonDrawerParentCommunicationsPlaceholder");
-        expect(drawer).not.toMatch(
-            /personParentGuardianChrome[\s\S]{0,400}onOpenOpportunityCommunications/
-        );
-    });
-
     it("parent IA lock suppresses profile, contact, record info, and duplicate summary fields", () => {
         const filtered = filterPersonDrawerParentOverviewSections([
             { key: "profile", fields: [{ key: "first_name" }, { key: "last_name" }] },
@@ -186,34 +132,6 @@ describe("parent operating surface", () => {
             _field_definitions: [{ field_key: "city" }, { field_key: "postal_code" }],
         });
         expect(fields.map((f) => f.key)).toEqual(["city", "postal_code"]);
-    });
-
-    it("parent drawer renders address and inline employee status", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const address = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdAddress.tsx"),
-            "utf8"
-        );
-        expect(drawer).toContain("PersonDrawerHouseholdAddress");
-        expect(drawer).toContain("PersonDrawerParentHouseholdSection");
-        expect(drawer).toContain("PersonDrawerEmployeeStatusSection");
-        expect(address).toContain('data-person-drawer-household-address="true"');
-        expect(address).toContain("resolvePersonDrawerHouseholdAddressModel");
-        expect(drawer).toMatch(
-            /PersonDrawerParentHouseholdSection[\s\S]{0,1200}PersonDrawerHouseholdAddress[\s\S]{0,1200}PersonDrawerEmployeeStatusSection/
-        );
-    });
-
-    it("no child lifecycle modules leak into parent drawer", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("personParentGuardianChrome");
-        expect(drawer).toContain("PersonDrawerParentLifecycleRail");
-        expect(drawer).not.toMatch(
-            /personParentGuardianChrome[\s\S]{0,500}PersonDrawerChildLifecycleRail/
-        );
-        expect(drawer).not.toMatch(
-            /personParentGuardianChrome[\s\S]{0,500}PersonDrawerChildSummary/
-        );
     });
 
     it("open seed from opportunity contact uses guardian emphasis", () => {

@@ -1,177 +1,1231 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import clsx from "clsx";
+import { useReservedCardGeometry } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import CardInlineOverlay from "@/components/admin/focusPanel/cards/CardInlineOverlay";
+import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
+import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
+import CurrentWorkParticipantDecisionsPanel from "@/components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel";
+import { resolveParticipantDecisionScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveParticipantDecisionScope";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import {
-    buildCurrentWorkCardEvidence,
-    inferWorkItemOwner,
-} from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
+    workIntentProjectionForStageWorkItem,
+    type StageWorkItemProjection,
+} from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import CurrentWorkActivityPreview, {
+    CurrentWorkActivityKindIcon,
+    type CurrentWorkActivityPreviewItem,
+} from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
+import CurrentWorkFocusedSurface from "@/components/admin/focusPanel/cards/CurrentWorkFocusedSurface";
+import { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
+import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
+import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
+import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
+import { buildOutcomeCompletionSummary } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildOutcomeCompletionSummary";
+import type { CurrentWorkChecklistItem } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
+import { resolveWorkItemHandoff } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveWorkItemHandoff";
+import { handoffOwnerCardForChecklistScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkSurfaceVM";
+import {
+    resolveCurrentWorkRequirementOwner,
+    type CurrentWorkRequirementOwner,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkRequirementOwner";
+import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { executeCommandSurfaceAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCommandSurfaceAction";
+import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
+import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
+import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
+import { resolveTourCommandPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveTourCommandPresentation";
+import CurrentWorkContextStrip from "@/components/admin/focusPanel/cards/CurrentWorkContextStrip";
+import CurrentWorkProgressSummary from "@/components/admin/focusPanel/cards/CurrentWorkProgressSummary";
+import { buildWhatsNextCardPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildWhatsNextCardPresentation";
+import type {
+    CurrentWorkActionVM,
+    CurrentWorkChecklistItemVM,
+    CurrentWorkCompletionSummary,
+    CurrentWorkSurfaceVM,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
-import type {
-    OperationalContext,
-    OperationalWorkItem,
-} from "@/lib/adminV2/runtime/operationalContext/types";
+import { useDismissSignal, useReportPerspective } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
+import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
+import {
+    ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE,
+    type ContactFamilySendCompleteDetail,
+} from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
+import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
+import { useAlloyConfirm } from "@/components/ui/AlloyConfirmDialog";
+import { scheduledTourCloseConfirmRequest } from "@/lib/lifecycle/scheduledTourCloseConfirmation";
+import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
+import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
+import {
+    warmCurrentWorkCapabilitiesForActions,
+    warmCurrentWorkCapabilityOnIntent,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
 
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
     receded?: boolean;
-    /** Owner card: receives cross-card handoffs to a specific work item. */
     coordination?: FocusPanelCoordination;
+    mutation?: FocusPanelMutation;
+    /** Summary card in the identity grid, or full Focus Panel workspace takeover. */
+    presentation?: "summary" | "workspace";
 };
 
-/**
- * Current Work operational card (Work archetype). Answers "What needs to happen
- * next on this record?". It INSTRUCTS — it never becomes a centered Focus Card.
- * Collapsed, it shows the 2-second answer (primary item + due). The full queue
- * appears as a card-anchored INLINE OVERLAY that covers the card below WITHOUT
- * moving the base surface. Clicking an item HANDS OFF to the card that OWNS its
- * truth (Contact family → Household, enrollment → Children); ownerless items are
- * inert guidance. Pure over `context.signals.work` (no fetch).
- *
- * @see docs/platform/operator/card-archetypes.md (Work)
- * @see docs/sprints/06_2026/focus-panel-inline-overlay-finalization
- */
-export default function CurrentWorkCard({ model, context, receded = false, coordination }: Props) {
-    const evidence = useMemo(() => buildCurrentWorkCardEvidence(context), [context]);
-    const [overlayOpen, setOverlayOpen] = useState(false);
+type CompletionPhase = "working" | "select_result" | "confirm" | "processing" | "complete";
 
-    const openWorkItem = (item: OperationalWorkItem) => {
-        const owner = inferWorkItemOwner(item);
-        if (owner && coordination) {
-            setOverlayOpen(false);
-            coordination.requestFocus(owner.card, owner.focus);
+export default function CurrentWorkCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    mutation,
+    presentation = "summary",
+}: Props) {
+    /*
+     * THE SERVER PROJECTED THIS WORK. The card phrases it.
+     *
+     * `projectCurrentWork` used to run here — through this builder — which is the second reason the
+     * published configuration had to reach the browser. The projection now arrives already decided
+     * on whichever transport frame is current, and the builder is handed it rather than re-deriving.
+     *
+     * Interaction routing stays: `resolveWorkItemHandoff` runs on click, against client callbacks,
+     * and decides where a checklist item hands off to — not what the work IS.
+     */
+    const evidence = useMemo(
+        () =>
+            buildCurrentWorkCardEvidence(context, {
+                viewModel: context.operationalProjection?.currentWork ?? null,
+            }),
+        [context],
+    );
+    const vm = evidence.viewModel;
+    const surface = vm.surface;
+    // Mutations + Tour invitation / Communications prepare must key the family opportunity
+    // (Record of Truth). Child Waitlist Attention rewrites subject.id to the child /
+    // process-instance id — using that as opportunityId made Send Tour Invitation 404
+    // with "This record is no longer available."
+    const opportunityId = resolveFocusPanelMutationOpportunityId({
+        subjectId: context.subject.id,
+        grain: context.grain,
+        truth: context.truth as Record<string, unknown>,
+    });
+
+    // ── PER-CHILD PATHS ──
+    //
+    // Configured on the stage work TEMPLATE, and the completion gate refuses the outcome while any
+    // child is undecided — in this very surface. Every field of the scope comes from the runtime
+    // projection this card already holds; nothing is inferred.
+    const participantDecisionScope = useMemo(
+        () => resolveParticipantDecisionScope({ opportunityId, surface }),
+        [opportunityId, surface],
+    );
+    const handleParticipantDecisionChanged = useCallback(
+        (affected: { opportunityId: string; customerMemberId?: string }) => {
+            // A decision moves a child's participation, which changes the work's own completion
+            // eligibility and shows up on the record's activity.
+            dispatchOpportunityDrawerScopedUpdate(affected.opportunityId, "participant_decision", [
+                "header_actions",
+                "activity",
+            ]);
+        },
+        [],
+    );
+    // Phase A — count how many times the card re-composes with a distinct evidence identity per
+    // subject (seed context → enriched context = two composes for one navigation).
+    const cardPerspective = context.stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : "content";
+    useEffect(() => {
+        logCurrentWorkInit("currentWorkCard.compose", {
+            subjectId: context.subject.id,
+            note: cardPerspective,
+            cache: cardPerspective === "pending" ? "miss" : undefined,
+        });
+    }, [context.subject.id, cardPerspective]);
+
+    // Warm configured capabilities on intent: as soon as What's Next shows its actions, prefetch the
+    // data each capability's host will need (keyed on the capability host, never the action name) so
+    // the centered host opens with warmed content — e.g. Schedule tour shows availability instantly.
+    useEffect(() => {
+        if (context.stageWorkPending || evidence.isEmpty) return;
+        const actions = [
+            surface.primaryAction,
+            ...surface.supportingActions,
+            ...surface.communicationActions,
+        ].filter(Boolean) as CurrentWorkActionVM[];
+        warmCurrentWorkCapabilitiesForActions(actions, context);
+    }, [context, surface, evidence.isEmpty]);
+    const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
+    // Slice A: Current Work elevates as a centered Focus Card. It is "open" (focused) when the
+    // coordination host marks it open (drill-in / requestFocus) — or, for back-compat, when a
+    // caller still passes presentation="workspace". The card then renders the configured-work
+    // surface inside the elevated cell instead of a full-canvas replace.
+    const isWorkspace = presentation === "workspace" || coordination?.currentWorkWorkspace?.open === true;
+    // Tier-2 stage work still resolving — hold a neutral loading treatment in the region's final
+    // geometry. A pending projection must NEVER render as "No active work" (false-empty).
+    const stageWorkPending = context.stageWorkPending === true;
+    /*
+     * S4-1. Current Work has ONE root for every perspective, so unlike Attendance and Health the ref
+     * has a single home. The pending perspective replaces a settled body with one line of text, which
+     * is the same collapse Financials was repaired for; Slice 3 measured `showed_loading: false` here,
+     * so this closes a rare window rather than a routinely visible one. Geometry only — the pending
+     * body still renders, and no prior subject's work is retained.
+     */
+    const reservedGeometry = useReservedCardGeometry(!stageWorkPending);
+
+    const [completionPhase, setCompletionPhase] = useState<CompletionPhase>("working");
+    const [pendingOutcomeKey, setPendingOutcomeKey] = useState<string | null>(null);
+    const [completionSummary, setCompletionSummary] = useState<CurrentWorkCompletionSummary | null>(null);
+    const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+    const [recordedNotice, setRecordedNotice] = useState<string | null>(null);
+    const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
+    const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
+    /** Work Items → Focus Panel deep-link: highlight the shared work identity when present. */
+    const [focusedWorkItemId, setFocusedWorkItemId] = useState<string | null>(null);
+    const openWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
+
+    // Canonical local-time doctrine: activity timestamps render in the operator's resolved timezone.
+    const viewerTimeZone = useAdminViewerTimezone();
+    const activityPreviewItems = useMemo(
+        () => buildCurrentWorkActivityPreviewItemsFromContext(context, {
+            currentWorkId: vm.primaryWorkItem?.work_id ?? undefined,
+            workTemplateKey: vm.primaryWorkItem?.template_key ?? undefined,
+            timeZone: viewerTimeZone,
+            limit: 3,
+        }),
+        [context, vm.primaryWorkItem?.template_key, vm.primaryWorkItem?.work_id, viewerTimeZone],
+    );
+
+    const closeActionPanel = useCallback(() => {
+        setActivePanelAction(null);
+        // Drop one-shot workspace action intent when the operator closes the capability,
+        // so a remount cannot reopen it after dismiss.
+        coordination?.clearCurrentWorkWorkspaceIntent?.();
+    }, [coordination]);
+
+    const handleViewFullActivity = useCallback(() => {
+        setActivityPreviewOpen(false);
+        coordination?.openFocusPanelMode?.("activity");
+    }, [coordination]);
+
+    const handleCloseActivityPreview = useCallback(() => {
+        setActivityPreviewOpen(false);
+    }, []);
+
+    /*
+     * THE STAGE'S OTHER OPEN WORK, AND THE WORK THE OPERATOR HAS SELECTED.
+     *
+     * `pickPrimaryOpenItem` already says a secondary item "is reached only when the primary has
+     * nothing open — and then explicitly, through its own row". That row did not exist, so on a
+     * stage whose primary work is open, secondary work could be started and never resolved: the
+     * offer work on Waitlist was live in the runtime, deduped correctly on repeat invocation, and
+     * its outcomes were reachable from no surface at all.
+     *
+     * Selection is by TEMPLATE KEY against the runtime, re-resolved on every render, so a work item
+     * that closes underneath the operator falls back to the primary rather than leaving a stale
+     * projection selected. Null means "the stage's primary work", which is the unchanged default.
+     */
+    const stageWorkItems = useMemo<StageWorkItemProjection[]>(() => {
+        const runtime = surface.runtime;
+        if (!runtime) return [];
+        return [runtime.primary, ...runtime.additional].filter(
+            (item): item is StageWorkItemProjection => item != null,
+        );
+    }, [surface.runtime]);
+    const secondaryOpenWork = useMemo(
+        () =>
+            stageWorkItems.filter(
+                (item) => (item.role ?? "primary") === "secondary" && item.state === "open",
+            ),
+        [stageWorkItems],
+    );
+    const [selectedWorkKey, setSelectedWorkKey] = useState<string | null>(null);
+    const selectedWorkItem =
+        selectedWorkKey ?
+            stageWorkItems.find(
+                (item) => item.template_key === selectedWorkKey && item.state === "open",
+            ) ?? null
+        :   null;
+    /** The work every outcome control acts on — the selected item, else the stage's primary. */
+    const activeWorkItem = selectedWorkItem ?? vm.primaryWorkItem;
+    const activeProjection =
+        selectedWorkItem && surface.runtime ?
+            workIntentProjectionForStageWorkItem(surface.runtime, selectedWorkItem)
+        :   vm.primaryProjection;
+    const activeOutcomes = selectedWorkItem ? selectedWorkItem.outcomes : vm.completionOutcomes;
+
+    const pendingOutcome =
+        activeOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
+    const [confirmDialog, askConfirm] = useAlloyConfirm();
+
+    const resetCompletion = useCallback(() => {
+        setCompletionPhase("working");
+        setPendingOutcomeKey(null);
+        setSelectedWorkKey(null);
+        setCompletionSummary(null);
+        clearError();
+    }, [clearError]);
+
+    const openWorkspace = useCallback(
+        (intent: NonNullable<Parameters<NonNullable<FocusPanelCoordination["openCurrentWorkWorkspace"]>>[0]> = {
+            kind: "drill_in",
+        }) => {
+            resetCompletion();
+            // Clear any open capability panel, but do not clear workspace intent here —
+            // openCurrentWorkWorkspace installs the new intent immediately after.
+            setActivePanelAction(null);
+            coordination?.openCurrentWorkWorkspace?.(intent);
+        },
+        [coordination, resetCompletion],
+    );
+
+    const closeWorkspace = useCallback(() => {
+        resetCompletion();
+        closeActionPanel();
+        setActivityPreviewOpen(false);
+        coordination?.closeCurrentWorkWorkspace?.();
+        // Focus returns through the workspace host (E2E-11): this ref lived in the summary instance,
+        // which is not the one closing, so focusing it here always fell through to <body>.
+    }, [closeActionPanel, coordination, resetCompletion]);
+
+    const handleActionPanelComplete = useCallback(() => {
+        // Capability complete → restore full Focus Panel (same as Close), not elevated What's Next.
+        closeWorkspace();
+    }, [closeWorkspace]);
+
+    // Slice A: report the centered-elevation depth so the host raises this cell (backdrop +
+    // centered) — the same path Household/Children use — and collapse on backdrop/ESC dismiss.
+    useReportPerspective(coordination, "current_work", isWorkspace ? "focused" : "base");
+
+    useDismissSignal(coordination, "current_work", () => {
+        // Outside click / Esc on the depth scrim restores the full Focus Panel —
+        // including while a capability (Message / Send form / Tour) is open.
+        // Do not leave an orphaned "Close" control outside the elevated card.
+        closeWorkspace();
+    });
+
+    useEffect(() => {
+        const onFocusCurrentWork = (event: Event) => {
+            const detail = (event as CustomEvent<{ opportunity_id?: string; task_id?: string | null }>).detail;
+            if (detail?.opportunity_id !== opportunityId) return;
+            const taskId = typeof detail.task_id === "string" ? detail.task_id.trim() : "";
+            if (taskId) setFocusedWorkItemId(taskId);
+            openWorkspace({ kind: "drill_in" });
+        };
+        window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
+    }, [openWorkspace, opportunityId]);
+
+    useEffect(() => {
+        const onContactFamilySend = (event: Event) => {
+            const detail = (event as CustomEvent<ContactFamilySendCompleteDetail>).detail;
+            if (!detail || detail.opportunity_id !== opportunityId) return;
+            // Success ack already shown in the shared centered dialog. Do not reopen
+            // elevated What's Next / handoff notice — return straight to Focus Panel.
+            setHandoffNotice(null);
+            closeWorkspace();
+        };
+        window.addEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
+        return () =>
+            window.removeEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
+    }, [closeWorkspace, opportunityId]);
+
+    // Consume one-shot workspace intents (action panel / record outcome) after mount.
+    const workspaceIntent = coordination?.currentWorkWorkspace?.intent ?? null;
+    const workspaceIntentKind = workspaceIntent?.kind ?? null;
+    const workspaceIntentActionKey =
+        workspaceIntent && workspaceIntent.kind === "action" ? workspaceIntent.actionKey : null;
+    useEffect(() => {
+        if (!isWorkspace || !workspaceIntentKind) return;
+        if (workspaceIntentKind === "record_outcome") {
+            setCompletionPhase("select_result");
+            coordination?.clearCurrentWorkWorkspaceIntent?.();
+            return;
+        }
+        if (workspaceIntentKind === "action" && workspaceIntentActionKey) {
+            const allActions = [
+                surface.primaryAction,
+                surface.recordOutcomeAction,
+                ...surface.supportingActions,
+                ...surface.communicationActions,
+                ...surface.alternatePaths,
+                ...(surface.administrativeActions ?? []),
+            ].filter(Boolean) as CurrentWorkActionVM[];
+            const match = allActions.find(
+                (action) =>
+                    action.key === workspaceIntentActionKey
+                    || action.actionRef === workspaceIntentActionKey
+                    || action.handlerKey === workspaceIntentActionKey,
+            );
+            /*
+             * E2E-03: Manage carries a resolved action in (Add Child). Where this stage's Work
+             * Template does not list it, host THAT action — the registry made it available, and its
+             * declared host is this workspace. Nothing here picks a substitute command.
+             */
+            const carried =
+                workspaceIntent?.kind === "action" && workspaceIntent.resolved?.key?.trim() === workspaceIntentActionKey ?
+                    workspaceIntent.resolved
+                :   null;
+            const hosted: CurrentWorkActionVM | null =
+                match
+                ?? (carried ?
+                    {
+                        key: carried.key,
+                        label: carried.label,
+                        category: "administrative",
+                        placement: "manage_overflow",
+                        handlerKey: carried.key,
+                        resolved: carried,
+                    }
+                :   null);
+            if (!hosted) {
+                coordination?.clearCurrentWorkWorkspaceIntent?.();
+                return;
+            }
+            // Keep intent until closeActionPanel clears it — cold-fetch remounts were
+            // wiping local activePanelAction after a timed intent clear.
+            setActivePanelAction(hosted);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-apply intent across remounts
+    }, [isWorkspace, workspaceIntentKind, workspaceIntentActionKey]);
+
+    const invokeHeaderDelegate = (action: CurrentWorkActionVM) => {
+        const resolved = action.resolved;
+        if (resolved && coordination?.invokeHeaderAction) {
+            coordination.invokeHeaderAction(resolved);
+            return;
+        }
+        if (coordination?.invokeHeaderAction) {
+            coordination.invokeHeaderAction({
+                key: action.handlerKey ?? action.key,
+                label: action.label,
+                description: action.description ?? null,
+                action_type: "registry",
+                icon: action.icon ?? null,
+                style: null,
+                display_style: "outline",
+                /*
+                 * Configured arguments, not an empty object. This was hardcoded `{}`, so an action
+                 * whose contract requires an input could be configured, resolved, rendered and
+                 * pressed — and would then refuse, because the one thing it needed never travelled.
+                 */
+                payload: action.workTemplateKey ? { template_key: action.workTemplateKey } : {},
+                workflow_id: null,
+            });
         }
     };
 
-    const hasItems = !evidence.isEmpty && evidence.items.length > 0;
+    // Warm a capability's data on hover/focus of its action (extra lead time before the click) so the
+    // host opens with content already in hand. Keyed on the capability host — no action-name branching.
+    const warmAction = useCallback(
+        (action: CurrentWorkActionVM) => warmCurrentWorkCapabilityOnIntent(action, context),
+        [context],
+    );
 
-    // Collapsed body = the 2-second answer only (the insight + supporting line carry
-    // the primary item and its due). The full queue lives in the inline overlay.
-    const body = evidence.isEmpty ? (
-        <div className="alloy-os-household__summary" data-work-empty="true">
-            <p className="alloy-os-household__row-detail">All caught up — nothing needs action</p>
-        </div>
-    ) : null;
+    /**
+     * Run a command whose subject and inputs are already resolved.
+     *
+     * The subject is the one the Focus Panel is already showing — a child when the surface is
+     * child-grain — never the enclosing opportunity. That substitution is exactly what made this
+     * command unreachable through the drawer header, and re-introducing it here would put the work
+     * on the wrong record rather than merely failing.
+     *
+     * Executes through the registered-action route and nothing else; the server keeps eligibility.
+     */
+    const runCommandSurfaceAction = async (action: CurrentWorkActionVM) => {
+        // The durable child from the one carrier that names it. Absent means absent: the carrier's
+        // rule is that a wrong child is worse than no child, so there is no fallback and the host
+        // refuses rather than acting on whoever happens to be first.
+        const childId = context.participantScope?.customerMemberId?.trim() ?? "";
 
-    const footerAction = hasItems ? (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setOverlayOpen((v) => !v)}
-            data-work-action="view"
-            aria-expanded={overlayOpen}
-        >
-            View work items →
-        </button>
-    ) : null;
+        const result = await executeCommandSurfaceAction({
+            actionKey: action.handlerKey ?? action.key,
+            entityType: "child",
+            entityId: childId,
+            // Bound by configuration, carried through the projection — never re-asked of the operator.
+            ...(action.workTemplateKey ? { payload: { template_key: action.workTemplateKey } } : {}),
+            surface: "focus_panel",
+        });
+
+        if (!result.ok) {
+            setHandoffNotice(result.error);
+            return;
+        }
+        // Canonical completion: the same path a capability panel takes when it finishes, so the
+        // projection refreshes and the surface returns to the full Focus Panel.
+        resetCompletion();
+        handleActionPanelComplete();
+    };
+
+    const invokeAction = (action: CurrentWorkActionVM) => {
+        const plan = planCurrentWorkActionExecution(action);
+        switch (plan.kind) {
+            case "blocked":
+                setHandoffNotice(plan.reason);
+                return;
+            case "unsupported":
+                setHandoffNotice(plan.reason);
+                return;
+            case "record_outcome":
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "record_outcome" });
+                    return;
+                }
+                closeActionPanel();
+                setCompletionPhase("select_result");
+                return;
+            case "open_workspace":
+                openWorkspace({ kind: "drill_in" });
+                return;
+            case "open_inline_panel":
+                setHandoffNotice(null);
+                // Mark click before shell commit so Move to Waitlist click→shell timings are measurable.
+                if (plan.surface === "subject_selector" && typeof performance !== "undefined") {
+                    try {
+                        const key =
+                            (plan.action.handlerKey ?? plan.action.key).trim() || "waitlist_child";
+                        performance.mark(`alloy-cw:${key}:click`);
+                    } catch {
+                        /* ignore */
+                    }
+                }
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "action", actionKey: plan.action.key });
+                    return;
+                }
+                setActivePanelAction(plan.action);
+                return;
+            case "process_transition":
+                setHandoffNotice(null);
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "action", actionKey: plan.action.key });
+                    return;
+                }
+                setActivePanelAction(plan.action);
+                return;
+            case "communications_composer":
+                // #1: open the real communications composer INLINE in the centered surface (not the
+                // legacy modal). From the summary, elevate first, then the composer opens inline.
+                setHandoffNotice(null);
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "action", actionKey: action.key });
+                    return;
+                }
+                setActivePanelAction(action);
+                return;
+            case "header_delegate":
+                setHandoffNotice(null);
+                invokeHeaderDelegate(plan.action);
+                return;
+            case "command_surface": {
+                setHandoffNotice(null);
+                /*
+                 * A declared body means the command is REVIEWED before it runs. Without one the
+                 * command surface runs immediately, which is correct for a capability whose inputs
+                 * configuration bound and whose effect is local — so this changes nothing for
+                 * `stage_work.start` and everything for a command that sends a family paperwork.
+                 */
+                const declaredBody = canonicalActionDefinition(
+                    plan.action.handlerKey ?? plan.action.key,
+                )?.commandSurfaceBody;
+                if (declaredBody) {
+                    if (!isWorkspace) {
+                        openWorkspace({ kind: "action", actionKey: action.key });
+                        return;
+                    }
+                    setActivePanelAction(action);
+                    return;
+                }
+                void runCommandSurfaceAction(plan.action);
+                return;
+            }
+            case "cancel_tour": {
+                setHandoffNotice(null);
+                if (!mutation?.tour?.cancelTour) {
+                    setHandoffNotice("Tour cancellation is not available right now.");
+                    return;
+                }
+                void (async () => {
+                    const result = await mutation.tour.cancelTour(plan.bookingId);
+                    if (!result.ok) {
+                        setHandoffNotice(result.error ?? "Tour could not be cancelled.");
+                    }
+                })();
+                return;
+            }
+            default:
+                setHandoffNotice("This action is not available from What's Next.");
+        }
+    };
+
+    const handleChecklistItem = (item: CurrentWorkChecklistItemVM) => {
+        if (item.status === "complete") return;
+
+        const legacyItem = vm.checklist.find(
+            (row) => row.id === item.handoffItemId || row.id === item.key,
+        );
+        if (legacyItem) {
+            handleLegacyChecklistItem(legacyItem);
+            return;
+        }
+
+        // Owner comes from runtime metadata (Slice E); fall back to the legacy scope map.
+        const ownerCard = item.owner?.card ?? handoffOwnerCardForChecklistScope(item.scope);
+        if (ownerCard && coordination?.requestFocus) {
+            setHandoffNotice(null);
+            const source = { card: "current_work" as const, focus: null };
+            if (isWorkspace) coordination.closeCurrentWorkWorkspace?.();
+            resetCompletion();
+            coordination.requestFocus(ownerCard, item.owner?.focus ?? null, source);
+            return;
+        }
+
+        if (item.actionRef && coordination?.invokeHeaderAction) {
+            invokeAction({
+                key: item.actionRef,
+                label: item.label,
+                category: "supporting",
+                placement: "current_work_supporting",
+                actionRef: item.actionRef,
+            });
+        }
+    };
+
+    const handleLegacyChecklistItem = (item: CurrentWorkChecklistItem) => {
+        if (item.state === "complete") return;
+
+        const plan = resolveWorkItemHandoff(item, coordination);
+        if (!plan) return;
+
+        switch (plan.kind) {
+            case "blocked":
+                setHandoffNotice(plan.message);
+                return;
+            case "activity":
+                setHandoffNotice(null);
+                setActivityPreviewOpen(true);
+                return;
+            case "header_action": {
+                const composerAction = coordination?.resolveCommunicationsComposerAction?.();
+                if (composerAction && coordination?.invokeHeaderAction) {
+                    setHandoffNotice(null);
+                    coordination.invokeHeaderAction(composerAction);
+                    return;
+                }
+                setHandoffNotice(
+                    "No communications composer is available — open Activity or add Communications to this panel.",
+                );
+                return;
+            }
+            case "focus": {
+                setHandoffNotice(null);
+                const source = { card: "current_work" as const, focus: null };
+                if (isWorkspace) coordination?.closeCurrentWorkWorkspace?.();
+                resetCompletion();
+                coordination?.requestFocus(plan.card, plan.focus, source);
+                return;
+            }
+        }
+    };
+
+    const handleConfirmOutcome = useCallback(() => {
+        if (!pendingOutcomeKey || !activeProjection || !activeWorkItem) return;
+        setCompletionPhase("processing");
+        void (async () => {
+            let result = await completeOutcome(activeProjection, pendingOutcomeKey);
+            /*
+             * A terminal Tour outcome while the Tour is still ahead: nothing was written. The operator
+             * is asked in the platform's words; declining leaves everything exactly as it was.
+             */
+            if (result?.confirmation_required) {
+                const confirmed = await askConfirm(
+                    scheduledTourCloseConfirmRequest({
+                        confirmation: result.confirmation_required,
+                        outcomeLabel: pendingOutcome?.label ?? null,
+                    }),
+                );
+                if (!confirmed) {
+                    setCompletionPhase("confirm");
+                    return;
+                }
+                result = await completeOutcome(activeProjection, pendingOutcomeKey, { confirmCloseScheduledTour: true });
+            }
+            // A refused outcome returns to the confirmation with its error — never to "Completed".
+            if (!result?.ok) {
+                setCompletionPhase("confirm");
+                return;
+            }
+            /*
+             * THE RECORD LEFT THIS STAGE — there is nothing to continue here. The "What's Next /
+             * Continue Work" interstitial described work the record no longer has; the Focus Panel
+             * closes and re-renders at the new stage, with one line saying the outcome was recorded.
+             */
+            if (result.moved_stage) {
+                closeWorkspace();
+                setRecordedNotice("Outcome recorded");
+                return;
+            }
+            const effectLines = stageWorkOutcomeEffectLines(activeWorkItem, pendingOutcomeKey);
+            setCompletionSummary(
+                buildOutcomeCompletionSummary({
+                    workItem: activeWorkItem,
+                    outcomeKey: pendingOutcomeKey,
+                    effectLines,
+                }),
+            );
+            setCompletionPhase("complete");
+            setPendingOutcomeKey(null);
+        })();
+    }, [completeOutcome, pendingOutcomeKey, pendingOutcome, askConfirm, activeProjection, activeWorkItem, closeWorkspace]);
+
+    useEffect(() => {
+        if (!recordedNotice) return;
+        const timer = window.setTimeout(() => setRecordedNotice(null), 4000);
+        return () => window.clearTimeout(timer);
+    }, [recordedNotice]);
+
+    // #6: the status is expressed through the SHARED UniversalCard status-chip system (one canonical
+    // chip aligned with the card title), never a bespoke pill nested inside the card's own status
+    // slot (that double-pill was the "detached, unfinished" look). Tone is derived generically from
+    // the surface status — no per-process/per-stage styling.
+    // Presentation prefers stage position + durable membership over open-work progress labels.
+    const whatsNextPresentation = useMemo(
+        () =>
+            buildWhatsNextCardPresentation({
+                surface,
+                context,
+                activityItems: activityPreviewItems,
+                timeZone: viewerTimeZone,
+            }),
+        [surface, context, activityPreviewItems, viewerTimeZone],
+    );
+    const statusChip = whatsNextPresentation.statusLabel;
+    const statusTone: "blocked" | "done" | "neutral" =
+        surface.status === "blocked" ? "blocked"
+        : surface.status === "completed" ? "done"
+        :   "neutral";
+    const cardInsight = whatsNextPresentation.title;
+
+    // Activity preview + "View all activity" live under Recent Activity on the summary card.
+    const canPreviewActivity =
+        !isWorkspace
+        && !stageWorkPending
+        && !evidence.isEmpty
+        && completionPhase !== "complete";
+    const footerAction = null;
+    const stageLabel = context.businessProcess?.stageKey ?? null;
+    const ownerLabel = null;
+
+    void stageLabel;
+    void ownerLabel;
+
+    // Slice A: the focused (elevated) state renders a PURPOSE-BUILT centered configured-work
+    // surface — NOT the legacy two-column workspace body — inside the same UniversalCard so the
+    // grid's centered elevation applies. Summary and focused share one card; only the body swaps.
+    const focusedBody = (
+        <CurrentWorkFocusedSurface
+            surface={surface}
+            completionPhase={completionPhase}
+            pendingOutcome={pendingOutcome}
+            pendingOutcomeKey={pendingOutcomeKey}
+            busy={busy}
+            error={error}
+            handoffNotice={handoffNotice}
+            activityItems={activityPreviewItems}
+            truth={context.truth as Record<string, unknown>}
+            onChecklistItem={handleChecklistItem}
+            onAction={invokeAction}
+            onWarm={warmAction}
+            onSelectOutcome={(key) => {
+                clearError();
+                setPendingOutcomeKey(key);
+                setCompletionPhase("confirm");
+            }}
+            onCancelOutcome={() => {
+                setPendingOutcomeKey(null);
+                setSelectedWorkKey(null);
+                setCompletionPhase("working");
+            }}
+            secondaryWork={secondaryOpenWork.map((item) => ({
+                key: item.template_key,
+                label: item.label,
+            }))}
+            selectedWorkKey={selectedWorkKey}
+            onSelectWork={(templateKey) => {
+                clearError();
+                setSelectedWorkKey(templateKey);
+                setPendingOutcomeKey(null);
+                setCompletionPhase("select_result");
+            }}
+            outcomes={activeOutcomes}
+            outcomeWorkLabel={selectedWorkItem?.label ?? null}
+            onConfirmOutcome={handleConfirmOutcome}
+            onClose={closeWorkspace}
+            // R-014: return to the launcher list without collapsing the card. `closeActionPanel`
+            // has existed since the panel slot was written and was reachable from no UI control —
+            // every visible exit was bound to `closeWorkspace`, so leaving a command destination
+            // always cost the operator the whole Focus Panel context.
+            onDismissPanel={closeActionPanel}
+            panelTitle={activePanelAction?.label ?? null}
+            actionPanel={
+                activePanelAction ?
+                    <CurrentWorkActionPanel
+                        action={activePanelAction}
+                        context={context}
+                        opportunityId={opportunityId}
+                        mutation={mutation}
+                        onClose={closeWorkspace}
+                        onComplete={handleActionPanelComplete}
+                    />
+                :   null
+            }
+            participantDecisions={
+                // Self-suppressing: the panel asks the configured surface and renders nothing when
+                // this template declares no participant decisions, so an unconfigured tenant sees
+                // exactly what it sees today. A null scope means the runtime has not projected a
+                // department/stage/template yet — never a reason to query someone else's decisions.
+                participantDecisionScope ?
+                    <CurrentWorkParticipantDecisionsPanel
+                        scope={participantDecisionScope}
+                        canMutate={context.capabilities.canMutate}
+                        onChanged={handleParticipantDecisionChanged}
+                    />
+                :   null
+            }
+        />
+    );
+
+    const body =
+        stageWorkPending ? (
+            <div className="alloy-os-household__summary" data-work-pending="true" aria-busy="true">
+                <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading What's Next">
+                    Loading What&apos;s Next…
+                </p>
+            </div>
+        ) : evidence.isEmpty ? (
+            <div className="alloy-os-household__summary" data-work-empty="true">
+                <p className="alloy-os-household__row-detail">No What&apos;s Next configured</p>
+            </div>
+        ) : completionPhase === "complete" && completionSummary ?
+            <OutcomeCompleteBody
+                surface={surface}
+                summary={completionSummary}
+                activityPreviewOpen={activityPreviewOpen}
+                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
+                onCloseActivityPreview={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
+                activityPreviewItems={activityPreviewItems}
+                onContinue={() => {
+                    resetCompletion();
+                }}
+            />
+        : isWorkspace ? focusedBody
+        :   <SummaryBody
+                surface={surface}
+                context={context}
+                opportunityId={opportunityId}
+                focusedWorkItemId={focusedWorkItemId}
+                truth={context.truth as Record<string, unknown>}
+                activityItems={activityPreviewItems}
+                timeZone={viewerTimeZone}
+                activityPreviewOpen={activityPreviewOpen}
+                canPreviewActivity={canPreviewActivity}
+                activityTriggerRef={openWorkspaceTriggerRef}
+                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
+                onCloseActivityPreview={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
+                onChecklistItem={handleChecklistItem}
+                onAction={invokeAction}
+                onWarm={warmAction}
+            />;
+
+    // Shared hosted-capability mode: when a capability panel is active in the focused card, What's
+    // Next collapses to a COMPACT CONTEXT FRAME — the explanatory sentence is dropped and the card
+    // becomes a fill/scroll host so the capability's own footer stays visible. Driven by the
+    // presence of an active capability, never by action name.
+    const capabilityActive = isWorkspace && activePanelAction != null;
 
     return (
         <div
+            ref={reservedGeometry.ref}
             className="alloy-os-household alloy-os-currentwork"
             data-work-card="true"
-            data-work-card-perspective={evidence.isEmpty ? "empty" : "diagnostic"}
-            data-fp-overlay-open={overlayOpen ? "true" : undefined}
+            data-work-reserved={reservedGeometry.reserved ? "true" : undefined}
+            style={reservedGeometry.style}
+            data-work-card-perspective={stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : isWorkspace ? "focused" : "summary"}
+            data-capability-active={capabilityActive ? "true" : undefined}
+            data-current-work-surface="true"
+            data-focused-work-id={focusedWorkItemId ?? undefined}
         >
+            {confirmDialog}
             <UniversalCard
-                title={model.title}
-                insight={evidence.answerLine}
-                supportingInsight={evidence.supportingLine}
+                /*
+                 * IN COMMAND MODE THE CARD STOPS INTRODUCING ITSELF. "What's Next" and the stage sat
+                 * above every command workspace, restating what is still visible behind the scrim
+                 * and pushing the first editable control down by two lines plus a chip. The command
+                 * names itself in its own topbar, so this identity is redundant exactly while a
+                 * capability owns the surface — and returns the moment it closes.
+                 */
+                title={capabilityActive ? "" : vm.microLabel}
+                insight={capabilityActive ? "" : cardInsight}
+                supportingInsight={null}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="status"
-                statusChip={evidence.statusChip}
-                statusTone={evidence.statusTone}
+                statusChip={capabilityActive ? null : statusChip}
+                statusTone={statusTone}
                 density="compact"
                 gridSpan={model.span}
                 data-universal-card-key={model.key}
                 receded={receded}
                 footerAction={footerAction}
             >
+                {recordedNotice && !isWorkspace ?
+                    <p className="alloy-os-household__row-detail" role="status" data-work-outcome-recorded="true">
+                        {recordedNotice}
+                    </p>
+                :   null}
                 {body}
             </UniversalCard>
-            <CardInlineOverlay
-                open={overlayOpen && hasItems}
-                onClose={() => setOverlayOpen(false)}
-                title="Current work"
-                dataOverlay="current-work"
-            >
-                <div className="alloy-os-household__rows" data-work-list>
-                    {evidence.items.map((item) => (
-                        <WorkRow
-                            key={item.id}
-                            item={item}
-                            onFocus={inferWorkItemOwner(item) ? () => openWorkItem(item) : undefined}
-                        />
-                    ))}
-                </div>
-            </CardInlineOverlay>
         </div>
     );
 }
 
-function workTone(item: OperationalWorkItem): "risk" | "work" | "neutral" {
-    if (item.urgency === "overdue") return "risk";
-    if (item.urgency === "today" || item.state === "open") return "work";
-    return "neutral";
-}
+// ReadinessSummary (Slice E ownership grouping) lives in its own module so the focused
+// configured-work surface (Slice A) can reuse it without a circular import. Re-exported here
+// for back-compat with existing importers.
+export { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
 
-function WorkRow({ item, onFocus }: { item: OperationalWorkItem; onFocus?: () => void }) {
-    const tone = workTone(item);
-    const lead = item.urgency === "overdue" ? "!" : item.state === "open" ? "●" : "○";
-    const pointsTo = onFocus ? inferWorkItemOwner(item) : null;
-    const inner = (
-        <>
-            <span
-                className={clsx("alloy-os-household__avatar", `alloy-os-card-lead--${tone}`)}
-                aria-hidden
-            >
-                {lead}
-            </span>
-            <span className="alloy-os-household__row-main min-w-0">
-                <span className="alloy-os-household__row-name">{item.label}</span>
-                {item.dueLabel ? (
-                    <span
-                        className={clsx(
-                            "alloy-os-household__row-detail",
-                            item.urgency === "overdue" && "alloy-os-card-detail--risk",
-                        )}
-                    >
-                        {item.dueLabel}
-                    </span>
-                ) : null}
-            </span>
-            {pointsTo ? (
-                <span className="alloy-os-readiness__pointer" aria-hidden>
-                    {pointsTo.card === "household" ? "Household" : "Children"} →
-                </span>
-            ) : null}
-        </>
+function SummaryBody({
+    surface,
+    context,
+    opportunityId,
+    focusedWorkItemId,
+    truth,
+    activityItems,
+    timeZone,
+    activityPreviewOpen,
+    canPreviewActivity,
+    activityTriggerRef,
+    onToggleActivityPreview,
+    onCloseActivityPreview,
+    onViewFullActivity,
+    onChecklistItem,
+    onAction,
+    onWarm,
+}: {
+    surface: CurrentWorkSurfaceVM;
+    context: OperationalContext;
+    opportunityId: string;
+    focusedWorkItemId: string | null;
+    truth?: Record<string, unknown> | null;
+    activityItems: CurrentWorkActivityPreviewItem[];
+    timeZone?: string | null;
+    activityPreviewOpen: boolean;
+    canPreviewActivity: boolean;
+    activityTriggerRef: RefObject<HTMLButtonElement | null>;
+    onToggleActivityPreview: () => void;
+    onCloseActivityPreview: () => void;
+    onViewFullActivity: () => void;
+    onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
+    onAction: (action: CurrentWorkActionVM) => void;
+    onWarm: (action: CurrentWorkActionVM) => void;
+}) {
+    // ONE shared derivation so the summary and the focused "View details" surface show the SAME
+    // buttons — a dominant command (or outcome when outcome-led), configured helpful actions, and
+    // Record outcome as a subordinate button when a command leads.
+    const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
+
+    /*
+     * THE STAGE'S OTHER OPEN WORK, ON THE CARD THE OPERATOR IS LOOKING AT.
+     *
+     * `Record outcome` acts on the PRIMARY work — correctly, and deliberately so. The consequence
+     * was that a second open work item had no way to be resolved from here at all: on staging an
+     * offer work was started, was live in the runtime, and its outcomes (Spot offered, No
+     * response, Candidate paused) were reachable from nowhere, because the only surface that listed
+     * secondary work was the expanded workspace.
+     *
+     * Same derivation as that section, so the two cannot disagree about what counts as secondary,
+     * and the same handler, so selecting a row opens its own work and outcome context rather than
+     * needing a second navigation path.
+     */
+    const secondaryWork = (surface.checklist ?? []).filter(
+        (item) => item.kind === "stage_work" && item.workRole === "secondary" && item.status !== "complete",
     );
-    if (onFocus) {
-        return (
-            <button
-                type="button"
-                className="alloy-os-household__row alloy-os-currentwork__row"
-                data-work-row={item.id}
-                data-work-tone={tone}
-                onClick={onFocus}
-            >
-                {inner}
-            </button>
-        );
-    }
+    const card = buildWhatsNextCardPresentation({
+        surface,
+        context,
+        activityItems,
+        timeZone,
+    });
+    const workId = surface.primaryWorkItem?.work_id?.trim() || "";
+    const workItemsLinkActive =
+        Boolean(workId) && (!focusedWorkItemId || focusedWorkItemId === workId);
+
+    /**
+     * Why this work cannot be resolved. The summary is where the "Blocked" chip appears, so it is
+     * where the reason belongs — a status word with no explanation is the dead end this sprint
+     * exists to remove. Computed by the runtime, previously discarded here.
+     */
+    const outcomeBlockReason =
+        !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
+
+    const recentActivity = card.recentActivity;
+    const showRecentActivity = recentActivity.length > 0 || canPreviewActivity;
+
     return (
         <div
-            className="alloy-os-household__row alloy-os-currentwork__row"
-            data-work-row={item.id}
-            data-work-tone={tone}
+            className="alloy-os-currentwork__summary"
+            data-work-summary="true"
+            data-whats-next-card="v2"
+            data-summary-source={card.summarySource}
+            data-focused-work-id={focusedWorkItemId ?? undefined}
+            role="group"
+            aria-label="What's Next summary"
         >
-            {inner}
+            {card.summaryLine ?
+                <p className="alloy-os-currentwork__summary-line" data-work-summary-line="true">
+                    {card.summaryLine}
+                </p>
+            :   null}
+            {card.currentWorkLabel ?
+                <p className="alloy-os-currentwork__current-work-label" data-work-current-label="true">
+                    Current work · {card.currentWorkLabel}
+                </p>
+            :   null}
+            {outcomeBlockReason ?
+                <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
+                    {outcomeBlockReason}
+                </p>
+            :   null}
+            {card.progress ?
+                <CurrentWorkProgressSummary progress={card.progress} />
+            :   null}
+            <div className="alloy-os-currentwork__summary-controls">
+                <div className="alloy-os-currentwork__context-action-row" data-work-context-action-row="true">
+                    <CurrentWorkContextStrip surface={surface} truth={truth} facts={card.contextFacts} />
+                    {dominant ?
+                        <button
+                            type="button"
+                            className="alloy-os-currentwork__primary-action"
+                            data-work-primary-action={dominant.key}
+                            data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
+                            onClick={() => onAction(dominant)}
+                            onMouseEnter={() => onWarm(dominant)}
+                            onFocus={() => onWarm(dominant)}
+                        >
+                            <CurrentWorkActionButtonContent action={dominant} />
+                        </button>
+                    :   null}
+                </div>
+                {helpful.length > 0 || subordinateOutcome ?
+                    <div className="alloy-os-currentwork__primary-stack" data-work-primary-stack="true">
+                        {helpful.length > 0 ?
+                            <div className="alloy-os-currentwork__helpful-row" data-work-helpful-row="true">
+                                <CurrentWorkTourGroupedActions
+                                    actions={helpful}
+                                    // One resolver names the state for both surfaces.
+                                    label={
+                                        resolveTourCommandPresentation(helpful, context.signals.tour, {
+                                            // The canonical ownership gate, straight from the surface:
+                                            // an elapsed tour may only be called "awaiting outcome"
+                                            // where outcome-bearing work actually exists to resolve it.
+                                            outcomeWorkAvailable: surface.showOutcomeCompletion,
+                                        }).label
+                                    }
+                                    onAction={onAction}
+                                    onWarm={onWarm}
+                                    variant="summary"
+                                />
+                            </div>
+                        :   null}
+                        {subordinateOutcome ?
+                            <button
+                                type="button"
+                                className="alloy-os-currentwork__record-outcome-link"
+                                data-work-action="record-outcome"
+                                onClick={() => onAction(subordinateOutcome)}
+                            >
+                                Record outcome
+                            </button>
+                        :   null}
+                    </div>
+                :   null}
+                {/*
+                  * OUTSIDE THE ACTION STACK, for the same reason the focused surface is.
+                  *
+                  * This sat inside `helpful.length > 0 || subordinateOutcome`, so a stage projecting
+                  * no helpful commands and no subordinate outcome dropped the section entirely — and
+                  * the static guard that claimed "the summary card lists the stage's other open
+                  * work" stayed green throughout, because the markup was always present in source.
+                  * A render test on that exact shape is what found it. Other open work exists
+                  * independently of whether this stage happens to project commands.
+                  */}
+                {secondaryWork.length > 0 ?
+                    <div data-work-section="also-in-progress" data-work-secondary-summary="true">
+                        <p className="alloy-os-currentwork__context-label">Also in progress</p>
+                        <ul className="alloy-os-currentwork__recent-activity-list">
+                            {secondaryWork.map((item) => (
+                                <li key={item.key}>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-currentwork__record-outcome-link"
+                                        data-work-secondary-item={item.key}
+                                        onClick={() => onChecklistItem(item)}
+                                    >
+                                        {item.label}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+            :   null}
+            <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
+                <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                {showRecentActivity ?
+                    <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
+                        {recentActivity.length > 0 ?
+                            <>
+                                <p className="alloy-os-currentwork__context-label">Recent activity</p>
+                                <ul className="alloy-os-currentwork__recent-activity-list">
+                                    {recentActivity.map((item) => (
+                                        <li key={item.key}>
+                                            <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
+                                                <CurrentWorkActivityKindIcon
+                                                    kind={item.kind as CurrentWorkActivityPreviewItem["kind"]}
+                                                />
+                                            </span>
+                                            <span className="alloy-os-currentwork__recent-activity-body">
+                                                <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
+                                                {item.occurredAt ?
+                                                    <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
+                                                :   null}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </>
+                            :   null}
+                            {canPreviewActivity ?
+                                <div className="alloy-os-currentwork__activity-link-wrap relative">
+                                    <button
+                                        ref={activityTriggerRef}
+                                        type="button"
+                                        className="alloy-os-currentwork__view-all-activity"
+                                        data-work-action="preview-activity"
+                                        aria-expanded={activityPreviewOpen}
+                                        onClick={onToggleActivityPreview}
+                                    >
+                                        View all activity
+                                    </button>
+                                    <CurrentWorkActivityPreview
+                                        open={activityPreviewOpen}
+                                        items={activityItems}
+                                        onClose={onCloseActivityPreview}
+                                        onViewFullActivity={onViewFullActivity}
+                                        triggerRef={activityTriggerRef}
+                                    />
+                                </div>
+                            :   null}
+                        </div>
+                    :   null}
+                </div>
+
+                {workId ?
+                    <div
+                        className="alloy-os-currentwork__work-items-link"
+                        data-current-work-work-items-link="true"
+                        data-work-items-link-active={workItemsLinkActive ? "true" : undefined}
+                    >
+                        <span className="alloy-os-currentwork__work-items-meta">Also in Work Items</span>
+                        <ViewInWorkItemsLink
+                            taskId={workId}
+                            opportunityId={opportunityId}
+                            source="business_process"
+                        />
+                    </div>
+                :   null}
+            </div>
+        </div>
+    );
+}
+
+function OutcomeCompleteBody({
+    surface,
+    summary,
+    activityPreviewOpen,
+    onToggleActivityPreview,
+    onCloseActivityPreview,
+    onViewFullActivity,
+    activityPreviewItems,
+    onContinue,
+}: {
+    surface: CurrentWorkSurfaceVM;
+    summary: CurrentWorkCompletionSummary;
+    activityPreviewOpen: boolean;
+    onToggleActivityPreview: () => void;
+    onCloseActivityPreview: () => void;
+    onViewFullActivity?: () => void;
+    activityPreviewItems: CurrentWorkActivityPreviewItem[];
+    onContinue: () => void;
+}) {
+    const triggerRef = useRef<HTMLButtonElement>(null);
+
+    return (
+        <div className="alloy-os-currentwork__complete" data-work-completion="complete">
+            <p className="alloy-os-currentwork__complete-eyebrow">What's Next</p>
+            <span className="alloy-os-card-pill alloy-os-card-pill--complete">Completed</span>
+            <h3 className="alloy-os-currentwork__complete-title">{surface.title}</h3>
+            <p className="alloy-os-currentwork__complete-outcome">{summary.outcomeLabel}</p>
+            <div className="alloy-os-currentwork__complete-changes">
+                {summary.changeLines.map((line) => (
+                    <p key={line} className="alloy-os-currentwork__complete-change">
+                        ✓ {line}
+                    </p>
+                ))}
+                <p className="alloy-os-currentwork__complete-summary">{summary.summary}</p>
+            </div>
+            {summary.nextReminderLabel ?
+                <p className="alloy-os-currentwork__complete-reminder">{summary.nextReminderLabel}</p>
+            :   null}
+            {summary.nextWorkLabel ?
+                <div className="alloy-os-currentwork__complete-next">
+                    <p className="alloy-os-currentwork__supporting-title">What&apos;s next</p>
+                    <p className="alloy-os-currentwork__complete-next-label">{summary.nextWorkLabel}</p>
+                </div>
+            :   null}
+            <div className="alloy-os-card-nav" data-work-complete-actions="true">
+                <div className="alloy-os-currentwork__activity-link-wrap">
+                    <button
+                        ref={triggerRef}
+                        type="button"
+                        className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                        onClick={onToggleActivityPreview}
+                        aria-expanded={activityPreviewOpen}
+                        data-work-action="preview-activity"
+                    >
+                        View recent activity
+                    </button>
+                    <CurrentWorkActivityPreview
+                        open={activityPreviewOpen}
+                        items={activityPreviewItems}
+                        onClose={onCloseActivityPreview}
+                        onViewFullActivity={onViewFullActivity}
+                        triggerRef={triggerRef}
+                    />
+                </div>
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5 alloy-os-ucard__action--cta"
+                    onClick={onContinue}
+                >
+                    Continue Work
+                </button>
+            </div>
         </div>
     );
 }

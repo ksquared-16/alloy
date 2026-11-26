@@ -1,0 +1,3 @@
+before step 12: the job's target resolves to: https://staging.workwithalloy.com/api/scheduled-work/wake
+before step 12: credential rows: 0
+before step 12: one tick by hand (the job's own command): requests queued 0 -> 0, responses 0 -> 0 (inert while the credential is absent)

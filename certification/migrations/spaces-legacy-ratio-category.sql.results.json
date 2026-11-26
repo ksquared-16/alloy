@@ -1,0 +1,320 @@
+{
+  "trusted_host_action_id": "tha_a0e90e3b379b83",
+  "query_hash": "df3318b3504aa0167d3ebb34b21505f1b728dc7e01b0b79b470460e764d615ab",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T22:30:36.204Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_a0e90e3b379b83",
+    "query_hash": "df3318b3504aa0167d3ebb34b21505f1b728dc7e01b0b79b470460e764d615ab",
+    "authorization_id": "grnt_9f3ec7307d654558",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T22:30:38.959Z",
+    "question_ids": [
+      "spaces_legacy_ratio_category"
+    ],
+    "questions": {
+      "spaces_legacy_ratio_category": {
+        "question_id": "spaces_legacy_ratio_category",
+        "row_count": null,
+        "rows": [
+          {
+            "units_with_legacy_ratio_or_category": [
+              {
+                "label": "Bears",
+                "site": "South Campus",
+                "role": "(null)",
+                "category": "toddler",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:6",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "10"
+              },
+              {
+                "label": "Giraffe",
+                "site": "South Campus",
+                "role": "(null)",
+                "category": "preschool",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:6,2:14",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "12"
+              },
+              {
+                "label": "Infant A",
+                "site": "West Campus",
+                "role": "(null)",
+                "category": "infant",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:4",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "6"
+              },
+              {
+                "label": "Infant A",
+                "site": "North Campus",
+                "role": "(null)",
+                "category": "infant",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:5,2:11",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "8"
+              },
+              {
+                "label": "Infant B",
+                "site": "West Campus",
+                "role": "(null)",
+                "category": "classroom",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:4",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "6"
+              },
+              {
+                "label": "Infant B",
+                "site": "North Campus",
+                "role": "(null)",
+                "category": "infant",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:5",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "8"
+              },
+              {
+                "label": "Monkeys",
+                "site": "South Campus",
+                "role": "(null)",
+                "category": "infant",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:5",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "9"
+              },
+              {
+                "label": "Pre-K",
+                "site": "Room 1",
+                "role": "operational_group",
+                "category": "pre_k",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:8",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "15"
+              },
+              {
+                "label": "Preschool",
+                "site": "West Campus",
+                "role": "(null)",
+                "category": "preschool",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:8",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "8"
+              },
+              {
+                "label": "Preschool 1",
+                "site": "North Campus",
+                "role": "(null)",
+                "category": "preschool",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:7,2:15",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "12"
+              },
+              {
+                "label": "Preschool 2",
+                "site": "North Campus",
+                "role": "(null)",
+                "category": "preschool",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:7,2:15",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "12"
+              },
+              {
+                "label": "Tigers",
+                "site": "South Campus",
+                "role": "(null)",
+                "category": "toddler",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:6",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "10"
+              },
+              {
+                "label": "Toddler 1",
+                "site": "Room 1",
+                "role": "operational_group",
+                "category": "toddler",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:6",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "10"
+              },
+              {
+                "label": "Toddler 1",
+                "site": "West Campus",
+                "role": "(null)",
+                "category": "classroom",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:6",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "7"
+              },
+              {
+                "label": "Toddler 2",
+                "site": "Room 1",
+                "role": "operational_group",
+                "category": "toddler",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:7",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "10"
+              },
+              {
+                "label": "Toddler 2",
+                "site": "West Campus",
+                "role": "(null)",
+                "category": "toddler",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:6",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "7"
+              },
+              {
+                "label": "Zebras",
+                "site": "South Campus",
+                "role": "(null)",
+                "category": "infant",
+                "semantic_kind": "classroom",
+                "room_category": null,
+                "student_teacher_ratio": "1:5",
+                "ratio": null,
+                "ratio_licensing_notes": null,
+                "licensing_ratio": null,
+                "capacity": "9"
+              }
+            ],
+            "sites_metadata_keys": [
+              {
+                "label": "North Campus",
+                "keys": [
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "location_scheduling_v1",
+                  "seed_key",
+                  "seed_source",
+                  "site_phone",
+                  "timezone"
+                ]
+              },
+              {
+                "label": "South Campus",
+                "keys": [
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "site_phone",
+                  "timezone"
+                ]
+              },
+              {
+                "label": "West Campus",
+                "keys": [
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "site_phone",
+                  "timezone"
+                ]
+              }
+            ],
+            "any_ratio_like_15_or_211": [
+              {
+                "label": "Monkeys",
+                "value": "1:5"
+              },
+              {
+                "label": "Infant A",
+                "value": "1:5,2:11"
+              },
+              {
+                "label": "Preschool 1",
+                "value": "1:7,2:15"
+              },
+              {
+                "label": "Infant B",
+                "value": "1:5"
+              },
+              {
+                "label": "Preschool 2",
+                "value": "1:7,2:15"
+              },
+              {
+                "label": "Zebras",
+                "value": "1:5"
+              }
+            ],
+            "observed_at": "2026-09-22 22:30:38.887607+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatTourInstantForOperator } from "@/lib/tours/schedules/tourTimeFormat";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import type { RequestedTourAttention } from "@/lib/tours/publicCalendar/requestedTourOperatorView";
 import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
 import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
+import { peekWarmTourSchedule, prefetchTourSchedule, invalidateWarmTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
 
 export type OpportunityTourScheduleActionModalProps = {
     open: boolean;
@@ -18,6 +21,8 @@ export type OpportunityTourScheduleActionModalProps = {
     initialTourTime?: string | null;
     onSlotBooked: (result?: { booking?: TourBookingRow }) => void | Promise<void>;
     onLegacySubmit: (payload: { tour_date: string; tour_time: string }) => Promise<void>;
+    /** When embedded, renders inline (e.g. Current Work action panel) without a full-screen scrim. */
+    variant?: "modal" | "embedded";
 };
 
 type SlotPhase = "bootstrapping" | "duplicate_guard" | "schedule" | "reschedule";
@@ -25,17 +30,8 @@ type SlotPhase = "bootstrapping" | "duplicate_guard" | "schedule" | "reschedule"
 const SUCCESS_DISMISS_MS = 2000;
 
 function formatBookingWhen(row: TourBookingRow, viewerTz: string | null | undefined): string {
-    try {
-        const d = new Date(row.start_at);
-        if (Number.isNaN(d.getTime())) return row.start_at;
-        return new Intl.DateTimeFormat(undefined, {
-            dateStyle: "medium",
-            timeStyle: "short",
-            timeZone: row.timezone || viewerTz || undefined,
-        }).format(d);
-    } catch {
-        return row.start_at;
-    }
+    // The booking's own zone snapshot, on a 12-hour clock — never the browser's locale (S3-D).
+    return formatTourInstantForOperator(row.start_at, row.timezone || viewerTz || null);
 }
 
 function statusLabel(sk: string): string {
@@ -68,7 +64,10 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
         initialTourTime,
         onSlotBooked,
         onLegacySubmit,
+        variant = "modal",
     } = props;
+
+    const isEmbedded = variant === "embedded";
 
     const loc = String(locationId ?? "").trim();
     const hasSite = Boolean(loc);
@@ -79,6 +78,8 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
     const [activeBookings, setActiveBookings] = useState<TourBookingRow[]>([]);
     const [bootstrapErr, setBootstrapErr] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    /** S7 — an accepted public tour request on this lead that still needs a time. */
+    const [requestedTourAttention, setRequestedTourAttention] = useState<RequestedTourAttention[]>([]);
 
     const defaultSuccessMessage = useMemo(() => {
         const label = (submitLabel ?? title ?? "").toLowerCase();
@@ -87,11 +88,14 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
 
     const completeWithSuccess = useCallback(
         async (result: { booking?: TourBookingRow } | undefined, message: string) => {
+            // A booking changed the availability + active bookings — drop the warm entry so the next
+            // open re-verifies (the TTL would also expire it, but this keeps it correct immediately).
+            if (oid && loc) invalidateWarmTourSchedule(oid, loc);
             await onSlotBooked(result);
             setSuccessMessage(message);
             window.setTimeout(() => onClose(), SUCCESS_DISMISS_MS);
         },
-        [onClose, onSlotBooked]
+        [onClose, onSlotBooked, oid, loc]
     );
 
     const loadActiveBookings = useCallback(async () => {
@@ -108,9 +112,11 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             });
             const j = (await res.json().catch(() => ({}))) as {
                 active_bookings?: TourBookingRow[];
+                requested_tour_attention?: RequestedTourAttention[] | null;
                 error?: string;
             };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
+            setRequestedTourAttention(j.requested_tour_attention ?? []);
             const act = j.active_bookings ?? [];
             setActiveBookings(act);
             setSlotPhase(act.length > 0 ? "duplicate_guard" : "schedule");
@@ -128,6 +134,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             setActiveBookings([]);
             setBootstrapErr(null);
             setSuccessMessage(null);
+            setRequestedTourAttention([]);
             return;
         }
         setPanel(hasSite ? "slots" : "legacy");
@@ -137,37 +144,70 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             setBootstrapErr(null);
             return;
         }
-        setSlotPhase("bootstrapping");
+        // Warm-first: if operator intent already warmed this work unit, resolve the duplicate-guard
+        // decision synchronously — the picker (with its warm availability) opens with no "Checking
+        // tour bookings…" gate. Cold opens fall back to the fetch (and warm the cache for next time).
+        const warm = peekWarmTourSchedule(oid, loc);
+        if (warm) {
+            setActiveBookings(warm.activeBookings);
+            setBootstrapErr(null);
+            setSlotPhase(warm.activeBookings.length > 0 ? "duplicate_guard" : "schedule");
+            return;
+        }
+        // Host-shell-first: open STRAIGHT to the slot picker (its warm slots render instantly; a cold
+        // window shows the local availability skeleton) — never a blocking "Checking tour bookings…"
+        // gate. The duplicate-guard check runs in parallel and only surfaces if an active booking
+        // exists (rare on a fresh schedule; the server blocks duplicate bookings regardless).
+        void prefetchTourSchedule(oid, loc);
+        setActiveBookings([]);
+        setBootstrapErr(null);
+        setSlotPhase("schedule");
         void loadActiveBookings();
-    }, [open, hasSite, oid, loadActiveBookings]);
+    }, [open, hasSite, oid, loc, loadActiveBookings]);
 
     const primaryActive = useMemo(() => activeBookings[0] ?? null, [activeBookings]);
 
     if (!open) return null;
 
+    const successBody = (
+        <>
+            <div className="text-base font-semibold text-alloy-midnight">{title}</div>
+            <div className="mt-4 space-y-3">
+                <ActionModalStatusMessage type="success" message={successMessage!} />
+                <p className="text-xs text-alloy-midnight/65">
+                    Tour date in the inquiry summary has been updated.
+                </p>
+                <div className="flex justify-end pt-1">
+                    <button
+                        type="button"
+                        className="rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-alloy-bend-pine/90"
+                        onClick={onClose}
+                    >
+                        Done
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+
     if (successMessage) {
+        if (isEmbedded) {
+            return (
+                <div
+                    className="w-full overflow-hidden rounded-xl border border-alloy-stone/25 bg-white p-5"
+                    data-tour-schedule-inline="success"
+                >
+                    {successBody}
+                </div>
+            );
+        }
         return (
             <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
                 <div
                     className="w-full max-w-md overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white p-5 shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="text-base font-semibold text-alloy-midnight">{title}</div>
-                    <div className="mt-4 space-y-3">
-                        <ActionModalStatusMessage type="success" message={successMessage} />
-                        <p className="text-xs text-alloy-midnight/65">
-                            Tour date in the inquiry summary has been updated.
-                        </p>
-                        <div className="flex justify-end pt-1">
-                            <button
-                                type="button"
-                                className="rounded-lg bg-alloy-midnight px-3 py-2 text-sm font-medium text-white"
-                                onClick={onClose}
-                            >
-                                Done
-                            </button>
-                        </div>
-                    </div>
+                    {successBody}
                 </div>
             </div>
         );
@@ -175,20 +215,28 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
 
     const showSlotChrome = hasSite && panel === "slots";
 
-    return (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-            <div
-                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-            >
+    const scheduleBody = (
+            <>
                 {showSlotChrome && slotPhase === "bootstrapping" ? (
-                    <div className="px-5 py-6" aria-busy="true">
+                    // #3 — canonical LOCAL loading treatment: a compact inline loader inside the stable
+                    // scheduling shell, never a large reserved panel. (Part 2 warms this so it rarely shows.)
+                    <div className="px-5 py-4" aria-busy="true">
                         <BosExecutionLoader
-                            variant="panel"
+                            variant="inline"
                             title="Checking tour bookings…"
-                            subtitle="Verifying existing reservations before scheduling."
                             data-testid="schedule-tour-bootstrap-loader"
                         />
+                    </div>
+                ) : null}
+
+                {showSlotChrome && slotPhase !== "bootstrapping" && requestedTourAttention.length ? (
+                    <div className="space-y-1 border-b border-amber-200 bg-amber-50 px-5 py-3" data-testid="requested-tour-attention">
+                        {requestedTourAttention.map((a) => (
+                            <p key={a.caseId} className="text-xs leading-relaxed text-amber-950">
+                                <strong>Requested at intake: {a.requestedLabel}.</strong> {a.message} The family has not been sent a
+                                confirmation for this time.
+                            </p>
+                        ))}
                     </div>
                 ) : null}
 
@@ -215,12 +263,16 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                                 <div className="mt-0.5 text-[11px] text-alloy-midnight/50">{primaryActive.timezone}</div>
                             </div>
                             <div className="flex flex-wrap justify-end gap-2 border-t border-alloy-stone/10 pt-3">
-                                <button type="button" className="rounded-lg border px-3 py-1.5 text-xs" onClick={onClose}>
+                                <button
+                                    type="button"
+                                    className="rounded-lg border border-alloy-stone/30 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight transition-colors hover:bg-alloy-stone/5"
+                                    onClick={onClose}
+                                >
                                     Close
                                 </button>
                                 <button
                                     type="button"
-                                    className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-xs font-semibold text-white"
+                                    className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90"
                                     onClick={() => setSlotPhase("reschedule")}
                                 >
                                     Reschedule tour
@@ -321,6 +373,29 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                         />
                     </div>
                 ) : null}
+            </>
+    );
+
+    if (isEmbedded) {
+        // #3 — when hosted (e.g. the What's Next capability host), fill the host's stable dimensions
+        // and scroll internally rather than nesting a bordered/elevated box-in-box; the host frames it.
+        return (
+            <div
+                className="flex h-full min-h-0 w-full flex-col overflow-auto rounded-lg border border-alloy-stone/20 bg-white"
+                data-tour-schedule-inline="true"
+            >
+                {scheduleBody}
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+            <div
+                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {scheduleBody}
             </div>
         </div>
     );

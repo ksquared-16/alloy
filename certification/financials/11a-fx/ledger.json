@@ -1,0 +1,12 @@
+{
+  "status": 200,
+  "keys": [
+    "data",
+    "total",
+    "limit",
+    "offset"
+  ],
+  "total": 0,
+  "sample": [],
+  "tuition": []
+}

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORG_DOCUMENTS_STORAGE_BUCKET } from "@/lib/storage/orgDocumentsBucket";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
@@ -19,6 +20,9 @@ export type PublicVendorApplicationFile = {
   buffer: Buffer;
   filename: string;
   contentType: string;
+  /** D1c-1: the route's structural-screening decision. A quarantined file is stored unavailable until released. */
+  status?: "uploaded" | "quarantined";
+  screening?: Record<string, unknown>;
 };
 
 export type SubmitPublicVendorApplicationParams = {
@@ -349,8 +353,11 @@ export async function submitPublicVendorApplication(
     return i >= 0 ? filename.slice(i).toLowerCase() : "";
   };
 
-  const insurancePath = `vendors/${vendorId}/insurance/${crypto.randomUUID()}${ext(input.proof_of_insurance.filename) || ".bin"}`;
-  const driversPath = `vendors/${vendorId}/drivers_license/${crypto.randomUUID()}${ext(input.drivers_license.filename) || ".bin"}`;
+  // Org-prefixed, in the canonical layout `vendorObjectPathRemediation` moves the legacy objects to.
+  // The document signer refuses any path outside `<org_id>/` (Documents V1 / D1a), so the old
+  // `vendors/<id>/...` form would store a file nobody could ever open. Existing objects are untouched.
+  const insurancePath = `${orgId}/vendors/${vendorId}/insurance/${crypto.randomUUID()}${ext(input.proof_of_insurance.filename) || ".bin"}`;
+  const driversPath = `${orgId}/vendors/${vendorId}/drivers_license/${crypto.randomUUID()}${ext(input.drivers_license.filename) || ".bin"}`;
 
   const insuranceBuf = input.proof_of_insurance.buffer;
   const driversBuf = input.drivers_license.buffer;
@@ -401,9 +408,11 @@ export async function submitPublicVendorApplication(
     original_filename: insuranceFilename,
     mime_type: input.proof_of_insurance.contentType || "application/octet-stream",
     byte_size: insuranceBuf.length,
+    checksum_sha256: createHash("sha256").update(insuranceBuf).digest("hex"),
     bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
     storage_path: insurancePath,
-    status: "uploaded",
+    status: input.proof_of_insurance.status ?? "uploaded",
+    metadata: input.proof_of_insurance.screening ? { screening: input.proof_of_insurance.screening } : {},
   });
   if (doc1Err) {
     console.error("[submitPublicVendorApplication] documents insert (insurance) failed:", doc1Err.message);
@@ -427,9 +436,11 @@ export async function submitPublicVendorApplication(
     original_filename: driversFilename,
     mime_type: input.drivers_license.contentType || "application/octet-stream",
     byte_size: driversBuf.length,
+    checksum_sha256: createHash("sha256").update(driversBuf).digest("hex"),
     bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
     storage_path: driversPath,
-    status: "uploaded",
+    status: input.drivers_license.status ?? "uploaded",
+    metadata: input.drivers_license.screening ? { screening: input.drivers_license.screening } : {},
   });
   if (doc2Err) {
     console.error("[submitPublicVendorApplication] documents insert (drivers_license) failed:", doc2Err.message);

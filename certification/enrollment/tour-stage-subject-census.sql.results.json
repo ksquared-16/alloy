@@ -1,0 +1,30 @@
+{
+  "trusted_host_action_id": "tha_005ea0b7c9e485",
+  "query_hash": "df78669a209052e794ca47fb986e59833a0c0780d4cf13d4f7785c11d14bf45f",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-12T18:29:55.634Z",
+    "question_ids": [
+      "q1_stage_distribution",
+      "q2_total_opportunities"
+    ],
+    "questions": {
+      "q1_stage_distribution": {
+        "question_id": "q1_stage_distribution",
+        "row_count": null,
+        "rows": [
+          "stage=lead | status=null | count=3",
+          "stage=waitlist | status=null | count=1"
+        ]
+      },
+      "q2_total_opportunities": {
+        "question_id": "q2_total_opportunities",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

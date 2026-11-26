@@ -1,0 +1,9 @@
+{
+  "firstSnapshotId": "fec155ae-4b73-46eb-ad0a-bf9abcff0bbe",
+  "secondStatus": 200,
+  "secondSnapshotId": "1893ff0d-3794-45e4-bb46-3201898339ad",
+  "priorStillPresent": true,
+  "secondDifferent": true,
+  "ledgerHits": [],
+  "noInvoiceOnResponses": true
+}

@@ -1,5 +1,7 @@
 "use client";
 
+import { DOMAIN_PROJECTION_CATALOG } from "@/lib/businessProcesses/projections/domainProjectionCatalog";
+import type { ProcessProjectionDomain } from "@/lib/lifecycle/processModelV1";
 import Link from "next/link";
 import LayoutAssignmentCard from "@/components/adminV2/settings/configurationRuntime/LayoutAssignmentCard";
 import WorkViewConditionEditor from "@/components/adminV2/settings/businessProcess/WorkViewConditionEditor";
@@ -21,6 +23,7 @@ import {
     BUSINESS_PROCESS_LENS_VISIBLE_IN_WORK_UNIT,
     BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER,
     BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY,
+    BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
     formatWorkViewBasicsSummary,
@@ -31,8 +34,190 @@ import {
 import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import type { WorkViewCompatQueueLane } from "@/lib/lifecycle/workViewsRuntimeConvergence";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
+import { isWorkViewCatchAll } from "@/lib/lifecycle/workViewsConfigV1";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
+import { isLayoutRuntimeOpportunityDrawerBodyEnabledClient } from "@/lib/layout/featureFlag";
 import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssignmentLayoutOptions";
+import { GRAIN_LABELS, resolveWorkViewStageGrains, stageKeysReferencedByWorkView, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
+import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
+
+/**
+ * ROW TYPE DECLARATION for a lens with no stage condition.
+ *
+ * Row type is normally INHERITED from the stages a view filters on, and that inheritance stays
+ * authoritative — a stage-scoped view shows it read-only below. A view with no stage condition has
+ * nothing to inherit from, and in a process whose stages are not all one row type the runtime cannot
+ * resolve it and refuses the view outright. Declaring it here is how such a view becomes usable.
+ *
+ * Only Family and Child are offered: they are the row types the Focus Panel can actually present.
+ * Person / Account / Work item exist in stage configuration but have no panel subject, so offering
+ * them would let an operator author a view that can only ever refuse.
+ */
+function WorkViewRowTypeDeclaration({
+    declaredGrain,
+    onDeclareGrain,
+    viewId,
+    helper,
+}: {
+    declaredGrain?: StageGrain;
+    onDeclareGrain: (grain: StageGrain | undefined) => void;
+    viewId: string;
+    helper: string;
+}) {
+    return (
+        <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-alloy-stone/20 bg-alloy-stone/[0.03] px-4 py-2.5"
+            data-testid="work-view-grain-declaration"
+        >
+            <label className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-alloy-midnight/60">Row type</span>
+                <select
+                    className="rounded border border-alloy-stone/40 bg-white px-2 py-1 text-[11px] text-alloy-midnight"
+                    value={declaredGrain ?? ""}
+                    onChange={(e) => onDeclareGrain((e.target.value || undefined) as StageGrain | undefined)}
+                    data-testid={`process-work-view-row-grain-${viewId}`}
+                >
+                    <option value="">Not declared</option>
+                    <option value="family">{GRAIN_LABELS.family}</option>
+                    <option value="child">{GRAIN_LABELS.child}</option>
+                </select>
+            </label>
+            <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
+                {declaredGrain ?
+                    `Every row in this view is one ${GRAIN_LABELS[declaredGrain].toLowerCase()}, whatever stage it is at.`
+                :   helper}
+            </p>
+        </div>
+    );
+}
+
+function WorkViewGrainBanner({
+    stageGrains,
+    hasStageScope,
+    catchAll = false,
+    declaredGrain,
+    onDeclareGrain,
+    viewId,
+}: {
+    stageGrains: (StageGrain | undefined)[];
+    /** True when the view filters by `opportunity_stage` — grain can be confirmed from stage config. */
+    hasStageScope: boolean;
+    /** Process-wide catch-all (`filters_v1: []`) — informational only, no mixed-grain warnings. */
+    catchAll?: boolean;
+    /** The view's own Row Type declaration, for a view with no stage condition to inherit from. */
+    declaredGrain?: StageGrain;
+    onDeclareGrain: (grain: StageGrain | undefined) => void;
+    viewId: string;
+}) {
+    // No stage condition — nothing to inherit from, so the view declares its own row type.
+    if (catchAll || !hasStageScope) {
+        return (
+            <>
+                <WorkViewRowTypeDeclaration
+                    declaredGrain={declaredGrain}
+                    onDeclareGrain={onDeclareGrain}
+                    viewId={viewId}
+                    helper={
+                        "No stage condition, so there is no stage to inherit a row type from."
+                        + " Declare one — a process with more than one row type across its stages cannot resolve this view without it."
+                    }
+                />
+                {catchAll ?
+                    <div
+                        className="flex items-start gap-2 border-b border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-4 py-2.5"
+                        data-testid="work-view-grain-catch-all"
+                    >
+                        <span className="text-[11px] font-medium text-alloy-bend-pine">All work</span>
+                        <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
+                            {BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER}
+                        </p>
+                    </div>
+                :   null}
+            </>
+        );
+    }
+
+    const defined = stageGrains.filter((g): g is StageGrain => g !== undefined);
+    const consistency = validateWorkViewGrainConsistency(stageGrains, declaredGrain);
+    const spansGrains = new Set(defined).size > 1;
+
+    if (!consistency.valid) {
+        return (
+            <>
+                <div
+                    className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5"
+                    data-testid="work-view-grain-mixed-warning"
+                    role="alert"
+                >
+                    <span className="mt-px text-red-600">⚠</span>
+                    <p className="text-[12px] text-red-800">{consistency.message}</p>
+                </div>
+                <WorkViewRowTypeDeclaration
+                    declaredGrain={declaredGrain}
+                    onDeclareGrain={onDeclareGrain}
+                    viewId={viewId}
+                    helper="These stages have different row types. Family shows one row per family, with each child grouped under it."
+                />
+            </>
+        );
+    }
+
+    if (spansGrains) {
+        // Valid only because the view is declared Family — keep the declaration editable here.
+        return (
+            <WorkViewRowTypeDeclaration
+                declaredGrain={declaredGrain}
+                onDeclareGrain={onDeclareGrain}
+                viewId={viewId}
+                helper="One row per family; children at any of these stages are grouped under their family."
+            />
+        );
+    }
+
+    if (defined.length === 0) {
+        return (
+            <div
+                className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2"
+                data-testid="work-view-grain-missing"
+            >
+                <span className="text-[11px] font-medium text-amber-800">Row type</span>
+                <span className="text-[11px] text-amber-700">Missing stage grain — configure Row type in each stage&apos;s Stage Context.</span>
+            </div>
+        );
+    }
+
+    const grain = defined[0];
+    // A declaration that disagrees with the stages the view filters on is a contradiction, and the
+    // runtime refuses the view rather than picking a winner. Say so here, before it is published.
+    if (declaredGrain && declaredGrain !== grain) {
+        return (
+            <div
+                className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5"
+                data-testid="work-view-grain-declaration-conflict"
+                role="alert"
+            >
+                <span className="mt-px text-red-600">⚠</span>
+                <p className="text-[12px] text-red-800">
+                    This view declares its row type as {GRAIN_LABELS[declaredGrain]}, but the stages it
+                    includes are {GRAIN_LABELS[grain]}. The runtime refuses a view that contradicts
+                    itself — clear the declaration, or change the stage condition.
+                </p>
+            </div>
+        );
+    }
+    return (
+        <div
+            className="flex items-center gap-3 border-b border-alloy-stone/20 bg-alloy-stone/[0.04] px-4 py-2"
+            data-testid="work-view-grain-banner"
+        >
+            <span className="text-[11px] font-medium text-alloy-midnight/60">Row type</span>
+            <span className="text-[11px] font-semibold text-alloy-midnight" data-testid="work-view-grain-label">
+                {GRAIN_LABELS[grain]}
+            </span>
+            <span className="text-[11px] text-alloy-midnight/40">· Inherited from included stages</span>
+        </div>
+    );
+}
 
 function WorkViewEditorSection({
     sectionId,
@@ -81,41 +266,48 @@ function WorkViewEditorSection({
 export default function WorkViewProcessEditorCard({
     view,
     selected,
-    departmentId,
-    workUnitId,
+    workUnitKey,
     layouts,
+    stageGrains = [],
+    stageGrainByKey,
     queueLanes = [],
     onSelect: _onSelect,
     onChange,
     onDelete,
+    projectionDomain = null,
 }: {
+    /**
+     * BP V2 S2 — set when the process is a domain projection. The view then selects ONE registered
+     * projection (the projection is its membership and order), so the condition, sort and row-type
+     * editors — which publication refuses on such a view — are replaced by that choice.
+     */
+    projectionDomain?: ProcessProjectionDomain | null;
     view: WorkViewConfigV1Stored;
     selected: boolean;
-    departmentId: string;
-    workUnitId: string | null;
+    workUnitKey: string | null;
     layouts: EntityLayoutRecord[];
+    stageGrains?: (StageGrain | undefined)[];
+    /** stage key → grain. When provided, the grain banner scopes to the stages THIS view filters to. */
+    stageGrainByKey?: Record<string, StageGrain | undefined>;
     queueLanes?: WorkViewCompatQueueLane[];
     onSelect: () => void;
     onChange: (patch: Partial<WorkViewConfigV1Stored>) => void;
     onDelete?: () => void;
 }) {
+    const legacyDrawerBodyEnabled = isLayoutRuntimeOpportunityDrawerBodyEnabledClient();
     const queueOptions = publishedLayoutOptionsForAssignmentSlot(layouts, "queue_record");
     const drawerOptions = publishedLayoutOptionsForAssignmentSlot(layouts, "opportunity_drawer");
     const queueRecord = view.queue_layout_id ? layouts.find((l) => l.id === view.queue_layout_id) ?? null : null;
     const drawerRecord =
         view.focus_panel_layout_id ? layouts.find((l) => l.id === view.focus_panel_layout_id) ?? null : null;
 
-    const previewHref =
-        workUnitId ?
-            buildOperationalViewPreviewRuntimeHref({
-                departmentId,
-                workUnitId,
-                queueKey: view.compat_queue_key,
-                workViewId: view.id,
-                queueLayoutId: view.queue_layout_id,
-                focusPanelLayoutId: view.focus_panel_layout_id,
-            })
-        :   null;
+    const previewHref = buildOperationalViewPreviewRuntimeHref({
+        workUnitKey,
+        queueKey: view.compat_queue_key,
+        workViewId: view.id,
+        queueLayoutId: view.queue_layout_id,
+        focusPanelLayoutId: view.focus_panel_layout_id,
+    });
 
     const displayTitle = view.label.trim() || "Untitled work view";
     const sortRules = normalizeWorkViewSorts(view.sort_v1, view.sorts_v1);
@@ -164,6 +356,44 @@ export default function WorkViewProcessEditorCard({
                 :   null}
             </header>
 
+            {projectionDomain ? (
+                <div
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-alloy-stone/20 bg-alloy-stone/[0.03] px-4 py-2.5"
+                    data-testid="work-view-projection-picker"
+                >
+                    <label className="flex items-center gap-2">
+                        <span className="text-[11px] font-medium text-alloy-midnight/60">Records</span>
+                        <select
+                            className="rounded border border-alloy-stone/40 bg-white px-2 py-1 text-[11px] text-alloy-midnight"
+                            value={view.projection_key ?? ""}
+                            onChange={(e) => onChange({ projection_key: e.target.value || undefined })}
+                            data-testid={`process-work-view-projection-${view.id}`}
+                        >
+                            <option value="">Choose…</option>
+                            {DOMAIN_PROJECTION_CATALOG[projectionDomain].map((p) => (
+                                <option key={p.key} value={p.key}>
+                                    {p.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
+                        This view lists the records the chosen projection returns, in its own order.
+                    </p>
+                </div>
+            ) : (
+            <WorkViewGrainBanner
+                catchAll={isWorkViewCatchAll(view)}
+                stageGrains={
+                    stageGrainByKey ? resolveWorkViewStageGrains(view.filters_v1, stageGrainByKey) : stageGrains
+                }
+                hasStageScope={stageKeysReferencedByWorkView(view.filters_v1).length > 0}
+                declaredGrain={view.row_grain_v1}
+                onDeclareGrain={(grain) => onChange({ row_grain_v1: grain })}
+                viewId={view.id}
+            />
+            )}
+
             <div className="space-y-0 px-4 pb-4">
                 <WorkViewEditorSection
                     sectionId="basics"
@@ -197,6 +427,7 @@ export default function WorkViewProcessEditorCard({
                     </div>
                 </WorkViewEditorSection>
 
+                {projectionDomain ? null : (<>
                 <WorkViewEditorSection
                     sectionId="conditions"
                     title="Show work when…"
@@ -228,6 +459,7 @@ export default function WorkViewProcessEditorCard({
                         onChange={(sorts) => onChange(syncSortFields(sorts))}
                     />
                 </WorkViewEditorSection>
+                </>)}
 
                 <WorkViewEditorSection
                     sectionId="presentation"
@@ -237,9 +469,12 @@ export default function WorkViewProcessEditorCard({
                     onOpenChange={(isOpen) => setSectionOpen("presentation", isOpen)}
                     testId="work-view-section-presentation"
                 >
+                    <p className="mb-3 text-[11px] text-alloy-midnight/45">
+                        Select surfaces for this Work View. Surface owns presentation — Work View only selects which surface to use.
+                    </p>
                     <div className="grid gap-2" data-testid={`process-work-view-presentation-${view.id}`}>
                         <LayoutAssignmentCard
-                            title="Queue layout"
+                            title="Queue Row Surface"
                             subtitle="Work list presentation for this view."
                             selectedId={view.queue_layout_id ?? ""}
                             assignedRecord={queueRecord}
@@ -248,18 +483,36 @@ export default function WorkViewProcessEditorCard({
                             onChange={(queue_layout_id) => onChange({ queue_layout_id: queue_layout_id || undefined })}
                             testIdPrefix={`process-work-view-queue-${view.id}`}
                         />
-                        <LayoutAssignmentCard
-                            title="Focus panel layout"
-                            subtitle="Selected record presentation for this view."
-                            selectedId={view.focus_panel_layout_id ?? ""}
-                            assignedRecord={drawerRecord}
-                            options={drawerOptions}
-                            allLayouts={layouts}
-                            onChange={(focus_panel_layout_id) =>
-                                onChange({ focus_panel_layout_id: focus_panel_layout_id || undefined })
-                            }
-                            testIdPrefix={`process-work-view-focus-${view.id}`}
-                        />
+                        {/*
+                          * THIS SLOT DRIVES THE LEGACY DRAWER BODY, NOT THE FOCUS PANEL.
+                          *
+                          * It writes `focus_panel_layout_id`, and the only runtime that reads
+                          * that is `/api/admin/layout-runtime/opportunity-drawer-body` — gated
+                          * off by default. The Focus Panel resolves its own surface by published
+                          * variant and never consults an assigned id, so titling this "Focus
+                          * Panel Surface" promised an effect it could not have: two Work Views
+                          * were left pointing at focus_panel_summary v10 and v132 while the
+                          * runtime served v143.
+                          *
+                          * So it appears only when its consumer is switched on, and it says which
+                          * runtime it drives. To scope a Focus Panel to a Work View, publish a
+                          * variant declaring that Work View — the resolver already ranks that
+                          * above an unscoped one.
+                          */}
+                        {legacyDrawerBodyEnabled ? (
+                            <LayoutAssignmentCard
+                                title="Opportunity Drawer Body (legacy runtime)"
+                                subtitle="Record body for the legacy drawer. The Focus Panel resolves its own surface by published variant."
+                                selectedId={view.focus_panel_layout_id ?? ""}
+                                assignedRecord={drawerRecord}
+                                options={drawerOptions}
+                                allLayouts={layouts}
+                                onChange={(focus_panel_layout_id) =>
+                                    onChange({ focus_panel_layout_id: focus_panel_layout_id || undefined })
+                                }
+                                testIdPrefix={`process-work-view-focus-${view.id}`}
+                            />
+                        ) : null}
                     </div>
                 </WorkViewEditorSection>
 

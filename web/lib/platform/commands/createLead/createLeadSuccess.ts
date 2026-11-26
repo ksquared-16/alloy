@@ -10,11 +10,12 @@
  * Read-only: this builds a descriptor from the execution result; it performs no navigation
  * or data fetching itself.
  *
- * @see docs/sprints/06_2026/create_lead_command_flow_audit.md
+ * @see docs/sprints/archive/06_2026/create_lead_command_flow_audit.md
  */
 
 import type { ActionResultOk } from "@/lib/adminV2/actions/actionTypes";
 import { createLeadDisplayName } from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
+import { resolveCreatedRecordProcessContextHref } from "@/lib/platform/commands/createLead/resolveCreatedRecordProcessContextHref";
 
 export type CommandRefreshTarget = {
     /** `opportunity` → invalidate the created record; `work_unit` → invalidate that work unit's queue + pill counts. */
@@ -34,9 +35,17 @@ export type CreateLeadSuccess = {
      * the lead's assigned work unit so the New Leads queue/pill counts refetch (not just the record).
      */
     refreshTargets: CommandRefreshTarget[];
-    /** Work unit the lead was assigned to — drives queue/count invalidation and focus-panel routing. */
+    /** Work unit the record was assigned to — drives queue/count invalidation and routing. */
     workUnitId: string | null;
-    /** Case status written to the lead (e.g. `new_inquiry`). Proves New Leads membership; diagnostics. */
+    /** Platform work unit key when returned by the action (routing). */
+    workUnitKey: string | null;
+    /** Config-resolved Work View id for process-context routing, when matched. */
+    workViewId: string | null;
+    /** Label-derived Work View route key (`Leads` → `leads`) for operator URLs. */
+    workViewRouteKey: string | null;
+    /** Canonical Work Unit Focus Panel href — Work mode, not legacy drawer. */
+    focusPanelHref: string;
+    /** Case status written to the record. */
     statusKey: string | null;
     /** Short operator confirmation copy. */
     successCopy: string;
@@ -52,6 +61,16 @@ function trimmed(v: unknown): string {
  * Extract the created opportunity id from a registered-action success result. Falls back
  * across the affectedId and known detail shapes returned by `executeCreateLeadAction`.
  */
+export function isCreateLeadProcessingReview(result: ActionResultOk): boolean {
+    const detail = (result.result.detail ?? {}) as Record<string, unknown>;
+    return trimmed(detail.mode) === "processing_review" && Boolean(trimmed(detail.processing_case_id));
+}
+
+export function createLeadProcessingCaseId(result: ActionResultOk): string | null {
+    const detail = (result.result.detail ?? {}) as Record<string, unknown>;
+    return trimmed(detail.processing_case_id) || null;
+}
+
 export function createdLeadOpportunityId(result: ActionResultOk): string {
     const fromAffected = trimmed(result.result.affectedId);
     if (fromAffected) return fromAffected;
@@ -70,9 +89,18 @@ export function buildCreateLeadSuccess(input: {
     const createdRecordId = createdLeadOpportunityId(input.result);
     const detail = (input.result.result.detail ?? {}) as Record<string, unknown>;
     const workUnitId = trimmed(detail.work_unit_id) || null;
+    const workUnitKey = trimmed(detail.work_unit_key) || null;
+    const workViewId = trimmed(detail.work_view_id) || null;
+    const workViewRouteKey = trimmed(detail.work_view_route_key) || null;
     const statusKey = trimmed(detail.status_key) || null;
     const name = input.knownInputs ? createLeadDisplayName(input.knownInputs) : "";
     const title = name ? `Lead for ${name}` : null;
+    const focusPanelHref = resolveCreatedRecordProcessContextHref({
+        recordId: createdRecordId,
+        workUnitKey,
+        workViewId,
+        workViewRouteKey,
+    });
     return {
         createdRecordId,
         entityType: "opportunity",
@@ -82,15 +110,17 @@ export function buildCreateLeadSuccess(input: {
             ...(createdRecordId
                 ? [{ entityType: "opportunity", entityId: createdRecordId } as CommandRefreshTarget]
                 : []),
-            // Invalidate the lead's work-unit queue + pill counts so New Leads reflects the new record
-            // without a full page reload (the record is a valid member; only the projection was stale).
             ...(workUnitId
                 ? [{ entityType: "work_unit", entityId: workUnitId } as CommandRefreshTarget]
                 : []),
         ],
         workUnitId,
+        workUnitKey,
+        workViewId,
+        workViewRouteKey,
+        focusPanelHref,
         statusKey,
         successCopy: name ? `Created lead for ${name}.` : "Lead created.",
-        nextCopy: "Opening lead.",
+        nextCopy: "Opening record.",
     };
 }

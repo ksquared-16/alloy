@@ -1,0 +1,160 @@
+/**
+ * Decision Package — the immutable output of the Trust Runtime.
+ *
+ * Immutable AT CREATION (Decision 020). There is no lifecycle field on this
+ * type and none on the table: presented / accepted / rejected / overridden /
+ * executed / observed are append-only observations that REFERENCE a package.
+ *
+ * A Decision Package is evidence. It is never directly executable.
+ *
+ * @see docs/platform/trust/decision-package.md
+ * @see docs/platform/trust/trust-platform-decisions.md — Decision 020
+ */
+
+import type { InformationClass } from "@/lib/trust/classification/informationClasses";
+import type { ProviderCostUnits } from "@/lib/trust/economics/providerCostUnits";
+import type { KnowledgeReference } from "@/lib/trust/privacy/privacyEngine";
+import type { ReasoningEvidenceItem } from "@/lib/trust/reasoning/reasoningStrategy";
+import type { TrustReviewRequirement } from "@/lib/trust/decisionClasses/decisionClassRegistry";
+import type { ValidationReport } from "@/lib/trust/validation/validationOrchestrator";
+import type { TrustVector } from "@/lib/trust/governance/trustGovernance";
+
+/**
+ * The closed outcome set. Every refusal is a Decision Package — refusal is the
+ * default, and it is never an exception or a bare error.
+ */
+export const DECISION_PACKAGE_OUTCOMES = [
+    "recommended",
+    "refused_policy",
+    "refused_permission",
+    "refused_unsupported_class",
+    "refused_insufficient_information",
+    "refused_privacy",
+    "refused_budget",
+    "failed_validation",
+    "failed_reasoning",
+] as const;
+
+export type DecisionPackageOutcome = (typeof DECISION_PACKAGE_OUTCOMES)[number];
+
+export function isRefusalOutcome(outcome: DecisionPackageOutcome): boolean {
+    return outcome !== "recommended";
+}
+
+export type DecisionPackageEconomics = {
+    readonly strategy_key: string | null;
+    readonly strategy_kind: string | null;
+    readonly escalation_level: number;
+    readonly latency_ms: number;
+    readonly cache_utilized: boolean;
+    /**
+     * Measured cost of this execution, in units. Zero when no provider ran.
+     *
+     * A COUNT, not money — and provider-independent, which is why it may sit on
+     * the package at all: a number of units says nothing about which provider
+     * produced it. Provider and model IDENTITY remain absent from this type by
+     * design (ADR-2); they live only in usage/economics telemetry.
+     *
+     * Validated by `parseProviderCostUnits` before construction: finite,
+     * non-negative, never NaN or Infinity.
+     */
+    readonly provider_cost_units: ProviderCostUnits;
+};
+
+export type DecisionPackagePrivacyReport = {
+    readonly pii_mode: string;
+    readonly classes_present: readonly InformationClass[];
+    readonly redaction_steps: readonly { readonly path: string; readonly kind: string }[];
+    /**
+     * What each declared element's transformation actually did.
+     *
+     * Optional because a refusal that never reached transformation genuinely has
+     * none to report — an absent list and an empty list mean different things,
+     * and conflating them would be a smaller version of the misstatement this
+     * field exists to correct.
+     *
+     * Carries no value, no provider and no model: a key, its information class,
+     * its declared transformation, and whether that transformation was actually
+     * performed.
+     */
+    readonly transformations?: readonly {
+        readonly key: string;
+        readonly information_class: InformationClass;
+        readonly transformation: string;
+        readonly disposition: string;
+        readonly support: string;
+    }[];
+    /**
+     * What content-aware text minimization removed, per detector.
+     *
+     * Counts only, never a matched substring — recording the removed text to
+     * prove it was removed would defeat the removal. Absent when the policy
+     * required no text minimization.
+     */
+    readonly text_minimizations?: readonly {
+        readonly detector_key: string;
+        readonly redaction_kind: string;
+        readonly replaced_count: number;
+    }[];
+    /**
+     * What known-participant redaction removed.
+     *
+     * Counts only — never a matched span and never a roster entry, which are the
+     * identities being removed. Absent when the policy required no participant
+     * redaction; a present entry with `replaced_count: 0` means the pass ran
+     * against a real roster and found no occurrence, which is evidence rather
+     * than an absence of it.
+     */
+    readonly participant_redactions?: readonly {
+        readonly redaction_kind: string;
+        readonly replaced_count: number;
+        readonly roster_token_count: number;
+    }[];
+};
+
+export type DecisionPackageV1 = {
+    readonly schema_version: 1;
+    readonly id: string;
+    readonly org_id: string;
+    readonly contract_id: string;
+    readonly decision_class_key: string;
+
+    readonly outcome: DecisionPackageOutcome;
+    /** Present only when `outcome === "recommended"`. */
+    readonly recommendation: Record<string, unknown> | null;
+    /** Human-readable reason. Always present, including on refusals. */
+    readonly explanation: string;
+    readonly evidence: readonly ReasoningEvidenceItem[];
+    readonly remaining_uncertainty: readonly string[];
+    /** Statistical certainty. Never trust, never approval. */
+    readonly confidence: number | null;
+
+    readonly trust_vector: TrustVector | null;
+    readonly trust_score: number | null;
+    readonly trust_semantics_version: string | null;
+    readonly review_requirement: TrustReviewRequirement;
+
+    readonly validation: ValidationReport | null;
+    readonly privacy_report: DecisionPackagePrivacyReport;
+    readonly economics: DecisionPackageEconomics;
+    readonly knowledge_versions: readonly KnowledgeReference[];
+
+    /** Declared at creation. Outcomes arrive later as observations, never as fields here. */
+    readonly learning_metadata: {
+        readonly learning_policy_key: string;
+        readonly eligible_for_learning: boolean;
+    };
+
+    /** Alternatives are not produced in V1. Present so the shape is stable. */
+    readonly alternatives: readonly Record<string, unknown>[];
+
+    /** Lineage: set when a materially modified recommendation produced this package. */
+    readonly supersedes_package_id: string | null;
+
+    readonly strategy_key: string | null;
+    readonly strategy_version: string | null;
+    readonly validation_version: string | null;
+    readonly runtime_version: string;
+    readonly registry_version: string;
+    readonly created_at_iso: string;
+};

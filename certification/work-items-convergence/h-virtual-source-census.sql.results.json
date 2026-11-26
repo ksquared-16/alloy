@@ -1,0 +1,66 @@
+{
+  "trusted_host_action_id": "tha_8f0a6849e03acd",
+  "query_hash": "cdc4335412586bbaf89c12d47eadc0eff289b6e66a644bc8aeccd2013c0133fc",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-10T22:01:12.395Z",
+    "question_ids": [
+      "comms_threads_by_attention",
+      "processing_cases_by_status",
+      "tasks_total_by_source"
+    ],
+    "questions": {
+      "comms_threads_by_attention": {
+        "question_id": "comms_threads_by_attention",
+        "row_count": null,
+        "rows": [
+          {
+            "attention_state": "needs_response",
+            "assignment_state": "unassigned",
+            "threads": 4
+          },
+          {
+            "attention_state": null,
+            "assignment_state": "unassigned",
+            "threads": 1
+          }
+        ]
+      },
+      "processing_cases_by_status": {
+        "question_id": "processing_cases_by_status",
+        "row_count": null,
+        "rows": [
+          {
+            "status": "archived",
+            "cases": 2
+          },
+          {
+            "status": "needs_resolution",
+            "cases": 6
+          },
+          {
+            "status": "received",
+            "cases": 137
+          }
+        ]
+      },
+      "tasks_total_by_source": {
+        "question_id": "tasks_total_by_source",
+        "row_count": null,
+        "rows": [
+          {
+            "source": "manual",
+            "status": "canceled",
+            "rows": 1
+          },
+          {
+            "source": "manual",
+            "status": "open",
+            "rows": 3
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

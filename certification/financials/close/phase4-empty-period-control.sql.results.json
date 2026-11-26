@@ -1,0 +1,63 @@
+{
+  "trusted_host_action_id": "tha_4cd9665e3315c9",
+  "query_hash": "c5015b0f24e0402d720d66849b9f89cc02caa948a10ac3a850ca97ae8b47450f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T04:05:53.268Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_4cd9665e3315c9",
+    "query_hash": "c5015b0f24e0402d720d66849b9f89cc02caa948a10ac3a850ca97ae8b47450f",
+    "authorization_id": "grnt_a080357b56894d15",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T04:06:00.050Z",
+    "question_ids": [
+      "q1",
+      "q2"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "billing_period_id": "d93a6a6f-2ea3-45ed-b878-b5549c518772",
+            "period_key": "2026-10-04~2026-10-04",
+            "status": "open",
+            "charges_in_period": 0,
+            "reductions_in_period": 0,
+            "is_empty": true
+          },
+          {
+            "billing_period_id": "59f50689-030f-4c91-a38e-57a3a62b6279",
+            "period_key": "2026-10-03~2026-10-03",
+            "status": "closed",
+            "charges_in_period": 0,
+            "reductions_in_period": 0,
+            "is_empty": true
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "charges_any": 0,
+            "payments_any": 0,
+            "reductions_any": 0,
+            "obligations_any": 0,
+            "periods_total": 4
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

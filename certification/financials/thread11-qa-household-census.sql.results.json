@@ -1,0 +1,93 @@
+{
+  "trusted_host_action_id": "tha_ff64bedf42e6cd",
+  "query_hash": "abb4c4d836fa617c69edd0ba124420d582cb54b77196a9885ad5506c8d115048",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T16:15:35.946Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ff64bedf42e6cd",
+    "query_hash": "abb4c4d836fa617c69edd0ba124420d582cb54b77196a9885ad5506c8d115048",
+    "authorization_id": "grnt_ff2cb09a4079403d",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T16:15:37.229Z",
+    "question_ids": [
+      "tenant",
+      "fixture_state",
+      "subject",
+      "subject_money",
+      "charge_templates"
+    ],
+    "questions": {
+      "tenant": {
+        "question_id": "tenant",
+        "row_count": null,
+        "rows": [
+          "org_exists ~ 1",
+          "customers_total ~ 11",
+          "charges_total ~ 59",
+          "payments_total ~ 3"
+        ]
+      },
+      "fixture_state": {
+        "question_id": "fixture_state",
+        "row_count": null,
+        "rows": [
+          "customers ~ 4",
+          "customer_members ~ 5",
+          "agreements ~ 4",
+          "customer_persons ~ 4",
+          "funding_agencies ~ 1",
+          "subsidy_authorizations ~ 1"
+        ]
+      },
+      "subject": {
+        "question_id": "subject",
+        "row_count": null,
+        "rows": [
+          "customer ~ fd000000-0000-4000-8000-0000000c0001 ~ Alvarez Household (demo) ~ active",
+          "member ~ fd000000-0000-4000-8000-0000000d0001 ~ Ana Alvarez ~ active=true",
+          "member ~ fd000000-0000-4000-8000-0000000d0005 ~ Rio Alvarez ~ active=true",
+          "agreement ~ fd000000-0000-4000-8000-0000000a0001 ~ member=fd000000-0000-4000-8000-0000000d0001 ~ site=1a5644a7-45c4-413b-9021-5f556118b6e2 ~ active",
+          "site ~ 1a5644a7-45c4-413b-9021-5f556118b6e2 ~ North Campus",
+          "person ~ fd000000-0000-4000-8000-0000000b0002 ~ Dana Alvarez ~ role=parent ~ primary=true ~ status=active",
+          "person ~ fd000000-0000-4000-8000-0000000b0003 ~ Rosa Alvarez ~ role=guardian ~ primary=false ~ status=NULL",
+          "person ~ fd000000-0000-4000-8000-0000000b0004 ~ Ana Alvarez ~ role=child ~ primary=false ~ status=active"
+        ]
+      },
+      "subject_money": {
+        "question_id": "subject_money",
+        "row_count": null,
+        "rows": [
+          "charges_posted ~ 0",
+          "charges_draft ~ 0",
+          "charges_other_status ~ 0",
+          "reductions ~ 0",
+          "payments ~ 0",
+          "allocations ~ 0",
+          "refund_payments ~ 0",
+          "responsibility_arrangements ~ 0",
+          "responsibility_allocations ~ 0",
+          "expected_funding ~ 0",
+          "subsidy_authorizations ~ 0"
+        ]
+      },
+      "charge_templates": {
+        "question_id": "charge_templates",
+        "row_count": null,
+        "rows": [
+          "template ~ 27055d7e-72a3-441a-a4dd-ae01fbf1f421 ~ Materials ~ consumable_fee ~ fixed ~ 1800",
+          "template ~ 315d8b1d-9d1c-4613-97aa-22658a0cdb52 ~ Late pickup ~ late_pickup ~ fixed ~ 2500",
+          "template ~ c03e638e-0f3e-49f0-9d41-696276c8fa21 ~ Registration fee ~ fee ~ fixed ~ 7500",
+          "template ~ e6f64079-681d-4d60-8be3-fac451edadb1 ~ Field trip ~ one_time ~ fixed ~ 4000"
+        ]
+      }
+    },
+    "row_count": 33
+  }
+}

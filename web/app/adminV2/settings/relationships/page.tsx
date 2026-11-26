@@ -1,12 +1,9 @@
-import { Suspense } from "react";
-import RelationshipsSettingsClient from "./RelationshipsSettingsClient";
+import { redirect } from "next/navigation";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
 export const dynamic = "force-dynamic";
 
+/** Compatibility: `/settings/relationships` → Data Model Relationships category. */
 export default function AdminV2SettingsRelationshipsPage() {
-    return (
-        <Suspense fallback={<p className="text-sm text-alloy-midnight/55">Loading…</p>}>
-            <RelationshipsSettingsClient />
-        </Suspense>
-    );
+    redirect(dataModelSectionHref("relationships"));
 }

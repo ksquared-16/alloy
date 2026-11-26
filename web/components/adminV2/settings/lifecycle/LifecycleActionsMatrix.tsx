@@ -203,7 +203,7 @@ export default function LifecycleActionsMatrix({
         <Wrapper className={wrapperClass} data-testid="lifecycle-actions-matrix">
             {!embedded ? (
                 <header className="border-b border-alloy-forge/8 px-3 py-2.5">
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Process Actions</h3>
+                    <h3 className="text-sm font-semibold text-alloy-midnight">Process Commands</h3>
                     <p className="mt-1 text-[11px] leading-relaxed text-alloy-midnight/60">
                         Configure which actions are available in this process and where they appear. Stage
                         restrictions are optional.

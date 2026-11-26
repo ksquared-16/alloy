@@ -1,0 +1,45 @@
+{
+  "trusted_host_action_id": "tha_b5b6c97cbde214",
+  "query_hash": "ccda2431c056a00f54d15859ed7922ee362ecfab020de98858b3f4cf7f3d62c7",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-24T17:42:36.972Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b5b6c97cbde214",
+    "query_hash": "ccda2431c056a00f54d15859ed7922ee362ecfab020de98858b3f4cf7f3d62c7",
+    "authorization_id": "grnt_5e261d43d0884971",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-24T17:42:38.711Z",
+    "question_ids": [
+      "financials_bundle_physical"
+    ],
+    "questions": {
+      "financials_bundle_physical": {
+        "question_id": "financials_bundle_physical",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_has_20261024120000": 1,
+            "newest_applied": "20261024120000",
+            "function_exists": 1,
+            "signature": "p_org_id uuid, p_customer_id uuid, p_customer_member_id uuid",
+            "returns": "jsonb",
+            "security_definer": false,
+            "volatility": "s",
+            "search_path_pinned": "search_path=public, pg_temp",
+            "org_predicate_count": 26,
+            "fact_set_count": 19,
+            "grantees": "PUBLIC,authenticated,postgres,service_role"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

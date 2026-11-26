@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import WorkViewConditionValueControl from "@/components/adminV2/settings/businessProcess/WorkViewConditionValueControl";
 import { ConfigRuntimeSectionHeader } from "@/components/adminV2/settings/configurationRuntime/ConfigurationRuntimePrimitives";
 import { useWorkViewsConfiguration } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import {
     createDefaultWorkViewFilterRow,
     operatorLabelsForField,
@@ -12,11 +13,18 @@ import {
 } from "@/lib/lifecycle/workViewFilterValueControls";
 import {
     DEFAULT_WORK_VIEW_CONDITION_FIELD_KEY,
-    getWorkViewConditionField,
+    getWorkViewConditionFieldDef,
     workViewConditionFieldGroups,
-} from "@/lib/lifecycle/workViewConditionFieldRegistry";
+    choiceOptionsForWorkViewField,
+} from "@/lib/lifecycle/workViewCanonicalOperands";
+import {
+    BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER,
+    BUSINESS_PROCESS_WORK_VIEW_SHOW_WHEN_ALL,
+    BUSINESS_PROCESS_WORK_VIEW_SHOW_WHEN_CONDITIONS,
+    BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN,
+} from "@/lib/lifecycle/businessProcessUiLabels";
 import type { WorkViewFilterOperatorV1, WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
-import { BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN } from "@/lib/lifecycle/businessProcessUiLabels";
+import { isWorkViewCatchAll } from "@/lib/lifecycle/workViewsConfigV1";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 type StatusOptionsResponse = { options?: { value: string; label: string }[] };
@@ -27,7 +35,7 @@ type ProgramCategoriesResponse = {
     categories?: { key: string; label: string | null }[];
 };
 
-const FIELD_GROUPS = workViewConditionFieldGroups();
+type ShowWhenMode = "all" | "conditions";
 
 export default function WorkViewConditionEditor({
     filters,
@@ -42,20 +50,30 @@ export default function WorkViewConditionEditor({
     onMatchChange?: (match: "all" | "any") => void;
 }) {
     const { stageOptions } = useWorkViewsConfiguration();
+    const { tenantFieldDefinitions: opportunityFieldDefinitions } = useTenantFieldDefinitions("opportunities");
+    const { tenantFieldDefinitions: memberFieldDefinitions } = useTenantFieldDefinitions("customer_member");
+    const tenantFieldDefinitions = useMemo(
+        () => [...opportunityFieldDefinitions, ...memberFieldDefinitions],
+        [memberFieldDefinitions, opportunityFieldDefinitions],
+    );
+    const fieldGroups = useMemo(
+        () => workViewConditionFieldGroups(tenantFieldDefinitions),
+        [tenantFieldDefinitions],
+    );
     const [opportunityStatusOptions, setOpportunityStatusOptions] = useState<WorkViewFilterOption[]>([]);
     const [childEnrollmentStatusOptions, setChildEnrollmentStatusOptions] = useState<WorkViewFilterOption[]>([]);
     const [siteOptions, setSiteOptions] = useState<WorkViewFilterOption[]>([]);
     const [roomOptions, setRoomOptions] = useState<WorkViewFilterOption[]>([]);
     const [programOptions, setProgramOptions] = useState<WorkViewFilterOption[]>([]);
 
+    const showWhenMode: ShowWhenMode = isWorkViewCatchAll({ filters_v1: filters }) ? "all" : "conditions";
+
     const loadOptions = useCallback(async () => {
         try {
             const [oppRes, childRes, siteRes, roomRes, programRes] = await Promise.all([
                 fetch("/api/admin/status-options?entity_type=opportunities", workspaceDataFetchInit()),
                 fetch("/api/admin/status-options?entity_type=opportunity_customer_members", workspaceDataFetchInit()),
-                // Campus options: real campuses only (`location_type=site`) — never units/scaffolding.
                 fetch("/api/admin/locations?location_type=site", workspaceDataFetchInit()),
-                // Room options: classrooms (`location_type=unit`).
                 fetch("/api/admin/locations?location_type=unit", workspaceDataFetchInit()),
                 fetch("/api/admin/location-program-categories", workspaceDataFetchInit()),
             ]);
@@ -87,7 +105,6 @@ export default function WorkViewConditionEditor({
             }
             if (programRes.ok) {
                 const json = (await programRes.json()) as ProgramCategoriesResponse;
-                // De-dupe program categories by key across locations for the (currently location-agnostic) picker.
                 const byKey = new Map<string, WorkViewFilterOption>();
                 for (const cat of json.categories ?? []) {
                     const value = String(cat.key ?? "").trim();
@@ -105,10 +122,9 @@ export default function WorkViewConditionEditor({
         void loadOptions();
     }, [loadOptions]);
 
-    /** Resolve the option list for a field from its typed option source. */
     const optionsForField = useCallback(
         (fieldKey: string): readonly WorkViewFilterOption[] => {
-            const source = getWorkViewConditionField(fieldKey)?.optionSource;
+            const source = getWorkViewConditionFieldDef(fieldKey, tenantFieldDefinitions)?.optionSource;
             if (!source) return [];
             switch (source.kind) {
                 case "process_stages":
@@ -123,11 +139,21 @@ export default function WorkViewConditionEditor({
                     return roomOptions;
                 case "programs":
                     return programOptions;
+                case "inline_choice":
+                    return choiceOptionsForWorkViewField(fieldKey, tenantFieldDefinitions);
                 default:
                     return [];
             }
         },
-        [childEnrollmentStatusOptions, opportunityStatusOptions, programOptions, roomOptions, siteOptions, stageOptions],
+        [
+            childEnrollmentStatusOptions,
+            opportunityStatusOptions,
+            programOptions,
+            roomOptions,
+            siteOptions,
+            stageOptions,
+            tenantFieldDefinitions,
+        ],
     );
 
     const updateRow = (index: number, patch: Partial<WorkViewFilterV1>) => {
@@ -135,18 +161,29 @@ export default function WorkViewConditionEditor({
     };
 
     const removeRow = (index: number) => {
-        onChange(filters.filter((_, i) => i !== index));
+        const next = filters.filter((_, i) => i !== index);
+        onChange(next);
     };
 
     const addRow = () => {
         onChange([...filters, createDefaultWorkViewFilterRow(DEFAULT_WORK_VIEW_CONDITION_FIELD_KEY)]);
     };
 
+    const setShowWhenMode = (mode: ShowWhenMode) => {
+        if (mode === "all") {
+            onChange([]);
+            return;
+        }
+        if (!filters.length) {
+            onChange([createDefaultWorkViewFilterRow(DEFAULT_WORK_VIEW_CONDITION_FIELD_KEY)]);
+        }
+    };
+
     return (
         <div className="space-y-3" data-testid="work-view-condition-editor">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <ConfigRuntimeSectionHeader>{BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN}</ConfigRuntimeSectionHeader>
-                {filters.length > 1 && onMatchChange ? (
+                {showWhenMode === "conditions" && filters.length > 1 && onMatchChange ? (
                     <label className="flex items-center gap-2 text-xs font-medium text-alloy-midnight/55">
                         <span>Match</span>
                         <select
@@ -162,74 +199,100 @@ export default function WorkViewConditionEditor({
                     </label>
                 ) : null}
             </div>
-            <div className="space-y-2">
-                {filters.map((row, index) => {
-                    const operators = operatorLabelsForField(row.field_key);
-                    return (
-                        <div
-                            key={`${row.field_key}-${index}`}
-                            className="config-runtime-condition-row"
-                            data-testid={`work-view-condition-row-${index}`}
-                        >
-                            <select
-                                value={getWorkViewConditionField(row.field_key)?.key ?? row.field_key}
-                                onChange={(e) => updateRow(index, { field_key: e.target.value })}
-                                className="config-runtime-select"
-                                data-testid={`work-view-condition-field-${index}`}
-                            >
-                                {FIELD_GROUPS.map((group) => (
-                                    <optgroup key={group.key} label={group.label}>
-                                        {group.fields.map((def) => (
-                                            <option key={def.key} value={def.key}>
-                                                {def.label}
+
+            <label className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium text-alloy-midnight/55">Scope</span>
+                <select
+                    value={showWhenMode}
+                    onChange={(e) => setShowWhenMode(e.target.value === "all" ? "all" : "conditions")}
+                    className="config-runtime-select max-w-md"
+                    data-testid="work-view-show-when-mode"
+                    aria-label="Show work when scope"
+                >
+                    <option value="all">{BUSINESS_PROCESS_WORK_VIEW_SHOW_WHEN_ALL}</option>
+                    <option value="conditions">{BUSINESS_PROCESS_WORK_VIEW_SHOW_WHEN_CONDITIONS}</option>
+                </select>
+            </label>
+
+            {showWhenMode === "all" ? (
+                <p
+                    className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.03] px-3 py-2.5 text-[12px] leading-relaxed text-alloy-midnight/55"
+                    data-testid="work-view-catch-all-helper"
+                >
+                    {BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER}
+                </p>
+            ) : (
+                <>
+                    <div className="space-y-2">
+                        {filters.map((row, index) => {
+                            const operators = operatorLabelsForField(row.field_key, tenantFieldDefinitions);
+                            return (
+                                <div
+                                    key={`${row.field_key}-${index}`}
+                                    className="config-runtime-condition-row"
+                                    data-testid={`work-view-condition-row-${index}`}
+                                >
+                                    <select
+                                        value={getWorkViewConditionFieldDef(row.field_key, tenantFieldDefinitions)?.key ?? row.field_key}
+                                        onChange={(e) => updateRow(index, { field_key: e.target.value })}
+                                        className="config-runtime-select"
+                                        data-testid={`work-view-condition-field-${index}`}
+                                    >
+                                        {fieldGroups.map((group) => (
+                                            <optgroup key={group.key} label={group.label}>
+                                                {group.fields.map((def) => (
+                                                    <option key={def.key} value={def.key}>
+                                                        {def.label}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={row.operator}
+                                        onChange={(e) =>
+                                            updateRow(index, { operator: e.target.value as WorkViewFilterOperatorV1 })
+                                        }
+                                        className="config-runtime-select"
+                                        data-testid={`work-view-condition-operator-${index}`}
+                                    >
+                                        {operators.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
                                             </option>
                                         ))}
-                                    </optgroup>
-                                ))}
-                            </select>
-                            <select
-                                value={row.operator}
-                                onChange={(e) =>
-                                    updateRow(index, { operator: e.target.value as WorkViewFilterOperatorV1 })
-                                }
-                                className="config-runtime-select"
-                                data-testid={`work-view-condition-operator-${index}`}
-                            >
-                                {operators.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </option>
-                                ))}
-                            </select>
-                            <WorkViewConditionValueControl
-                                fieldKey={row.field_key}
-                                operator={row.operator}
-                                value={row.value}
-                                options={optionsForField(row.field_key)}
-                                onChange={(value) => updateRow(index, { value })}
-                                testId={`work-view-condition-value-${index}`}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => removeRow(index)}
-                                className="rounded-lg px-2 py-2 text-xs font-medium text-alloy-midnight/45 hover:bg-red-50 hover:text-red-700"
-                                aria-label="Remove condition"
-                                data-testid={`work-view-condition-remove-${index}`}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    );
-                })}
-            </div>
-            <button
-                type="button"
-                onClick={addRow}
-                className="text-sm font-semibold text-alloy-pine hover:underline"
-                data-testid="work-view-add-condition"
-            >
-                + Add condition
-            </button>
+                                    </select>
+                                    <WorkViewConditionValueControl
+                                        fieldKey={row.field_key}
+                                        operator={row.operator}
+                                        value={row.value}
+                                        options={optionsForField(row.field_key)}
+                                        onChange={(value) => updateRow(index, { value })}
+                                        testId={`work-view-condition-value-${index}`}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeRow(index)}
+                                        className="rounded-lg px-2 py-2 text-xs font-medium text-alloy-midnight/45 hover:bg-red-50 hover:text-red-700"
+                                        aria-label="Remove condition"
+                                        data-testid={`work-view-condition-remove-${index}`}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="text-sm font-semibold text-alloy-pine hover:underline"
+                        data-testid="work-view-add-condition"
+                    >
+                        + Add condition
+                    </button>
+                </>
+            )}
         </div>
     );
 }

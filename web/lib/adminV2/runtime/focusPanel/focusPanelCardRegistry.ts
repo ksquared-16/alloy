@@ -1,0 +1,416 @@
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { CardAuthoring } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
+import type { CardFirstOrderFields } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardFirstOrderConcern";
+import type { CardLifecycle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    declarationAppliesToGrain,
+    filterCardKeysForGrain,
+    grainsForDeclaration,
+    type CardGrainApplicability,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern";
+import {
+    successorForDeclaration,
+    type CardSupersession,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardSupersession";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+
+/**
+ * THE FOCUS PANEL CARD REGISTRY — the extension model for Alloy surfaces (Runtime V1 Certification,
+ * Workstreams C/D/E). This is a PLATFORM CONTRACT, not a switch-statement replacement.
+ *
+ * TARGET: adding a card is "declare it once + supply its component", and the runtime
+ * composes/renders/reveals/defers/measures it automatically — never a central-orchestration edit. Today
+ * card knowledge is scattered across ~13 central lists; each is folded in ONE CONCERN AT A TIME, each
+ * migration replacing a central list 1:1 and verified against the loads-as-one + warm-<2s guardrails.
+ *
+ * DESIGN LAW — COMPOSE SMALL CONTRACTS, DO NOT GROW A GOD-SCHEMA:
+ *   A `CardDefinition` is the composition of its IDENTITY with the independent CONCERN CONTRACTS it opts
+ *   into — placement · lifecycle · loading policy · dependencies · permissions · diagnostics · render.
+ *   Each concern is a SMALL, separately-typed contract OWNED BY ITS OWN runtime composer (the placement
+ *   composer reads placement; the reveal composer reads loading policy; …). No single coordinator knows
+ *   all concerns. Adding a concern = one optional slice + one composer; existing cards are untouched.
+ *   Every property added here must satisfy: (1) the runtime needs it; (2) multiple cards use it;
+ *   (3) multiple future surfaces use it; (4) it REMOVES orchestration; (5) it introduces NO new central
+ *   coordinator. Scale test for every decision: at 300 cards across 40 products, does this get EASIER to
+ *   extend, or harder? Optimize for easier.
+ *
+ * PLATFORM vs DOMAIN: the registry + concern contracts are PLATFORM (how ANY surface declares cards). A
+ * card's `build`/data bindings (folded in later) stay DOMAIN-owned (opportunity/stage-work) and are
+ * declared THROUGH the contract — domain knowledge never leaks back into the kernel/surface-host layers.
+ *
+ * MIGRATION LEDGER (concerns folded in so far):
+ *   1. IDENTITY.title — reserved-cell / display title (was `FOCUS_PANEL_CARD_TITLES`).
+ *   2. LIFECYCLE (`CardLifecycle`, owned by `focusPanelCoordinationModel`) — canvas-elevation
+ *      ownership: `ownsOperationalTruth` / `ownsWorkCompletion` (were the `OPERATIONAL_TRUTH_CARDS` /
+ *      `WORK_OWNING_CARDS` membership sets). The composers `isOperationalTruthCard` /
+ *      `isWorkOwningCard` now read this concern off the registry.
+ *   (next, each as its own concern contract + composer: placement · loadingPolicy(+commitCritical) ·
+ *    dependencies · permissions · diagnostics · render · archetype · catalog)
+ *
+ * The proven seed is `COMMIT_CRITICAL_CARD_SPECS` (`{key, isKnowable, build}`, already iterated with no
+ * per-card blocks) — it becomes the `loadingPolicy` concern, not a field on a monolith.
+ */
+
+/**
+ * IDENTITY concern — the one contract every card has. Kept deliberately tiny; other concerns attach as
+ * their own optional slices (see the DESIGN LAW above), each defined in its owning module as it migrates.
+ */
+export type CardIdentity = {
+    key: FocusPanelCardKey;
+    /**
+     * Display + reserved-cell title. A reserved (settling) cell shows this so the committed panel reads
+     * as a complete surface, not a blank placeholder. `undefined` = the card renders its own title.
+     */
+    title?: string;
+};
+
+/**
+ * A card DECLARATION = its identity composed with the concern contracts it opts into. As concerns
+ * migrate, this becomes `CardIdentity & Partial<CardPlacement & CardLoadingPolicy & …>`, where each
+ * `CardXxx` is a small contract imported from the module that OWNS that concern's composer. It must
+ * never collapse into one flat schema this file defines wholesale.
+ */
+export type CardDefinition = CardIdentity &
+    Partial<CardLifecycle> &
+    Partial<CardGrainApplicability> &
+    Partial<CardSupersession> &
+    Partial<CardAuthoring> &
+    /*
+     * FIRST-ORDER concern (owned by `focusPanelCardFirstOrderConcern`, read by the A′ compiler).
+     * Folded in as its own optional slice, per the DESIGN LAW above — the registry does not learn
+     * what a semantic key means, only that a card declares some.
+     */
+    Partial<CardFirstOrderFields>;
+
+/**
+ * The declared cards. Each carries only the concern slices it opts into: a reserved-cell `title`
+ * (others render their own) and the LIFECYCLE ownership flags (`ownsOperationalTruth` /
+ * `ownsWorkCompletion`, read by `focusPanelCoordinationModel`). Ordering is not authoritative here —
+ * placement folds in as a later concern.
+ */
+export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
+    // Superseded on EVERY grain: the combined Process card answers this question wherever it is
+    // asked. The key stays because Current Work remains a canonical data owner.
+    {
+        key: "current_work",
+        title: "What's Next",
+        ownsWorkCompletion: true,
+        supersededBy: "business_process",
+    },
+    // The combined Business Process card — successor to `current_work` as a card presentation.
+    // Same work-completion ownership, because it is the same operating question at a fuller depth.
+    /*
+     * "Business Process", not "What's Next".
+     *
+     * The successor was carrying its PREDECESSOR's title, so every surface that reads
+     * `cardTitle` — the Surface Builder library above all — offered the current card under the
+     * retired card's name. The runtime card already renders its configured process name; this is
+     * the identity an operator picks it by.
+     */
+    {
+        key: "business_process", title: "Business Process", ownsWorkCompletion: true,
+        firstOrderFields: [
+            "process.name", "process.stage_count", "process.current_stage_key",
+            "process.current_stage_label", "process.stage_position", "process.stage_entered_at",
+        ],
+    },
+    /**
+     * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
+     * durable Household surface exist at all. Silence would have left it case-only by the
+     * `DEFAULT_CARD_GRAINS` rule, so `deriveHouseholdFocusPanelCards` would compose nothing and the
+     * record would open empty. That is the silence rule working, not a bug to route around.
+     *
+     * It clears the truthfulness bar at both grains for the same reason Employment does:
+     * `buildOpportunityFamilyContactRows` already answers "who is this family, and how do we reach
+     * them" from `customer_persons` alone, with no case involved. Same card, same renderer, same
+     * model builder — only the producer of the record differs.
+     */
+    {
+        key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"],
+        firstOrderFields: [
+            "household.label", "household.updated_at", "person.primary_contact_name",
+            "person.primary_contact_line", "record.location_label", "children.count",
+        ],
+    },
+    /**
+     * NOT declared for `household`, deliberately. `buildChildrenCardModel` reads the canonical child
+     * collection — on a case, one enrollment's projection of a family's children — while a durable
+     * household knows its children through `customer_members`, a wider and differently-shaped set.
+     * Declaring the grain without a builder that reads the canonical edge would render enrollment
+     * framing for children that have no enrollment. See `deriveHouseholdFocusPanelCards`.
+     *
+     * ── AND `child`, BECAUSE THIS IS THE CARD THAT ANSWERS "WHO IS THIS CHILD" ──
+     *
+     * It looked like a roster card and so it was declared case-only, and the durable child record
+     * grew a second, smaller card of its own (`child_identity`) to fill the gap. That produced two
+     * platform answers to one question: an operator reaching Lennon from a case saw his photo,
+     * gender, allergies, medical notes and special instructions with an Edit action, and an operator
+     * reaching the same child from Operations saw four fields and no way to change them.
+     *
+     * The card was never really a roster. Its content is the CHILDREN SURFACE configuration —
+     * `children_surface`, resolved by `effectiveChildrenNestedConfig` — which is a child's own field
+     * vocabulary, and its focused perspective renders exactly one child. The collection was the
+     * container, not the subject.
+     *
+     * It reaches the child grain honestly because `normalizeFocusPanelChildrenRowsFromTruth` admits
+     * `_durable_child_rows`: a durable child composes itself as the one member of its own
+     * collection, so the card composes from real truth rather than from a case borrowed for the
+     * occasion. `ChildrenCard` reads `context.grain` and opens on that member — see its docblock.
+     */
+    {
+        key: "children", title: "Children", ownsOperationalTruth: true, grains: ["opportunity", "child"],
+        firstOrderFields: ["children.count", "children.enrolling_count"],
+    },
+    /**
+     * Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
+     *
+     * The FIRST card declared for two grains, and the reason the GRAIN concern exists. Employment is
+     * a fact about a PERSON. On a case it is a related-subject projection ("which of my contacts work
+     * here"); on a durable Person it is the subject's own answer. Same card, same renderer, same
+     * `context.employment` contract — only the producer of that projection differs.
+     */
+    /**
+     * Case-grain ONLY from here on. On a family case this answers "does anyone on this household
+     * work here?" — a reference chip, and a different question from "who is this employee?".
+     *
+     * On a durable PERSON that second question is now owned by `staff`, so the presentation is
+     * superseded there and only there. The case chip is untouched, which is exactly why the
+     * supersession carries a grain scope instead of being global.
+     */
+    {
+        key: "employment",
+        title: "Employment",
+        grains: ["opportunity"],
+        supersededBy: "staff",
+        supersededOnGrains: ["person"],
+    },
+    /**
+     * THE EMPLOYEE-CENTRIC STAFF CARD — person grain only.
+     *
+     * Successor to the person-grain Employment presentation, reading the SAME
+     * `PersonEmploymentComposition`. It is not a second owner of employment truth; it is a fuller
+     * presentation of the one owner. Scheduling stays a separate card answering a separate question
+     * (when and where are they scheduled), and is deliberately NOT folded in here.
+     */
+    { key: "staff", title: "Staff", grains: ["person"] },
+    /*
+     * QUALIFICATIONS — "what does this Staff member hold, what needs attention, and what is
+     * required of them?"
+     *
+     * Person grain only, and not because employment is person-owned: because there is no other
+     * grain where the question is even askable. A case panel composes employment for a linked
+     * contact as DISPLAY, and a credential's expiry is not a family's business.
+     *
+     * It does NOT declare `ownsOperationalTruth`. The canvas-elevation concern is for cards that
+     * own the operating day; a qualification is a durable fact with dates, and elevating it would
+     * put a credential on the same plane as attendance.
+     */
+    { key: "staff_qualifications", title: "Qualifications", grains: ["person"] },
+    /*
+     * AVAILABILITY — "when can this Staff member work?"
+     *
+     * Person grain, and like Qualifications it is askable nowhere else: a case
+     * panel shows a linked contact's employment as display, and when that person
+     * can work is not a family's business.
+     *
+     * It does NOT declare `ownsOperationalTruth`. Canvas elevation is for cards
+     * that own the operating day; availability is a standing intent, and elevating
+     * it would put "could work Tuesdays" on the same plane as who is here now.
+     */
+    { key: "staff_availability", title: "Availability", grains: ["person"] },
+    /*
+     * STAFF READINESS — "is this Staff member ready, and what needs attention?"
+     *
+     * Person grain. It does NOT declare `ownsOperationalTruth`, and that is the
+     * whole point: readiness owns nothing. Every input belongs to another card, and
+     * elevating a derived answer to canvas truth would invite someone to edit it.
+     */
+    { key: "staff_readiness", title: "Readiness", grains: ["person"] },
+    { key: "staff_compensation", title: "Compensation", grains: ["person"] },
+    {
+        key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"],
+        firstOrderFields: [
+            "attendance.state", "attendance.date", "attendance.expected_room_label",
+            "attendance.unavailable_reason",
+        ],
+    },
+    /*
+     * FINANCIALS — "what is owed, what happened, and what can I do about it".
+     *
+     * It does NOT supersede `billing_preview`, which asks a different question: "is billing
+     * CONFIGURED and ready for this enrollment?" One is readiness, the other is the ledger, and a
+     * family can be fully configured and owe nothing or be misconfigured and owe a great deal.
+     * Superseding would delete the readiness answer to make room for the balance.
+     *
+     * Both grains, for the same reason Attendance carries both: the account is the household's, and a
+     * child-grain panel scopes the same account to one subject rather than answering a different
+     * question.
+     */
+    {
+        key: "financials", title: "Financials", ownsOperationalTruth: true, grains: ["opportunity", "child"],
+        firstOrderFields: [
+            "financials.prepaid_available_cents", "financials.prepaid_pending_cents",
+            "financials.prepaid_held_cents", "financials.billing_period_key",
+            "financials.responsibility_cents", "financials.balance_cents",
+            "financials.past_due_cents",
+        ],
+    },
+    /*
+     * HEALTH & SAFETY — "what do I need to know to care for this child safely right now?"
+     *
+     * ── WHY NOT THE EXISTING `health` KEY ──
+     *
+     * `health` is already taken and means ENROLLMENT HEALTH: a pipeline metric with a chip and a
+     * tone, describing how an enrolment is progressing. It has nothing to do with allergies. Reusing
+     * it would have put medical facts behind a key whose whole vocabulary is about process health,
+     * and every existing consumer of `health` would have started receiving them.
+     *
+     * CHILD GRAIN ONLY, deliberately. Health is about a person, and a case panel covering several
+     * children has no single health subject — the card refuses rather than choosing one.
+     */
+    {
+        key: "health_safety", title: "Health & Safety", ownsOperationalTruth: true, grains: ["child"],
+        firstOrderFields: [
+            "health.profile_fact_count", "health.requirements_satisfied",
+            "health.requirements_total", "health.emergency_contact_count",
+        ],
+    },
+    /**
+     * The first CHILD-grain card, and no longer the child's user-facing one.
+     *
+     * `children` now reaches this grain (above) and is what a durable child record renders: it is
+     * the tenant's CONFIGURED child card, with the fields, labels, order and edit affordance the
+     * Children Surface declares. This card composes four hardcoded facts and can be edited nowhere.
+     *
+     * It is retained as an INTERNAL FALLBACK, not as a presentation choice — a composition that has
+     * no published Children Surface at all still resolves something rather than nothing. Do not
+     * route a host here to avoid wiring the configured card; that is how the two answers appeared.
+     */
+    { key: "child_identity", title: "Child", grains: ["child"] },
+    { key: "milestones", title: "Milestones" },
+    { key: "readiness_kpi", title: "Readiness" },
+    { key: "health", title: "Enrollment Health" },
+    { key: "tour_summary", title: "Tour" },
+    { key: "communications", title: "Communications", ownsOperationalTruth: true },
+    { key: "documents", title: "Documents", ownsOperationalTruth: true },
+    { key: "attention", title: "Why Now" },
+    /*
+     * BILLING PREVIEW — "is this enrolment priced, and on what terms?"
+     *
+     * ── WHY IT NOW DECLARES THE CHILD GRAIN ──────────────────────────────────────────────────
+     *
+     * It declared none, so it fell to the case-only default and was omitted from every child-grain
+     * panel. The consequence was not cosmetic: this card owns acceptance of recurring tuition terms
+     * through `enrollment.pricing.accept`, so an operator working an ENROLLED CHILD — which is
+     * where enrolment pricing is actually decided — had no path to establish or change that child's
+     * recurring terms at all. Recurring billing had no operator entry point.
+     *
+     * It composes truthfully at both grains for the same reason Financials and Assignments do: the
+     * assignments belong to the household's enrolment, and a child-grain panel scopes that same
+     * truth to one subject rather than answering a different question. Where a record has no
+     * assignment it says "No assignment on this record to price." rather than rendering an empty
+     * shell, which is the bar this declaration is held to.
+     */
+    { key: "billing_preview", title: "Billing Preview", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
+    { key: "required_information", title: "Required Information" },
+    { key: "current_mission", title: "Current Mission" },
+    { key: "timeline", title: "Timeline" },
+    { key: "notes", title: "Notes" },
+    /**
+     * Truth-owning card with no reserved-cell title (it renders its own).
+     *
+     * Declared for `child` as well as the case, because a commitment is a fact about the CHILD. The
+     * card was always child-shaped inside — it renders per-child assignment rows and executes every
+     * canonical assignment action against a `customer_members.id` — and the case grain was only ever
+     * the surface that happened to host it.
+     *
+     * This is the declaration that lets `Operations → Roster → Lennon → Schedule` render the SAME
+     * card the case panel renders, rather than a second assignments view. It reaches the child grain
+     * as a durable OPERATIONAL context (`canonical_operational`), not through a published
+     * composition — there is no `schedule` business process and there must not be one.
+     *
+     * ── AND `person`, BECAUSE A COMMITMENT IS NOT A CHILD CONCEPT ──
+     *
+     * `schedule_assignments` was extended in place so children and staff would not acquire competing
+     * scheduling engines, and every canonical assignment action already declares `person` among its
+     * supported entity types. The card was the only layer still assuming a child, and generalizing
+     * it around `OperationalAssignmentSubject` is what makes this third grain honest rather than
+     * aspirational: `Roster → Staff → Jane → Schedule` renders THIS card, not a staff copy of it.
+     *
+     * The grain concern remains the gate. A card reaches the person grain because it is declared
+     * here — never because a component decided it could.
+     */
+    /*
+     * "Assignments" — the name the card renders and the name an operator picks it by.
+     *
+     * With no title the registry fell back to humanising the KEY, so the Surface Builder offered
+     * this card as "scheduling" while the runtime card headed itself ASSIGNMENTS. A card an
+     * operator cannot recognise between the library and the panel is the same drift as offering it
+     * under a predecessor's name.
+     */
+    { key: "scheduling", title: "Assignments", ownsOperationalTruth: true, grains: ["opportunity", "child", "person"] },
+];
+
+const CARD_BY_KEY: ReadonlyMap<FocusPanelCardKey, CardDefinition> = new Map(
+    FOCUS_PANEL_CARDS.map((c) => [c.key, c]),
+);
+
+/** The declared definition for a card key, or undefined when the key has no registry entry yet. */
+export function cardDefinition(key: FocusPanelCardKey): CardDefinition | undefined {
+    return CARD_BY_KEY.get(key);
+}
+
+/** The declared reserved-cell / display title for a card, or undefined (card renders its own). */
+export function cardTitle(key: FocusPanelCardKey): string | undefined {
+    return CARD_BY_KEY.get(key)?.title;
+}
+
+// ── GRAIN concern composer (contract: `focusPanelCardGrainConcern.ts`) ────────────────────────────
+
+/**
+ * Can this card compose for this subject grain?
+ *
+ * Total and deterministic. An unregistered key is not applicable to ANY grain — including `case`:
+ * a key the registry has never heard of has no declaration to trust, and admitting it on the default
+ * would let an unknown card onto the enrollment panel, which is the opposite of the guarantee.
+ */
+export function cardAppliesToGrain(key: FocusPanelCardKey, grain: OperationalSubjectType): boolean {
+    const definition = CARD_BY_KEY.get(key);
+    if (!definition) return false;
+    return declarationAppliesToGrain(definition, grain);
+}
+
+/**
+ * The canonical successor that owns this card's presentation on `grain`, or null.
+ *
+ * Omit `grain` to ask only about GLOBAL supersession. That asymmetry is deliberate: a caller that
+ * cannot state its grain must not receive a grain-scoped answer, or a person-grain rule would be
+ * applied to a case placement — the exact defect the scope exists to prevent.
+ */
+export function cardSuccessor(
+    key: FocusPanelCardKey,
+    grain?: OperationalSubjectType,
+): FocusPanelCardKey | null {
+    const definition = CARD_BY_KEY.get(key);
+    if (!definition) return null;
+    return successorForDeclaration(definition, grain);
+}
+
+/** Resolve a key to the card that actually composes on `grain` (itself when not superseded). */
+export function resolveCardIdentity(
+    key: FocusPanelCardKey,
+    grain?: OperationalSubjectType,
+): FocusPanelCardKey {
+    return cardSuccessor(key, grain) ?? key;
+}
+
+/** The grains a registered card admits — its declaration, or the case-only default. */
+export function cardGrains(key: FocusPanelCardKey): readonly OperationalSubjectType[] {
+    const definition = CARD_BY_KEY.get(key);
+    return definition ? grainsForDeclaration(definition) : [];
+}
+
+/** Every registered card key applicable to `grain`, in registry order. */
+export function cardKeysForGrain(grain: OperationalSubjectType): FocusPanelCardKey[] {
+    return filterCardKeysForGrain(FOCUS_PANEL_CARDS, grain);
+}

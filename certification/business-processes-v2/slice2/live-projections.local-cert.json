@@ -1,0 +1,78 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "at": "2026-10-20T21:09:11.438Z",
+  "assignments": {
+    "total": 9,
+    "truncated": false,
+    "by_grain": {
+      "child": 8,
+      "person": 1
+    },
+    "source_facts": 113,
+    "restricted_site": "00000000-0000-4000-8000-000000000010",
+    "restricted_total": 9,
+    "paged_13_total": 9,
+    "sample": [
+      {
+        "subject": {
+          "type": "child",
+          "id": "00000000-0000-4000-8000-00005000006b"
+        },
+        "source": {
+          "kind": "schedule_assignment",
+          "id": "00000000-0000-4000-8000-00005000006e",
+          "count": 1,
+          "statusLabel": "Active primary"
+        }
+      },
+      {
+        "subject": {
+          "type": "child",
+          "id": "00000000-0000-4000-8000-000050000021"
+        },
+        "source": {
+          "kind": "schedule_assignment",
+          "id": "065e750f-7141-4bcf-b705-c993ff8b11b4",
+          "count": 53,
+          "statusLabel": "Active"
+        }
+      },
+      {
+        "subject": {
+          "type": "child",
+          "id": "00000000-0000-4000-8000-000070000052"
+        },
+        "source": {
+          "kind": "schedule_assignment",
+          "id": "00000000-0000-4000-8000-000070000082",
+          "count": 1,
+          "statusLabel": "Active primary"
+        }
+      }
+    ]
+  },
+  "billing_denied": {
+    "status": "refused",
+    "code": "projection_forbidden",
+    "message": "You don't have access to view financial information for this organization. Contact an administrator to request access."
+  },
+  "billing": {
+    "total": 1,
+    "truncated": false,
+    "source_facts": 2,
+    "sample": [
+      {
+        "subject": {
+          "type": "household",
+          "id": "fc500000-0000-4000-8000-0000000c0001"
+        },
+        "source": {
+          "kind": "charge",
+          "id": "5aa82328-f731-4a1c-a81b-ec28bc7c8e6f",
+          "count": 2,
+          "statusLabel": "Review required"
+        }
+      }
+    ]
+  }
+}

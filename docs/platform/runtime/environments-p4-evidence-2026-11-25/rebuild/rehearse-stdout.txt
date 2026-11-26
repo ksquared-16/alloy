@@ -1,0 +1,6 @@
+# rehearse.sh stdout, 2026-11-25 ~22:53 UTC (transcribed from the session console; the script printed it, it was not tee-d)
+gotrue_migrate_rc=0
+storage_migrate_rc=0
+networks_attached=[]
+chain_result=ALL APPLIED (557 files)
+real 28.7s

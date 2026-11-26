@@ -31,13 +31,6 @@ const parentProfile = resolvePersonDrawerProfileFromRecord({
 });
 
 describe("person drawer IA cleanup pass", () => {
-    it("hides quick links context panel for child and parent profiles", () => {
-        expect(personDrawerShowsChildContextPanel(childProfile)).toBe(false);
-        expect(personDrawerShowsChildContextPanel(parentProfile)).toBe(false);
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).not.toContain("PersonDrawerContextPanel");
-        expect(typeof buildPersonDrawerQuickLinks).toBe("function");
-    });
 
     it("household child link state requires person_id", () => {
         expect(resolvePersonDrawerHouseholdChildLinkState("child-1")).toBe("openable");
@@ -69,17 +62,6 @@ describe("person drawer IA cleanup pass", () => {
         expect(children.find((c) => c.display_name === "Wrigley")?.link_state).toBe("unlinked");
         expect(children.find((c) => c.display_name === "Riley")?.age_label).toBe("5 yrs");
         expect(children.find((c) => c.display_name === "Riley")?.link_state).toBe("openable");
-    });
-
-    it("shared household section renders avatar cards and unlinked state", () => {
-        const household = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
-            "utf8"
-        );
-        expect(household).toContain("PersonDrawerIdentityAvatar");
-        expect(household).toContain("data-person-drawer-household-child-unlinked");
-        expect(household).toContain('label="Primary"');
-        expect(household).toContain("data-person-drawer-child-age");
     });
 
     it("prefers customer location address over person interim fields", () => {
@@ -125,27 +107,6 @@ describe("person drawer IA cleanup pass", () => {
         expect(CHILD_LIFECYCLE_PREMIUM_SECTION_KEYS.has("medical")).toBe(true);
     });
 
-    it("employee status uses premium drawer shell on parent", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const employee = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerEmployeeStatusSection.tsx"),
-            "utf8"
-        );
-        expect(drawer).toContain("PersonDrawerEmployeeStatusSection");
-        expect(drawer).toContain("PersonEmployeePlacementSection");
-        expect(employee).toContain("data-person-drawer-employee-status");
-        expect(employee).toContain("oppInqLeadSummaryShellClassName");
-    });
-
-    it("parent address section does not show unavailable empty mailing copy", () => {
-        const address = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdAddress.tsx"),
-            "utf8"
-        );
-        expect(address).toContain("data-person-drawer-household-address");
-        expect(address).not.toContain("No household mailing address on file");
-    });
-
     it("parent operating overview strips Profile, Contact, and Record Info sections", () => {
         const filtered = personDrawerParentOperatingOverviewSections([
             { key: "basic_info", title: "Profile", fields: [{ key: "first_name", label: "First name" }] },
@@ -153,13 +114,6 @@ describe("person drawer IA cleanup pass", () => {
             { key: "record_info", title: "Record Info", fields: [{ key: "created_at", label: "Created" }] },
         ]);
         expect(filtered).toEqual([]);
-    });
-
-    it("does not render parent/child module chip strip under tabs", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const stripBlock = drawer.slice(drawer.indexOf("const drawerPostTabStrip"));
-        expect(stripBlock.slice(0, 600)).not.toContain("personDrawerParentLifecycleRail");
-        expect(stripBlock.slice(0, 600)).not.toContain("personDrawerChildLifecycleRail");
     });
 
     it("computes child age label from date of birth", () => {

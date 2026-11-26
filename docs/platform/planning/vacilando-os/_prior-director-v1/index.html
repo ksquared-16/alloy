@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Alloy Director</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0f14'/%3E%3Cpath d='M9 22 16 9l7 13' fill='none' stroke='%235bd6c4' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app" class="shell" data-view="missions">
+      <!-- Rail -->
+      <nav class="rail" aria-label="Director navigation">
+        <div class="rail-mark" title="Alloy Director">
+          <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+            <rect width="32" height="32" rx="7" fill="var(--brand-mark-bg)"></rect>
+            <path d="M9 22 16 9l7 13" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"></path>
+          </svg>
+        </div>
+        <a class="rail-item" data-nav="missions" href="#/missions" title="Missions">
+          <span class="rail-glyph">◫</span><span class="rail-label">Missions</span>
+        </a>
+        <a class="rail-item" data-nav="decisions" href="#/decisions" title="Decisions">
+          <span class="rail-glyph">◇</span><span class="rail-label">Decisions</span>
+          <span class="rail-badge" data-badge="decisions" hidden></span>
+        </a>
+        <a class="rail-item" data-nav="history" href="#/history" title="History">
+          <span class="rail-glyph">≋</span><span class="rail-label">History</span>
+        </a>
+        <a class="rail-item" data-nav="settings" href="#/settings" title="Settings">
+          <span class="rail-glyph">◈</span><span class="rail-label">Settings</span>
+        </a>
+        <div class="rail-spacer"></div>
+        <div class="rail-conn" data-live="off" title="Live connection">
+          <span class="dot"></span><span class="rail-label">Live</span>
+        </div>
+      </nav>
+
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1 id="viewTitle">Director</h1>
+          <p id="viewSub" class="topbar-sub"></p>
+        </div>
+        <div class="topbar-status" id="topStatus"></div>
+      </header>
+
+      <!-- Main -->
+      <main class="main" id="main" tabindex="-1">
+        <div class="loading" id="loading">Projecting runtime state…</div>
+      </main>
+
+      <!-- Conversation / context dock -->
+      <aside class="dock" id="dock" aria-label="Mission context and decisions">
+        <div class="dock-head">
+          <span class="dock-kicker">Command context</span>
+          <button class="dock-collapse" id="dockCollapse" title="Collapse" aria-label="Collapse context dock">›</button>
+        </div>
+        <div class="dock-body" id="dockBody"></div>
+      </aside>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="modal" class="modal" hidden></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -10,6 +10,8 @@ import {
     type OpportunityStatusSourceRow,
 } from "@/lib/admin/drawer/resolveOpportunityStatusLabelsBatch";
 import type { ConversationSummary } from "@/lib/communications/v2/commandCenterViewModel";
+import { deriveThreadTopicTitle } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
+import { resolveCommunicationQueueScope } from "@/lib/communications/v2/communicationQueueScopeResolution";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const PREVIEW_MAX = 96;
@@ -56,6 +58,34 @@ function truncatePreview(body: string | null | undefined): string | null {
     if (!text) return null;
     if (text.length <= PREVIEW_MAX) return text;
     return `${text.slice(0, PREVIEW_MAX - 1)}…`;
+}
+
+function deriveQueueTopicLabel(row: ThreadRow): string {
+    const meta = row.metadata ?? {};
+    const actionLabel = typeof meta.action_label === "string" ? meta.action_label : null;
+    const topic = typeof meta.topic === "string" ? meta.topic : null;
+    const familyLabel = typeof meta.family_label === "string" ? meta.family_label : null;
+    const subject =
+        typeof meta.subject === "string"
+            ? meta.subject
+            : typeof meta.thread_subject === "string"
+              ? meta.thread_subject
+              : null;
+
+    return deriveThreadTopicTitle({
+        thread: {
+            subject,
+            channel: row.channel,
+            attentionState: row.attention_state,
+            slaState: row.sla_state,
+        },
+        workflowLabel: actionLabel,
+        conversationMetadata: {
+            topic,
+            actionLabel,
+            familyLabel,
+        },
+    });
 }
 
 async function loadLastMessagePreviews(
@@ -226,7 +256,7 @@ export async function enrichCommandCenterConversations(
         for (const row of customerRows) {
             const id = String((row as { id: string }).id);
             const name = ((row as { name?: string | null }).name ?? "").trim();
-            customerNameById.set(id, name || "Family");
+            customerNameById.set(id, name || "");
             const pc = (row as { primary_contact_id?: string | null }).primary_contact_id;
             if (pc && UUID_RE.test(String(pc))) {
                 personIds.add(String(pc));
@@ -352,6 +382,36 @@ export async function enrichCommandCenterConversations(
         const childNames = childLinks?.map((c) => c.name) ?? null;
         const lastActivityAt = preview?.created_at ?? r.last_message_at;
 
+        const metadataCustomerId =
+            typeof meta.customer_id === "string"
+                ? meta.customer_id
+                : typeof meta.customerId === "string"
+                  ? meta.customerId
+                  : null;
+
+        const scope = resolveCommunicationQueueScope({
+            orgId,
+            customerId,
+            primaryEntityType: r.primary_entity_type,
+            primaryEntityId: r.primary_entity_id,
+            threadId: r.id,
+            metadataCustomerId,
+            opportunityCustomerId:
+                isOpportunityEntity(type) && UUID_RE.test(entityId) ? oppCustomerByOppId.get(entityId) ?? null : null,
+            personCustomerId:
+                isPersonEntity(type) && UUID_RE.test(entityId) ? personCustomerByPersonId.get(entityId) ?? null : null,
+            customerExists: customerId ? customerNameById.has(customerId) : undefined,
+        });
+
+        const resolvedCustomerId = scope.status === "resolved" ? scope.customerId : customerId;
+        if (scope.status === "resolved" && !customerId) {
+            customerId = scope.customerId;
+            if (!familyLabel) familyLabel = customerNameById.get(scope.customerId) || null;
+            if (!primaryContactName) primaryContactName = primaryContactByCustomerId.get(scope.customerId) ?? null;
+            if (!primaryContactPersonId) primaryContactPersonId = primaryContactPersonByCustomerId.get(scope.customerId) ?? null;
+            if (!opportunityId) opportunityId = oppIdByCustomerId.get(scope.customerId) ?? null;
+        }
+
         return {
             id: r.id,
             channel: r.channel,
@@ -375,7 +435,16 @@ export async function enrichCommandCenterConversations(
             opportunity_id: opportunityId,
             primary_entity_type: r.primary_entity_type,
             primary_entity_id: r.primary_entity_id,
-            customer_id: customerId,
+            customer_id: resolvedCustomerId,
+            topic_label: deriveQueueTopicLabel(r),
+            scope_status: scope.status,
+            scope_reason: scope.status === "resolved" ? scope.reason : null,
+            scope_unresolved_reason:
+                scope.status === "unresolved"
+                    ? scope.reason
+                    : scope.status === "ambiguous"
+                      ? scope.reason
+                      : null,
         };
     });
 }

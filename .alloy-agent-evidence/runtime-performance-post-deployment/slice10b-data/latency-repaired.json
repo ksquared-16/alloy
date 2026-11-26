@@ -1,0 +1,1462 @@
+[
+ {
+  "path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+  "kind": "fetch",
+  "startRelMs": 24079,
+  "durationMs": 17051,
+  "ttfbMs": 17050,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b0…",
+  "kind": "fetch",
+  "startRelMs": 14967,
+  "durationMs": 8732,
+  "ttfbMs": 8627,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/workspace/work-unit/waitlist",
+  "kind": "document",
+  "startRelMs": 3,
+  "durationMs": 8325,
+  "ttfbMs": 3043,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/work-units/waitlist/provisioning-answer",
+  "kind": "fetch",
+  "startRelMs": 8346,
+  "durationMs": 6579,
+  "ttfbMs": 6522,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+  "kind": "fetch",
+  "startRelMs": 23702,
+  "durationMs": 4241,
+  "ttfbMs": 4184,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/communications/unread-count",
+  "kind": "fetch",
+  "startRelMs": 3818,
+  "durationMs": 3170,
+  "ttfbMs": 3170,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-qu…",
+  "kind": "fetch",
+  "startRelMs": 7171,
+  "durationMs": 3035,
+  "ttfbMs": 3034,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/communications/bindings",
+  "kind": "fetch",
+  "startRelMs": 15223,
+  "durationMs": 2760,
+  "ttfbMs": 2759,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/metrics/resolve",
+  "kind": "fetch",
+  "startRelMs": 14968,
+  "durationMs": 2758,
+  "ttfbMs": 2717,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/entity-labels",
+  "kind": "fetch",
+  "startRelMs": 3838,
+  "durationMs": 2736,
+  "ttfbMs": 2030,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/communications/family-workspace",
+  "kind": "fetch",
+  "startRelMs": 15069,
+  "durationMs": 2231,
+  "ttfbMs": 2230,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/inner.html",
+  "kind": "document",
+  "startRelMs": 8442,
+  "durationMs": 2142,
+  "ttfbMs": 2139,
+  "bytes": 438,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/departments",
+  "kind": "fetch",
+  "startRelMs": 3820,
+  "durationMs": 1971,
+  "ttfbMs": 1968,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/communications/family-workspace",
+  "kind": "fetch",
+  "startRelMs": 17302,
+  "durationMs": 1971,
+  "ttfbMs": 1969,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/workspace/site-filter",
+  "kind": "fetch",
+  "startRelMs": 3816,
+  "durationMs": 1957,
+  "ttfbMs": 1957,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/queue-view-totals",
+  "kind": "fetch",
+  "startRelMs": 10212,
+  "durationMs": 1892,
+  "ttfbMs": 1890,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/lifecycle-catalog",
+  "kind": "fetch",
+  "startRelMs": 3819,
+  "durationMs": 1780,
+  "ttfbMs": 1780,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/communications/conversations",
+  "kind": "fetch",
+  "startRelMs": 23796,
+  "durationMs": 1755,
+  "ttfbMs": 1748,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/operational-tasks",
+  "kind": "fetch",
+  "startRelMs": 3819,
+  "durationMs": 1738,
+  "ttfbMs": 1738,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/ai/workflow-assist/capabilities",
+  "kind": "fetch",
+  "startRelMs": 3845,
+  "durationMs": 1705,
+  "ttfbMs": 1704,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/communications/family-workspace",
+  "kind": "fetch",
+  "startRelMs": 25552,
+  "durationMs": 1493,
+  "ttfbMs": 1491,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/ai/config-layout-assist/capabilities",
+  "kind": "fetch",
+  "startRelMs": 3845,
+  "durationMs": 1415,
+  "ttfbMs": 1414,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/status-options",
+  "kind": "fetch",
+  "startRelMs": 5799,
+  "durationMs": 1370,
+  "ttfbMs": 827,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-acc9bb1e0a…",
+  "kind": "image",
+  "startRelMs": 23847,
+  "durationMs": 1351,
+  "ttfbMs": 449,
+  "bytes": 4457857,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/communications/drawer-recipients",
+  "kind": "fetch",
+  "startRelMs": 17985,
+  "durationMs": 1312,
+  "ttfbMs": 1311,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/actions/right-rail-bundle",
+  "kind": "fetch",
+  "startRelMs": 14968,
+  "durationMs": 1207,
+  "ttfbMs": 1207,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/work-units",
+  "kind": "fetch",
+  "startRelMs": 3819,
+  "durationMs": 1199,
+  "ttfbMs": 1198,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/activity",
+  "kind": "fetch",
+  "startRelMs": 24079,
+  "durationMs": 1167,
+  "ttfbMs": 1165,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/communications/threads",
+  "kind": "fetch",
+  "startRelMs": 15222,
+  "durationMs": 1146,
+  "ttfbMs": 1145,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-8aed48d804…",
+  "kind": "fetch",
+  "startRelMs": 14969,
+  "durationMs": 1049,
+  "ttfbMs": 1049,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/lifecycle-bu…",
+  "kind": "fetch",
+  "startRelMs": 14977,
+  "durationMs": 1008,
+  "ttfbMs": 1008,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/operational-tasks",
+  "kind": "fetch",
+  "startRelMs": 23796,
+  "durationMs": 984,
+  "ttfbMs": 984,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/option-sets/childcare_program_type",
+  "kind": "fetch",
+  "startRelMs": 23797,
+  "durationMs": 920,
+  "ttfbMs": 919,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/option-sets/person_gender",
+  "kind": "fetch",
+  "startRelMs": 23798,
+  "durationMs": 875,
+  "ttfbMs": 875,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/entity-layouts/focus-panel-summary",
+  "kind": "fetch",
+  "startRelMs": 14965,
+  "durationMs": 864,
+  "ttfbMs": 864,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/locations",
+  "kind": "fetch",
+  "startRelMs": 23797,
+  "durationMs": 819,
+  "ttfbMs": 627,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-acc9bb1e0a…",
+  "kind": "image",
+  "startRelMs": 14981,
+  "durationMs": 774,
+  "ttfbMs": 424,
+  "bytes": 4457857,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-acc9bb1e0a…",
+  "kind": "image",
+  "startRelMs": 23847,
+  "durationMs": 715,
+  "ttfbMs": 333,
+  "bytes": 2454096,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/api/admin/communications/threads/b98d8f65-023e-41e6-b8fc-296bab311df3/m…",
+  "kind": "fetch",
+  "startRelMs": 17984,
+  "durationMs": 648,
+  "ttfbMs": 647,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/communications/threads/addb497f-10c1-4d92-ad03-268fd9ce19e4/m…",
+  "kind": "fetch",
+  "startRelMs": 17984,
+  "durationMs": 648,
+  "ttfbMs": 648,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/api/admin/communications/threads/7bd232bf-35fe-4fcd-8223-a34b08a46a11/m…",
+  "kind": "fetch",
+  "startRelMs": 17984,
+  "durationMs": 647,
+  "ttfbMs": 646,
+  "bytes": null,
+  "status": 200,
+  "blocks": "SECONDARY_ENRICHMENT"
+ },
+ {
+  "path": "/_next/static/chunks/3b8ab141e9a2f1f8.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 638,
+  "ttfbMs": 628,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/queues/stage-membership-ack",
+  "kind": "fetch",
+  "startRelMs": 14964,
+  "durationMs": 578,
+  "ttfbMs": 577,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/_next/static/chunks/f2afaa789640c327.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 560,
+  "ttfbMs": 525,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/verticals",
+  "kind": "fetch",
+  "startRelMs": 8347,
+  "durationMs": 558,
+  "ttfbMs": 556,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/622d33a7c40140e0.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 505,
+  "ttfbMs": 487,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/9eb239d11bbf96e0.css",
+  "kind": "stylesheet",
+  "startRelMs": 3053,
+  "durationMs": 492,
+  "ttfbMs": 490,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/e0d801e4f401de52.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 483,
+  "ttfbMs": 475,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/ba272f69f9df52d3.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 483,
+  "ttfbMs": 473,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/3d15682a74cea168.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 483,
+  "ttfbMs": 471,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/f534f94ee3f11c10.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 481,
+  "ttfbMs": 471,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/20df031e39aaf654.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 480,
+  "ttfbMs": 455,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/06b02be439485e82.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 480,
+  "ttfbMs": 470,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/5bdd705a480d3ad5.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 480,
+  "ttfbMs": 470,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/87f97b57496261a4.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 465,
+  "ttfbMs": 454,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/ce6dac96ea9a236a.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 460,
+  "ttfbMs": 451,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/c6ed0d42eb949436.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 459,
+  "ttfbMs": 449,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/ee27420c9f40ca39.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 459,
+  "ttfbMs": 450,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/ee59ddf75c5d8406.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 458,
+  "ttfbMs": 448,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/8e914021f039820e.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 458,
+  "ttfbMs": 447,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/c8372086422c3f71.js",
+  "kind": "script",
+  "startRelMs": 3117,
+  "durationMs": 458,
+  "ttfbMs": 448,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/663a6b7af4d5a586.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 457,
+  "ttfbMs": 446,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/e1db69534ac08cce.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 456,
+  "ttfbMs": 445,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/cb3e97b66077c79c.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 455,
+  "ttfbMs": 429,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/96cd5f74ca115368.css",
+  "kind": "stylesheet",
+  "startRelMs": 3053,
+  "durationMs": 440,
+  "ttfbMs": 439,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/turbopack-dafa8c92f0a9303c.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 440,
+  "ttfbMs": 434,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/7eb340cd9ad0e39c.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 439,
+  "ttfbMs": 426,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/8fc0f4ed667d311c.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 438,
+  "ttfbMs": 428,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/api/admin/location-program-categories",
+  "kind": "fetch",
+  "startRelMs": 23797,
+  "durationMs": 438,
+  "ttfbMs": 436,
+  "bytes": null,
+  "status": 200,
+  "blocks": "NOTHING_VISIBLE"
+ },
+ {
+  "path": "/_next/static/chunks/c6d374526fc89136.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 437,
+  "ttfbMs": 427,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/22232b85f4c1e3a1.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 437,
+  "ttfbMs": 427,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/185d5eacae211a4d.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 437,
+  "ttfbMs": 427,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/98d8ec1794713864.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 437,
+  "ttfbMs": 428,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/6386dc008f42ea3f.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 435,
+  "ttfbMs": 404,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/9095853454ac7435.js",
+  "kind": "script",
+  "startRelMs": 3116,
+  "durationMs": 435,
+  "ttfbMs": 425,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/59c03d67e765d1b4.css",
+  "kind": "stylesheet",
+  "startRelMs": 3053,
+  "durationMs": 433,
+  "ttfbMs": 432,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/298cd5f88ca30f68.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 413,
+  "ttfbMs": 403,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/83929380a49f7e9f.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 413,
+  "ttfbMs": 403,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/41a37d7790e21a3c.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 412,
+  "ttfbMs": 378,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/c101a1620d1efd55.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 408,
+  "ttfbMs": 378,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/8fe7260e811ffac7.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 405,
+  "ttfbMs": 397,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/d810b1e40e06e7e8.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 403,
+  "ttfbMs": 378,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/ce38db1e2e463aca.css",
+  "kind": "stylesheet",
+  "startRelMs": 3053,
+  "durationMs": 401,
+  "ttfbMs": 401,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/cc319e83c9636f08.js",
+  "kind": "script",
+  "startRelMs": 3194,
+  "durationMs": 394,
+  "ttfbMs": 394,
+  "bytes": 476,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/4e883ae5a3829184.css",
+  "kind": "stylesheet",
+  "startRelMs": 3053,
+  "durationMs": 389,
+  "ttfbMs": 383,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/v3",
+  "kind": "script",
+  "startRelMs": 3806,
+  "durationMs": 389,
+  "ttfbMs": 257,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/6564e583aa517857.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 387,
+  "ttfbMs": 380,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/252b7dfb88bdbff0.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 385,
+  "ttfbMs": 379,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/d2a1819ec004a187.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 384,
+  "ttfbMs": 376,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/116c30293fae9928.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 384,
+  "ttfbMs": 377,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/c0c1ddd16a1e052d.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 384,
+  "ttfbMs": 375,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/dde79e53cfd25af6.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 380,
+  "ttfbMs": 373,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/67a0e7512c178d3e.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 380,
+  "ttfbMs": 374,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/8ea83f29c16b1a52.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 380,
+  "ttfbMs": 371,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/a8dbca33a11e4ea9.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 379,
+  "ttfbMs": 373,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/f6d0cb94cbd8179d.js",
+  "kind": "script",
+  "startRelMs": 3110,
+  "durationMs": 379,
+  "ttfbMs": 352,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/311068ea95b2c8cc.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 379,
+  "ttfbMs": 369,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/4a606ddf03a4d791.js",
+  "kind": "script",
+  "startRelMs": 3115,
+  "durationMs": 379,
+  "ttfbMs": 370,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/ecb81afe807dcc8e.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 377,
+  "ttfbMs": 348,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/b8708e8d6abacb78.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 377,
+  "ttfbMs": 369,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/media/e2334d715941921e-s.p.d82a9aff.woff2",
+  "kind": "font",
+  "startRelMs": 3053,
+  "durationMs": 358,
+  "ttfbMs": 357,
+  "bytes": 7992,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/media/c875c6f5d3e977ac-s.p.80fc2c9e.woff2",
+  "kind": "font",
+  "startRelMs": 3053,
+  "durationMs": 357,
+  "ttfbMs": 357,
+  "bytes": 7844,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/fc624a958202934d.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 354,
+  "ttfbMs": 346,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/011a1a45df5133ea.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 353,
+  "ttfbMs": 345,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/baa3b03a7130fcf1.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 353,
+  "ttfbMs": 343,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/6b7e1cf556aabead.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 352,
+  "ttfbMs": 345,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/466e3428f37b1608.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 351,
+  "ttfbMs": 343,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/e781d8bc038179fa.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 349,
+  "ttfbMs": 343,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/f5157f06f12594ac.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 349,
+  "ttfbMs": 342,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/fe0aba4d4d40f441.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 349,
+  "ttfbMs": 340,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/0bc7d7b2cd022fda.js",
+  "kind": "script",
+  "startRelMs": 3114,
+  "durationMs": 348,
+  "ttfbMs": 338,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/d208eee840dab70c.css",
+  "kind": "stylesheet",
+  "startRelMs": 3054,
+  "durationMs": 335,
+  "ttfbMs": 333,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/452c7522843fe760.js",
+  "kind": "script",
+  "startRelMs": 3110,
+  "durationMs": 330,
+  "ttfbMs": 313,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/6b4b434cdb6d3a0a.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 330,
+  "ttfbMs": 322,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/8f9694a574a2cacc.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 330,
+  "ttfbMs": 323,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/c87313bfacdb2b8e.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 317,
+  "ttfbMs": 309,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/eda4a9a85a7497a1.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 314,
+  "ttfbMs": 306,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/media/47fe1b7cd6e6ed85-s.p.855a563b.woff2",
+  "kind": "font",
+  "startRelMs": 3052,
+  "durationMs": 309,
+  "ttfbMs": 308,
+  "bytes": 7848,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/e920d3c384ab70cd.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 306,
+  "ttfbMs": 298,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/ab5cea45179af10e.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 306,
+  "ttfbMs": 299,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/4a1f20b837412da7.js",
+  "kind": "script",
+  "startRelMs": 3113,
+  "durationMs": 306,
+  "ttfbMs": 299,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/d3de333a4f929d34.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 304,
+  "ttfbMs": 297,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/388f70332d8cd050.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 304,
+  "ttfbMs": 297,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/cc8395f586616352.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 304,
+  "ttfbMs": 298,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/f4089e19e83e00b0.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 304,
+  "ttfbMs": 297,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/aadd510b77728c12.js",
+  "kind": "script",
+  "startRelMs": 3110,
+  "durationMs": 303,
+  "ttfbMs": 277,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/b229c148acde3f61.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 303,
+  "ttfbMs": 297,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/1c9f7ae53fc64008.css",
+  "kind": "stylesheet",
+  "startRelMs": 3054,
+  "durationMs": 281,
+  "ttfbMs": 280,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/c46bc9aee1f12d7d.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 278,
+  "ttfbMs": 272,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/b3a5416345cd2186.js",
+  "kind": "script",
+  "startRelMs": 3112,
+  "durationMs": 277,
+  "ttfbMs": 270,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/media/a218039a3287bcfd-s.p.4a23d71b.woff2",
+  "kind": "font",
+  "startRelMs": 3053,
+  "durationMs": 276,
+  "ttfbMs": 276,
+  "bytes": 7900,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/e0930dfab7210562.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 271,
+  "ttfbMs": 265,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/d6628f7c0bcc94b6.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 261,
+  "ttfbMs": 255,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/66b98913970fdd2b.js",
+  "kind": "script",
+  "startRelMs": 3110,
+  "durationMs": 252,
+  "ttfbMs": 247,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/085c0ce2454e6758.js",
+  "kind": "script",
+  "startRelMs": 3110,
+  "durationMs": 232,
+  "ttfbMs": 226,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/brand/alloy-brandmark-gradient.svg",
+  "kind": "image",
+  "startRelMs": 3110,
+  "durationMs": 222,
+  "ttfbMs": 217,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next-live/feedback/feedback.js",
+  "kind": "script",
+  "startRelMs": 3612,
+  "durationMs": 209,
+  "ttfbMs": 153,
+  "bytes": null,
+  "status": 204,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/4706b056a166f842.js",
+  "kind": "script",
+  "startRelMs": 3111,
+  "durationMs": 208,
+  "ttfbMs": 202,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/beb7c8a4a8365fe6.css",
+  "kind": "stylesheet",
+  "startRelMs": 3053,
+  "durationMs": 197,
+  "ttfbMs": 196,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/media/8e6fa89aa22d24ec-s.p.3aec397d.woff2",
+  "kind": "font",
+  "startRelMs": 3053,
+  "durationMs": 196,
+  "ttfbMs": 196,
+  "bytes": 7740,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/auth/v1/user",
+  "kind": "fetch",
+  "startRelMs": 3989,
+  "durationMs": 196,
+  "ttfbMs": 58,
+  "bytes": null,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/_next/static/chunks/53273c9889415995.js",
+  "kind": "script",
+  "startRelMs": 3413,
+  "durationMs": 175,
+  "ttfbMs": 175,
+  "bytes": 442,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/6",
+  "kind": "xhr",
+  "startRelMs": 10771,
+  "durationMs": 153,
+  "ttfbMs": 151,
+  "bytes": 156,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html",
+  "kind": "document",
+  "startRelMs": 8343,
+  "durationMs": 37,
+  "ttfbMs": 36,
+  "bytes": 200,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/v3/fingerprinted/js/m-outer-15a2b40a058ddff1cffdb63779fe3de1.js",
+  "kind": "script",
+  "startRelMs": 8413,
+  "durationMs": 28,
+  "ttfbMs": 27,
+  "bytes": 526,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ },
+ {
+  "path": "/out-4.5.45.js",
+  "kind": "script",
+  "startRelMs": 10593,
+  "durationMs": 28,
+  "ttfbMs": 22,
+  "bytes": 14184,
+  "status": 200,
+  "blocks": "STRUCTURE"
+ }
+]

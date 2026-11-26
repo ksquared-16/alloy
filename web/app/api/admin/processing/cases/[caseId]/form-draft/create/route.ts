@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import {
     createFormFromCaseDraft,
@@ -17,21 +18,69 @@ export const dynamic = "force-dynamic";
  * existing Forms infrastructure. Idempotent — repeat calls return the existing form,
  * never a duplicate. No publish, no public link, no records, no matching.
  */
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { caseId: rawCaseId } = await params;
     const caseId = parseUuidParam(rawCaseId, "caseId");
     if (caseId instanceof NextResponse) return caseId;
 
+    let formNameOverride: string | null = null;
+    let folderId: string | null = null;
+    try {
+        const body = (await request.json()) as { form_name?: unknown; folder_id?: unknown };
+        if (typeof body.form_name === "string" && body.form_name.trim()) {
+            formNameOverride = body.form_name.trim();
+        }
+        // The Forms folder chosen at Save to Forms. Same id shape the folder model mints.
+        if (typeof body.folder_id === "string" && /^[a-z0-9_]{1,64}$/.test(body.folder_id.trim())) {
+            folderId = body.folder_id.trim();
+        }
+    } catch {
+        // Empty body is allowed — create uses stored preview name.
+    }
+
     const supabase = createAdminClient();
 
     try {
+        if (formNameOverride) {
+            const { data: caseRow, error: caseErr } = await supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", ctx.orgId)
+                .eq("id", caseId)
+                .maybeSingle();
+            if (caseErr) throw new Error(caseErr.message);
+            if (!caseRow) return jsonError("Not found", 404);
+            const metadata =
+                caseRow.metadata && typeof caseRow.metadata === "object" && !Array.isArray(caseRow.metadata)
+                    ? (caseRow.metadata as Record<string, unknown>)
+                    : {};
+            const previewRaw = metadata.form_draft_preview;
+            if (previewRaw && typeof previewRaw === "object" && !Array.isArray(previewRaw)) {
+                await supabase
+                    .from("processing_cases")
+                    .update({
+                        metadata: {
+                            ...metadata,
+                            form_draft_preview: {
+                                ...(previewRaw as Record<string, unknown>),
+                                generated_form_name: formNameOverride,
+                            },
+                        },
+                    })
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", caseId);
+            }
+        }
+
         const result = await createFormFromCaseDraft(makeCreateFormDepsFromSupabase(supabase), {
             orgId: ctx.orgId,
             caseId,
+            folderId,
         });
 
         if (!result.ok) {
@@ -43,10 +92,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
             {
                 caseId,
                 form_id: result.formId,
+                form_name: result.formName,
                 form_version_id: result.formVersionId,
                 created_at: result.createdAt,
                 already_created: result.alreadyCreated,
-                builder_path: `/admin/forms/${result.formId}`,
             },
             { status: result.alreadyCreated ? 200 : 201 }
         );

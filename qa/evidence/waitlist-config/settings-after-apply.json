@@ -1,0 +1,13 @@
+{
+  "capturedAt": "2026-09-11T20:00:14.562Z",
+  "summary": null,
+  "publicationStatus": "Changes applied",
+  "offer_spot": [
+    "Spot offered → Move to Enrolling · Update child enrollment status · Complete current work · Complete current work",
+    "No response to offer → Mark needs attention — No response to waitlist offer",
+    "Candidate paused → Update waitlist candidate status: paused"
+  ],
+  "review_waitlist_position": [
+    "Candidate paused → Update waitlist candidate status: paused"
+  ]
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "dwell": 0,
+    "headStart": 0,
+    "postClickUsable": 1044,
+    "cardRequests": 1,
+    "account": "0658832a-48d6-4b80-beae-0b12d573fdf2"
+  },
+  {
+    "dwell": 300,
+    "headStart": 0,
+    "postClickUsable": 611,
+    "cardRequests": 1,
+    "account": "fd000000-0000-4000-8000-0000000c0001"
+  },
+  {
+    "dwell": 800,
+    "headStart": 0,
+    "postClickUsable": 1195,
+    "cardRequests": 2,
+    "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+  },
+  {
+    "dwell": 1500,
+    "headStart": 0,
+    "postClickUsable": 1035,
+    "cardRequests": 2,
+    "account": "fd000000-0000-4000-8000-0000000c0002"
+  },
+  {
+    "dwell": 0,
+    "headStart": 0,
+    "postClickUsable": 7706,
+    "cardRequests": 1,
+    "account": "7796a568-3b5f-4606-80f9-fee2dae2a419"
+  },
+  {
+    "dwell": 300,
+    "headStart": 0,
+    "postClickUsable": 752,
+    "cardRequests": 1,
+    "account": "fcaa839f-6960-4b09-b663-b247b99ea9d9"
+  },
+  {
+    "dwell": 800,
+    "headStart": 0,
+    "postClickUsable": 320,
+    "cardRequests": 1,
+    "account": "fd000000-0000-4000-8000-0000000c0003"
+  },
+  {
+    "dwell": 1500,
+    "headStart": 0,
+    "postClickUsable": 992,
+    "cardRequests": 2,
+    "account": "610a1496-7b96-4d1a-bf49-5cf193b31a6d"
+  }
+]

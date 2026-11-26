@@ -1,0 +1,225 @@
+/**
+ * POS-FP16 — Configuration Discovery acceptance certification (Layers 2→5).
+ *
+ * Proves the exact Enrollment Record fixture is discovered as a governed operating-model proposal —
+ * concept-first, not 112 rows — with the required concept-level outcomes: existing-field matches,
+ * relationships, upload/acknowledgement/signature requirements, static/output classification.
+ *
+ * Contract-level assertions (not one golden snapshot): each boundary is checked for the meaningful
+ * property it must guarantee. Input is the captured fixture geometry run through the real detector +
+ * discovery pipeline — deterministic, no PDF library, no LLM, no I/O.
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import { describe, it, expect } from "vitest";
+
+import { buildLayoutLines } from "@/lib/pos/processingCase/structure/pdfLayoutLines";
+import { detectLayoutStructure } from "@/lib/pos/processingCase/structure/detectLayoutStructure";
+import type { LayoutDocument, LayoutTextItem } from "@/lib/pos/processingCase/structure/pdfLayoutTypes";
+import { buildSemanticModel } from "@/lib/pos/discovery/semanticModel";
+import { discoverConcepts } from "@/lib/pos/discovery/conceptDiscovery";
+import { discoverConfiguration } from "@/lib/pos/discovery/discoverConfiguration";
+
+type GeomItem = { s: string; x: number; y: number; w: number; h: number; fh: number };
+type Geom = { pageCount: number; pages: { page: number; width: number; height: number; items: GeomItem[] }[] };
+
+function fixtureStructure() {
+    const g = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/enrollment-record-8.25.geom.json"), "utf8")) as Geom;
+    const doc: LayoutDocument = {
+        pageCount: g.pageCount,
+        ok: true,
+        reason: null,
+        pages: g.pages.map((p) => ({
+            page: p.page,
+            width: p.width,
+            height: p.height,
+            lines: buildLayoutLines(p.items.map((it): LayoutTextItem => ({ s: it.s, x: it.x, y: it.y, w: it.w, h: it.h, fh: it.fh })), p.page),
+        })),
+    };
+    return detectLayoutStructure(doc);
+}
+
+const structure = fixtureStructure();
+const result = discoverConfiguration({ structure });
+const concepts = result.concepts;
+const proposals = result.proposals;
+const summaryCount = (label: RegExp) => result.summary.find((s) => label.test(s.label))?.count ?? 0;
+const proposalFor = (labelRe: RegExp) => proposals.find((p) => labelRe.test(concepts.find((c) => c.id === p.candidate_id)?.label ?? ""));
+
+describe("Configuration Discovery — Enrollment Record acceptance fixture", () => {
+    it("reviews concepts, not 112 raw questions", () => {
+        // 112 detected questions collapse to a reviewable concept set (relationships + dedup + output copy).
+        expect(concepts.length).toBeLessThan(50);
+        expect(concepts.length).toBeGreaterThan(25);
+    });
+
+    it("produces the operator-facing summary categories", () => {
+        // Labels are operator-facing now ("Alloy already has", not "Existing fields matched"). The
+        // counts are the assertion; the wording belongs to the review, not to discovery's contract.
+        expect(summaryCount(/Alloy already has/)).toBeGreaterThanOrEqual(6);
+        // Five, not three: the care-provider definitions added in Slice 4 mean this school's
+        // "Primary Care Doctor" and "Dentist" fields bind to a physician / dentist relationship
+        // instead of being proposed as new child fields. Different school, same vocabulary.
+        expect(summaryCount(/Relationships found/)).toBe(5);
+        // Three, not two: the page asks for immunization records on or before the first day AND for
+        // updated records after every new immunization. The old fixed lexicon collapsed both into
+        // one "immunization" requirement; they are different obligations with different timing.
+        expect(summaryCount(/Upload requirements found/)).toBe(3);
+        expect(summaryCount(/Acknowledgements found/)).toBe(1);
+        expect(summaryCount(/Signatures found/)).toBe(2);
+        expect(summaryCount(/output copies found/)).toBe(1);
+    });
+
+    it("AUDIT: proposes NO new fields from inference — screening data is form-only", () => {
+        const newFields = proposals.filter((p) => p.disposition === "create_proposed_field");
+        const formOnly = proposals.filter((p) => p.disposition === "form_only_response");
+        // This assertion has moved twice, in the same direction. It was 25 durable new fields, then
+        // 3 after the Slice 4 audit, and it is 0 now: a new field is an affirmative ownership
+        // conclusion, and none of the three survives one.
+        //
+        //   "Date of Enrollment" — an execution date, resolved from the execution.
+        //   "Nickname"          — binds to the settled `preferred_name` field.
+        //   "Preferred Hospital"— unmatched, which is the absence of a conclusion, not one.
+        const newLabels = newFields.map((p) => concepts.find((c) => c.id === p.candidate_id)!.label).sort();
+        expect(newLabels).toEqual([]);
+        const dispositionOf = (re: RegExp) =>
+            proposals.find((p) => re.test(concepts.find((c) => c.id === p.candidate_id)!.label))?.disposition;
+        expect(dispositionOf(/Date of Enrollment/)).toBe("derived_value_system");
+        expect(dispositionOf(/Nickname/)).toBe("reuse_canonical_field");
+        expect(dispositionOf(/Preferred Hospital/)).toBe("held_unknown_owner");
+        // The health-history screening grid is FORM-ONLY, never durable customer_member fields.
+        for (const screening of ["Ear Infections", "Diabetes", "Asthma", "Nosebleeds", "Convulsions/Seizures", "Heart Disease/Defect"]) {
+            expect(formOnly.some((p) => concepts.find((c) => c.id === p.candidate_id)!.label === screening)).toBe(true);
+            expect(newLabels).not.toContain(screening);
+        }
+        // Y/N screening statuses + conditional explanations are form-only.
+        expect(formOnly.some((p) => /health care plan/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
+        expect(formOnly.some((p) => /if yes, please explain/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
+        expect(formOnly.length).toBeGreaterThanOrEqual(18);
+        // The doctor is no longer a proposed FIELD at all — it binds to the physician relationship,
+        // which is a better answer than a health-sensitive field on the child. The sensitivity claim
+        // moves with it: what carries health data now is the person the relationship links.
+        const doctor = proposals.find((p) => /Primary Care Doctor/.test(concepts.find((c) => c.id === p.candidate_id)!.label));
+        expect(doctor?.disposition).toBe("relationship_binding");
+        expect(doctor?.target_relationship_role).toBe("physician");
+    });
+
+    it("matches high-confidence canonical fields to the existing model (no duplicates)", () => {
+        const expectMatch = (labelRe: RegExp, entity: string, key: string) => {
+            const p = proposalFor(labelRe);
+            expect(p?.disposition, `${labelRe} should reuse a canonical field`).toBe("reuse_canonical_field");
+            expect(p?.target_field_source).toEqual(expect.objectContaining({ entity_type: entity, field_key: key }));
+        };
+        // A person's name resolves to the REGISTERED split field, not an unregistered display_name —
+        // this is what the generated form actually builds.
+        expectMatch(/Child's Name/, "child", "child_first_name");
+        expectMatch(/Date of Birth/, "customer_member", "dob");
+        expectMatch(/Allergies/, "customer_member", "allergies");
+        expectMatch(/Best Email Address/, "person", "email");
+        expectMatch(/Best Contact Number/, "person", "phone"); // richer than the label — via concept key
+        expectMatch(/Home Address/, "customer", "address");
+    });
+
+    it("classifies guardians, emergency contacts, and pickups as child-scoped relationships", () => {
+        const rel = proposals.filter((p) => p.disposition === "relationship_binding");
+        const roles = rel.map((p) => p.target_relationship_role).sort();
+        expect(roles).toEqual(["authorized_pickup", "dentist", "emergency_contact", "guardian", "physician"]);
+        // relationship concepts, not flat person fields
+        expect(concepts.filter((c) => c.kind === "relationship_group").every((c) => c.cardinality === "multiple")).toBe(true);
+        // no "Emergency Contact #1 Name" leaked as a scalar field concept
+        expect(concepts.some((c) => c.kind === "scalar_field" && /Emergency Contact #/.test(c.label))).toBe(false);
+    });
+
+    it("recognizes each document-upload requirement the page states, separately", () => {
+        const uploads = proposals.filter((p) => p.disposition === "upload_requirement");
+        expect(uploads.every((p) => p.target_requirement_type === "upload")).toBe(true);
+        const labels = uploads.map((p) => concepts.find((c) => c.id === p.candidate_id)?.label ?? "");
+        expect(labels.some((l) => /immuniz/i.test(l))).toBe(true);
+        expect(labels.some((l) => /care plan/i.test(l))).toBe(true);
+        // The ongoing "bring us updated records" instruction is its own obligation, not a restatement
+        // of the first-day requirement.
+        expect(labels.some((l) => /updated records/i.test(l))).toBe(true);
+        expect(uploads.length).toBe(3);
+    });
+
+    it("recognizes the emergency-authorization acknowledgement", () => {
+        const ack = proposals.find((p) => p.disposition === "acknowledgement");
+        expect(ack?.target_requirement_type).toBe("acknowledgement");
+    });
+
+    it("distinguishes participant signatures from an internal director signature", () => {
+        const sigs = proposals.filter((p) => p.disposition === "signature_requirement");
+        expect(sigs.length).toBe(2);
+        const director = sigs.find((p) => /Director/i.test(concepts.find((c) => c.id === p.candidate_id)?.label ?? ""));
+        const guardian = sigs.find((p) => /Parent\/Guardian/i.test(concepts.find((c) => c.id === p.candidate_id)?.label ?? ""));
+        expect(concepts.find((c) => c.id === director?.candidate_id)?.subject).toBe("internal");
+        expect(concepts.find((c) => c.id === guardian?.candidate_id)?.subject).toBe("person");
+        expect(director?.explanation).toMatch(/internal/i);
+    });
+
+    it("recognizes the classroom copy as an output projection, not participant work", () => {
+        const out = proposals.find((p) => p.disposition === "output_binding");
+        expect(out).toBeTruthy();
+        expect(concepts.find((c) => c.id === out?.candidate_id)?.kind).toBe("output_copy");
+    });
+
+    it("HOLDS a genuine unmatched attribute rather than concluding it is durable truth", () => {
+        // Slice 7 overturns what this test used to assert. "Preferred Hospital" is unmatched, and
+        // unmatched is not an ownership conclusion — it is the absence of one. Alloy no longer
+        // reasons "nothing matched, so make a field"; that is exactly how a routing number became a
+        // customer field.
+        const hospital = proposalFor(/Preferred Hospital/);
+        expect(hospital?.disposition).toBe("held_unknown_owner");
+        expect(hospital?.proposed_field, "a held concept must carry nothing creatable").toBeUndefined();
+        expect(hospital?.ownership_routing?.owner).toBe("HELD_UNKNOWN_OWNER");
+    });
+
+    it("leaves the operator an explicit, single-row way to make it durable", () => {
+        // Held is not a straitjacket. An operator who knows their programme may decide this IS
+        // durable — but it must be one person on one row, never an inference and never a bulk sweep.
+        const hospital = proposalFor(/Preferred Hospital/)!;
+        const create = hospital.alternatives.find((a) => a.disposition === "create_proposed_field");
+        expect(create, "the operator needs a way to resolve a held row").toBeDefined();
+        expect(create!.confidence.signals.join(" ")).toMatch(/Alloy did not conclude this/i);
+        expect(hospital.ownership_routing?.bulkAcceptSafe).toBe(false);
+    });
+
+    it("still auto-creates nothing", () => {
+        expect(proposals.filter((p) => p.disposition === "create_proposed_field").every((p) => p.decision_state === "proposed")).toBe(true);
+    });
+
+    it("captures Y/N status questions and their conditional explanations as concepts", () => {
+        expect(concepts.some((c) => c.kind === "boolean_status" && /health care plan/i.test(c.label))).toBe(true);
+        expect(concepts.filter((c) => c.kind === "conditional_explanation").length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("gives every concept and proposal a stable, lineage-derived id (rerun-safe)", () => {
+        const rerun = discoverConfiguration({ structure });
+        expect(rerun.concepts.map((c) => c.id)).toEqual(concepts.map((c) => c.id));
+        expect(rerun.proposals.map((p) => p.id)).toEqual(proposals.map((p) => p.id));
+        // ids derive from lineage (page:section:slug), never an array index
+        expect(concepts.every((c) => /^\d+:[a-z0-9_]*:/.test(c.id))).toBe(true);
+    });
+
+    it("every proposal is explainable and confidence-banded", () => {
+        expect(proposals.every((p) => p.explanation.length > 10)).toBe(true);
+        expect(proposals.every((p) => ["high", "review", "attention", "unresolved"].includes(p.confidence.band))).toBe(true);
+        expect(proposals.every((p) => p.confidence.signals.length > 0)).toBe(true);
+    });
+});
+
+describe("Configuration Discovery — semantic model boundary", () => {
+    it("does not treat a signature section as a repeated person group", () => {
+        const sem = buildSemanticModel(structure);
+        const sig = sem.sections.find((s) => /Parent\/Guardian Signatures/.test(s.title));
+        expect(sig?.repeated_person).toBe(false);
+        const guardians = sem.sections.find((s) => /^Parent or Guardian #1$/.test(s.title));
+        expect(guardians?.repeated_person).toBe(true);
+    });
+    it("discovers concepts deterministically from the semantic model", () => {
+        const a = discoverConcepts(buildSemanticModel(structure));
+        const b = discoverConcepts(buildSemanticModel(structure));
+        expect(a.map((c) => c.concept_key)).toEqual(b.map((c) => c.concept_key));
+    });
+});

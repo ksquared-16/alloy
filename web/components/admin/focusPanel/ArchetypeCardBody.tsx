@@ -4,9 +4,16 @@ import clsx from "clsx";
 
 import { formatFocusPanelChipLabelDisplay } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 
+import {
+    durableRecordEntityType,
+    durableSubjectTypeFor,
+} from "@/lib/runtime/focus/durableRecordRoute";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+
 import type {
     FocusPanelCardArchetype,
     FocusPanelCardPayload,
+    FocusPanelProfileField,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 const MISSING_VALUE = "—";
@@ -36,7 +43,7 @@ export default function ArchetypeCardBody({ archetype, payload, fallbackBody }: 
                                     !field.value?.trim() && "alloy-os-ucard__profile-value--missing",
                                 )}
                             >
-                                {field.value?.trim() || MISSING_VALUE}
+                                <ProfileFieldValue field={field} />
                             </dd>
                         </div>
                     ))}
@@ -107,4 +114,48 @@ export default function ArchetypeCardBody({ archetype, payload, fallbackBody }: 
         default:
             return fallbackBody ?? null;
     }
+}
+
+/**
+ * A profile value — plain text, or a gesture when the field names another RECORD.
+ *
+ * ── WHY THE GESTURE AND NOT A LINK ──
+ *
+ * `useOperatorRecordFocus` is THE adapter for "the operator pointed at a record, put it in front of
+ * them", and it is the one that knows whether the caller is inside the kernel, above it, or outside
+ * the workspace entirely. An `<a href>` here would be a second entry path — the exact shape that
+ * doctrine names as broken, since a work-unit route is seed-only and a push renders nothing. So the
+ * row states intent and the adapter owns the destination, like every other caller.
+ *
+ * ── AND WHY AN UNRECOGNISED GRAIN RENDERS AS TEXT ──
+ *
+ * `durableSubjectTypeFor` returns null for a grain this build has no composer for. Rendering a
+ * button anyway would give the operator a control that silently does nothing, which is worse than
+ * the plain string it replaced — the string at least never promised.
+ */
+function ProfileFieldValue({ field }: { field: FocusPanelProfileField }) {
+    const focusRecord = useOperatorRecordFocus();
+    const value = field.value?.trim() || MISSING_VALUE;
+
+    const subjectId = (field.record?.subject_id ?? "").trim();
+    const grain = field.record ? durableSubjectTypeFor(field.record.subject_type) : null;
+    if (!grain || !subjectId || !field.value?.trim()) return <>{value}</>;
+
+    return (
+        <button
+            type="button"
+            className="alloy-os-ucard__profile-value-link"
+            data-profile-field-record={grain}
+            data-profile-field-record-id={subjectId}
+            onClick={() => {
+                void focusRecord({
+                    entity_type: durableRecordEntityType(grain),
+                    entity_id: subjectId,
+                    intent: "durable_record",
+                });
+            }}
+        >
+            {value}
+        </button>
+    );
 }

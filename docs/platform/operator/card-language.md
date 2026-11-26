@@ -1,8 +1,15 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Card Language
 
 **Status:** Foundational platform doctrine (June 2026). Defines how every operational answer behaves.
 **Precedes:** the Card Library. **Follows:** [`operational-grammar.md`](./operational-grammar.md).
-**Companions:** [`card-archetypes.md`](./card-archetypes.md) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) · [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md)
+**Companions:** [`universal-card-archetypes.md`](./universal-card-archetypes.md) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) · [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md)
 
 > The Operational Grammar defines **why** Alloy works. The Card Language defines **how** every operational answer behaves. This is the design language every card, surface, module, and future workflow follows. Individual cards are not defined here — only the language they all speak.
 
@@ -70,7 +77,15 @@ Every card supports the same lifecycle and never invents new states: Loading, Co
 
 ## Density System
 
-Cards adapt by density and never change identity: Micro (queue) · Compact (summary) · Standard (work) · Expanded (focused) · Immersive (embedded workspace). One card, multiple densities.
+Cards adapt by density and never change identity: **Micro** (queue) · **Compact** (summary) ·
+**Standard** (work) · **Expanded**. One card, four densities — the runtime enum
+`FocusPanelCardDensity`, owned by [`universal-card-system.md`](./universal-card-system.md).
+
+*Immersive* is not a fifth density: it is the Embedded Workspace interaction model in
+[`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md), and
+`card-composition-system.md` calls the same move `takeover_surface`. A layout document
+persisting "immersive" as a density is discarded by
+`web/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel.ts`.
 
 ---
 
@@ -118,7 +133,7 @@ Rules:
 
 > **Employee clarification:** Employee status is not a Household field. When the context changes to Sarah and Sarah is linked to an Employee entity, the configured surface may include an Employee card. Relationship is derived — never an "Employee = Yes" checkbox as canonical truth.
 
-Architecture freeze: **no additional interaction primitives** should be introduced before card implementation unless a genuine contradiction is discovered.
+> **Card Links (Focus Panel):** Configured in-panel links between cards (e.g. Children → Schedule) are Perspective Changes owned by `FocusPanelCoordination.requestFocus`. Platform helpers live in `focusPanelCardLinks.ts`. They never open a new page, drawer, or workspace — they change the active card inside the same Focus Panel. Surface Builder authors which fields/controls link where.
 
 ### Editing
 
@@ -130,15 +145,15 @@ Editing is always **contextual** — the operator never leaves the operational c
 
 Color communicates **operational meaning, not module identity.** Cards remain visually calm; operational state creates color.
 
-| Color | Meaning |
-|-------|---------|
-| Neutral / Slate | Context, identity |
-| Blue | Financial |
-| Green | Healthy / complete |
-| Amber | Requires attention |
-| Red | Blocked / urgent |
-| Purple | Intelligence |
-| Gray | History |
+The **tokens and their meanings are owned by**
+[`operational-surface-design-system.md`](./operational-surface-design-system.md) §6 (System 5),
+which is what `web/app/globals.css` implements. This document previously carried a second table
+that disagreed with it on two colours — Blue as "Financial" (System 5: metrics/informational) and
+Green as "Healthy / complete" (System 5: active work / primary action). That table is removed
+rather than restated, so there is one palette.
+
+What this document owns is the *principle*, not the values: colour tracks operational state, and
+a calm card earns its colour from what is true of the subject.
 
 ---
 
@@ -158,4 +173,4 @@ Experiences are composed from cards. Cards are composed from operational answers
 
 ## Outcome
 
-This language governs every card in Alloy. The next document, [`card-archetypes.md`](./card-archetypes.md), defines the Card Archetypes that speak this language.
+This language governs every card in Alloy. The next document, [`universal-card-archetypes.md`](./universal-card-archetypes.md), defines the Card Archetypes that speak this language.

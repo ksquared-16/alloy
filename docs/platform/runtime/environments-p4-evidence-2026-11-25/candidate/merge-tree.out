@@ -1,0 +1,22 @@
+16e30900d8ec3462d6cdd9441b0842d3c0c1321f
+.github/workflows/vacilando-tier2.yml
+web/components/admin/focusPanel/FocusPanelCardRenderer.tsx
+web/components/admin/focusPanel/cards/BillingPreviewCard.tsx
+web/components/adminV2/settings/surfaces/QueueRowBuilderV2.tsx
+web/components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx
+web/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel.ts
+web/tests/adminV2/queueRowBuilderV2.test.ts
+
+Auto-merging .github/workflows/vacilando-tier2.yml
+CONFLICT (add/add): Merge conflict in .github/workflows/vacilando-tier2.yml
+Auto-merging web/components/admin/focusPanel/FocusPanelCardRenderer.tsx
+CONFLICT (content): Merge conflict in web/components/admin/focusPanel/FocusPanelCardRenderer.tsx
+CONFLICT (modify/delete): web/components/admin/focusPanel/cards/BillingPreviewCard.tsx deleted in origin/staging and modified in origin/main.  Version origin/main of web/components/admin/focusPanel/cards/BillingPreviewCard.tsx left in tree.
+Auto-merging web/components/adminV2/settings/surfaces/QueueRowBuilderV2.tsx
+CONFLICT (add/add): Merge conflict in web/components/adminV2/settings/surfaces/QueueRowBuilderV2.tsx
+Auto-merging web/components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx
+CONFLICT (content): Merge conflict in web/components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx
+Auto-merging web/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel.ts
+CONFLICT (content): Merge conflict in web/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel.ts
+Auto-merging web/tests/adminV2/queueRowBuilderV2.test.ts
+CONFLICT (add/add): Merge conflict in web/tests/adminV2/queueRowBuilderV2.test.ts

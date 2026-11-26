@@ -70,23 +70,41 @@ describe("Configuration Mode doctrine cleanup", () => {
         expect(detail).toContain("status-detail-open-processes");
     });
 
-    it("Statuses page has queue/workspace without cross-link banner", () => {
+    it("Statuses page redirects into the Data Model Statuses category", () => {
         const page = read("app/adminV2/settings/statuses/page.tsx");
-        expect(page).toContain("StatusesConfigurationPage");
+        expect(page).toContain("dataModelSectionHref");
+        expect(page).toContain('"statuses"');
         expect(page).not.toContain("LifecycleSettingsCrossLinkBanner");
+        expect(read("components/adminV2/settings/statuses/StatusesConfigurationPage.tsx")).toContain(
+            "ConfigurationShell",
+        );
     });
 
-    it("pattern placeholders declare queue/workspace targets for next surfaces", () => {
-        const placeholder = read("components/adminV2/settings/configurationRuntime/ConfigurationPatternPlaceholder.tsx");
-        expect(placeholder).toContain("Context → Queue → Workspace → BOS");
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain('surface="fields"');
-        expect(read("app/adminV2/settings/actions/page.tsx")).toContain('surface="actions"');
-        expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain('surface="user-roles"');
-        expect(read("app/adminV2/settings/communications/page.tsx")).toContain('surface="communications"');
+    it("hybrid settings surfaces use configuration shell instead of rollout placeholders", () => {
+        const shell = read("components/adminV2/settings/configurationRuntime/SettingsConfigurationSurfaceShell.tsx");
+        expect(shell).toContain("ConfigurationContext");
+        expect(shell).toContain("ConfigurationShell");
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
+        // IA-8: the Access workspace has one renderer, and it is the `/organization/access` page.
+        expect(read("app/adminV2/settings/organization/access/page.tsx")).toContain("UsersRolesConfigurationPage");
+        expect(read("app/adminV2/settings/organization/communications/page.tsx")).toContain(
+            "OrganizationCommunicationsPage",
+        );
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
+        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
+        for (const path of [
+            "app/adminV2/settings/fields/page.tsx",
+            "app/adminV2/settings/organization/access/page.tsx",
+            "app/adminV2/settings/organization/communications/page.tsx",
+            "app/adminV2/settings/entities/page.tsx",
+            "app/adminV2/settings/actions/page.tsx",
+        ]) {
+            expect(read(path)).not.toContain("ConfigurationPatternPlaceholder");
+        }
     });
 
     it("workflows documented as diagnostic/future automation surface", () => {
-        const doc = readDoc("docs/sprints/06_2026/configuration_runtime_settings_pattern_rollout.md");
+        const doc = readDoc("docs/sprints/archive/06_2026/configuration_runtime_settings_pattern_rollout.md");
         expect(doc).toMatch(/diagnostic|early automation/i);
         expect(doc).toMatch(/Automation|automation/i);
         expect(doc).not.toMatch(/Workflows.*polished Configuration Mode/i);

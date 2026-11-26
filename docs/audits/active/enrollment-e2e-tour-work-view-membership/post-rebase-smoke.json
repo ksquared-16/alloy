@@ -1,0 +1,80 @@
+{
+  "error": null,
+  "workViews": [
+    {
+      "step": "All",
+      "href": "http://127.0.0.1:3015/workspace/work-unit/all",
+      "hasQ": true,
+      "empty": 0,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "scheduledTour": false,
+      "waitlistTour": true,
+      "sample": "FiltersKKurzman FamilyWaitlist · Tour ScheduledKelly Kurzman · (602) 290-4816Lennon (2y4m) | Wrigley (4m)1d2 children"
+    },
+    {
+      "step": "Tours",
+      "clicked": "Tours1",
+      "href": "http://127.0.0.1:3015/workspace/work-unit/all?work_view_id=new_work_view_5",
+      "hasQ": true,
+      "empty": 0,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "scheduledTour": false,
+      "waitlistTour": true,
+      "sample": "FiltersKKurzman FamilyWaitlist · Tour ScheduledKelly Kurzman · (602) 290-4816Lennon (2y4m) | Wrigley (4m)1d2 children"
+    },
+    {
+      "step": "Waitlist",
+      "clicked": "Waitlist2",
+      "href": "http://127.0.0.1:3015/workspace/work-unit/all?work_view_id=new_work_view_4",
+      "hasQ": true,
+      "empty": 0,
+      "kurzmanFamily": false,
+      "lennon": true,
+      "wrigley": true,
+      "scheduledTour": false,
+      "waitlistTour": false,
+      "sample": "Filters▼Infant1WWrigley Kurzman3/15/2026 (4m) · —4d▼Toddler1LLennon Kurzman4/2/2024 (2y4m) · —4d"
+    },
+    {
+      "step": "All",
+      "clicked": "All1",
+      "href": "http://127.0.0.1:3015/workspace/work-unit/all?work_view_id=new_work_view_6",
+      "hasQ": true,
+      "empty": 0,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "scheduledTour": false,
+      "waitlistTour": true,
+      "sample": "FiltersKKurzman FamilyWaitlist · Tour ScheduledKelly Kurzman · (602) 290-4816Lennon (2y4m) | Wrigley (4m)1d2 children"
+    }
+  ],
+  "automation": {
+    "rows": 2,
+    "amount": "48",
+    "field0": "opportunity_stage",
+    "field1": "site",
+    "bendPine": true,
+    "labels": {
+      "stage": "Select stage…",
+      "campus": "North Campus"
+    }
+  },
+  "focus": {
+    "waitlistTour": true,
+    "lennon": true,
+    "wrigley": true,
+    "scheduledTour": false
+  },
+  "pass": {
+    "all": true,
+    "tours": true,
+    "waitlist": true,
+    "automation": true
+  },
+  "ok": true
+}

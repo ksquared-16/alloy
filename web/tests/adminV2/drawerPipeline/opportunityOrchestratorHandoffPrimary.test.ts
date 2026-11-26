@@ -9,10 +9,6 @@ import { buildDrawerEnrichmentState } from "@/lib/adminV2/drawerPipeline/enrichm
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("opportunity orchestrator handoff on drawer_primary", () => {
-    it("drawer header no longer exposes Open in Orchestrator", () => {
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).not.toContain('data-drawer-action="open_in_orchestrator"');
-    });
 
     it("inquiry right column no longer reserves orchestrator handoff slot", () => {
         const enrichment = buildDrawerEnrichmentState({

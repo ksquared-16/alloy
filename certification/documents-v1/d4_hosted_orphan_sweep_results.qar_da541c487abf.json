@@ -1,0 +1,12 @@
+{
+  "wu1": {
+    "link": 200,
+    "preview_parents": 2,
+    "delete": 200
+  },
+  "-ui": {
+    "link": 200,
+    "preview_parents": 2,
+    "delete": 200
+  }
+}

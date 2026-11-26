@@ -39,7 +39,7 @@ export default function GuttersPage() {
                   <li>Protect your home from water damage</li>
                 </ul>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <GetQuoteButton defaultService="gutters" className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary w-full sm:w-auto !text-white">
+                  <GetQuoteButton className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary w-full sm:w-auto !text-white">
                     Request gutter quote
                   </GetQuoteButton>
                 </div>

@@ -1,6 +1,6 @@
 # Operational Work V1 Phase B — Work Definitions Implementation Plan
 
-**Path:** `docs/sprints/06_2026/operational_work_v1_phase_b_implementation_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_work_v1_phase_b_implementation_plan.md`  
 **Date:** 2026-06-03  
 **Status:** **Planning complete — no code, no migrations**  
 **Scope:** Define how Work Definitions are introduced as configuration/policy that instantiates runtime work through `instantiateWork(...)`.

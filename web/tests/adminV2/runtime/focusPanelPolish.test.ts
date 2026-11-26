@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     buildFocusPanelContextChips,
+    buildFocusPanelContextChipsFromQueuePreviewSeed,
     formatFocusPanelChipLabel,
     formatFocusPanelChipLabelDisplay,
     formatFocusPanelDisplayLabel,
@@ -11,9 +12,9 @@ import {
     resolveFocusPanelMissionDisplay,
     resolveFocusPanelProcessLabel,
     resolveFocusPanelStatusTone,
+    resolveQueuePreviewSeedIdentitySummaryLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import {
-    FOCUS_PANEL_HEADER_BOS_LABEL,
     FOCUS_PANEL_SUPPRESS_HEADER_STAGE_CTA,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelHeaderActions";
 
@@ -76,6 +77,39 @@ describe("focusPanelDisplayLabels", () => {
         expect(chips[0]).toMatchObject({ label: "New Lead", kind: "status", tone: "due" });
         expect(chips[1]).toMatchObject({ label: "Enrollment", kind: "process" });
         expect(chips[2]).toMatchObject({ label: "Downtown Campus", kind: "location" });
+    });
+
+    it("builds seed-backed context chips with the status chip RESERVED, not seeded", () => {
+        const chips = buildFocusPanelContextChipsFromQueuePreviewSeed({
+            title: "Jordan Lee",
+            statusLabel: "New Lead",
+            statusKey: "new_lead",
+            stageLabel: "New Leads",
+            locationLabel: "North Campus",
+        });
+        // Geometry is unchanged — still three chips, status first.
+        expect(chips).toHaveLength(3);
+        expect(chips[0]).toMatchObject({ kind: "status", reserved: true, label: "" });
+        // The seed's own status text must not reach the chip row: it is a different vocabulary
+        // than the owner's, so rendering it guarantees a post-complete correction.
+        expect(chips.map((chip) => chip.label)).toEqual(["", "New Leads", "North Campus"]);
+        expect(chips.some((chip) => chip.label === "New Lead")).toBe(false);
+    });
+
+    it("resolves queue preview seed identity summary from attention/work or contact", () => {
+        expect(
+            resolveQueuePreviewSeedIdentitySummaryLine({
+                title: "Jordan Lee",
+                operTrustHeadline: "Tour follow-up overdue",
+                subtitle: "Sam Parent",
+            }),
+        ).toBe("Tour follow-up overdue");
+        expect(
+            resolveQueuePreviewSeedIdentitySummaryLine({
+                title: "Jordan Lee",
+                subtitle: "Sam Parent",
+            }),
+        ).toBe("Sam Parent");
     });
 
     it("maps status keys to System 5 chip tones", () => {
@@ -146,18 +180,20 @@ describe("Focus Panel header composition guards", () => {
         expect(opportunity).not.toContain("mission={");
     });
 
-    it("BOS header label is BOS with default variant and Manage remains present", () => {
-        expect(FOCUS_PANEL_HEADER_BOS_LABEL).toBe("BOS");
-
+    it("Focus Panel header omits BOS (floating chat owns it) and keeps Manage", () => {
         const header = readSrc("components/admin/focusPanel/OpportunityFocusPanelHeader.tsx");
-        expect(header).toContain("FOCUS_PANEL_HEADER_BOS_LABEL");
-        expect(header).toContain('bosAssistLabel={FOCUS_PANEL_HEADER_BOS_LABEL}');
-        expect(header).toContain('bosActionVariant="default"');
+        expect(header).toContain("hideBos");
+        expect(header).not.toContain("FOCUS_PANEL_HEADER_BOS_LABEL");
+        expect(header).not.toContain("bosAssistLabel=");
         expect(header).toContain("onSubjectManageActionSelect");
         expect(header).toContain("buildSubjectManageMenuFromResolvedActions");
         expect(header).toContain("displayVm.actions.header_menu");
         expect(header).not.toContain("buildRecordManageMenuForEntity");
         expect(header).not.toContain("Duplicate Lead");
+
+        const controls = readSrc("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
+        expect(controls).toContain("hideBos");
+        expect(controls).toContain("BosDrawerAssistCta");
 
         const bos = readSrc("components/admin/drawer/BosDrawerAssistCta.tsx");
         expect(bos).toContain("BosMark");
@@ -171,6 +207,54 @@ describe("Focus Panel header composition guards", () => {
         const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain("--alloy-os-bend-pine");
         expect(css).toContain("alloy-os-focus-panel-mode-switch__tab--active");
+        expect(css).toMatch(/alloy-os-focus-panel-mode-switch__tab--active[\s\S]*font-weight: 600/);
+    });
+
+    it("UniversalCard shared shell uses soft perimeter + layered elevation tokens (no decorative left rails)", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain("--alloy-os-fp-card-border");
+        expect(css).toContain("--alloy-os-fp-card-shadow");
+        expect(css).toContain("--alloy-os-fp-card-shadow-hover");
+        // ~8% stronger perimeter (22% → 30% midnight mix) without changing white cards / shadow.
+        expect(css).toMatch(
+            /--alloy-os-fp-card-border:\s*color-mix\(in srgb, var\(--alloy-os-midnight[^)]*\)\s*30%/,
+        );
+        expect(css).toMatch(/\.alloy-os-ucard\s*\{[^}]*box-shadow:\s*var\(--alloy-os-fp-card-shadow/);
+        expect(css).toMatch(
+            /\.alloy-os-ucard--tier-work,\s*\n\.alloy-os-ucard\[data-card-role="active-work"\]\s*\{\s*\n\s*border-left-width:\s*1px;/,
+        );
+        // What's Next / work cards must not keep Bend Pine accent rails.
+        expect(css).not.toMatch(
+            /\.alloy-os-currentwork\[data-work-card-perspective="summary"\][\s\S]{0,120}border-left:\s*4px\s+solid\s+var\(--alloy-os-bend-pine/,
+        );
+        expect(css).not.toMatch(
+            /data-card-role="active-work"\][\s\S]{0,160}inset\s+2px\s+0\s+0\s+0\s+color-mix\(in\s+srgb,\s*var\(--alloy-os-bend-pine/,
+        );
+    });
+
+    it("What's Next summary adds breath between description, actions, and Still Needed", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain(".alloy-os-currentwork__summary-controls");
+        expect(css).toMatch(
+            /\.alloy-os-currentwork__summary-controls\s*\{[^}]*gap:\s*14px/,
+        );
+        expect(css).toMatch(
+            /\.alloy-os-ucard\[data-universal-card-key="current_work"\] \.alloy-os-ucard__body\s*\{[^}]*padding-top:\s*6px/,
+        );
+    });
+
+    it("queue row shell uses lighter soft-depth tokens (not Focus Panel shadow intensity)", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        const shell = readSrc("lib/presentation/runtime/queueRowCardShell.ts");
+        expect(shell).toContain("alloy-os-queue-row-card");
+        expect(css).toContain(".alloy-os-queue-row-card");
+        expect(css).toContain("--alloy-os-queue-row-shadow");
+        expect(css).toMatch(
+            /\.alloy-os-queue-row-card\s*\{[^}]*box-shadow:\s*var\(--alloy-os-queue-row-shadow/,
+        );
+        // ~30% lighter shade vs Focus Panel card shadow opacities.
+        expect(css).toMatch(/--alloy-os-queue-row-shadow:[\s\S]*?0\.05/);
+        expect(css).toContain("--alloy-os-fp-card-shadow");
     });
 
     it("header identity uses System 5 chip language", () => {
@@ -210,10 +294,66 @@ describe("Enrollment Freeze — depth + overlay polish", () => {
     });
 });
 
+describe("Surface Builder composer chrome", () => {
+    it("keeps remove/configure controls above the drag bar hit target", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__chrome\s*\{[^}]*z-index:\s*8/);
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__drag-bar\s*\{[^}]*z-index:\s*6/);
+        // Drag bar ends before the stable top-right Configure toolbar.
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__drag-bar\s*\{[^}]*right:\s*156px/);
+        expect(css).toContain("alloy-os-fp-composer-cell__toolbar");
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__configure\s*\{[^}]*opacity:\s*0\.78/);
+        const composer = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(composer).toContain("onRemove");
+        expect(composer).toContain("removeArea");
+        expect(composer).toContain("alloy-os-fp-composer-cell__toolbar");
+    });
+
+    it("Linked card host ignores mount-time base reports and clears on dismiss", () => {
+        const host = readSrc("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
+        expect(host).toContain('visibilityByCardKey.get(card) === "linked"');
+        expect(host).toContain("setActiveDepth((prev) => (prev?.card === card ? null : prev))");
+        expect(host).toContain("alloy-os-focus-panel-linked-host");
+        const composer = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(composer).toContain('entry.visibility ?? "visible") === "visible"');
+        expect(composer).toContain("toRemove");
+        expect(composer).toContain("toAdd");
+    });
+
+    it("top-pins elevated cards for all composer depth states (not vertically centered)", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toMatch(
+            /\[data-fp-composer-depth-active="true"\][\s\S]*\.alloy-os-ucard\s*\{[^}]*top:\s*12px/,
+        );
+        expect(css).toContain("alloy-os-focus-panel-linked-host");
+        expect(css).toMatch(
+            /\.alloy-os-focus-panel-linked-host\s*\{[^}]*align-items:\s*start/,
+        );
+        expect(css).not.toMatch(
+            /\.alloy-os-focus-panel-linked-host\s*\{[^}]*place-items:\s*center/,
+        );
+        // Linked host matches Visible Focus Card frost (not a dark modal dim).
+        expect(css).toMatch(
+            /\.alloy-os-focus-panel-linked-host__backdrop\s*\{[^}]*rgba\(255,\s*255,\s*255/,
+        );
+        expect(css).not.toMatch(
+            /\.alloy-os-focus-panel-linked-host__backdrop\s*\{[^}]*alloy-os-midnight/,
+        );
+    });
+
+    it("Assignments work surface uses Focus Card back chrome, not a modal close ✕", () => {
+        const card = readSrc("components/admin/focusPanel/cards/SchedulingCard.tsx");
+        expect(card).not.toContain('data-schedule-close="true"');
+        expect(card).toContain("data-schedule-back");
+        expect(card).toContain("alloy-os-ucard__action--system5");
+    });
+});
+
 describe("Targeted contact editing + depth history (QA)", () => {
     it("Household has per-row edit affordances, not a global Edit contact link", () => {
         const card = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
-        expect(card).toContain("data-household-edit-contact"); // per-row affordance
+        const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
+        expect(summary).toContain("data-household-edit-contact"); // per-row affordance
         expect(card).toContain("setEditingPersonId"); // targeted edit state
         expect(card).not.toContain('data-household-action="edit"'); // global link removed
         expect(card).toContain('requestFocus("children", childId, source)'); // handoff records source
@@ -245,7 +385,8 @@ describe("Targeted contact editing + depth history (QA)", () => {
 describe("Canvas builder mounted in the settings editor (Experience Builder V4)", () => {
     it("FocusPanelSummarySurfaceEditor mounts the canvas-first builder + persists via the existing flow", () => {
         const editor = readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
-        expect(editor).toContain("FocusPanelGridCanvasBuilder"); // V5: the responsive GRID canvas IS the editor
+        expect(editor).toContain("FocusPanelRuntimeComposerCanvas"); // runtime-shaped composer is the editor canvas
+        expect(editor).toContain("FocusPanelVisibilityZones"); // Visible / Linked compact overlays
         expect(editor).not.toContain("FocusPanelRowLayoutBuilder"); // the row-control panel is gone
         expect(editor).toContain("onSelectCard"); // selecting a card on the canvas opens the Inspector
         expect(editor).toContain("readFocusPanelPublishedLayout"); // loads existing metadata
@@ -256,12 +397,25 @@ describe("Canvas builder mounted in the settings editor (Experience Builder V4)"
     });
 
     it("Canvas owns composition (drag + grid span resize); inspector owns behavior", () => {
-        const canvas = readSrc("components/admin/focusPanel/FocusPanelGridCanvasBuilder.tsx");
-        expect(canvas).toContain("data-grid-resize-w"); // right edge → span columns
-        expect(canvas).toContain("data-grid-resize-h"); // bottom edge → span rows (vertical spans)
+        const canvas = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(canvas).toContain("alloy-os-fp-composer-cell__handle--w"); // right edge → span columns
+        expect(canvas).toContain("alloy-os-fp-composer-cell__handle--h"); // bottom edge → span rows
+        expect(canvas).toContain("alloy-os-fp-composer-cell__toolbar"); // stable top-right Configure
+        expect(canvas).toContain("alloy-os-fp-composer-cell__configure");
         expect(canvas).toContain("moveArea"); // drag to move a region (snaps to grid)
         expect(canvas).toContain("resizeArea"); // edge drag resizes the region
         expect(canvas).toContain("onSelectCard"); // click selects → inspector
+        /*
+         * Composition is owned by the EXPLICIT CANDIDATE MODEL now. The canvas used
+         * to import `snapMoveTarget` — a pointer→row→column inference the operator
+         * could not see and six rounds of QA could not make predictable. It
+         * enumerates the legal destinations, draws them, and commits the one the
+         * pointer selected, so the guard is that those three are the same call.
+         */
+        expect(canvas).toContain("enumerateDropCandidates");
+        expect(canvas).toContain("pickDropCandidate");
+        expect(canvas).toContain("applyDropCandidate");
+        expect(canvas).not.toContain("snapMoveTarget");
     });
 });
 

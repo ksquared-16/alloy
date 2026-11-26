@@ -35,7 +35,7 @@ export type FamilyStatusFilter = { kind: "family_status"; status_keys: string[] 
 export type ChildEnrollmentStatusFilter = { kind: "child_enrollment_status"; status_keys: string[] };
 /** opportunities.location_id (default); OCM location fallback for child grain. */
 export type LocationFilter = { kind: "location"; location_ids: string[] };
-/** opportunity_customer_members.desired_program_category_id. */
+/** opportunity_customer_members.program_category_id. */
 export type ProgramFilter = { kind: "program"; program_category_ids: string[] };
 /**
  * opportunity_customer_members.program_room_cohort_key — a TEXT cohort key scoped by

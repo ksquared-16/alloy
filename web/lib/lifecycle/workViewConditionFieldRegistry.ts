@@ -21,7 +21,7 @@
 
 import type { WorkViewFilterOperatorV1 } from "@/lib/lifecycle/workViewsConfigV1";
 
-export type WorkViewConditionFieldGroup = "lead" | "child" | "household" | "operational";
+export type WorkViewConditionFieldGroup = "lead" | "child" | "household" | "operational" | "custom";
 
 export type WorkViewConditionSubject = "opportunity" | "child" | "person" | "record";
 
@@ -34,6 +34,8 @@ export type WorkViewConditionValueKind =
     | "boolean"
     | "date_preset"
     | "text"
+    | "number"
+    | "choice_select"
     | "none";
 
 /** Where the value dropdown sources its options. */
@@ -45,6 +47,8 @@ export type WorkViewConditionOptionSource =
     | { kind: "programs" }
     | { kind: "boolean" }
     | { kind: "date" }
+    | { kind: "inline_choice"; refKey: string }
+    | { kind: "canonical_choice"; optionSetRef: string }
     | { kind: "none" };
 
 export type WorkViewConditionFieldDef = {
@@ -59,6 +63,8 @@ export type WorkViewConditionFieldDef = {
     runtimeField: string;
     /** Whether the runtime evaluator can apply this field. UI hides runtime-unsupported fields. */
     runtimeSupported: boolean;
+    /** Operational predicates vs canonical provider-backed operands. */
+    source?: "operational" | "canonical";
 };
 
 const SELECT_OPERATORS: readonly WorkViewFilterOperatorV1[] = [
@@ -76,7 +82,7 @@ const DATE_OPERATORS: readonly WorkViewFilterOperatorV1[] = ["equals", "date_is"
  * absent — they survive only as legacy aliases (see {@link LEGACY_FIELD_KEY_ALIASES}).
  *
  * Enrollment "Start with current Enrollment needs" set: Stage, Lead Status, Enrollment Status,
- * Campus/School, Program, Room, Desired Start, Needs Attention, Current Work.
+ * Campus/School, Program, Room, Start date, Needs Attention, Current Work.
  */
 export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[] = [
     {
@@ -91,6 +97,7 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         operators: SELECT_OPERATORS,
         runtimeField: "opportunity_stage",
         runtimeSupported: true,
+        source: "operational",
     },
     {
         key: "opportunity_status",
@@ -115,11 +122,25 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         runtimeSupported: true,
     },
     {
+        // Operational Tour fact from active `tour_bookings` (not lifecycle stage). Enables
+        // family-grain Tours Work Views to overlap Waitlist without stage movement.
+        key: "has_active_tour",
+        label: "Has active Tour",
+        group: "operational",
+        subject: "opportunity",
+        valueKind: "boolean",
+        optionSource: { kind: "boolean" },
+        operators: BOOLEAN_OPERATORS,
+        runtimeField: "has_active_tour",
+        runtimeSupported: true,
+        source: "operational",
+    },
+    {
         // Child/OCM enrollment disposition. Options are the FULL configured enrollment status set
         // (`status_definitions` for opportunity_customer_members, org defs unioned with industry
         // defaults) — never a hardcoded subset.
         key: "child_enrollment_status",
-        label: "Enrollment Status",
+        label: "Enrollment Participation",
         group: "child",
         subject: "child",
         valueKind: "status_select",
@@ -152,14 +173,14 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         runtimeSupported: true,
     },
     {
-        key: "desired_start_date",
-        label: "Desired Start",
+        key: "start_date",
+        label: "Start date",
         group: "child",
         subject: "child",
         valueKind: "date_preset",
         optionSource: { kind: "date" },
         operators: DATE_OPERATORS,
-        runtimeField: "desired_start_date",
+        runtimeField: "start_date",
         runtimeSupported: true,
     },
     {
@@ -267,6 +288,7 @@ const GROUP_LABELS: Record<WorkViewConditionFieldGroup, string> = {
     child: "Child",
     household: "Household",
     operational: "Operational",
+    custom: "Custom fields",
 };
 
 const GROUP_ORDER: readonly WorkViewConditionFieldGroup[] = ["lead", "child", "household", "operational"];

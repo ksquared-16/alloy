@@ -3,10 +3,14 @@
  * Raw status keys must never render in operator UI.
  */
 
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import {
     OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL,
+    opportunityDisplayLocationFromRecord,
     opportunityDisplayLocationLabel,
 } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import { effectiveStagesFromInquiryChildren } from "@/lib/process/definitions/enrollment/loadEffectiveEnrollmentStagesByOpportunity";
+import { composeLocationRollup } from "@/lib/process/engine/effectiveProcessPosition";
 
 const KNOWN_CHIP_LABELS: Record<string, string> = {
     new_inquiry: "New Lead",
@@ -158,13 +162,51 @@ export function buildFocusPanelContextLine(labels: Array<string | null | undefin
 
 export type FocusPanelStatusTone = "ready" | "blocked" | "at-risk" | "due" | "done" | "neutral";
 
-export type FocusPanelContextChipKind = "status" | "process" | "location";
+/*
+ * "attention" is what is WAITING on the operator for this record (outstanding work, unread
+ * messages), as opposed to what the record IS (status, process, location). It renders in the same
+ * chip row rather than as a second badge system, because the record header is already the one place
+ * an operator looks to size up a record.
+ */
+export type FocusPanelContextChipKind = "status" | "process" | "location" | "attention";
 
 export type FocusPanelContextChip = {
     label: string;
     kind: FocusPanelContextChipKind;
     tone?: FocusPanelStatusTone;
+    /** Attention chips only — the count behind the label, so consumers never parse it back out. */
+    count?: number;
+    /**
+     * The chip's fact is NOT YET KNOWN, and this chip is holding its place until the owner answers.
+     *
+     * A reserved chip renders the geometry and no value. It is the chip-row equivalent of
+     * `ReservedFocusPanelCell` in the card grid: the configured element is always present, and
+     * readiness decides content — never whether the element exists. UNKNOWN is not a value, so a
+     * reserved chip must never be given a label to display.
+     */
+    reserved?: boolean;
 };
+
+/**
+ * Attention chips for a record: outstanding work and unread messages, kept SEPARATE.
+ *
+ * A combined number cannot be acted on — the two are resolved in different places by different
+ * people. A zero count produces no chip at all: an empty state is the absence of a chip, not a
+ * chip that says nothing is wrong.
+ */
+export function buildFocusPanelAttentionChips(counts: {
+    work?: number | null;
+    unread?: number | null;
+}): FocusPanelContextChip[] {
+    const chips: FocusPanelContextChip[] = [];
+    const work = typeof counts.work === "number" && counts.work > 0 ? counts.work : 0;
+    const unread = typeof counts.unread === "number" && counts.unread > 0 ? counts.unread : 0;
+    if (work > 0) chips.push({ label: `Work: ${work}`, kind: "attention", tone: "due", count: work });
+    if (unread > 0) {
+        chips.push({ label: `Unread: ${unread}`, kind: "attention", tone: "at-risk", count: unread });
+    }
+    return chips;
+}
 
 /** Map raw status keys to System 5 chip tone classes. */
 export function resolveFocusPanelStatusTone(statusKey: string | null | undefined): FocusPanelStatusTone {
@@ -177,11 +219,100 @@ export function resolveFocusPanelStatusTone(statusKey: string | null | undefined
     return "neutral";
 }
 
-/** Location chip when a real site/location is known — skips placeholder copy. */
+/** Location chip when a real site/location is known — skips placeholder copy.
+ * Uses child-site aggregate (with lead inherit) so siblings at South + North surface as multi.
+ * Prefers Effective Process Position location rollup when participant sites diverge.
+ */
 export function resolveFocusPanelLocationChip(record: Record<string, unknown>): string | null {
-    const label = opportunityDisplayLocationLabel(record)?.trim();
+    const fromRow =
+        typeof record._effective_location_rollup_label === "string"
+            ? record._effective_location_rollup_label.trim()
+            : "";
+    if (fromRow) return fromRow;
+
+    const fromChildren = effectiveStagesFromInquiryChildren(record);
+    const locRollup = composeLocationRollup(fromChildren.locationIds);
+    if (locRollup.compactLabel) return locRollup.compactLabel;
+
+    const resolved = opportunityDisplayLocationFromRecord(record);
+    if (resolved.kind === "none") return null;
+    const label = resolved.label?.trim();
     if (!label || label === OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL) return null;
     return label;
+}
+
+/**
+ * Operator-facing Effective Process Position stage rollup for the Focus Panel header.
+ * Derived from participant stages already on the record — never writes stage.
+ */
+export function resolveFocusPanelEffectiveStageChip(record: Record<string, unknown>): string | null {
+    const attached =
+        typeof record._effective_stage_rollup_label === "string"
+            ? record._effective_stage_rollup_label.trim()
+            : "";
+    if (attached) {
+        return formatFocusPanelChipLabel(
+            attached
+                .split(" · ")
+                .map((part) => formatFocusPanelChipLabel(part) ?? part)
+                .join(" · "),
+        );
+    }
+    const derived = effectiveStagesFromInquiryChildren(record);
+    if (!derived.stageRollupLabel) return null;
+    const parts = derived.stageRollupLabel.split(" · ");
+    if (parts.length >= 3 || derived.stageRollupLabel.endsWith("active stages")) {
+        return derived.stageRollupLabel;
+    }
+    return parts.map((p) => formatFocusPanelChipLabel(p) ?? p).join(" · ");
+}
+
+/**
+ * Seed-backed header chips for cold Focus Panel open (queue row → panel).
+ *
+ * THE STATUS CHIP IS RESERVED, NOT SEEDED — and that is the whole point of this function.
+ *
+ * The seed's `statusLabel` comes from the queue row's CONFIGURED `status` display slot, and that
+ * slot is bound per work unit. On `new-leads` it is bound to `queue_row.stage_label`, so what
+ * arrived here was the process STAGE ("Lead") and it was rendered in the chip that means RECORD
+ * STATUS. The owner (the drawer VM's status control, from the authored `status_defs`) then answered
+ * "New Lead" and corrected the chip ~2.9s AFTER the frame was already complete — measured 14/14 on
+ * deployed staging, the only post-complete correction on this header.
+ *
+ * Seeding from the row's status field instead does not fix it: that field carries "New" for the
+ * same record, which is a third spelling and corrects just the same. The row simply has no value
+ * equal to the owner's, so there is nothing here that can honestly fill this chip.
+ *
+ * So it stays UNKNOWN until its owner answers. UNKNOWN IS NOT A VALUE — it is rendered as a
+ * reserved chip that holds the row's geometry and displays nothing, which turns the later arrival
+ * into a FILL (unknown → known) rather than a CORRECTION (known → different known).
+ *
+ * Process and location are unchanged: they are seeded from fields the row does own, and neither was
+ * observed to correct.
+ */
+export function buildFocusPanelContextChipsFromQueuePreviewSeed(
+    seed: OpportunityDrawerQueuePreviewSeed | null | undefined,
+): FocusPanelContextChip[] {
+    if (!seed) return [];
+    return [
+        { label: "", kind: "status", reserved: true },
+        ...buildFocusPanelContextChips({
+            statusLabel: null,
+            statusKey: seed.statusKey ?? null,
+            processLabel: formatFocusPanelDisplayLabel(seed.stageLabel) ?? seed.stageLabel ?? null,
+            locationLabel: seed.locationLabel ?? null,
+        }),
+    ];
+}
+
+/** Header identity summary from queue preview seed — contact, attention, or work context. */
+export function resolveQueuePreviewSeedIdentitySummaryLine(
+    seed: OpportunityDrawerQueuePreviewSeed | null | undefined,
+): string | null {
+    if (!seed) return null;
+    const headline = seed.operTrustHeadline?.trim();
+    if (headline) return headline;
+    return seed.subtitle?.trim() || null;
 }
 
 /** Build deduplicated context chips for the subject identity block. */

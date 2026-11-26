@@ -20,14 +20,27 @@ import type { FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusP
  * widths (`1`, `2`, `"row"`). `narrow` and `medium` therefore both resolve to a
  * single column today. A future finer column base (a 6-unit grid) would let
  * `medium` sit visually between `narrow` and `wide`. See
- * docs/sprints/06_2026/focus-panel-composition-review for the full recommendation.
+ * docs/sprints/archive/06_2026/focus-panel-composition-review for the full recommendation.
  */
 export type FocusPanelCardFootprint = "narrow" | "medium" | "wide" | "full";
 
 export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPanelCardFootprint>> = {
     household: "wide",
     children: "wide",
+    employment: "wide",
+    staff: "wide",
+    // Wide for the same reason `children` is: two columns is what a list of items with a
+    // status each needs before the status wraps under the label.
+    staff_qualifications: "wide",
+    staff_availability: "wide",
+    staff_readiness: "wide",
+    staff_compensation: "wide",
+    attendance: "wide",
+    financials: "wide",
+    health_safety: "wide",
+    scheduling: "wide",
     current_work: "narrow",
+    business_process: "narrow",
     readiness_kpi: "medium",
     tour_summary: "narrow",
     communications: "wide",
@@ -63,17 +76,37 @@ export function footprintToGridSpan(footprint: FocusPanelCardFootprint): FocusPa
     }
 }
 
-/** Lucide icon names — resolved in UniversalCardIcon. */
-export const SYSTEM5_CARD_ICON: Partial<Record<FocusPanelCardKey, string>> = {
+/** Lucide icon names — resolved in UniversalCardIcon (every key must resolve). */
+export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     attention: "AlertCircle",
     current_mission: "Target",
     current_work: "Briefcase",
+    // The journey rail is the card's spine, so it takes the branch glyph, not the briefcase.
+    business_process: "GitBranch",
     required_information: "ClipboardList",
     readiness_kpi: "ShieldCheck",
     health: "HeartPulse",
     tour_summary: "Calendar",
     household: "Home",
     children: "Baby",
+    // The durable child's own identity. Same glyph family as `children` on purpose — same subject
+    // matter, different question (this child, vs this family's children).
+    child_identity: "Baby",
+    employment: "Users",
+    // One employee, not a group — the case chip keeps Users, the person card takes the singular.
+    staff: "User",
+    // The credential glyph, not a person: the subject of this card is the qualification.
+    staff_qualifications: "BadgeCheck",
+    // The clock glyph: the subject is when, not who.
+    staff_availability: "CalendarClock",
+    // Reuses the readiness glyph the platform already associates with the question.
+    staff_readiness: "ShieldCheck",
+    staff_compensation: "DollarSign",
+    attendance: "Clock",
+    financials: "DollarSign",
+    health_safety: "HeartPulse",
+    milestones: "Flag",
+    scheduling: "CalendarDays",
     communications: "MessageSquare",
     documents: "FileText",
     work_launcher: "Rocket",
@@ -109,12 +142,13 @@ export const SYSTEM5_DEFAULT_CARD_ACTIONS: Partial<
     tour_summary: { label: "Schedule tour →", variant: "primary" },
     household: { label: "View household →", variant: "secondary" },
     children: { label: "View children →", variant: "secondary" },
+    scheduling: { label: "Create schedule →", variant: "primary" },
     communications: { label: "View communications →", variant: "secondary" },
     documents: { label: "View documents →", variant: "secondary" },
 };
 
-export function system5IconForCard(key: FocusPanelCardKey): string | null {
-    return SYSTEM5_CARD_ICON[key] ?? null;
+export function system5IconForCard(key: FocusPanelCardKey): string {
+    return SYSTEM5_CARD_ICON[key] ?? "LayoutGrid";
 }
 
 export function system5DefaultActionForCard(

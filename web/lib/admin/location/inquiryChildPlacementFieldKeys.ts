@@ -1,15 +1,14 @@
 /** Canonical inquiry_child OCM field keys for location → program → room cascade. */
 export const INQUIRY_CHILD_PLACEMENT_OCM_KEYS = {
     location_id: "location_id",
-    desired_program_type: "desired_program_type",
-    desired_program_category_id: "desired_program_category_id",
+    program_category_id: "program_category_id",
     program_room_cohort_key: "program_room_cohort_key",
 } as const;
 
 /** create_lead execute payload keys for the same cascade. */
 export const INQUIRY_CHILD_PLACEMENT_CREATE_LEAD_KEYS = {
     location_id: "child_location_id",
-    desired_program_type: "child_program",
+    program_category_id: "child_program",
     program_room_cohort_key: "child_program_room_cohort_key",
 } as const;
 
@@ -18,8 +17,7 @@ export type InquiryChildPlacementRole = "location" | "program" | "room";
 const PLACEMENT_ROLE_BY_FIELD_KEY: Record<string, InquiryChildPlacementRole> = {
     location_id: "location",
     child_location_id: "location",
-    desired_program_type: "program",
-    desired_program_category_id: "program",
+    program_category_id: "program",
     child_program: "program",
     program: "program",
     program_room_cohort_key: "room",
@@ -28,7 +26,7 @@ const PLACEMENT_ROLE_BY_FIELD_KEY: Record<string, InquiryChildPlacementRole> = {
 
 const PLACEMENT_ALIASES: Record<InquiryChildPlacementRole, readonly string[]> = {
     location: ["location_id", "child_location_id"],
-    program: ["desired_program_category_id", "desired_program_type", "child_program", "program"],
+    program: ["program_category_id", "child_program", "program"],
     room: ["program_room_cohort_key", "child_program_room_cohort_key"],
 };
 

@@ -4,10 +4,16 @@
  * Used when builder or legacy child-grain routing enables the lane and the row
  * carries ocmrow:/pcrow: ids or explicit row_grain.
  *
- * @see docs/sprints/06_2026/child_grain_queue_conversion_design.md §7
+ * @see docs/sprints/archive/06_2026/child_grain_queue_conversion_design.md §7
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
+import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
+import { resolveIdentityPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
+import {
+    buildHouseholdChildrenLookup,
+    mergeInquiryChildProfileFromHousehold,
+} from "@/lib/workUnits/queueRowChildProfileMerge";
 import { placementCandidateQueueRowId } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { enrollmentOffersChildQueueRowId } from "@/lib/queues/childGrainEnrollmentQueue";
 import {
@@ -29,9 +35,11 @@ import {
     buildNextBestAction,
     buildWorkSummary,
     resolveBoringCaseStatusLabel,
+    resolveSubjectStatusLabel,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
-import { filterQueueRelevantInquiryChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
+import { filterQueueRelevantInquiryChildren, readInquiryChildrenFromRow } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
+import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 
 export type BuildChildGrainQueueRowContextInput = {
     row: Record<string, unknown>;
@@ -47,26 +55,12 @@ function trimOrNull(raw: unknown): string | null {
     return t || null;
 }
 
-function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
-    const direct = row._inquiry_children;
-    if (Array.isArray(direct) && direct.length) {
-        return direct.filter((x) => x != null && typeof x === "object");
-    }
-    const md = row.metadata;
-    if (md != null && typeof md === "object" && !Array.isArray(md)) {
-        const ic = (md as { inquiry_children?: unknown }).inquiry_children;
-        if (Array.isArray(ic)) {
-            return ic.filter((x) => x != null && typeof x === "object");
-        }
-    }
-    return [];
-}
-
+/** Prefer household `_customer_name` over opportunity title (often primary contact). */
 function resolveCaseDisplayName(row: Record<string, unknown>): string {
     return (
+        trimOrNull(row._customer_name) ??
         trimOrNull(row.title) ??
         trimOrNull(row.name) ??
-        trimOrNull(row._customer_name) ??
         "Case"
     );
 }
@@ -85,13 +79,13 @@ function resolveCaseId(row: Record<string, unknown>): string {
 function buildSubjectPlacementFromInquiryChildRaw(raw: Record<string, unknown>): SubjectPlacementContext | null {
     const location_id = trimOrNull(raw.location_id);
     const location_label = trimOrNull(raw.location_label);
-    const program_key = trimOrNull(raw.desired_program_type);
+    const program_key = trimOrNull(raw.program_key);
     const program_label =
         trimOrNull(raw.desired_program_label) ??
         (program_key ? humanizeSnakeCaseToken(program_key) : null);
     const room_id = trimOrNull(raw.program_room_cohort_key);
     const room_label = trimOrNull(raw.program_room_cohort_label);
-    const schedule_key = trimOrNull(raw.desired_schedule_type);
+    const schedule_key = trimOrNull(raw.schedule_type);
     const schedule_label =
         trimOrNull(raw.desired_schedule_label) ??
         (schedule_key ? humanizeSnakeCaseToken(schedule_key) : null);
@@ -193,7 +187,9 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             subjectId: ocmId,
             displayName: trimOrNull(row._child_display_name) ?? "Child",
             statusKey,
-            statusLabel: statusKey ? humanizeSnakeCaseToken(statusKey) : "—",
+            // Operator-facing label is the child's PROCESS STAGE (retired participation status).
+            // Prefer the true stage_key; fall back to the humanized key only if stage is unknown.
+            statusLabel: resolveChildProcessStageLabel({ stageKey, dispositionKey: statusKey }) ?? resolveSubjectStatusLabel(statusKey),
             stageKey,
         };
     }
@@ -213,7 +209,9 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             subjectId: ocmId,
             displayName: trimOrNull(g.child_display_name) ?? trimOrNull(row._child_display_name) ?? "Child",
             statusKey,
-            statusLabel: statusKey ? humanizeSnakeCaseToken(statusKey) : "—",
+            // Operator-facing label is the child's PROCESS STAGE (retired participation status).
+            // Prefer the true stage_key; fall back to the humanized key only if stage is unknown.
+            statusLabel: resolveChildProcessStageLabel({ stageKey, dispositionKey: statusKey }) ?? resolveSubjectStatusLabel(statusKey),
             stageKey,
         };
     }
@@ -230,7 +228,10 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             if (parts.length >= 3) candidateId = parts[2]!;
         }
         if (!candidateId) return null;
+        // `candidate_status` (active/paused/…) stays INTERNAL — the operator sees the Process Stage
+        // (Waitlist); placement rank/adjustment is supporting context (waitlist_context), not status.
         const statusKey = trimOrNull(row.candidate_status) ?? trimOrNull(row.status) ?? "active";
+        const stageKey = trimOrNull((row as { _queue_lane_stage_key?: unknown })._queue_lane_stage_key) ?? "waitlist";
         return {
             subjectId: candidateId,
             displayName:
@@ -240,8 +241,8 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
                     : null) ??
                 "Child",
             statusKey,
-            statusLabel: humanizeSnakeCaseToken(statusKey),
-            stageKey: trimOrNull((row as { _queue_lane_stage_key?: unknown })._queue_lane_stage_key) ?? "waitlist",
+            statusLabel: resolveChildProcessStageLabel({ stageKey }) ?? resolveSubjectStatusLabel(statusKey),
+            stageKey,
         };
     }
 
@@ -319,8 +320,11 @@ function buildRelatedSubjectsSummary(
             raw && trimOrNull(raw.placement_candidate_id) ? "candidate" : "child";
         const placement = raw ? buildSubjectPlacementFromInquiryChildRaw(raw) : null;
         const subjectLocationId = placement?.location_id ?? (raw ? trimOrNull(raw.location_id) : null);
+        // Sibling summary also shows Process Stage, not the retired participation status.
+        const siblingStageKey = raw ? trimOrNull(raw.stage_key) ?? trimOrNull(raw.enrollment_track_stage_key) : null;
         const statusLabel =
-            child.outcome_status_key ? humanizeSnakeCaseToken(child.outcome_status_key) : "—";
+            resolveChildProcessStageLabel({ stageKey: siblingStageKey, dispositionKey: child.outcome_status_key }) ??
+            resolveSubjectStatusLabel(child.outcome_status_key);
 
         const summary: RelatedSubjectSummary = {
             subject_type: subjectType,
@@ -332,6 +336,9 @@ function buildRelatedSubjectsSummary(
             program_label: placement?.program_label ?? null,
             room_label: placement?.room_label ?? (raw ? trimOrNull(raw.program_room_cohort_label) : null),
             schedule_label: placement?.schedule_label ?? (raw ? trimOrNull(raw.desired_schedule_label) : null),
+            ...(raw
+                ? mergeInquiryChildProfileFromHousehold(raw, buildHouseholdChildrenLookup(row))
+                : {}),
         };
         const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
         out.push(applyRelatedSubjectLocationVisibility(summary, visibility));
@@ -344,7 +351,16 @@ function resolveLifecycleKey(queue: PartialQueueRowContextQueueMeta): string {
     return trimOrNull(queue.lifecycle_key) ?? "enrollment";
 }
 
-function resolveStageLabel(queue: PartialQueueRowContextQueueMeta): string {
+function resolveStageLabel(queue: PartialQueueRowContextQueueMeta, row?: Record<string, unknown>): string {
+    const fromRow =
+        row
+            ? trimOrNull(row.enrollment_track_stage_label)
+                ?? trimOrNull(row._lifecycle_stage_title)
+                ?? trimOrNull(row.stage_label)
+            : null;
+    if (fromRow) return fromRow;
+    const stageKey = trimOrNull(queue.stage_key);
+    if (stageKey) return humanizeSnakeCaseToken(stageKey);
     return queue.label.trim() || queue.key;
 }
 
@@ -352,6 +368,42 @@ function resolveStageKey(queue: PartialQueueRowContextQueueMeta, activeStageKey:
     const fromActive = trimOrNull(activeStageKey);
     if (fromActive) return fromActive;
     return trimOrNull(queue.stage_key) ?? queue.key;
+}
+
+/**
+ * Waitlist ranking context for a candidate-grain row, from the placement waitlist projection.
+ * Presentation-only; undefined when the row carries no projection / no rank. (Variants Phase 5.)
+ */
+function resolveWaitlistContext(
+    row: Record<string, unknown>,
+): {
+    position_label?: string | null;
+    wait_since?: string | null;
+    priority?: number | null;
+    placement_candidate_id?: string | null;
+    can_adjust_placement?: boolean | null;
+} | undefined {
+    const proj = row._placement_waitlist_row;
+    if (proj == null || typeof proj !== "object" || Array.isArray(proj)) return undefined;
+    const p = proj as Record<string, unknown>;
+    const positionLabel = trimOrNull(p.runtime_position_label);
+    const waitSince = trimOrNull(p.wait_since);
+    const candidateId =
+        trimOrNull(p.placement_candidate_id) ?? trimOrNull(row.placement_candidate_id);
+    const priorityV2 = p.placement_priority_v2;
+    const score =
+        priorityV2 != null && typeof priorityV2 === "object" && !Array.isArray(priorityV2)
+            && typeof (priorityV2 as { score?: unknown }).score === "number"
+            ? ((priorityV2 as { score: number }).score)
+            : null;
+    if (!positionLabel && !waitSince && score == null && !candidateId) return undefined;
+    return {
+        position_label: positionLabel,
+        wait_since: waitSince,
+        priority: score,
+        placement_candidate_id: candidateId,
+        can_adjust_placement: Boolean(candidateId),
+    };
 }
 
 /** Whether this row should receive honest child/candidate QueueRowContext. */
@@ -376,7 +428,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
     const stageKey = resolveStageKey(input.queue, active.stageKey);
     const rowStage =
         trimOrNull(row.enrollment_track_stage_label) ??
-        resolveStageLabel(input.queue);
+        resolveStageLabel(input.queue, row);
 
     const caseStatusKey =
         trimOrNull(row.opportunity_status_key) ?? trimOrNull(row.status_key) ?? "open";
@@ -403,6 +455,25 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             : null;
 
     const placement_context = resolvePlacementContext(row, subjectType === "child" ? active.subjectId : null);
+    // Waitlist ranking fields are Placement-owned. Candidate grain always carries the projection;
+    // child-grain Waitlist provisioning now attaches the same `_placement_waitlist_row` shape.
+    const waitlist_context =
+        subjectType === "candidate" || subjectType === "child" ? resolveWaitlistContext(row) : undefined;
+
+    const activeInquiryRaw = readInquiryChildrenFromRow(row).find((entry) => {
+        if (entry == null || typeof entry !== "object" || Array.isArray(entry)) return false;
+        const raw = entry as Record<string, unknown>;
+        const subjectId =
+            trimOrNull(raw.ocm_id) ?? trimOrNull(raw.id) ?? trimOrNull(raw.customer_member_id);
+        return subjectId === active.subjectId;
+    }) as Record<string, unknown> | undefined;
+    const householdLookup = buildHouseholdChildrenLookup(row);
+    const activeProfile = activeInquiryRaw
+        ? mergeInquiryChildProfileFromHousehold(activeInquiryRaw, householdLookup)
+        : null;
+    const subjectImageUrl = activeInquiryRaw
+        ? resolveIdentityPhotoUrlFromRaw(activeInquiryRaw)
+        : null;
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -411,6 +482,8 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             subject_type: subjectType,
             subject_id: active.subjectId,
             display_name: active.displayName,
+            ...(activeProfile ?? {}),
+            ...(subjectImageUrl ? { image_url: subjectImageUrl } : {}),
         },
         row_count: 1,
         row_count_unit:
@@ -446,6 +519,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             stage_focus_key: stageKey,
         },
         ...(placement_context ? { placement_context } : {}),
+        ...(waitlist_context ? { waitlist_context } : {}),
     };
 }
 

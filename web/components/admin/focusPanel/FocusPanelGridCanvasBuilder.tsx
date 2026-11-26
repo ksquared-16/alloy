@@ -34,6 +34,11 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
 
 const ROW_UNIT_PX = 76; // uniform authoring track height (Power-BI-style snap rows)
 
+type NestedSurfaceTarget = {
+    surfaceId: string;
+    surfaceLabel: string;
+};
+
 type Props = {
     initialGrid: FocusPanelGridLayout;
     catalog: { key: FocusPanelCardKey; label: string }[];
@@ -42,11 +47,24 @@ type Props = {
     onChange?: (layout: FocusPanelPublishedLayout) => void;
     onSelectCard?: (key: FocusPanelCardKey) => void;
     selectedCard?: FocusPanelCardKey | null;
+    /** Depth-bound nested surfaces reachable from each canvas card (registry-derived). */
+    nestedSurfaceByCard?: Partial<Record<FocusPanelCardKey, NestedSurfaceTarget>>;
+    /** Drill into a nested surface editor (same path as chip launchers). */
+    onOpenNestedSurface?: (surfaceId: string) => void;
 };
 
 type Ghost = { colStart: number; colSpan: number; rowStart: number; rowSpan: number };
 
-export default function FocusPanelGridCanvasBuilder({ initialGrid, catalog, renderCard, onChange, onSelectCard, selectedCard }: Props) {
+export default function FocusPanelGridCanvasBuilder({
+    initialGrid,
+    catalog,
+    renderCard,
+    onChange,
+    onSelectCard,
+    selectedCard,
+    nestedSurfaceByCard,
+    onOpenNestedSurface,
+}: Props) {
     const [grid, setGrid] = useState<FocusPanelGridLayout>(initialGrid);
     const [ghost, setGhost] = useState<Ghost | null>(null);
     const surfaceRef = useRef<HTMLDivElement>(null);
@@ -199,7 +217,24 @@ export default function FocusPanelGridCanvasBuilder({ initialGrid, catalog, rend
                                 ✕
                             </button>
                         </div>
-                        <div className="alloy-os-grid-builder__body">{renderCard(area.card)}</div>
+                        <div className="alloy-os-grid-builder__body">
+                            {renderCard(area.card)}
+                            {nestedSurfaceByCard?.[area.card] && onOpenNestedSurface ? (
+                                <button
+                                    type="button"
+                                    className="mt-2 flex w-full items-center justify-end gap-1 rounded-md border border-dashed border-alloy-pine/30 bg-alloy-pine/[0.04] px-2 py-1.5 text-[11px] font-medium text-alloy-pine hover:border-alloy-pine/50 hover:bg-alloy-pine/[0.08]"
+                                    data-nested-surface-affordance={area.card}
+                                    data-open-nested-surface={nestedSurfaceByCard[area.card]!.surfaceId}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenNestedSurface(nestedSurfaceByCard[area.card]!.surfaceId);
+                                    }}
+                                >
+                                    Configure expansion →
+                                    <span className="text-alloy-midnight/35">{nestedSurfaceByCard[area.card]!.surfaceLabel}</span>
+                                </button>
+                            ) : null}
+                        </div>
                         <div className="alloy-os-grid-builder__handle alloy-os-grid-builder__handle--w" data-grid-resize-w={area.card} role="separator" aria-label="Span columns" onPointerDown={(e) => startResize(e, area, "w")} />
                         <div className="alloy-os-grid-builder__handle alloy-os-grid-builder__handle--h" data-grid-resize-h={area.card} role="separator" aria-label="Span rows" onPointerDown={(e) => startResize(e, area, "h")} />
                         <div className="alloy-os-grid-builder__handle alloy-os-grid-builder__handle--corner" data-grid-resize-corner={area.card} role="separator" aria-label="Span columns and rows" onPointerDown={(e) => startResize(e, area, "wh")} />

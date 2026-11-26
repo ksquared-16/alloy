@@ -1,0 +1,62 @@
+[
+    {
+        "id": "e1621b05-540e-4bc2-b075-bb95c90d2a26",
+        "verb": "create",
+        "org_id": "6bf6f79c-f7df-4b50-ac32-8f85720bf576",
+        "modality": "required",
+        "standing": "binding",
+        "valid_to": null,
+        "condition": {
+            "type": "staffing_ratio",
+            "max_children_per_staff": 4
+        },
+        "valid_from": "2026-08-01T00:00:00Z",
+        "authored_at": "2026-07-16T22:35:14.349Z",
+        "author_class": "human",
+        "subject_kind": "room",
+        "authority_key": "licensing:staffing-ratio",
+        "lineage_root_id": "e1621b05-540e-4bc2-b075-bb95c90d2a26",
+        "transition_type": null,
+        "supersedes_expectation_id": null
+    },
+    {
+        "id": "bd621a8c-a9c3-4af4-b4ec-1deed3d05946",
+        "verb": "revise",
+        "org_id": "6bf6f79c-f7df-4b50-ac32-8f85720bf576",
+        "modality": "required",
+        "standing": "binding",
+        "valid_to": null,
+        "condition": {
+            "type": "staffing_ratio",
+            "max_children_per_staff": 3
+        },
+        "valid_from": "2026-09-01T00:00:00Z",
+        "authored_at": "2026-07-16T22:35:14.468Z",
+        "author_class": "human",
+        "subject_kind": "room",
+        "authority_key": "licensing:staffing-ratio",
+        "lineage_root_id": "e1621b05-540e-4bc2-b075-bb95c90d2a26",
+        "transition_type": "revision",
+        "supersedes_expectation_id": "e1621b05-540e-4bc2-b075-bb95c90d2a26"
+    },
+    {
+        "id": "076429ba-66d3-4907-8601-e11dca400cf7",
+        "verb": "correct",
+        "org_id": "6bf6f79c-f7df-4b50-ac32-8f85720bf576",
+        "modality": "required",
+        "standing": "binding",
+        "valid_to": null,
+        "condition": {
+            "type": "staffing_ratio",
+            "max_children_per_staff": 5
+        },
+        "valid_from": "2026-09-01T00:00:00Z",
+        "authored_at": "2026-07-16T22:35:14.526Z",
+        "author_class": "human",
+        "subject_kind": "room",
+        "authority_key": "licensing:staffing-ratio",
+        "lineage_root_id": "e1621b05-540e-4bc2-b075-bb95c90d2a26",
+        "transition_type": "correction",
+        "supersedes_expectation_id": "bd621a8c-a9c3-4af4-b4ec-1deed3d05946"
+    }
+]

@@ -14,6 +14,15 @@ const mockOnChildDispositionEntrySpawnWorkIntent = vi.fn();
 const mockInstantiateStageWorkFromTemplate = vi.fn();
 const mockEmitEvent = vi.fn();
 
+vi.mock("@/lib/admin/statusTransitionRules", () => ({
+    /*
+     * The canonical executor validates every governed transition against `status_transition_rules`
+     * (D-BP4). These suites assert destination routing and outcome effects, so policy is permissive
+     * here; the gate has its own cases.
+     */
+    validateStatusTransition: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 vi.mock("@/lib/lifecycle/executeStageOperatingOutcome", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/lifecycle/executeStageOperatingOutcome")>();
     return {
@@ -120,9 +129,21 @@ describe("applyEnrollmentStatusTransitionOutcomeEffects", () => {
         });
     });
 
+    /**
+     * The skip set exists because the manual transition already wrote the STATUS. It never wrote a
+     * stage — and for a child, the stage is the whole position. Skipping `move_to_stage` here left
+     * the child disposition-waitlisted with a placement candidate while its process instance stayed
+     * put: placement membership and process membership recording two halves of one decision.
+     *
+     * The status kinds stay skipped. Only the movement is restored, and only for a child.
+     */
     it("runs executeStageOperatingOutcome with skip flags for manual waitlist transition", async () => {
         mockExecuteStageOperatingOutcome.mockImplementationOnce(async (params) => {
-            expect(params.skipTargetKinds).toEqual(STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS);
+            expect(params.skipTargetKinds).toEqual(
+                STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS.filter((k) => k !== "move_to_stage"),
+            );
+            expect(params.skipTargetKinds).toContain("update_child_enrollment_status");
+            expect(params.skipTargetKinds).not.toContain("move_to_stage");
             expect(params.outcomeKey).toBe("waitlist");
             return {
                 applied_targets: [{ kind: "create_next_work", template_key: "follow_up_waitlist" }],
@@ -230,7 +251,10 @@ describe("executeEnrollmentStatusTransition outcome wiring", () => {
             targetStatusKey: "waitlisted",
             validation: { ok: true, blocking: [], warnings: [], recommendations: [] },
             requiresBypassReason: true,
+            // The executor reads the grain-correct current status from the preflight now.
+            currentStatusKey: "qualified",
             destinationSource: "bp",
+            skippedStageLabels: [],
         });
     });
 

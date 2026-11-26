@@ -32,7 +32,14 @@ describe("resolveOpportunityVmStatusLabel", () => {
         ).toBe("Tour scheduled");
     });
 
-    it("falls back to queue seed when VM not yet applied for target id", () => {
+    it("reports UNKNOWN rather than the queue seed when the VM is not yet applied", () => {
+        /*
+         * This used to return the seed. The seed is the queue row's configured `status` DISPLAY
+         * slot, which is bound per work unit — on `new-leads` it resolves to the process stage —
+         * so returning it answered a STATUS question with whatever that slot happened to hold, and
+         * the owner then corrected the rendered chip after the frame was complete (measured 14/14
+         * on deployed staging). Null here means UNKNOWN and the header reserves the chip.
+         */
         const vm = minimalSettledOpportunityDrawerViewModel({
             entity: { type: "opportunity", id: "opp-other" },
             header: { title: "Opp", subtitle: null, status: { renderAs: "readonly_pill", label: "Other" }, status_can_mutate: false, oper_trust_preview: null },
@@ -43,7 +50,31 @@ describe("resolveOpportunityVmStatusLabel", () => {
                 displayVm: vm,
                 queueSeedStatusLabel: "New lead",
             })
-        ).toBe("New lead");
+        ).toBeNull();
+    });
+
+    it("never returns the seed even when there is no VM at all", () => {
+        expect(
+            resolveOpportunityVmStatusLabel({
+                drawerId: "opp-1",
+                displayVm: null,
+                queueSeedStatusLabel: "Lead",
+            })
+        ).toBeNull();
+    });
+
+    it("reports UNKNOWN, not the seed, when the owner renders the status hidden", () => {
+        const vm = minimalSettledOpportunityDrawerViewModel({
+            entity: { type: "opportunity", id: "opp-1" },
+            header: { title: "Opp", subtitle: null, status: { renderAs: "hidden" }, status_can_mutate: false, oper_trust_preview: null },
+        });
+        expect(
+            resolveOpportunityVmStatusLabel({
+                drawerId: "opp-1",
+                displayVm: vm,
+                queueSeedStatusLabel: "Lead",
+            })
+        ).toBeNull();
     });
 
     it("returns null when hidden and no seed", () => {
@@ -57,42 +88,5 @@ describe("resolveOpportunityVmStatusLabel", () => {
                 displayVm: vm,
             })
         ).toBeNull();
-    });
-});
-
-describe("Opportunity VM status — no flicker contract", () => {
-    it("VmReadonlyStatusPill is pure markup without hooks or async", () => {
-        const pill = read("components/admin/vmDrawer/VmReadonlyStatusPill.tsx");
-        expect(pill).not.toContain("useState");
-        expect(pill).not.toContain("useEffect");
-        expect(pill).not.toContain("useMemo");
-        expect(pill).not.toContain("<select");
-        expect(pill).not.toContain("status-options");
-        expect(pill).toContain("data-vm-readonly-status-pill");
-    });
-
-    it("OpportunityDrawerVmRuntime uses progressive status without statusBadge or prefetch fetch", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("VmProgressiveStatusDropdown");
-        expect(runtime).toContain("resolveOpportunityVmStatusLabel");
-        expect(runtime).toContain("data-drawer-vm-status-rail");
-        expect(runtime).not.toContain("VmOpportunityStatusControl");
-        expect(runtime).not.toContain("statusBadge");
-        expect(runtime).not.toContain("holdPriorPayload");
-        expect(runtime).not.toContain("status-options");
-    });
-
-    it("status renders below title; actions stay in headerTitleRight", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("data-opportunity-drawer-header-status-below-title");
-        expect(runtime).toContain("data-opportunity-drawer-header-title-right");
-        expect(runtime).not.toMatch(
-            /headerTitleRight[\s\S]*VmProgressiveStatusDropdown/
-        );
-    });
-
-    it("VmOpportunityStatusControl is not imported by VM opportunity runtime", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).not.toContain('from "@/components/admin/vmDrawer/VmOpportunityStatusControl"');
     });
 });

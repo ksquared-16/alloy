@@ -1,0 +1,152 @@
+{
+  "frequencies": [
+    {
+      "key": "semiannual",
+      "cells": [
+        "Semi-Annual",
+        "Semi-Annual",
+        "No recurring periods — nothing is billed on a schedule for this frequency",
+        "No billing periods",
+        "Active",
+        "0",
+        ""
+      ],
+      "recurrenceBillable": "false",
+      "previewBillable": "false",
+      "current": null,
+      "next": null,
+      "none": "No billing periods"
+    },
+    {
+      "key": "weekly",
+      "cells": [
+        "Weekly",
+        "—",
+        "Every 7 days from the agreement anchor",
+        "Current · Sep 15–21, 2026 Next · Sep 22–28, 2026",
+        "Active",
+        "1",
+        ""
+      ],
+      "recurrenceBillable": "true",
+      "previewBillable": "true",
+      "current": "Current · Sep 15–21, 2026",
+      "next": "Next · Sep 22–28, 2026",
+      "none": null
+    },
+    {
+      "key": "biweekly",
+      "cells": [
+        "Bi-weekly",
+        "—",
+        "Every 14 days from the agreement anchor",
+        "Current · Sep 15–28, 2026 Next · Sep 29–Oct 12, 2026",
+        "Active",
+        "0",
+        ""
+      ],
+      "recurrenceBillable": "true",
+      "previewBillable": "true",
+      "current": "Current · Sep 15–28, 2026",
+      "next": "Next · Sep 29–Oct 12, 2026",
+      "none": null
+    },
+    {
+      "key": "monthly",
+      "cells": [
+        "Monthly",
+        "—",
+        "Each calendar month",
+        "Current · September 2026 Next · October 2026",
+        "Active",
+        "6",
+        ""
+      ],
+      "recurrenceBillable": "true",
+      "previewBillable": "true",
+      "current": "Current · September 2026",
+      "next": "Next · October 2026",
+      "none": null
+    },
+    {
+      "key": "annual",
+      "cells": [
+        "Annual",
+        "—",
+        "Each year from the agreement anchor",
+        "Current · Sep 1, 2026–Aug 31, 2027 Next · Sep 1, 2027–Aug 31, 2028",
+        "Active",
+        "0",
+        ""
+      ],
+      "recurrenceBillable": "true",
+      "previewBillable": "true",
+      "current": "Current · Sep 1, 2026–Aug 31, 2027",
+      "next": "Next · Sep 1, 2027–Aug 31, 2028",
+      "none": null
+    },
+    {
+      "key": "daily",
+      "cells": [
+        "Daily",
+        "—",
+        "Every day from the agreement anchor",
+        "Current · Sep 21–21, 2026 Next · Sep 22–22, 2026",
+        "Active",
+        "0",
+        ""
+      ],
+      "recurrenceBillable": "true",
+      "previewBillable": "true",
+      "current": "Current · Sep 21–21, 2026",
+      "next": "Next · Sep 22–22, 2026",
+      "none": null
+    },
+    {
+      "key": "hourly",
+      "cells": [
+        "Hourly",
+        "—",
+        "No recurring periods — nothing is billed on a schedule for this frequency",
+        "No billing periods",
+        "Active",
+        "0",
+        ""
+      ],
+      "recurrenceBillable": "false",
+      "previewBillable": "false",
+      "current": null,
+      "next": null,
+      "none": "No billing periods"
+    },
+    {
+      "key": "per_session",
+      "cells": [
+        "Per Session",
+        "—",
+        "No recurring periods — nothing is billed on a schedule for this frequency",
+        "No billing periods",
+        "Active",
+        "0",
+        ""
+      ],
+      "recurrenceBillable": "false",
+      "previewBillable": "false",
+      "current": null,
+      "next": null,
+      "none": "No billing periods"
+    }
+  ],
+  "consequenceWeekly": "Every 7 days from the agreement anchor",
+  "weeklyBillable": "true",
+  "consequenceSemi": "No recurring periods — nothing is billed on a schedule for this frequency",
+  "semiBillable": "false",
+  "dialogFields": {
+    "inputs": [
+      "billing-frequency-name",
+      "billing-frequency-description",
+      "billing-frequency-interval"
+    ],
+    "nativeSelects": 0
+  }
+}

@@ -1,0 +1,16 @@
+started: tenant:config:import verify verify --target local --supabase-url http://127.0.0.1:50513 --org-id 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json --expect-sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513 --baseline /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/census-extras.txt --after-census /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/after-step16-census-extras.txt
+file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+target: local http://127.0.0.1:50513
+org: 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8|active|Firefly Early Learning (firefly-early-learning)
+release config: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/scripts/release/release-config.json; baseline: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/census-extras.txt
+PASS  config_present               27 item(s) present and equal
+PASS  work_units:lead_management   0 lane work unit(s) active
+PASS  baseline_counts              92 table(s) at their baseline
+PASS  import_write_set             business_process_drafts 0 → 1; business_process_revisions 0 → 1; configuration_publications 0 → 1; customer_person_role_types 0 → 6; departments 0 → 1; document_categories 10 → 20; document_type_versions 13 → 26; document_types 13 → 26; field_definitions 0 → 9; field_section_definitions 0 → 1; locations 0 → 20; option_set_items 0 → 10; option_sets 0 → 1; orgs 1 → 2; record_drawer_layouts 0 → 1; role_definitions 6 → 10; role_permission_grants 158 → 318; user_access_profiles 0 → 1; user_roles 0 → 1; workflow_events 0 → 1
+PASS  census_write_set             20 table(s) moved, all in the write set
+PASS  orgs                         5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8|active|Firefly Early Learning; 6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219
+PASS  no_seed_ids                  no f17e0000-… id in any table the import writes
+PASS  memberships                  b7bec213-bfd0-429f-ae76-a476ea380bde|admin
+PASS  auth_users                   1 user(s): b7bec213-bfd0-429f-ae76-a476ea380bde
+✓ all 9 checks passed

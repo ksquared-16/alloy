@@ -1,0 +1,18 @@
+{
+  "purpose": "Does any Work View assign an explicit focus_panel_layout_id? Work Views live at departments.metadata.lifecycle_builder_v1.processes[].work_views_v1 (there is no work_views table).",
+  "requested_by": "lane_faacca6079ad",
+  "mode": "read_only",
+  "combined_query": "SELECT id, org_id, name, metadata -> 'lifecycle_builder_v1' -> 'processes' AS processes FROM public.departments WHERE metadata ? 'lifecycle_builder_v1' LIMIT 20\n",
+  "combined_query_hash": "a2d851fb5f744019667e2a10be96e22685fa6b98cb304cf1649bbfb80711611a",
+  "expected_columns": [
+    "id",
+    "org_id",
+    "name",
+    "processes"
+  ],
+  "needed_fields": [
+    "processes[].work_views_v1[].focus_panel_layout_id",
+    "processes[].work_views_v1[].id",
+    "processes[].work_views_v1[].label"
+  ]
+}

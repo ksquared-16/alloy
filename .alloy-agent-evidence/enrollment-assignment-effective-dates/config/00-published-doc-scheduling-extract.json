@@ -1,0 +1,113 @@
+{
+  "hits": [
+    {
+      "key": "scheduling",
+      "visibility": "linked",
+      "meta": {
+        "key": "scheduling",
+        "span": 2,
+        "tier": "reference",
+        "density": "compact",
+        "gridRow": 0,
+        "instanceId": "scheduling",
+        "visibility": "linked"
+      },
+      "rawKeys": [
+        "id",
+        "key",
+        "rows",
+        "title",
+        "metadata"
+      ]
+    },
+    {
+      "key": "scheduling",
+      "visibility": "linked",
+      "meta": null,
+      "rawKeys": [
+        "key",
+        "span",
+        "tier",
+        "density",
+        "gridRow",
+        "instanceId",
+        "visibility"
+      ]
+    }
+  ],
+  "order": [
+    {
+      "key": "current_work",
+      "visibility": null,
+      "instanceId": null,
+      "title": "What's Next"
+    },
+    {
+      "key": "current_work",
+      "visibility": null,
+      "instanceId": "current_work",
+      "title": null
+    },
+    {
+      "key": "children",
+      "visibility": null,
+      "instanceId": null,
+      "title": "Children"
+    },
+    {
+      "key": "children",
+      "visibility": null,
+      "instanceId": "children",
+      "title": null
+    },
+    {
+      "key": "milestones",
+      "visibility": null,
+      "instanceId": null,
+      "title": "Milestones"
+    },
+    {
+      "key": "milestones",
+      "visibility": null,
+      "instanceId": "milestones",
+      "title": null
+    },
+    {
+      "key": "household",
+      "visibility": null,
+      "instanceId": null,
+      "title": "Household"
+    },
+    {
+      "key": "household",
+      "visibility": null,
+      "instanceId": "household",
+      "title": null
+    },
+    {
+      "key": "billing_preview",
+      "visibility": null,
+      "instanceId": null,
+      "title": "Billing Preview"
+    },
+    {
+      "key": "billing_preview",
+      "visibility": null,
+      "instanceId": "billing_preview",
+      "title": null
+    },
+    {
+      "key": "scheduling",
+      "visibility": "linked",
+      "instanceId": null,
+      "title": "Assignments"
+    },
+    {
+      "key": "scheduling",
+      "visibility": "linked",
+      "instanceId": "scheduling",
+      "title": null
+    }
+  ],
+  "areas": null
+}

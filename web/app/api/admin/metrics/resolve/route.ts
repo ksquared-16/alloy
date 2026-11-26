@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
-import { assertMetricSiteAccess } from "@/lib/metrics/resolveMetricSiteAccess";
+import { assertMetricSiteAccess, assertMetricWorkUnitAccess } from "@/lib/metrics/resolveMetricSiteAccess";
 import {
     parseOipMetricKeys,
     listMetricDefinitions,
@@ -14,6 +13,7 @@ import {
 } from "@/lib/metrics/registry";
 import { parseMetricTimeWindow } from "@/lib/metrics/timeWindow";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
+import { metricResolveApiItemsFromResolved } from "@/lib/metrics/metricResolveApiItem";
 import type { MetricDimensions, MetricResolveMode, MetricTimeWindowKey, OipMetricKey } from "@/lib/metrics/types";
 
 export const dynamic = "force-dynamic";
@@ -79,10 +79,9 @@ function parseDimensions(searchParams: URLSearchParams): MetricDimensions {
  * - status_key, lifecycle_stage: optional dimensions (enrollment metrics)
  */
 export async function GET(request: NextRequest) {
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) {
-        return adminContextFailureResponse(access);
-    }
+    const auth = await requireAnalyticsReadAccess();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
 
     const { searchParams } = new URL(request.url);
     const keysParam = searchParams.get("keys");
@@ -174,6 +173,12 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Site not in access scope" }, { status: 403 });
         }
     }
+    if (workUnitId) {
+        const workUnitAllowed = await assertMetricWorkUnitAccess({ supabase, orgId, scope, workUnitId });
+        if (!workUnitAllowed) {
+            return NextResponse.json({ error: "Work unit not in access scope" }, { status: 403 });
+        }
+    }
 
     const { data: orgSettings } = await supabase
         .from("org_settings")
@@ -200,50 +205,8 @@ export async function GET(request: NextRequest) {
         includeKpi: true,
     });
 
-    const metrics: MetricResolveApiItem[] = resolved.map((row) => {
-        const m = row.metric;
-        const item: MetricResolveApiItem = {
-            metric_key: m.key,
-            label: m.label,
-            format: m.format,
-            value: m.value,
-            formatted_value: m.formattedValue,
-            window: m.window,
-            window_start: m.windowStartIso,
-            window_end: m.windowEndIso,
-            computed_at: m.computedAtIso,
-            resolve_mode: m.resolveMode,
-            sources: m.sources,
-            source_metadata: getMetricSourceMetadata(m.key as OipMetricKey),
-            ...(Object.keys(dimensions).length ? { dimensions } : {}),
-            ...(m.meta ? { meta: m.meta } : {}),
-        };
-
-        if (row.kpi) {
-            item.kpi = {
-                kpi_key: row.kpi.key,
-                label: row.kpi.label,
-                status: row.kpi.status,
-                target_kind: row.kpi.targetKind,
-                target_max_hours: row.kpi.targetMaxHours,
-                target_min_rate: row.kpi.targetMinRate,
-                target_max_count: row.kpi.targetMaxCount,
-                thresholds: {
-                    healthy_max_hours: row.kpi.thresholds.healthyMaxHours,
-                    warning_max_hours: row.kpi.thresholds.warningMaxHours,
-                    healthy_min_rate: row.kpi.thresholds.healthyMinRate,
-                    warning_min_rate: row.kpi.thresholds.warningMinRate,
-                    healthy_max_count: row.kpi.thresholds.healthyMaxCount,
-                    warning_max_count: row.kpi.thresholds.warningMaxCount,
-                },
-                observed_value_hours: row.kpi.observedValueHours,
-                observed_value_rate: row.kpi.observedValueRate,
-                observed_value_count: row.kpi.observedValueCount,
-            };
-        }
-
-        return item;
-    });
+    // One serialisation, shared with the document composer — see metricResolveApiItem.ts.
+    const metrics: MetricResolveApiItem[] = metricResolveApiItemsFromResolved(resolved, dimensions);
 
     return NextResponse.json({
         org_id: orgId,

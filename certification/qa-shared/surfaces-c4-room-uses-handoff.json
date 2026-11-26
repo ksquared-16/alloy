@@ -1,0 +1,328 @@
+{
+ "schema": "surfaces_c4_room_uses_fixture_handoff.v4",
+ "status": "PREPARED LOCALLY \u2014 NOT EXECUTED. The runners verify the installed toolkit's authority v2 through the shared product verifier and no longer fail closed by design; they refuse until the executor issues a v2 authority for THIS candidate. The installed registration pins candidate 47332abe2d47\u2026, so no authority can be issued for this candidate until the platform owner re-pins it (registration_amendments_v4.R1). census is not registered at all (R3). Synthetic evidence only; no live proof.",
+ "objective": "OPWORK_FAACCA6079AD_SPRINT_6E76007E732B c4",
+ "why": "c4 needs a deployed read-only observation of Add Assignment with a room whose configured space_uses decides the use. QA Shared has one category and two unconfigured, unmarked rooms (census gar_0cf3a246e1346b, 2026-10-30T17:06:16Z), so the derived use cannot be distinguished there today. Firefly Bears was proposed and WITHDRAWN: Firefly 93667019-bd28-49b5-a688-acc9bb1e0a19 is FORBIDDEN_QA_ORG_IDS (certified operating tenant). Its prior-state snapshot (gar_67a1264b377290, sha256 220485b1\u2026) is retained as evidence only.",
+ "fixture": {
+  "org": "qa_shared 4acc9386-c485-486f-aa1f-05d83499d142",
+  "site": "qa_north 21c9be10-f6e9-4048-ab4c-939ddbe0f0b7 (permanent structure, never created here)",
+  "namespace": "ac000000-",
+  "category": {
+   "id": "ac000000-0000-4000-8000-000000000301",
+   "key": "qa_surfaces_room_use",
+   "subject_types": [
+    "child"
+   ]
+  },
+  "room": {
+   "id": "ac000000-0000-4000-8000-000000000311",
+   "unit_role": "operational_group",
+   "metadata": {
+    "space_uses": [
+     "ac000000-0000-4000-8000-000000000301"
+    ],
+    "qa_fixture": "surfaces_c4_room_uses",
+    "qa_run_id": "<qar_\u2026>"
+   }
+  },
+  "untouched": [
+   "81a903e6-00fe-429b-bd2f-3314ae0aa2dc Room N 584637",
+   "1aa06a04-088f-4dd7-be7c-0d023b134166 Room S 584637"
+  ]
+ },
+ "new_reconciliations": [
+  {
+   "key": "qa_surfaces_room_uses_fixture_ensure",
+   "description": "Seed the Surfaces c4 room-Uses fixture (one ac000000- child category + one QA North classroom whose space_uses names it) in the frozen QA Shared org for the open surfaces_c4 run.",
+   "runner": "dev:qa:surfaces-room-uses-fixture-ensure",
+   "runner_path": "web/scripts/qaSurfacesRoomUsesFixtureEnsure.mjs",
+   "runner_sha256": "e8c95ea7cd0b9622f28c1a6e41111df2734b39d0e113e177f94f60dbd1482319",
+   "fixture_path": "certification/fixtures/qa-surfaces-room-uses-ensure.sql",
+   "fixture_sha256": "95a4906215c04c121c3cbf4bd2ae281e0d06f3365d155fe0ad72f8cca476c139",
+   "environments": [
+    "staging"
+   ],
+   "supportsDryRun": false,
+   "frozen_context": {
+    "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+   },
+   "fixture_safety": "qa_surfaces_room_uses",
+   "qa_plan": "surfaces_c4",
+   "purpose": "surfaces_c4_room_uses_fixture",
+   "apply_env": {
+    "DRY_RUN": "0",
+    "CERT_FIXTURE_APPLY": "1"
+   },
+   "result_shape": [
+    "seeded",
+    "failed"
+   ],
+   "refuses": [
+    "outside QA Shared / without a run id",
+    "QA North absent (never creates structure)",
+    "another run's fixture (lease)",
+    "any assignment referencing the fixture",
+    "any row referencing either fixture row through any catalog FK (reset cap)"
+   ]
+  },
+  {
+   "key": "qa_surfaces_room_uses_fixture_reset",
+   "description": "Reset the Surfaces c4 room-Uses fixture (exactly its two ac000000- rows) for the open surfaces_c4 run in the frozen QA Shared org.",
+   "runner": "dev:qa:surfaces-room-uses-fixture-reset",
+   "runner_path": "web/scripts/qaSurfacesRoomUsesFixtureReset.mjs",
+   "runner_sha256": "c11caa62e901ac1c615a90e2deb27e9162743fc206ccdb0b17de26d0a6a1ade3",
+   "fixture_path": "certification/fixtures/qa-surfaces-room-uses-reset.sql",
+   "fixture_sha256": "7fc6f68a588024c946717589050666e6e91fe20c8b71fcce2469d9ef6bb2c349",
+   "environments": [
+    "staging"
+   ],
+   "supportsDryRun": false,
+   "frozen_context": {
+    "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+   },
+   "fixture_safety": "qa_surfaces_room_uses",
+   "qa_plan": "surfaces_c4",
+   "purpose": "surfaces_c4_room_uses_fixture",
+   "apply_env": {
+    "DRY_RUN": "0",
+    "CERT_FIXTURE_APPLY": "1"
+   },
+   "result_shape": [
+    "reset",
+    "failed"
+   ],
+   "refuses": [
+    "outside QA Shared / without a run id",
+    "another run's fixture (lease)",
+    "any assignment referencing the fixture",
+    "any row referencing either fixture row through any catalog FK (reset cap)"
+   ]
+  }
+ ],
+ "census": {
+  "path": "certification/qa-shared/surfaces-room-uses-census.sql",
+  "sha256": "01aafe34da218db47f3bc82d4e0b351552f7e150ad21deb7ca7da68a8ab6a8a3",
+  "run": "before ensure, after ensure, after reset (database.read_census, alloy_deployed_primary)"
+ },
+ "proposed_plan": {
+  "key": "surfaces_c4 (A741 to register; or an owner-approved extension of an existing plan)",
+  "orgs": [
+   "qa_shared"
+  ],
+  "personas": {
+   "observer": "QA Shared persona with schedule read and Add Assignment open, saves blocked by the read-only probe (route-level write abort)"
+  },
+  "cleanup": "zero_residue (both ac000000- rows absent after reset; unmarked-room hashes and non-fixture category count unchanged)",
+  "exclusivity": "bp_v2 is aggregate_exclusive on QA Shared: schedule outside any bp_v2 run window"
+ },
+ "hosted_approval_scope": [
+  "environment.qa_run_open on alloy_staging_web with hosted_qa_authority declared",
+  "ensure (2 inserts) + reset (2 exact-id deletes) in QA Shared only",
+  "read-only census x3",
+  "read-only observation: QA North child -> Add Assignment -> fixture room -> record derived use -> Cancel; ZERO saves"
+ ],
+ "deployed_vs_isolated": {
+  "proven_isolated": "room-derived use rule: web/tests/businessProcesses/assignmentUseFromRoom.test.tsx (14) and web/tests/operationalAssignments/assignmentUseResolution.test.ts",
+  "still_needs_deployed": "the c4 observation itself"
+ },
+ "closure_simplification_for_shared_owner": "After amend gar_b678292f1feaf9 (c6), this observation sprint has a REAL promotion path (checkpoint ick_993874ea3a18, candidate 89558974a70f). The generic observation-only sprintClosureState rule proposed earlier is NOT needed for it; withdraw that as a requirement from this lane. Closure = c6 promotion verified + c4 evidenced + slice siteless-case-assignments (005a78d9d, superseded by the integrated slice) ABANDONED by the operator.",
+ "pre_existing_reds_not_ours": "web/tests/qa/sharedQaInfrastructure.test.ts: 10 fail identically at the lane base 317eafa5b (Documents authz fixture/census pins). RESOLVED on current staging 8ef45da54 by 625959cc0 (re-pin to staging bytes): on staging + this fixture manifest the suite is 35/35. They remain red on the lane branch only because the lane is 127 commits behind; they are not carried by the clean-base candidate.",
+ "superseded_pins_v1": {
+  "source_commit": "431843e1299e1a252a85cfd95bb42dd02989688a",
+  "ensure_runner": "5ed1d1b7fed0122ca4f3acfea13518bc3d1d7627b9a06065f707913b04da3cac",
+  "reset_runner": "ffa6bce0a5d4782c5e004947f22c9d8e705e2d34a0864b297cf3c58b75daef75",
+  "ensure_fixture": "ea123fac5e9fd87cc2c9a75b92f608a0b994c0c952bac3cd0b1f3d930d341973",
+  "reset_fixture": "89ffe11e575d5e9d77ab4dd03ee7583c9804eab319e38c84ccfede2b9aa069dd",
+  "why_superseded": "v1 ensure deleted and recreated ANOTHER run's live fixture (no lease check); neither file capped cascades (60 catalog FKs reference locations/operational_assignment_types, several ON DELETE CASCADE/SET NULL); runners applied without one transaction; no npm runner scripts existed, so `npm run <runner>` could not start."
+ },
+ "registration_packet_a741": {
+  "owner": "A741 (platform / Vacilando toolkit). Nothing below is filed by this lane.",
+  "reconciliation_registry": "lib/reconciliation-registry.mjs: add the two entries in new_reconciliations verbatim (registry shape of qa_authz_fixture_ensure/reset; drop the informational `refuses` arrays).",
+  "fixture_safety_profile": {
+   "file": "lib/hosted-fixture-safety.mjs FIXTURE_SAFETY_PROFILES",
+   "key": "qa_surfaces_room_uses",
+   "value": {
+    "idPrefix": "ac000000-",
+    "ownership": {},
+    "requireReplicaWindow": false
+   },
+   "why": "REQUIRED: under the existing qa_authz_vendors profile (aa000000-) the installed toolkit's auditHostedFixture/hostedFixtureVerdict REFUSES both files ('a delete is not fixture-scoped'); under this profile both pass (2/2 deletes fixture-scoped). Measured 2026-10-30 against toolkit 20261030-bc7d50c681cb."
+  },
+  "qa_plan": {
+   "file": "lib/qa-plan-registry.mjs QA_PLANS",
+   "key": "surfaces_c4",
+   "orgs": [
+    "qa_shared"
+   ],
+   "personas": {
+    "observer": "qa_shared, seeded read role with schedule read (Add Assignment opens; route-level write abort; zero saves)"
+   },
+   "aggregate_exclusive": false,
+   "cleanup": "ZERO_RESIDUE",
+   "fixture_reconciliations": {
+    "ensure": "qa_surfaces_room_uses_fixture_ensure",
+    "reset": "qa_surfaces_room_uses_fixture_reset"
+   },
+   "residue_census": {
+    "path": "certification/qa-shared/surfaces-room-uses-census.sql",
+    "query_sha256": "01aafe34da218db47f3bc82d4e0b351552f7e150ad21deb7ca7da68a8ab6a8a3",
+    "note": "data rows (fixture_rows / unmarked_rooms_untouched / org_categories), not `~ true` checks; A741 decides whether to add check rows or bind it as evidence"
+   },
+   "exclusivity_note": "bp_v2 is aggregate_exclusive on QA Shared; schedule outside any bp_v2 run window",
+   "alternative": "an owner-approved extension of an existing plan instead of a new key"
+  },
+  "lease_semantics": {
+   "qa_run_lease": "QA_RUN_LEASE default 4h, max 12h (lib/qa-run-ledger.mjs); expiry ABANDONS, it does not release",
+   "fixture_owner": "locations.metadata.qa_run_id of the fixture room = the ledger's OPEN run id injected as QA_RUN_ID",
+   "ensure": "refuses when the room exists under a different run id",
+   "reset": "refuses when the room exists under a different run id",
+   "open_gap_for_owner": "an ABANDONED run's fixture can only be reset with that run's id, but the preflight injects QA_RUN_ID only from an OPEN run, so no governed path resets it today. Recovery = re-open/recover the abandoned run (its id) or an owner-approved recovery reconciliation. Not solved here by design: widening reset to 'any run' would break the lease."
+  },
+  "hosted_preconditions": [
+   "HOSTED_QA_ACTIVATION RUN stage for surfaces_c4 (no-send guard serving + plan gate)",
+   "fixture/runner bytes present in the canonical checkout the trusted host runs from (i.e. after this slice is promoted to staging)",
+   "environment.qa_run_open on alloy_staging_web with hosted_qa_authority declared"
+  ]
+ },
+ "synthetic_evidence_2026_10_30": {
+  "where": "local shared cert stack (alloy-cert, 127.0.0.1:54422), stand-in QA Shared org + QA North seeded INSIDE each transaction; every scenario ended in ROLLBACK or an aborted transaction; residue after all runs: 0 org, 0 location, 0 program-category rows",
+  "scenarios": {
+   "s1 ensure \u2192 re-ensure same run \u2192 reset": "2 rows with space_uses/qa_run_id/qa_fixture as specified; idempotent; reset to 0; org locations 1\u21922\u21922\u21921",
+   "s2 ensure run A, ensure run B": "refused: belongs to another QA run",
+   "s3 ensure run A, reset run B": "refused: belongs to another QA run",
+   "s4 ensure, a location_program_categories row (ON DELETE CASCADE) on the room, reset": "refused: reset cap, 1 row in location_program_categories",
+   "s5 same, re-ensure": "refused: reset cap",
+   "s6 org = Firefly": "refused: QA Shared only",
+   "s7 census before/after ensure/after reset": "executes on the real schema; fixture_rows absent \u2192 present (owner, uses) \u2192 absent; 0 assignments referencing"
+  },
+  "harness": "psess_claude_f73cf76a8697/synthetic/*.sql (seat session directory, not committed)"
+ },
+ "superseded_pins_v2": {
+  "source_commit": "df69c47b96d5",
+  "ensure_runner": "814934964a32c5207fe4816234b12359c7d2881105669cb6e0dda0625585432f",
+  "reset_runner": "439b9a822c880fbb9df8b0ff02eaed07498c25ab47d46f2754a913b2485da1bd",
+  "why_superseded": "v2 runners loaded dotenv, took QA_RUN_ID on syntax alone and connected to any supplied DATABASE_URL without executor-issued authority (incident: direct psql against shared alloy-cert under a live hold)."
+ },
+ "child_guard": {
+  "modules": {
+   "web/scripts/qa/isolatedFixtureAuthorityV2.mjs": "bf6e405fcaf3a158842ed33732c0e5af8bae4119c3404f7f50e94aa0933e3876 (git blob 20f04adeb14be4667e4415cccd25e19fadf71881 \u2014 byte-identical to the Enrollment sprint 80eb74466 and the Financials sprint 1b8d6e2b1)",
+   "web/scripts/qa/surfacesFixtureAuthority.mjs": "e690ef101bb54d044f11c9d650bac94b5f24a16ab9595e2d599ad97d99d32a2e",
+   "web/scripts/qa/surfacesRoomUsesFixtureRunner.mjs": "321e614439faeb4349386039b24b31baba18f395f3288ec499e8892e33876e37",
+   "web/tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json": "c028b885672509e5f28e30b12f0cf3f2128bba92d45999002daad6894cb94d4c (toolkit eeaa6dac6860 vectors, vendored)"
+  },
+  "pattern": "ADOPTS the shared product restatement of toolkit authority v2 (verifyIsolatedFixtureAuthorityV2) \u2014 no second restatement. Surfaces adds only program facts after it.",
+  "order": "1\u201310 shared v2 (store root from passwd home \u2192 authority by real path \u2192 schema v2, v1 = org_unbound \u2192 live in_flight request naming these bytes \u2192 window \u2192 exact binding incl. npm script, script body digest, HEAD \u2192 fixture_org = env = registry {qa_shared, persona} \u2192 database identity vs DATABASE_URL with the child env as client env \u2192 hold disposition re-read \u2192 PostgREST origin) \u2192 11 mutating \u2192 12 SQL pinned on disk and at candidate \u2192 13 executor QA-run ledger OPEN/unexpired/local/environment and persona org qa_shared \u2192 14 never alloy-cert. Then the CONNECTION GATE (runAttested): 1\u201314 again plus verifyConnectionTarget on the frozen final URL and the built psql env, and psql receives exactly that copy. No env file, no client, no connection before 1\u201314.",
+  "removed": "fixture_authority_target_unbound (the v1-era fail-closed), the CERT_FIXTURE_APPLY/DRY_RUN arming (the executor's child env never sets it, so every authorized run refused apply_not_armed), and the post-verification URL rewrite (6543\u21925432, pgbouncer dropped) plus psql inheriting the whole process env (INC-A83E-03 shape)."
+ },
+ "registration_requirements_v3": {
+  "hosted_reconciliation_path": "lib/trusted-host-reconciliation.mjs spawns `npm run <runner>` and issues NO operation authority. As the reconciliation entries stand, the runners refuse with fixture_authority_absent. Either A741 issues the isolated authority (and the fields below) on that path, or the fixture is registered ONLY through the isolated executor.",
+  "certification_fixture_registry": "lib/certification-fixture.mjs: two qa_bound definitions surfaces_room_uses_ensure (npm_script dev:qa:surfaces-room-uses-fixture-ensure, operations.ensure {args:[], mutating:true}) and surfaces_room_uses_reset (dev:qa:surfaces-room-uses-fixture-reset, operations.reset {args:[], mutating:true, reset:true}), suite 'surfaces', fixture_org PERSONA, reset_limit 2.",
+  "authority_record_fields_missing": {
+   "database_identity": "a credential-free identity (host:port/database) of the database the executor injects, bound to environment_id, so the child can prove DATABASE_URL is that environment's. Absent from vacilando.isolated_fixture_authority.v1 \u2192 refused (fixture_authority_target_unbound).",
+   "target_hold_disposition": "the executor's measured hold state for the target (and the lane) at issue time, e.g. {state: 'clear', measured_at, hold_ref}. No hold field exists in the record or in any toolkit store the child can read \u2192 refused (same code)."
+  },
+  "plan_and_profile": "unchanged from v2: qa_plan surfaces_c4 (persona observer on qa_shared) and the ac000000- fixture safety profile qa_surfaces_room_uses.",
+  "limits": "The child guard governs only these runners. It cannot mechanically stop a provider seat that holds credentials from running SQL directly (the incident shape); the connectivity/credential boundary is the platform owner's. Executor and child share an OS user: a same-user process rewriting the executor's store is out of reach. A narrative hold is not enforced by this guard."
+ },
+ "installed_contract_measured_2026_10_31": {
+  "toolkit": "20261031-eeaa6dac6860 (eeaa6dac68600dee8862962decd42b60169523b9)",
+  "file": "lib/certification-fixture.mjs surfaces_room_uses_ensure / surfaces_room_uses_reset",
+  "authority_contract": "v2",
+  "candidate_pin": "47332abe2d47581b3e9c81ee809b28d4881316da",
+  "ensure": {
+   "npm_script": "dev:qa:surfaces-room-uses-fixture-ensure",
+   "script_sha256": "d090b5fe0b0f590914f9b56250b1d9e04ca47d154257e9900abff0862102fc91",
+   "sql_sha256": "95a4906215c04c121c3cbf4bd2ae281e0d06f3365d155fe0ad72f8cca476c139",
+   "operations": {
+    "ensure": {
+     "args": [],
+     "mutating": true
+    }
+   }
+  },
+  "reset": {
+   "npm_script": "dev:qa:surfaces-room-uses-fixture-reset",
+   "script_sha256": "362d61b3641fc56a40a9ad2ed9221af9b10f49878add7bcc2b21e54dad574fc9",
+   "sql_sha256": "7fc6f68a588024c946717589050666e6e91fe20c8b71fcce2469d9ef6bb2c349",
+   "operations": {
+    "reset": {
+     "args": [],
+     "mutating": true
+    }
+   }
+  },
+  "fixture_org": "PERSONA",
+  "required_org_key": "qa_shared",
+  "reserved_namespace": "surfaces-cert.alloy.invalid",
+  "not_registered": [
+   "reset:true / reset_limit (the receipt does not certify a bounded reset)",
+   "any census operation"
+  ],
+  "pins_vs_this_candidate": "script bodies and SQL bytes UNCHANGED (match); candidate pin does NOT match (new commit) \u2192 executor refuses isolated_fixture_candidate_not_pinned until R1"
+ },
+ "output_contract": {
+  "reset": "reset namespace=surfaces-cert.alloy.invalid removed=<n>, n = sum of psql DELETE tags over exactly two statements, n <= 2; otherwise reset_unbounded / reset_unreported and exit 1",
+  "census": "census count=<n> (exactly one line; any write tag = census_wrote); n = ac000000- rows in the two fixture tables + assignments referencing either fixture row, QA Shared only; 2 after ensure, 0 after reset",
+  "ensure": "exactly 2 INSERT, two DELETE statements removing <= 2 of this run's rows, no UPDATE; otherwise ensure_unbounded",
+  "all": "\u2713/\u2717 check lines, then one JSON line (org, run, request, candidate, environment, database identity digest, hold revision \u2014 never a URL or secret)"
+ },
+ "registration_amendments_v4": {
+  "owner": "the existing Financials/Vacilando platform owner of lib/certification-fixture.mjs. Nothing here is filed by this lane; nothing here broadens the approved non-SQL successor's scope.",
+  "R1_required_for_any_execution": {
+   "file": "lib/certification-fixture.mjs",
+   "change": "SURFACES_ROOM_USES_CANDIDATE = <the commit that adds this handoff v4 (git log -1 -- certification/qa-shared/surfaces-c4-room-uses-handoff.json)>",
+   "unchanged": "both script_sha256 and both sql pins"
+  },
+  "R2_optional_bounded_reset_receipt": {
+   "surfaces_room_uses_reset": {
+    "reset_limit": 2,
+    "operations": {
+     "reset": {
+      "args": [],
+      "mutating": true,
+      "reset": true
+     }
+    }
+   }
+  },
+  "R3_census_registration": {
+   "surfaces_room_uses_census": {
+    "fixture": "surfaces_room_uses_census",
+    "suite": "surfaces",
+    "qa_bound": true,
+    "npm_script": "dev:qa:surfaces-room-uses-fixture-census",
+    "reserved_namespace": "surfaces-cert.alloy.invalid",
+    "fixture_org": "PERSONA",
+    "required_org_key": "qa_shared",
+    "authority_contract": "v2",
+    "pins": {
+     "candidate_sha": "<same as R1>",
+     "script_sha256": "a0a6aa03095a87730b37b07a6d7208250e31a91dfd45ef16991a04aba5cae645",
+     "sql": {
+      "path": "certification/fixtures/qa-surfaces-room-uses-census.sql",
+      "sha256": "6d35ea1c8668a7e923f2b534285b607b03707cfc1941e773e061e86e1ff91a80"
+     }
+    },
+    "operations": {
+     "census": {
+      "args": [],
+      "mutating": false,
+      "census": true
+     }
+    }
+   },
+   "until_registered": "the executor issues no authority for it, so the product program refuses (fixture_authority_absent) \u2014 closed by construction, no authority invented"
+  }
+ },
+ "remaining_live_gates": [
+  "R1 re-pin (and R3 for census) in an installed toolkit",
+  "a READY, leased, non-shared certenv and an OPEN surfaces QA run binding a qa_shared persona (the live environment is expired; renewal/activation not performed here)",
+  "a CLEAR target-hold record for that certenv written by environment.record_target_hold_state (operator-approved); the shared-target hold stays in place",
+  "an issuable loopback database identity for that certenv (never port 54422)",
+  "executor execution ensure \u2192 observation \u2192 reset \u2192 census, receipts retained; hosted path remains separately approved"
+ ],
+ "synthetic_evidence_2026_10_31": {
+  "suite": "web/tests/qa/surfacesFixtureAuthority.test.ts + web/tests/qa/surfacesRoomUsesFixture.test.ts \u2014 99/99 via vac run test (temp-dir executor store, fake psql; no database, network or real Gateway state)",
+  "planted_controls": "URL rewrite restored \u2192 10 failures; gate bypassed \u2192 3 failures; both reverted byte-identical"
+ }
+}

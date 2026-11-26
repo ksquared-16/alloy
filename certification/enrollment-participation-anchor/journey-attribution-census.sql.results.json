@@ -1,0 +1,35 @@
+{
+  "trusted_host_action_id": "tha_b6aec79751e81b",
+  "query_hash": "6e9ac7d49831b8b2bad906024e2d3f4612114703b76eeb1ae847120a157ceec8",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T19:08:01.107Z",
+    "question_ids": [
+      "participation_anchored_attribution"
+    ],
+    "questions": {
+      "participation_anchored_attribution": {
+        "question_id": "participation_anchored_attribution",
+        "row_count": null,
+        "rows": [
+          {
+            "namespace": "fixture_namespace",
+            "created": "since_baseline",
+            "journeys": 2
+          },
+          {
+            "namespace": "outside_fixture_namespace",
+            "created": "before_baseline",
+            "journeys": 2
+          },
+          {
+            "namespace": "outside_fixture_namespace",
+            "created": "since_baseline",
+            "journeys": 10
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

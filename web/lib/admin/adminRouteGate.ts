@@ -10,8 +10,8 @@ import {
     type AdminAccessContextSuccess,
 } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
+import { logPortalDenied } from "@/lib/admin/portalAdmission";
 import {
-    effectiveDepartmentScopeDimensions,
     scopeDimensionsFromAccess,
     type AdminAccessScopeDimensions,
 } from "@/lib/admin/accessScope";
@@ -26,7 +26,10 @@ export type AdminRouteGateSuccess = {
     /** Department scope after portal admin/ops bypass (used by workspace + departments APIs). */
     dim: AdminAccessScopeDimensions;
     /** Profile-derived scope before bypass (debug / audit). */
-    dimRaw: AdminAccessScopeDimensions;
+    /**
+     * W-8 removed the raw/effective split: no role widens a scope dimension, so the stored
+     * dimensions *are* the enforced ones and there is no second answer to report.
+     */
 };
 
 export type AdminRouteGateFailure = AdminContextFailure | AdminAccessContextFailure;
@@ -41,6 +44,9 @@ export async function loadAdminRouteGate(): Promise<AdminRouteGateResult> {
     const bundle = await loadAdminAccessBundleCached();
     if (!bundle.ok) return bundle;
     if (!bundle.portalEligible) {
+        // W-13 — the principal resolved; their grants do not carry `portal.access`. A failed grant
+        // read never gets here: it denied at the resolver and left `bundle.ok` false.
+        logPortalDenied("loadAdminRouteGate", bundle.userId, bundle.orgId, "no-capability");
         return { ok: false, status: 403 };
     }
     const access: AdminAccessContextSuccess = {
@@ -61,8 +67,7 @@ export async function loadAdminRouteGate(): Promise<AdminRouteGateResult> {
         role: compatibilityPortalRole(access.roleKeys),
         roleKeys: access.roleKeys,
         access,
-        dim: effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys),
-        dimRaw: scopeDimensionsFromAccess(access),
+        dim: scopeDimensionsFromAccess(access),
     };
 }
 

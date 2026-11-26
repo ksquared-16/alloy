@@ -36,7 +36,7 @@ async function main() {
 
   // --- Lookup field_definition ids we need (do NOT modify field_definitions)
   const neededOppKeys = [
-    "desired_start_date",
+    "start_date",
     "program_type",
     "schedule_type",
     "inquiry_source",
@@ -304,7 +304,7 @@ async function main() {
     },
     {
       org_id: ORG_ID,
-      field_definition_id: oppDefByKey.get("desired_start_date").id,
+      field_definition_id: oppDefByKey.get("start_date").id,
       entity_type: "opportunity",
       entity_id: opportunityId,
       value_date: isoDate(desiredStart),
@@ -344,13 +344,36 @@ async function main() {
   add("field_values", "opportunity:6");
 
   // --- 10) Opportunity-customer-member links for both children (overrides + outcomes)
+  // Canonical program field: program_category_id FK resolved by org+location+key (S2 migration model).
+  async function ensureProgramCategory(key, label, sortOrder) {
+    const existing = await sb
+      .from("location_program_categories")
+      .select("id")
+      .eq("org_id", ORG_ID)
+      .eq("location_id", centerId)
+      .eq("key", key)
+      .maybeSingle();
+    if (existing.data?.id) return existing.data.id;
+    const inserted = await sb
+      .from("location_program_categories")
+      .insert({ org_id: ORG_ID, location_id: centerId, key, label, sort_order: sortOrder, is_active: true })
+      .select("id")
+      .single();
+    if (inserted.error) throw new Error(`location_program_categories insert failed (${key}): ${inserted.error.message}`);
+    add("location_program_categories", inserted.data.id);
+    return inserted.data.id;
+  }
+  const preschoolCategoryId = await ensureProgramCategory("preschool", "Preschool", 10);
+  const toddlerCategoryId = await ensureProgramCategory("toddler", "Toddler", 20);
+
   const { error: ocmErr } = await sb.from("opportunity_customer_members").insert([
     {
       org_id: ORG_ID,
       opportunity_id: opportunityId,
       customer_member_id: emmaMemberId,
-      desired_program_type: "preschool",
-      desired_schedule_type: "full_time",
+      location_id: centerId,
+      program_category_id: preschoolCategoryId,
+      schedule_type: "full_time",
       outcome_status_key: "interested",
       notes: "Preschool spot likely available.",
       metadata: { demo_seed: "childcare_one_scenario_v1" },
@@ -359,8 +382,9 @@ async function main() {
       org_id: ORG_ID,
       opportunity_id: opportunityId,
       customer_member_id: noahMemberId,
-      desired_program_type: "toddler",
-      desired_schedule_type: "part_time",
+      location_id: centerId,
+      program_category_id: toddlerCategoryId,
+      schedule_type: "part_time",
       outcome_status_key: "waitlisted",
       notes: "Toddler availability tight; likely waitlist.",
       metadata: { demo_seed: "childcare_one_scenario_v1" },
@@ -374,7 +398,7 @@ async function main() {
     sb
       .from("opportunity_customer_members")
       .select(
-        "id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, notes, customer_members:customer_member_id(id,display_name,dob,person_id)"
+        "id, customer_member_id, program_category_id, location_program_categories(key, label), schedule_type, outcome_status_key, notes, customer_members:customer_member_id(id,display_name,dob,person_id)"
       )
       .eq("org_id", ORG_ID)
       .eq("opportunity_id", opportunityId)
@@ -397,8 +421,10 @@ async function main() {
     link_id: r.id,
     child: r.customer_members?.display_name ?? null,
     dob: r.customer_members?.dob ?? null,
-    desired_program_type: r.desired_program_type ?? null,
-    desired_schedule_type: r.desired_schedule_type ?? null,
+    program_category_id: r.program_category_id ?? null,
+    program_key: r.location_program_categories?.key ?? null,
+    program_label: r.location_program_categories?.label ?? null,
+    schedule_type: r.schedule_type ?? null,
     outcome_status_key: r.outcome_status_key ?? null,
     outcome_status_label: r.outcome_status_key ? (sdMap.get(r.outcome_status_key) ?? null) : null,
     notes: r.notes ?? null,

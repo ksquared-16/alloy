@@ -1,0 +1,24 @@
+{
+  "hostPresent": true,
+  "RENDERED_VARIANT": "FinancialsCard body (RICH/approved)",
+  "universalCardDensity": null,
+  "universalCardAttrs": [
+    "data-universal-card-density=compact",
+    "data-universal-card-span=row",
+    "data-universal-card-key=financials"
+  ],
+  "zoneHeads": [
+    "CURRENT PERIOD",
+    "DUE"
+  ],
+  "lines": [
+    "Consumable fee",
+    "Credit",
+    "Adjustment",
+    "NET OBLIGATION",
+    "Balance",
+    "Paid",
+    "Unassigned"
+  ],
+  "cardText": "FINANCIALS\n\nCURRENT PERIOD\n\nSeptember 2026\n\nCHARGES\n\nConsumable fee\n$18.00\n\nDISCOUNTS & CREDITS\n\nCredit\n-$260.06\nAdjustment\n$146.71\nNET OBLIGATION\n-$55.13\nAdd\n\nDUE\n\n$61.00\n\nNothing past due\n\nBalance\n-$55.13\nPaid\n$0.00\nUnassigned\n$18.00\nPayment\nDetails\n→"
+}

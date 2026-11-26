@@ -1,0 +1,121 @@
+{
+  "trusted_host_action_id": "tha_4cc4c092cba55e",
+  "query_hash": "207035f88f0d0c63c8f370bd576cc3643bb25ecb05164c4d01709abe7c2bebb9",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T03:13:14.443Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_4cc4c092cba55e",
+    "query_hash": "207035f88f0d0c63c8f370bd576cc3643bb25ecb05164c4d01709abe7c2bebb9",
+    "authorization_id": "grnt_83d8cf03a51d495a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T03:13:16.027Z",
+    "question_ids": [
+      "attempts",
+      "charge_counts",
+      "occurrence_history"
+    ],
+    "questions": {
+      "attempts": {
+        "question_id": "attempts",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "occurrence_id": "1c1e307f-66d2-41de-9f5a-c2189ce7924a",
+                "attempt_number": 1,
+                "worker_id": "worker-2d0071db",
+                "outcome": "completed",
+                "started_at": "2026-09-22 03:10:01.631474+00",
+                "counts": {
+                  "no_work_due": 6,
+                  "configuration_refused": 0,
+                  "normal_period_processed": 0,
+                  "short_catch_up_processed": 0,
+                  "catch_up_requires_operator": 1
+                },
+                "periods_billed": [],
+                "requires_operator": [
+                  {
+                    "operator_action": "Converge these periods with Generate Tuition; automatic billing resumes once the outstanding set is within the limit.",
+                    "outstanding_periods": 3,
+                    "automatic_catch_up_limit": 2,
+                    "newest_outstanding_period": "2026-09-22~2026-09-28",
+                    "oldest_outstanding_period": "2026-09-08~2026-09-14",
+                    "financial_mutation_performed": false,
+                    "opportunity_customer_member_id": "e978987c-56d1-4972-af34-54ccc32f37e2"
+                  }
+                ]
+              },
+              {
+                "occurrence_id": "1cf0ca86-c9ca-4366-a14d-687b9fbe158d",
+                "attempt_number": 1,
+                "worker_id": "worker-a8d926b0",
+                "outcome": "completed",
+                "started_at": "2026-09-22 03:00:02.339765+00",
+                "counts": {
+                  "no_work_due": 4,
+                  "configuration_refused": 0,
+                  "normal_period_processed": 1,
+                  "short_catch_up_processed": 1,
+                  "catch_up_requires_operator": 1
+                },
+                "periods_billed": [
+                  "2026-09-22~2026-09-28",
+                  "2026-09-15~2026-09-21",
+                  "2026-09-22~2026-09-28"
+                ],
+                "requires_operator": [
+                  {
+                    "operator_action": "Converge these periods with Generate Tuition; automatic billing resumes once the outstanding set is within the limit.",
+                    "outstanding_periods": 3,
+                    "automatic_catch_up_limit": 2,
+                    "newest_outstanding_period": "2026-09-22~2026-09-28",
+                    "oldest_outstanding_period": "2026-09-08~2026-09-14",
+                    "financial_mutation_performed": false,
+                    "opportunity_customer_member_id": "e978987c-56d1-4972-af34-54ccc32f37e2"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "charge_counts": {
+        "question_id": "charge_counts",
+        "row_count": null,
+        "rows": [
+          {
+            "C_over_bound": 0,
+            "D_one_period": 1,
+            "E_two_periods": 2,
+            "certa": 5,
+            "certb": 2
+          }
+        ]
+      },
+      "occurrence_history": {
+        "question_id": "occurrence_history",
+        "row_count": null,
+        "rows": [
+          {
+            "count": 4,
+            "statuses": [
+              "completed"
+            ],
+            "wake_count": 94,
+            "now": "2026-09-22 03:13:15.950537+00"
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

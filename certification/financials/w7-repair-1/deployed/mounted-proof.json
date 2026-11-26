@@ -1,0 +1,82 @@
+[
+  {
+    "proof": "A+B",
+    "account": {
+      "id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "label": "Certopp Family $55.00 4 charges · account-wide fees $55 coll"
+    },
+    "before": {
+      "floor": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "ledgerRows": 1
+    },
+    "during": {
+      "floor": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "ledgerRows": 1,
+      "overlays": [
+        "detail",
+        "add_charge"
+      ],
+      "roles": [
+        "command"
+      ]
+    },
+    "zero": {
+      "template": "Enrollment fee (waived) ▾",
+      "blockedNote": "Enrollment fee (waived) resolves to $0.00 for Household, so there is no charge to raise. Choose another charge type, or correct this one's amount.",
+      "blockedReason": "resolves_to_nothing",
+      "submitDisabled": true,
+      "gross": "CHARGE TYPEREQUIRED Enrollment fee (waived) ▾ 6 configured types"
+    }
+  },
+  {
+    "proof": "D-discounts-accounts",
+    "present": true,
+    "state": null,
+    "childRows": 2,
+    "body": "DISCOUNTS CC Certa Certhouse Sibling discount (QA specimen) · 10% Expected $18.50 · 10% of $185.00 Waive discount → Add discount → CC Certb Certhouse Sibling discount (QA specimen) · 10% Expected $145"
+  },
+  {
+    "proof": "E-focus-panel",
+    "card": {
+      "mounted": true,
+      "skeleton": false,
+      "empty": "absent",
+      "nav": true
+    },
+    "cardRequests": 1,
+    "discounts": {
+      "reached": true,
+      "present": true,
+      "state": null,
+      "childRows": 2,
+      "body": "DISCOUNTS CC Certa Certhouse Sibling discount (QA specimen) · 10% Expected $18.50 · 10% of $185.00 Waive discount → Add discount → CC Certb Certhouse Sibling discount (QA specimen) · 10% Expected $145"
+    }
+  },
+  {
+    "proof": "C-nonzero-not-blocked",
+    "chosen": "Field trip",
+    "options": [
+      "Enrollment fee (waived)",
+      "Field trip",
+      "Late pickup",
+      "Materials",
+      "Monthly tuition",
+      "Registration fee"
+    ],
+    "after": {
+      "template": "Field trip ▾",
+      "blocked": null,
+      "submitDisabled": false,
+      "net": null,
+      "fields": [
+        "CHARGE TYPEREQUIRED Field trip ▾ 6 configured types",
+        "APPLIES TOREQUIRED Household ▾ Household · one charge for the account",
+        "AMOUNT $40.00",
+        "NOTE",
+        "SERVICE DATEREQUIRED 📅",
+        "BILLING PERIOD October 2026",
+        "DUE Configured policy"
+      ]
+    }
+  }
+]

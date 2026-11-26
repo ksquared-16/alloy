@@ -1,0 +1,738 @@
+{
+  "summary": {
+    "passed": 90,
+    "total": 90,
+    "qa_run_id": "qar_da541c487abf",
+    "at": "2026-10-25T22:07:13Z"
+  },
+  "results": [
+    {
+      "case": "deployed build",
+      "persona": null,
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "sha": "9d565560334fb0e41aa6c71cf4888218a5b62826",
+      "project": "ikaxilmwmrmbagoidedu"
+    },
+    {
+      "case": "signed-url wu1 expect 200",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url wu2 expect 200",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url v1 expect 200",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url intake expect 200",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url x expect 404",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu1 expect 200",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url wu2 expect 200",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url v1 expect 200",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url intake expect 200",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url x expect 404",
+      "persona": "ocr",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu1 expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu2 expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url v1 expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url intake expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url x expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu1 expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu2 expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url v1 expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url intake expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url x expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu1 expect 200",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url wu2 expect 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url v1 expect 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url intake expect 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url x expect 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu1 expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url wu2 expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url v1 expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url intake expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "signed-url x expect 200",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url wu1 expect 200",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url wu2 expect 200",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url v1 expect 200",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url intake expect 200",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "signed-url x expect 404",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "documents list",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "fixtures_visible": [
+        "intake",
+        "v1",
+        "wu1",
+        "wu2"
+      ],
+      "expected": [
+        "intake",
+        "v1",
+        "wu1",
+        "wu2"
+      ]
+    },
+    {
+      "case": "documents list",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "fixtures_visible": [
+        "intake",
+        "v1",
+        "wu1",
+        "wu2"
+      ],
+      "expected": [
+        "intake",
+        "v1",
+        "wu1",
+        "wu2"
+      ]
+    },
+    {
+      "case": "documents list",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "fixtures_visible": [
+        "wu1"
+      ],
+      "expected": [
+        "wu1"
+      ]
+    },
+    {
+      "case": "documents list",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "fixtures_visible": [],
+      "expected": []
+    },
+    {
+      "case": "documents list",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "fixtures_visible": [],
+      "expected": []
+    },
+    {
+      "case": "documents list",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "fixtures_visible": [
+        "x"
+      ],
+      "expected": [
+        "x"
+      ]
+    },
+    {
+      "case": "extracted-text intake expect 200",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "length": 64
+    },
+    {
+      "case": "extracted-text intake expect 403",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "length": null
+    },
+    {
+      "case": "extracted-text intake expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "length": null
+    },
+    {
+      "case": "extracted-text intake expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "length": null
+    },
+    {
+      "case": "extracted-text intake expect 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "length": null
+    },
+    {
+      "case": "extracted-text intake expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "length": null
+    },
+    {
+      "case": "source-preview intake expect 200",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "source-preview intake expect 200",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "source-preview intake expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE"
+    },
+    {
+      "case": "source-preview intake expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE"
+    },
+    {
+      "case": "source-preview intake expect 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "source-preview intake expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "pos documents list expect 200",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "foreign_fixtures_visible": []
+    },
+    {
+      "case": "pos documents list expect 403",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "pos documents list expect 403",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "pos documents list expect 403",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "pos documents list expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "pos documents list expect 403",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "pos documents list expect 200",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "foreign_fixtures_visible": []
+    },
+    {
+      "case": "vendor signed-url V1/v1 expect 200",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "vendor signed-url V1/wu1 expect 404",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "vendor signed-url V2/v1 expect 404",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "vendor signed-url V1/v1 expect 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "vendor signed-url V1/v1 expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null,
+      "has_url": false
+    },
+    {
+      "case": "vendor signed-url V1/x expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null,
+      "has_url": false
+    },
+    {
+      "case": "vendor signed-url V1/v1 refused",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "vendor signed-url V1/v1 refused",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "upload refused (no documents.write)",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "stored": false
+    },
+    {
+      "case": "upload refused (no documents.write)",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "stored": false
+    },
+    {
+      "case": "upload refused (no documents.write)",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "stored": false
+    },
+    {
+      "case": "upload refused (no documents.write)",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "stored": false
+    },
+    {
+      "case": "upload refused (no documents.write)",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null,
+      "stored": false
+    },
+    {
+      "case": "entity-options refused (no documents.write)",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "entity-options admits a writer",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "delete refused expect 403",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "delete refused expect 403",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "delete refused expect 403",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "delete refused expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "delete refused expect 404",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "wu1 intact after refused deletes",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "x intact after refused deletes",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "unknown id -> 404",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "malformed id -> 404",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "unauthenticated refused /api/admin/documents/{wu1}/signed-url",
+      "persona": null,
+      "pass": true,
+      "status": 401,
+      "code": "UNAUTHENTICATED"
+    },
+    {
+      "case": "unauthenticated refused /api/admin/documents",
+      "persona": null,
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "case": "unauthenticated refused /api/admin/pos/documents/{intake}/extracted-text",
+      "persona": null,
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "case": "unauthenticated refused /api/admin/pos/documents",
+      "persona": null,
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "case": "unauthenticated refused /api/admin/documents/{intake}/source-preview",
+      "persona": null,
+      "pass": true,
+      "status": 401,
+      "code": "UNAUTHENTICATED"
+    }
+  ]
+}

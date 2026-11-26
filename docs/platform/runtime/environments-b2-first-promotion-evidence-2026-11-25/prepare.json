@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "manifest_sha256": "a3181dc2179f27edfac329b92d73593ffd17e331ec753cf26556796291e355f1",
+  "mode": "first_promotion",
+  "new_supabase_project_ref": "rehearsalnewprojectr",
+  "chain": 558,
+  "first_version": "20260328120000",
+  "last_version": "20261223090000",
+  "destructive_in_chain": 45
+}

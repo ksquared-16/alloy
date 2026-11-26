@@ -23,7 +23,7 @@ describe("BOS Adoption Sprint 01", () => {
     });
 
     it("surface audit doc exists", () => {
-        expect(read("../docs/sprints/06_2026/bos_adoption_sprint01_surface_audit.md")).toContain(
+        expect(read("../docs/sprints/archive/06_2026/bos_adoption_sprint01_surface_audit.md")).toContain(
             "Adoption Sprint 01",
         );
     });

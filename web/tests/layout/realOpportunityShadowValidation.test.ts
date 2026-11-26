@@ -76,7 +76,7 @@ function buildRealisticVm(recordId: string): OpportunityDrawerViewModel {
             status_can_mutate: false,
             oper_trust_preview: null,
         },
-        actions: { header: [], header_menu: [], manage_menu: [] },
+        actions: { header: [], header_menu: [], manage_menu: [], record_header: null },
         layout: {
             mode: "workflow_v1",
             tabs: [...OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP] as DrawerTabKey[],
@@ -91,10 +91,13 @@ function buildRealisticVm(recordId: string): OpportunityDrawerViewModel {
                 })),
             },
         },
+        activity: {
+            communicationsPreviewVm: null,
+        },
         above_fold: { render_model: aboveFold, record },
         summaries: {
             tasks: { state: "loaded", open_count: 0, open_tasks: [] },
-            active_tour_bookings: [],
+            active_tour_bookings: [], operator_relevant_tour_booking: null,
             reminders: { state: "ready", next_follow_up_iso: null, scheduled_send_count: 0, scheduled_sends: [] },
             bos: null,
             attention: null,

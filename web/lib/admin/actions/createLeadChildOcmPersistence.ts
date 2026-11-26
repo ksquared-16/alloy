@@ -5,7 +5,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
-import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
+import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -30,10 +33,11 @@ function trimDateOnly(v: unknown): string | null {
 
 export type CreateLeadChildOcmFields = {
     location_id: string | null;
-    desired_program_type: string | null;
-    desired_program_category_id: string | null;
-    desired_schedule_type: string | null;
-    desired_start_date: string | null;
+    /** Stable program key from intake (`child_program`) — resolved to `program_category_id`, never stored. */
+    program_key: string | null;
+    program_category_id: string | null;
+    schedule_type: string | null;
+    start_date: string | null;
     program_room_cohort_key: string | null;
     notes: string | null;
 };
@@ -59,17 +63,17 @@ export function parseCreateLeadChildParticipationPayload(
     const dob = trimDateOnly(merged.child_date_of_birth);
 
     const ocm: CreateLeadChildOcmFields = {
-        // Lead-level location_id belongs on the opportunity — never infer child participation from it.
-        location_id: trimUuid(merged.child_location_id),
-        desired_program_type:
-            trimStableKey(merged.child_program) ?? trimStableKey(merged.desired_program_type),
-        desired_program_category_id:
+        // Explicit child location wins; otherwise cascade Lead location so site participation
+        // matches the Lead form Location (same inheritance as later add-child).
+        location_id: trimUuid(merged.child_location_id) || trimUuid(merged.location_id),
+        program_key: trimStableKey(merged.child_program),
+        program_category_id:
             trimUuid(merged.child_program_category_id) ??
-            trimUuid(merged.desired_program_category_id),
-        desired_schedule_type:
-            trimStableKey(merged.child_desired_schedule_type) ?? trimStableKey(merged.desired_schedule_type),
-        desired_start_date:
-            trimDateOnly(merged.child_desired_start_date) ?? trimDateOnly(merged.desired_start_date),
+            trimUuid(merged.program_category_id),
+        schedule_type:
+            trimStableKey(merged.child_schedule_type) ?? trimStableKey(merged.schedule_type),
+        start_date:
+            trimDateOnly(merged.child_start_date) ?? trimDateOnly(merged.start_date),
         program_room_cohort_key:
             trimUuid(merged.child_program_room_cohort_key) ??
             trimUuid(merged.program_room_cohort_key),
@@ -105,19 +109,33 @@ export function buildCreateLeadOcmInsertRow(args: {
         org_id: orgId,
         opportunity_id: opportunityId,
         customer_member_id: customerMemberId,
-        // No child enrollment disposition at lead creation: the OCM status domain only defines real
-        // enrollment outcomes (waitlisted/enrolling/enrolled/…), none of which a brand-new lead has.
-        // Leave outcome_status_key null so the child badge is suppressed until enrollment starts —
-        // do NOT write `new_inquiry` (which has no OCM definition and humanizes to "New Inquiry").
-        outcome_status_key: null,
+        /*
+         * FRESH-LEAD DISPOSITION MATCHES PRODUCTION, because this row is a fixture of it.
+         *
+         * This builder feeds `scripts/seedCanonicalLeadE2eFixture.ts`, which INSERTS the row it
+         * returns. It previously wrote null with a comment forbidding `new_inquiry` — describing an
+         * intended end state rather than the shipped one. Live Create Lead resolves the child
+         * participation through `ensureOpportunityCustomerMemberParticipation`, which persists
+         * `new_inquiry`, and this module's own `validateCreateLeadOcmInsertRow` asserts that value.
+         * So the fixture contradicted both production and its sibling validator, and only escaped
+         * notice because the seed validates grain rather than disposition.
+         *
+         * A fixture that does not match what production writes cannot certify what production does.
+         * Converging the WRITER to null is a separate product decision (tracked as D-BP5); until it
+         * is made, the fixture reflects shipped behaviour.
+         */
+        outcome_status_key: NEW_LEAD_STATUS_KEY,
+        // No child process stage at lead creation: the child rides the family track until a
+        // decision creates the enrollment participation. Stage is a persisted column (S4) — leave
+        // it null now; outcome execution writes it when the child enters waitlist/enrolling/etc.
+        stage_key: null,
         metadata: { source: "create_lead" },
         ...(ocm.location_id ? { location_id: ocm.location_id } : {}),
-        ...(ocm.desired_program_type ? { desired_program_type: ocm.desired_program_type } : {}),
-        ...(ocm.desired_program_category_id
-            ? { desired_program_category_id: ocm.desired_program_category_id }
+        ...(ocm.program_category_id
+            ? { program_category_id: ocm.program_category_id }
             : {}),
-        ...(ocm.desired_schedule_type ? { desired_schedule_type: ocm.desired_schedule_type } : {}),
-        ...(ocm.desired_start_date ? { desired_start_date: ocm.desired_start_date } : {}),
+        ...(ocm.schedule_type ? { schedule_type: ocm.schedule_type } : {}),
+        ...(ocm.start_date ? { start_date: ocm.start_date } : {}),
         ...(ocm.program_room_cohort_key ? { program_room_cohort_key: ocm.program_room_cohort_key } : {}),
         ...(ocm.notes ? { notes: ocm.notes } : {}),
     };
@@ -125,7 +143,10 @@ export function buildCreateLeadOcmInsertRow(args: {
 
 export type ApplyCreateLeadChildParticipationResult = {
     customer_member_id: string;
-    ocm_id: string;
+    /** Legacy OCM bridge id — no longer written at Create Lead (always null; kept for shape compatibility). */
+    ocm_id: string | null;
+    /** Enrollment process instance created for this child (runtime source of truth). */
+    process_instance_id: string | null;
 };
 
 export async function applyCreateLeadChildParticipationFromIdentity(
@@ -157,58 +178,74 @@ export async function applyCreateLeadChildParticipationFromIdentity(
         childPersonId = childPerson.person_id;
     }
 
-    const cmPayload: Record<string, unknown> = {
-        org_id: params.orgId,
-        customer_id: params.customerId,
-        person_id: childPersonId,
-        display_name: params.identity.display_name,
-        first_name: params.identity.first_name,
-        last_name: params.identity.last_name,
-        dob: params.identity.dob,
-        relationship: "child",
-        is_active: true,
-        metadata: { source: "create_lead" },
-    };
-
-    const { data: cm, error: cmErr } = await supabase
-        .from("customer_members")
-        .insert(cmPayload)
-        .select("id")
-        .single();
-    if (cmErr || !cm) {
-        throw new Error(cmErr?.message ?? "Could not create child record for lead.");
-    }
-    const customerMemberId = String((cm as { id: string }).id);
-
-    const enrichedProgram = await enrichOcmProgramCategoryFields(supabase, {
+    // ONE child-member write authority. Create Lead still resolves the child's IDENTITY its own
+    // way (from intake facts, above) — the authority owns the row, never who the child is.
+    const { member } = await createHouseholdChildMember(supabase, {
         orgId: params.orgId,
-        locationId: params.ocm.location_id,
-        desiredProgramType: params.ocm.desired_program_type,
-        desiredProgramCategoryId: params.ocm.desired_program_category_id,
+        customerId: params.customerId,
+        personId: childPersonId,
+        displayName: params.identity.display_name,
+        firstName: params.identity.first_name,
+        lastName: params.identity.last_name,
+        dob: params.identity.dob,
+        source: "create_lead",
     });
-    const ocmRow = buildCreateLeadOcmInsertRow({
+    const customerMemberId = member.id;
+
+    // FK-only program storage: resolve the intake program key against the child's site.
+    const programCategoryId =
+        trimUuid(params.ocm.program_category_id) ??
+        (await resolveProgramCategoryId(supabase, {
+            orgId: params.orgId,
+            locationId: params.ocm.location_id,
+            programKey: params.ocm.program_key,
+        }));
+
+    /*
+     * ── THE ENROLLMENT PARTICIPATION IS ESTABLISHED HERE ──
+     *
+     * This deliberately REVERSES the earlier "OCM bridge write REMOVED" position, and it is worth
+     * saying why rather than quietly editing it. That decision treated `process_instances` as the
+     * sole runtime owner of child participation and OCM as legacy. REAL ENROLLMENT V1 settled the
+     * opposite: `opportunity_customer_members` is the durable owner of a child's Enrollment state,
+     * and a journey ANCHORS to it (`context_type = enrollment_participation`).
+     *
+     * Start Enrollment was converged to that model; this path was not. The consequence was provable
+     * and not theoretical: a child arriving through acquisition got a journey anchored to the
+     * OPPORTUNITY, so the canonical anchor never existed for them, and Start Enrollment later reused
+     * that legacy-shaped journey rather than creating a canonical one. Two symptoms, one root.
+     *
+     * The participation is created through the canonical find-or-create the rest of Enrollment uses,
+     * never a direct insert — so this makes exactly one OCM, carries the acquisition Opportunity on
+     * it, and is idempotent under a repeated Create Lead.
+     */
+    const participation = await ensureOpportunityCustomerMemberParticipation({
+        supabase,
         orgId: params.orgId,
         opportunityId: params.opportunityId,
         customerMemberId,
-        ocm: {
-            ...params.ocm,
-            desired_program_type: enrichedProgram.desired_program_type,
-            desired_program_category_id: enrichedProgram.desired_program_category_id,
-        },
+        source: "create_lead",
+        outcomeStatusKey: NEW_LEAD_STATUS_KEY,
     });
 
-    const { data: ocmData, error: ocmErr } = await supabase
-        .from("opportunity_customer_members")
-        .insert(ocmRow)
-        .select("id")
-        .single();
-    if (ocmErr || !ocmData) {
-        throw new Error(ocmErr?.message ?? "Could not link child participation to lead.");
-    }
+    /*
+     * NO CHILD ENROLLMENT PROCESS INSTANCE HERE.
+     *
+     * Intake owns family acquisition and the child's durable participation bridge. It does NOT own
+     * the decision that the child is entering Enrollment. Creating a journey here put a CHILD
+     * instance into the FAMILY-grain `lead` stage, which is why an acquisition child reported
+     * "Stage lead requires no Forms" and could never realize a participant objective.
+     *
+     * The child rides the family acquisition track on the Opportunity until the governed
+     * `decision → Continue to Enrolling` outcome, which creates the child journey at the CHILD
+     * stage `enrollment`. The OCM above is identity, not evidence that execution has begun.
+     */
 
     return {
         customer_member_id: customerMemberId,
-        ocm_id: String((ocmData as { id: string }).id),
+        ocm_id: participation.ocmId,
+        // Intake creates no child journey; the Enrollment-entry outcome does.
+        process_instance_id: null,
     };
 }
 

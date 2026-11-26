@@ -149,6 +149,27 @@
     color: var(--cr-midnight);
 }
 
+/*
+ * A leading icon needs the input's text to start clear of it, and `.config-runtime-input` sets a
+ * `padding` SHORTHAND — so a `pl-*` utility on the element loses to it and the placeholder renders
+ * underneath the icon. Utilities and this stylesheet have equal specificity, so source order decides
+ * and the shorthand wins.
+ *
+ * The fix belongs here rather than at each call site: it is the shared input that resets the padding,
+ * so every consumer that adds a leading icon would otherwise rediscover the same bug. Declared after
+ * the base rule, and as a longhand, so it wins deterministically.
+ *
+ * It is its OWN rule, and that is load-bearing. This declaration was first written directly beneath
+ * `.config-runtime-select:focus,` — the opening line of the grouped focus rule below — which silently
+ * did two things: it gave every focused select a 2.05rem left padding (text jumping on focus), and it
+ * took the focus OUTLINE away from every select in the configuration runtime, because the selector
+ * that used to share the outline rule had been captured by this one. A comment between a grouped
+ * selector's lines does not separate them; only the brace does.
+ */
+.config-runtime-input--with-leading-icon {
+    padding-left: 2.05rem;
+}
+
 .config-runtime-select:focus,
 .config-runtime-input:focus {
     outline: 2px solid color-mix(in srgb, var(--cr-pine) 35%, transparent);
@@ -199,7 +220,7 @@
     flex: 1;
     flex-direction: column;
     overflow: hidden;
-    gap: 0.5rem;
+    gap: 0.35rem;
 }
 
 .process-config-context-bar {
@@ -211,11 +232,167 @@
 }
 
 .settings-configuration-tiles {
-    margin-top: 1.5rem; /* 24px — compact index gap below context row */
+    margin-top: 1.5rem; /* legacy alias — compact index uses .config-platform-index */
+}
+
+/* ── Configuration Platform — Settings Home index (frozen visual) ── */
+
+.config-platform-hub-eyebrow {
+    margin-bottom: 0.2rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 68%, transparent);
+}
+
+.config-platform-index {
+    --config-platform-identity-width: 15.5rem;
+    --config-platform-identity-icon: 1.75rem;
+    --config-platform-identity-gap: 0.75rem;
+    --config-platform-section-gap: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    margin-top: 1rem;
+    border-top: 1px solid color-mix(in srgb, var(--cr-stone-border) 88%, transparent);
+}
+
+.config-platform-section {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--cr-stone-border) 88%, transparent);
+}
+
+@media (min-width: 900px) {
+    .config-platform-section {
+        grid-template-columns: var(--config-platform-identity-width) minmax(0, 1fr);
+        align-items: start;
+        column-gap: var(--config-platform-section-gap);
+        padding: 1.05rem 0;
+    }
+}
+
+.config-platform-section__identity {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--config-platform-identity-gap);
+    width: 100%;
+    max-width: var(--config-platform-identity-width);
+    padding-top: 0.15rem;
+}
+
+.config-platform-section__identity-icon {
+    display: flex;
+    width: var(--config-platform-identity-icon);
+    height: var(--config-platform-identity-icon);
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--cr-pine);
+}
+
+.config-platform-section__title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    color: var(--color-alloy-midnight, #18273a);
+}
+
+.config-platform-section__description {
+    margin-top: 0.2rem;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 58%, transparent);
+}
+
+.config-platform-section__items {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.config-platform-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 2.85rem;
+    padding: 0.35rem 0.45rem 0.35rem 0.2rem;
+    border-radius: 0.4rem;
+    transition: background 0.12s ease;
+}
+
+/* AdminV2NavLink wraps children in `.adminv2-nav-link__inner` — keep row flex layout. */
+.config-platform-row.adminv2-nav-link {
+    display: flex;
+    width: 100%;
+}
+
+.config-platform-row.adminv2-nav-link > .adminv2-nav-link__inner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    width: 100%;
+    flex: 1;
+}
+
+.config-platform-row:hover {
+    background: color-mix(in srgb, var(--cr-pine) 5%, white);
+}
+
+.config-platform-row__icon {
+    display: flex;
+    height: 1.5rem;
+    width: 1.5rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: color-mix(in srgb, var(--cr-pine) 78%, var(--cr-midnight));
+    transition: color 0.12s ease;
+}
+
+.group:hover .config-platform-row__icon {
+    color: var(--cr-pine);
+}
+
+.config-platform-row__title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: color-mix(in srgb, var(--cr-midnight) 88%, transparent);
+    transition: color 0.12s ease;
+}
+
+.group:hover .config-platform-row__title {
+    color: var(--cr-midnight);
+}
+
+.config-platform-row__description {
+    margin-top: 0.05rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 56%, transparent);
+}
+
+.config-platform-row__chevron {
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 36%, transparent);
+    transition:
+        color 0.12s ease,
+        transform 0.12s ease;
+}
+
+.group:hover .config-platform-row__chevron {
+    color: var(--cr-pine);
+    transform: translateX(2px);
 }
 
 .process-config-context-title {
-    font-size: 1.5rem;
+    font-size: 1.125rem;
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.25;
@@ -223,9 +400,9 @@
 }
 
 .process-config-context-summary {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 400;
-    line-height: 1.4;
+    line-height: 1.35;
     color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 65%, transparent);
 }
 
@@ -332,6 +509,23 @@
     background: rgba(0, 162, 131, 0.05);
 }
 
+.process-config-nav-item:focus {
+    outline: none;
+}
+
+.process-config-nav-item:focus-visible {
+    outline: 2px solid var(--cr-pine);
+    outline-offset: 2px;
+}
+
+.process-config-nav-item--muted {
+    opacity: 0.72;
+}
+
+.process-config-nav-item--muted .config-typo-queue-item-title {
+    color: color-mix(in srgb, var(--cr-midnight) 70%, transparent);
+}
+
 .process-config-nav-item--active {
     border-left-color: var(--cr-pine);
     background: rgba(0, 162, 131, 0.08);
@@ -351,7 +545,8 @@
     flex: 1 1 auto;
     overflow-y: auto;
     padding: 1rem 1.15rem;
-    background: white;
+    /* Level 1 — River Stone workspace canvas (white regions sit above). */
+    background: var(--color-alloy-stone, #f4f6f9);
 }
 
 .process-config-work-view-list-card {
@@ -415,7 +610,7 @@
     min-width: 0;
     flex: 1;
     overflow-y: auto;
-    background: white;
+    background: var(--color-alloy-stone, #f4f6f9);
 }
 
 .config-mode-condition-row,
@@ -630,6 +825,11 @@
         border-color 0.15s ease;
 }
 
+.config-secondary-btn--sm {
+    padding: 0.3125rem 0.625rem;
+    font-size: 0.6875rem;
+}
+
 .config-secondary-btn:hover:not(:disabled) {
     border-color: rgba(0, 162, 131, 0.28);
     background: rgba(0, 162, 131, 0.04);
@@ -685,4 +885,591 @@
 
 .statuses-config-surface [data-status-settings-category] .text-\[\#59678b\] {
     color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 72%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Locations collection rail — first-class object selector (not filter queue) */
+/* -------------------------------------------------------------------------- */
+
+.locations-collection-rail {
+    --locations-rail-pad-x: 0.875rem;
+}
+
+.locations-collection-rail__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem var(--locations-rail-pad-x) 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--cr-midnight) 8%, transparent);
+}
+
+.locations-collection-rail__title {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--cr-midnight);
+}
+
+.locations-collection-rail__count {
+    margin: 0.25rem 0 0;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--cr-midnight) 45%, transparent);
+}
+
+.locations-collection-rail__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.75rem var(--locations-rail-pad-x);
+}
+
+.locations-collection-rail__search-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.locations-collection-rail__search-icon {
+    position: absolute;
+    top: 50%;
+    left: 0.65rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    transform: translateY(-50%);
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+    pointer-events: none;
+}
+
+.locations-collection-rail__search {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--cr-midnight) 14%, transparent);
+    background: #fff;
+    padding: 0.45rem 0.65rem 0.45rem 1.85rem;
+    font-size: 0.8125rem;
+    color: var(--cr-midnight);
+}
+
+.locations-collection-rail__search::placeholder {
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+}
+
+.locations-collection-rail__search:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--cr-pine) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-pine) 14%, transparent);
+}
+
+/* Programs collection toolbar — two-row layout (search full width; filter + sort below). */
+.programs-collection-controls {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.65rem var(--locations-rail-pad-x) 0.5rem;
+}
+
+.programs-collection-controls__search-wrap {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+}
+
+.programs-collection-controls__search-icon {
+    position: absolute;
+    top: 50%;
+    left: 0.65rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    transform: translateY(-50%);
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+    pointer-events: none;
+}
+
+.programs-collection-controls__search,
+.programs-collection-controls__select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 2.125rem;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--cr-midnight) 14%, transparent);
+    background: #fff;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    color: var(--cr-midnight);
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.programs-collection-controls__search {
+    padding: 0.45rem 0.65rem 0.45rem 1.85rem;
+}
+
+.programs-collection-controls__select {
+    padding: 0.35rem 1.75rem 0.35rem 0.65rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555e6d' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    background-size: 0.75rem;
+}
+
+.programs-collection-controls__search::placeholder {
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+}
+
+.programs-collection-controls__search:hover,
+.programs-collection-controls__select:hover {
+    background-color: color-mix(in srgb, var(--cr-midnight) 2.5%, white);
+}
+
+.programs-collection-controls__search:focus,
+.programs-collection-controls__select:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--cr-pine) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-pine) 14%, transparent);
+}
+
+.programs-collection-controls__search:disabled,
+.programs-collection-controls__select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background-color: color-mix(in srgb, var(--cr-midnight) 3%, white);
+}
+
+.programs-collection-controls__row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.programs-collection-controls__field {
+    display: block;
+    min-width: 0;
+}
+
+.locations-collection-rail:has(.programs-collection-controls) .locations-collection-rail__list {
+    padding-top: 0.15rem;
+}
+
+.locations-collection-rail__filter {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--cr-midnight) 14%, transparent);
+    background: #fff;
+    color: color-mix(in srgb, var(--cr-midnight) 55%, transparent);
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.locations-collection-rail__filter:hover {
+    background: color-mix(in srgb, var(--cr-midnight) 3%, white);
+}
+
+.locations-collection-rail__filter--active {
+    border-color: color-mix(in srgb, var(--cr-pine) 40%, transparent);
+    background: color-mix(in srgb, var(--cr-pine) 10%, white);
+    color: #007d68;
+}
+
+.locations-collection-rail__filter:focus-visible {
+    outline: 2px solid var(--cr-pine);
+    outline-offset: 2px;
+}
+
+.locations-collection-rail__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: min(70vh, 42rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.15rem var(--locations-rail-pad-x) 0.9rem;
+}
+
+.locations-collection-row {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.7rem 0.65rem;
+    text-align: left;
+}
+
+.locations-collection-row--inactive:not([aria-selected="true"]) {
+    opacity: 0.78;
+}
+
+.locations-collection-row__glyph {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.55rem;
+}
+
+.locations-collection-row__body {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.locations-collection-row__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1rem;
+    color: var(--cr-midnight);
+}
+
+.locations-collection-row__place {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    color: color-mix(in srgb, var(--cr-midnight) 60%, transparent);
+}
+
+.locations-collection-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.15rem;
+}
+
+.locations-collection-row__status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 0.12rem 0.45rem;
+    font-size: 0.625rem;
+    font-weight: 650;
+    line-height: 1.2;
+}
+
+.locations-collection-row__status--active {
+    border-color: color-mix(in srgb, var(--cr-pine) 28%, transparent);
+    background: color-mix(in srgb, var(--cr-pine) 12%, white);
+    color: #007d68;
+}
+
+.locations-collection-row__status--inactive {
+    border-color: color-mix(in srgb, var(--cr-midnight) 12%, transparent);
+    background: color-mix(in srgb, var(--cr-midnight) 5%, white);
+    color: color-mix(in srgb, var(--cr-midnight) 55%, transparent);
+}
+
+.locations-collection-row__attention {
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: color-mix(in srgb, var(--color-alloy-ember, #c45c26) 92%, transparent);
+}
+
+.locations-collection-row__chevron {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.15rem;
+    color: color-mix(in srgb, var(--cr-pine) 70%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Canonical child-object workspace — supporting collection + owning detail   */
+/* -------------------------------------------------------------------------- */
+
+.config-child-workspace__list-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--cr-midnight) 8%, transparent);
+    padding: 0.9rem 0.9rem 0.75rem;
+}
+
+.config-child-workspace__list-title {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    color: var(--cr-midnight);
+}
+
+.config-child-workspace__list-summary {
+    margin: 0.2rem 0 0;
+    font-size: 0.6875rem;
+    color: color-mix(in srgb, var(--cr-midnight) 45%, transparent);
+}
+
+.config-child-workspace__list-body {
+    display: flex;
+    max-height: min(68vh, 40rem);
+    flex-direction: column;
+    gap: 0.3rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.6rem;
+}
+
+.config-child-workspace__list .process-config-nav-item {
+    min-height: 3.6rem;
+    align-items: flex-start;
+    padding: 0.7rem 0.75rem;
+}
+
+.config-child-workspace__detail {
+    min-height: 18rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STAGE EDITOR LAYOUT SYSTEM
+   ───────────────────────────────────────────────────────────────────────────
+   Not a new visual language. The stage editor was built OUTSIDE the one this
+   file already defines: an audit found 9 distinct arbitrary font sizes
+   (text-[8px] … text-sm) across 269 usages, 4 radius families, and ZERO uses
+   of the `config-typo-*` scale above. Every rule here either reuses an
+   existing --cr-* token or composes classes already defined in this file.
+
+   The grid is 4 columns. Every label, input, select, checkbox and badge in a
+   stage editor sits in one of them, so nothing floats independently.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.stage-editor-v2 {
+    /* One rhythm. Sections, cards and rows all step in multiples of these. */
+    --se-gap: 0.75rem;
+    --se-gap-tight: 0.5rem;
+    --se-pad-x: 1.25rem;
+    --se-radius: 0.625rem;
+    --se-radius-inner: 0.375rem;
+    --se-rule: 1px solid color-mix(in srgb, var(--color-alloy-forge, #59678b) 12%, transparent);
+    --se-rule-soft: 1px solid color-mix(in srgb, var(--color-alloy-forge, #59678b) 8%, transparent);
+}
+
+/* ── The field grid ─────────────────────────────────────────────────────────
+   A row of controls that must align to the same columns regardless of which
+   editor rendered it. `--se-cols` lets a row opt into 2 or 3 columns without
+   inventing a new class per shape. */
+.stage-grid {
+    display: grid;
+    gap: var(--se-gap);
+    grid-template-columns: repeat(var(--se-cols, 1), minmax(0, 1fr));
+}
+@media (min-width: 60rem) {
+    .stage-grid--2 { --se-cols: 2; }
+    .stage-grid--3 { --se-cols: 3; }
+    .stage-grid--4 { --se-cols: 4; }
+}
+
+/* ── The field ──────────────────────────────────────────────────────────────
+   Label above control, one label treatment, one control height. Replaces four
+   different label styles (text-[9px], text-[10px], text-[11px] uppercase, and
+   bare <span>) that previously appeared within a single screen. */
+.stage-field { display: flex; min-width: 0; flex-direction: column; gap: 0.3rem; }
+
+.stage-field__label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.3;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 70%, transparent);
+}
+
+.stage-field__hint {
+    font-size: 0.6875rem;
+    line-height: 1.45;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 55%, transparent);
+}
+
+/* One control height across input/select/textarea — the single biggest source
+   of the "uneven density" the audit recorded. */
+.stage-control {
+    width: 100%;
+    min-width: 0;
+    min-height: 2rem;
+    border-radius: var(--se-radius-inner);
+    border: 1px solid color-mix(in srgb, var(--color-alloy-forge, #59678b) 18%, transparent);
+    background: #ffffff;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--cr-midnight, #1a2332);
+}
+.stage-control:focus {
+    border-color: var(--cr-pine, #00a283);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-pine, #00a283) 12%, transparent);
+}
+textarea.stage-control { min-height: 3.25rem; resize: vertical; }
+select.stage-control { appearance: auto; padding-right: 0.35rem; }
+
+/* ── Panels ─────────────────────────────────────────────────────────────────
+   One card. Previously rounded-lg / rounded-md / rounded-xl were used
+   interchangeably at the same nesting depth. */
+.stage-panel {
+    border-radius: var(--se-radius);
+    border: var(--se-rule);
+    background: #ffffff;
+}
+.stage-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--se-gap-tight);
+    padding: 0.55rem 0.75rem;
+}
+.stage-panel__body { border-top: var(--se-rule-soft); padding: 0.75rem; }
+
+/* Section heading — one treatment, used by every sub-editor. */
+.stage-section-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 70%, transparent);
+}
+
+/* Inline count next to a heading — carries meaning while collapsed. */
+.stage-count {
+    display: inline-flex;
+    min-width: 1.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-alloy-forge, #59678b) 10%, transparent);
+    padding: 0 0.375rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 75%, transparent);
+}
+
+/* ── Stage exit path ────────────────────────────────────────────────────────
+   Objective 5: an exit must read as a path, not three unrelated dropdowns.
+   The destination and the outcomes that trigger it sit on one line above the
+   controls, so the sentence is legible before anything is edited. */
+.stage-exit {
+    border-radius: var(--se-radius);
+    border: var(--se-rule);
+    background: #ffffff;
+    overflow: hidden;
+}
+.stage-exit + .stage-exit { margin-top: var(--se-gap-tight); }
+
+.stage-exit__headline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem;
+    border-bottom: var(--se-rule-soft);
+    background: color-mix(in srgb, var(--color-alloy-stone, #f4f6f9) 45%, white);
+    padding: 0.45rem 0.7rem;
+}
+.stage-exit__name {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--cr-midnight, #1a2332);
+}
+.stage-exit__arrow { color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 40%, transparent); }
+.stage-exit__trigger {
+    font-size: 0.6875rem;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 65%, transparent);
+}
+.stage-exit__trigger strong {
+    font-weight: 600;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 85%, transparent);
+}
+.stage-exit__body { padding: 0.6rem 0.7rem; }
+
+/* ── Tags ───────────────────────────────────────────────────────────────────
+   Replaces five hand-rolled pill styles with two tones. */
+.stage-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: var(--se-radius-inner);
+    border: 1px solid color-mix(in srgb, var(--color-alloy-forge, #59678b) 15%, transparent);
+    background: #ffffff;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.5;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 75%, transparent);
+    white-space: nowrap;
+}
+.stage-tag--accent {
+    border-color: var(--cr-pine-border, rgba(0, 162, 131, 0.28));
+    background: var(--cr-pine-soft, rgba(0, 162, 131, 0.08));
+    color: var(--cr-pine, #00a283);
+}
+
+/* ── Collapsed collection rail ──────────────────────────────────────────────
+   The rail is 22rem of permanent navigation. With a process selected it held
+   two cards and ~550px of nothing while the editor beside it was truncating
+   its own dropdowns. Collapsed it keeps the navigation one click away and
+   returns the width to the work. */
+.config-rail-collapsed {
+    display: flex;
+    height: 100%;
+    min-height: 8rem;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    border-radius: var(--cr-card-radius, 1rem);
+    border: 1px solid var(--cr-stone-border);
+    background: #ffffff;
+    padding: 0.65rem 0.25rem;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+.config-rail-collapsed:hover {
+    border-color: var(--cr-pine-border, rgba(0, 162, 131, 0.28));
+    background: color-mix(in srgb, var(--cr-pine, #00a283) 4%, white);
+}
+.config-rail-collapsed__label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-orientation: mixed;
+    writing-mode: vertical-rl;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 65%, transparent);
+}
+
+/* A field that spans two grid columns. Defined at the same breakpoint as .stage-grid--*
+   so the span and the column count can never disagree — which is exactly what happens when
+   a Tailwind `lg:col-span-2` (64rem) is paired with a 60rem grid. */
+@media (min-width: 60rem) {
+    .stage-field--wide { grid-column: span 2 / span 2; }
 }

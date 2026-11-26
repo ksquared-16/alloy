@@ -1,6 +1,6 @@
 # Lifecycle runtime visibility contract — implementation
 
-**Path:** `docs/sprints/06_2026/lifecycle_runtime_visibility_contract_implementation.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_runtime_visibility_contract_implementation.md`  
 **Status:** **Implemented** (Phase 1 lifecycle runtime)  
 **Date:** 2026-06-02  
 

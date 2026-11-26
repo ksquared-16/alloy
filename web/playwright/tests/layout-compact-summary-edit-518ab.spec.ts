@@ -15,7 +15,7 @@ loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
 const LIVE = process.env.PLAYWRIGHT_518AB_QA === "1";
 const WORK_UNIT_SLUG = "new-leads";
-const outDir = path.join(__dirname, "../../../docs/sprints/06_2026/assets/518ab-browser-qa");
+const outDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/assets/518ab-browser-qa");
 
 const COMPACT_PROBE_FN = () => {
     const compact = document.querySelector('[data-layout-runtime-related-list-compact="true"]');

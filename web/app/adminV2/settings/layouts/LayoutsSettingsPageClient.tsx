@@ -150,7 +150,7 @@ function LayoutsSettingsPageClientInner() {
                         Create, duplicate, edit, and publish surfaces. Assign published surfaces to process stages
                         from{" "}
                         <Link href={ADMIN_V2_SETTINGS_PROCESSES_PATH} className="font-medium text-alloy-pine hover:underline">
-                            Settings → Processes
+                            Configuration → Processes
                         </Link>
                         .
                     </p>

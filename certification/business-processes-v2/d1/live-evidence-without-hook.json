@@ -1,0 +1,94 @@
+{
+  "run": "0a4b0f73",
+  "at": "2026-10-23T04:11:23.445Z",
+  "scenarios": {
+    "1_new_org": {
+      "org": "1e674d0f-0eff-4c2a-a678-24d9f9f130c8",
+      "override_rows": 0,
+      "permission_keys": 95
+    },
+    "13_projection_publications": {
+      "assignments": {
+        "department_id": "c5efd1e7-c9c4-4b50-816a-7e80ce25654a",
+        "revision_id": "589c3725-d5e3-465a-8e6e-6f0f524bdefc",
+        "revision_number": 1,
+        "publication_id": "8dbb051d-3c06-4aab-8639-d402f2894af8",
+        "published_at": "2026-10-23T04:11:23.707344+00:00",
+        "already_published": false
+      },
+      "billing": {
+        "department_id": "dae25b8f-3edf-4376-b6e5-3544b9892727",
+        "revision_id": "5e3d7988-41be-4dc9-846d-201165a808b7",
+        "revision_number": 1,
+        "publication_id": "97a62fab-1606-491c-89aa-e633b9015e87",
+        "published_at": "2026-10-23T04:11:23.824665+00:00",
+        "already_published": false
+      },
+      "override_rows": 0
+    },
+    "12_failed_publish": {
+      "status": 409,
+      "code": "business_process_draft_edit_conflict",
+      "override_rows_after": 0
+    },
+    "7_8_focus_summary": {
+      "status": 200,
+      "keys": [
+        "published",
+        "draft"
+      ]
+    },
+    "11_conflicting_reported": {
+      "classic": {
+        "status": "blocked",
+        "processKeys": [
+          "enrollment"
+        ],
+        "state": {
+          "kind": "conflicting",
+          "id": "1191e3b5-d321-4e5e-aa83-81a3ccd7a94b",
+          "inquiry_drawer_mode": null
+        }
+      },
+      "inactive": {
+        "status": "blocked",
+        "processKeys": [
+          "enrollment"
+        ],
+        "state": {
+          "kind": "inactive",
+          "id": "a806d595-ade5-43f7-8cdf-f56c673e49d3"
+        }
+      },
+      "malformed": {
+        "status": "blocked",
+        "processKeys": [
+          "enrollment"
+        ],
+        "state": {
+          "kind": "invalid",
+          "id": "994dfb20-fc59-477a-b3c3-b6a5293c8d4f",
+          "reason": "config_json is not an object"
+        }
+      }
+    },
+    "14_concurrency": {
+      "statuses": [
+        "provisioned",
+        "provisioned_concurrently",
+        "provisioned_concurrently",
+        "provisioned_concurrently",
+        "provisioned_concurrently",
+        "provisioned_concurrently"
+      ],
+      "rows": 1
+    }
+  },
+  "cleanup": {
+    "1e674d0f-0eff-4c2a-a678-24d9f9f130c8": "not deleted: update or delete on table \"orgs\" violates foreign key constraint \"customers_org_id_fkey\" on table \"customers\"",
+    "99e56a36-a9c3-47e1-862b-89f3c08384f0": "not deleted: update or delete on table \"orgs\" violates foreign key constraint \"locations_org_id_fkey\" on table \"locations\"",
+    "02e35824-1e38-4e8d-b41e-2dfe8749ffe2": "not deleted: update or delete on table \"orgs\" violates foreign key constraint \"locations_org_id_fkey\" on table \"locations\"",
+    "11366f39-4418-453b-b1de-9ab6734384aa": "not deleted: update or delete on table \"orgs\" violates foreign key constraint \"locations_org_id_fkey\" on table \"locations\"",
+    "61a76c5e-a9ea-44b9-9cc3-3537d0062a5d": "not deleted: update or delete on table \"orgs\" violates foreign key constraint \"locations_org_id_fkey\" on table \"locations\""
+  }
+}

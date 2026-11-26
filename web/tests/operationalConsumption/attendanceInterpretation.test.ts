@@ -47,11 +47,42 @@ describe("interpretAttendance — not every attendance fact is commercial", () =
         expect(r.directives[0]).toMatchObject({ obligationKind: "hourly_care", scheduleBasis: "hourly", draftable: true, unitMultiplier: 3 });
     });
 
-    it("absence → vacation credit only when eligible, else discarded", () => {
-        expect(interpretAttendance(fact({ attendanceFactType: "absence", vacationEligible: true })).directives[0]).toMatchObject({ obligationKind: "vacation_credit", draftable: false });
-        const none = interpretAttendance(fact({ attendanceFactType: "absence", vacationEligible: false }));
-        expect(none.directives).toHaveLength(0);
-        expect(none.discardReason).toMatch(/no vacation-credit eligibility/);
+    it("absence → vacation credit only when COMMERCIAL POLICY says so", () => {
+        /*
+         * This test used to pass `vacationEligible` on the fact, because the fact
+         * used to be the authority. It is now the commercial context that decides,
+         * and the three answers are deliberately distinct: a policy granting
+         * credit, a policy refusing it, and no policy at all.
+         */
+        const away = fact({ attendanceFactType: "absence" });
+
+        expect(interpretAttendance(away, { vacationTreatment: "credit" }).directives[0])
+            .toMatchObject({ obligationKind: "vacation_credit", draftable: false });
+
+        const refused = interpretAttendance(away, { vacationTreatment: "no_credit" });
+        expect(refused.directives).toHaveLength(0);
+        expect(refused.discardReason).toMatch(/no_credit/);
+
+        // Absent configuration is a different answer from a configured refusal.
+        const unconfigured = interpretAttendance(away);
+        expect(unconfigured.directives).toHaveLength(0);
+        expect(unconfigured.discardReason).toMatch(/no vacation-credit policy configured/);
+    });
+
+    it("the operational fact carries no commercial eligibility at all", () => {
+        /*
+         * The strongest available proof that the old authority is gone: the field
+         * is no longer ON the DTO, so no caller can set it and no interpreter can
+         * read it. Asserting "the boolean is ignored" would require fabricating a
+         * DTO state the type no longer permits.
+         *
+         * What remains is the correct split — the fact says the child was away,
+         * the commercial context says what that is worth.
+         */
+        const away = fact({ attendanceFactType: "absence" });
+        expect(Object.keys(away)).not.toContain("vacationEligible");
+        expect(interpretAttendance(away).directives).toHaveLength(0);
+        expect(interpretAttendance(away, { vacationTreatment: "credit" }).directives).toHaveLength(1);
     });
 
     it("no-show emits a directive (resolves to a charge only if a template exists)", () => {

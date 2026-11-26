@@ -9,6 +9,7 @@ import { cache } from "react";
 import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
+import { logPortalDenied } from "@/lib/admin/portalAdmission";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 import { getCachedAuthUser, getCachedAuthUserId } from "@/lib/admin/cachedAuthSession";
 import {
@@ -27,6 +28,15 @@ export interface AdminAuthResult {
     roleKeys: string[];
     /** Primary org from {@link resolveAdminAccessCore} — same id used by Settings → Users & Roles members API. */
     orgId: string;
+    /**
+     * The union of `role_permission_grants` for the resolved org — the SAME set every capability
+     * gate consults.
+     *
+     * Carried so the shell can decide what to OFFER without asking a second question and getting a
+     * second answer. `M2-13` is this initiative's record of two gates in one request disagreeing
+     * about the same principal; a navigation layer that re-derived capability would be a third.
+     */
+    permissionKeys: string[];
 }
 
 async function loadAdminAuth(): Promise<AdminAuthResult | null> {
@@ -41,6 +51,8 @@ async function loadAdminAuth(): Promise<AdminAuthResult | null> {
     const bundleMs = Date.now() - t1;
 
     if (!bundle.ok || !bundle.portalEligible) {
+        // W-13 — the shell's own refusal, and the one an operator sees as a redirect to /login.
+        if (bundle.ok) logPortalDenied("getAdminAuth", bundle.userId, bundle.orgId, "no-capability");
         return null;
     }
 
@@ -57,7 +69,7 @@ async function loadAdminAuth(): Promise<AdminAuthResult | null> {
             total_ms: totalMs,
         });
     }
-    return { user, role, roleKeys: bundle.roleKeys, orgId: bundle.orgId };
+    return { user, role, roleKeys: bundle.roleKeys, orgId: bundle.orgId, permissionKeys: bundle.permissionKeys };
 }
 
 const resolveAdminAuthOnce = cache(async (): Promise<AdminAuthResult | null> => {
@@ -108,7 +120,18 @@ export async function requireAdmin(): Promise<NextResponse | null> {
 
 /**
  * Use in PATCH routes that both admin and ops can call (opportunities, jobs, contacts, customers, schedules).
- * Returns 401 if not logged in or no valid profile; 403 if role not in (admin, ops); otherwise null.
+ *
+ * **Does not check a role, and does not call `getAdminAuth`.** It resolves through
+ * `getAdminOrgContextLightCached` → `resolveAdminPortalOrgCore` — a *different* resolver from the
+ * one `requireAdmin` and `getAdminContextCached` use (`M2-13`: two gates in one request can
+ * disagree about the same principal; `W-41` consolidates them and needs `AD-12`).
+ *
+ * Returns **401** with no session, **403** when the principal is not portal-eligible, otherwise
+ * `null`. The name reflects "portal user allowed", not "verify ops" — it never branches on the
+ * compatibility `role` string.
+ *
+ * The comment this replaces claimed "403 if role not in (admin, ops)", a gate that is nowhere in
+ * this body. Prefer `loadAdminRouteGate` for new routes, which resolves capabilities and scope too.
  */
 export async function requireAdminOrOps(): Promise<NextResponse | null> {
     const ctx = await getAdminOrgContextLightCached();

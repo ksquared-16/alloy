@@ -1,0 +1,158 @@
+[
+  {
+    "t": "2026-08-13T14:12:02.737Z",
+    "step": "active-before",
+    "active": [
+      {
+        "id": "6dad1e22-48d0-455b-9dfa-c0db4e3a3d8d",
+        "status_key": "confirmed",
+        "start_at": "2026-08-14T17:00:00+00:00"
+      }
+    ]
+  },
+  {
+    "t": "2026-08-13T14:12:16.341Z",
+    "step": "cancel",
+    "id": "6dad1e22-48d0-455b-9dfa-c0db4e3a3d8d",
+    "status": 200,
+    "body": {
+      "booking": {
+        "id": "6dad1e22-48d0-455b-9dfa-c0db4e3a3d8d",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "opportunity_id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+        "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "primary_person_id": "e5df3f17-d0ba-475a-bb37-73a8f1f899a0",
+        "primary_contact_id": null,
+        "requested_by_user_id": null,
+        "start_at": "2026-08-14T17:00:00+00:00",
+        "end_at": "2026-08-14T17:45:00+00:00",
+        "timezone": "America/Los_Angeles",
+        "status_key": "canceled",
+        "source": "public_link",
+        "form_submission_id": null,
+        "form_public_link_id": null,
+        "canceled_at": "2026-08-13T14:12:07.711+00:00",
+        "canceled_by": "admin",
+        "cancel_reason": null,
+        "rescheduled_from_booking_id": null,
+        "metadata": {
+          "rule_id": "3f600420-1fe7-4822-ae0c-92ff4834cb99",
+          "tour_public_booking_link_id": "b19c318e-bf06-464a-9bce-5d879cdac9e8"
+        },
+        "created_at": "2026-08-12T21:13:39.372327+00:00",
+        "updated_at": "2026-08-13T14:12:07.947779+00:00"
+      }
+    }
+  },
+  {
+    "t": "2026-08-13T14:12:21.049Z",
+    "step": "patch",
+    "status": 200,
+    "marker": "CERT_BOOK_1786630321998"
+  },
+  {
+    "t": "2026-08-13T14:12:32.368Z",
+    "step": "prepare",
+    "status": 200,
+    "ok": true,
+    "inviteUrl": "http://localhost:3015/a/zf3Cf997"
+  },
+  {
+    "t": "2026-08-13T14:12:36.570Z",
+    "step": "slot",
+    "slot": {
+      "startAt": "2026-08-17T16:00:00.000Z",
+      "endAt": "2026-08-17T16:45:00.000Z",
+      "timezone": "America/Los_Angeles",
+      "remainingCapacity": 1,
+      "ruleId": "823fd406-cdb9-4cf9-bff1-26d0f511d0a3",
+      "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "userId": null
+    },
+    "count": 36
+  },
+  {
+    "t": "2026-08-13T14:12:54.143Z",
+    "step": "book",
+    "status": 201,
+    "json": {
+      "ok": true,
+      "booking": {
+        "id": "0f0cb69b-bc82-4dda-82b1-e16994b6ee03",
+        "state": "confirmed",
+        "start_at": "2026-08-17T16:00:00+00:00",
+        "end_at": "2026-08-17T16:45:00+00:00",
+        "timezone": "America/Los_Angeles"
+      }
+    }
+  },
+  {
+    "t": "2026-08-13T14:12:58.838Z",
+    "step": "RESULT",
+    "pass": {
+      "booked": true,
+      "markerInMessage": true,
+      "friendlyAnchors": true,
+      "noRawLabels": true
+    },
+    "confMsg": {
+      "id": "52b1e384-5f6f-446e-a7f7-ca657547cf4f",
+      "channel": "email",
+      "subject": "Your tour is scheduled — 08/17/2026, 9:00 AM · CERT_TOUR_TMPL_1786572190971 · CERT_TOUR_TMPL_1786572259833 · CERT_BROWSER_1786629983410 · CERT_BROWSER_1786630155260 · CERT_BOOK_1786630321998",
+      "hasMarker": true,
+      "anchors": [
+        {
+          "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Tour%20at%2",
+          "text": "Add to calendar"
+        },
+        {
+          "href": "http://localhost:3015/tour-booking/XhDpP08yB4g9EhMu1_WKomEmikKxAjz9mGcz60xvObs",
+          "text": "Reschedule tour"
+        },
+        {
+          "href": "http://localhost:3015/tour-booking/nlqpEY2SZEB2I9GB78vR9Xx4-SGhCoE4zskZN3O8IYg",
+          "text": "Manage or cancel tour"
+        }
+      ],
+      "rawUrlVisible": false,
+      "eventKey": "tour_confirmation",
+      "htmlSlice": "<p>Hello Kelly,</p>\n<p>Your tour is confirmed for 08/17/2026, 9:00 AM.<br/>North Campus — 123 Main Street, Bend, OR, 97701</p>\n<p><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Tour%20at%20North%20Campus&amp;dates=20260817T160000Z%2F20260817T164500Z&amp;details=Tour%20for%20Kurzman%20Family&amp;location=North%20Campus%20%E2%80%94%20123%20Main%20Street%2C%20Bend%2C%20"
+    },
+    "analyzedHead": [
+      {
+        "id": "52b1e384-5f6f-446e-a7f7-ca657547cf4f",
+        "channel": "email",
+        "subject": "Your tour is scheduled — 08/17/2026, 9:00 AM · CERT_TOUR_TMPL_1786572190971 · CERT_TOUR_TMPL_1786572259833 · CERT_BROWSER_1786629983410 · CERT_BROWSER_1786630155260 · CERT_BOOK_1786630321998",
+        "hasMarker": true,
+        "anchors": [
+          {
+            "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Tour%20at%2",
+            "text": "Add to calendar"
+          },
+          {
+            "href": "http://localhost:3015/tour-booking/XhDpP08yB4g9EhMu1_WKomEmikKxAjz9mGcz60xvObs",
+            "text": "Reschedule tour"
+          },
+          {
+            "href": "http://localhost:3015/tour-booking/nlqpEY2SZEB2I9GB78vR9Xx4-SGhCoE4zskZN3O8IYg",
+            "text": "Manage or cancel tour"
+          }
+        ],
+        "rawUrlVisible": false,
+        "eventKey": "tour_confirmation",
+        "htmlSlice": "<p>Hello Kelly,</p>\n<p>Your tour is confirmed for 08/17/2026, 9:00 AM.<br/>North Campus — 123 Main Street, Bend, OR, 97701</p>\n<p><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Tour%20at%20North%20Campus&amp;dates=20260817T160000Z%2F20260817T164500Z&amp;details=Tour%20for%20Kurzman%20Family&amp;location=North%20Campus%20%E2%80%94%20123%20Main%20Street%2C%20Bend%2C%20"
+      },
+      {
+        "id": "ed361c4a-1d1a-4451-a663-e6b5a81533a7",
+        "channel": "email",
+        "subject": "Tour canceled — North Campus",
+        "hasMarker": false,
+        "anchors": [],
+        "rawUrlVisible": false,
+        "eventKey": "tour_cancel",
+        "htmlSlice": "<p>Hello Kelly,</p>\n<p>Your scheduled tour on 08/14/2026, 10:00 AM at North Campus has been canceled.</p>\n<p>Thank you,<br/>Firefly Early Learning</p>"
+      }
+    ],
+    "marker": "CERT_BOOK_1786630321998"
+  }
+]

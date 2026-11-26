@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-initiative-remediate <initiative-key>
+
+Collects failed review findings, groups by owning task, and writes bounded
+remediation packages into existing worker worktrees.
+
+Transitions: reviewing|remediation_required → remediation_required → implementing
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local base reviews_dir review_json round
+  base="$(alloy_initiative_dir "$key")"
+  reviews_dir="$base/reviews"
+  review_json="$reviews_dir/task-002-review.json"
+  [[ -f "$review_json" ]] || alloy_die "review report missing: $review_json"
+
+  alloy_engineering_io validate-review "$review_json"
+
+  local status findings
+  status="$(node -e "console.log(require('${review_json}').status)")"
+  findings="$(node -e "console.log(JSON.stringify(require('${review_json}').required_remediation||[]))")"
+
+  if [[ "$status" == "pass" ]]; then
+    alloy_info "Review passed — no remediation required"
+    if [[ "$(alloy_initiative_current_state "$key")" == "reviewing" ]]; then
+      alloy_initiative_transition "$key" "merge_ready" 2>/dev/null || true
+    fi
+    exit 0
+  fi
+
+  round="$(node -e "const d=require('${base}/state.json'); console.log((d.remediation_round||0)+1);")"
+  node -e "
+    const fs = require('fs');
+    const p = '${base}/state.json';
+    const d = JSON.parse(fs.readFileSync(p,'utf8'));
+    d.remediation_round = ${round};
+    d.cost_summary = d.cost_summary || {};
+    d.cost_summary.remediation_rounds = (d.cost_summary.remediation_rounds||0) + 1;
+    d.updated_at = '$(alloy_iso_now)';
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  local rem_path="$base/remediation/round-${round}-task-001.md"
+  mkdir -p "$base/remediation"
+  {
+    printf '# Remediation package — round %s\n\n' "$round"
+    printf 'Initiative: `%s`\n' "$key"
+    printf 'Owning task: task-001\n'
+    printf 'Approved specification hash: `%s` (frozen — do not reinterpret scope)\n\n' \
+      "$(node -e "console.log(require('${base}/state.json').approved_spec_hash||'')")"
+    printf '## Required remediation\n\n'
+    node -e "for (const f of JSON.parse(process.argv[1])) console.log('- ' + f)" "$findings"
+    printf '\n## Prohibited\n\n'
+    printf -- '- Unrelated refactors\n'
+    printf -- '- Scope expansion beyond approved contract\n'
+    printf -- '- Push / merge\n'
+    printf '\n## Revalidation\n\n'
+    printf -- '- Re-run focused checks for touched files\n'
+    printf -- '- Update reports/task-001-result.json\n'
+    printf -- '- UI routes must be re-verified if UI findings present\n'
+  } >"$rem_path"
+
+  local worktree_path
+  worktree_path="$(node -e "console.log(require('${base}/state.json').workers['task-001'].path)")"
+  cp "$rem_path" "$(alloy_engineering_worker_package_md_path "$worktree_path")"
+
+  alloy_engineering_update_task_status "$key" "task-001" "remediation"
+  local cur_state
+  cur_state="$(alloy_initiative_current_state "$key")"
+  if [[ "$cur_state" == "reviewing" || "$cur_state" == "merge_ready" ]]; then
+    alloy_initiative_transition "$key" "remediation_required" 2>/dev/null || true
+  fi
+  alloy_initiative_transition "$key" "implementing" 2>/dev/null || true
+
+  alloy_info "Remediation round $round prepared"
+  alloy_info "  package: $rem_path"
+  alloy_info "  copied to worktree package path for paste delivery"
+  alloy_info "Next: alloy-worker-open $key task-001"
+}
+
+main "$@"

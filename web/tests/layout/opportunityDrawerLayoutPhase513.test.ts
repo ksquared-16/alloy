@@ -16,12 +16,20 @@ import {
     repairOpportunityDrawerLayoutGeneratedKeys,
     writeCustomSectionMetadata,
 } from "@/lib/layout/layoutEditorGeneratedKeys";
+import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { formatLayoutValidationErrors, prepareOpportunityDrawerLayoutDocForEditor, validateOpportunityDrawerLayoutDoc } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { validateLayoutDocForSurface } from "@/lib/layout/validateLayoutDocForSurface";
 
-const EMAIL_FIELD = { refKey: "person.primary_email", fieldLabel: "Email", fieldType: "text" as const };
+const EMAIL_FIELD: LayoutCatalogField = {
+    entityKey: "person",
+    entityLabel: "Person",
+    fieldKey: "primary_email",
+    refKey: "person.primary_email",
+    fieldLabel: "Email",
+    fieldType: "text",
+};
 
 function legacySectionDoc(sectionKey: string, blockRefKey = "block"): LayoutDoc {
     const doc = buildLeadDrawerDefaultDoc();

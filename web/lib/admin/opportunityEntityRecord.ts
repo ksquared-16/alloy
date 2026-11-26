@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
 import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlationId";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
+import { collectLinkedContactsFromOpportunityRecord } from "@/lib/admin/drawer/collectLinkedPersonIdsFromOpportunityRecord";
+import { buildCaseEmploymentProjection } from "@/lib/employment/buildCaseEmploymentProjection";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import {
@@ -27,6 +29,10 @@ import {
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
+import { attachPersonChildRelationshipsToEntityRecord } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
+import { listEnrollmentInstancesForLead, buildEnrollmentParticipationByMemberMap } from "@/lib/process/processInstances";
+import { resolveDurableFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenDurableFactsOverlay";
+import { resolveProcessDraftFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenProcessDraftFactsOverlay";
 import {
   attachChildScopedContactLinksToRecord,
   memberRowsFromInquiryChildren,
@@ -52,6 +58,10 @@ import { loadInquiryChildCustomFieldValuesByOcmId } from "@/lib/admin/drawer/inq
 import { normalizeIsoDateOnly } from "@/lib/fields/inquiryChildFieldRegistry";
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { enrichInquiryChildrenWithPlacementOptionLabels } from "@/lib/admin/drawer/enrichInquiryChildrenPlacementLabels";
+import { attachCustomerMemberProfileToInquiryChildren } from "@/lib/admin/drawer/attachCustomerMemberProfileToInquiryChildren";
+import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import { RESOLVED_PHOTO_URL_KEY } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
+import { projectResolvedProfilePhotosOntoRows } from "@/lib/documents/projectPersonProfilePhotos";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -64,7 +74,30 @@ type WarmPersonRow = {
   email?: string | null;
   phone?: string | null;
   date_of_birth?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
+
+function warmPersonPhotoUrl(person: WarmPersonRow | null | undefined): string | null {
+  if (!person) return null;
+  const meta = person.metadata;
+  if (!meta || typeof meta !== "object") return null;
+  for (const key of ["photo_url", "avatar_url", "profile_photo_url", "profile_image_url", "image_url"]) {
+    const value = meta[key];
+    if (value != null && String(value).trim() !== "") return String(value).trim();
+  }
+  return null;
+}
+
+/** Warm-person map → metadata bag for profile-photo projection. */
+function metadataByPersonIdFromWarmMap(
+  pmap: Map<string, WarmPersonRow>,
+): Map<string, Record<string, unknown> | null | undefined> {
+  const out = new Map<string, Record<string, unknown> | null | undefined>();
+  for (const [id, person] of pmap) {
+    out.set(id, person.metadata ?? null);
+  }
+  return out;
+}
 
 function trimOrNull(v: unknown): string | null {
   if (v == null) return null;
@@ -83,6 +116,7 @@ function buildOpportunityInquiryLinesLite(
   };
   push("program_type", "Program", out.program_type);
   push("schedule_type", "Schedule", out.schedule_type);
+  // Opportunity-level legacy field key — not the OCM column (S2 renamed OCM only).
   push("desired_start_date", "Desired start", out.desired_start_date);
   const defs =
     (out._field_definitions as
@@ -171,7 +205,7 @@ async function fetchPrimaryPersonContactHydrate(
   if (primaryPersonId) {
     const { data: person } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
+      .select("id, first_name, last_name, full_name, email, phone, date_of_birth, metadata")
       .eq("id", primaryPersonId)
       .eq("org_id", orgId)
       .maybeSingle();
@@ -206,7 +240,7 @@ async function fetchPrimaryPersonContactHydrate(
     if (c && (c as { person_id?: string | null }).person_id) {
       const { data: person } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
+        .select("id, first_name, last_name, full_name, email, phone, date_of_birth, metadata")
         .eq("id", (c as { person_id: string }).person_id)
         .eq("org_id", orgId)
         .maybeSingle();
@@ -271,12 +305,12 @@ type CmBootstrapRow = {
 type OcmJoinRow = {
   id: string;
   customer_member_id: string;
-  desired_start_date?: string | null;
+  start_date?: string | null;
   location_id?: string | null;
   program_room_cohort_key?: string | null;
-  desired_program_type?: string | null;
-  desired_program_category_id?: string | null;
-  desired_schedule_type?: string | null;
+  program_category_id?: string | null;
+  location_program_categories?: { key?: string | null; label?: string | null } | null;
+  schedule_type?: string | null;
   outcome_status_key?: string | null;
   fit_status?: string | null;
   notes?: string | null;
@@ -296,28 +330,42 @@ type InquiryHydrateChild = {
   age: string | null;
   linked_on_inquiry: boolean;
   ocm_id: string | null;
-  desired_program_type: string | null;
-  desired_program_category_id: string | null;
+  program_category_id: string | null;
+  /** Stable program key derived from the category FK (or opportunity default) — display only. */
+  program_key: string | null;
   desired_program_label: string | null;
-  desired_schedule_type: string | null;
+  schedule_type: string | null;
   desired_schedule_label: string | null;
   outcome_status_key: string | null;
   outcome_status_label: string | null;
   fit_status: string | null;
   notes: string | null;
-  desired_start_date: string | null;
+  start_date: string | null;
   location_id?: string | null;
   location_label?: string | null;
   program_room_cohort_key?: string | null;
   program_room_cohort_label?: string | null;
+  /** Enrollment process stage (position) from process_instances — source of truth. */
+  stage_key?: string | null;
+  /** Provenance of the participation state/stage: "process_instances" (authoritative) or "ocm" (bridge). */
+  _participation_source?: "process_instances" | "ocm";
+  /**
+   * Answers recorded with each chosen per-child path (`process_instances.metadata.decision_answers_v1`),
+   * keyed by decision — e.g. the program offered. Raw journey data; configuration decides how it reads.
+   */
+  _decision_answers_v1?: Record<string, unknown> | null;
+  /** Provenance of operational facts: "durable" (materialized) > "process_instance" (pre-mat draft) > "ocm" (legacy). */
+  _operational_facts_source?: "durable" | "process_instance" | "ocm";
   custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown> | null;
+  /** Profile image when present on linked person/member metadata. */
+  photo_url?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
 
 const OCM_INQUIRY_SELECT_COLUMNS =
-  "id, customer_member_id, desired_start_date, location_id, program_room_cohort_key, desired_program_type, desired_program_category_id, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at";
+  "id, customer_member_id, start_date, location_id, program_room_cohort_key, program_category_id, location_program_categories(key, label), schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at";
 
 async function batchLocationLabelsForOrg(
   supabase: AdminSupabase,
@@ -374,20 +422,24 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
     });
     const dob = identity.dob;
     const age = ageFromDobIso(dob);
-    const desiredProgramType =
-      trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
-    const desiredProgramCategoryId = trimOrNull(r.desired_program_category_id);
-    const desiredScheduleType =
-      trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+    const programCategoryId = trimOrNull(r.program_category_id);
+    const embeddedCategoryKey = trimOrNull(r.location_program_categories?.key);
+    const embeddedCategoryLabel = trimOrNull(r.location_program_categories?.label);
+    // Derived display key: embedded category key, else opportunity-level default program key.
+    const programKey = embeddedCategoryKey ?? (programCategoryId ? null : oppDefaultProgramType);
+    const scheduleType =
+      trimOrNull(r.schedule_type) ?? oppDefaultScheduleType;
     const outcomeStatusKey = trimOrNull(r.outcome_status_key);
     const desiredProgramLabel = resolveInquiryChildProgramCategoryLabel({
-      desired_program_type: desiredProgramType,
+      program_category_id: programCategoryId,
+      program_key: programKey,
+      desired_program_label: embeddedCategoryLabel,
       optionLabelLookup: optionLabelMap,
     });
     const desiredScheduleLabel = optionLabelFromBatchMap(
       optionLabelMap,
       "childcare_schedule_type",
-      desiredScheduleType,
+      scheduleType,
     );
     const locationId = trimOrNull(r.location_id);
     const cohortKey = trimOrNull(r.program_room_cohort_key);
@@ -419,24 +471,177 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       age: age ? age.label : null,
       linked_on_inquiry: true,
       ocm_id: r.id,
-      desired_program_type: desiredProgramType,
-      desired_program_category_id: desiredProgramCategoryId,
+      program_category_id: programCategoryId,
+      program_key: programKey,
       desired_program_label: desiredProgramLabel,
-      desired_schedule_type: desiredScheduleType,
+      schedule_type: scheduleType,
       desired_schedule_label: desiredScheduleLabel,
       outcome_status_key: outcomeStatusKey,
       outcome_status_label: outcomeStatusLabel,
       fit_status: trimOrNull(r.fit_status),
       notes: trimOrNull(r.notes),
-      desired_start_date: normalizeIsoDateOnly(r.desired_start_date),
+      start_date: normalizeIsoDateOnly(r.start_date),
       location_id: locationId,
       location_label: locationId ? (locationLabelById.get(locationId) ?? null) : null,
       program_room_cohort_key: cohortKey,
       program_room_cohort_label: cohortLabel,
       custom_fields: {},
       metadata: (r.metadata as Record<string, unknown>) ?? null,
+      photo_url:
+        warmPersonPhotoUrl(p)
+        ?? (() => {
+          const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
+          if (!memMeta) return null;
+          for (const key of ["photo_url", "avatar_url", "profile_photo_url", "profile_image_url", "image_url"]) {
+            const value = memMeta[key];
+            if (value != null && String(value).trim() !== "") return String(value).trim();
+          }
+          return null;
+        })(),
       created_at: r.created_at ?? null,
       updated_at: r.updated_at ?? null,
+    };
+  });
+}
+
+/**
+ * Overlay process_instances (source of truth) onto the OCM-derived child blocks. The Focus Panel /
+ * record surface shows child ENROLLMENT PARTICIPATION (state) and PROCESS STAGE from process_instances,
+ * not OCM.outcome_status_key. OCM stays only as the enumerator + bridge for participation-detail fields
+ * (program/schedule/start/fit — still edited via the OCM PATCH path, retired in a later slice).
+ *
+ * Match is by customer_member_id (= process_instances.subject_id). A child with no process instance
+ * (legacy pre-cutover) keeps its OCM-sourced status as a documented fallback.
+ */
+/** Pure application of process-instance participation onto children (fetch already resolved). */
+export function applyProcessInstanceParticipation(
+  children: InquiryHydrateChild[],
+  instances: Awaited<ReturnType<typeof listEnrollmentInstancesForLead>>,
+  ocmStatusLabelByKey: Map<string, string>,
+): InquiryHydrateChild[] {
+  if (!children.length) return children;
+  if (!instances.length) {
+    // No process instances yet (legacy lead) → OCM remains the participation source (bridge fallback).
+    return children.map((c) => ({ ...c, _participation_source: "ocm" as const }));
+  }
+  const piBySubject = new Map(instances.map((pi) => [pi.subject_id, pi]));
+  return children.map((c) => {
+    const pi = c.customer_member_id ? piBySubject.get(c.customer_member_id) : undefined;
+    if (!pi) return { ...c, _participation_source: "ocm" as const };
+    const stateKey = trimOrNull(pi.state);
+    const stageKey = trimOrNull(pi.stage_key);
+    const stateLabel = stateKey
+      ? (ocmStatusLabelByKey.get(stateKey) ??
+         canonicalNewLeadStatusLabel(stateKey) ??
+         humanizeStatusKey(stateKey))
+      : null;
+    return {
+      ...c,
+      // Participation state + process stage are authoritative from process_instances.
+      outcome_status_key: stateKey,
+      outcome_status_label: stateLabel,
+      stage_key: stageKey,
+      _participation_source: "process_instances" as const,
+      _decision_answers_v1:
+        pi.metadata && typeof pi.metadata.decision_answers_v1 === "object" && !Array.isArray(pi.metadata.decision_answers_v1)
+          ? (pi.metadata.decision_answers_v1 as Record<string, unknown>)
+          : null,
+    };
+  });
+}
+
+export async function overlayProcessInstanceParticipation(
+  supabase: AdminSupabase,
+  orgId: string,
+  opportunityId: string,
+  children: InquiryHydrateChild[],
+  ocmStatusLabelByKey: Map<string, string>,
+): Promise<InquiryHydrateChild[]> {
+  if (!children.length) return children;
+  const instances = await listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
+  return applyProcessInstanceParticipation(children, instances, ocmStatusLabelByKey);
+}
+
+/**
+ * Overlay DURABLE operational facts (program / room / schedule / start date) onto the child blocks from
+ * the operational enrollment read model (child_enrollment_agreements + child_placements +
+ * schedule_assignments) once enrollment has been materialized. Durable facts win; OCM fills only the gaps
+ * and remains the fallback for children with no operational agreement yet. Matched by customer_member_id.
+ */
+/** Pure application of durable operational facts onto children (fetch already resolved). */
+export function applyDurableOperationalFacts(
+  children: InquiryHydrateChild[],
+  facts: Awaited<ReturnType<typeof resolveDurableFactsForChildren>>,
+): InquiryHydrateChild[] {
+  if (!children.length) return children;
+  if (!facts.size) return children.map((c) => ({ ...c, _operational_facts_source: "ocm" as const }));
+  return children.map((c) => {
+    const f = c.customer_member_id ? facts.get(c.customer_member_id) : undefined;
+    if (!f) return { ...c, _operational_facts_source: "ocm" as const };
+    return {
+      ...c,
+      // Durable operational facts are the source once materialized; OCM values fill gaps only.
+      desired_program_label: f.programLabel ?? c.desired_program_label,
+      program_room_cohort_label: f.roomLabel ?? c.program_room_cohort_label,
+      desired_schedule_label: f.scheduleLabel ?? c.desired_schedule_label,
+      start_date: normalizeIsoDateOnly(f.startDate) ?? c.start_date,
+      program_category_id: f.programCategoryId ?? c.program_category_id,
+      location_id: f.siteLocationId ?? c.location_id,
+      _operational_facts_source: "durable" as const,
+    };
+  });
+}
+
+export async function overlayDurableOperationalFacts(
+  supabase: AdminSupabase,
+  orgId: string,
+  children: InquiryHydrateChild[],
+): Promise<InquiryHydrateChild[]> {
+  if (!children.length) return children;
+  const facts = await resolveDurableFactsForChildren(
+    supabase as never,
+    orgId,
+    children.map((c) => ({ customerMemberId: c.customer_member_id, siteLocationId: c.location_id ?? null })),
+  );
+  return applyDurableOperationalFacts(children, facts);
+}
+
+/**
+ * Overlay PRE-materialization participation facts from process_instances.metadata onto child blocks that
+ * are NOT yet materialized (durable overlay left them "ocm"). Priority is durable > process_instance draft
+ * > OCM: this runs AFTER the durable overlay and only touches non-durable children. Lets the Focus Panel
+ * render program/room/schedule/start for new leads without any OCM row.
+ */
+export async function overlayProcessDraftParticipation(
+  supabase: AdminSupabase,
+  orgId: string,
+  opportunityId: string,
+  children: InquiryHydrateChild[],
+): Promise<InquiryHydrateChild[]> {
+  const pending = children.filter((c) => c._operational_facts_source !== "durable" && c.customer_member_id);
+  if (!pending.length) return children;
+  const draft = await resolveProcessDraftFactsForChildren(
+    supabase as never,
+    orgId,
+    opportunityId,
+    pending.map((c) => ({ customerMemberId: c.customer_member_id })),
+  );
+  if (!draft.size) return children;
+  return children.map((c) => {
+    if (c._operational_facts_source === "durable") return c;
+    const f = c.customer_member_id ? draft.get(c.customer_member_id) : undefined;
+    if (!f) return c;
+    return {
+      ...c,
+      // Process-instance draft is the source pre-materialization; keep any existing value as a gap-fill.
+      desired_program_label: f.programLabel ?? c.desired_program_label,
+      program_room_cohort_label: f.roomLabel ?? c.program_room_cohort_label,
+      desired_schedule_label: f.scheduleLabel ?? c.desired_schedule_label,
+      start_date: normalizeIsoDateOnly(f.startDate) ?? c.start_date,
+      program_category_id: f.programCategoryId ?? c.program_category_id,
+      location_id: f.siteLocationId ?? c.location_id,
+      location_label: f.siteLocationLabel ?? c.location_label,
+      _operational_facts_source: "process_instance" as const,
     };
   });
 }
@@ -472,24 +677,24 @@ function applyInquiryChildrenMetadataFallbacks(
           ocm_id: null,
           dob: typeof row.dob === "string" ? row.dob : null,
           age: typeof row.age === "string" ? row.age : null,
-          desired_program_type:
+          program_category_id: null,
+          program_key:
             typeof row.program_type_key === "string"
               ? trimOrNull(row.program_type_key)
               : null,
-          desired_program_category_id: null,
           desired_program_label:
             typeof row.program_label === "string"
               ? trimOrNull(row.program_label)
               : typeof row.program_short === "string"
                 ? trimOrNull(row.program_short)
                 : null,
-          desired_schedule_type: null,
+          schedule_type: null,
           desired_schedule_label: null,
           outcome_status_key: null,
           outcome_status_label: null,
           fit_status: null,
           notes: typeof row.notes === "string" ? trimOrNull(row.notes) : null,
-          desired_start_date: null,
+          start_date: null,
           custom_fields: {},
           metadata: (row.metadata as Record<string, unknown>) ?? {
             source: "opportunity_metadata",
@@ -523,18 +728,18 @@ function applyInquiryChildrenMetadataFallbacks(
           ocm_id: null,
           dob: typeof md.child_dob === "string" ? md.child_dob : null,
           age: typeof md.child_age === "string" ? md.child_age : null,
-          desired_program_type:
+          program_category_id: null,
+          program_key:
             typeof md.program_type_key === "string"
               ? trimOrNull(md.program_type_key)
               : null,
-          desired_program_category_id: null,
           desired_program_label:
             typeof md.program_label === "string"
               ? trimOrNull(md.program_label)
               : typeof md.demo_requested_program === "string"
                 ? trimOrNull(md.demo_requested_program)
                 : null,
-          desired_schedule_type:
+          schedule_type:
             typeof md.schedule_type_key === "string"
               ? trimOrNull(md.schedule_type_key)
               : null,
@@ -546,7 +751,7 @@ function applyInquiryChildrenMetadataFallbacks(
           outcome_status_label: null,
           fit_status: null,
           notes: typeof md.notes === "string" ? trimOrNull(md.notes) : null,
-          desired_start_date: null,
+          start_date: null,
           custom_fields: {},
           metadata: { source: "opportunity_metadata_demo_child_name" },
           created_at: null,
@@ -565,10 +770,29 @@ function applyInquiryChildrenMetadataFallbacks(
  * Option-set label batch (`batchOptionItemLabelsForOrg`) is intentionally omitted here (~400–500ms):
  * read-only rows use item_key fallbacks; editable dropdowns load option sets when edit mode arms.
  */
+/**
+ * Carry the photo projection's single key onto the profiled rows.
+ *
+ * Both inputs are derived from the same base array by `.map`, so index `i` is the same child in
+ * both. A row that resolved no photo is returned untouched — an absent photo must stay absent rather
+ * than become an explicit null the card would render as "no photo on file".
+ */
+export function mergeResolvedPhotoOntoProfiledChildren<T extends Record<string, unknown>>(
+  profiled: T[],
+  photographed: Array<Record<string, unknown>>,
+): T[] {
+  if (profiled.length !== photographed.length) return profiled;
+  return profiled.map((row, i) => {
+    const photo = photographed[i]?.[RESOLVED_PHOTO_URL_KEY];
+    return photo === undefined ? row : ({ ...row, [RESOLVED_PHOTO_URL_KEY]: photo } as T);
+  });
+}
+
 export async function attachOpportunityInquiryChildrenShell(
   supabase: AdminSupabase,
   orgId: string,
   host: Record<string, unknown>,
+  documentActor?: DocumentActor | null,
 ): Promise<void> {
   const opportunityId = trimOrNull(host.id);
   if (!opportunityId) {
@@ -579,6 +803,9 @@ export async function attachOpportunityInquiryChildrenShell(
   const oppMeta = (host.metadata as Record<string, unknown> | null) ?? null;
   const oppDefaultProgramType = trimOrNull(host.program_type);
   const oppDefaultScheduleType = trimOrNull(host.schedule_type);
+  // Sub-phase instrumentation for `children_orientation_ms` — surfaced on the record so the compose
+  // can bubble it into the response `phases_ms` and the dominant first-useful cost is measurable.
+  const cph: Record<string, number> = {};
 
   const ocmJoinP = supabase
     .from("opportunity_customer_members")
@@ -601,6 +828,7 @@ export async function attachOpportunityInquiryChildrenShell(
         .limit(25)
     : Promise.resolve({ data: [] as CmBootstrapRow[], error: null });
 
+  const tBatch0 = Date.now();
   const [joinRes, cmsRes, ocmMemberDefsTaggedPack] = await Promise.all([
     ocmJoinP,
     customerMembersP,
@@ -610,6 +838,7 @@ export async function attachOpportunityInquiryChildrenShell(
       nextRevalidateSeconds: 900,
     }),
   ]);
+  cph.ocm_members_batch_ms = Date.now() - tBatch0;
 
   const jrows = (joinRes.data ?? []) as OcmJoinRow[];
   const bootstrapList = ((cmsRes.data ?? []) ?? []) as CmBootstrapRow[];
@@ -637,15 +866,55 @@ export async function attachOpportunityInquiryChildrenShell(
   }
 
   const memberMap = new Map(memList.map((m) => [m.id, m]));
+
+  /*
+   * ── LAW 34: A PERSON-BACKED CHILD'S IDENTITY COMES FROM `persons` ──
+   *
+   * `resolveInquiryChildIdentityFields` has always been person-first — but it can only be person-first
+   * if the person is actually LOADED. This map was constructed empty and never filled, so `pmap.get(pid)`
+   * missed for every child, `person` arrived null, and the resolver silently took its
+   * `customer_members` fallback branch for person-backed children too.
+   *
+   * That is not a cosmetic miss. It is precisely how a child could read "Lennon Kurzman" on every
+   * operator surface while `persons` held `perf-probe-1787311039569`: the surfaces were showing the
+   * member mirror, the placement projection (which loads persons through its own join) was showing the
+   * canonical row, and identity edits — which write `persons` — were invisible to the editor that made
+   * them. The editor then baselined on the member, so re-typing the correct value wrote nothing at all.
+   *
+   * Loading the children's persons here fixes every consumer of `_inquiry_children` at once — Children,
+   * Assignment, Focus Panel header, drawer VM, Records and the queue row projections all read this one
+   * record. One authority, resolved once, rather than a rule re-implemented per card.
+   */
   const pmap = new Map<string, WarmPersonRow>();
+  const childPersonIds = [
+    ...new Set(
+      [...memList, ...bootstrapList]
+        .map((m) => trimOrNull(m.person_id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (childPersonIds.length > 0) {
+    const tChildPersons0 = Date.now();
+    const { data: childPersons } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, email, phone, date_of_birth, metadata")
+      .eq("org_id", orgId)
+      .in("id", childPersonIds);
+    for (const row of (childPersons ?? []) as WarmPersonRow[]) {
+      if (row?.id) pmap.set(row.id, row);
+    }
+    cph.child_persons_ms = Date.now() - tChildPersons0;
+  }
 
   const optionLabelMap = EMPTY_OPTION_LABEL_MAP as Map<string, string>;
   const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberDefsTaggedPack.rows);
+  const tLoc0 = Date.now();
   const locationLabelById = await batchLocationLabelsForOrg(
     supabase,
     orgId,
     jrows.map((r) => trimOrNull(r.location_id)).filter((id): id is string => Boolean(id)),
   );
+  cph.location_labels_ms = Date.now() - tLoc0;
 
   let inquiryBlocks = mapOcmJoinRowsToInquiryChildrenBlock(
     jrows,
@@ -665,25 +934,139 @@ export async function attachOpportunityInquiryChildrenShell(
     oppDefaultScheduleType,
     optionLabelMap,
   );
-  let inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, opportunityId);
-  inquiryChildrenOut = await enrichInquiryChildrenWithPlacementOptionLabels(
-    supabase,
-    orgId,
-    inquiryChildrenOut,
+  const inquiryChildrenBase = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, opportunityId);
+
+  // ── Overlay chain — first-useful child orientation ──────────────────────────────────────────
+  // Precedence of APPLICATION is fixed: placement labels → process-instance participation → durable
+  // operational facts → process-instance draft (durable > draft > OCM). But the FETCHES of the first
+  // three are mutually independent — each reads only the base children (customer_member_id/location_id)
+  // and opportunityId, never a prior overlay's OUTPUT. So the three round-trips are issued CONCURRENTLY
+  // and only their pure application stays serial; identical result, one round-trip instead of three.
+  // Only the draft overlay depends on the durable overlay's output (it targets the non-durable remainder),
+  // so it fetches+applies last.
+  // Child-scoped contact links key off customer_member_id + person_id only — both STABLE across the
+  // overlay chain (overlays never add/remove children or rewrite those ids). So this round-trip is
+  // issued CONCURRENTLY with the overlay fetch instead of after it, removing one serial hop from the
+  // dominant children chain. It writes a disjoint host key (`_child_scoped_contact_links`).
+  const tLinks0 = Date.now();
+  const baseMemberRows = memberRowsFromInquiryChildren(inquiryChildrenBase);
+  const contactsP: Promise<unknown> =
+    baseMemberRows.length > 0
+      ? attachChildScopedContactLinksToRecord(supabase, orgId, baseMemberRows, host).then((r) => {
+          cph.child_scoped_contacts_ms = Date.now() - tLinks0;
+          return r;
+        })
+      : Promise.resolve().then(() => {
+          host._child_scoped_contact_links = [];
+          host._child_scoped_contact_links_query_failed = false;
+          cph.child_scoped_contacts_ms = 0;
+        });
+
+  const tOverlay0 = Date.now();
+  /*
+   * THE THREE LEGS, TIMED INDIVIDUALLY — because the wall is the SLOWEST of them, not their sum.
+   *
+   * `overlay_parallel_fetch_ms` measured 554-627ms on deployed 14be94ea and is the largest true wall
+   * inside the children shell (857-875ms), which is itself the largest wall inside `visible_entity`
+   * (1,162-1,270ms) on the chain that ends at FIRST ACTIONABLE. It has never been possible to say
+   * WHICH leg owns it, so the repair could only have been chosen by guessing among three.
+   *
+   * Timing starts where each promise is CREATED, which is where its work begins — these are started
+   * eagerly and joined below, so a clock opened at the join would measure the remainder of the
+   * slowest leg and report the other two as instant.
+   *
+   * `finally` rather than `then`: a leg that rejects still consumed the time, and the caller's own
+   * error handling must see the rejection unchanged.
+   */
+  const leg = <T,>(name: string, p: Promise<T>): Promise<T> => {
+    const started = Date.now();
+    return p.finally(() => {
+      cph[name] = Date.now() - started;
+    });
+  };
+  const placementLabeledP = leg(
+    "overlay_placement_labels_ms",
+    enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryChildrenBase),
   );
+  const processInstancesP = leg(
+    "overlay_process_instances_ms",
+    listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId }),
+  );
+  const durableFactsP = leg(
+    "overlay_durable_facts_ms",
+    resolveDurableFactsForChildren(
+      supabase as never,
+      orgId,
+      inquiryChildrenBase.map((c) => ({
+        customerMemberId: c.customer_member_id,
+        siteLocationId: c.location_id ?? null,
+      })),
+    ),
+  );
+  const [placementLabeled, processInstances, durableFacts] = await Promise.all([
+    placementLabeledP,
+    processInstancesP,
+    durableFactsP,
+  ]);
+  cph.overlay_parallel_fetch_ms = Date.now() - tOverlay0;
+  // Row counts, so a slow leg can be told apart from a leg handed too much work. The children count
+  // is the input scale all three share.
+  cph.overlay_children_in = inquiryChildrenBase.length;
+  cph.overlay_process_instances_rows = Array.isArray(processInstances) ? processInstances.length : -1;
+  // Apply in precedence order (pure, synchronous).
+  let inquiryChildrenOut = applyProcessInstanceParticipation(placementLabeled, processInstances, ocmStatusLabelByKey);
+  inquiryChildrenOut = applyDurableOperationalFacts(inquiryChildrenOut, durableFacts);
+  // Draft depends on the durable result (targets the non-durable remainder) → fetch+apply last.
+  const tDraft0 = Date.now();
+  inquiryChildrenOut = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryChildrenOut);
+  cph.process_draft_ms = Date.now() - tDraft0;
+  // The two legs below sit AFTER the timed batch and were the only untimed work in this shell:
+  // `children_orientation_ms` summed to ~417-491 ms while the leg itself measured 602-884 ms, and
+  // the difference had nowhere to be attributed. Naming them is what makes the remainder findable.
+  /**
+   * THE LAST TWO LEGS OF THIS SHELL, RUN TOGETHER.
+   *
+   * They were awaited in sequence and were the only untimed work here — `children_orientation_ms`
+   * summed to ~417-491 ms while the leg measured 602-884 ms, and the difference had nowhere to be
+   * attributed. Named, they are 177 ms and 153 ms: 330 ms of the 631 ms leg, one after the other.
+   *
+   * They are independent, and disjointly so rather than incidentally. The profile attach keys on
+   * `customer_member_id` and writes `gender`, `allergies`, `medical_notes`, `preferred_name`,
+   * `special_instructions` and `custom_fields`. The photo projection keys on `person_id`, reads no
+   * profile field, and writes exactly one key — `resolved_photo_url`. Neither reads what the other
+   * writes, so ordering never decided the result; only the clock did.
+   *
+   * Both derive from the SAME base rows and both preserve order and length, so the photo value is
+   * carried across by index. Sequencing is preserved where it matters: the profiled row is the base,
+   * and only the one photo key is merged onto it.
+   *
+   * R1's bounded photo concurrency is untouched — this changes when the projection starts, never how
+   * many signatures it mints at once, and the actor is still the one passed in.
+   */
+  const tShellTail0 = Date.now();
+  const [profiledChildren, photographedChildren] = await Promise.all([
+    attachCustomerMemberProfileToInquiryChildren(supabase, orgId, inquiryChildrenOut, documentActor?.userId),
+    projectResolvedProfilePhotosOntoRows({
+      supabase,
+      orgId,
+      actor: documentActor,
+      rows: inquiryChildrenOut as unknown as Array<Record<string, unknown>>,
+      personIdKey: "person_id",
+      metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+    }),
+  ]);
+  inquiryChildrenOut = mergeResolvedPhotoOntoProfiledChildren(
+    profiledChildren,
+    photographedChildren,
+  ) as typeof inquiryChildrenOut;
+  cph.children_shell_tail_ms = Date.now() - tShellTail0;
 
   host._inquiry_children = inquiryChildrenOut;
+  host._enrollment_participation_by_member = buildEnrollmentParticipationByMemberMap(processInstances);
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
   attachOpportunityChildLifecycleSummary(host);
-  {
-    const memberRows = memberRowsFromInquiryChildren(inquiryChildrenOut);
-    if (memberRows.length > 0) {
-      await attachChildScopedContactLinksToRecord(supabase, orgId, memberRows, host);
-    } else {
-      host._child_scoped_contact_links = [];
-      host._child_scoped_contact_links_query_failed = false;
-    }
-  }
+  await contactsP; // ensure the concurrent contact-links fetch has committed before returning
+  host._children_shell_phase_ms = cph;
 }
 
 type OppPersonShellRow = {
@@ -697,6 +1080,7 @@ export async function attachOpportunityPersonsShell(
   supabase: AdminSupabase,
   orgId: string,
   host: Record<string, unknown>,
+  documentActor?: DocumentActor | null,
 ): Promise<void> {
   const opportunityId = trimOrNull(host.id);
   if (!opportunityId) {
@@ -717,7 +1101,7 @@ export async function attachOpportunityPersonsShell(
   if (personIds.length > 0) {
     const { data: people } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, email, phone")
+      .select("id, first_name, last_name, full_name, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", personIds);
     for (const row of (people ?? []) as WarmPersonRow[]) {
@@ -736,12 +1120,20 @@ export async function attachOpportunityPersonsShell(
         name: warmPersonDisplayName(p),
         phone: trimOrNull(p?.phone),
         email: trimOrNull(p?.email),
+        photo_url: warmPersonPhotoUrl(p),
       };
     });
-  host._opportunity_persons = mapped;
-  host._additional_contacts_shell_count = mapped.filter(
-    (r) => !primaryPersonId || r.person_id !== primaryPersonId,
-  ).length;
+  host._opportunity_persons = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: mapped as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+  });
+  host._additional_contacts_shell_count = (
+    host._opportunity_persons as Array<{ person_id?: string }>
+  ).filter((r) => !primaryPersonId || r.person_id !== primaryPersonId).length;
 }
 
 /** Household guardians for inquiry lead summary — merges with `_opportunity_persons` in FamilyContactsPanel. */
@@ -749,6 +1141,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
   supabase: AdminSupabase,
   orgId: string,
   host: Record<string, unknown>,
+  documentActor?: DocumentActor | null,
 ): Promise<void> {
   const householdId =
     typeof host.customer_id === "string" && host.customer_id.trim() ? host.customer_id.trim() : null;
@@ -791,7 +1184,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
   if (missingCpPersonIds.length > 0) {
     const { data: cpPeople } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, email, phone")
+      .select("id, first_name, last_name, full_name, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", missingCpPersonIds);
     for (const row of (cpPeople ?? []) as WarmPersonRow[]) {
@@ -799,7 +1192,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
     }
   }
 
-  host._customer_persons = ((cpRows ?? []) as {
+  const customerPersonsMapped = ((cpRows ?? []) as {
     person_id: string;
     role_type?: string | null;
     is_primary?: boolean | null;
@@ -813,7 +1206,16 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
       name: warmPersonDisplayName(p),
       phone: trimOrNull(p?.phone),
       email: trimOrNull(p?.email),
+      photo_url: warmPersonPhotoUrl(p),
     };
+  });
+  host._customer_persons = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: customerPersonsMapped as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
   });
 }
 
@@ -875,6 +1277,7 @@ async function respondOpportunityRelationshipMemberOverlay(
   },
   opportunityRouteStartedAt: number,
   request: NextRequest,
+  documentActor?: DocumentActor | null,
 ): Promise<NextResponse> {
   const hydrateGraphTimings: Record<string, number> = {};
   const oppMeta =
@@ -998,7 +1401,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     const tPl = Date.now();
     const { data: personRows } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", allNeeded);
     hydrateGraphTimings.relationship_overlay_member_linked_person_fetch_ms = Date.now() - tPl;
@@ -1043,11 +1446,36 @@ async function respondOpportunityRelationshipMemberOverlay(
   inquiryBlocks = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, opportunityId);
   inquiryBlocks = await enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryBlocks);
   inquiryBlocks = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryBlocks);
+  // Source of truth for participation state + process stage is process_instances (not OCM).
+  const enrollmentInstances = await listEnrollmentInstancesForLead(supabase as never, {
+    orgId,
+    opportunityId,
+  });
+  inquiryBlocks = applyProcessInstanceParticipation(
+    inquiryBlocks,
+    enrollmentInstances,
+    ocmStatusLabelByKey,
+  );
+  // Source of truth for operational facts (program/room/schedule/start) is the durable model once
+  // materialized (agreement/placement/schedule); OCM is the fallback.
+  inquiryBlocks = await overlayDurableOperationalFacts(supabase, orgId, inquiryBlocks);
+  // Pre-materialization: participation facts come from process_instances.metadata (no OCM).
+  inquiryBlocks = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryBlocks);
+  inquiryBlocks = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: inquiryBlocks as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+  }) as typeof inquiryBlocks;
 
   const overlayRecord: Record<string, unknown> = {
     id: opportunityId,
     org_id: orgId,
     _inquiry_children: inquiryBlocks,
+    _enrollment_participation_by_member:
+      buildEnrollmentParticipationByMemberMap(enrollmentInstances),
     _member_person_graph_pending: false,
     hydrate_graph_timings_ms_overlay: hydrateGraphTimings,
     ocm_status_defs_overlay: {
@@ -1098,6 +1526,17 @@ export type BuildOpportunityDrawerVisiblePayloadOptions = {
   hintPrimaryPersonName?: string | null;
   hintPrimaryPersonEmail?: string | null;
   hintPrimaryPersonPhone?: string | null;
+  /** Admin document actor for request-scoped profile-photo URL minting. */
+  documentActor?: DocumentActor | null;
+  /**
+   * Called the moment a canonical record fact becomes KNOWN, before the payload is finished.
+   *
+   * Delivery only — this never produces a fact, it reports one the composition just produced. The
+   * roster is still resolved exactly once, by the shell leg below, and still travels in the finished
+   * payload. Measured on deployed 96f37f1a: `_inquiry_children` is canonical at P50 1,148ms and the
+   * cards that gate on it do not clear until P50 3,194ms.
+   */
+  onCanonicalTruth?: (fields: Record<string, unknown>) => void;
 };
 
 export async function buildOpportunityDrawerVisiblePayload(
@@ -1219,6 +1658,79 @@ export async function buildOpportunityDrawerVisiblePayload(
     phaseMs.location_lookup_ms = Date.now() - t0;
     return row;
   })();
+  /*
+   * THE SHELL JOIN DOES NOT WAIT FOR THE PRIMARY JOIN.
+   *
+   * `drawer_primary_parallel_ms` (P50 130 ms) and `shell_parallel_ms` (P50 632 ms) were serial
+   * stages of `visible_entity_ms` (P50 962 ms): 130 + 632 + 201 = 963, measured over n=24 on
+   * deployed staging. The shells were awaited after the primary join for one reason only — `vis`
+   * was constructed from its results.
+   *
+   * They do not read those results. Across all four shells the only host keys read are `id`,
+   * `primary_person_id`, `status`, `status_key`, `work_unit_id`, `customer_id`, `metadata`,
+   * `program_type` and `schedule_type`. Every one is a column of `data`. The primary join writes
+   * `_work_unit_department_id`, `_customer_name`, `_pipeline_stage_name`, `_status_display`,
+   * `_quote_total_display`, the lifecycle fields, `_primary_person_*`, `_primary_contact_*`,
+   * `_field_definitions` and `_record_surface` — and no shell reads any of them. The dependency was
+   * on the OBJECT, never on its contents.
+   *
+   * So `vis` is built from `data` alone and the shells start here. The primary join's assignments
+   * below land on the same object while the shells are in flight: the key sets are disjoint, and a
+   * single-threaded runtime cannot interleave within either write.
+   *
+   * NOT a query-count repair — the same reads happen, and each leg is timed exactly as before.
+   * Only the schedule changes.
+   */
+  const vis: Record<string, unknown> = { ...data };
+  const documentActor = options?.documentActor ?? null;
+  const tShell0 = Date.now();
+  const timedLeg = async <T,>(key: string, work: Promise<T>): Promise<T> => {
+    const t0 = Date.now();
+    try {
+      return await work;
+    } finally {
+      phaseMs[key] = Date.now() - t0;
+      /*
+       * WHEN the leg finished, not only how long it took.
+       *
+       * A duration cannot be correlated with a client milestone: to ask "how long did the browser
+       * wait after this fact was canonical" the caller needs the INSTANT it became canonical. These
+       * absolute stamps are converted to offsets by `sharedCanonicalDeps` against its own clock
+       * origin and then deleted, so no wall-clock value reaches the response.
+       *
+       * Counts and instants only. No identity, contact or child values are recorded here.
+       */
+      phaseMs[`${key}__end_abs`] = Date.now();
+    }
+  };
+  const shellP = Promise.all([
+    timedLeg(
+      "shell_children_ms",
+      attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor).then((r) => {
+        /*
+         * The roster is canonical HERE, not when the payload finishes. Emitted only when the shell
+         * actually produced an array: absent stays UNKNOWN, and an explicit `[]` is the canonical
+         * answer "this family has no children" and is emitted as such. A throwing sink must never
+         * take down the composition it is reporting on.
+         */
+        const roster = (vis as Record<string, unknown>)._inquiry_children;
+        if (Array.isArray(roster)) {
+          try {
+            options?.onCanonicalTruth?.({ _inquiry_children: roster });
+          } catch {
+            /* delivery is best-effort; the finished payload still carries the same fact */
+          }
+        }
+        return r;
+      }),
+    ),
+    timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
+    timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),
+  ]);
+  // The `await` below is what reports a rejection, exactly as `await Promise.all(...)` did. This
+  // only keeps the interval until then from being read as an unhandled rejection.
+  shellP.catch(() => {});
   const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible, locRowV] = await Promise.all([
     wuDeptP,
     customerP,
@@ -1228,7 +1740,6 @@ export async function buildOpportunityDrawerVisiblePayload(
     locP,
   ]);
   phaseMs.drawer_primary_parallel_ms = Date.now() - tParallel0;
-  const vis: Record<string, unknown> = { ...data };
   vis._work_unit_department_id = hintDepartmentId
     ? hintDepartmentId
     : wuidForDept
@@ -1297,12 +1808,8 @@ export async function buildOpportunityDrawerVisiblePayload(
   );
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
-  await Promise.all([
-    attachOpportunityInquiryChildrenShell(supabase, orgId, vis),
-    attachOpportunityPersonsShell(supabase, orgId, vis),
-    attachOpportunityActivitySignalShell(supabase, orgId, vis),
-    attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis),
-  ]);
+  await shellP;
+  phaseMs.shell_parallel_ms = Date.now() - tShell0;
   vis._relationship_displays = {};
   const householdIdV =
     typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
@@ -1333,6 +1840,41 @@ export async function buildOpportunityDrawerVisiblePayload(
     primary_child: null,
     inquiry: { title: inquiryTitleEarlyV, lines: [], section_key: "quote" },
   };
+
+  // ── Employment of the case's linked contacts (related-subject projection) ──
+  //
+  // A person has no host Work Unit of its own, so a Person attention gesture resolves through the
+  // household to THIS case — which makes this payload the only envelope that can carry that
+  // person's employment to the Focus Panel. It is a projection, never an authority:
+  // `buildCaseEmploymentProjection` delegates every fact to the person-owned composition and
+  // nothing about employment is decided here.
+  //
+  // ⚠ It belongs on THIS builder, not on the `surface=full` enrichment pass, because the Focus
+  // Panel's record comes from here (`sharedCanonicalDeps` → the drawer VM). Attached to `full`
+  // instead, the card composed its cell, elevated on the gesture's ASPECT, and rendered nothing —
+  // the projection was never on the record the panel actually reads. Certified by the absence of
+  // any `[timing][opportunity-api]` line during a run whose panel had already composed.
+  //
+  // The cost is one indexed query over the case's contacts, and for the overwhelming majority of
+  // families it returns zero rows and no composition runs at all.
+  try {
+    const tEmployment0 = Date.now();
+    vis._case_employment = await buildCaseEmploymentProjection(supabase, orgId, {
+      // The HOUSEHOLD is the authoritative contact set. A household case can legitimately carry an
+      // empty `_opportunity_persons` and a null `primary_person_id` — the seeded Smith case does
+      // both — so deriving candidates from the payload arrays alone projected nothing for a case
+      // whose primary contact was in fact employed.
+      householdId: householdIdV,
+      primaryPersonId: trimOrNull(opp.primary_person_id ?? null),
+      knownContacts: collectLinkedContactsFromOpportunityRecord(vis),
+    });
+    phaseMs.case_employment_ms = Date.now() - tEmployment0;
+  } catch {
+    // A projection failure must not fail the record. Absent reads as not-composed, which keeps
+    // the card silent rather than asserting "nobody here is staff".
+    delete vis._case_employment;
+  }
+
   return vis;
 }
 
@@ -1356,6 +1898,7 @@ export async function respondOpportunityEntityGet(
   id: string,
   request: NextRequest,
   accessDim?: AdminAccessScopeDimensions | null,
+  documentActor?: DocumentActor | null,
 ): Promise<NextResponse> {
   const opportunityRouteStartedAt = Date.now();
   const { data, error } = await withDbTiming(
@@ -1412,6 +1955,7 @@ export async function respondOpportunityEntityGet(
       opp,
       opportunityRouteStartedAt,
       request,
+      documentActor,
     );
   }
 
@@ -1433,7 +1977,9 @@ export async function respondOpportunityEntityGet(
     const enrichStartedAt = Date.now();
     const enrichPhaseMs: Record<string, number> = {};
     const tVis0 = Date.now();
-    const vis = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data);
+    const vis = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data, {
+      documentActor,
+    });
     enrichPhaseMs.visible_build_ms = Date.now() - tVis0;
     const enrichTotalMsV = Date.now() - enrichStartedAt;
     const enrichHeaderV =
@@ -1491,6 +2037,7 @@ export async function respondOpportunityEntityGet(
       hintPrimaryPersonName: openerHints.primaryPersonName,
       hintPrimaryPersonEmail: openerHints.primaryPersonEmail,
       hintPrimaryPersonPhone: openerHints.primaryPersonPhone,
+      documentActor,
     });
     enrichPhaseMs.drawer_primary_build_ms = Date.now() - tPrimary0;
     const primaryPhases = (out._drawer_primary_phase_ms ?? {}) as Record<string, number>;
@@ -1769,6 +2316,7 @@ export async function respondOpportunityEntityGet(
   lapSegment("relationship_displays_attach");
 
   const oppMeta = (opp.metadata ?? null) as Record<string, unknown> | null;
+  // Opportunity-level legacy field key — not the OCM column (S2 renamed OCM only).
   const metaDesired =
     oppMeta && typeof oppMeta.desired_start_date === "string"
       ? oppMeta.desired_start_date.trim()
@@ -2066,7 +2614,7 @@ export async function respondOpportunityEntityGet(
     const tPl = Date.now();
     const { data: personRows } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
       .eq("org_id", orgId)
       .in("id", oppRolesPersonPrefetchIds);
     const wall = Date.now() - tPl;
@@ -2077,8 +2625,36 @@ export async function respondOpportunityEntityGet(
     }
   }
 
+  /*
+   * ── LAW 34: IDENTITY CANNOT BE DEFERRED TO A LATER PASS ──
+   *
+   * Member-linked `persons` rows were deferred to Pass 6 for first-paint cost. That is a sound
+   * instinct for RELATIONSHIP data and a wrong one for IDENTITY: `resolveInquiryChildIdentityFields`
+   * needs the person to be present, and when it is missing the resolver does not wait — it silently
+   * returns the `customer_members` mirror. So the deferral did not postpone a name, it CHANGED which
+   * store owned it, and the record shipped with the fallback as if it were canonical.
+   *
+   * A child's name is first-paint content; there is no later in which to render it. One batched,
+   * id-indexed query is the honest price, and it is the same query Pass 6 would have issued anyway.
+   */
+  const identityPersonIdsMissing = memberLinkedPersonIdsDeferred.filter((pid) => !pmap.has(pid));
+  if (identityPersonIdsMissing.length > 0) {
+    const tIdent0 = Date.now();
+    const { data: identityPersonRows } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
+      .eq("org_id", orgId)
+      .in("id", identityPersonIdsMissing);
+    for (const pr of (identityPersonRows ?? []) as WarmPersonRow[]) {
+      if (pr.id) pmap.set(pr.id, pr);
+    }
+    hydrateGraphTimings.child_identity_person_lookup_ms = Date.now() - tIdent0;
+  }
+  // The graph is only "pending" for persons still absent AFTER identity has been resolved.
+  out._member_person_graph_pending = memberLinkedPersonIdsDeferred.some((pid) => !pmap.has(pid));
+
   let person_lookup_missing_count =
-    memberLinkedPersonIdsDeferred.length +
+    memberLinkedPersonIdsDeferred.filter((pid) => !pmap.has(pid)).length +
     oppRolesPersonPrefetchIds.filter((pid) => !pmap.has(pid)).length;
 
   lapSegment("customer_member_linked_person_lookup");
@@ -2130,6 +2706,20 @@ export async function respondOpportunityEntityGet(
     inquiryChildrenOut,
   );
   inquiryChildrenOut = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryChildrenOut);
+  inquiryChildrenOut = await attachCustomerMemberProfileToInquiryChildren(
+    supabase,
+    orgId,
+    inquiryChildrenOut,
+    documentActor?.userId,
+  );
+  inquiryChildrenOut = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: inquiryChildrenOut as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+  }) as typeof inquiryChildrenOut;
   out._inquiry_children = inquiryChildrenOut;
   attachOpportunityChildLifecycleSummary(out);
   {
@@ -2157,6 +2747,34 @@ export async function respondOpportunityEntityGet(
     };
   }
   markPhase("after_inquiry_children_resolved");
+
+  try {
+    const memberIds = (out._inquiry_children as { customer_member_id?: string | null }[] | undefined ?? [])
+      .map((c) => (c.customer_member_id != null ? String(c.customer_member_id).trim() : ""))
+      .filter(Boolean);
+    const memberChildIds = new Map<string, string | null>();
+    for (const child of (out._inquiry_children as { customer_member_id?: string | null; id?: string | null; person_id?: string | null }[] | undefined) ?? []) {
+      const memberId = child.customer_member_id != null ? String(child.customer_member_id).trim() : "";
+      if (!memberId) continue;
+      memberChildIds.set(memberId, child.person_id != null ? String(child.person_id) : child.id != null ? String(child.id) : null);
+    }
+    if (memberIds.length > 0 && out.customer_id) {
+      out._person_child_relationships_by_member = await attachPersonChildRelationshipsToEntityRecord({
+        supabase,
+        orgId,
+        customerId: String(out.customer_id),
+        customerMemberIds: memberIds,
+        memberChildIds,
+      });
+    } else {
+      out._person_child_relationships_by_member = [];
+    }
+  } catch (pcrAttachErr) {
+    out._person_child_relationships_by_member = [];
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[opportunity_entity] person_child_relationship attach failed", pcrAttachErr);
+    }
+  }
   lapSegment("inquiry_children_metadata_fallbacks");
 
   {
@@ -2166,15 +2784,7 @@ export async function respondOpportunityEntityGet(
       person_id: string;
       role_type?: string | null;
     };
-    type PersonRowAgg = {
-      id: string;
-      first_name?: string | null;
-      last_name?: string | null;
-      full_name?: string | null;
-      date_of_birth?: string | null;
-      email?: string | null;
-      phone?: string | null;
-    };
+    type PersonRowAgg = WarmPersonRow;
     const personIdsForOpp = [
       ...new Set(
         ((opRows ?? []) as OppPersonLite[])
@@ -2188,7 +2798,7 @@ export async function respondOpportunityEntityGet(
       const tMiss = Date.now();
       const { data: extraPeople } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+        .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
         .eq("org_id", orgId)
         .in("id", missingOppPersonIds);
       hydrateGraphTimings.opportunity_persons_missing_persons_ms = Date.now() - tMiss;
@@ -2199,7 +2809,7 @@ export async function respondOpportunityEntityGet(
 
     lapSegment("opportunity_persons_person_merge_small_batch");
 
-    out._opportunity_persons = ((opRows ?? []) as OppPersonLite[]).map((r) => {
+    const oppPersonsMapped = ((opRows ?? []) as OppPersonLite[]).map((r) => {
       const p = (pmap.get(r.person_id) ?? null) as PersonRowAgg | null;
       return {
         id: r.id,
@@ -2208,7 +2818,16 @@ export async function respondOpportunityEntityGet(
         name: personDisplayName(p),
         phone: trimOrNull(p?.phone),
         email: trimOrNull(p?.email),
+        photo_url: warmPersonPhotoUrl(p),
       };
+    });
+    out._opportunity_persons = await projectResolvedProfilePhotosOntoRows({
+      supabase,
+      orgId,
+      actor: documentActor,
+      rows: oppPersonsMapped as unknown as Array<Record<string, unknown>>,
+      personIdKey: "person_id",
+      metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
     });
 
     if (householdId) {
@@ -2228,14 +2847,14 @@ export async function respondOpportunityEntityGet(
       if (missingCpPersonIds.length > 0) {
         const { data: cpPeople } = await supabase
           .from("persons")
-          .select("id, first_name, last_name, full_name, email, phone")
+          .select("id, first_name, last_name, full_name, email, phone, metadata")
           .eq("org_id", orgId)
           .in("id", missingCpPersonIds);
         for (const row of (cpPeople ?? []) as PersonRowAgg[]) {
           pmap.set(row.id, row);
         }
       }
-      out._customer_persons = ((cpRows ?? []) as {
+      const customerPersonsMapped = ((cpRows ?? []) as {
         person_id: string;
         role_type?: string | null;
         is_primary?: boolean | null;
@@ -2249,7 +2868,16 @@ export async function respondOpportunityEntityGet(
           name: personDisplayName(p),
           phone: trimOrNull(p?.phone),
           email: trimOrNull(p?.email),
+          photo_url: warmPersonPhotoUrl(p),
         };
+      });
+      out._customer_persons = await projectResolvedProfilePhotosOntoRows({
+        supabase,
+        orgId,
+        actor: documentActor,
+        rows: customerPersonsMapped as unknown as Array<Record<string, unknown>>,
+        personIdKey: "person_id",
+        metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
       });
     }
   }
@@ -2326,6 +2954,11 @@ export async function respondOpportunityEntityGet(
 
   markPhase("after_identity_block");
   lapSegment("quote_section_identity_aggregate");
+
+  // Employment is projected ONCE, in `buildOpportunityDrawerVisiblePayload` — the shared builder
+  // both this route and the Focus Panel's drawer VM compose from. Re-projecting here would make
+  // two producers of one fact, and would still miss the panel, which never takes this path.
+
   const enrichTotalMs = Date.now() - enrichStartedAt;
   const timingPayload = {
     opportunity_id: id,

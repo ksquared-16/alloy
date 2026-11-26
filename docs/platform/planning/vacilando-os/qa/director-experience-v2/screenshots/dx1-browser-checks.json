@@ -1,0 +1,12 @@
+{
+  "hasMissionOutcome": true,
+  "hasExecutiveSummary": true,
+  "hasContinueDiscovery": true,
+  "hasPark": true,
+  "hasClose": true,
+  "hasTechnicalDepth": true,
+  "hasEvidenceStrip": true,
+  "heroCta": "",
+  "heroIsContinueDiscovery": false,
+  "localAppAboveFold": false
+}

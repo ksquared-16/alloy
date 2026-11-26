@@ -1,0 +1,755 @@
+{
+  "run": "qar_4246ac22ece0",
+  "summary": {
+    "passed": 58,
+    "total": 59
+  },
+  "sections": {
+    "D8": {
+      "passed": 40,
+      "total": 41
+    },
+    "EN-FI-10": {
+      "passed": 18,
+      "total": 18
+    }
+  },
+  "results": [
+    {
+      "section": "D8",
+      "case": "authoring a form needs forms.author",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "form 'f1' created through Forms",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "form 'f1' version published",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "form 'f2' created through Forms",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "form 'f2' version published",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "a Forms evidence policy naming an unknown form is refused by database validation",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": [
+        "form_evidence_form_unknown"
+      ]
+    },
+    {
+      "section": "D8",
+      "case": "a policy naming an active form validates",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "D8",
+      "case": "requirement with Forms evidence (needs review) published",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "Kid A: missing before any submission",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "submission 'a_f1' created as a draft for the child",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "a draft submission produces no document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_SUBMITTED"
+    },
+    {
+      "section": "D8",
+      "case": "a draft submission never counts",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "submitting needs forms.submissions",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "submission submitted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "generating needs forms.submissions",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "the completed form PDF is generated as a canonical document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "generation is idempotent (the same document, not a copy)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "library: one canonical Document of type Completed form",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "type": "generated_form_pdf"
+    },
+    {
+      "section": "D8",
+      "case": "attribution: owned by the submission's child, not the household or a sibling",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "owner_type": "child"
+    },
+    {
+      "section": "D8",
+      "case": "provenance: form, submission, status and artifact kind read from the existing links",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "provenance": {
+        "role": "generated_pdf",
+        "kind": "generated",
+        "submission_status": "submitted",
+        "integrity": "unrecorded"
+      }
+    },
+    {
+      "section": "D8",
+      "case": "integrity is stated (verified / unrecorded), never a mismatch for an untampered artifact",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "integrity": "unrecorded"
+    },
+    {
+      "section": "D8",
+      "case": "one immutable version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "version_count": 1
+    },
+    {
+      "section": "D8",
+      "case": "Forms keeps its own view of the artifact (linked_documents)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "Forms evidence is pending review \u2014 never accepted automatically",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "pending_review"
+    },
+    {
+      "section": "D8",
+      "case": "readiness names the evidence as coming from Forms",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "the sibling is unaffected",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "submission 'b_f2' created as a draft for the child",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "a completed form the policy does not name never counts",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "missing"
+    },
+    {
+      "section": "D8",
+      "case": "Forms evidence accepted through the D7 review",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "D6 requirement satisfied by eligible, accepted Forms evidence",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied"
+    },
+    {
+      "section": "D8",
+      "case": "a revised policy (counts on submission) publishes as a new version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "the published v1 policy is unchanged (immutable); v2 carries the new acceptance",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "v1": {
+        "form_keys": [
+          "qa_4246ac22ece0_d8f1"
+        ],
+        "acceptance": "review"
+      },
+      "v2": {
+        "form_keys": [
+          "qa_4246ac22ece0_d8f1"
+        ],
+        "acceptance": "submitted"
+      }
+    },
+    {
+      "section": "D8",
+      "case": "submission 'b_f1' created as a draft for the child",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "under an explicit 'counts on submission' policy the submitted form satisfies",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied"
+    },
+    {
+      "section": "D8",
+      "case": "another organization: the submission is not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "another organization: the generated document is not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "section": "D8",
+      "case": "department-restricted actor: the household library is not disclosed",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "nothing on file",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "summary": "nothing_on_file"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "the Health card needs health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "the Health card needs health.view",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "reporting a fact needs health.manage",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "FORBIDDEN"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "a reported immunization fact (operator source)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "layer: reported only \u2014 not verified",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "summary": "reported_only",
+      "medical": "unverified"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "layer: uploaded certificate is distinct from the reported fact",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "summary": "certificate_uploaded",
+      "certificate": "uploaded"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "verification refuses a certificate whose version is not accepted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "CONFLICT"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "layer: a rejected certificate is reviewed, not accepted, not verified",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "summary": "certificate_rejected"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "layer: an ACCEPTED certificate beside a reported fact is accepted-unverified \u2014 review never verifies",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "summary": "certificate_accepted_unverified"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "verification needs a stated basis",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "ACTION_BLOCKED"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "verification refuses another child's certificate",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "BAD_REQUEST"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "verification needs health.manage",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "FORBIDDEN"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "another organization cannot verify",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "after every refusal the fact is still unverified",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "the one explicit Medical verification with health.manage, a basis and the child's own accepted certificate",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "detail_keys": [
+        "already_verified",
+        "confirmed_at"
+      ]
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "layer: verified only after the verification act",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "summary": "verified"
+    },
+    {
+      "section": "EN-FI-10",
+      "case": "re-verification is idempotent (already verified), never a second stamp",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "Forms read contract: without documents admission the linked document's title and file name are withheld",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "Forms read contract: a documents reader in scope may see the standard-sensitivity linked document's label",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D8",
+      "case": "department-restricted actor: an out-of-scope child's linked document is named only 'restricted' (EN-FI-01)",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "names": [
+        "Document (restricted)"
+      ]
+    },
+    {
+      "section": "D8",
+      "case": "department-restricted actor: an out-of-scope child's form answers are not disclosed (single read, list)",
+      "persona": "scoped_ops",
+      "pass": false,
+      "status": 200,
+      "code": null,
+      "single_read_status": 200,
+      "single_read_answers_disclosed": true,
+      "list_status": 200,
+      "list_answers_disclosed": true,
+      "documents_api_for_same_actor": "404 on library, readiness, signed-url, history"
+    }
+  ],
+  "superseded_attempts": [
+    {
+      "rerun": "D8READ",
+      "replaced_at": "2026-10-28T17:04:27+00:00",
+      "reason": "driver defect: asserted forms.submissions on a submission READ; formsAuthority gates writes only \u2014 replaced by the EN-FI-01 read contract (label disclosure) and a subject-scope probe",
+      "results": [
+        {
+          "section": "D8",
+          "case": "reading a submission needs forms.submissions",
+          "persona": "doc_reader",
+          "pass": false,
+          "status": 200,
+          "code": null
+        }
+      ]
+    },
+    {
+      "rerun": "FI10",
+      "replaced_at": "2026-10-28T17:05:11+00:00",
+      "reason": "driver defect: medical.verified is a COUNT of verified facts (0/1), not a boolean, so 'verified is False' could never match; the observed summaries were correct at every layer",
+      "results": [
+        {
+          "section": "EN-FI-10",
+          "case": "nothing on file",
+          "persona": "fixture_admin",
+          "pass": true,
+          "status": 200,
+          "code": null,
+          "summary": "nothing_on_file"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "the Health card needs health.view",
+          "persona": "doc_reader",
+          "pass": true,
+          "status": 403,
+          "code": null
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "the Health card needs health.view",
+          "persona": "processing_only",
+          "pass": true,
+          "status": 403,
+          "code": null
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "reporting a fact needs health.manage",
+          "persona": "doc_reader",
+          "pass": true,
+          "status": 403,
+          "code": "FORBIDDEN"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "a reported immunization fact (operator source)",
+          "persona": "fixture_admin",
+          "pass": true,
+          "status": 200,
+          "code": null
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "layer: reported only \u2014 not verified",
+          "persona": "fixture_admin",
+          "pass": false,
+          "status": 200,
+          "code": null,
+          "summary": "reported_only",
+          "medical": "unverified"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "layer: uploaded certificate is distinct from the reported fact",
+          "persona": "fixture_admin",
+          "pass": false,
+          "status": 200,
+          "code": null,
+          "summary": "certificate_uploaded",
+          "certificate": "uploaded"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "verification refuses a certificate whose version is not accepted",
+          "persona": "fixture_admin",
+          "pass": true,
+          "status": 409,
+          "code": "CONFLICT"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "layer: a rejected certificate is reviewed, not accepted, not verified",
+          "persona": "fixture_admin",
+          "pass": false,
+          "status": 200,
+          "code": null,
+          "summary": "certificate_rejected"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "layer: an ACCEPTED certificate beside a reported fact is accepted-unverified \u2014 review never verifies",
+          "persona": "fixture_admin",
+          "pass": false,
+          "status": 200,
+          "code": null,
+          "summary": "certificate_accepted_unverified"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "verification needs a stated basis",
+          "persona": "fixture_admin",
+          "pass": true,
+          "status": 400,
+          "code": "ACTION_BLOCKED"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "verification refuses another child's certificate",
+          "persona": "fixture_admin",
+          "pass": true,
+          "status": 400,
+          "code": "BAD_REQUEST"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "verification needs health.manage",
+          "persona": "doc_reader",
+          "pass": true,
+          "status": 403,
+          "code": "FORBIDDEN"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "another organization cannot verify",
+          "persona": "cross_org_admin",
+          "pass": true,
+          "status": 404,
+          "code": "NOT_FOUND"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "after every refusal the fact is still unverified",
+          "persona": "fixture_admin",
+          "pass": false,
+          "status": 200,
+          "code": null
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "the one explicit Medical verification with health.manage, a basis and the child's own accepted certificate",
+          "persona": "fixture_admin",
+          "pass": true,
+          "status": 200,
+          "code": null,
+          "detail_keys": [
+            "already_verified",
+            "confirmed_at"
+          ]
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "layer: verified only after the verification act",
+          "persona": "fixture_admin",
+          "pass": false,
+          "status": 200,
+          "code": null,
+          "summary": "verified"
+        },
+        {
+          "section": "EN-FI-10",
+          "case": "re-verification is idempotent (already verified), never a second stamp",
+          "persona": "fixture_admin",
+          "pass": true,
+          "status": 200,
+          "code": null
+        }
+      ]
+    },
+    {
+      "rerun": "D8READ",
+      "replaced_at": "2026-10-28T17:06:12+00:00",
+      "reason": "driver defect in the first D8READ rerun: 'linked_label_disclosed' tested the document id (always present) instead of its name; split into the EN-FI-01 label check and the answers-scope check",
+      "results": [
+        {
+          "section": "D8",
+          "case": "Forms read contract: without documents admission the linked document's title and file name are withheld",
+          "persona": "no_docs",
+          "pass": true,
+          "status": 200,
+          "code": null
+        },
+        {
+          "section": "D8",
+          "case": "Forms read contract: a documents reader in scope may see the standard-sensitivity linked document's label",
+          "persona": "doc_reader",
+          "pass": true,
+          "status": 200,
+          "code": null
+        },
+        {
+          "section": "D8",
+          "case": "department-restricted actor: an out-of-scope household's submission answers are not disclosed",
+          "persona": "scoped_ops",
+          "pass": false,
+          "status": 200,
+          "code": null,
+          "status_seen": 200,
+          "answers_disclosed": true,
+          "linked_label_disclosed": true
+        }
+      ]
+    }
+  ]
+}

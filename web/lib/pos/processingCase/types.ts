@@ -24,7 +24,10 @@ export type ProcessingCaseSourceKind =
     | "upload"
     | "email_attachment"
     | "import"
-    | "recreated_document";
+    | "recreated_document"
+    | "create_lead"
+    /** A family's statement about a new child, from the family view (processing_participant_child_requests). */
+    | "participant_child_request";
 
 export type ProcessingCaseSourceRole = "primary" | "related";
 
@@ -34,6 +37,17 @@ export type ProcessingCaseSourceRole = "primary" | "related";
  * The production implementation lives in `processingCaseDb.ts`.
  */
 export interface ProcessingCaseDeps {
+    /**
+     * Open a case AND its primary source in one transaction (`open_processing_case_with_primary_source`). A lost race
+     * returns the winner's case and leaves no orphan. Returns `null` when the atomic path is not available (the
+     * function has not reached this database yet) — the opener then uses the three calls below.
+     */
+    openCaseWithPrimarySource?(args: {
+        orgId: string;
+        sourceKind: ProcessingCaseSourceKind;
+        sourceId: string;
+        caseType: string | null;
+    }): Promise<{ processingCaseId: string; created: boolean } | null>;
     findCaseIdByPrimarySource(args: {
         orgId: string;
         sourceKind: ProcessingCaseSourceKind;

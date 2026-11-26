@@ -9,13 +9,6 @@ function readSrc(rel: string): string {
 }
 
 describe("inquiry child placement hydration on drawer open", () => {
-    it("loads location and program option sets when placement labels enabled (not only isEditing)", () => {
-        const section = readSrc("components/admin/entity/OpportunityInquiryChildrenSection.tsx");
-        expect(section).toContain("enrichmentFetchEnabled || placementLabelFetchEnabled");
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("enrichmentFetchEnabled={drawerChildRows.length > 0 && !!canMutate}");
-        expect(drawer).toContain("placementLabelFetchEnabled={drawerChildRows.length > 0}");
-    });
 
     it("opportunity entity hydrates inquiry children placement labels server-side", () => {
         const record = readSrc("lib/admin/opportunityEntityRecord.ts");

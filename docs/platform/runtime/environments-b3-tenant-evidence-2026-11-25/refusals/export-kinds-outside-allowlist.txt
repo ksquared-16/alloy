@@ -1,0 +1,4 @@
+✗ refused (outside the allowlist), nothing was read:
+  - children: person data (P3 L1); never carried (D7)
+  - charge_templates: P3 C10: no app write path exists for charge templates (only a demo seeder); not transferable yet
+  - provider_bindings: environment credentials: re-provisioned per environment, never transferred (P3 C15, B4; I-7)

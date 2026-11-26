@@ -1,0 +1,27 @@
+{
+  "purpose": "Focus Panel published Surface parity: does the runtime-resolved published row carry the composition the Surfaces builder is showing?",
+  "requested_by": "lane_faacca6079ad",
+  "mode": "read_only",
+  "combined_query": "SELECT id, org_id, entity_type, surface, layout_key, name, status, version, metadata, updated_at, doc FROM public.entity_layouts WHERE entity_type = 'opportunities' AND surface = 'drawer' AND layout_key = 'focus_panel_summary' ORDER BY updated_at DESC LIMIT 20\n",
+  "combined_query_hash": "30255617c60fce953cb1d727ca2d4a49ff533558413b0ea402edf2b9f346759e",
+  "expected_columns": [
+    "id",
+    "org_id",
+    "entity_type",
+    "surface",
+    "layout_key",
+    "name",
+    "status",
+    "version",
+    "metadata",
+    "updated_at",
+    "doc"
+  ],
+  "needed_fields": [
+    "status (draft vs published)",
+    "version",
+    "metadata (businessProcessKey/workViewId/stageKey/statusKey variant constraints)",
+    "doc.metadata.focusPanelLayout (grid + rows)",
+    "doc.sections[].metadata (card key, visibility, instanceId)"
+  ]
+}

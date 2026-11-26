@@ -1,0 +1,67 @@
+{
+ "instrument": {
+  "measured_element_is_painted": true,
+  "wrapper_is_NOT_painted": true,
+  "painted_and_wrapper_are_different_elements": true,
+  "wrapper_contains_painted": true,
+  "painted_tag": "article"
+ },
+ "solved_band_H": 299,
+ "business_process": {
+  "cell_H": 299,
+  "transparent_wrapper": {
+   "found": true,
+   "tag": "div",
+   "classes": "alloy-os-process",
+   "height": 299,
+   "backgroundColor": "rgba(0, 0, 0, 0)",
+   "borderTopWidth": "0px",
+   "borderRadius": "0px",
+   "opaqueBackground": false,
+   "hasBorder": false,
+   "isPaintedSurface": false,
+   "display": "flex",
+   "flex": "0 1 auto"
+  },
+  "painted": {
+   "found": true,
+   "tag": "article",
+   "classes": "alloy-os-ucard alloy-os-ucard--compact alloy-os-ucard--tier-work alloy-os-ucard--archetype",
+   "height": 299,
+   "backgroundColor": "rgb(255, 255, 255)",
+   "borderTopWidth": "1px",
+   "borderRadius": "14px",
+   "opaqueBackground": true,
+   "hasBorder": true,
+   "isPaintedSurface": true,
+   "display": "flex",
+   "flex": "1 1 auto"
+  }
+ },
+ "financials": {
+  "cell_H": 299,
+  "painted": {
+   "found": true,
+   "tag": "article",
+   "classes": "alloy-os-ucard alloy-os-ucard--compact alloy-os-ucard--tier-context alloy-os-ucard--archet",
+   "height": 299.19,
+   "backgroundColor": "rgb(255, 255, 255)",
+   "borderTopWidth": "1px",
+   "borderRadius": "14px",
+   "opaqueBackground": true,
+   "hasBorder": true,
+   "isPaintedSurface": true,
+   "display": "flex",
+   "flex": "0 1 auto"
+  }
+ },
+ "residual_whitespace_px": 0,
+ "gate": {
+  "bp_cell_eq_H": true,
+  "bp_wrapper_eq_H": true,
+  "bp_PAINTED_eq_H": true,
+  "fin_cell_eq_H": true,
+  "fin_PAINTED_eq_H": true,
+  "bp_PAINTED_eq_fin_PAINTED": true
+ }
+}

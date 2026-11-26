@@ -1,6 +1,6 @@
 # Operational Work V1 — Implementation Plan
 
-**Path:** `docs/sprints/06_2026/operational_work_v1_implementation_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_work_v1_implementation_plan.md`  
 **Date:** 2026-06-03  
 **Status:** **Planning complete — architecture frozen for implementation** (no code in this sprint)  
 **Scope:** Convert approved Operating Work Framework V1 into a **safe, reuse-first implementation roadmap**. Not a coding sprint, schema sprint, or discovery reopen.
@@ -8,7 +8,7 @@
 **Canonical operating model (frozen — do not redesign):**
 
 - [`operational_work_framework_v1.md`](./operational_work_framework_v1.md)
-- [`tasks_v2_operational_work_framework.md`](./tasks_v2_operational_work_framework.md)
+- [`tasks_v2_operational_work_framework.md`](../../../../sprints/archive/06_2026/tasks_v2_operational_work_framework.md)
 - [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
 - [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
 

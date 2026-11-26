@@ -1,0 +1,89 @@
+{
+  "trusted_host_action_id": "tha_d2f5b303aeedf6",
+  "query_hash": "300d0be641d4a8211dbac2096f47509b53ff38cda0c7836e311c75996d7d8725",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T21:02:11.022Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d2f5b303aeedf6",
+    "query_hash": "300d0be641d4a8211dbac2096f47509b53ff38cda0c7836e311c75996d7d8725",
+    "authorization_id": "grnt_abb3e85bc90448cd",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T21:02:12.400Z",
+    "question_ids": [
+      "calculations",
+      "authorship",
+      "row",
+      "versions",
+      "not_null_probe",
+      "per_org",
+      "nonvacuity"
+    ],
+    "questions": {
+      "calculations": {
+        "question_id": "calculations",
+        "row_count": null,
+        "rows": [
+          "rows=9 orgs=1 draft=2 published=5 archived=2 first=2026-07-27 last_created=2026-07-28 last_updated=2026-07-28"
+        ]
+      },
+      "authorship": {
+        "question_id": "authorship",
+        "row_count": null,
+        "rows": [
+          "with_created_by=9 without_created_by=0 with_updated_by=9 distinct_authors=1"
+        ]
+      },
+      "row": {
+        "question_id": "row",
+        "row_count": null,
+        "rows": [
+          "orgcalc.capacity ~ published ~ authored=true ~ created=2026-07-28 ~ updated=2026-07-28 ~ versions=1 ~ published_version=true",
+          "orgcalc.effective_physical_licensed_seats ~ draft ~ authored=true ~ created=2026-07-27 ~ updated=2026-07-27 ~ versions=1 ~ published_version=false",
+          "orgcalc.fte_room_utilization_preview ~ draft ~ authored=true ~ created=2026-07-28 ~ updated=2026-07-28 ~ versions=1 ~ published_version=false",
+          "orgcalc.qa_capacity_12_53_49 ~ published ~ authored=true ~ created=2026-07-28 ~ updated=2026-07-28 ~ versions=3 ~ published_version=true",
+          "orgcalc.qa_capacity_18_27_14 ~ published ~ authored=true ~ created=2026-07-27 ~ updated=2026-07-28 ~ versions=4 ~ published_version=true",
+          "orgcalc.qa_proving_1785174725436 ~ published ~ authored=true ~ created=2026-07-27 ~ updated=2026-07-27 ~ versions=2 ~ published_version=true",
+          "orgcalc.qa_proving_1785174801275 ~ archived ~ authored=true ~ created=2026-07-27 ~ updated=2026-07-27 ~ versions=2 ~ published_version=true",
+          "orgcalc.qa_proving_1785174871173 ~ archived ~ authored=true ~ created=2026-07-27 ~ updated=2026-07-27 ~ versions=2 ~ published_version=true",
+          "orgcalc.room_utilization ~ published ~ authored=true ~ created=2026-07-28 ~ updated=2026-07-28 ~ versions=1 ~ published_version=true"
+        ]
+      },
+      "versions": {
+        "question_id": "versions",
+        "row_count": null,
+        "rows": [
+          "rows=17 published=15 runtime_bound=0 last_published=2026-07-28"
+        ]
+      },
+      "not_null_probe": {
+        "question_id": "not_null_probe",
+        "row_count": null,
+        "rows": [
+          "organization_calculation_versions.organization_calculation_id is_nullable=NO ~ tables_referencing_calculations=1"
+        ]
+      },
+      "per_org": {
+        "question_id": "per_org",
+        "row_count": null,
+        "rows": [
+          "orgs_total=3 orgs_with_calculations=1"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "calculations_table_exists=true versions_table_exists=true orgs=3"
+        ]
+      }
+    },
+    "row_count": 15
+  }
+}

@@ -1,0 +1,2069 @@
+/**
+ * Vacilando Gateway — Execution Run (Phase 1).
+ *
+ * One operator-approved instruction tracked from acceptance to
+ * COMPLETE / NEEDS_INPUT / FAILED / ABANDONED. Not a Claude session, not a tmux pane,
+ * not a resource scheduler.
+ */
+import { createHash, randomBytes } from "node:crypto";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+
+import { LANE_ID_RE, LANE_INSTRUCTION_MAX, runReceiptToken, textProvesInstructionReceipt } from "./lanes.mjs";
+import { assertResettableRoot, canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
+import { TOOLKIT_DIR } from "./workspace-facts.mjs";
+import { isDeclaredWaitReason } from "./run-wait.mjs";
+import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
+import * as attachmentsModule from "./lane-attachments.mjs";
+import { recordLaneProgress } from "./lane-memory.mjs";
+
+export const EXECUTION_RUN_SCHEMA = "vacilando.execution_run.v1";
+/**
+ * Storage bound on run HISTORY, not a ceiling on lanes. Durable work is not
+ * scarce (see provider-capacity.mjs), so this is generous and is about disk,
+ * not concurrency. Lanes beyond it keep working; only their oldest history is
+ * pruned.
+ */
+export const EXECUTION_RUN_MAX_LANES = 256;
+export const EXECUTION_RUN_MAX_PER_LANE = 16;
+export const EXECUTION_RUN_MAX_TRANSITIONS = 40;
+export const EXECUTION_RUN_SUMMARY_MAX = 2000;
+export const EXECUTION_RUN_REASON_MAX = 500;
+
+/**
+ * PROVIDER PROGRESS CONTRACT.
+ *
+ * The run already carried `latest_progress` — a worker-reported *sentence*. It
+ * answered "what is happening" and never "how far along". The operator could
+ * read a lane for twenty minutes and still not know whether it was starting or
+ * finishing, which is the single question the Lane surface exists to answer.
+ *
+ * This extends the SAME field family rather than opening a second progress
+ * system: `latest_progress` keeps its meaning, and `progress_estimate` carries
+ * the bounded estimate beside it.
+ *
+ * It is deliberately an ESTIMATE. The provider is the only party that knows how
+ * much of its own plan remains, and it knows that only approximately. Every
+ * consumer must render it as an estimate and must never derive an ETA from it —
+ * there is no estimator, and a percentage divided by elapsed time is a lie with
+ * a decimal point on it.
+ */
+export const PROGRESS_CONFIDENCES = Object.freeze(["low", "medium", "high"]);
+
+export const PROGRESS_SOURCES = Object.freeze([
+  "provider_estimate",
+  "deterministic",
+  "operator",
+  "derived",
+]);
+
+/**
+ * Progress is reported at MILESTONES, not per message. A worker that has not
+ * reported inside this window is not "62% and frozen" — it is unknown, and the
+ * UI is required to say so rather than keep painting a stale bar.
+ */
+export const PROGRESS_STALE_MS = 30 * 60 * 1000;
+
+export const PROGRESS_SUMMARY_MAX = 240;
+export const PROGRESS_REMAINING_MAX = 480;
+
+/**
+ * THE FINISH ESTIMATE IS REPORTED, NEVER DERIVED.
+ *
+ * The rule above still stands: elapsed time divided by a provider's own guess
+ * is a lie with a decimal point on it, and this function will not compute one.
+ * What it accepts is a provider SAYING how much longer it needs — which is a
+ * different claim, made by the only party with a plan, and it travels with its
+ * own confidence and its own timestamp so a consumer can see how much to trust
+ * it and how old it is.
+ *
+ * `estimated_remaining_minutes` and `estimated_finish_at` are two spellings of
+ * one answer. A worker mid-task naturally knows "about twenty more minutes";
+ * a scheduled or queued one naturally knows a wall-clock time. Both normalise
+ * to an absolute instant, because "20 minutes" read forty minutes later is
+ * worse than useless — it is confidently wrong. Converting minutes to an
+ * instant against the report's own timestamp is arithmetic on reported data,
+ * not an invented schedule.
+ *
+ * Absent is a legitimate, renderable state. Nothing here invents a value.
+ */
+function normalizeFinishEstimate({
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
+  source = null,
+  nowMs = Date.now(),
+} = {}) {
+  let finishMs = null;
+  const mins = estimated_remaining_minutes === null || estimated_remaining_minutes === undefined
+    || estimated_remaining_minutes === ""
+    ? null
+    : Number(estimated_remaining_minutes);
+  if (Number.isFinite(mins) && mins >= 0) {
+    // Anchored to the moment of the report, not to read time.
+    finishMs = nowMs + Math.round(mins) * 60_000;
+  }
+  if (finishMs === null && estimated_finish_at) {
+    const at = Date.parse(estimated_finish_at);
+    if (Number.isFinite(at)) finishMs = at;
+  }
+  if (finishMs === null) return null;
+  const conf = String(estimate_confidence || "").trim().toLowerCase();
+  const src = String(source || "").trim().toLowerCase();
+  return {
+    estimated_finish_at: iso(finishMs),
+    // Kept as reported so a consumer can say "about 20 minutes" without doing
+    // subtraction the operator would then have to check.
+    estimated_remaining_minutes: Number.isFinite(mins) && mins >= 0
+      ? Math.round(mins)
+      : Math.max(0, Math.round((finishMs - nowMs) / 60_000)),
+    estimate_confidence: PROGRESS_CONFIDENCES.includes(conf) ? conf : "low",
+    estimate_source: PROGRESS_SOURCES.includes(src) ? src : "provider_estimate",
+    estimate_updated_at: iso(nowMs),
+  };
+}
+
+/**
+ * Normalise a reported estimate. Returns null when there is nothing usable —
+ * an absent estimate is a legitimate, renderable state ("Progress estimate
+ * unavailable"), so this never invents a value to avoid returning null.
+ */
+export function normalizeProgressEstimate({
+  percent = null,
+  confidence = null,
+  summary = null,
+  source = null,
+  remaining_work = null,
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
+  nowMs = Date.now(),
+} = {}) {
+  const pct = percent === null || percent === undefined || percent === ""
+    ? null
+    : Number(percent);
+  const hasPct = Number.isFinite(pct);
+  const conf = String(confidence || "").trim().toLowerCase();
+  const src = String(source || "").trim().toLowerCase();
+  const sum = bound(summary, PROGRESS_SUMMARY_MAX);
+  const rem = bound(remaining_work, PROGRESS_REMAINING_MAX);
+  const finish = normalizeFinishEstimate({
+    estimated_remaining_minutes, estimated_finish_at,
+    estimate_confidence: estimate_confidence ?? confidence,
+    source, nowMs,
+  });
+  // A finish estimate on its own is a complete answer: "about an hour left" is
+  // useful even from a provider that will not put a number on percent done.
+  if (!hasPct && !sum && !rem && !finish) return null;
+  return {
+    percent: hasPct ? Math.max(0, Math.min(100, Math.round(pct))) : null,
+    confidence: PROGRESS_CONFIDENCES.includes(conf) ? conf : "low",
+    summary: sum,
+    remaining_work: rem,
+    source: PROGRESS_SOURCES.includes(src) ? src : "provider_estimate",
+    updated_at: iso(nowMs),
+    ...(finish || {}),
+  };
+}
+
+/**
+ * Is this estimate still worth showing? Separated from rendering so the server,
+ * the view and the tests all agree on one answer.
+ */
+export function progressEstimateIsStale(estimate, { nowMs = Date.now(), staleMs = PROGRESS_STALE_MS } = {}) {
+  if (!estimate?.updated_at) return true;
+  const at = Date.parse(estimate.updated_at);
+  if (!Number.isFinite(at)) return true;
+  return nowMs - at > staleMs;
+}
+
+/**
+ * Should Vacilando ask this run for a fresh progress estimate?
+ *
+ * WHY IT ASKS RATHER THAN GUESSES. A stale estimate is not a rendering
+ * problem to be smoothed over; it is a question nobody has answered lately,
+ * and the only party who can answer it is the provider. The UI's job is to say
+ * "unknown" honestly, and this predicate's job is to make "unknown" temporary.
+ *
+ * WHO IS ASKED. The provider, through the orientation and continuation text it
+ * already receives. Not the operator — they are the one waiting for the
+ * answer, and interrupting them to ask how long their own agent will take is
+ * exactly backwards.
+ *
+ * Only ACTIVE runs are solicited. A run that is finished, failed or waiting on
+ * a human has no remaining plan to estimate, and asking would produce a number
+ * about nothing.
+ */
+export const PROGRESS_SOLICIT_STATES = Object.freeze([
+  "EXECUTING", "VALIDATING", "RECOVERING",
+]);
+
+export function progressSolicitationDue(run, { nowMs = Date.now(), staleMs = PROGRESS_STALE_MS } = {}) {
+  if (!PROGRESS_SOLICIT_STATES.includes(String(run?.state || "").toUpperCase())) return false;
+  const est = run?.progress_estimate || null;
+  // Never reported at all is the strongest case for asking.
+  if (!est) return true;
+  return progressEstimateIsStale(est, { nowMs, staleMs });
+}
+
+export const RUN_STATES = Object.freeze([
+  "QUEUED",
+  "EXECUTING",
+  "WAITING_RESOURCE",
+  "VALIDATING",
+  "NEEDS_INPUT",
+  "RECOVERING",
+  "COMPLETE",
+  "FAILED",
+  "ABANDONED",
+]);
+
+export const TERMINAL_RUN_STATES = Object.freeze(["COMPLETE", "FAILED", "ABANDONED"]);
+/**
+ * Nonterminal states that mean "waiting on someone", never "failed".
+ * A run here can report a checkpoint, expose its blocker, resume when the
+ * blocker clears, and complete normally.
+ */
+export const BLOCKED_RUN_STATES = Object.freeze(["NEEDS_INPUT", "WAITING_RESOURCE"]);
+/** Origins that are background reconciliation rather than observed work. */
+export const SWEEPING_ORIGINS = Object.freeze(["system", "governor"]);
+/** Truly irreversible. ABANDONED is terminal for scheduling, but recoverable. */
+export const IRREVERSIBLE_RUN_STATES = Object.freeze(["COMPLETE", "FAILED"]);
+/*
+ * WHO CAUSED THIS RUN.
+ *
+ * "scheduler" was missing, and its absence was not inert. work-scheduler-dispatch
+ * creates its runs with origin "scheduler"; resolveRunOrigin falls through an
+ * unrecognised origin to "operator". So every autonomously dispatched run was
+ * recorded as though the Director had asked for it — the resident system's own
+ * decisions attributed to the person the whole point was to not involve. It also
+ * left nothing able to tell a dispatched run from a hand-made one, which is what
+ * the completion path needs in order to know whether an authorized next step was
+ * actually spent.
+ */
+export const RUN_ORIGINS = Object.freeze(["operator", "agent", "governor", "system", "certification", "scheduler"]);
+
+const LEGAL = Object.freeze({
+  // QUEUED -> NEEDS_INPUT: the pane was not at an actionable prompt, so the
+  // instruction could not be delivered and needs the operator to clear a modal.
+  // The instruction is preserved; NEEDS_INPUT -> EXECUTING then retries it.
+  QUEUED: ["EXECUTING", "NEEDS_INPUT", "FAILED", "ABANDONED"],
+  EXECUTING: ["WAITING_RESOURCE", "VALIDATING", "NEEDS_INPUT", "RECOVERING", "COMPLETE", "FAILED", "ABANDONED"],
+  WAITING_RESOURCE: ["EXECUTING", "VALIDATING", "NEEDS_INPUT", "FAILED"],
+  // ABANDONED is reachable from VALIDATING for exactly the reason spelled out
+  // for RECOVERING below, and its absence was the same ONE-WAY TRAP.
+  //
+  // MEASURED. The Payments run sat in VALIDATING for three hours after a
+  // finished turn. Nothing was validating: no heavy process in its worktree and
+  // zero broker claims on the host. The classifier had been corrected to stop
+  // protecting it, and idle-turn completion correctly declined to file a
+  // completion whose summary the transcript did not corroborate — so the
+  // governor's only remaining conclusion was to abandon it, and abandon was
+  // ILLEGAL from here. The run could not leave VALIDATING by any path, and even
+  // the operator's Close stale run returned illegal_transition.
+  //
+  // As with RECOVERING, this does not make ABANDONED cheap. It stays terminal
+  // for scheduling and recoverable, and it is still reached only with positive
+  // evidence — the classifier must first find no claim and no live signals.
+  VALIDATING: ["EXECUTING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT", "COMPLETE", "FAILED", "ABANDONED"],
+  // COMPLETE is reachable from RECOVERING: work that finished must never be
+  // impossible to close merely because Vacilando abandoned the run mid-sprint.
+  //
+  // ABANDONED is reachable for the mirror-image reason, and its absence was a
+  // ONE-WAY TRAP. The governor abandons a run it cannot attribute; an operator
+  // recovery moves it to RECOVERING; the governor reaches the same conclusion
+  // again and its only available conclusion — abandon — was illegal from here.
+  // The run could then never leave RECOVERING by any path, and the lane card
+  // read "Recovering" permanently. Communications sat in exactly that trap.
+  //
+  // This does not make ABANDONED cheap: it stays terminal for scheduling and
+  // recoverable, and RECOVERING is still reachable only through
+  // recoverExecutionRun() with proven ownership.
+  RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED", "ABANDONED"],
+  // ABANDONED is reachable from NEEDS_INPUT: a run that needs input for which
+  // no operator control exists is stuck, not failed. It is collected out of the
+  // impossible state into the one the platform already has for "not going to
+  // continue, and recoverable" — rather than being reported as a failure whose
+  // reason is the question it was waiting on.
+  NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "COMPLETE", "FAILED", "ABANDONED"],
+  COMPLETE: [],
+  FAILED: [],
+  // ABANDONED is recoverable, not dead. RECOVERING is its ONLY exit, and it is
+  // reachable only through recoverExecutionRun() with proven worker ownership.
+  // Arbitrary ABANDONED -> EXECUTING stays illegal.
+  ABANDONED: ["RECOVERING"],
+});
+
+const REPORT_STATES = new Set([
+  "EXECUTING", "WAITING_RESOURCE", "VALIDATING", "NEEDS_INPUT", "RECOVERING", "COMPLETE", "FAILED",
+]);
+
+function runtimeRoot() {
+  return process.env.ALLOY_RUNTIME_ROOT?.trim()
+    || join(homedir(), ".local", "state", "alloy-dev");
+}
+
+export function executionRunStorePath(root = runtimeRoot()) {
+  return join(root, "vacilando", "execution-runs", "runs.json");
+}
+
+export function executionRunEventsPath(root = runtimeRoot()) {
+  return join(root, "vacilando", "execution-runs", "events.jsonl");
+}
+
+function emptyStore() {
+  return { schema_version: EXECUTION_RUN_SCHEMA, lanes: {} };
+}
+
+function atomicWrite(path, obj) {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
+  renameSync(tmp, path);
+}
+
+/*
+ * THE READ PATH IS MEMOIZED. THE WRITE PATH IS NOT.
+ *
+ * MEASURED, on live-sized state. One "cheap" Governor reconcile took 1016 ms
+ * (p95 1043 ms) against a <25 ms target, and did 127 large JSON.parse calls
+ * per pass — 517.7 MB of text, 488 ms of it inside JSON.parse alone. Every one
+ * of those was the same 4.15 MB runs.json, re-read and re-parsed because
+ * `getExecutionRun` reads the whole store to find ONE run and is called once
+ * per run per helper. That pass runs every 10 seconds: roughly a second of CPU
+ * every ten, with the GC churn on top. It is the `fs ReadFileUtf8 → UTF-8
+ * decode → JSON.parse → allocation → GC` hot path the September 11 sampler
+ * caught, and it is the residual burst that survived moving Engineering Health
+ * off this event loop.
+ *
+ * The file is still the authority. What changes is that re-parsing bytes we
+ * have already parsed, whose identity has not changed, is no longer mistaken
+ * for re-reading the truth.
+ *
+ * WHY THIS IS SAFE, precisely. Mutations do not come through here. They use
+ * `readStoreForMutation` → `readExecutionRunStoreGuarded`, which is deliberately
+ * left uncached: a write must always be computed from fresh bytes, and must
+ * still fail closed on an unreadable store. Only the LENIENT readers —
+ * `getExecutionRun`, `activeRunForLane`, `listExecutionRunsForLane` — share the
+ * memo, and every write invalidates it explicitly on the way out.
+ *
+ * Identity is (size, mtimeMs, inode), so a write from any other process — a
+ * worker's `vac run-status`, a test harness — misses the memo on the very next
+ * stat. `statSync` costs microseconds against ~8 ms of parse. The short max age
+ * is a backstop, not the mechanism: it bounds the blast radius if a read-only
+ * caller ever mutates what it was handed.
+ *
+ * NOT a cache in front of correctness. Nothing here decides anything, no
+ * reconciliation guarantee is skipped, and no timer interval was widened to
+ * hide the cost.
+ */
+const RUN_STORE_MEMO_MAX_AGE_MS = 2000;
+let runStoreMemo = null;
+
+function runStoreIdentity(path) {
+  try {
+    const st = statSync(path);
+    return { size: st.size, mtimeMs: st.mtimeMs, ino: st.ino };
+  } catch {
+    return null;
+  }
+}
+
+/** Every write drops the memo, so the next read re-parses what was just written. */
+function invalidateRunStoreMemo() {
+  runStoreMemo = null;
+}
+
+/** Test seam: a control must be able to prove the memo is not answering for the file. */
+export function resetExecutionRunStoreMemoForTests() {
+  invalidateRunStoreMemo();
+}
+
+export function readExecutionRunStore(root = runtimeRoot()) {
+  const path = executionRunStorePath(root);
+  const id = runStoreIdentity(path);
+  const now = Date.now();
+  if (runStoreMemo && id
+    && runStoreMemo.path === path
+    && runStoreMemo.size === id.size
+    && runStoreMemo.mtimeMs === id.mtimeMs
+    && runStoreMemo.ino === id.ino
+    && now - runStoreMemo.at < RUN_STORE_MEMO_MAX_AGE_MS) {
+    return runStoreMemo.store;
+  }
+  const read = readExecutionRunStoreGuarded(root);
+  // Readers stay lenient: a dashboard that cannot read the store should render
+  // empty rather than throw. MUTATIONS must not, which is what the guarded form
+  // below exists for.
+  //
+  // An UNREADABLE store is never memoized. Caching "I could not read it" would
+  // hold the empty answer for the whole max age and turn a transient
+  // mid-rename read into seconds of "no runs exist".
+  if (read.ok && id) {
+    runStoreMemo = { path, ...id, at: now, store: read.store };
+  }
+  return read.store;
+}
+
+/**
+ * DURABLE RUN IDENTITY MUST OUTLIVE THE GATEWAY PROCESS.
+ *
+ * The lenient read above returned `emptyStore()` for every failure, and every
+ * mutation is read → modify → atomic whole-file overwrite. So a single transient
+ * unreadable read — a partial file observed mid-rename, an interrupted write
+ * during Gateway shutdown, EMFILE under concurrency — made the very NEXT write
+ * replace the entire store with one run. Not a lane's history: every lane's.
+ *
+ * That is not theoretical. It stranded a completed implementation: run
+ * erun_34e080af44cc2c5d vanished, `current_run_id` went null, `vac run-status`
+ * and `checkpoint-create` both answered `run_not_found`, and finished work on
+ * disk had no run to be committed under. The store afterwards held five lanes
+ * with exactly one run each — the signature of a reset, not of the 16-per-lane
+ * retention cap doing its job.
+ *
+ * ABSENT AND UNREADABLE ARE DIFFERENT ANSWERS. A missing file is legitimately
+ * an empty store: first boot has no history to lose. A file that EXISTS and
+ * cannot be parsed is a fact we do not have, and writing over it converts a
+ * recoverable problem into a permanent one. Mutations therefore fail closed and
+ * say so, leaving the bytes on disk for recovery.
+ */
+export function readExecutionRunStoreGuarded(root = runtimeRoot()) {
+  const path = executionRunStorePath(root);
+  if (!existsSync(path)) {
+    // Genuinely nothing to lose.
+    return { ok: true, store: emptyStore(), absent: true };
+  }
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    return { ok: false, error: "run_store_unreadable", detail: e?.message || String(e), store: emptyStore() };
+  }
+  try {
+    const raw = JSON.parse(text);
+    if (!raw || typeof raw !== "object") {
+      return { ok: false, error: "run_store_malformed", detail: "top level is not an object", store: emptyStore() };
+    }
+    const lanes = raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {};
+    return { ok: true, store: { schema_version: EXECUTION_RUN_SCHEMA, lanes } };
+  } catch (e) {
+    return { ok: false, error: "run_store_malformed", detail: e?.message || String(e), store: emptyStore() };
+  }
+}
+
+/**
+ * Read the store for a MUTATION, or refuse.
+ *
+ * Returns null when the caller must not proceed. Every write path goes through
+ * this, so "we could not read it" can never again be silently spelled "there was
+ * nothing there".
+ */
+function readStoreForMutation(root) {
+  const read = readExecutionRunStoreGuarded(root);
+  return read.ok ? read.store : null;
+}
+
+function writeStore(store, root) {
+  /*
+   * Keep one generation behind the current file.
+   *
+   * The write itself is atomic, so this is not about torn files — it is about
+   * the case where a mutation was already wrong before it got here. A single
+   * `.prev` copy is what makes a bad generation recoverable at all; without it
+   * the only copy of run history is the one being replaced.
+   */
+  const path = executionRunStorePath(root);
+  try {
+    if (existsSync(path)) copyFileSync(path, `${path}.prev`);
+  } catch { /* a missing backup must never block the write that keeps runs alive */ }
+  atomicWrite(path, store);
+  // The bytes just changed. Drop the read memo rather than relying on the stat
+  // to notice — same-millisecond writes are exactly where identity is weakest.
+  invalidateRunStoreMemo();
+  return store;
+}
+
+function iso(ms) {
+  return new Date(ms ?? Date.now()).toISOString();
+}
+
+function newRunId(laneId, nowMs) {
+  return "erun_" + createHash("sha256")
+    .update(`${laneId}:${nowMs}:${randomBytes(6).toString("hex")}`)
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function bound(s, max) {
+  const t = String(s || "").trim();
+  if (!t) return null;
+  return t.length > max ? t.slice(0, max) : t;
+}
+
+export function isTerminalRunState(state) {
+  return TERMINAL_RUN_STATES.includes(state);
+}
+
+/** COMPLETE/FAILED can never be reopened. ABANDONED can be recovered. */
+export function isIrreversibleRunState(state) {
+  return IRREVERSIBLE_RUN_STATES.includes(state);
+}
+
+export function isLegalRunTransition(from, to) {
+  return (LEGAL[from] || []).includes(to);
+}
+
+/**
+ * Gateway certification / soak / transport-only prompts. These must not become
+ * persistent production work on a durable lane.
+ */
+export function isCertificationInstruction(text) {
+  const s = String(text || "");
+  if (!s.trim()) return false;
+  if (/\bVACILANDO_[A-Z0-9_]+\b/.test(s)) return true;
+  if (/\bGateway two-lane\b/i.test(s)) return true;
+  if (/\bsoak only\b/i.test(s)) return true;
+  if (/\bCASE C session\b/i.test(s)) return true;
+  if (/^Certification only:/im.test(s)) return true;
+  if (/\btransport-only\b/i.test(s)) return true;
+  if (/Do not modify files, run commands, or change the worktree/i.test(s)) return true;
+  return false;
+}
+
+function resolveRunOrigin(origin, text) {
+  if (origin === "certification" || isCertificationInstruction(text)) return "certification";
+  if (RUN_ORIGINS.includes(origin)) return origin;
+  return "operator";
+}
+
+export function activeRunForLane(laneId, root = runtimeRoot()) {
+  const requested = String(laneId || "");
+  const id = canonicalLaneStoreId(requested, root);
+  if (!LANE_ID_RE.test(id) && !LANE_ID_RE.test(requested)) return null;
+  const store = readExecutionRunStore(root);
+  const pack = store.lanes[id] || store.lanes[requested];
+  if (!pack?.current_run_id) return null;
+  const run = (pack.runs || []).find((r) => r.run_id === pack.current_run_id);
+  if (!run || isTerminalRunState(run.state)) return null;
+  return run;
+}
+
+/**
+ * States in which the lane's current run OCCUPIES its provider.
+ *
+ * QUEUED is deliberately absent, and that absence is the whole point: a queued
+ * run is work waiting to be HANDED to a provider, not work the provider is
+ * doing. Treating it as occupancy is what let an idle resident session refuse
+ * the very run it was supposed to pick up.
+ *
+ * Everything else non-terminal is occupancy, including the blocked states. A
+ * provider parked on NEEDS_INPUT or WAITING_RESOURCE looks idle by CPU and is
+ * not free: someone is waiting on that run, and delivering a different one over
+ * it would silently displace them.
+ */
+export const OCCUPYING_RUN_STATES = Object.freeze([
+  "EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING",
+]);
+
+/**
+ * The run that makes this lane genuinely busy, or null when its provider is
+ * resident-but-free.
+ *
+ * "Does a session exist" and "does this lane have conflicting productive work"
+ * are different questions. Admission needs the second one, and this is it.
+ */
+export function occupyingRunForLane(laneId, root = runtimeRoot()) {
+  const run = activeRunForLane(laneId, root);
+  if (!run) return null;
+  return OCCUPYING_RUN_STATES.includes(String(run.state)) ? run : null;
+}
+
+export function getExecutionRun(runId, root = runtimeRoot()) {
+  const id = String(runId || "").trim();
+  if (!id) return null;
+  const store = readExecutionRunStore(root);
+  for (const pack of Object.values(store.lanes || {})) {
+    const run = (pack.runs || []).find((r) => r.run_id === id);
+    if (run) return run;
+  }
+  return null;
+}
+
+export function listExecutionRunsForLane(laneId, root = runtimeRoot()) {
+  const requested = String(laneId || "");
+  const id = canonicalLaneStoreId(requested, root);
+  if (!LANE_ID_RE.test(id) && !LANE_ID_RE.test(requested)) return [];
+  const store = readExecutionRunStore(root);
+  const pack = store.lanes[id] || store.lanes[requested];
+  return [...(pack?.runs || [])];
+}
+
+export function gatewayRuntimeRoot() {
+  return vacilandoGatewayRoot();
+}
+
+export function candidateRuntimeRoots() {
+  const env = process.env.ALLOY_RUNTIME_ROOT?.trim();
+  return [...new Set([env, gatewayRuntimeRoot(), runtimeRoot()].filter(Boolean))];
+}
+
+export function findExecutionRun(runId) {
+  const id = String(runId || "").trim();
+  if (!id) return null;
+  for (const root of candidateRuntimeRoots()) {
+    const run = getExecutionRun(id, root);
+    if (run) return { run, root };
+  }
+  return null;
+}
+
+function pruneLanePack(pack) {
+  const runs = Array.isArray(pack.runs) ? pack.runs.slice(0, EXECUTION_RUN_MAX_PER_LANE) : [];
+  let current = pack.current_run_id || null;
+  if (current && !runs.some((r) => r.run_id === current)) current = runs[0]?.run_id || null;
+  return { current_run_id: current, runs };
+}
+
+function pruneStore(store) {
+  const ids = Object.keys(store.lanes || {});
+  if (ids.length <= EXECUTION_RUN_MAX_LANES) return store;
+  const ranked = ids
+    .map((id) => {
+      const latest = store.lanes[id]?.runs?.[0]?.updated_at;
+      return { id, at: Date.parse(latest) || 0 };
+    })
+    .sort((a, b) => b.at - a.at)
+    .slice(0, EXECUTION_RUN_MAX_LANES);
+  const lanes = {};
+  for (const { id } of ranked) lanes[id] = store.lanes[id];
+  store.lanes = lanes;
+  return store;
+}
+
+function putRun(store, run) {
+  const pack = store.lanes[run.lane_id] || { current_run_id: null, runs: [] };
+  const runs = (pack.runs || []).filter((r) => r.run_id !== run.run_id);
+  runs.unshift(run);
+  pack.runs = runs.slice(0, EXECUTION_RUN_MAX_PER_LANE);
+  if (isTerminalRunState(run.state)) {
+    if (pack.current_run_id === run.run_id) pack.current_run_id = null;
+  } else {
+    pack.current_run_id = run.run_id;
+  }
+  store.lanes[run.lane_id] = pruneLanePack(pack);
+  return pruneStore(store);
+}
+
+function appendTransition(run, { from, to, reason, origin, nowMs }) {
+  const rec = {
+    from_state: from,
+    to_state: to,
+    occurred_at: iso(nowMs),
+    reason: bound(reason, EXECUTION_RUN_REASON_MAX),
+    origin: RUN_ORIGINS.includes(origin) ? origin : "system",
+  };
+  run.transitions = [...(run.transitions || []), rec].slice(-EXECUTION_RUN_MAX_TRANSITIONS);
+  return rec;
+}
+
+/**
+ * Worker liveness. A report that does not change state is still positive proof
+ * that the worker is alive. Before this existed, `vac run-status <run> executing`
+ * on an already-EXECUTING run was discarded as a noop, so a working agent left
+ * no evidence at all and the governor read it as an orphan.
+ */
+function touchWorkerLiveness(run, { nowMs, origin, progress = null, progressEstimate = null }) {
+  if (origin !== "agent") return false;
+  run.last_worker_report_at = iso(nowMs);
+  run.worker_report_count = (Number(run.worker_report_count) || 0) + 1;
+  if (progress) {
+    run.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
+  }
+  if (progressEstimate) run.progress_estimate = progressEstimate;
+  return true;
+}
+
+function appendRunEvent(rec, root) {
+  try {
+    const path = executionRunEventsPath(root);
+    mkdirSync(dirname(path), { recursive: true });
+    appendFileSync(path, `${JSON.stringify(rec)}\n`, "utf8");
+  } catch { /* events are best-effort */ }
+}
+
+function scheduleOutcomePush(run, root) {
+  return import("./lane-push.mjs").then(async (mod) => {
+    let label = run.lane_id;
+    try {
+      label = getDurableLane(run.lane_id, root)?.name || label;
+    } catch { /* keep id */ }
+    const out = await mod.pushRunOutcome(run, { label, root });
+    appendRunEvent({
+      type: "execution_run.push_dispatch",
+      run_id: run.run_id,
+      lane_id: run.lane_id,
+      state: run.state,
+      sent: out?.sent || 0,
+      skipped: out?.skipped || null,
+      error: out?.error || null,
+      at: new Date().toISOString(),
+    }, root);
+    return out;
+  }).catch((err) => {
+    const fail = { ok: false, error: "push_dispatch_failed", sent: 0, detail: String(err?.message || err) };
+    appendRunEvent({
+      type: "execution_run.push_dispatch",
+      run_id: run.run_id,
+      lane_id: run.lane_id,
+      state: run.state,
+      sent: 0,
+      error: fail.error,
+      at: new Date().toISOString(),
+    }, root);
+    return fail;
+  });
+}
+
+function emitOutcomeEvent(run, root, { recordEvent = true } = {}) {
+  if (!["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"].includes(run.state)) {
+    return Promise.resolve(null);
+  }
+  if (recordEvent) {
+    appendRunEvent({
+      type: `execution_run.${run.state.toLowerCase()}`,
+      run_id: run.run_id,
+      lane_id: run.lane_id,
+      state: run.state,
+      reason: run.state_reason || null,
+      at: run.updated_at,
+    }, root);
+  }
+  if (["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"].includes(run.state)) {
+    return scheduleOutcomePush(run, root);
+  }
+  return Promise.resolve(null);
+}
+
+
+/**
+ * MAY THIS RUN CLAIM TO CONTINUE THAT ONE?
+ *
+ * `continuation_of` existed, was documented, was tested once - and was accepted
+ * without a single check. Any string was stored: a run id that does not exist, a
+ * run still executing, the successor itself, or a cycle. Measured across the
+ * live store: 0 of 181 runs carried it, so nothing had ever exercised the field
+ * in anger and nothing had noticed it was unguarded.
+ *
+ * The doctrine is not changed here, only enforced. A continuation says "the work
+ * this run is doing was previously attempted by that run, which terminated". So:
+ *
+ *   the predecessor must exist          - a link to nothing is worse than no link
+ *   the predecessor must be terminal    - a live run has not been continued, it
+ *                                         is still going
+ *   it may not be the run itself        - self-lineage is a lie that traverses
+ *   the chain may not cycle             - A->B->A makes history untraversable
+ *   the lane must match                 - lineage is within a lane's history
+ *
+ * Chronology is deliberately NOT a criterion. "It happened after" is how an
+ * unrelated mission gets adopted into someone else's failure.
+ */
+export const CONTINUATION_REFUSALS = Object.freeze({
+  MISSING: "continuation_predecessor_missing",
+  NOT_TERMINAL: "continuation_predecessor_not_terminal",
+  SELF: "continuation_self_reference",
+  CYCLE: "continuation_cycle",
+  LANE: "continuation_lane_mismatch",
+});
+
+export function validateContinuation(successorRunId, continuation, { root = runtimeRoot() } = {}) {
+  const priorId = String(continuation?.run_id || continuation || "").trim();
+  if (!priorId) return { ok: false, code: CONTINUATION_REFUSALS.MISSING, detail: "no predecessor run id was given" };
+  if (priorId === String(successorRunId)) {
+    return { ok: false, code: CONTINUATION_REFUSALS.SELF, detail: "a run cannot continue itself" };
+  }
+
+  const store = readExecutionRunStore(root);
+  const index = new Map();
+  for (const [laneId, pack] of Object.entries(store?.lanes || {})) {
+    for (const r of pack.runs || []) index.set(r.run_id, { run: r, laneId });
+  }
+
+  const prior = index.get(priorId);
+  if (!prior) {
+    return { ok: false, code: CONTINUATION_REFUSALS.MISSING, detail: `no run ${priorId} exists to continue` };
+  }
+  if (!isTerminalRunState(prior.run.state)) {
+    return {
+      ok: false,
+      code: CONTINUATION_REFUSALS.NOT_TERMINAL,
+      detail: `run ${priorId} is ${prior.run.state}; a run still in flight has not been continued`,
+    };
+  }
+  const successor = index.get(String(successorRunId));
+  if (successor && successor.laneId !== prior.laneId) {
+    return {
+      ok: false,
+      code: CONTINUATION_REFUSALS.LANE,
+      detail: `run ${priorId} belongs to ${prior.laneId}, not ${successor.laneId}`,
+    };
+  }
+
+  // Walk the existing chain. The successor is not yet linked, so reaching it
+  // from the predecessor means this link would close a loop.
+  const seen = new Set([String(successorRunId)]);
+  let cursor = prior;
+  while (cursor) {
+    if (seen.has(cursor.run.run_id)) {
+      return { ok: false, code: CONTINUATION_REFUSALS.CYCLE, detail: `continuing ${priorId} would close a cycle` };
+    }
+    seen.add(cursor.run.run_id);
+    const nextId = cursor.run.continuation_of?.run_id;
+    cursor = nextId ? index.get(String(nextId)) : null;
+  }
+
+  return { ok: true, predecessor: { run_id: priorId, state: prior.run.state, lane_id: prior.laneId } };
+}
+
+/**
+ * Attachment metadata for a run, resolved synchronously.
+ *
+ * publicExecutionRun is called from synchronous code all over the projection
+ * layer, so this cannot be a dynamic import. The module is small and has no
+ * cycle back into execution-run.
+ */
+function attachmentsForRunSync(runId) {
+  if (!runId || !attachmentsModule) return [];
+  return attachmentsModule.listRunAttachments(runId);
+}
+
+export function publicExecutionRun(run, { includeInstruction = false, includeTransitions = false } = {}) {
+  if (!run) return null;
+  // Attachments belong to the prompt, so they travel with the run projection —
+  // metadata and an authenticated URL only, never bytes and never a real path.
+  let attachments = [];
+  try {
+    attachments = attachmentsForRunSync(run.run_id);
+  } catch { /* the conversation still renders without them */ }
+  const out = {
+    run_id: run.run_id,
+    attachments,
+    lane_id: run.lane_id,
+    state: run.state,
+    state_reason: run.state_reason || null,
+    /*
+     * LINEAGE REACHES THE OPERATOR, OR IT MIGHT AS WELL NOT EXIST.
+     *
+     * `continuation_of` was stored and never projected, so every surface built
+     * on this shape showed a recovery run as unrelated new work. That is half
+     * of why the field went unused in 181 runs: nothing could set it usefully
+     * and nothing would have shown it.
+     *
+     * The predecessor's own record is untouched - this is the successor saying
+     * what it continues, never the failed run being reopened.
+     */
+    continuation_of: run.continuation_of || null,
+    current_phase: run.current_phase || null,
+    created_at: run.created_at,
+    started_at: run.started_at || null,
+    completed_at: run.completed_at || null,
+    updated_at: run.updated_at,
+    origin: run.origin || null,
+    mission_id: run.mission_id || null,
+    worktree_path: run.worktree_path || null,
+    node_id: run.node_id || null,
+    latest_progress: run.latest_progress || null,
+    // The bounded provider estimate. Projected verbatim, including its
+    // updated_at, so the consumer — not the store — decides whether it is still
+    // fresh enough to draw.
+    progress_estimate: run.progress_estimate || null,
+    completion_report: run.completion_report || null,
+    git_baseline: run.git_baseline || null,
+    checkpoint_readiness: run.checkpoint_readiness || null,
+    resource_wait: run.resource_wait || null,
+    governed_action: run.governed_action || null,
+    checkpoint_ready: Boolean(run.checkpoint_ready),
+    checkpoint_summary: run.checkpoint_summary || null,
+    last_worker_report_at: run.last_worker_report_at || null,
+    worker_report_count: Number(run.worker_report_count) || 0,
+    recovery_state: run.recovery_state || null,
+    recovered_count: Number(run.recovered_count) || 0,
+    output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+    delivery: run.delivery && typeof run.delivery === "object" ? run.delivery : null,
+    // A completion that was later found unattributable stays visible as such.
+    // Hiding it would leave the operator reading a green COMPLETE for work that
+    // never ran.
+    false_completion: run.false_completion || null,
+    // The structured report that owns the visible assistant message. Projected
+    // in full — a truncation here would defeat the whole contract.
+    agent_report: run.agent_report || null,
+    agent_report_count: Array.isArray(run.agent_reports) ? run.agent_reports.length : 0,
+    provider_suspension: run.provider_suspension || null,
+  };
+  if (run.state === "ABANDONED") {
+    const probe = executionRunRecoverability(run);
+    out.recoverable = Boolean(probe.recoverable);
+    out.recovery_blocked_reason = probe.recoverable ? null : probe.reason;
+  }
+  if (includeInstruction) out.instruction = run.instruction;
+  if (includeTransitions) out.transitions = run.transitions || [];
+  return out;
+}
+
+export function lastInstructionFromRun(run) {
+  if (!run?.instruction) return null;
+  if (!run.started_at) {
+    if (run.state === "FAILED") {
+      return {
+        instruction: run.instruction,
+        delivered_at: null,
+        status: "failed",
+        instruction_size: run.instruction.length,
+        run_id: run.run_id,
+        run_state: run.state,
+        output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+      };
+    }
+    if (run.state !== "QUEUED") return null;
+    return {
+      instruction: run.instruction,
+      delivered_at: null,
+      queued_at: run.updated_at || run.created_at || null,
+      status: "queued",
+      instruction_size: run.instruction.length,
+      run_id: run.run_id,
+      run_state: run.state,
+      output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+    };
+  }
+  return {
+    instruction: run.instruction,
+    delivered_at: run.started_at,
+    status: "delivered",
+    instruction_size: run.instruction.length,
+    run_id: run.run_id,
+    run_state: run.state,
+    output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+    delivery: run.delivery && typeof run.delivery === "object" ? run.delivery : null,
+  };
+}
+
+export function runListHint(run) {
+  if (!run?.state) return null;
+  switch (run.state) {
+    case "NEEDS_INPUT": return "Needs input";
+    case "FAILED": return "Failed";
+    case "COMPLETE": return "Complete";
+    case "ABANDONED": return "Abandoned";
+    case "WAITING_RESOURCE": {
+      if (run.governed_action && ["requested", "awaiting_director", "awaiting_operator", "executing"].includes(run.governed_action.status)) {
+        return "Waiting on Director";
+      }
+      if (run.resource_wait?.resource_key === "director_governed_action") return "Waiting on Director";
+      if (run.resource_wait?.resuming) {
+        return `${run.resource_wait.label || "Resource"} available`;
+      }
+      if (run.resource_wait?.ready_to_resume) return "Ready to resume";
+      const label = run.resource_wait?.label;
+      if (label) {
+        const s = String(label);
+        return /^waiting\b/i.test(s) ? s : `Waiting for ${s}`;
+      }
+      return run.state_reason || "Waiting for resource";
+    }
+    case "VALIDATING": return "Validating";
+    case "RECOVERING": return "Recovering";
+    case "EXECUTING": return "Executing";
+    case "QUEUED": return "Queued";
+    default: return null;
+  }
+}
+
+export function inspectLaneRun(laneId, root = runtimeRoot()) {
+  const requested = String(laneId || "");
+  const id = canonicalLaneStoreId(requested, root);
+  if (!LANE_ID_RE.test(id) && !LANE_ID_RE.test(requested)) return { ok: false, error: "invalid_lane_id" };
+  const runs = listExecutionRunsForLane(id, root);
+  const active = activeRunForLane(id, root);
+  const previous = !active ? runs.find((r) => isTerminalRunState(r.state)) : null;
+  return {
+    ok: true,
+    lane_id: id,
+    execution_run: publicExecutionRun(active, { includeInstruction: true, includeTransitions: true }),
+    previous_run: publicExecutionRun(previous, { includeInstruction: true, includeTransitions: true }),
+  };
+}
+
+export function attachLaneRuns(lanes, root = runtimeRoot(), { includeInstruction = false } = {}) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  if (!list.length) return list;
+  const store = readExecutionRunStore(root);
+  return list.map((lane) => {
+    const id = lane?.lane_id;
+    const pack = id
+      ? (store.lanes[id] || store.lanes[canonicalLaneStoreId(id, root)] || (lane.aliases || []).map((a) => store.lanes[a]).find(Boolean) || null)
+      : null;
+    const currentId = pack?.current_run_id;
+    const runs = pack?.runs || [];
+    const current = currentId ? runs.find((r) => r.run_id === currentId) : null;
+    const active = current && !isTerminalRunState(current.state) ? current : null;
+    const previous = !active ? runs.find((r) => isTerminalRunState(r.state)) : null;
+    if (!active && !previous) return lane;
+    const last = lastInstructionFromRun(active) || lastInstructionFromRun(previous);
+    return {
+      ...lane,
+      execution_run: active ? publicExecutionRun(active, { includeInstruction }) : null,
+      previous_run: previous ? publicExecutionRun(previous) : null,
+      last_instruction: last || lane.last_instruction,
+    };
+  });
+}
+
+export function createQueuedRun({
+  laneId,
+  instruction,
+  worktreePath = null,
+  nowMs = Date.now(),
+  origin = "operator",
+  root = runtimeRoot(),
+} = {}) {
+  const id = canonicalLaneStoreId(laneId, root);
+  if (!LANE_ID_RE.test(id)) return { ok: false, error: "invalid_lane_id" };
+  const text = String(instruction ?? "");
+  if (!text.trim()) return { ok: false, error: "instruction_empty" };
+  if (text.length > LANE_INSTRUCTION_MAX) return { ok: false, error: "instruction_too_large" };
+  // Refuse rather than found a new store on top of one we could not read.
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
+  const pack = store.lanes[id];
+  const current = pack?.current_run_id
+    ? (pack.runs || []).find((r) => r.run_id === pack.current_run_id)
+    : null;
+  if (current && !isTerminalRunState(current.state)) {
+    return { ok: false, error: "current_run_active", run: publicExecutionRun(current) };
+  }
+
+  const resolvedOrigin = resolveRunOrigin(origin, text);
+  const run = {
+    schema_version: EXECUTION_RUN_SCHEMA,
+    run_id: newRunId(id, nowMs),
+    lane_id: id,
+    instruction: text,
+    created_at: iso(nowMs),
+    started_at: null,
+    completed_at: null,
+    state: "QUEUED",
+    current_phase: null,
+    state_reason: null,
+    origin: resolvedOrigin,
+    latest_progress: null,
+    progress_estimate: null,
+    completion_report: null,
+    agent_session_id: null,
+    resource_wait: null,
+    recovery_state: null,
+    last_worker_report_at: null,
+    worker_report_count: 0,
+    recovered_count: 0,
+    worktree_path: worktreePath
+      ? String(worktreePath)
+      : (getDurableLane(id, root)?.binding?.worktree_path || null),
+    node_id: localNodeId(root),
+    mission_id: getDurableLane(id, root)?.mission_id || null,
+    output_fingerprint_at_send: null,
+    delivery: { acknowledged: false, provider: null, error: null, at: null },
+    agent_report: null,
+    agent_reports: [],
+    // Attribution evidence: what was already dirty when this run began. Never
+    // permission to touch those paths — see checkpoint-readiness.
+    git_baseline: null,
+    checkpoint_readiness: null,
+    provider_suspension: null,
+    transitions: [],
+    updated_at: iso(nowMs),
+  };
+  appendTransition(run, {
+    from: null,
+    to: "QUEUED",
+    reason: resolvedOrigin === "certification" ? "certification_send" : "operator_send",
+    origin: resolvedOrigin,
+    nowMs,
+  });
+  writeStore(putRun(store, run), root);
+  return { ok: true, run };
+}
+
+export function transitionExecutionRun(runId, toState, {
+  reason = null,
+  origin = "system",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  phase = undefined,
+  progress = null,
+  // The bounded provider progress estimate, already normalized by the caller.
+  progress_estimate = null,
+  completion_report = null,
+  resource_wait = null,
+  fingerprint = null,
+  worktreePath = null,
+  // A caller that genuinely OBSERVED the execution fail says so. See the
+  // BLOCKED_STATES guard below.
+  execution_failure = false,
+} = {}) {
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
+  let found = null;
+  let packId = null;
+  for (const [laneId, pack] of Object.entries(store.lanes || {})) {
+    const hit = (pack.runs || []).find((r) => r.run_id === runId);
+    if (hit) { found = hit; packId = laneId; break; }
+  }
+  if (!found) return { ok: false, error: "run_not_found" };
+  const to = String(toState || "").toUpperCase();
+  if (!RUN_STATES.includes(to)) return { ok: false, error: "invalid_state" };
+  if (found.state === to) {
+    // Same-state report. Not a transition, but still liveness evidence: persist
+    // it so the stale governor can tell a working agent from an orphan.
+    const touched = touchWorkerLiveness(found, { nowMs, origin, progress, progressEstimate: progress_estimate });
+    if (touched || progress || progress_estimate) {
+      if (progress && !touched) {
+        found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
+      }
+      // An estimate is worth persisting whoever reported it. A same-state
+      // report is the ONLY moment most estimates arrive — a worker at 62% is
+      // by definition still EXECUTING — so dropping it here would have made
+      // the whole contract unreachable in practice.
+      if (progress_estimate && !touched) found.progress_estimate = progress_estimate;
+      found.updated_at = iso(nowMs);
+      if (phase !== undefined) found.current_phase = bound(phase, 80);
+      writeStore(putRun(store, found), root);
+    }
+    // Retry push if the first dispatch never delivered. Dedup lives in lane-push.
+    const push = ["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"].includes(to)
+      ? emitOutcomeEvent(found, root, { recordEvent: false })
+      : Promise.resolve(null);
+    return { ok: true, run: found, noop: true, heartbeat: touched, push };
+  }
+  if (!isLegalRunTransition(found.state, to)) {
+    return { ok: false, error: "illegal_transition", from: found.state, to };
+  }
+
+  // A BLOCKED RUN IS NOT A FAILED RUN.
+  //
+  // NEEDS_INPUT and WAITING_RESOURCE mean the work is waiting on a person or on
+  // a governed decision. Measured: a run went QUEUED -> EXECUTING -> NEEDS_INPUT
+  // -> FAILED, and the FAILURE reason printed back was the run's own
+  // NEEDS_INPUT reason — the runtime reporting a mission as failed by quoting
+  // the question it was waiting to have answered.
+  //
+  // FAILED stays reachable from these states, because a worker or an operator
+  // may genuinely observe a failure while blocked. What is refused is a
+  // BACKGROUND SWEEP doing it: a governor or system caller must have observed
+  // the execution fail and say so with `execution_failure`. Declaring a
+  // governed action, a dependency, a resource wait or an environment
+  // prerequisite is none of those things.
+  if (to === "FAILED" && BLOCKED_RUN_STATES.includes(found.state)
+    && SWEEPING_ORIGINS.includes(String(origin))
+    && execution_failure !== true) {
+    return {
+      ok: false,
+      error: "blocked_run_not_failed",
+      from: found.state,
+      to,
+      detail: "A run waiting on input or a governed decision is blocked, not failed. Resolve or withdraw the blocker, or report a real execution failure.",
+    };
+  }
+
+  const from = found.state;
+  found.state = to;
+  found.state_reason = bound(reason, EXECUTION_RUN_REASON_MAX);
+  found.updated_at = iso(nowMs);
+  if (phase !== undefined) found.current_phase = bound(phase, 80);
+  if (to === "EXECUTING" && !found.started_at) {
+    found.started_at = iso(nowMs);
+    // Capture what was ALREADY dirty the moment this run began working. This is
+    // the evidence that later lets a checkpoint refuse a file it did not create;
+    // without it nothing can be attributed and readiness fails closed.
+    scheduleGitBaselineCapture(found, { nowMs, root });
+  }
+  if (to === "COMPLETE" || to === "FAILED" || to === "ABANDONED") found.completed_at = iso(nowMs);
+  if (progress) {
+    found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
+  }
+  if (progress_estimate) found.progress_estimate = progress_estimate;
+  // A run that has ENDED has no estimate to make. Leaving 62% on a COMPLETE run
+  // is the exact false precision this contract exists to refuse.
+  if (to === "COMPLETE") {
+    found.progress_estimate = normalizeProgressEstimate({
+      percent: 100,
+      confidence: "high",
+      summary: found.progress_estimate?.summary || null,
+      source: "deterministic",
+      nowMs,
+    });
+  } else if (to === "FAILED" || to === "ABANDONED") {
+    found.progress_estimate = null;
+  }
+  if (completion_report) {
+    found.completion_report = {
+      // A bounded one-liner for rows and lists. It is NOT the user-facing final
+      // message — that is agent_report.message, stored unbounded. The link back
+      // lets a reader see which report this summary was cut from.
+      summary: bound(completion_report.summary || completion_report, EXECUTION_RUN_SUMMARY_MAX),
+      at: iso(nowMs),
+      ...(completion_report.report_id ? { report_id: String(completion_report.report_id) } : {}),
+    };
+  }
+  if (to === "WAITING_RESOURCE") {
+    const key = resource_wait?.resource_key || resource_wait?.key || null;
+    /*
+     * THE MACHINE REASON SURVIVES THE WRITE.
+     *
+     * This rebuild used a presentation allowlist — resource_key, label, summary
+     * and friends — and `reason` was not in it. So `waitProjection()` built a
+     * correct S6 descriptor (`needs_operator_input`, human_indefinite, owner
+     * director), handed it here, and the writer dropped the entire envelope on
+     * the way to disk. Every governed approval wait was stored with no machine
+     * reason at all.
+     *
+     * MEASURED: erun_f4f9ff73ca8144ce entered WAITING_RESOURCE for a worktree
+     * retirement at 19:32:43 and the Governor failed it `missing_wait_reason`
+     * ten seconds later. The push wait is written exactly as wrongly; it
+     * survives only because it resumes before a sweep sees it. The comment on
+     * waitProjection already says the text was never the problem and the
+     * missing envelope was — and then the envelope was thrown away here.
+     *
+     * An UNDECLARED reason is not stored. A wait nobody defined must keep
+     * reading as missing rather than be preserved as a plausible-looking key.
+     */
+    const declared = isDeclaredWaitReason(resource_wait?.reason) ? resource_wait.reason : null;
+    found.resource_wait = {
+      ...(declared
+        ? {
+          schema_version: resource_wait?.schema_version || null,
+          reason: declared,
+          resource_type: resource_wait?.resource_type || null,
+          owner: resource_wait?.owner || null,
+          waiting_since: Number(resource_wait?.waiting_since) || nowMs,
+          deadline: resource_wait?.deadline ?? null,
+          bound_policy: resource_wait?.bound_policy || null,
+          resolution_state: resource_wait?.resolution_state || null,
+          last_observed_at: Number(resource_wait?.last_observed_at) || nowMs,
+        }
+        : {}),
+      resource_key: key ? String(key).slice(0, 80) : null,
+      label: bound(resource_wait?.label || reason || key, 120),
+      summary: bound(resource_wait?.summary || resource_wait?.purpose, 240),
+      governed_request_id: resource_wait?.governed_request_id || null,
+      action_key: resource_wait?.action_key || resource_wait?.actionKey || null,
+      target: resource_wait?.target || null,
+      purpose: bound(resource_wait?.purpose, 1000),
+      artifact_refs: Array.isArray(resource_wait?.artifact_refs)
+        ? resource_wait.artifact_refs.map(String).slice(0, 8)
+        : (resource_wait?.artifact ? [String(resource_wait.artifact)] : null),
+      reason_worker_cannot_execute: bound(
+        resource_wait?.reason_worker_cannot_execute || resource_wait?.reasonWorkerCannotExecute,
+        1000,
+      ),
+      requested_mode: resource_wait?.requested_mode || resource_wait?.requestedMode || null,
+      mission_id: resource_wait?.mission_id || resource_wait?.missionId || null,
+    };
+  } else if (to !== "WAITING_RESOURCE" && from === "WAITING_RESOURCE") {
+    /*
+     * LEAVING A WAIT RESOLVES IT.
+     *
+     * This was the literal no-op `found.resource_wait = found.resource_wait`,
+     * so a run could leave WAITING_RESOURCE and keep a wait that still read
+     * `resolution_state: "waiting"`. An active wait on a running run is the same
+     * class of lie as a wait with no reason on a waiting one, and the live proof
+     * produced exactly it: erun_828e075e3c1ed70a ran for minutes carrying the
+     * retirement wait it had already left.
+     *
+     * RESOLVED, NOT ERASED. The earlier repair in this area cleared the wait
+     * outright and destroyed the forensic record on terminal failures — an
+     * operator looking at a failed run could no longer see what it had been
+     * waiting for. The record stays; only its state moves, and the moment it
+     * moved is recorded. An owner that genuinely wants the wait gone still
+     * clears it outright through patchRunResourceWait.
+     */
+    if (found.resource_wait && found.resource_wait.resolution_state === "waiting") {
+      found.resource_wait = {
+        ...found.resource_wait,
+        resolution_state: "resolved",
+        resolved_at: nowMs,
+        resolved_into: to,
+        last_observed_at: nowMs,
+      };
+    }
+  }
+  if (resource_wait?.governed_action) found.governed_action = resource_wait.governed_action;
+  if (fingerprint) found.output_fingerprint_at_send = found.output_fingerprint_at_send || String(fingerprint);
+  if (worktreePath && !found.worktree_path) found.worktree_path = String(worktreePath);
+  touchWorkerLiveness(found, { nowMs, origin });
+  appendTransition(found, { from, to, reason, origin, nowMs });
+  writeStore(putRun(store, found), root);
+
+  /*
+   * A FINISHED RUN IS PROGRESS THE LANE SHOULD REMEMBER.
+   *
+   * THE DEFECT THIS CLOSES, traced live. Lane authorization revalidates
+   * `checkpoint_fresh` against lane memory's `updated_at`, and nothing in the
+   * resident system ever wrote it — `recordPromotionCheckpoint` had zero call
+   * sites. Six hours after a human last edited lane memory by hand, every lane
+   * revalidated to UNKNOWN and the scheduler stopped considering it. Backend
+   * was measured with five of six checks passing, none unmeasured, and was
+   * never once offered to the planner.
+   *
+   * Completion is the honest place to record it: real work finished on this
+   * lane, so its context genuinely is current. A lane where nothing completes
+   * still ages out, which is what the freshness window is for.
+   *
+   * Only a run the scheduler dispatched consumes the authorized next step.
+   * `origin` is the discriminator: work-scheduler-dispatch is the sole creator
+   * of "scheduler" runs. A certification or operator run refreshes the lane's
+   * context without spending the Director's instruction, which is why this is
+   * not simply "clear next_step on any completion".
+   *
+   * It never creates memory, so lanes that are UNKNOWN stay UNKNOWN, and it can
+   * never fail the transition: the run really did complete.
+   */
+  if (to === "COMPLETE" && found.lane_id) {
+    try {
+      recordLaneProgress(found.lane_id, {
+        runId: found.run_id,
+        summary: found.completion_report?.summary || found.latest_progress?.summary || null,
+        consumedNextStep: found.origin === "scheduler",
+      }, { root, nowMs });
+    } catch { /* lane memory is context, never a gate on reporting a finished run */ }
+  }
+
+  const push = emitOutcomeEvent(found, root);
+  try {
+    onExecutionRunTransition({
+      run: found,
+      from,
+      to,
+      resource: resource_wait,
+      reason,
+      origin,
+      nowMs,
+      root,
+    });
+  } catch { /* resource coordinator must not fail the run transition */ }
+
+  /*
+   * THE LANE HAS YIELDED — DELIVER WHAT IT IS OWED.
+   *
+   * A lane that files a governed action during its turn cannot be told the
+   * outcome while that turn is running: its own pane is busy, and pasting into
+   * it would corrupt the work in progress. The notification is deferred instead
+   * of discarded, and THIS is the moment it comes due — a terminal run state is
+   * the canonical "I have finished", and the only point at which the pane is
+   * expected to become pastable.
+   *
+   * Deliberately fire-and-forget: a redelivery must never fail, delay, or
+   * reorder the transition that triggered it. If this attempt still finds the
+   * pane busy the notification simply stays owed, and the conductor tick picks
+   * it up.
+   */
+  if (TERMINAL_RUN_STATES.includes(to) && packId) {
+    import("./governed-action-request.mjs")
+      .then((m) => m.drainGovernedNotificationsForLane?.(packId, { root, nowMs }))
+      .catch(() => { /* redelivery is best-effort; the tick is the safety net */ });
+  }
+  return { ok: true, run: getExecutionRun(runId, root) || found, from, to, push };
+}
+
+export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
+  for (const pack of Object.values(store.lanes || {})) {
+    const found = (pack.runs || []).find((r) => r.run_id === runId);
+    if (!found) continue;
+    if (fields.checkpoint_ready !== undefined) found.checkpoint_ready = Boolean(fields.checkpoint_ready);
+    if (fields.checkpoint_summary !== undefined) found.checkpoint_summary = bound(fields.checkpoint_summary, 200);
+    if (fields.checkpoint_requested !== undefined) found.checkpoint_requested = Boolean(fields.checkpoint_requested);
+    if (fields.state_reason !== undefined) found.state_reason = fields.state_reason == null ? null : bound(fields.state_reason, EXECUTION_RUN_REASON_MAX);
+    if (fields.governed_action !== undefined) found.governed_action = fields.governed_action || null;
+    if (fields.recovery_state !== undefined) found.recovery_state = fields.recovery_state || null;
+    // Allowlisted like every other patchable field. The value is normalized by
+    // normalizeProgressEstimate before it reaches here, so what lands is always
+    // bounded, clamped 0-100 and carries its own source and timestamp.
+    if (fields.progress_estimate !== undefined) found.progress_estimate = fields.progress_estimate || null;
+    if (fields.recovered_count !== undefined) found.recovered_count = Number(fields.recovered_count) || 0;
+    if (fields.completed_at !== undefined) found.completed_at = fields.completed_at || null;
+    if (fields.instruction !== undefined) {
+      const text = String(fields.instruction ?? "");
+      if (!text.trim()) return { ok: false, error: "instruction_empty" };
+      if (text.length > LANE_INSTRUCTION_MAX) return { ok: false, error: "instruction_too_large" };
+      found.instruction = text;
+    }
+    if (fields.delivery !== undefined && fields.delivery && typeof fields.delivery === "object") {
+      found.delivery = { ...(found.delivery || {}), ...fields.delivery };
+    }
+    if (fields.output_fingerprint_at_send !== undefined) {
+      found.output_fingerprint_at_send = fields.output_fingerprint_at_send
+        ? String(fields.output_fingerprint_at_send)
+        : found.output_fingerprint_at_send;
+    }
+    if (fields.false_completion !== undefined) {
+      found.false_completion = fields.false_completion || null;
+    }
+    // Provider suspension (provider-suspension.mjs): the durable record of a
+    // parked lane whose process was put down — question, resumable session and
+    // correlation baseline, all kept so the work survives the computation.
+    if (fields.provider_suspension !== undefined) {
+      found.provider_suspension = fields.provider_suspension || null;
+    }
+    // Structured agent reports (execution-run-report.mjs). Stored verbatim:
+    // the user-facing message must never be shortened on its way to disk.
+    if (fields.completion_report !== undefined) {
+      // Allowlisted and bounded like every other patchable field. Needed so an
+      // agent's own summary can replace a system-authored placeholder on a run
+      // that was closed before the agent filed it — see run-summary-output.
+      found.completion_report = fields.completion_report
+        ? {
+          summary: bound(fields.completion_report.summary || fields.completion_report, EXECUTION_RUN_SUMMARY_MAX),
+          at: fields.completion_report.at || iso(nowMs),
+          ...(fields.completion_report.report_id ? { report_id: String(fields.completion_report.report_id) } : {}),
+        }
+        : null;
+    }
+    /**
+     * Audit linkage to the run this one continues.
+     *
+     * A run correctly moved OUT of an impossible state is terminal and must
+     * stay terminal — its history is evidence. But the operator instruction it
+     * carried is not spent, and re-sending it should not look like unrelated
+     * new work. This records "this run continues that one" on the SUCCESSOR
+     * only; the historical run is never rewritten to pretend it executed.
+     */
+    if (fields.continuation_of !== undefined) {
+      if (fields.continuation_of) {
+        // EXPLICIT, AND CHECKED. The caller states the lineage; this refuses a
+        // claim that cannot be true rather than storing it for a later reader
+        // to trip over.
+        const v = validateContinuation(runId, fields.continuation_of, { root });
+        if (!v.ok) return { ok: false, error: v.code, detail: v.detail };
+      }
+      found.continuation_of = fields.continuation_of
+        ? {
+          run_id: String(fields.continuation_of.run_id || fields.continuation_of),
+          reason: fields.continuation_of.reason ? bound(fields.continuation_of.reason, 200) : null,
+          instruction_sha256: fields.continuation_of.instruction_sha256
+            ? String(fields.continuation_of.instruction_sha256)
+            : null,
+          linked_at: iso(nowMs),
+        }
+        : null;
+    }
+    if (fields.git_baseline !== undefined) {
+      found.git_baseline = fields.git_baseline || null;
+    }
+    if (fields.checkpoint_readiness !== undefined) {
+      found.checkpoint_readiness = fields.checkpoint_readiness || null;
+    }
+    if (fields.agent_report !== undefined) {
+      found.agent_report = fields.agent_report || null;
+    }
+    if (fields.agent_reports !== undefined) {
+      found.agent_reports = Array.isArray(fields.agent_reports) ? fields.agent_reports : [];
+    }
+    // Governed dependency routing. `governed_dependency` is the projection the
+    // ORIGINATING run carries while it waits on required capability it cannot
+    // reach itself; `governed_dependency_parent` is the pointer a DEPENDENT run
+    // carries back to the run it was created for. Allowlisted like everything
+    // else here — an un-allowlisted field is dropped in silence, which is how
+    // the first wiring pass produced a run that knew nothing about the
+    // dependency blocking it.
+    if (fields.governed_dependency !== undefined) {
+      found.governed_dependency = fields.governed_dependency || null;
+    }
+    if (fields.governed_dependency_parent !== undefined) {
+      found.governed_dependency_parent = fields.governed_dependency_parent || null;
+    }
+    found.updated_at = iso(nowMs);
+    writeStore(putRun(store, found), root);
+    return { ok: true, run: found };
+  }
+  return { ok: false, error: "run_not_found" };
+}
+
+export function patchRunResourceWait(runId, resourceWait, root = runtimeRoot()) {
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
+  for (const pack of Object.values(store.lanes || {})) {
+    const found = (pack.runs || []).find((r) => r.run_id === runId);
+    if (!found) continue;
+    found.resource_wait = resourceWait || null;
+    found.updated_at = iso();
+    writeStore(putRun(store, found), root);
+    return found;
+  }
+  return null;
+}
+
+export function cwdOwnsRun(run, cwd) {
+  if (!run?.worktree_path || cwd == null || cwd === "") return false;
+  const real = (p) => {
+    try { return realpathSync(p); } catch { return resolve(String(p)); }
+  };
+  const root = real(run.worktree_path);
+  const here = real(cwd);
+  return here === root || here.startsWith(`${root}/`);
+}
+
+export const RECOVERY_MAX_PER_RUN = 8;
+
+/**
+ * Would recovery succeed right now? A dry run of recoverExecutionRun's ownership
+ * gate, used by the UI so an ABANDONED run can be shown as recoverable and
+ * offered a continuation action instead of forcing a fake new run.
+ */
+export function executionRunRecoverability(run, { root = null } = {}) {
+  if (!run?.run_id) return { recoverable: false, reason: "no_run" };
+  if (isIrreversibleRunState(run.state)) return { recoverable: false, reason: "irreversible" };
+  if (run.state === "RECOVERING") return { recoverable: false, reason: "already_recovering" };
+  if (run.state !== "ABANDONED") return { recoverable: false, reason: "not_abandoned" };
+  const storeRoot = root || (findExecutionRun(run.run_id)?.root) || runtimeRoot();
+  const lane = getDurableLane(run.lane_id, storeRoot);
+  if (!lane) return { recoverable: false, reason: "lane_missing" };
+  const bound = lane?.binding?.worktree_path || null;
+  if (!run.worktree_path || !bound || realOrSelf(bound) !== realOrSelf(run.worktree_path)) {
+    return { recoverable: false, reason: "binding_mismatch" };
+  }
+  const active = activeRunForLane(run.lane_id, storeRoot);
+  if (active && active.run_id !== run.run_id) {
+    return { recoverable: false, reason: "lane_has_active_run", active_run_id: active.run_id };
+  }
+  if ((Number(run.recovered_count) || 0) >= RECOVERY_MAX_PER_RUN) {
+    return { recoverable: false, reason: "recovery_budget_exhausted" };
+  }
+  return { recoverable: true, reason: "ownership_provable", abandoned_reason: run.state_reason || null };
+}
+
+/**
+ * Canonical ABANDONED -> RECOVERING path (Phase 3).
+ *
+ * Recovery is never automatic on state alone. It requires positive ownership
+ * proof, so an abandoned run cannot be hijacked by another lane or worktree:
+ *
+ *   1. the run is ABANDONED (COMPLETE/FAILED stay irreversible);
+ *   2. the durable lane still exists;
+ *   3. the claimed lane matches the run's lane;
+ *   4. the claimant proves worktree ownership (cwd inside the run's worktree),
+ *      or is the operator acting on a lane whose binding still matches;
+ *   5. the lane has no other active run to displace.
+ *
+ * History is never rewritten: the abandonment transition is preserved and the
+ * recovery is appended after it.
+ */
+export function recoverExecutionRun(runId, {
+  laneId = null,
+  cwd = null,
+  origin = "agent",
+  reason = null,
+  nowMs = Date.now(),
+  root = null,
+} = {}) {
+  const found = root ? { run: getExecutionRun(runId, root), root } : findExecutionRun(runId);
+  if (!found?.run) return { ok: false, error: "run_not_found" };
+  const run = found.run;
+  const storeRoot = found.root;
+
+  if (isIrreversibleRunState(run.state)) {
+    return { ok: false, error: "run_irreversible", state: run.state };
+  }
+  if (run.state === "RECOVERING") {
+    // Idempotent: a duplicate recovery attempt is a no-op, not a second recovery.
+    return { ok: true, run, already_recovering: true, noop: true };
+  }
+  if (run.state !== "ABANDONED") {
+    return { ok: true, run, not_abandoned: true, noop: true };
+  }
+
+  const lane = getDurableLane(run.lane_id, storeRoot);
+  if (!lane) return { ok: false, error: "lane_missing" };
+
+  if (laneId) {
+    const claimed = canonicalLaneStoreId(laneId, storeRoot);
+    const owned = canonicalLaneStoreId(run.lane_id, storeRoot);
+    if (claimed !== owned && String(laneId) !== run.lane_id) {
+      return { ok: false, error: "lane_mismatch" };
+    }
+  }
+
+  let proof = null;
+  if (cwd) {
+    if (!cwdOwnsRun(run, cwd)) return { ok: false, error: "worktree_mismatch" };
+    proof = "worktree_cwd";
+  } else if (origin === "operator") {
+    const bound_ = lane?.binding?.worktree_path || null;
+    if (!run.worktree_path || !bound_ || realOrSelf(bound_) !== realOrSelf(run.worktree_path)) {
+      return { ok: false, error: "binding_mismatch" };
+    }
+    proof = "operator_binding";
+  } else {
+    return { ok: false, error: "ownership_unproven" };
+  }
+
+  const active = activeRunForLane(run.lane_id, storeRoot);
+  if (active && active.run_id !== run.run_id) {
+    return { ok: false, error: "lane_has_active_run", active_run_id: active.run_id };
+  }
+  if ((Number(run.recovered_count) || 0) >= RECOVERY_MAX_PER_RUN) {
+    return { ok: false, error: "recovery_budget_exhausted" };
+  }
+
+  const abandonedAt = run.completed_at || run.updated_at;
+  const out = transitionExecutionRun(run.run_id, "RECOVERING", {
+    reason: reason || "ownership_proven_recovery",
+    origin: origin === "operator" ? "operator" : "agent",
+    nowMs,
+    root: storeRoot,
+  });
+  if (!out.ok) return out;
+
+  patchRunFields(run.run_id, {
+    recovery_state: {
+      recovered_at: iso(nowMs),
+      abandoned_at: abandonedAt || null,
+      abandoned_reason: run.state_reason || null,
+      ownership_proof: proof,
+      origin,
+    },
+    recovered_count: (Number(run.recovered_count) || 0) + 1,
+    completed_at: null,
+  }, { nowMs, root: storeRoot });
+
+  appendRunEvent({
+    type: "execution_run.recovered",
+    run_id: run.run_id,
+    lane_id: run.lane_id,
+    ownership_proof: proof,
+    abandoned_reason: run.state_reason || null,
+    abandoned_at: abandonedAt || null,
+    origin,
+    at: iso(nowMs),
+  }, storeRoot);
+
+  return {
+    ok: true,
+    recovered: true,
+    ownership_proof: proof,
+    run: getExecutionRun(run.run_id, storeRoot) || out.run,
+  };
+}
+
+function realOrSelf(p) {
+  try { return realpathSync(String(p)); } catch { return resolve(String(p)); }
+}
+
+export function reportRunState(runId, state, {
+  reason = null,
+  summary = null,
+  resource = null,
+  resource_event = null,
+  origin = "agent",
+  cwd = null,
+  expectedLaneId = null,
+  nowMs = Date.now(),
+  root = null,
+  checkpoint_ready = false,
+  checkpoint_summary = null,
+  payload = null,
+  // Provider progress. Reported alongside a state report because that is the
+  // path workers already use; see PROGRESS_SOURCES.
+  progress_percent = null,
+  progress_confidence = null,
+  progress_summary = null,
+  progress_source = null,
+  remaining_work = null,
+  // The provider's own claim about how much longer it needs. Reported, never
+  // derived from progress_percent — see normalizeFinishEstimate.
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
+} = {}) {
+  const found = root
+    ? { run: getExecutionRun(runId, root), root }
+    : findExecutionRun(runId);
+  if (!found?.run) return { ok: false, error: "run_not_found" };
+  const run = found.run;
+  const storeRoot = found.root;
+  if (expectedLaneId && run.lane_id !== expectedLaneId
+      && canonicalLaneStoreId(run.lane_id, storeRoot) !== canonicalLaneStoreId(expectedLaneId, storeRoot)) {
+    return { ok: false, error: "lane_mismatch" };
+  }
+  if (cwd && !cwdOwnsRun(run, cwd)) {
+    return { ok: false, error: "worktree_mismatch" };
+  }
+  // Phase 3/4: a worker reporting on a run Vacilando abandoned is itself proof
+  // the abandonment was wrong. Recover it (ownership already proven above by
+  // lane + cwd) rather than answering illegal_transition and stranding a live
+  // sprint with no way to reach COMPLETE.
+  let autoRecovered = null;
+  if (run.state === "ABANDONED") {
+    const rec = recoverExecutionRun(run.run_id, {
+      laneId: expectedLaneId || run.lane_id,
+      cwd: cwd || null,
+      origin: cwd ? "agent" : origin,
+      reason: "worker_reported_on_abandoned_run",
+      nowMs,
+      root: storeRoot,
+    });
+    if (!rec.ok) return rec;
+    autoRecovered = rec.recovered ? rec.ownership_proof : null;
+    Object.assign(run, getExecutionRun(run.run_id, storeRoot) || run);
+  }
+  const estimate = normalizeProgressEstimate({
+    percent: progress_percent,
+    confidence: progress_confidence,
+    summary: progress_summary,
+    source: progress_source,
+    remaining_work,
+    estimated_remaining_minutes,
+    estimated_finish_at,
+    estimate_confidence,
+    nowMs,
+  });
+  const ready = checkpoint_ready === true || String(checkpoint_ready).toLowerCase() === "true" || String(checkpoint_ready) === "1";
+  if (ready) {
+    patchRunFields(run.run_id, {
+      checkpoint_ready: true,
+      checkpoint_summary: checkpoint_summary || summary,
+    }, { nowMs, root: storeRoot });
+  }
+  // A PROGRESS-ONLY REPORT IS LEGAL.
+  //
+  // "I am 62% through" is not a state change, and forcing the worker to restate
+  // EXECUTING to carry it would make every milestone a transition report. This
+  // writes the estimate on its own and returns, without touching state.
+  if (estimate) {
+    patchRunFields(run.run_id, { progress_estimate: estimate }, { nowMs, root: storeRoot });
+    Object.assign(run, getExecutionRun(run.run_id, storeRoot) || run);
+  }
+  const to = state ? normalizeReportedState(state) : null;
+  if (!to && ready) {
+    return afterCheckpointReport({
+      ok: true,
+      run: getExecutionRun(run.run_id, storeRoot) || run,
+    }, run.lane_id, storeRoot, nowMs, summary || checkpoint_summary);
+  }
+  // Progress alone, with no state argument, is a complete report. It was
+  // already persisted above; returning invalid_state here would have made the
+  // milestone form of the contract unusable.
+  if (!to && estimate) {
+    return { ok: true, run: getExecutionRun(run.run_id, storeRoot) || run, progress_only: true };
+  }
+  if (!to || !REPORT_STATES.has(to)) return { ok: false, error: "invalid_state" };
+  // A completion may only close an instruction that was actually delivered.
+  // Without this, a report produced by an earlier turn can terminalize a run
+  // whose instruction never reached the provider.
+  if (to === "COMPLETE") {
+    const admissible = runCompletionAdmissible(run);
+    if (!admissible.ok) {
+      return { ok: false, error: admissible.error, run: publicExecutionRun(run) };
+    }
+  }
+  const progress = summary || (to === "NEEDS_INPUT" || to === "FAILED" || to === "COMPLETE" ? reason : null);
+  const completion = to === "COMPLETE" || to === "FAILED" || to === "NEEDS_INPUT"
+    ? { summary: summary || reason }
+    : null;
+  const waitExtra = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const out = transitionExecutionRun(run.run_id, to, {
+    reason,
+    origin,
+    nowMs,
+    root: storeRoot,
+    phase: to === "VALIDATING" ? "validation" : (to === "WAITING_RESOURCE" ? "resource_wait" : undefined),
+    progress,
+    progress_estimate: estimate,
+    completion_report: completion,
+    resource_wait: resource ? {
+      resource_key: resource,
+      label: reason || resource,
+      ...waitExtra,
+    } : null,
+  });
+  if (String(resource_event || "").toLowerCase() === "released" && out.ok) {
+    cleanupRunResources(run.run_id, { origin, nowMs, root: storeRoot });
+    out.resource_released = true;
+    out.run = getExecutionRun(run.run_id, storeRoot) || out.run;
+  }
+  if (out.ok && to === "WAITING_RESOURCE" && !ready) {
+    try {
+      import("./source-control.mjs").then((scm) => scm.requestCheckpoint(run.lane_id, {
+        origin: "resource_wait",
+        nowMs,
+        root: storeRoot,
+      })).catch(() => {});
+    } catch { /* */ }
+  }
+  if (autoRecovered && out.ok) out.recovered = autoRecovered;
+  if (out.ok && ready) {
+    return afterCheckpointReport(out, run.lane_id, storeRoot, nowMs, summary || checkpoint_summary);
+  }
+  return out;
+}
+
+/**
+ * Record the worktree's starting state for a run, best effort.
+ *
+ * Deliberately fire-and-forget: a run must start even when Git is slow or
+ * unreadable. A run with no baseline is not a run that may commit anything —
+ * readiness treats a missing baseline as "nothing is attributable".
+ */
+function scheduleGitBaselineCapture(run, { nowMs, root } = {}) {
+  const worktreePath = run?.worktree_path;
+  if (!worktreePath || run?.git_baseline) return;
+  const runId = run.run_id;
+  import("./checkpoint-readiness.mjs").then(async ({ captureRunGitBaseline }) => {
+    const out = await captureRunGitBaseline({
+      worktreePath,
+      laneId: run.lane_id || null,
+      nowMs,
+    });
+    if (!out?.ok) return;
+    // Re-check at WRITE time, not only at schedule time. The capture is async,
+    // so a baseline recorded by another path while this was in flight must win —
+    // a later capture would fold work done since the run started into the
+    // "already dirty" set and quietly mark this run's own files foreign.
+    if (getExecutionRun(runId, root)?.git_baseline) return;
+    patchRunFields(runId, { git_baseline: out.baseline }, { nowMs, root });
+  }).catch(() => { /* a missing baseline fails closed on its own */ });
+}
+
+/**
+ * Report checkpoint readiness. Read-only, by construction.
+ *
+ * THIS FUNCTION USED TO CREATE A COMMIT. It called
+ * `maybeCreateCheckpoint({ origin: "agent", summary })`, which ran
+ * `git add -A && git commit -m "<the status summary>"` in the lane worktree.
+ * In wt5-runtime-performance-ux-completion that swept roughly 67 unrelated
+ * dirty files into the lane branch, twice, with the status summary as the
+ * commit message.
+ *
+ * A status report may not mutate a repository. It now inspects the worktree,
+ * compares it with the baseline captured when the run began, records the
+ * verdict on the run, and stops. Creating a commit is `vac checkpoint-create`,
+ * which requires an explicit path manifest and an expected HEAD.
+ *
+ * The evaluation is asynchronous and deliberately not awaited: reporting run
+ * state must never fail or stall because Git is slow or unreadable. The verdict
+ * lands on the run when it arrives, and `out.checkpoint_readiness` carries the
+ * promise for callers that want it.
+ */
+function afterCheckpointReport(out, laneId, root, nowMs, summary) {
+  const runId = out?.run?.run_id || null;
+  const worktreePath = out?.run?.worktree_path || null;
+  out.checkpoint_mutations = "none";
+  out.checkpoint_readiness = (async () => {
+    try {
+      const { evaluateCheckpointReadiness } = await import("./checkpoint-readiness.mjs");
+      const result = await evaluateCheckpointReadiness({
+        worktreePath,
+        baseline: out?.run?.git_baseline || null,
+        runId,
+        laneId,
+      });
+      if (runId) {
+        patchRunFields(runId, {
+          checkpoint_readiness: result,
+          // The flag now means "the agent asked", never "a commit was made".
+          checkpoint_ready: result.checkpoint_ready === true,
+          checkpoint_summary: summary || null,
+        }, { nowMs, root });
+      }
+      out.readiness = result;
+      return result;
+    } catch (e) {
+      return { checkpoint_ready: false, reason: "git_unreadable", detail: String(e?.message || e) };
+    }
+  })();
+  return out;
+}
+
+/**
+ * Delivery truth. `delivery.acknowledged` is authoritative when present; runs
+ * that predate the field fall back to started_at so history stays readable.
+ */
+export function runDeliveryAcknowledged(run) {
+  if (!run) return false;
+  if (run.delivery && typeof run.delivery === "object") return run.delivery.acknowledged === true;
+  return Boolean(run.started_at);
+}
+
+/**
+ * May this run be closed as COMPLETE?
+ *
+ * A completion is a claim about work that an agent did in response to a
+ * specific instruction. If the instruction was never delivered, there is no
+ * work to have completed — whatever produced the completion belongs to some
+ * earlier turn. This is the guard that stops an old completion from closing a
+ * newer instruction.
+ */
+export function runCompletionAdmissible(run) {
+  if (!run) return { ok: false, error: "run_not_found" };
+  // Either proof of delivery is enough, and both are needed as alternatives:
+  // `delivery.acknowledged` is the modern receipt, `started_at` covers runs
+  // that reached EXECUTING through recovery or an older code path. What neither
+  // covers — and what this refuses — is a run that never started at all.
+  if (runDeliveryAcknowledged(run) || run.started_at) return { ok: true, error: null };
+  return { ok: false, error: "completion_before_delivery" };
+}
+
+/**
+ * Record that this run's own receipt token was seen in newly advanced pane
+ * output. Idempotent, and only ever moves false -> true.
+ */
+export function noteInstructionReceipt(runId, {
+  text = "",
+  fingerprint = null,
+  nowMs = Date.now(),
+  root = null,
+} = {}) {
+  const found = root ? { run: getExecutionRun(runId, root), root } : findExecutionRun(runId);
+  if (!found?.run) return { ok: false, error: "run_not_found" };
+  const run = found.run;
+  if (!runReceiptToken(run)) return { ok: true, confirmed: false, reason: "no_receipt_token" };
+  if (run.delivery?.receipt_confirmed === true) return { ok: true, confirmed: true, already: true, run };
+  if (!textProvesInstructionReceipt(run, text, fingerprint)) {
+    return { ok: true, confirmed: false, reason: "not_yet_observed", run };
+  }
+  const patched = patchRunFields(run.run_id, {
+    delivery: {
+      ...(run.delivery || {}),
+      receipt_confirmed: true,
+      receipt_confirmed_at: iso(nowMs),
+    },
+  }, { nowMs, root: found.root });
+  return { ok: true, confirmed: true, run: patched.run || run };
+}
+
+/**
+ * Reconcile a completion that was never attributable to its run. COMPLETE is
+ * irreversible by law (see LEGAL) and this does not break that: the run stays
+ * COMPLETE in the ledger and is marked superseded, with its instruction
+ * preserved verbatim so the operator can retry it on a ready pane. A run that
+ * is NOT yet terminal is failed outright with the same reason.
+ */
+export function supersedeFalseCompletion(runId, {
+  reason = "provider_prompt_not_ready",
+  origin = "system",
+  nowMs = Date.now(),
+  root = null,
+} = {}) {
+  const found = root ? { run: getExecutionRun(runId, root), root } : findExecutionRun(runId);
+  if (!found?.run) return { ok: false, error: "run_not_found" };
+  const run = found.run;
+  const storeRoot = found.root;
+  const preserved = String(run.instruction || "");
+  if (run.false_completion?.superseded === true) {
+    return { ok: true, already: true, mode: "superseded", run, retry_instruction: preserved };
+  }
+  if (isTerminalRunState(run.state)) {
+    const patched = patchRunFields(run.run_id, {
+      false_completion: {
+        superseded: true,
+        reason,
+        at: iso(nowMs),
+        prior_state: run.state,
+        preserved_instruction: preserved,
+      },
+    }, { nowMs, root: storeRoot });
+    return {
+      ok: true,
+      mode: "superseded",
+      run: patched.run || run,
+      retry_instruction: preserved,
+    };
+  }
+  const failed = transitionExecutionRun(run.run_id, "FAILED", {
+    reason,
+    origin,
+    nowMs,
+    root: storeRoot,
+    completion_report: { summary: `Superseded: ${reason}. Instruction preserved for retry.` },
+  });
+  if (failed.ok) {
+    patchRunFields(run.run_id, {
+      false_completion: {
+        superseded: true,
+        reason,
+        at: iso(nowMs),
+        prior_state: run.state,
+        preserved_instruction: preserved,
+      },
+    }, { nowMs, root: storeRoot });
+  }
+  return {
+    ok: failed.ok,
+    mode: "failed",
+    error: failed.ok ? null : failed.error,
+    run: getExecutionRun(run.run_id, storeRoot) || run,
+    retry_instruction: preserved,
+  };
+}
+
+export function normalizeReportedState(raw) {
+  const s = String(raw || "").trim().toLowerCase().replace(/-/g, "_");
+  const map = {
+    queued: "QUEUED",
+    executing: "EXECUTING",
+    waiting_resource: "WAITING_RESOURCE",
+    validating: "VALIDATING",
+    needs_input: "NEEDS_INPUT",
+    recovering: "RECOVERING",
+    complete: "COMPLETE",
+    completed: "COMPLETE",
+    failed: "FAILED",
+    fail: "FAILED",
+  };
+  return map[s] || (RUN_STATES.includes(String(raw || "").toUpperCase()) ? String(raw).toUpperCase() : null);
+}
+
+export function executionEnvelope(runId, instruction, { laneId = null } = {}) {
+  const vac = join(TOOLKIT_DIR, "vac");
+  const laneFlag = laneId ? ` --lane ${laneId}` : "";
+  return [
+    `You are executing Vacilando run ${runId}.`,
+    "",
+    "Complete the approved instruction below.",
+    "Report bounded execution-state changes with the Gateway-owned CLI (absolute path; do not rely on PATH `vac`):",
+    `  ${vac} run-status ${runId} executing|validating|waiting-resource|needs-input|complete|failed [--reason \"...\"] [--summary \"...\"] [--resource <key>]${laneFlag}`,
+    `When the turn is finished, you MUST file the last output: ${vac} run-status ${runId} complete --summary \"<last output>\"${laneFlag}. A turn is not complete without that summary.`,
+    "When a coherent implementation checkpoint is reached, also report:",
+    `  ${vac} run-status ${runId} executing --checkpoint-ready --summary \"feat(area): bounded commit subject\"${laneFlag}`,
+    "When you need a Director-owned capability this lane cannot execute (for example a read-only database census), report:",
+    `  ${vac} governed-action --run ${runId}${laneId ? ` --lane ${laneId}` : " --lane <lane_id>"} --json '{...}'`,
+    "Do not retry a capability you have already proven this lane cannot execute.",
+    "Do not ask the operator to paste SQL, credentials, or census results.",
+    "Do not wait for the operator merely because a validation resource is temporarily unavailable.",
+    "",
+    "Approved instruction:",
+    "---",
+    String(instruction || ""),
+    "---",
+  ].join("\n");
+}
+
+/**
+ * The same landmine as the lane store's reset, and the same refusal.
+ *
+ * Defaulting to `runtimeRoot()` means `ALLOY_RUNTIME_ROOT`, which in a worker
+ * shell is the LIVE gateway root. Every test calling this without an explicit
+ * root wiped the real run registry — which is what actually emptied runs.json
+ * alongside lanes.json, twice, moments after a test sweep. Not a transient I/O
+ * fault; the helper doing exactly what it was told, against production.
+ */
+export function resetExecutionRunsForTests(root = runtimeRoot()) {
+  assertResettableRoot(root, "execution run store");
+  writeStore(emptyStore(), root);
+  try {
+    const p = executionRunEventsPath(root);
+    if (existsSync(p)) writeFileSync(p, "", "utf8");
+  } catch { /* */ }
+  resetResourceRequestsForTests(root);
+}

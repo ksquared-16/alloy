@@ -1,0 +1,28 @@
+{
+  "inPlace": {
+    "typePresent": 1,
+    "agencyPresent": 1,
+    "typeCanonical": true,
+    "agencyCanonical": true,
+    "nativeSelectsInDetail": 0,
+    "typeValue": "Government subsidy",
+    "agencyValue": "Choose an agency…",
+    "agencyValueIsPlaceholder": 1
+  },
+  "agencyOptions": [
+    {
+      "label": "Choose an agency…",
+      "value": ""
+    },
+    {
+      "label": "State Childcare Assistance (demo) · STATE",
+      "value": "fd000000-0000-4000-8000-0000000f0001"
+    }
+  ],
+  "emptyValued": [
+    {
+      "label": "Choose an agency…",
+      "value": ""
+    }
+  ]
+}

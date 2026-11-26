@@ -16,6 +16,7 @@
  * @see docs/platform/operator/card-composition-system.md (default = recommendation, published = source of truth)
  */
 
+import { normalizeFocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 /**
@@ -182,6 +183,18 @@ export type FocusPanelGridLayout = {
  */
 export type FocusPanelPublishedLayout = { rows: FocusPanelLayoutRow[]; grid?: FocusPanelGridLayout };
 
+/**
+ * The layout AS STORED, which is not the layout as consumed.
+ *
+ * `rows` is a projection of the grid (see `deriveRowsFromGrid`), so a doc that carries only
+ * a `grid` is a legal published layout — `isFocusPanelPublishedLayout` has always said so in
+ * as many words. Every consumer downstream of the reader, however, was written against
+ * `FocusPanelPublishedLayout`, where `rows` is present. Naming the stored shape separately is
+ * what stops those two truths from being held by the same type: the validator accepts this,
+ * and `readFocusPanelPublishedLayout` returns the other, having filled in what it can derive.
+ */
+export type StoredFocusPanelPublishedLayout = { rows?: FocusPanelLayoutRow[]; grid?: FocusPanelGridLayout };
+
 /** A planned cell the renderer paints (width resolved to grid units). */
 export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[]; minHeightPx?: number };
 export type PublishedLayoutRowPlan = { cells: PublishedLayoutCellPlan[] };
@@ -249,12 +262,12 @@ export function isFocusPanelGridLayout(value: unknown): value is FocusPanelGridL
 }
 
 /** Validate a value is a well-formed published layout (defensive for stored docs). */
-export function isFocusPanelPublishedLayout(value: unknown): value is FocusPanelPublishedLayout {
+export function isFocusPanelPublishedLayout(value: unknown): value is StoredFocusPanelPublishedLayout {
     if (!value || typeof value !== "object") return false;
     // A V5 grid is sufficient on its own; `rows` may be a thin reading-order fallback.
-    const grid = (value as FocusPanelPublishedLayout).grid;
+    const grid = (value as StoredFocusPanelPublishedLayout).grid;
     if (grid !== undefined && !isFocusPanelGridLayout(grid)) return false;
-    const rows = (value as FocusPanelPublishedLayout).rows;
+    const rows = (value as StoredFocusPanelPublishedLayout).rows;
     const rowsOk =
         Array.isArray(rows) &&
         rows.length > 0 &&
@@ -280,16 +293,84 @@ export function isFocusPanelPublishedLayout(value: unknown): value is FocusPanel
 export const FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY = "focusPanelLayout" as const;
 
 /** Read + validate the published layout from a Summary LayoutDoc's metadata, or null. */
+/**
+ * Normalize every card key inside a stored published layout.
+ *
+ * THE STORED BLOB IS CONFIGURATION, AND CONFIGURATION NORMALIZES. `readFocusPanelCardSectionMeta`
+ * already normalizes the section path, but the published layout is a SECOND record of the same
+ * composition held in doc metadata, and it was returned verbatim. A tenant whose layout was
+ * published naming a superseded key therefore resolved that key on one path and not the other —
+ * two readers of one document disagreeing about which card is placed, which is how a card ends up
+ * both present and absent in the same render.
+ */
+function normalizePublishedLayoutCardKeys(
+    layout: StoredFocusPanelPublishedLayout,
+): FocusPanelPublishedLayout {
+    const normalizeKey = (card: FocusPanelCardKey): FocusPanelCardKey =>
+        normalizeFocusPanelCardKey(card) ?? card;
+    return {
+        ...layout,
+        ...(layout.grid
+            ? {
+                  grid: {
+                      ...layout.grid,
+                      areas: layout.grid.areas.map((a) => ({ ...a, card: normalizeKey(a.card) })),
+                  },
+              }
+            : {}),
+        rows: (layout.rows ?? []).map((row) => ({
+            ...row,
+            cells: row.cells.map((cell) => ({ ...cell, cards: cell.cards.map(normalizeKey) })),
+        })),
+    };
+}
+
+/**
+ * Read + validate the published layout from a Summary LayoutDoc's metadata, or null.
+ *
+ * THE READER OWNS THE INVARIANT ITS CONSUMERS WERE WRITTEN AGAINST. A stored layout may
+ * legally carry only a `grid`; `planPublishedLayout` and every other consumer read `rows`
+ * unconditionally. That gap crashed the Work Unit — the validator said yes and the very
+ * next line dereferenced `rows`. Deriving the projection here means there is one place
+ * that knows `rows` can be absent, instead of a dozen that must remember it.
+ */
 export function readFocusPanelPublishedLayout(
     doc: { metadata?: Record<string, unknown> | null } | null | undefined,
 ): FocusPanelPublishedLayout | null {
     const raw = doc?.metadata?.[FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY];
-    return isFocusPanelPublishedLayout(raw) ? raw : null;
+    if (!isFocusPanelPublishedLayout(raw)) return null;
+    return withDerivedRows(normalizePublishedLayoutCardKeys(raw));
+}
+
+/**
+ * Guarantee the `rows` projection, deriving it from the grid when the stored layout did
+ * not carry one. A grid-only layout is complete; a rows-less one handed to a consumer is not.
+ */
+export function withDerivedRows(layout: FocusPanelPublishedLayout): FocusPanelPublishedLayout {
+    if (layout.rows.length > 0 || !layout.grid) return layout;
+    return { ...layout, rows: deriveRowsFromGrid(layout.grid) };
 }
 
 /** Areas top→bottom, then left→right — the grid's natural reading order. */
 export function gridAreasInReadingOrder(grid: FocusPanelGridLayout): FocusPanelGridArea[] {
     return [...grid.areas].sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart);
+}
+
+/**
+ * The reading-order `rows` fallback a grid implies — one full-width cell per card,
+ * top→bottom/left→right.
+ *
+ * THIS IS WHAT MAKES `rows` DERIVABLE RATHER THAN REQUIRED. The grid is the composition
+ * source of truth; `rows` is a projection of it that older consumers and the responsive
+ * collapse read. Because it is a projection, a stored layout that carries only a grid is
+ * not incomplete — it is missing something the runtime can compute — and the reader
+ * computes it rather than handing a half-built layout to consumers that documented `rows`
+ * as always present.
+ */
+export function deriveRowsFromGrid(grid: FocusPanelGridLayout): FocusPanelLayoutRow[] {
+    return gridAreasInReadingOrder(grid).map((a) => ({
+        cells: [{ width: "full" as const, cards: [a.card], height: a.height }],
+    }));
 }
 
 /**
@@ -393,6 +474,28 @@ export function planPublishedLayout(
 
     // The literal row plan is always available (back-compat + the row-major fallback).
     const rows = planPublishedRows(layout);
+
+    /*
+     * A GRID IS PLANNED AS A GRID. THERE IS NO SECOND READING OF IT.
+     *
+     * This used to be two readings, chosen by a `preferLanesFromGrid` flag: the /surfaces
+     * composer passed nothing and got `grid`; the Work Unit passed `true` and got `lanes`,
+     * which bucketed the authored areas by `colStart` and then gave every card in a bucket
+     * that bucket's widest span. Measured on the running app against ONE published document
+     * - Financials authored `colStart 7, colSpan 2` beside two six-wide cards - the composer
+     * drew it 165px and the Work Unit drew it 554px. One document, two geometries, and the
+     * only one the operator could see while authoring was the one the operator would not get.
+     *
+     * The transposition existed to stop a tall card in one column opening dead space in its
+     * neighbour. `resolveColumnAwareLayout`, which this strategy renders through, already
+     * answers that - and answers it without discarding `colSpan` or `rowStart`, because a
+     * card falls against the cards it overlaps HORIZONTALLY and nothing else. So the lane
+     * reading was never a trade-off worth keeping: it is a strictly weaker reading of the
+     * same coordinates, and holding both is what let the builder and the runtime disagree.
+     *
+     * The rows -> lanes path further down is untouched. A layout carrying no grid carries no
+     * coordinates to honour, and lanes remain the right reading for it.
+     */
 
     // V5 responsive grid is the richest model (vertical/horizontal spans, independent
     // regions). When present it wins — the runtime paints each area with CSS Grid.

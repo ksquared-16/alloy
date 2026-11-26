@@ -1,0 +1,39 @@
+{
+  "schema": "alloy.shared_qa_no_send_backend_deploy_handoff.v1",
+  "objective": "COMPLETE SHARED QA NO-SEND SAFETY AND BACKEND DEPLOYMENT VERIFICATION",
+  "evidence_key": "qa_no_send_guard_backend_deployed",
+  "frozen_qa_org_ids": [
+    "4acc9386-c485-486f-aa1f-05d83499d142",
+    "ad53fee2-2570-460f-9300-f0e106c473b6"
+  ],
+  "surfaces": {
+    "web_legacy_sms_insert": [
+      "web/lib/workflowRun.ts create_message (SMS) → refuseQaOrgSmsQueueInsert before public.messages insert",
+      "web/lib/workflowRun.ts send_message (SMS) → refuseQaOrgSmsQueueInsert before public.messages insert"
+    ],
+    "backend_legacy_sms_dispatch": [
+      "backend/app/services/message_sender.py process_queued_messages → resolve org via workflow_runs.org_id; refuse QA_ORG_OUTBOUND_REFUSED; fail closed QA_ORG_OUTBOUND_ORG_UNRESOLVABLE; never call Twilio on refusal"
+    ],
+    "backend_modern_dispatch": [
+      "backend/app/services/dispatch_eligibility.py QA_ORG_OUTBOUND_REFUSED (unchanged)"
+    ],
+    "revision_identity": [
+      "GET https://staging-alloy.onrender.com/build-info → { ok, service, git_commit, git_branch }; 503 when RENDER_GIT_COMMIT missing/untrustworthy"
+    ]
+  },
+  "runtime_recheck": {
+    "url": "https://staging-alloy.onrender.com/build-info",
+    "require": {
+      "ok": true,
+      "service": "alloy-dispatcher",
+      "git_commit_contains_repair": true
+    },
+    "stale_rule": "Hosted QA runs must re-fetch /build-info and require git_commit to equal (or be an ancestor of) the certified merge SHA; never reuse a prior evidence record after a later Render deploy."
+  },
+  "do_not": [
+    "create QA fixtures",
+    "send real messages",
+    "provision additional identities",
+    "open hosted QA runs from this Alloy lane"
+  ]
+}

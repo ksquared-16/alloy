@@ -342,7 +342,7 @@ describe("packet review rollup helpers", () => {
 
     it("missing optional provenance fields do not crash builder", async () => {
         const client = makeRollupClient();
-        const r = await buildPacketReviewRollupV1(client, ORG, SESS);
+        const r = await buildPacketReviewRollupV1(client, ORG, SESS, { permissionKeys: ["health.view"] });
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         const rec = r.rollup.documents_index.find((d) => d.form_submission_id === SUB_NOPDF);
@@ -353,7 +353,7 @@ describe("packet review rollup helpers", () => {
 
 describe("buildPacketReviewRollupV1", () => {
     it("completed submitted step with generated PDF", async () => {
-        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS);
+        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS, { permissionKeys: ["health.view"] });
         expect(r.ok).toBe(true);
         if (!r.ok) return;
 
@@ -374,7 +374,7 @@ describe("buildPacketReviewRollupV1", () => {
     });
 
     it("submitted step with no PDF returns submitted_record artifact", async () => {
-        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS);
+        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS, { permissionKeys: ["health.view"] });
         expect(r.ok).toBe(true);
         if (!r.ok) return;
 
@@ -392,7 +392,7 @@ describe("buildPacketReviewRollupV1", () => {
     });
 
     it("labels resolve from schema_json in answer_view", async () => {
-        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS);
+        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS, { permissionKeys: ["health.view"] });
         expect(r.ok).toBe(true);
         if (!r.ok) return;
 
@@ -404,7 +404,7 @@ describe("buildPacketReviewRollupV1", () => {
     });
 
     it("includes operator review warnings from session", async () => {
-        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS);
+        const r = await buildPacketReviewRollupV1(makeRollupClient(), ORG, SESS, { permissionKeys: ["health.view"] });
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         expect(r.rollup.operator_review.warnings).toHaveLength(1);
@@ -431,7 +431,7 @@ describe("buildPacketReviewRollupV1", () => {
                 };
             },
         } as unknown as SupabaseClient;
-        const r = await buildPacketReviewRollupV1(empty, ORG, SESS);
+        const r = await buildPacketReviewRollupV1(empty, ORG, SESS, { permissionKeys: ["health.view"] });
         expect(r.ok).toBe(false);
         if (r.ok) return;
         expect(r.httpStatus).toBe(404);

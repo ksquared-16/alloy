@@ -1,0 +1,59 @@
+{
+  "at": "2026-09-23T20:03:51.549Z",
+  "remainingProbes": [
+    {
+      "id": "af7710d3-afd2-44bc-af20-5ccc22bff4cb",
+      "label": "Archive probe 51565",
+      "active": false
+    }
+  ],
+  "archived": [
+    {
+      "label": "Archive probe 51565",
+      "status": 200,
+      "code": null
+    }
+  ],
+  "finalCounts": {
+    "all": "All 9",
+    "operational": "Operational 6",
+    "physical": "Physical 3"
+  },
+  "finalRows": [
+    "Spaces",
+    "9 spaces",
+    "+ Add space",
+    "All 9",
+    "Operational 6",
+    "Physical 3",
+    "Infant A",
+    "Operational · Active · capacity needs review · 1 program",
+    "Infant B",
+    "Operational · Active · capacity needs review · 1 program",
+    "Playground",
+    "Physical · Active",
+    "Pre-K",
+    "Operational · Room 1 · Active · capacity needs review · 1 program",
+    "Preschool 1",
+    "Operational · Active · capacity needs review · 1 program",
+    "Preschool 2",
+    "Physical · Active · capacity needs review · 1 program",
+    "Room 1",
+    "Physical · Active",
+    "Toddler 1",
+    "Operational · Room 1 · Active · 10 capacity · 1 program",
+    "Toddler 2",
+    "Operational · Room 1 · Active · 10 capacity · 1 program"
+  ],
+  "qaMentions": 0,
+  "ratio_Infant_A": {
+    "read": "STAFFING RATIO | 1:4 · 2:8 · 3:12",
+    "review": "Ratio needs review | Recorded earlier: 1:5 · 2:11 | Configured now: 1:4 · 2:8 · 3:12 | These disagree. Only you can say which is right for this space."
+  },
+  "ratio_Toddler_1": {
+    "read": "STAFFING RATIO | 1:5 · 2:11",
+    "review": "Ratio needs review | Recorded earlier: 1:6 | Configured now: 1:5 · 2:11 | These disagree. Only you can say which is right for this space."
+  },
+  "errs": [],
+  "perrs": []
+}

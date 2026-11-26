@@ -1,0 +1,135 @@
+{
+  "persona": "admin",
+  "run": "qar_08296c326232",
+  "build": "502d597537a753125c0e11d2f299cb134c60fb1b",
+  "steps": [
+    {
+      "name": "view-entry",
+      "panel": "empty",
+      "header": "Select a record to begin The record you open appears here.",
+      "scheduling": false,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments",
+      "bos_visible": true,
+      "bos_rect": [
+        1017,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "record-entry-first",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room N 584637 Mon–Fri Starts Sep 22, 2026 Edit Assignment V",
+      "scheduling": true,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3A41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "record-switch",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Oct 12 Eve Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room S 584637 Mon–Fri Starts Oct 12, 2026 Edit Assignment V",
+      "scheduling": true,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3Acf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "record-refresh",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Oct 12 Eve Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room S 584637 Mon–Fri Starts Oct 12, 2026 Edit Assignment V",
+      "scheduling": true,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3Acf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 4
+    }
+  ],
+  "writes": [
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    }
+  ],
+  "financial_config": [],
+  "api_errors": []
+}

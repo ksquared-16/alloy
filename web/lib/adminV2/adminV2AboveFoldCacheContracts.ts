@@ -1,6 +1,6 @@
 /**
  * Platform-level above-fold cache key contracts for AdminV2 workspace navigation.
- * See docs/sprints/05_2026/adminv2_reveal_doctrine.md and adminv2_above_fold_cache.md.
+ * See docs/sprints/archive/05_2026/adminv2_reveal_doctrine.md and adminv2_above_fold_cache.md.
  */
 
 export const ADMINV2_ABOVE_FOLD_CACHE_TTL_MS = {

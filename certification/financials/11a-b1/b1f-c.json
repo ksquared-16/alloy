@@ -1,0 +1,14 @@
+[
+  {
+    "row": "C1",
+    "what": "an account with no available prepaid renders no Available $0.00 line",
+    "ok": true,
+    "observed": "account=\"Kurzman Family\" availableZeroShown=false prepaidNodes=0"
+  },
+  {
+    "row": "C3-reach",
+    "what": "an allocation control for unapplied money is reachable",
+    "ok": true,
+    "observed": "{\"applyControls\":1,\"buttons\":[]}"
+  }
+]

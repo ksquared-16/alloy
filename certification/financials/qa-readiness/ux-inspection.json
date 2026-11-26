@@ -1,0 +1,271 @@
+[
+  {
+    "item": "A",
+    "gap": {
+      "lensesBottom": 497,
+      "firstRowTop": 641,
+      "gap": 143,
+      "headTop": 620,
+      "lensesToHead": 122
+    }
+  },
+  {
+    "item": "B",
+    "anomalies": [
+      {
+        "w": 1280,
+        "idx": 0,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 1,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 2,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 3,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 4,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 5,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 6,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 7,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 8,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 9,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 10,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 11,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 12,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 13,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 14,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 15,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 16,
+        "h": 25,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 17,
+        "h": 23,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 18,
+        "h": 25,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      },
+      {
+        "w": 1280,
+        "idx": 19,
+        "h": 25,
+        "median": 23,
+        "overflows": true,
+        "tall": false,
+        "outside": false
+      }
+    ],
+    "count": 468
+  },
+  {
+    "item": "C",
+    "before": null,
+    "after": null
+  },
+  {
+    "item": "DEF",
+    "desc": [
+      {
+        "text": "Sep 29, 2026 Tuition Certa Certhouse 4000 · Tuition Revenue $185.00 scheduled Not allocated Monthly tuition",
+        "overflows": true,
+        "h": 23
+      },
+      {
+        "text": "Sep 25, 2026 Consumable fee Certa Certhouse 4030 · Supply Fees $18.00 posted Not allocated Materials",
+        "overflows": true,
+        "h": 23
+      },
+      {
+        "text": "Sep 25, 2026 Consumable fee Certb Certhouse 4030 · Supply Fees $18.00 posted Not allocated Materials",
+        "overflows": true,
+        "h": 23
+      },
+      {
+        "text": "Sep 22, 2026 Tuition Certa Certhouse 4000 · Tuition Revenue $185.00 draft Not allocated Monthly tuition",
+        "overflows": true,
+        "h": 23
+      },
+      {
+        "text": "Sep 18, 2026 Fee Household 4010 · Registration Fees $75.00 posted Certt Certhouse · $57.00 unassigned Registra",
+        "overflows": true,
+        "h": 23
+      },
+      {
+        "text": "Sep 18, 2026 Late pickup Certa Certhouse 4040 · Late Pickup Fees $25.00 reversed Not allocated Late pickup",
+        "overflows": true,
+        "h": 23
+      }
+    ],
+    "selects": [],
+    "overview": {
+      "hasMoney": true,
+      "zeros": 1,
+      "needsDecision": false,
+      "overflow": 0
+    }
+  },
+  {
+    "item": "responsive",
+    "results": [
+      {
+        "width": 1280,
+        "overflow": 0,
+        "backdrop": true,
+        "rows": 116,
+        "lenses": true
+      },
+      {
+        "width": 1440,
+        "overflow": 0,
+        "backdrop": true,
+        "rows": 116,
+        "lenses": true
+      },
+      {
+        "width": 1680,
+        "overflow": 0,
+        "backdrop": true,
+        "rows": 116,
+        "lenses": true
+      }
+    ]
+  }
+]

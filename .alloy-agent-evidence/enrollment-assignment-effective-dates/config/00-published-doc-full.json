@@ -1,0 +1,1854 @@
+{
+  "surface": "drawer",
+  "metadata": {
+    "layoutKey": "focus_panel_summary",
+    "focusPanelMode": "summary",
+    "nestedSurfaces": {
+      "children_surface": {
+        "groups": [
+          {
+            "key": "identity",
+            "enabled": true,
+            "fieldPolicies": {
+              "child.allergies": "read-only",
+              "child.medical_notes": "read-only",
+              "child.special_instructions": "read-only"
+            },
+            "displayOptions": {
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.first_name"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.last_name"
+              },
+              {
+                "row": 3,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.preferred_name"
+              },
+              {
+                "row": 4,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.nickname"
+              },
+              {
+                "row": 5,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.dob_age"
+              },
+              {
+                "row": 6,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.age"
+              },
+              {
+                "row": 7,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.age_band"
+              },
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "child.allergies"
+              },
+              {
+                "row": 2,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "child.medical_notes"
+              },
+              {
+                "row": 3,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "child.special_instructions"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.allergies",
+              "child.medical_notes",
+              "child.special_instructions"
+            ],
+            "fieldLayoutWidths": {
+              "child.allergies": "full",
+              "child.medical_notes": "full",
+              "child.special_instructions": "full"
+            },
+            "selectedFieldKeys": [
+              "child.first_name",
+              "child.last_name",
+              "child.preferred_name",
+              "child.nickname",
+              "child.dob_age",
+              "child.age",
+              "child.age_band"
+            ]
+          },
+          {
+            "key": "roster",
+            "enabled": true,
+            "fieldIcons": {
+              "inquiry_child.location_id": "badge-check",
+              "inquiry_child.schedule_type": "calendar-clock"
+            },
+            "fieldModes": {
+              "child.gender": {
+                "showIcon": false,
+                "showLabel": true
+              },
+              "child.last_name": {
+                "showIcon": false
+              },
+              "child.first_name": {
+                "showIcon": false
+              },
+              "child.date_of_birth": {
+                "showIcon": false,
+                "showLabel": true
+              },
+              "inquiry_child.program": {
+                "showIcon": false,
+                "showLabel": true
+              },
+              "inquiry_child.location_id": {
+                "showIcon": true,
+                "showLabel": false
+              },
+              "inquiry_child.schedule_type": {
+                "showIcon": true,
+                "showLabel": false
+              }
+            },
+            "fieldPolicies": {
+              "child.gender": "read-only",
+              "child.last_name": "read-only",
+              "child.first_name": "read-only",
+              "child.date_of_birth": "read-only",
+              "inquiry_child.program": "editable",
+              "inquiry_child.location_id": "editable",
+              "inquiry_child.schedule_type": "linked"
+            },
+            "displayOptions": {
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "icon": "badge-check",
+                "tier": "summary",
+                "width": "half",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "inquiry_child.location_id",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "half",
+                "column": 2,
+                "policy": "read-only",
+                "fieldRef": "inquiry_child.program",
+                "labelMode": "visible"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "half",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "child.date_of_birth",
+                "labelMode": "visible"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "half",
+                "column": 2,
+                "policy": "read-only",
+                "fieldRef": "child.gender",
+                "labelMode": "visible"
+              },
+              {
+                "row": 3,
+                "icon": "calendar-clock",
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "policy": "linked",
+                "fieldRef": "inquiry_child.schedule_type",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "child.first_name"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "editable",
+                "fieldRef": "child.last_name"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "child.date_of_birth",
+                "labelMode": "visible"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "editable",
+                "fieldRef": "child.gender",
+                "labelMode": "visible"
+              },
+              {
+                "row": 3,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "inquiry_child.program",
+                "labelMode": "visible"
+              },
+              {
+                "row": 4,
+                "icon": "calendar-clock",
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "policy": "linked",
+                "fieldRef": "inquiry_child.schedule_type",
+                "labelMode": "hidden"
+              }
+            ],
+            "contextFieldKeys": [
+              "child.first_name",
+              "child.last_name",
+              "child.date_of_birth",
+              "child.gender",
+              "inquiry_child.program",
+              "inquiry_child.schedule_type"
+            ],
+            "fieldLayoutWidths": {
+              "child.gender": "half",
+              "child.last_name": "half",
+              "child.first_name": "half",
+              "child.date_of_birth": "half",
+              "inquiry_child.program": "half",
+              "inquiry_child.location_id": "half",
+              "inquiry_child.schedule_type": "full"
+            },
+            "selectedFieldKeys": [
+              "inquiry_child.location_id",
+              "inquiry_child.program",
+              "child.date_of_birth",
+              "child.gender",
+              "inquiry_child.schedule_type"
+            ],
+            "evidenceCollections": [
+              {
+                "key": "medical",
+                "label": "Medical",
+                "enabled": true,
+                "sectionSemantic": "Medical evidence for this child."
+              },
+              {
+                "key": "documents",
+                "label": "Documents",
+                "enabled": true,
+                "sectionSemantic": "Document evidence for this child."
+              },
+              {
+                "key": "emergency_contacts",
+                "label": "Emergency Contacts",
+                "enabled": true,
+                "sectionSemantic": "Emergency contacts for this child (canonical relationship instances)."
+              },
+              {
+                "key": "pickup",
+                "label": "Pickup",
+                "enabled": true,
+                "sectionSemantic": "Pickup authorization evidence."
+              },
+              {
+                "key": "custom_notes",
+                "label": "Custom Notes",
+                "enabled": true,
+                "sectionSemantic": "Operator-defined evidence section."
+              }
+            ],
+            "fieldLayoutWidthsByPurpose": {
+              "context_facts": {
+                "child.gender": "half",
+                "child.last_name": "half",
+                "child.first_name": "half",
+                "child.date_of_birth": "half"
+              }
+            }
+          },
+          {
+            "key": "placement",
+            "enabled": true,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.location_id"
+              },
+              {
+                "row": 2,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.program"
+              },
+              {
+                "row": 3,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.program_room_cohort_key"
+              },
+              {
+                "row": 4,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.schedule_type"
+              },
+              {
+                "row": 5,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.start_date"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "inquiry_child.location_id",
+              "inquiry_child.program",
+              "inquiry_child.program_room_cohort_key",
+              "inquiry_child.schedule_type",
+              "inquiry_child.start_date"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "readiness",
+            "enabled": true,
+            "fieldPlacements": [],
+            "contextFieldKeys": [],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "child_edit",
+            "enabled": true,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.program"
+              },
+              {
+                "row": 2,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.schedule_type"
+              },
+              {
+                "row": 3,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.start_date"
+              },
+              {
+                "row": 4,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.date_of_birth"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "inquiry_child.program",
+              "inquiry_child.schedule_type",
+              "child.start_date",
+              "child.date_of_birth"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "medical",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.medical_summary"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.medical_summary"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "documents",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.documents_summary"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.documents_summary"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "emergency_contacts",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.primary_contact_name"
+              },
+              {
+                "row": 2,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.phone"
+              },
+              {
+                "row": 3,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 4,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person_child_relationship.relationship_type"
+              },
+              {
+                "row": 5,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person_child_relationship.priority"
+              },
+              {
+                "row": 6,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person_child_relationship.pickup_instructions"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "person.primary_contact_name",
+              "person.phone",
+              "person.email",
+              "person_child_relationship.relationship_type",
+              "person_child_relationship.priority",
+              "person_child_relationship.pickup_instructions"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "pickup",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.pickup_summary"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.pickup_summary"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "communications",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.communications_summary"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.communications_summary"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "notes",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.notes_summary"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.notes_summary"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "nickname",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.nickname"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.nickname"
+            ],
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "custom_notes",
+            "enabled": false,
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.notes_summary"
+              }
+            ],
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "child.notes_summary"
+            ],
+            "selectedFieldKeys": []
+          }
+        ],
+        "surfaceId": "children_surface"
+      },
+      "household_surface": {
+        "groups": [
+          {
+            "key": "primary_contact",
+            "enabled": true,
+            "instanceKey": "primary_contact",
+            "sectionLabel": "Primary Contact",
+            "sectionOrder": 0,
+            "definitionKey": "parent_primary",
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.primary_contact_name"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.phone"
+              },
+              {
+                "row": 3,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.date_of_birth"
+              },
+              {
+                "row": 2,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.address_line"
+              }
+            ],
+            "presentationRef": "primary_contact",
+            "contextFieldKeys": [],
+            "expandedFieldKeys": [
+              "person.date_of_birth",
+              "person.address_line"
+            ],
+            "sectionVisibility": "always",
+            "selectedFieldKeys": [
+              "person.primary_contact_name",
+              "person.phone",
+              "person.email"
+            ],
+            "relationshipCriteria": {
+              "roleKeys": [
+                "primary",
+                "primary_contact"
+              ]
+            }
+          },
+          {
+            "key": "other_parent_guardian",
+            "enabled": true,
+            "instanceKey": "other_parent_guardian",
+            "sectionLabel": "Other Parent / Guardian",
+            "sectionOrder": 1,
+            "definitionKey": "parent_guardian",
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.primary_contact_name"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.phone"
+              },
+              {
+                "row": 3,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.role_label"
+              }
+            ],
+            "presentationRef": "other_parent_guardian",
+            "contextFieldKeys": [
+              "person.role_label"
+            ],
+            "sectionVisibility": "when_nonempty",
+            "selectedFieldKeys": [
+              "person.primary_contact_name",
+              "person.phone",
+              "person.email"
+            ],
+            "relationshipCriteria": {
+              "roleKeys": [
+                "parent",
+                "guardian"
+              ],
+              "excludeRoleKeys": [
+                "emergency",
+                "pickup",
+                "billing"
+              ]
+            }
+          },
+          {
+            "key": "household_members",
+            "enabled": false,
+            "instanceKey": "household_members",
+            "sectionLabel": "Additional Contacts",
+            "sectionOrder": 2,
+            "definitionKey": "additional_contact",
+            "fieldPolicies": {
+              "person.email": "read-only",
+              "person.phone": "read-only"
+            },
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.primary_contact_name"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.phone"
+              },
+              {
+                "row": 3,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.phone"
+              },
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.date_of_birth"
+              },
+              {
+                "row": 2,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.address_line"
+              }
+            ],
+            "presentationRef": "household_members",
+            "contextFieldKeys": [
+              "person.email",
+              "person.phone"
+            ],
+            "expandedFieldKeys": [
+              "person.date_of_birth",
+              "person.address_line"
+            ],
+            "fieldLayoutWidths": {
+              "person.email": "full",
+              "person.phone": "full"
+            },
+            "sectionVisibility": "when_nonempty",
+            "selectedFieldKeys": [
+              "person.primary_contact_name",
+              "person.phone",
+              "person.email"
+            ],
+            "relationshipCriteria": {
+              "roleKeys": [
+                "additional",
+                "contact",
+                "member",
+                "relative",
+                "grandparent"
+              ]
+            }
+          },
+          {
+            "key": "children",
+            "enabled": true,
+            "instanceKey": "children",
+            "sectionLabel": "Children",
+            "sectionOrder": 5,
+            "definitionKey": "children",
+            "displayOptions": {
+              "showAge": false,
+              "showDob": false,
+              "visible": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.name"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.dob_age"
+              },
+              {
+                "row": 3,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.age"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.program"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "inquiry_child.schedule_type"
+              },
+              {
+                "row": 3,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.start_date"
+              },
+              {
+                "row": 4,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.status"
+              },
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "child.date_of_birth"
+              }
+            ],
+            "presentationRef": "children",
+            "contextFieldKeys": [
+              "inquiry_child.program",
+              "inquiry_child.schedule_type",
+              "child.start_date",
+              "child.status"
+            ],
+            "expandedFieldKeys": [
+              "child.date_of_birth"
+            ],
+            "sectionVisibility": "always",
+            "selectedFieldKeys": [
+              "child.name",
+              "child.dob_age",
+              "child.age"
+            ]
+          },
+          {
+            "key": "authorized_pickups",
+            "enabled": true,
+            "fieldModes": {
+              "person.last_name": {
+                "showLabel": false
+              },
+              "person.first_name": {
+                "showLabel": false
+              }
+            },
+            "instanceKey": "authorized_pickups",
+            "sectionLabel": "Authorized Pickup",
+            "sectionOrder": 4,
+            "definitionKey": "authorized_pickup",
+            "fieldPolicies": {
+              "person.email": "read-only",
+              "person.phone": "read-only",
+              "person.last_name": "read-only",
+              "person.first_name": "read-only"
+            },
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "half",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.first_name",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "half",
+                "column": 2,
+                "policy": "read-only",
+                "fieldRef": "person.last_name",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.first_name",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "editable",
+                "fieldRef": "person.last_name",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.phone"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "editable",
+                "fieldRef": "person.email"
+              }
+            ],
+            "presentationRef": "authorized_pickups",
+            "sectionSemantic": "authorized_pickup",
+            "contextFieldKeys": [
+              "person.first_name",
+              "person.last_name",
+              "person.phone",
+              "person.email"
+            ],
+            "fieldLayoutWidths": {
+              "person.last_name": "half",
+              "person.first_name": "half"
+            },
+            "sectionVisibility": "when_nonempty",
+            "selectedFieldKeys": [
+              "person.first_name",
+              "person.last_name"
+            ],
+            "relationshipCriteria": {
+              "roleKeys": [
+                "authorized_pickup",
+                "pickup"
+              ],
+              "excludeRoleKeys": [
+                "parent",
+                "guardian",
+                "emergency"
+              ]
+            },
+            "fieldLayoutWidthsByPurpose": {
+              "summary": {
+                "person.last_name": "half",
+                "person.first_name": "half"
+              },
+              "context_facts": {
+                "person.email": "half",
+                "person.phone": "half",
+                "person.last_name": "half",
+                "person.first_name": "half"
+              }
+            }
+          },
+          {
+            "key": "emergency_contacts",
+            "enabled": true,
+            "fieldModes": {
+              "person.email": {
+                "showIcon": false
+              },
+              "person.phone": {
+                "showIcon": false,
+                "showLabel": false
+              },
+              "person_child_relationship.relationship_type": {
+                "showIcon": false,
+                "showLabel": false
+              }
+            },
+            "instanceKey": "emergency_contacts",
+            "sectionLabel": "Emergency Contacts",
+            "sectionOrder": 3,
+            "definitionKey": "emergency_contact",
+            "fieldPolicies": {
+              "person.email": "read-only",
+              "person.phone": "read-only",
+              "person.first_name": "read-only",
+              "person.relationship_to_child": "read-only",
+              "person.emergency_contact_notes": "read-only"
+            },
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.phone",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person_child_relationship.relationship_type",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.phone",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "editable",
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.relationship_to_child"
+              },
+              {
+                "row": 3,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.emergency_contact_notes"
+              }
+            ],
+            "presentationRef": "emergency_contacts",
+            "sectionSemantic": "emergency_contact",
+            "contextFieldKeys": [
+              "person.phone",
+              "person.email",
+              "person.relationship_to_child",
+              "person.emergency_contact_notes"
+            ],
+            "fieldLayoutWidths": {
+              "person.phone": "half",
+              "person.relationship_to_child": "full",
+              "person.emergency_contact_notes": "full"
+            },
+            "sectionVisibility": "when_nonempty",
+            "selectedFieldKeys": [
+              "person.phone",
+              "person_child_relationship.relationship_type"
+            ],
+            "relationshipCriteria": {
+              "roleKeys": [
+                "emergency_contact",
+                "emergency"
+              ],
+              "excludeRoleKeys": [
+                "parent",
+                "guardian",
+                "primary"
+              ]
+            },
+            "fieldLayoutWidthsByPurpose": {
+              "context_facts": {
+                "person.email": "half",
+                "person.phone": "half",
+                "person.emergency_contact_notes": "full"
+              }
+            }
+          },
+          {
+            "key": "billing_contact",
+            "enabled": false,
+            "instanceKey": "billing_contact",
+            "sectionLabel": "Billing Contact",
+            "sectionOrder": 6,
+            "definitionKey": "billing_contact",
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.primary_contact_name"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 3,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.phone"
+              }
+            ],
+            "presentationRef": "billing_contact",
+            "sectionSemantic": "billing_contact",
+            "contextFieldKeys": [],
+            "sectionVisibility": "when_nonempty",
+            "selectedFieldKeys": [
+              "person.primary_contact_name",
+              "person.email",
+              "person.phone"
+            ],
+            "relationshipCriteria": {
+              "roleKeys": [
+                "billing_contact",
+                "billing"
+              ]
+            }
+          },
+          {
+            "key": "emergency_medical",
+            "enabled": false,
+            "instanceKey": "emergency_medical",
+            "sectionLabel": "Emergency Medical",
+            "sectionOrder": 7,
+            "definitionKey": "emergency_medical",
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.primary_contact_name"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.phone"
+              }
+            ],
+            "presentationRef": "emergency_medical",
+            "sectionSemantic": "emergency_medical",
+            "contextFieldKeys": [],
+            "sectionVisibility": "when_nonempty",
+            "selectedFieldKeys": [
+              "person.primary_contact_name",
+              "person.phone"
+            ]
+          },
+          {
+            "key": "custom_notes",
+            "enabled": false,
+            "instanceKey": "custom_notes",
+            "sectionLabel": "Custom Relationship",
+            "sectionOrder": 8,
+            "definitionKey": "custom_relationship",
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "full",
+                "column": 1,
+                "fieldRef": "person.role_label"
+              }
+            ],
+            "presentationRef": "custom_notes",
+            "sectionSemantic": "custom",
+            "contextFieldKeys": [
+              "person.role_label"
+            ],
+            "sectionVisibility": "when_nonempty",
+            "selectedFieldKeys": []
+          },
+          {
+            "key": "contact_edit",
+            "enabled": true,
+            "fieldModes": {
+              "person.city": {
+                "showIcon": false
+              },
+              "person.email": {
+                "showIcon": false
+              },
+              "person.phone": {
+                "showIcon": false
+              },
+              "person.state": {
+                "showIcon": false
+              },
+              "contact.email": {
+                "showIcon": false,
+                "showLabel": false
+              },
+              "contact.phone": {
+                "showIcon": false,
+                "showLabel": false
+              },
+              "person.last_name": {
+                "showIcon": false
+              },
+              "person.first_name": {
+                "showIcon": false
+              },
+              "person.sms_opt_in": {
+                "showIcon": false
+              },
+              "person.postal_code": {
+                "showIcon": false
+              },
+              "person.email_opt_in": {
+                "showIcon": false
+              },
+              "person.address_line1": {
+                "showIcon": false
+              },
+              "person.address_line2": {
+                "showIcon": false
+              }
+            },
+            "fieldLabels": {
+              "person.address_line1": "Address Line"
+            },
+            "fieldPolicies": {
+              "person.city": "editable",
+              "person.email": "editable",
+              "person.phone": "editable",
+              "person.state": "editable",
+              "person.last_name": "editable",
+              "person.first_name": "editable",
+              "person.sms_opt_in": "read-only",
+              "person.postal_code": "editable",
+              "person.email_opt_in": "read-only",
+              "person.address_line1": "editable",
+              "person.address_line2": "editable"
+            },
+            "displayOptions": {
+              "visible": true,
+              "showEmail": true,
+              "showPhone": true,
+              "showAvatar": true,
+              "useProfilePhotos": true
+            },
+            "fieldPlacements": [
+              {
+                "row": 1,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "contact.email",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 2,
+                "tier": "summary",
+                "width": "full",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "contact.phone",
+                "labelMode": "hidden"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.first_name"
+              },
+              {
+                "row": 1,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "editable",
+                "fieldRef": "person.last_name"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.phone"
+              },
+              {
+                "row": 2,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "editable",
+                "fieldRef": "person.email"
+              },
+              {
+                "row": 3,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 1,
+                "policy": "read-only",
+                "fieldRef": "person.email_opt_in"
+              },
+              {
+                "row": 3,
+                "tier": "context_fact",
+                "width": "half",
+                "column": 2,
+                "policy": "read-only",
+                "fieldRef": "person.sms_opt_in"
+              },
+              {
+                "row": 1,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.address_line1"
+              },
+              {
+                "row": 2,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.address_line2"
+              },
+              {
+                "row": 3,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.state"
+              },
+              {
+                "row": 4,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.city"
+              },
+              {
+                "row": 5,
+                "tier": "details",
+                "width": "full",
+                "column": 1,
+                "policy": "editable",
+                "fieldRef": "person.postal_code"
+              }
+            ],
+            "contextFieldKeys": [
+              "person.first_name",
+              "person.last_name",
+              "person.phone",
+              "person.email",
+              "person.email_opt_in",
+              "person.sms_opt_in"
+            ],
+            "expandedFieldKeys": [
+              "person.address_line1",
+              "person.address_line2",
+              "person.state",
+              "person.city",
+              "person.postal_code"
+            ],
+            "fieldLayoutWidths": {
+              "person.city": "half",
+              "person.email": "half",
+              "person.phone": "half",
+              "person.state": "half",
+              "person.last_name": "half",
+              "person.first_name": "half",
+              "person.sms_opt_in": "half",
+              "person.postal_code": "full",
+              "person.email_opt_in": "half",
+              "person.address_line1": "full",
+              "person.address_line2": "full"
+            },
+            "selectedFieldKeys": [
+              "contact.email",
+              "contact.phone"
+            ],
+            "fieldLayoutWidthsByPurpose": {
+              "context_facts": {
+                "person.email": "half",
+                "person.phone": "half",
+                "person.last_name": "half",
+                "person.first_name": "half",
+                "person.sms_opt_in": "half",
+                "person.email_opt_in": "half"
+              }
+            }
+          }
+        ],
+        "surfaceId": "household_surface"
+      }
+    },
+    "focusPanelLayout": {
+      "grid": {
+        "areas": [
+          {
+            "card": "current_work",
+            "colSpan": 6,
+            "rowSpan": 2,
+            "colStart": 1,
+            "rowStart": 1
+          },
+          {
+            "card": "milestones",
+            "colSpan": 6,
+            "rowSpan": 2,
+            "colStart": 1,
+            "rowStart": 5
+          },
+          {
+            "card": "billing_preview",
+            "colSpan": 6,
+            "rowSpan": 2,
+            "colStart": 1,
+            "rowStart": 7
+          },
+          {
+            "card": "children",
+            "colSpan": 6,
+            "rowSpan": 4,
+            "colStart": 7,
+            "rowStart": 1
+          },
+          {
+            "card": "household",
+            "colSpan": 6,
+            "rowSpan": 4,
+            "colStart": 7,
+            "rowStart": 6
+          }
+        ],
+        "columns": 12
+      },
+      "rows": [
+        {
+          "cells": [
+            {
+              "cards": [
+                "current_work"
+              ],
+              "width": "full"
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "cards": [
+                "children"
+              ],
+              "width": "full"
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "cards": [
+                "milestones"
+              ],
+              "width": "full"
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "cards": [
+                "household"
+              ],
+              "width": "full"
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "cards": [
+                "billing_preview"
+              ],
+              "width": "full"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "sections": [
+    {
+      "id": "fp-card-current_work",
+      "key": "current_work",
+      "rows": [],
+      "title": "What's Next",
+      "metadata": {
+        "focusPanelCard": {
+          "key": "current_work",
+          "span": 1,
+          "tier": "work",
+          "density": "compact",
+          "gridRow": 0,
+          "instanceId": "current_work"
+        }
+      }
+    },
+    {
+      "id": "fp-card-children",
+      "key": "children",
+      "rows": [],
+      "title": "Children",
+      "metadata": {
+        "focusPanelCard": {
+          "key": "children",
+          "span": 2,
+          "tier": "reference",
+          "density": "standard",
+          "gridRow": 0,
+          "instanceId": "children"
+        },
+        "focusPanelCardConfig": {
+          "evidenceGroups": [
+            {
+              "id": "identity",
+              "label": "Identity",
+              "owner": "children",
+              "fields": [
+                {
+                  "id": "child_name",
+                  "kind": "field",
+                  "label": "Name",
+                  "concept": "Enrollment → Children → Name",
+                  "editable": true,
+                  "renderer": "text",
+                  "placement": "collapsed"
+                },
+                {
+                  "id": "child_dob",
+                  "kind": "field",
+                  "label": "DOB / Age",
+                  "concept": "Enrollment → Children → DOB",
+                  "editable": true,
+                  "renderer": "text",
+                  "placement": "collapsed"
+                }
+              ],
+              "purpose": "Who is this child?",
+              "showInFocus": true,
+              "showInSummary": true
+            },
+            {
+              "id": "placement",
+              "label": "Placement",
+              "owner": "children",
+              "fields": [
+                {
+                  "id": "program",
+                  "kind": "field",
+                  "label": "Program",
+                  "concept": "Enrollment → Children → Program",
+                  "editable": true,
+                  "renderer": "text",
+                  "placement": "collapsed"
+                },
+                {
+                  "id": "room",
+                  "kind": "field",
+                  "label": "Room",
+                  "concept": "Enrollment → Children → Room",
+                  "editable": true,
+                  "renderer": "text",
+                  "placement": "collapsed"
+                },
+                {
+                  "id": "schedule",
+                  "kind": "field",
+                  "label": "Schedule",
+                  "concept": "Enrollment → Children → Schedule",
+                  "editable": true,
+                  "renderer": "text",
+                  "placement": "collapsed"
+                },
+                {
+                  "id": "teacher",
+                  "kind": "field",
+                  "label": "Teacher",
+                  "concept": "Enrollment → Children → Teacher",
+                  "renderer": "text",
+                  "placement": "collapsed"
+                },
+                {
+                  "id": "desired_start",
+                  "kind": "field",
+                  "label": "Desired Start",
+                  "concept": "Enrollment → Children → Desired Start",
+                  "editable": true,
+                  "renderer": "text",
+                  "placement": "collapsed"
+                }
+              ],
+              "purpose": "Where is this child placed?",
+              "showInFocus": true,
+              "includeInExpanded": true
+            },
+            {
+              "id": "medical",
+              "label": "Medical",
+              "owner": "children",
+              "fields": [],
+              "purpose": "What should we know medically?",
+              "includeInExpanded": true
+            },
+            {
+              "id": "documents",
+              "label": "Documents",
+              "owner": "children",
+              "fields": [],
+              "purpose": "What documents are required?",
+              "includeInExpanded": true
+            },
+            {
+              "id": "readiness",
+              "label": "Readiness",
+              "owner": "children",
+              "fields": [],
+              "purpose": "Is this child ready to enroll?",
+              "includeInExpanded": true
+            },
+            {
+              "id": "notes",
+              "label": "Notes",
+              "owner": "children",
+              "fields": [],
+              "purpose": "Anything else to record?",
+              "includeInExpanded": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fp-card-milestones",
+      "key": "milestones",
+      "rows": [],
+      "title": "Milestones",
+      "metadata": {
+        "focusPanelCard": {
+          "key": "milestones",
+          "span": 1,
+          "tier": "context",
+          "density": "compact",
+          "gridRow": 0,
+          "instanceId": "milestones"
+        }
+      }
+    },
+    {
+      "id": "fp-card-household",
+      "key": "household",
+      "rows": [],
+      "title": "Household",
+      "metadata": {
+        "focusPanelCard": {
+          "key": "household",
+          "span": 2,
+          "tier": "reference",
+          "density": "standard",
+          "gridRow": 0,
+          "instanceId": "household"
+        }
+      }
+    },
+    {
+      "id": "fp-card-billing_preview",
+      "key": "billing_preview",
+      "rows": [],
+      "title": "Billing Preview",
+      "metadata": {
+        "focusPanelCard": {
+          "key": "billing_preview",
+          "span": 1,
+          "tier": "context",
+          "density": "compact",
+          "gridRow": 0,
+          "instanceId": "billing_preview"
+        }
+      }
+    },
+    {
+      "id": "fp-card-scheduling",
+      "key": "scheduling",
+      "rows": [],
+      "title": "Assignments",
+      "metadata": {
+        "focusPanelCard": {
+          "key": "scheduling",
+          "span": 2,
+          "tier": "reference",
+          "density": "compact",
+          "gridRow": 0,
+          "instanceId": "scheduling",
+          "visibility": "linked"
+        }
+      }
+    }
+  ],
+  "entityType": "opportunities",
+  "formatVersion": 1
+}

@@ -22,12 +22,17 @@ import {
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import { WORKFLOW_ASSIST_BOUNDARY_NOTICE } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
 import { ADMIN_WORKFLOWS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    parseFutureRoomCapacityBosIntent,
+    type FutureRoomCapacityBosIntent,
+} from "@/lib/operationalQuestions/bos/parseFutureRoomCapacityIntent";
 
 export type CommandSurfaceRouteKind =
     | "workflow_assist"
     | "task_assist"
     | "config_layout_assist"
     | "job_layout"
+    | "operational_question"
     | "clarify";
 
 export type CommandSurfaceRouteContext = {
@@ -44,6 +49,8 @@ export type CommandSurfaceRouteResult = {
     workflowAssistReadIntent: WorkflowAssistReadIntentV1 | null;
     /** Set when operator asks to create/propose a workflow draft (Cards 4–5). */
     workflowAssistCreateIntent: WorkflowAssistCreateIntentV1 | null;
+    /** Set when `route === "operational_question"`. */
+    operationalQuestionIntent: FutureRoomCapacityBosIntent | null;
 };
 
 export const WORKFLOW_ASSIST_NOTICE_TEXT = WORKFLOW_ASSIST_BOUNDARY_NOTICE;
@@ -135,6 +142,19 @@ export function routeCommandSurface(
 ): CommandSurfaceRouteResult {
     const slots = extractCommandSurfaceSlots(input);
     const taskAssistIntent = parseTaskAssistCommandIntent(input);
+    const operationalQuestionIntent = parseFutureRoomCapacityBosIntent(input);
+
+    if (operationalQuestionIntent.kind !== "none") {
+        return {
+            route: "operational_question",
+            slots,
+            taskAssistIntent,
+            clarifyMessage: null,
+            workflowAssistReadIntent: null,
+            workflowAssistCreateIntent: null,
+            operationalQuestionIntent,
+        };
+    }
 
     if (slots.workflow_like || taskAssistIntent.workflow_blocked) {
         const { workflowAssistReadIntent, workflowAssistCreateIntent } = resolveWorkflowAssistIntents(
@@ -148,6 +168,7 @@ export function routeCommandSurface(
             clarifyMessage: null,
             workflowAssistReadIntent,
             workflowAssistCreateIntent,
+            operationalQuestionIntent: null,
         };
     }
 
@@ -159,6 +180,7 @@ export function routeCommandSurface(
             clarifyMessage: null,
             workflowAssistReadIntent: null,
             workflowAssistCreateIntent: null,
+            operationalQuestionIntent: null,
         };
     }
 
@@ -170,6 +192,7 @@ export function routeCommandSurface(
             clarifyMessage: null,
             workflowAssistReadIntent: null,
             workflowAssistCreateIntent: null,
+            operationalQuestionIntent: null,
         };
     }
 
@@ -181,6 +204,7 @@ export function routeCommandSurface(
             clarifyMessage: null,
             workflowAssistReadIntent: null,
             workflowAssistCreateIntent: null,
+            operationalQuestionIntent: null,
         };
     }
 
@@ -192,6 +216,7 @@ export function routeCommandSurface(
             clarifyMessage: null,
             workflowAssistReadIntent: null,
             workflowAssistCreateIntent: null,
+            operationalQuestionIntent: null,
         };
     }
 
@@ -203,6 +228,7 @@ export function routeCommandSurface(
             clarifyMessage: null,
             workflowAssistReadIntent: null,
             workflowAssistCreateIntent: null,
+            operationalQuestionIntent: null,
         };
     }
 
@@ -213,6 +239,7 @@ export function routeCommandSurface(
         clarifyMessage: CLARIFY_DEFAULT,
         workflowAssistReadIntent: null,
         workflowAssistCreateIntent: null,
+        operationalQuestionIntent: null,
     };
 }
 

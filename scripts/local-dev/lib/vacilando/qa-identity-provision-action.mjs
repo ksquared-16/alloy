@@ -1,0 +1,199 @@
+/**
+ * `environment.provision_qa_identity` — resolution, guarding and execution.
+ *
+ * Registered slot QA identities are managed, non-human accounts in hosted staging: machine
+ * identifiers rather than mailboxes. This action creates exactly the identity the slot registry
+ * already resolves, and nothing else.
+ *
+ * It deliberately does NOT belong to the restore action. Restoration must never quietly create a
+ * user — an account appearing as a side effect of "restore my session" is an account nobody decided
+ * to make. Creating and signing in are separate decisions, so they are separate approvals.
+ *
+ * The request carries a lane id and nothing else. Slot, worktree, port, Supabase project and the
+ * identity itself are resolved here from the canonical registries, exactly as the restore does, so
+ * there is no input through which a caller could aim this at another address.
+ */
+import { redactAuthText } from "./browser-auth.mjs";
+import { getDurableLane } from "./development-lane.mjs";
+import { resolveRestoreTarget } from "./qa-session-restore-action.mjs";
+import { runQaIdentityProvisionSync } from "./qa-identity-provision-runner.mjs";
+import { assertManagedLaneEnvironment } from "./lane-worktree-lifecycle.mjs";
+
+/** Inputs a caller may never supply, mirroring the restore action's boundary. */
+export const FORBIDDEN_PROVISION_INPUTS = Object.freeze([
+    "email", "identity", "expectedIdentity", "supabaseUrl", "supabaseProject", "projectRef",
+    "serviceUrl", "redirectUrl", "redirectTo", "storagePath", "storage",
+    "worktree", "port", "slot", "baseUrl", "token", "password", "serviceRoleKey", "accessToken",
+]);
+
+/** Keys the governed layer injects into every validator; ignored, never honoured. */
+import { managedSlots } from "./managed-slots.mjs";
+
+const FRAMEWORK_INJECTED_INPUTS = Object.freeze([
+    "queryArtifactPath", "databaseTarget", "worktreePath", "worktree_path", "artifactRoot",
+]);
+
+/**
+ * The shape a managed QA identity must have.
+ *
+ * This is the line that keeps the action from ever touching a customer or employee account. It is
+ * checked here AND again inside the trusted child, because a single check in one process is a
+ * single edit away from being removed.
+ */
+/*
+ * THE FOURTH COPY OF "HOW MANY SLOTS EXIST", AND IT SILENTLY DENIED HALF THE
+ * FLEET A QA BROWSER SESSION.
+ *
+ * This read `qa-slot[1-6]`. The host has run twelve slots since ALLOY_MAX_AGENTS
+ * moved, and `managed-slots.mjs` was created precisely because that number was
+ * re-encoded as a literal in ten files — "a Gateway that will not allocate slot
+ * 7, a census that skips it, a lane that cannot bind it". Three of those copies
+ * were consolidated onto the topology owner. This one was missed, so it kept
+ * enforcing six.
+ *
+ * MEASURED ON THE LIVE HOST, which is how it surfaced: slots 1-6 report an
+ * expected identity and slots 7, 8, 9, 11 and 12 report `expected_identity
+ * missing`, blocking `vac browser-auth status` and `restore` for every lane
+ * above six. The host config defines ALLOY_SLOT_1..6_QA_IDENTITY beside
+ * ALLOY_MAX_AGENTS="12", so the configuration is short too — but configuration
+ * is the operator's to extend, and this pattern would have REJECTED the
+ * extension: `qa-slot7-…` and `qa-slot12-…` both fail it. Fixing the config
+ * alone could not have worked while this stood.
+ *
+ * The bound now comes from the topology owner, so it cannot disagree with how
+ * many slots the host actually has. What it still refuses is unchanged and is
+ * the point of the check: anything that is not a managed `qa-slot<N>-` alias
+ * inside the current range — a customer account, an employee account, a slot
+ * that does not exist.
+ */
+export function managedQaIdentityPattern(env = process.env) {
+  const slots = managedSlots(env).join("|");
+  return new RegExp(`^qa-slot(?:${slots})-[a-z0-9-]+@[a-z0-9.-]+$`, "i");
+}
+
+/** Is this a managed QA alias for a slot this host actually has? */
+export function isManagedQaIdentity(identity, env = process.env) {
+  return managedQaIdentityPattern(env).test(String(identity || ""));
+}
+
+/**
+ * Retained for callers that want the pattern itself. Built from the topology at
+ * import time; `isManagedQaIdentity` re-reads it per call and is what the
+ * validators use, so a topology change does not need a restart to take effect.
+ */
+export const MANAGED_QA_IDENTITY = managedQaIdentityPattern();
+
+export function validateProvisionQaIdentityInputs(rawInputs = {}) {
+    const inputs = Object.fromEntries(
+        Object.entries(rawInputs || {}).filter(([k]) => !FRAMEWORK_INJECTED_INPUTS.includes(k)),
+    );
+    const supplied = Object.keys(inputs);
+    const offending = supplied.filter((k) => FORBIDDEN_PROVISION_INPUTS.includes(k));
+    if (offending.length) {
+        return { ok: false, error: "caller_supplied_forbidden_input", detail: offending.join(", ") };
+    }
+    const laneId = inputs.laneId || inputs.lane_id || null;
+    if (!laneId || !/^lane_[A-Za-z0-9]+$/.test(String(laneId))) {
+        return { ok: false, error: "lane_id_required" };
+    }
+    const unknown = supplied.filter((k) => !["laneId", "lane_id"].includes(k));
+    if (unknown.length) return { ok: false, error: "unexpected_input", detail: unknown.join(", ") };
+    // MANAGED REGISTRATION IS A PRECONDITION, NOT A RUNTIME SURPRISE.
+    //
+    // This action resolves slot, port, worktree and QA identity from the
+    // registries at EXECUTION time. Accepting it for a lane whose worktree is
+    // unregistered creates a governed action that can never execute — an
+    // operator card asking approval for something impossible.
+    // gar_97d071ef22861f was exactly that: filed against Slot 1 after Slot 1's
+    // registration had been archived by a capacity release.
+    //
+    // The refusal names the missing prerequisite, so the answer is "register
+    // the worktree", not "denied".
+    const managed = assertManagedLaneEnvironment(String(laneId));
+    if (!managed.ok) {
+        return { ok: false, error: managed.error, detail: managed.detail, lane_worktree: managed.resolution || null };
+    }
+    return { ok: true, normalized: { laneId: String(laneId) } };
+}
+
+/**
+ * Execute an APPROVED provisioning.
+ *
+ * Synchronous because the governed path is: `processGovernedAction` calls its executor without
+ * awaiting, and the trusted-host actions beside this one work through `spawnSync`. Without a grant
+ * that authorizes exactly this action, the trusted child is never spawned, so a pending or denied
+ * request cannot reach Supabase at all.
+ */
+export function executeProvisionQaIdentitySync({
+    action,
+    grant,
+    grantCheck,
+    nowMs = Date.now(),
+    provision = runQaIdentityProvisionSync,
+    getLane = getDurableLane,
+} = {}) {
+    if (!grant) return safeProvisionFailure({ code: "grant_missing" });
+    const authorized = grantCheck ? grantCheck(grant, action, { nowMs }) : { ok: true };
+    if (!authorized.ok) return safeProvisionFailure({ code: authorized.error || "grant_rejected" });
+
+    const inputCheck = validateProvisionQaIdentityInputs(action?.inputs || {});
+    if (!inputCheck.ok) return safeProvisionFailure({ code: inputCheck.error, detail: inputCheck.detail });
+
+    const resolved = resolveRestoreTarget(inputCheck.normalized.laneId, { getLane });
+    if (!resolved.ok) return safeProvisionFailure({ code: resolved.error, detail: resolved.detail });
+    const validated = resolved.validated;
+
+    // Second, independent check on the identity SHAPE. The registry resolved it, but a registry can
+    // be misconfigured, and this action must never be the thing that creates a customer account.
+    if (!isManagedQaIdentity(validated.expected_identity)) {
+        return safeProvisionFailure({
+            code: "identity_not_managed_qa_shape",
+            lane: validated.lane_id,
+            slot: validated.slot,
+        });
+    }
+
+    const out = provision(validated);
+    if (!out.ok) {
+        return safeProvisionFailure({
+            code: out.error, detail: out.detail, lane: validated.lane_id, slot: validated.slot,
+            identity: validated.expected_identity,
+        });
+    }
+    return {
+        ok: true,
+        // `already_exists` is a success, not a no-op failure: the desired state is reached either way.
+        status: out.result === "already_exists" ? "already_exists" : "provisioned",
+        lane_id: validated.lane_id,
+        slot: validated.slot,
+        registered_identity: validated.expected_identity,
+        mutated: out.mutated === true,
+        occurrences: out.occurrences ?? null,
+        directory_entries_scanned: out.directory_entries_scanned ?? null,
+        email_sent: false,
+        password_exposed: false,
+        managed_by: "alloy",
+        // Provisioning creates no session, so it can never assert verification.
+        verified: false,
+        provisioned_at: new Date(nowMs).toISOString(),
+        failure_code: null,
+    };
+}
+
+/** The only failure shape. No field here can carry a credential. */
+export function safeProvisionFailure({ code, detail = null, lane = null, slot = null, identity = null }) {
+    return {
+        ok: false,
+        status: "failed",
+        lane_id: lane,
+        slot,
+        registered_identity: identity,
+        mutated: false,
+        email_sent: false,
+        password_exposed: false,
+        verified: false,
+        provisioned_at: null,
+        failure_code: String(code || "unknown").slice(0, 64),
+        failure_detail: detail == null ? null : redactAuthText(String(detail)).slice(0, 120),
+    };
+}

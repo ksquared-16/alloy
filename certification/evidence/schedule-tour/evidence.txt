@@ -1,0 +1,1 @@
+T0 published Lead rules: reached_family_to_tour,interested_to_tour,not_interested_close,left_message_remain,needs_follow_up_remain

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { availableMatchSignals, deferredRecordResolver, type RecordResolutionSourceContext } from "@/lib/pos/recordResolution/recordResolverSeam";
+import { availableMatchSignals } from "@/lib/pos/recordResolution/recordResolverSeam";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
 
 function person(opts: Partial<IntakePersonCandidate>): IntakePersonCandidate {
@@ -12,6 +12,7 @@ function person(opts: Partial<IntakePersonCandidate>): IntakePersonCandidate {
         phones: opts.phones ?? [],
         dob: opts.dob ?? null,
         age_years: opts.age_years ?? null,
+        calculated_age: opts.calculated_age ?? null,
         program_interest: opts.program_interest ?? null,
         source_fact_ids: opts.source_fact_ids ?? [],
         confidence: opts.confidence ?? "high",
@@ -22,18 +23,22 @@ function person(opts: Partial<IntakePersonCandidate>): IntakePersonCandidate {
 function household(parents: IntakePersonCandidate[], children: IntakePersonCandidate[]): IntakeHouseholdCandidate {
     return {
         household_id: "h1",
+        parents_guardians: parents,
         parents,
         children,
+        household_contacts: [],
         address: null,
         location: null,
         source: null,
         notes: null,
+        program_interest: null,
+        start_date: null,
+        relationships: [],
         unassigned_fact_ids: [],
+        unmapped_facts: [],
         review_warnings: [],
     };
 }
-
-const ctx: RecordResolutionSourceContext = { org_id: "org1", source_kind: "form_packet_session", source_id: "sess1" };
 
 describe("availableMatchSignals", () => {
     it("detects email, phone, and child name+dob signals (presence only, no matching)", () => {
@@ -47,32 +52,5 @@ describe("availableMatchSignals", () => {
     it("returns no signals when identifiers are absent or blank", () => {
         const cand = household([person({ emails: ["  "], phones: [] })], [person({ role: "child", first_name: "Ada", dob: null })]);
         expect(availableMatchSignals(cand)).toEqual([]);
-    });
-});
-
-describe("deferredRecordResolver", () => {
-    it("never matches; always defers and requires review", async () => {
-        const cand = household([person({ emails: ["a@b.com"] })], []);
-        const proposal = await deferredRecordResolver.resolve(cand, ctx);
-        expect(proposal.status).toBe("deferred");
-        expect(proposal.matched_on).toEqual([]);
-        expect(proposal.review_required).toBe(true);
-        expect(proposal.notes).toContain("parent_email");
-    });
-
-    it("passes through known launch-context FKs without performing matching", async () => {
-        const cand = household([], []);
-        const proposal = await deferredRecordResolver.resolve(cand, {
-            ...ctx,
-            launch_context: { opportunity_id: "opp-9", customer_id: "cust-9" },
-        });
-        expect(proposal.lead_id).toBe("opp-9");
-        expect(proposal.household_id).toBe("cust-9");
-        expect(proposal.status).toBe("deferred");
-    });
-
-    it("notes absence of signals when the candidate carries none", async () => {
-        const proposal = await deferredRecordResolver.resolve(household([], []), ctx);
-        expect(proposal.notes).toContain("no match signals");
     });
 });

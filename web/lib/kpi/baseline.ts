@@ -1,5 +1,5 @@
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
-import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
+import type { WorkspaceRootMetrics } from "@/lib/workspace/workspaceRootMetrics";
 import {
     buildWorkspaceRootOrgOpportunityKpis,
     type WorkspaceGrowthDeptSnapshot,

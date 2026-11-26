@@ -1,63 +1,178 @@
 "use client";
 
 /**
- * Communications KPI band — compact, glanceable status strip.
+ * Communications operational health — Work + Studio contextual metrics (Doctrine V3).
  *
- * Refactored (Work/Studio parity) to render the SHARED `CompactKpiStrip` with platform
- * KPI color semantics, so Communications and Processing read as siblings. Data is
- * unchanged: real inbox metrics + derived template/announcement KPIs from already-loaded
- * workspace data. No new fetches, no fabricated counts.
+ * Data-only adapter: derives counts from workspace KPI context and renders
+ * canonical `WorkspaceOperationalHealth`. No layout or trend styling lives here.
  */
 
-import CompactKpiStrip, { type CompactKpiItem } from "@/components/workspace/CompactKpiStrip";
+import WorkspaceOperationalHealth, {
+    type WorkspaceOperationalHealthItem,
+    type WorkspaceOperationalHealthTrend,
+} from "@/components/workspace/WorkspaceOperationalHealth";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import { useCommunicationsWorkspaceKpi } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
-import { NEEDS_REVIEW_STATUS_LABEL } from "@/lib/communications/v2/commandCenterViewModel";
 import {
-    computeAnnouncementWorkspaceKpis,
-    computeTemplateWorkspaceKpis,
-} from "@/lib/communications/v2/communicationsWorkspaceKpiModel";
+    computeAnnouncementOperationalHealth,
+    computeInboxOperationalHealth,
+    computeTemplateOperationalHealth,
+} from "@/lib/communications/v2/communicationsOperationalHealthModel";
+
+/** Static trend placeholders until historical comparison APIs exist. */
+const PLACEHOLDER_TREND: WorkspaceOperationalHealthTrend = { direction: "none", label: "—" };
+
+const INBOX_TRENDS = {
+    needs_reply: PLACEHOLDER_TREND,
+    unread: PLACEHOLDER_TREND,
+    scheduled: PLACEHOLDER_TREND,
+    needs_review: { direction: "none" as const, label: "—", tone: "ember" as const },
+};
+
+const ANNOUNCEMENT_TRENDS = {
+    draft: PLACEHOLDER_TREND,
+    scheduled: PLACEHOLDER_TREND,
+    sent_today: { direction: "none" as const, label: "—", tone: "gold" as const },
+    failed: { direction: "none" as const, label: "—", tone: "ember" as const },
+};
+
+const TEMPLATE_TRENDS = {
+    active: PLACEHOLDER_TREND,
+    draft: PLACEHOLDER_TREND,
+    needs_review: { direction: "none" as const, label: "—", tone: "ember" as const },
+    recently_updated: { direction: "none" as const, label: "—", tone: "gold" as const },
+};
+
+const SECTION_EYEBROW: Partial<Record<CommunicationsModalTab, string>> = {
+    inbox: "Inbox",
+    announcements: "Announcements",
+    scheduled: "Scheduled",
+    templates: "Templates",
+};
 
 export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeTab: CommunicationsModalTab }) {
     const { inbox, templates, announcements } = useCommunicationsWorkspaceKpi();
+
+    const announcementHealth = computeAnnouncementOperationalHealth(announcements.rows);
+    const inboxHealth = computeInboxOperationalHealth(inbox.metrics, announcementHealth.scheduled);
+    const templateHealth = computeTemplateOperationalHealth(templates.rows);
 
     const inboxLoading = inbox.loading && inbox.metrics === null;
     const templatesLoading = !templates.listResolved;
     const announcementsLoading = !announcements.listResolved;
 
-    let items: CompactKpiItem[] = [];
+    let items: WorkspaceOperationalHealthItem[] = [];
     let loading = false;
+    const eyebrow = SECTION_EYEBROW[activeTab];
 
     if (activeTab === "inbox") {
-        const m = inbox.metrics;
         loading = inboxLoading;
         items = [
-            { key: "needs_reply", label: "Needs reply", value: String(m?.requiresResponse ?? 0), state: "pending" },
-            { key: "overdue", label: "Overdue", value: String(m?.slaAtRisk ?? 0), state: "attention" },
-            { key: "unread", label: "Unread", value: String(m?.unread ?? 0), state: "attention" },
-            { key: "needs_review", label: NEEDS_REVIEW_STATUS_LABEL, value: String(m?.unclassified ?? 0), state: "pending" },
+            {
+                key: "needs_reply",
+                label: "Needs Reply",
+                value: String(inboxHealth.needsReply),
+                tone: "ember",
+                trend: INBOX_TRENDS.needs_reply,
+            },
+            {
+                key: "unread",
+                label: "Unread",
+                value: String(inboxHealth.unread),
+                tone: "gold",
+                trend: INBOX_TRENDS.unread,
+            },
+            {
+                key: "scheduled",
+                label: "Scheduled",
+                value: String(inboxHealth.scheduled),
+                tone: "pine",
+                trend: INBOX_TRENDS.scheduled,
+            },
+            {
+                key: "needs_review",
+                label: "Needs Review",
+                value: String(inboxHealth.needsReview),
+                tone: "ember",
+                trend: INBOX_TRENDS.needs_review,
+            },
         ];
-    } else if (activeTab === "templates") {
-        const k = computeTemplateWorkspaceKpis(templates.rows);
-        loading = templatesLoading;
-        items = [
-            { key: "active", label: "Active", value: String(k.active), state: "ready" },
-            { key: "draft", label: "Draft", value: String(k.draft), state: "pending" },
-            { key: "categories", label: "Categories", value: String(k.categories), state: "neutral" },
-            { key: "last_updated", label: "Last updated", value: k.lastUpdatedLabel, state: "done" },
-        ];
-    } else if (activeTab === "announcements") {
-        const k = computeAnnouncementWorkspaceKpis(announcements.rows);
+    } else if (activeTab === "announcements" || activeTab === "scheduled") {
         loading = announcementsLoading;
         items = [
-            { key: "draft", label: "Draft", value: String(k.draft), state: "pending" },
-            { key: "scheduled", label: "Scheduled", value: String(k.scheduled), state: "pending" },
-            { key: "active", label: "Active", value: String(k.active), state: "ready" },
-            { key: "sent_recently", label: "Sent (7d)", value: String(k.sentRecently), state: "done" },
+            {
+                key: "draft",
+                label: "Draft",
+                value: String(announcementHealth.draft),
+                tone: "midnight",
+                trend: ANNOUNCEMENT_TRENDS.draft,
+            },
+            {
+                key: "scheduled",
+                label: "Scheduled",
+                value: String(announcementHealth.scheduled),
+                tone: "pine",
+                trend: ANNOUNCEMENT_TRENDS.scheduled,
+            },
+            {
+                key: "sent_today",
+                label: "Sent Today",
+                value: String(announcementHealth.sentToday),
+                tone: "gold",
+                trend: ANNOUNCEMENT_TRENDS.sent_today,
+            },
+            {
+                key: "failed",
+                label: "Failed",
+                value: String(announcementHealth.failed),
+                tone: "ember",
+                trend: ANNOUNCEMENT_TRENDS.failed,
+            },
+        ];
+    } else if (activeTab === "templates") {
+        loading = templatesLoading;
+        items = [
+            {
+                key: "active",
+                label: "Active",
+                value: String(templateHealth.active),
+                tone: "pine",
+                trend: TEMPLATE_TRENDS.active,
+            },
+            {
+                key: "draft",
+                label: "Draft",
+                value: String(templateHealth.draft),
+                tone: "midnight",
+                trend: TEMPLATE_TRENDS.draft,
+            },
+            {
+                key: "needs_review",
+                label: "Needs Review",
+                value: String(templateHealth.needsReview),
+                tone: "ember",
+                trend: TEMPLATE_TRENDS.needs_review,
+            },
+            {
+                key: "recently_updated",
+                label: "Recently Updated",
+                value: String(templateHealth.recentlyUpdated),
+                tone: "gold",
+                trend: TEMPLATE_TRENDS.recently_updated,
+            },
         ];
     }
 
-    if (items.length === 0) return null;
+    if (items.length === 0 || !eyebrow) return null;
 
-    return <CompactKpiStrip items={items} loading={loading} ariaLabel="Communications status" data-comms-workspace-kpi-band="true" />;
+    return (
+        <WorkspaceOperationalHealth
+            eyebrow={eyebrow}
+            items={items}
+            loading={loading}
+            ariaLabel={`${eyebrow} operational health`}
+            className="w-full"
+            data-testid="comms-workspace-health-band"
+        />
+    );
 }

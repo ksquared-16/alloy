@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — System 5C — Card Content Templates & Field Inclusion Doctrine
 
 **Revision:** 1  

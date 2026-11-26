@@ -8,6 +8,7 @@ import {
     type LifecycleBuilderProcessRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
+import { resolveProcessModel } from "@/lib/lifecycle/processModelV1";
 import { isLifecycleBuilderOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderOwned";
 import type {
     LifecycleCatalogEntry,
@@ -73,6 +74,7 @@ export function catalogEntriesFromDepartmentRows(
                 department_name: dept.name,
                 process_id: process.id,
                 process_key: process.key,
+                process_model: resolveProcessModel(process),
                 lifecycle_name,
                 source,
                 stage_count,

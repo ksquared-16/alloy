@@ -1,6 +1,9 @@
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { isDomainProjectionHostWorkUnit } from "@/lib/businessProcesses/projections/domainProjectionHost";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
+import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import { sortLifecycleDeptWorkUnits } from "@/lib/lifecycle/sortLifecycleDeptWorkUnits";
 
 export type DeptPipelineWorkUnitPick = {
     id: string;
@@ -21,6 +24,7 @@ export function pickDeptPipelineWorkUnit(
         queue_definition?: unknown;
         department_id?: string | null;
         metadata?: unknown;
+        is_active?: boolean | null;
     }>,
     departmentId: string
 ): DeptPipelineWorkUnitPick | null {
@@ -33,6 +37,11 @@ export function pickDeptPipelineWorkUnit(
     });
 
     for (const w of ordered) {
+        // An inactive/archived unit must never be the pipeline host: the queue route refuses to
+        // serve rows for inactive units (is_active=true filter), so picking one produces a 404 in the
+        // request graph (e.g. the deprecated "Qualification" enrollment_pipeline unit still carrying a
+        // `pipeline_total` lane). Skip explicitly-inactive rows; rows with no is_active are unchanged.
+        if (w.is_active === false) continue;
         const key = String(w.key ?? "").trim().toLowerCase();
         if (key === "needs_attention") continue;
         const wuDept = String(w.department_id ?? "").trim();
@@ -53,4 +62,46 @@ export function pickDeptPipelineWorkUnit(
         };
     }
     return null;
+}
+
+/**
+ * Host work unit for a department's configured Work Views: the pipeline work unit when one
+ * exists, else the first lifecycle-stage work unit. Shared by the workspace nav builder
+ * (`workViewNavEntriesForDepartment`) and the work-view slug resolver so a configured Work
+ * View resolves to the same host everywhere.
+ */
+export function pickDeptWorkViewHostWorkUnit<
+    T extends {
+        id: string;
+        key?: string | null;
+        queue_definition?: unknown;
+        department_id?: string | null;
+        is_active?: boolean | null;
+    },
+>(rows: T[], departmentId: string): T | null {
+    const forDept = rows.filter(
+        (row) => String(row.department_id ?? "").trim() === departmentId && row.is_active !== false,
+    );
+    const pipeline = pickDeptPipelineWorkUnit(forDept, departmentId);
+    if (pipeline) {
+        const pipelineRow = forDept.find((row) => row.id === pipeline.id) ?? null;
+        if (pipelineRow) return pipelineRow;
+    }
+    // BP V2 S2 — a domain-projection department's only host. It has no pipeline and no stage units, so
+    // the two branches above can never pick it, and nothing else can be its host.
+    const projectionHost = forDept.find((row) => isDomainProjectionHostWorkUnit(row));
+    if (projectionHost) return projectionHost;
+    const lifecycleHosts = sortLifecycleDeptWorkUnits(
+        forDept
+            .filter((row) => isLifecycleStageWorkUnitKey(String(row.key ?? "")))
+            .map((row) => ({
+                id: row.id,
+                name: (row as { name?: string | null }).name ?? null,
+                key: row.key ?? null,
+                sort_order: (row as { sort_order?: number | null }).sort_order ?? null,
+            })),
+    );
+    if (!lifecycleHosts.length) return null;
+    const hostId = lifecycleHosts[0]!.id;
+    return forDept.find((row) => row.id === hostId) ?? null;
 }

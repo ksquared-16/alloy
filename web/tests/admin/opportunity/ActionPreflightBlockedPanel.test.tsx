@@ -21,7 +21,7 @@ describe("ActionPreflightBlockedPanel", () => {
                             source: "action",
                         },
                         {
-                            field_key: "desired_schedule_type",
+                            field_key: "schedule_type",
                             label: "Schedule",
                             reason: "Schedule is required before enrollment approval.",
                             source: "completion",
@@ -45,7 +45,7 @@ describe("ActionPreflightBlockedPanel", () => {
                             {
                                 entity_type: "opportunity",
                                 entity_id: "opp-1",
-                                field_key: "desired_schedule_type",
+                                field_key: "schedule_type",
                                 label: "Schedule",
                                 requirement_type: "required_before_action",
                                 blocking_level: "hard_block",

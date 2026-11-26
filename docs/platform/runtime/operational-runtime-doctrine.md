@@ -1,10 +1,17 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Runtime Doctrine
 
-> **Implemented — Runtime Simplification sprint CLOSED (June 2026).** These laws are now realized in code for `/workspace` and `/workspace/work-unit/*`: reveal owned by the server Route VM, switching as navigation, context/perspective/queue ownership in canonical runtime modules. The canonical sprint record (completed/remaining domains, runtime score, lessons, **runtime principles**) is [`work-unit-runtime-simplification-closeout.md`](./work-unit-runtime-simplification-closeout.md). Future runtime work is ownership-driven and incremental — treat the runtime as infrastructure, not an area to rediscover.
+> **Implemented — Runtime Simplification sprint CLOSED (June 2026).** These laws are now realized in code for `/workspace` and `/workspace/work-unit/*`: reveal owned by the server Route VM, switching as navigation, context/perspective/queue ownership in canonical runtime modules. The canonical sprint record (completed/remaining domains, runtime score, lessons, **runtime principles**) is `work-unit-runtime-simplification-closeout.md` (historical: `../../sprints/completed/work-unit-runtime-simplification-closeout.md`). Future runtime work is ownership-driven and incremental — treat the runtime as infrastructure, not an area to rediscover.
 
 **Status:** Canonical doctrine (Track 2, Phase 1 — June 2026). **Doctrine lock only; no runtime code changes in this phase.**
 **Scope:** Primary operational routes — `/workspace`, `/workspace/work-unit/:slug` (+ `:recordId`), and the navigations between them.
-**Companion evidence:** [`../../sprints/06_2026/operational-runtime-doctrine-phase-1.md`](../../sprints/06_2026/operational-runtime-doctrine-phase-1.md) (current-behavior map + first implementation plan).
+**Companion evidence:** `../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md` (historical: `../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md`) (current-behavior map + first implementation plan).
 **Builds on (does not replace):** `docs/system/adminv2-runtime-performance-doctrine.md` (locked reveal/queue/drawer gates), `docs/platform/operator/surface-view-model-composition.md` (Surface VM law).
 
 > **North star.** Alloy is an **operating system**, not a web app assembling pages. The operator must **never visibly watch Alloy build itself**. The only acceptable transition for a primary operational route is: **BOS transition / intentional OS reveal → the complete final surface appears once.** The bar is not "data eventually loads" — it is "the operator never notices loading."
@@ -33,7 +40,16 @@ A fixed-dimension **snapshot/default slot** that patches values in place is **no
 Every visible region has **exactly one canonical owner**. No competing: legacy fallback UI · duplicate drawer owner · duplicate queue owner · duplicate KPI owner · duplicate route shell. Legacy/fallback owners are quarantined behind flag-off or deleted — never reachable on the canonical path.
 
 ### 5. One First-Paint Payload
-Everything required for the first reveal must be **ready together** before commit: workspace context · work-unit context · KPIs · queue rows · lane/section metadata · banner/context data · command/action frame. Secondary fetches are allowed **only** for non-primary / deferred panels (e.g. Focus Panel card body, below-fold rails, right-rail workflow KPIs).
+Everything required for the first reveal must be **ready together** before commit: workspace context · work-unit context · KPIs · queue rows · lane/section metadata · banner/context data · command/action frame. Secondary fetches are allowed **only** for non-primary / deferred panels (below-fold rails, right-rail workflow KPI *values*, deeper record detail).
+
+> **Updated 2026-07-19 (Runtime V1 freeze).** The Focus Panel **Summary** is no longer a deferred
+> fetch — it commits WITH the surface. The provisioning answer carries the commit-critical Focus Panel
+> projections (`focusPanelStageWork`, `focusPanelSubjectSnapshot`, the published `focusPanelSummaryDoc`,
+> and `actionsProjection`), and the commit-critical card registry
+> (`focusPanelCommitCriticalCards.ts`) makes Current Work / Household / Children / Readiness ready at
+> commit. Settlement (the drawer VM) **enriches** the committed summary and fills the workspace/detail
+> drill; it never builds the summary. So "Focus Panel card body" is removed from the deferred example:
+> the Summary is first-paint; only the expanded workspace/detail settles.
 
 ### 6. Continuous Navigation
 Navigation is **continuity, not page replacement**. `/workspace → work-unit` and `work-unit → /workspace` must **not** reveal an intermediate skeleton or loading shell, and must **not** clear the current surface before the next surface is ready. Warm caches and stable chrome carry the operator across the boundary.
@@ -56,7 +72,7 @@ The acceptance bar is **perceptual**: the operator never notices loading, constr
 
 - These laws **extend** the locked `adminv2-runtime-performance-doctrine.md`; where that doctrine specifies reveal gates, cache keys, request-ownership, and known-empty semantics, those remain the protected mechanism. This doctrine adds the **product-feel acceptance bar** the gates must satisfy on the four primary flows.
 - A change is **doctrine-conformant** only if, on both cold and warm paths, the surface reveals once (Law 1), chrome is stable (Law 2), no construction is visible (Law 3), each region has one owner (Law 4), the first-paint bundle is complete (Law 5), navigation is seamless (Law 6), intent is warmed (Law 7), and saves are continuous (Law 8).
-- **Settings surfaces are a later extension**, not in this phase's scope; the same laws will apply when a `SettingsSurfaceViewModel` is adopted.
+- **Configuration surfaces are a later extension**, not in this phase's scope; the same laws will apply when a `SettingsSurfaceViewModel` is adopted.
 
 ---
 

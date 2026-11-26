@@ -1,0 +1,54 @@
+{
+  "hasOwnerLink": true,
+  "hasOldOpenChildrenAffordance": false,
+  "viewDetailsInFooter": true,
+  "actionButtonWidths": [
+    110,
+    112,
+    112,
+    112
+  ],
+  "actionButtonsEqual": true,
+  "summaryButtons": [
+    "Message",
+    "Schedule tour",
+    "Send form",
+    "Record outcome"
+  ],
+  "focusedButtons": [
+    "Message",
+    "Schedule tour",
+    "Send form",
+    "Record outcome"
+  ],
+  "focusedMatchesSummary": true,
+  "tour": {
+    "clickToAvailabilityMs": 208,
+    "bootstrapLoaderShown": false
+  },
+  "message": {
+    "clickToComposerMs": 90,
+    "loadingConversationShown": false
+  },
+  "composer": {
+    "hasSendLater": true,
+    "hasBosAssist": true,
+    "hasSend": true,
+    "sendLaterWithinComposer": true,
+    "bosWithinComposer": false
+  },
+  "tourEvents": [
+    "+23493ms tour.prefetch.start miss",
+    "+26588ms tour.prefetch.reuse hit",
+    "+28219ms tour.prefetch.reuse hit",
+    "+28856ms tour.prefetch.ready 24 slots · 0 bookings",
+    "+30868ms tour.prefetch.reuse hit",
+    "+30869ms tour.prefetch.reuse hit",
+    "+30918ms tour.peek value ready",
+    "+30920ms tour.peek value ready",
+    "+30922ms tour.peek value ready",
+    "+30930ms tour.peek value ready",
+    "+30954ms tour.peek value ready",
+    "+30957ms tour.peek value ready"
+  ]
+}

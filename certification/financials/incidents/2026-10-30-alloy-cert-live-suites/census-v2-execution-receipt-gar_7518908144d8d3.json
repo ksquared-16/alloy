@@ -1,0 +1,97 @@
+{
+  "schema": "financials.alloy_cert_incident_census_receipt.v3",
+  "request_id": "gar_7518908144d8d3",
+  "trusted_host_action_id": "tha_4d389b4074b7b0",
+  "run_id": "erun2_88e78dcc85a97799",
+  "lane_id": "lane_b77b3cbb5840",
+  "filed_by_toolkit": {
+    "root": "/Users/vacilando/.local/share/alloy/toolkit/eeaa6dac6860",
+    "version": "20261031-eeaa6dac6860"
+  },
+  "gateway_runtime": "eeaa6dac6860",
+  "candidate": "061e164b558cfa0755c41275b38886c549298ba6",
+  "census_id": "financials_alloy_cert_incident_20261030_v2",
+  "operator_approval": {
+    "decision": "approved",
+    "actor": "operator",
+    "at": "2026-10-31T12:55:03.421Z"
+  },
+  "grant_id": "grnt_790405eaabb34019",
+  "decision_timing": {
+    "submitted_at": "2026-10-31T12:55:03.639Z",
+    "accepted_at": "2026-10-31T12:55:03.421Z",
+    "authorization_persisted_at": "2026-10-31T12:55:03.451Z",
+    "execution_started_at": "2026-10-31T12:55:04.130Z",
+    "execution_settled_at": "2026-10-31T12:55:05.923Z"
+  },
+  "terminal_status": "complete",
+  "executed": true,
+  "attempts": 1,
+  "query": {
+    "file_sha256": "dd5dd815e55de1483774b27d0303c4fd58294b4aacc100a03b2d3c39bacea421",
+    "executed_sql_sha256": "31ce283d585498b6fd4cbd9aede2c33dbba32c584d7a79da28e53e45a8e4ab45",
+    "statements": 27,
+    "answered": 27,
+    "complete": true,
+    "unanswered": []
+  },
+  "target": {
+    "database_target": "alloy_cert",
+    "target_id": "alloy-cert@127.0.0.1:54422",
+    "target_class": "shared_local_certification",
+    "port": 54422,
+    "census_id": "financials_alloy_cert_incident_20261030_v2"
+  },
+  "connection_attestation": {
+    "target_digest": "9473d6136090d499169f382e2729d9291152fe2f215ae303e7e81c90a3484b99",
+    "resource": {
+      "compose_project": "alloy-cert",
+      "published_port": 54422
+    },
+    "transaction": "read_only_rollback"
+  },
+  "permitted_by": {
+    "request_id": "tha_4d389b4074b7b0",
+    "census_id": "financials_alloy_cert_incident_20261030_v2",
+    "query_hash": "31ce283d585498b6fd4cbd9aede2c33dbba32c584d7a79da28e53e45a8e4ab45",
+    "target_digest": "9473d6136090d499169f382e2729d9291152fe2f215ae303e7e81c90a3484b99"
+  },
+  "hold_effect": "none",
+  "census_run_at": "2026-10-31T12:55:03.782Z",
+  "counts": {
+    "q01_tuition_agreement_before": 0,
+    "q02_tuition_agreement_during": 0,
+    "q03_tuition_agreement_after": 0,
+    "q04_tuition_terms_before": 0,
+    "q05_tuition_terms_during": 0,
+    "q06_tuition_terms_after": 0,
+    "q07_tuition_events_before": 0,
+    "q08_tuition_events_during": 0,
+    "q09_tuition_events_after": 0,
+    "q10_tuition_obligations_before": 0,
+    "q11_tuition_obligations_during": 0,
+    "q12_tuition_obligations_after": 0,
+    "q13_tuition_charges_before": 63,
+    "q14_tuition_charges_during": 0,
+    "q15_tuition_charges_after": 0,
+    "q16_tuition_charges_nondraft_any_time": 63,
+    "q17_spine_agreement_before": 1,
+    "q18_spine_agreement_any_time": 1,
+    "q19_spine_household_any_time": 1,
+    "q20_spine_charges_before": 7614,
+    "q21_spine_charges_during": 0,
+    "q22_spine_charges_after": 0,
+    "q23_spine_correction_children_during": 0,
+    "q24_spine_allocations_during": 0,
+    "q25_spine_household_payments_during": 0,
+    "q26_spine_household_payments_after": 0,
+    "q27_spine_household_periods_during": 0
+  },
+  "provenance_limit": "counts bound what is present at census time; they cannot prove historical deletion — that needs a separate snapshot or prior baseline",
+  "attestation_boundary": "final psql configuration identity + docker compose project publishing 54422; not cryptographic server authentication",
+  "prior_attempts_preserved": [
+    "gar_ed727e30c6854a (failed, executed=false, census-v2-execution-receipt.json)",
+    "erun2_da0d4c8405f6235c (stopped pre-DB, census-v2-preflight-stop-identity-gap.json)"
+  ],
+  "live_hold": "Financials LIVE HOLD and shared alloy-cert hold remain; nothing cleaned, written or lifted"
+}

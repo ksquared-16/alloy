@@ -18,7 +18,7 @@ export { formatRequirementValidationSummary } from "@/lib/completion/requirement
 /**
  * Completion Guardrails Foundation — primary evaluator (Sprint B).
  *
- * Bootstrap code rules only; not admin-configured. See docs/sprints/05_2026/required_fields_completion_guardrails_policy.md.
+ * Bootstrap code rules only; not admin-configured. See docs/sprints/archive/05_2026/required_fields_completion_guardrails_policy.md.
  */
 export function evaluateCompletionRequirements(
     ctx: CompletionEvaluationContext
@@ -77,20 +77,34 @@ function extractRelatedFromRecord(record: Record<string, unknown>) {
     const inquiry_children = Array.isArray(inquiryRaw)
         ? inquiryRaw
               .filter((x): x is Record<string, unknown> => x != null && typeof x === "object" && !Array.isArray(x))
+              // Spread first: re-listing fields here silently dropped every child-profile-grain
+              // value (dob, gender, custom_fields, and the customer_member_id they resolve
+              // through), so rules bound to those read null on every record and reported captured
+              // data as missing. Normalizing the typed keys after the spread keeps the shape
+              // without the loss.
               .map((row) => ({
+                  ...row,
                   id: typeof row.id === "string" ? row.id : undefined,
                   person_id: typeof row.person_id === "string" ? row.person_id : null,
+                  customer_member_id:
+                      typeof row.customer_member_id === "string" ? row.customer_member_id : null,
                   first_name: typeof row.first_name === "string" ? row.first_name : null,
                   last_name: typeof row.last_name === "string" ? row.last_name : null,
+                  dob:
+                      typeof row.dob === "string"
+                          ? row.dob
+                          : typeof row.date_of_birth === "string"
+                            ? row.date_of_birth
+                            : null,
                   location_id: typeof row.location_id === "string" ? row.location_id : null,
-                  desired_program_type:
-                      typeof row.desired_program_type === "string" ? row.desired_program_type : null,
+                  program_category_id:
+                      typeof row.program_category_id === "string" ? row.program_category_id : null,
                   program_room_cohort_key:
                       typeof row.program_room_cohort_key === "string" ? row.program_room_cohort_key : null,
-                  desired_schedule_type:
-                      typeof row.desired_schedule_type === "string" ? row.desired_schedule_type : null,
-                  desired_start_date:
-                      typeof row.desired_start_date === "string" ? row.desired_start_date : null,
+                  schedule_type:
+                      typeof row.schedule_type === "string" ? row.schedule_type : null,
+                  start_date:
+                      typeof row.start_date === "string" ? row.start_date : null,
                   outcome_status_key:
                       typeof row.outcome_status_key === "string" ? row.outcome_status_key : null,
               }))

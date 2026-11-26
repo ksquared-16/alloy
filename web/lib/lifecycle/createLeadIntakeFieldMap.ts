@@ -20,6 +20,15 @@ export const CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS = [
 
 export const CREATE_LEAD_CONTACT_RULE_IDS = ["person:email", "person:phone"] as const;
 
+/**
+ * Code-owned Create Lead floor fields that must appear in the effective intake
+ * even when not listed in stage required/recommended (email|phone via constraint).
+ */
+export const CREATE_LEAD_CODE_OWNED_FLOOR_RULE_IDS = [
+    ...CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS,
+    ...CREATE_LEAD_CONTACT_RULE_IDS,
+] as const;
+
 /** rule_id → execute payload key for create_lead. */
 export const CREATE_LEAD_PAYLOAD_KEY_BY_RULE: Readonly<Record<string, string>> = {
     "person:first_name": "first_name",
@@ -32,10 +41,9 @@ export const CREATE_LEAD_PAYLOAD_KEY_BY_RULE: Readonly<Record<string, string>> =
     "child:age_group": "child_age_group",
     "child:location": "child_location_id",
     "child:program_interest": "child_program",
-    "child:desired_schedule": "child_desired_schedule_type",
-    "child:desired_start_date": "child_desired_start_date",
+    "child:desired_schedule": "child_schedule_type",
+    "child:start_date": "child_start_date",
     "child:classroom": "child_program_room_cohort_key",
-    "child:start_date": "child_desired_start_date",
     "opportunity:location": "location_id",
 };
 
@@ -68,7 +76,7 @@ export function inferActionIntakeValueKind(
     if (
         ruleId.includes("date") ||
         fieldKey === "date_of_birth" ||
-        fieldKey === "desired_start_date" ||
+        fieldKey === "start_date" ||
         fieldKey === "enrollment_date"
     ) {
         return "date";

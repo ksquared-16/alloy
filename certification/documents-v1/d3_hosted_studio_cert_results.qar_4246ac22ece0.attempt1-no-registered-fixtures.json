@@ -1,0 +1,294 @@
+{
+  "summary": {
+    "passed": 32,
+    "total": 40,
+    "qa_run_id": "qar_4246ac22ece0",
+    "at": "2026-10-28T16:39:51Z"
+  },
+  "results": [
+    {
+      "case": "deployed build",
+      "persona": null,
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "sha": "8125ac3f9f2737c9185f526d2d43acb025889e0b",
+      "project": "ikaxilmwmrmbagoidedu"
+    },
+    {
+      "case": "starter vocabulary present (10 categories, 13 types incl. existing doc_type values)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "categories": 10,
+      "types": 13
+    },
+    {
+      "case": "medical type published as medical",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "enforcement is stated, not implied",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "configuration read",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "configuration read",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "configuration read",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "another organization sees only its own types",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "category create refused",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "type create refused",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "category create refused",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "type create refused",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "category create refused",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "type create refused",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "category created with the requested stable key",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "nested category created",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a cycle is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "CATEGORY_CYCLE"
+    },
+    {
+      "case": "archiving a category with an active child is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "CATEGORY_HAS_ACTIVE_CHILDREN"
+    },
+    {
+      "case": "renaming keeps the key",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "another organization cannot change it",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "a duplicate key is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "KEY_TAKEN"
+    },
+    {
+      "case": "type created as a draft",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "nothing is live before publishing",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "an unvalidated draft cannot be published",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_VALIDATED"
+    },
+    {
+      "case": "server validation passes",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a stale compare-and-swap is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "PUBLISH_CONFLICT"
+    },
+    {
+      "case": "version 1 published",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "editing opens revision 2; lowering is flagged",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "the server refuses to validate a lowering",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "raising to restricted validates",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "version 2 supersedes version 1",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "identity stable across revisions; v1 superseded, v2 published",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "another organization cannot draft it",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "a new document of the type is stored",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "it carries the type's restricted default: a reader is refused",
+      "persona": "doc_reader",
+      "pass": false,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "a cleared administrator reads it",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "a type in use cannot be deleted",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a category with an active type cannot be archived",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "the type archives",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "the compatibility report maps the stored value to the type",
+      "persona": "doc_reader",
+      "pass": false,
+      "status": 200,
+      "code": null
+    }
+  ]
+}

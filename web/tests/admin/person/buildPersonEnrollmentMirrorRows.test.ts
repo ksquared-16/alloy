@@ -69,15 +69,6 @@ describe("child placement display from enrollment mirror", () => {
         expect(lines.age_line).toBeNull();
     });
 
-    it("child summary does not render placement panel below summary", () => {
-        const summary = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerChildSummary.tsx"),
-            "utf8"
-        );
-        expect(summary).not.toContain("PersonDrawerChildPlacementPanel");
-        expect(summary).not.toContain("School & program (lead)");
-    });
-
     it("edit placement affordance lives on header executive", () => {
         const header = readFileSync(
             join(process.cwd(), "components/admin/entity/PersonDrawerChildHeaderExecutive.tsx"),

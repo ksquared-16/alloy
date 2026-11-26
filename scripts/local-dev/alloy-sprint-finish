@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Finish a managed sprint slot: stop processes, preserve evidence, free the slot.
+# Never deletes the worktree, pushes, merges, rebases, or creates a PR.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-sprint-finish <slot> [--acknowledge-uncommitted]
+
+Stops managed processes, writes a continuation record, archives metadata,
+and marks the slot available. Worktree and branch are preserved on disk.
+
+Requires a clean commit state unless --acknowledge-uncommitted is passed.
+
+Never: delete worktree, push, merge, rebase, or create a PR.
+
+Examples:
+  alloy-sprint-finish 3
+  alloy-sprint-finish 3 --acknowledge-uncommitted
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local target="" ack=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --acknowledge-uncommitted|--acknowledge-dirty) ack=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="$1"
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$target" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_sprint_ops_dirs
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  alloy_sprint_finish_one "$target" "$ack"
+}
+
+main "$@"

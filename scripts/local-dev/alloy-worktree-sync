@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Rebase an agent worktree branch onto latest origin/staging.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worktree-sync <worktree-name>
+
+Refuses uncommitted changes. Never stashes automatically.
+Rebases the worktree branch onto origin/staging.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local name="$1"
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_require_cmd git
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local branch="$ALLOY_WORKTREE_BRANCH"
+  local base
+  base="$(alloy_base_ref)"
+
+  [[ -d "$path" ]] || alloy_die "worktree path missing: $path"
+  [[ -d "$path/.git" || -f "$path/.git" ]] || alloy_die "not a git worktree: $path"
+
+  local current
+  current="$(alloy_current_branch "$path")"
+  [[ "$current" == "$branch" ]] || \
+    alloy_die "expected branch '$branch' but worktree is on '$current'"
+
+  if alloy_worktree_is_dirty "$path"; then
+    cat >&2 <<EOF
+error: refusing sync — worktree has uncommitted changes: $path
+
+Before rebase:
+  - commit coherent work locally
+  - use a temporary local WIP commit when necessary
+  - never depend on an agent-controlled automatic stash
+
+alloy-worktree-sync will never stash for you.
+EOF
+    exit 1
+  fi
+
+  alloy_verify_canonical_repo
+  alloy_info "Fetching ${ALLOY_BASE_REMOTE}..."
+  alloy_repo_fetch "$ALLOY_REPO"
+
+  alloy_info "Rebasing ${branch} onto ${base}..."
+  if alloy_git "$path" rebase "$base"; then
+    alloy_info "Sync complete: $(alloy_git "$path" rev-parse --short HEAD) onto $(alloy_git "$path" rev-parse --short "$base")"
+    exit 0
+  fi
+
+  cat >&2 <<EOF
+
+Rebase stopped with conflicts (or another rebase failure).
+Nothing was force-reset. Your commits are still present in the rebase TODO list.
+
+Resolve:
+  cd ${path}
+  # fix conflicts in files
+  git add <resolved-files>
+  git rebase --continue
+
+To undo the attempted rebase and return to the pre-rebase branch tip:
+  cd ${path}
+  git rebase --abort
+
+Policy:
+  - commit coherent work before syncing
+  - temporary local WIP commits are OK
+  - do not rely on automatic stash
+EOF
+  exit 1
+}
+
+main "$@"

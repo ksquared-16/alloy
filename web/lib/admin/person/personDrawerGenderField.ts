@@ -8,7 +8,7 @@ type FieldDefRow = {
 
 /** Config-driven gender select options from person `_field_definitions`. */
 /** Fallback only when `_field_definitions` / option_set is not hydrated. */
-const DEFAULT_PERSON_GENDER_OPTIONS: FieldOption[] = [
+export const DEFAULT_PERSON_GENDER_OPTIONS: FieldOption[] = [
     { value: "male", label: "Male" },
     { value: "female", label: "Female" },
     { value: "not_specified", label: "Not Specified" },

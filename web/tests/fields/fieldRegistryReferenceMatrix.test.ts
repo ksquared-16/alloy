@@ -29,24 +29,24 @@ describe("fieldRegistryReferenceMatrix", () => {
         );
     });
 
-    it("maps child:program_interest and desired_program_type to inquiry_child/desired_program_type", () => {
+    it("maps child:program_interest and program_category_id to inquiry_child/program_category_id", () => {
         expect(ruleIdToCanonicalRef("child:program_interest")).toEqual({
             entity_type: "inquiry_child",
-            field_key: "desired_program_type",
+            field_key: "program_category_id",
         });
-        expect(systemFieldIdToCanonicalRef("desired_program_type")).toEqual({
+        expect(systemFieldIdToCanonicalRef("program_category_id")).toEqual({
             entity_type: "inquiry_child",
-            field_key: "desired_program_type",
+            field_key: "program_category_id",
         });
         expect(
             legacyIdToCanonicalRef("child:program_interest", "lifecycle_rule_id")?.field_key
-        ).toBe("desired_program_type");
+        ).toBe("program_category_id");
     });
 
     it("maps layout inquiry_child refKey to canonical registry ref", () => {
-        expect(layoutRefKeyToCanonicalRef("inquiry_child.desired_start_date")).toEqual({
+        expect(layoutRefKeyToCanonicalRef("inquiry_child.start_date")).toEqual({
             entity_type: "inquiry_child",
-            field_key: "desired_start_date",
+            field_key: "start_date",
         });
     });
 

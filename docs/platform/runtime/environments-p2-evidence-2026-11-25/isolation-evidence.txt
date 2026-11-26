@@ -1,0 +1,19 @@
+## docker inspect (selected)
+Name=/alloy-p2-restore-20261125 Image=postgres:17-alpine NetworkMode=none Networks=none  PortBindings={} PublishedPorts={} Mounts=[] Tmpfs={"/var/lib/postgresql/data":"rw,size=1g"} AutoRemove=true Labels={"alloy.objective":"WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66","alloy.purpose":"p2-throwaway-restore"}
+## interfaces inside container
+1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
+## routes inside container (empty = none)
+## DNS probe for production pooler host (expected to fail)
+nslookup: can't connect to remote host (192.168.65.7): Network unreachable
+## HTTPS egress probe (expected to fail)
+wget: bad address 'supabase.com'
+egress_rc=1
+## target identity
+system_identifier=7712237757228720170
+version=PostgreSQL 17.11 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+databases=postgres,template1,template0
+walden_readonly_role_present=false
+public_tables=0
+## containers carrying the throwaway label
+alloy-p2-restore-20261125 Up 22 seconds

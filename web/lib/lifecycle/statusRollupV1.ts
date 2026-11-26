@@ -51,8 +51,8 @@ const CATEGORY_KEYS = new Set<string>([
 ]);
 
 export const STATUS_CATEGORY_LABELS: Record<StatusRollupCategoryKey, string> = {
-    lead_statuses: "Lead / Case Statuses",
-    enrollment_statuses: "Enrollment Statuses",
+    lead_statuses: "Lead Statuses",
+    enrollment_statuses: "Enrollment Participation",
     person_statuses: "People Statuses",
     family_statuses: "Family statuses",
     candidate_statuses: "Candidate statuses",

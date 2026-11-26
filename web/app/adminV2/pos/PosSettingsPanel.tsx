@@ -79,7 +79,7 @@ export default function PosSettingsPanel() {
                                     className="flex items-center justify-between rounded-md border border-alloy-stone/20 bg-white px-2.5 py-1.5"
                                 >
                                     <span className="truncate text-[12.5px] font-medium text-alloy-midnight">{f.name || f.key}</span>
-                                    <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                    <span className="shrink-0 rounded bg-alloy-bend-pine/[0.08] px-1.5 py-0.5 text-[10px] font-semibold text-alloy-bend-pine">
                                         Connected
                                     </span>
                                 </li>

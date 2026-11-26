@@ -15,12 +15,19 @@ import {
     operationalIntentTemplate,
     type OperationalIntentKey,
 } from "@/lib/forms/operationalIntentTemplates";
+import { deferredTimingLabel } from "@/lib/forms/lifecycle/formRequirementTiming";
 
 export type FormLifecycleCoverageRowPresentation = {
     field_label: string;
     tier_label: "Required" | "Recommended" | "Enforced";
     status_label: "Satisfied" | "Missing" | "Unknown";
     detail: string | null;
+    /**
+     * Set when the process requires this field but a LATER moment owns it, so it does not block
+     * this form. Without this a deferred requirement is indistinguishable from a merely optional
+     * one, which is what made demoting fields to `recommended` feel like the only lever.
+     */
+    deferred_note?: string;
 };
 
 export type FormLifecycleCoverageEntityPresentation = {
@@ -43,6 +50,12 @@ export type FormLifecycleCoveragePresentation = {
     stage_label: string | null;
     intent_label: string | null;
     entity_groups: FormLifecycleCoverageEntityPresentation[];
+    /**
+     * Operator-facing labels of the required fields this form is missing, in coverage order.
+     * The panel names these inline — "Missing required fields" without saying *which* is the
+     * complaint this exists to answer.
+     */
+    missing_required_labels: string[];
 };
 
 function intentLabel(intent: string): string {
@@ -89,6 +102,16 @@ function tierLabel(
     return "Required";
 }
 
+/** Timing note for a requirement the process requires but a later moment owns. */
+function deferredNote(
+    requirementId: string,
+    contract: FormsLifecycleRequirementContract | null
+): string | undefined {
+    const timing = contract?.recommended.find((r) => r.id === requirementId)?.deferredTiming;
+    if (!timing?.length) return undefined;
+    return `Required ${deferredTimingLabel(timing)} — not needed on this form`;
+}
+
 function itemToRow(
     item: {
         requirementId: string;
@@ -100,6 +123,7 @@ function itemToRow(
     contract: FormsLifecycleRequirementContract | null,
     departmentMetadata?: Record<string, unknown> | null
 ): FormLifecycleCoverageRowPresentation {
+    const deferred_note = deferredNote(item.requirementId, contract);
     return {
         field_label: item.requirementLabel,
         tier_label: tierLabel(item, contract, departmentMetadata),
@@ -110,6 +134,7 @@ function itemToRow(
             : item.status === "unknown" ?
                 "Coverage could not be determined for this field"
             :   null,
+        ...(deferred_note ? { deferred_note } : {}),
     };
 }
 
@@ -143,6 +168,43 @@ function constraintRow(
         status_label: "Missing",
         detail: null,
     };
+}
+
+/**
+ * Labels of the required fields this form does not capture — including an unmet constraint such as
+ * "phone or email", which blocks record creation exactly like a missing field does.
+ */
+function missingRequiredLabels(coverage: FormsLifecycleCoverageResult): string[] {
+    const out: string[] = [];
+    for (const item of coverage.missingRequired) {
+        // Some requirements are authored as sentences too, not just constraints.
+        const label = constraintLabelAsFieldName(item.requirementLabel);
+        if (label && !out.includes(label)) out.push(label);
+    }
+    for (const cf of coverage.constraintFailures) {
+        const label = constraintLabelAsFieldName(cf.requirementLabel);
+        if (label && !out.includes(label)) out.push(label);
+    }
+    return out;
+}
+
+/**
+ * Constraint labels are authored as sentences ("Phone or email is required."). Inside an
+ * "Add: …" list that reads as "Add: Phone or email is required" — reduce it to the field name.
+ */
+function constraintLabelAsFieldName(raw: string | undefined): string {
+    return (raw ?? "")
+        .trim()
+        .replace(/\.$/, "")
+        .replace(/\s+(is|are)\s+required$/i, "")
+        .trim();
+}
+
+/** "A", "A and B", "A, B, and C" — operator prose, not a bullet dump. */
+function formatLabelList(labels: readonly string[]): string {
+    if (labels.length <= 1) return labels[0] ?? "";
+    if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+    return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
 function buildEntityGroups(
@@ -200,14 +262,15 @@ export function buildFormLifecycleCoveragePresentation(input: {
     if (!input.usage) {
         return {
             status: "empty",
-            status_headline: "No lifecycle selected",
+            status_headline: "No business process selected",
             status_message:
-                "Select a lifecycle stage to check whether this form captures the required fields.",
+                "Select a business process and stage to check whether this form captures the required fields.",
             schema_source,
             lifecycle_label,
             stage_label,
             intent_label,
             entity_groups: [],
+            missing_required_labels: [],
         };
     }
 
@@ -215,12 +278,13 @@ export function buildFormLifecycleCoveragePresentation(input: {
         return {
             status: "no_schema",
             status_headline: "Add form fields first",
-            status_message: "Publish or save a draft with fields to evaluate lifecycle coverage.",
+            status_message: "Publish or save a draft with fields to evaluate business process coverage.",
             schema_source,
             lifecycle_label,
             stage_label,
             intent_label,
             entity_groups: [],
+            missing_required_labels: [],
         };
     }
 
@@ -239,12 +303,12 @@ export function buildFormLifecycleCoveragePresentation(input: {
                 recordLabel === "Lead" ?
                     "Ready to create Lead."
                 :   `Ready to create ${recordLabel}.`
-            :   "Ready for this lifecycle stage";
+            :   "Ready for this business process stage";
         const status_message =
             recordIntent && recommendedGaps ?
                 `Ready to create ${recordLabel}. Recommended fields are missing but sharing is allowed.`
             : recordIntent ?
-                `This form captures the required information to create a ${recordLabel} for the selected lifecycle stage.`
+                `This form captures the required information to create a ${recordLabel} for the selected business process stage.`
             :   "This form captures the required information for the selected workflow stage.";
 
         return {
@@ -256,25 +320,37 @@ export function buildFormLifecycleCoveragePresentation(input: {
             stage_label,
             intent_label,
             entity_groups: buildEntityGroups(input.coverage, input.contract, input.departmentMetadata),
+            missing_required_labels: [],
         };
     }
 
     const recordIntent = operationalIntentRequiresLifecycleRecordCoverage(
         input.usage ? String(input.usage.intake_intent) : null
     );
+    const recordLabel = recordCreationLabelForIntent(
+        input.usage ? String(input.usage.intake_intent) : null
+    );
+    const missing_required_labels = missingRequiredLabels(input.coverage);
+    const named = missing_required_labels.length ? ` Add: ${formatLabelList(missing_required_labels)}.` : "";
     const recordBlockMessage =
         recordIntent ?
-            "This form cannot create a Lead yet because it does not capture all required information for the selected lifecycle stage."
-        :   "Missing required fields. This form is not ready to create a Lead for this stage.";
+            `This form can be saved and published, but it cannot create a ${recordLabel} until it captures every required field for this stage.${named}`
+        :   `This form is missing required fields for this stage.${named}`;
 
     return {
         status: "missing_required",
-        status_headline: "Missing required fields",
+        status_headline:
+            missing_required_labels.length === 1 ?
+                "1 required field missing"
+            : missing_required_labels.length ?
+                `${missing_required_labels.length} required fields missing`
+            :   "Missing required fields",
         status_message: recordBlockMessage,
         schema_source,
         lifecycle_label,
         stage_label,
         intent_label,
         entity_groups: buildEntityGroups(input.coverage, input.contract, input.departmentMetadata),
+        missing_required_labels,
     };
 }

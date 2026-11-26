@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Business Process Layout Assignment Layer
 
 **Status:** Implemented (June 2026). Assignment routing sits above `entity_layouts` resolution without changing LayoutDoc shape or Experience Builder surfaces.

@@ -1,0 +1,84 @@
+{
+  "G_summary": {
+    "present": true,
+    "balance": "Balance $1,412.87",
+    "availablePrepaid": "Available prepaid $125.00"
+  },
+  "K_prepaid": {
+    "named": true
+  },
+  "J_add": {
+    "control": true,
+    "targets": [
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "householdOffered": true,
+    "eachChildOnce": true
+  },
+  "assignment": {
+    "A_tuition": true,
+    "B_billingFrequency": true,
+    "C_periods": true,
+    "D_responsibility": true,
+    "E_discountForecast": true,
+    "F_exceptionAffordance": true
+  },
+  "I_accounts": {
+    "rows": 11,
+    "manageResponsibility": true,
+    "lenses": [
+      "all",
+      "charges",
+      "credits",
+      "funding",
+      "payments"
+    ]
+  },
+  "H_details": {
+    "availablePrepaid": "Available prepaid",
+    "responsibleParty": true,
+    "gear": true
+  },
+  "L_tuition": {
+    "reachable": true,
+    "headings": [
+      "Tuition Plans",
+      "Tuition Plans",
+      "Financial setup"
+    ],
+    "billingFrequencies": true,
+    "discounts": false,
+    "calendarPanel": false,
+    "closeControls": 0,
+    "reopenCopy": false
+  },
+  "M_policies": {
+    "reachable": true,
+    "headings": [
+      "Discounts & commercial policies",
+      "Policies",
+      "Financial execution policies",
+      "Resolved (org default)",
+      "Due date · Org default"
+    ],
+    "billingFrequencies": false,
+    "discounts": true,
+    "calendarPanel": false,
+    "closeControls": 0,
+    "reopenCopy": false
+  },
+  "N_accounting": {
+    "reachable": true,
+    "headings": [
+      "GL Codes",
+      "Where each charge category posts",
+      "Accounting calendar"
+    ],
+    "billingFrequencies": false,
+    "discounts": true,
+    "calendarPanel": true,
+    "closeControls": 11,
+    "reopenCopy": true
+  }
+}

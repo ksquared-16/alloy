@@ -100,6 +100,15 @@ function threadSubject(t: RawThreadRow): string | null {
     return null;
 }
 
+function readMetadataString(metadata: Record<string, unknown> | null | undefined, keys: readonly string[]): string | null {
+    if (!metadata) return null;
+    for (const key of keys) {
+        const v = metadata[key];
+        if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return null;
+}
+
 export function buildTimelineEvents(messages: RawMessageRow[]): TimelineEventVM[] {
     return messages
         .map((m) => ({
@@ -115,6 +124,9 @@ export function buildTimelineEvents(messages: RawMessageRow[]): TimelineEventVM[
             repliedAt: m.replied_at ?? null,
             sentAt: m.sent_at ?? null,
             status: deriveTimelineStatus(m, m.direction),
+            recipientPersonId: readMetadataString(m.metadata ?? null, ["recipient_person_id"]),
+            senderUserId: readMetadataString(m.metadata ?? null, ["author_user_id", "sender_user_id", "created_by_user_id"]),
+            senderDisplayName: readMetadataString(m.metadata ?? null, ["sender_display_name", "author_display_name"]),
         }))
         .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
 }

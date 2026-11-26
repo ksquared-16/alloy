@@ -16,7 +16,8 @@ export async function fetchActionIntakeSpec(input: {
 
     const res = await fetch(
         `/api/admin/lifecycle/action-intake-spec?${params.toString()}`,
-        workspaceDataFetchInit()
+        // Always revalidate after Builder edits — never serve a stale Schools/Location contract.
+        workspaceDataFetchInit({ cache: "no-store" }) ?? { cache: "no-store" }
     );
     const json = (await res.json().catch(() => ({}))) as { spec?: ActionIntakeSpec; error?: string };
     if (!res.ok || !json.spec) {

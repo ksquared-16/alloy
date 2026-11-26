@@ -4,6 +4,10 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 const PATCH_ALLOWED = [
     "first_name",
@@ -37,6 +41,8 @@ export async function PATCH(
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
     const { orgId, userId } = ctx;
 
     const { id } = await context.params;

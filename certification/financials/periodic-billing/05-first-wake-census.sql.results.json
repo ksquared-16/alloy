@@ -1,0 +1,231 @@
+{
+  "trusted_host_action_id": "tha_f52c8d34419c5d",
+  "query_hash": "8bfe2b87995dcad8ec2b5e7c136e7827a536e26751d35d67ff02e406a90725f1",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:21:10.318Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_f52c8d34419c5d",
+    "query_hash": "8bfe2b87995dcad8ec2b5e7c136e7827a536e26751d35d67ff02e406a90725f1",
+    "authorization_id": "grnt_5a82396dae9743f6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:21:12.074Z",
+    "question_ids": [
+      "schedule",
+      "occurrences",
+      "attempts",
+      "clock",
+      "certhouse_after"
+    ],
+    "questions": {
+      "schedule": {
+        "question_id": "schedule",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "id": "f5d1b0c3-dede-41de-9964-11e95d5f032b",
+                "org_id": null,
+                "handler_key": "financials.periodic_billing.evaluate",
+                "recurrence_kind": "one_time",
+                "is_active": true,
+                "next_due_at": null,
+                "label": "clock_activation_certification",
+                "created_at": "2026-09-21 18:50:51.302284+00",
+                "updated_at": "2026-09-21 19:25:01.63+00"
+              },
+              {
+                "id": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "handler_key": "financials.periodic_billing.evaluate",
+                "recurrence_kind": "daily",
+                "is_active": true,
+                "next_due_at": "2026-09-23 01:13:18.353+00",
+                "label": "financials_periodic_billing",
+                "created_at": "2026-09-22 01:13:18.528435+00",
+                "updated_at": "2026-09-22 01:15:01.036+00"
+              }
+            ]
+          }
+        ]
+      },
+      "occurrences": {
+        "question_id": "occurrences",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "id": "3366c666-905f-440b-bff3-8c19064f9047",
+                "scheduled_work_id": "f5d1b0c3-dede-41de-9964-11e95d5f032b",
+                "org_id": null,
+                "handler_key": "financials.periodic_billing.evaluate",
+                "due_at": "2026-09-21 18:49:51.302284+00",
+                "status": "completed",
+                "attempt_count": 1,
+                "claimed_by": "worker-1851aa4a",
+                "lease_expires_at": null,
+                "completed_at": "2026-09-21 19:25:01.302+00",
+                "failure_reason": null
+              },
+              {
+                "id": "525abf56-f77e-4dae-8726-2ab044909bd8",
+                "scheduled_work_id": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "handler_key": "financials.periodic_billing.evaluate",
+                "due_at": "2026-09-22 01:13:18.353+00",
+                "status": "completed",
+                "attempt_count": 1,
+                "claimed_by": "worker-8f1d1122",
+                "lease_expires_at": null,
+                "completed_at": "2026-09-22 01:15:00.732+00",
+                "failure_reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "attempts": {
+        "question_id": "attempts",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "id": "127a8b6d-09d3-423e-b7b5-528cae35f8b9",
+                "occurrence_id": "3366c666-905f-440b-bff3-8c19064f9047",
+                "attempt_number": 1,
+                "worker_id": "worker-1851aa4a",
+                "outcome": "completed",
+                "started_at": "2026-09-21 19:25:02.150319+00",
+                "finished_at": "2026-09-21 19:25:02.347+00",
+                "diagnostic": {
+                  "lease": "applied",
+                  "domain": "periodic_billing",
+                  "org_id": null,
+                  "reason": "periodic_billing evaluated; no mutation in V1",
+                  "attempt": 1,
+                  "mutation": "not_productized_v1",
+                  "evaluated_for": "2026-09-21T18:49:51.302284+00:00",
+                  "domain_ref_keys": [
+                    "mutating",
+                    "purpose"
+                  ]
+                }
+              },
+              {
+                "id": "eeafdc9a-224e-41a5-8813-5fd54dd9484a",
+                "occurrence_id": "525abf56-f77e-4dae-8726-2ab044909bd8",
+                "attempt_number": 1,
+                "worker_id": "worker-8f1d1122",
+                "outcome": "completed",
+                "started_at": "2026-09-22 01:15:01.586527+00",
+                "finished_at": "2026-09-22 01:15:02.226+00",
+                "diagnostic": {
+                  "lease": "applied",
+                  "counts": {
+                    "no_work_due": 2,
+                    "configuration_refused": 0,
+                    "normal_period_processed": 0,
+                    "short_catch_up_processed": 0,
+                    "catch_up_requires_operator": 0
+                  },
+                  "domain": "periodic_billing",
+                  "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                  "reason": "periodic billing: no work due",
+                  "evaluated_for": "2026-09-22",
+                  "periods_billed": [],
+                  "requires_operator": [],
+                  "assignments_considered": 2,
+                  "automatic_catch_up_limit": 2
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "clock": {
+        "question_id": "clock",
+        "row_count": null,
+        "rows": [
+          {
+            "wake_count": 72,
+            "last_wake_at": "2026-09-22 01:20:01.115154+00",
+            "observed_at": "2026-09-22 01:21:12.025989+00"
+          }
+        ]
+      },
+      "certhouse_after": {
+        "question_id": "certhouse_after",
+        "row_count": null,
+        "rows": [
+          {
+            "certa_charges": 5,
+            "certb_charges": 2,
+            "certhouse_rows": [
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-01",
+                "status": "draft",
+                "amount_cents": 18500,
+                "created_at": "2026-09-19 02:29:35.092911+00"
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-08",
+                "status": "draft",
+                "amount_cents": 18500,
+                "created_at": "2026-09-19 02:29:36.29446+00"
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-15",
+                "status": "draft",
+                "amount_cents": 18500,
+                "created_at": "2026-09-19 02:29:37.508185+00"
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "amount_cents": 18500,
+                "created_at": "2026-09-19 02:29:38.745738+00"
+              },
+              {
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "service_date": "2026-09-29",
+                "status": "draft",
+                "amount_cents": 18500,
+                "created_at": "2026-09-19 02:29:40.024384+00"
+              },
+              {
+                "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "service_date": "2026-09-01",
+                "status": "posted",
+                "amount_cents": 145000,
+                "created_at": "2026-09-19 02:27:57.75725+00"
+              },
+              {
+                "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "service_date": "2026-10-01",
+                "status": "draft",
+                "amount_cents": 145000,
+                "created_at": "2026-09-20 20:55:08.905848+00"
+              }
+            ],
+            "live_tuition_terms": 2,
+            "specimen_agreement_charges": 0
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

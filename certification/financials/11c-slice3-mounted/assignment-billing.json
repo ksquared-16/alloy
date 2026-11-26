@@ -1,0 +1,20 @@
+{
+  "Certa": {
+    "subjectInSection": "Certa",
+    "subjectMatches": true,
+    "accepted": "$195.00/weekly",
+    "overridden": "Overridden $185.00 / weekly",
+    "billingLine": "Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026 DISCOUNTS discount · $18.50 expected to apply Add exception discount · ended",
+    "discountLine": "DISCOUNTS discount · $18.50 expected to apply",
+    "exceptionLanguage": null
+  },
+  "Certb": {
+    "subjectInSection": "Certb",
+    "subjectMatches": true,
+    "accepted": "$1,450.00/monthly",
+    "overridden": null,
+    "billingLine": "Billing frequency monthly · current period September 2026 · next October 2026 DISCOUNTS discount · $145.00 expected to apply Add exception discount · ended 2",
+    "discountLine": "DISCOUNTS discount · $145.00 expected to apply",
+    "exceptionLanguage": null
+  }
+}

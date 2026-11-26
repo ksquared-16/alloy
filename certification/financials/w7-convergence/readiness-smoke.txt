@@ -1,0 +1,40 @@
+
+Running 3 tests using 1 worker
+
+[1A[2K[1/3] [chromium] › playwright/tests/zz-11e-w7-readiness-smoke.spec.ts:20:5 › the deployed build is the one we just promoted
+[1A[2K[chromium] › playwright/tests/zz-11e-w7-readiness-smoke.spec.ts:20:5 › the deployed build is the one we just promoted
+BUILD {"gitSha":"db05b3c2341ec97cc036752686a72e978cb073ee","gitBranch":"staging","gitMessage":"feat(financials): final pre-W7 convergence — one due date per subject, 
+
+[1A[2K[2/3] [chromium] › playwright/tests/zz-11e-w7-readiness-smoke.spec.ts:27:5 › the external QA surface loads with authenticated scenario data
+[1A[2K[chromium] › playwright/tests/zz-11e-w7-readiness-smoke.spec.ts:27:5 › the external QA surface loads with authenticated scenario data
+QA SURFACE {
+ "url": "/dev/core-financials-qa",
+ "signedOut": false,
+ "catalogVersion": "2026-10-05.1",
+ "scenarioish": 7,
+ "mentionsAdjustment": false,
+ "mentionsType": false,
+ "priorRevisionNotice": true,
+ "chars": 2724
+}
+
+[1A[2K[3/3] [chromium] › playwright/tests/zz-11e-w7-readiness-smoke.spec.ts:49:5 › the Financials surfaces and the controls the packet names
+[1A[2K[chromium] › playwright/tests/zz-11e-w7-readiness-smoke.spec.ts:49:5 › the Financials surfaces and the controls the packet names
+FINANCIALS DETAIL {"detailMounted":1,"ledgerRows":0,"prepaidOrHeld":true,"payments":true,"discounts":true}
+
+[1A[2KADD → CHARGE {"addCharge":2,"templateControl":1}
+
+[1A[2KADD → ADJUSTMENT {
+ "bandPresent": true,
+ "direction": true,
+ "categoryGone": true,
+ "source": true,
+ "amount": true,
+ "reason": true,
+ "dateControl": true,
+ "dateValue": "Oct 5, 2026",
+ "bandText": "Add adjustment Against enrolment Certa Certhouse ▾ What this is about The account as a whole — not one charge ▾ What needs to change Reduce what the family owes ▾ Reduce by Reason Effective date Preview Confirm Cancel",
+ "nativeDateInputs": 0
+}
+
+[1A[2K  3 passed (1.1m)

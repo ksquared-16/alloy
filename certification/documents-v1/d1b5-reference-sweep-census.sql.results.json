@@ -1,0 +1,54 @@
+{
+  "trusted_host_action_id": "tha_2a99d1dda74e8d",
+  "query_hash": "951ee9b0b82f66441a7aac8fd32684a0ad87471e6e0a774f92d040b84ce5701e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T11:53:22.624Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_2a99d1dda74e8d",
+    "query_hash": "951ee9b0b82f66441a7aac8fd32684a0ad87471e6e0a774f92d040b84ce5701e",
+    "authorization_id": "grnt_441d8b9e4a884f74",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T11:53:51.723Z",
+    "question_ids": [
+      "r00_identity",
+      "r01_hit"
+    ],
+    "questions": {
+      "r00_identity": {
+        "question_id": "r00_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "objects_total": 412,
+            "unreferenced": 34,
+            "by_class": {
+              "legacy_vendor": 6,
+              "opportunity": 28
+            },
+            "columns_searched": 1744
+          }
+        ]
+      },
+      "r01_hit": {
+        "question_id": "r01_hit",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "documents",
+            "column": "storage_path",
+            "class": "positive_control",
+            "rows": 5
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

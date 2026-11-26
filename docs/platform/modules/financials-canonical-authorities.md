@@ -1,0 +1,1289 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-10-27
+supersedes: []
+---
+
+# Financials — the canonical authorities
+
+**Status:** Core Financials authorities as of the Thread 11A **Core freeze** (Section 7
+mounted-certified). Payments V1/W7 is **implemented** on staging and **not certified** for AI
+context — see §14. Implementation ≠ certification.
+**Purpose:** name the single owner of every core financial concept, so a lane that needs one
+**finds it instead of building a second one.**
+
+This document exists because the failure mode in this domain is not ignorance, it is *duplication*.
+Every concept below already has an owner. A second discount engine, a second prepaid wallet, a
+second allocation path, a second child filter, a second charge writer or a second responsibility
+model would each be a defensible-looking local decision and a platform-level defect. The rule is:
+
+> If you cannot express the behaviour through the authority named here, report the smallest
+> compatible extension to it. Do not build a parallel mechanism.
+
+---
+
+## 0. The Core financial lifecycle — four layers, four owners
+
+Everything else in this document is a detail of this shape. The layers are **separate acts with
+separate owners**, and collapsing any two is the mistake that cannot be undone later.
+
+```
+ACCEPTED COMMERCIAL TERM   →  GROSS OBLIGATION
+        owner: enrollment_pricing_terms (accepted via enrollment.pricing.accept)
+
+COMMERCIAL REDUCTION POLICY →  REDUCTIONS  →  NET OBLIGATION
+        owner: commercial_policies → applyFinancialReductions → financial_reduction_applications
+
+RESPONSIBILITY              →  WHO OWES THE OBLIGATION
+        owner: financial_responsibility_arrangements + _shares
+
+PAYMENT / ALLOCATION        →  HOW MONEY SETTLES IT
+        owner: payments + payment_allocations
+```
+
+**Recurring generation and commercial reductions are two governed acts over the same Billing
+Period**, not one chained operation. `billing.generate_tuition` produces the gross;
+`billing.apply_discounts` reduces whatever gross that period holds. Do not chain them merely because
+a human exercises them in sequence — chaining would make the reduction a property of generation, and
+a manually added tuition charge would then be discounted by a different path than a generated one.
+
+Each layer may be run, previewed and audited on its own, and each answers a question the others do
+not:
+
+| Layer | Answers | Does NOT answer |
+|---|---|---|
+| Accepted term | what was agreed | who owes it |
+| Reduction | what the organisation's rules take off | who owes it, who paid |
+| Responsibility | who owes it | who paid, what it is for |
+| Payment | how it was settled | who owes it |
+
+---
+
+## 0.1 Subsidy — a fifth act, and the only one that changes nothing it touches
+
+**Certified 2026-09-30.** Subsidy is implemented, in production, and absent from the four-layer diagram
+above — which is the omission this section closes. It is not a fifth owner of the obligation; it is a
+separate act that alters **what may be collected right now** while leaving obligation, reduction,
+responsibility and payment exactly as they were.
+
+```
+SUBSIDY                     →  WHAT MAY BE COLLECTED FROM THE FAMILY RIGHT NOW
+        owner: financial_subsidy_* (7 tables) via 10 registered commands under `fin.subsidy`
+        effect: SUPPRESSION of collection, derived and never stored
+```
+
+### The rule, measured
+
+```
+authoritative outstanding  −  governed submitted-claim suppression  =  currently collectible
+```
+
+**An authorization does not suppress collection. A draft claim does not either.** Only a **SUBMITTED**
+claim suppresses, and only for the amount its lines explicitly attribute — because submitting is the
+point at which the provider has done the thing that makes the money genuinely receivable from the
+agency.
+
+Suppression is bounded by the **smallest** of three quantities, and each bound exists because dropping
+it tells a specific lie:
+
+| Bound | The lie it prevents |
+|---|---|
+| what was actually claimed on submitted lines | claiming more than was expected |
+| the expected subsidy attributable to the obligation | expecting more than was claimed |
+| what is still outstanding | suppressing money the family no longer owes because someone already paid |
+
+**It is derived, never materialised.** `resolveFamilyCollectible` recomputes it from claim state, line
+amounts and the authoritative outstanding every time it is asked, so it cannot drift, cannot be edited
+into something else, and disappears by itself the moment a claim is voided or denied. A stored copy
+would be a second balance wearing a different hat.
+
+**A shortfall does nothing on its own.** When $900 was claimed and $825 arrived, the $75 becomes an
+**unresolved variance** reported beside the figure — the family's collectible amount does **not** quietly
+rise to cover it.
+
+### The lifecycle, and its authority
+
+Ten registered commands, all `executable` / `production`, every one gated on the single capability
+**`fin.subsidy`** with one shared refusal (`subsidy_permission_required`) and one shared audit shape:
+
+`configure_agency` → `configure_program` → `record_authorization` → `build_claim` → `submit_claim` →
+`record_remittance` → `settle_remittance` → `reconcile_remittance` → `resolve_variance`, plus
+`billing.configure_expected_funding`.
+
+**There is no mounted HTTP route surface for subsidy** — 1 route file and zero write handlers. Subsidy
+mutations are operator **commands** dispatched through the action registry, which is why a route census
+finds nothing and why a reader who looked only at routes would conclude it is unimplemented. Durable
+writers are exactly three services: `subsidyService.ts`, `remittanceService.ts` and
+`expectedFundingService.ts` (17 mutation sites across the nine subsidy/funding tables). **Zero
+unexplained writers.**
+
+### Subsidy is not a payment
+
+A payment settles an obligation and moves money into Alloy's financial truth. A subsidy claim asserts
+that an agency owes money for care already delivered, and **suppresses collection from the family**
+while that claim stands. They are different acts with different owners, different tables and different
+reversal semantics: a denied claim restores collectibility, whereas a reversed payment is a ledger event.
+
+## 1. The five identities that must never collapse
+
+These are distinct questions with distinct owners. Conflating any two is the single most expensive
+mistake available in this domain, because the resulting data cannot be un-merged later.
+
+| Identity | The question | Owner |
+|---|---|---|
+| **Financial subject** | What/whom is this financial event *for*? | `charges.billable_source_*` → child agreement or household; projected as `subjectMemberId` |
+| **Responsible party** | Who *owes* some or all of it? | `financial_responsibility_arrangements` + `_shares` |
+| **Payer** | Who actually *supplied* the money? | `payments` / `payment_allocations` |
+| **Payment method** | *How* the money was supplied or collected? | `payment_provider_*`, collection attempts |
+| **Prepaid / deposit balance** | Money *held* before it is applied to an obligation | unapplied posted payment — see §6 |
+
+**Never infer payer from responsibility.** A grandparent may pay an obligation a parent owes.
+**Never infer responsibility from subject.** A household charge may be owed by one of two parents.
+
+### `subjectMemberId: null` means HOUSEHOLD GRAIN
+
+It does **not** mean unknown, missing, or not-applicable. A charge whose billable source is the
+household has no child agreement, so it resolves to `null` *deliberately*, rather than being
+attributed to a child who did not incur it.
+
+Reading `null` as "missing" is what produced the defect this thread repaired twice.
+
+---
+
+## 2. Subject scope — ONE predicate
+
+**Owner:** `web/lib/adminV2/runtime/focusPanel/financials/financialsRowScope.ts`
+
+```
+rowInFinancialsSubjectScope(row, scope)
+
+  "all"        → every row
+  "household"  → ONLY rows with subjectMemberId == null   (the deliberate narrow view)
+  <memberId>   → that child's rows AND the household's, MINUS siblings
+```
+
+A child scope is an **attention context**: it says which child the operator is working on. It does
+not turn a household financial account into a child's account. Asking for the household *by itself*
+is a different question, which is why `household` is the one scope that is narrower than the
+account.
+
+**Both** consuming surfaces read this and only this:
+
+- Focus Panel → Financials → Details
+- Financials Workspace → Accounts (`lib/financials/workspace/accountLenses.ts`)
+
+`accountLenses.subjectTokenOf` still exists and is **not** a second predicate: it answers which
+filter *option* a row contributes to, which is a different question from which rows a filter
+*selects*. Conflating those two is precisely what broke the Workspace.
+
+Derived, same file: `compactPayableRows` (scope ∩ current period ∩ `offersPayment`) and
+`ledgerPayableRows` (scope ∩ `offersPayment`, every period). Compact may only settle the current
+period; the ledger crosses periods deliberately.
+
+### 2.1 Site visibility of detail reads: the same location contract, two grains (BP V2 D4)
+
+**Owner of the rule:** `web/lib/financials/workspace/financialWorkLocation.ts`, via
+`isFinancialWorkVisible` (unchanged).
+**Owner of the detail-read enforcement:** `web/lib/financials/workspace/financialReadScope.ts`.
+
+| Grain | Readable to a site-restricted actor when | Readers |
+|---|---|---|
+| one money row (charge, payment, attempt, ledger row) | its own billable-source location is visible | every list reader; `charge/[id]`, `ledger/[id]`, `eligible-target-charges`, `collection-state` |
+| one household's financial presentation | **every** location its money occupies is visible | Financials card + Focus Panel producer, and the household-keyed reads the card is built from |
+
+The subject scope in §2 above (which child, or the household) is a different question. It is an
+attention filter inside an account the actor is already entitled to, not an authorization.
+Household record (CRM) visibility grants nothing here.
+
+## 3. The six time identities
+
+Not interchangeable. `charges` carries four dates and each answers a different question.
+
+| Identity | Owner | Notes |
+|---|---|---|
+| **Service / effective date** | `charges.service_date` = `occurs_on` (template `occurs_on_strategy`) | when the chargeable thing occurred / applies |
+| **Billing period** | `charges.billing_period_id` — the interval **containing the service date** | bound by `bindChargeBillingPeriodWithBounds`; see §3.0 |
+| **Invoice / bill date** | `charges.billable_on` | `invoice_timing` policy (org default, location override) or a template exception; never before the charge was created — §3.2 |
+| **Due date** | `charges.due_date` | `due_date` policy; never before the invoice — §3.2 |
+| **Payment date** | `payments.received_at` | when money actually arrived |
+| **Accounting period** | `financial_accounting_periods` | via `financial_accounting_calendars`, ≤1 active per org |
+| **Accounting period close** | `financial_accounting_periods.status` | `open` \| `closed` — *not* a synonym for posted |
+
+**`POSTED != ACCOUNTING PERIOD CLOSED`.** Posting is a charge lifecycle state; closing is an
+accounting calendar state.
+
+**`BILLING PERIOD != ACCOUNTING PERIOD`.** A commercial period may cross accounting boundaries.
+Journal attribution follows the accounting calendar, never the billing period boundary. Periods
+within one calendar cannot overlap (GiST exclusion constraint); different calendars may freely cover
+the same days, which is how monthly parent billing coexists with a 4/4/5 reporting calendar.
+
+### 3.0 Billing-period membership comes from the service date (W7, Director decision)
+
+**The billing period is the commercial interval that CONTAINS the service date.** Invoice timing
+decides *when we bill*; it has no authority over *which interval the obligation belongs to*.
+
+This reverses the earlier rule ("the period is `billable_on`", with the rationale that a field trip
+billed next cycle belongs to the cycle that bills it). Human QA showed what that rule does: a Nov 5
+service on a template invoicing "next billing cycle" became a **December** obligation and posted
+immediately (W7-F004). The Director decided the identities are independent:
+
+| Identity | Decides |
+|---|---|
+| service / effective date | when the chargeable thing occurred |
+| billing period | the interval containing that date |
+| invoice date | when we bill / present it |
+| due date | when payment is due |
+| accounting period | attributed separately, from the journal's `effective_on` |
+
+**Forward only.** Charges already bound keep their recorded `billing_period_id`; nothing is
+re-bound in bulk. A mismatch census (service date outside the bound period) is reported, not
+normalised.
+
+**One resolver, one direction** — `lib/financials/chargeDates/resolveChargeDateChain.ts`:
+
+```
+billing calendar (cadence + anchor)          → billing-period boundaries   (from the service date)
+boundaries + invoice-timing rule             → intended invoice date
+intended + business date at creation         → actual invoice date         (never before the charge existed)
+boundaries + actual invoice + due-date rule  → due date                    (never before the invoice)
+period start + organisation business date    → posting gate                (posting review is separate)
+```
+
+Preview and commit run the same resolver: the preview reads the period without writing
+(`previewChargeBillingPeriod`), the write re-runs it against the period the binder bound. Each
+written charge carries `metadata.charge_dates` (rule, scope, intended date, clamps).
+
+`posted_at` is still never the period: it records when someone pressed post.
+
+---
+
+### 3.0.1 Two invariants the database now holds (W7-F008, W7-F009)
+
+**A posted charge always has its journal entry.** Posting (`post_charge_with_journal`) and correction
+(`insert_posted_charge_with_journal`) write the charge and its `charge_posted` / `charge_corrected` entry
+in ONE transaction. An entry the accounting calendar cannot attribute (no period covers the effective date)
+refuses the post — the draft stays a draft and the refusal is said aloud — instead of leaving a posted
+charge with no consequence. A closed accounting period still defers to the next open one. A zero-amount
+charge has no consequence and carries no entry. Two staging charges posted 2026-08-26, before the journal
+existed, are the only posted charges without an entry; they are history and are not backfilled.
+
+**A bound charge's dates stay inside its own billing period.** `trg_enforce_charge_dates_inside_bound_period`
+refuses any insert, or any re-dating of a bound draft, that leaves its service or occurrence date outside
+the period it is bound to (binding itself is immutable). The four staging charges bound outside their
+service date's period were written 2026-10-02 by the retired invoice-date binding and are not rewritten.
+
+## 3.1 Billing period identity — the interval, not the month
+
+**Owner:** `lib/financials/billingPeriod.ts`.
+
+### 3.1.0 Two levels, and the string that joins them
+
+This document previously described the billing period as simply *derived*, which is true of the
+**instances** and wrong about the **rule**. There are two levels and a product that conflates them
+cannot be configured coherently.
+
+| Level | What it is | Where it lives | Who authors it |
+|---|---|---|---|
+| **Billing frequency** | the recurrence RULE — Weekly, Monthly, and whatever else an organisation authors | `billing_cadences` option set; surfaced by `TuitionBillingFrequenciesPanel` | **configured** by the organisation |
+| **Billing period** | the resulting commercial INTERVAL — `Sep 15–21`, `September 2026` | `lib/financials/billingPeriod.ts` | **derived**, never authored |
+
+The chain is:
+
+```
+configured billing frequency        Weekly
+  ↓ selected by
+accepted commercial term            $185 / week   (enrollment_pricing_terms.cadence_key)
+  ↓ anchored at
+agreement anchor                    the earliest accepted term's effective_start — Sep 1
+  ↓ derives
+billing period instances            Sep 1–7 · Sep 8–14 · Sep 15–21 · …
+```
+
+Nobody authors `Sep 15–21`. Asking an operator to do so would be asking them to maintain by hand
+what the anchor and the cadence already determine, and the first hand-entered period that
+disagreed with the tiling would be a period nobody signed.
+
+**The join is a string, and it is not validated.** `billingFrequencyItemKeyFromLabel` mints the
+cadence key from whatever label was typed, so an organisation can author `fortnightly`, attach it
+to a tuition plan and have an assignment accept a term on it. `billingPeriodFor` knows five
+cadences; `fortnightly` is not one. The money stays safe — `previewTuitionGeneration` and
+`generateTuitionCharges` both gate on `isPeriodBillableCadence` and refuse rather than invent an
+interval — but the configuration surface used to say nothing, so the operator met silence.
+
+`billingRecurrenceFor` closes that: the Billing Frequencies screen states the recurrence the
+**derivation authority** will actually produce for each configured frequency, and says plainly when
+it will produce none. It is a report of `billingPeriodFor`'s behaviour, not a second opinion about
+it, so configuration cannot drift from the periods the platform derives.
+
+### 3.1.1 Period identity
+
+A billing period is a **commercial interval**. Its identity carries its boundaries:
+
+| Cadence | Key | Label |
+|---|---|---|
+| monthly | `2026-09` *(unchanged)* | September 2026 |
+| weekly | `2026-09-21~2026-09-27` | Sep 21–27, 2026 |
+| biweekly | `2026-09-21~2026-10-04` | Sep 21–Oct 4, 2026 |
+| crossing a year | `2026-12-28~2027-01-03` | Dec 28, 2026–Jan 3, 2027 |
+
+**Monthly is unchanged byte-for-byte.** `YYYY-MM` is what every existing resolution key, stored
+`service_period`, ledger grouping and `<input type="month">` already holds. A monthly commercial
+period *is* the calendar month, so it ignores the anchor.
+
+**Weeks are not ISO weeks.** Periods tile from the **agreement's own anchor** — the earliest
+accepted term's `effective_start` — so one tenant's week runs Mon–Sun and another's Thu–Wed, and
+both are right. A shared calendar would impose a boundary nobody signed.
+
+**`hourly` and `per_session` have no interval.** They price a unit of usage; `isPeriodBillableCadence`
+is how a caller finds out before assuming, and generation refuses rather than inventing a month.
+
+Labels **derive from boundaries** (`billingPeriodLabel`), never from the key. `placeInBillingPeriod`
+takes an optional commercial grain and stays **monthly by default**, because every existing caller
+groups by calendar month and a ledger that silently regrouped would restate history.
+
+One tiling, called twice: `assignmentBillingPeriods` is shared by generation **and preview**, so a
+preview cannot show four weeks and then create five.
+
+### 3.0.9 Discounts, the Add target, and prepaid
+
+**DISCOUNT POLICY** — the organisation's commercial rule, authored in
+`/organization/financials` → Policies and owned by `commercial_policies`.
+
+**DISCOUNT FORECAST** — a read-only prediction for one commercial relationship.
+`forecastAssignmentReductions` asks the three readers the application path asks — `readPolicies`,
+`resolveHouseholdEligibility`, `resolveFinancialReductions` — over the ACCEPTED tuition for the
+current period, and writes nothing: no reduction application, no charge, no adjustment, no ledger
+row. It decides no eligibility of its own, because a forecast that reasoned independently would be
+a second opinion about money and the first disagreement with the ledger would be unattributable.
+
+The forecast asks about a **calendar month** even when the commercial period is weekly: reductions
+resolve per month, and the month it names is the one the application path will resolve the same
+charge under. That is what makes the two answers comparable.
+
+**DISCOUNT EXCEPTION** — *not* an enable/disable Boolean. `discount_enabled = false` would say "no
+discounts here" about every policy at once, for all time, with nobody's name on it, and would
+silently suppress any policy authored later. An exception names one policy, one commercial
+relationship, an effective window, an operator and a reason, and supersedes rather than mutating.
+It is scoped by `opportunity_customer_member_id` — the same through-line an accepted pricing term
+uses — so no second "assignment id" concept exists for discounts.
+
+**UNIFIED ADD TARGET** — one control answering "who receives this charge": Household explicitly, or
+one or more children, mutually exclusive. An empty selection is **never** Household; that ambiguity
+is why Household is a value rather than the absence of ticks, and Confirm is unavailable until a
+target is chosen. Category grain still governs what is offered.
+
+A SUBJECT IS A CHILD, not an agreement. A child with a closed enrolment beside a live one has one
+entry in the target, carrying the active agreement as its billable source.
+
+**PREPAID** — posted, unapplied money, available to allocate. It is a separate account position
+from Current Balance and is never netted into it; zero is silence, never `$0.00`. The same
+canonical projection feeds Focus Panel Summary, Focus Panel Details and Financials → Accounts.
+
+**PREPAID IS NOT A DEPOSIT.** No surface may label it one. Held money has a lifecycle — taken,
+held, forfeited, refunded, applied — that this platform does not model, and calling available
+prepaid a deposit would promise it. `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` belongs to Payments.
+
+### 3.1.3 The accounting period lifecycle
+
+**Owner:** `financial_accounting_calendars` + `financial_accounting_periods`;
+`lib/financials/accounting/accountingCalendarService.ts` is the only writer, reached through
+`POST /api/admin/financials/accounting-calendar` (`fin.write`).
+
+| act | who | what it does |
+|---|---|---|
+| Adopt | operator, `fin.write` | creates the org's single active calendar and materialises twelve calendar-month periods from `calendarMonthPeriods`, all open |
+| Close | operator, `fin.write` | sets `status`, `closed_at`, `closed_by` on one period. Nothing else. |
+| Reopen | — | **not supported in V1.** No authority exists and none is offered; a closed period shows no control. |
+
+**Closing is not a refusal.** This is the rule most likely to be "corrected" by someone who
+assumes otherwise, and doing so would let a closed month stop a nursery billing its families.
+`attribute_financial_journal_entry` decides every entry's period from `effective_on`:
+
+| situation | result |
+|---|---|
+| no active calendar | `period_attribution = 'no_calendar'` — a complete history carrying no period |
+| no period covers the date | refuse `accounting_period_unavailable` |
+| the covering period is **closed** | **defer** to the earliest later open period, stamping `accounting_period_deferred` and the date it came from |
+| closed and nothing later is open | refuse `accounting_period_closed` |
+
+> A CLOSED PERIOD DEFERS; IT DOES NOT REFUSE. Refusing would make a REPORTING boundary able to
+> block an OPERATIONAL act: a family could not be charged, or a cheque could not be recorded,
+> because the books were closed. Books close after the fact and money does not wait for them.
+
+**What close checks, and what it does not.** It checks the period exists and is open, and it
+warns when closing the last open period, because that is what turns the deferral into a refusal.
+It does **not** check reconciliation, posting review or draft work: no platform doctrine makes any
+of them a close blocker, and drafts are not journal entries — they carry no attribution at all, so
+an unposted charge cannot be "in" the period being closed.
+
+**History is stable.** `enforce_accounting_period_boundaries_frozen` refuses any change to
+`starts_on`, `ends_on`, `period_key` or `calendar_id` once entries are attributed — *"open a new
+period instead"*. `status` is deliberately outside that guard, which is what makes closing a
+period with history possible at all. Closing re-attributes nothing.
+
+### 3.1.2 Billing period is not accounting period
+
+Two configured period systems, two instance levels, and they are allowed to disagree:
+
+| | Configuration | Instance |
+|---|---|---|
+| **Commercial** | billing frequency (`billing_cadences`) | billing period — `Sep 29–Oct 5` |
+| **Accounting** | accounting calendar (`financial_accounting_calendars`, style `calendar_month` / `four_four_five` / `custom`) | accounting period (`financial_accounting_periods`) — `October 2026` |
+
+A weekly billing period of `Sep 29–Oct 5`, invoiced Sep 29, due Oct 9, paid Oct 3 and attributed to
+accounting period `October 2026` is an ordinary arrangement, not a contradiction. Deriving one from
+the other collapses two identities a 4/4/5 calendar exists to keep apart.
+
+Attribution is decided by the `attribute_financial_journal_entry` BEFORE INSERT trigger, never by a
+service — a rule the service owns is a rule a second writer can skip. A **draft** obligation has no
+accounting period yet and says so rather than displaying one it has not reached.
+
+## 3.2 Invoice date and due date
+
+| Date | Owner | Configured by |
+|---|---|---|
+| Invoice / bill date | `charges.billable_on` | **`financial_policies` type `invoice_timing`** (org default → location → account), or a template exception (`billable_on_strategy` ≠ `billing_policy`) |
+| Due date | `charges.due_date` | **`financial_policies` type `due_date`** |
+
+**Invoice timing** strategies: `days_before_period_start` (N ≥ 0; 0 = the first day of the period)
+and `on_service_date`. Template exceptions: `immediate` (service date), `offset_days` (service date +
+N), `next_billing_cycle` (the NEXT billing period's first day — no longer "the 1st of the next
+calendar month"). New templates default to `billing_policy`. Nothing configured → invoiced on the
+service date (platform default, stated as such in the UI).
+
+**Two clamps, one principle — the system never claims a family was billed or obliged before the
+charge existed:** actual invoice = max(rule, business date at creation); due = max(terms, actual
+invoice). A Nov 5 charge created Nov 5 under "7 days before / due on period start" is invoiced
+Nov 5 and due Nov 5, and both clamps are recorded and shown.
+
+Four due strategies, each computable from a date the charge already carries: `on_invoice`,
+`days_after_invoice`, `on_period_start`, `days_after_period_start`.
+
+*Fixed day of the month* was evaluated and deliberately excluded: it is month-shaped and meaningless
+for a weekly organisation, and `days_after_period_start` expresses the same intent for every cadence
+(offset 0 = the first day of the period).
+
+**An unconfigured organisation is unchanged.** `resolveDueDate` returns `null`, meaning *leave the
+due date alone* — never "due today". An unknown stored strategy is **reported, not guessed**.
+
+`Billing Period Oct 1–31, invoiced Sep 25, due Oct 1` is an ordinary arrangement and is supported;
+the dates are separate columns and separate identities.
+
+## 3.3 Subject grain — two layers that cannot contradict
+
+**Owner:** `lib/financials/chargeCategorySemantics.ts` (code-owned, beside `CHARGE_CATEGORIES`).
+
+```
+CATEGORY   declares what is semantically PERMITTED     CHILD | HOUSEHOLD | CHILD_OR_HOUSEHOLD
+TEMPLATE   may select, default or NARROW within it
+```
+
+A template may say a field trip is always child-grained. It **may not** say tuition is
+household-grained: `narrowSubjectGrain` returns `contradicts_category` and **refuses**, rather than
+picking a winner, because either answer would be a guess about whose money a charge is.
+
+Why code and not a table: `CHARGE_CATEGORIES` is a code-owned invariant, and "tuition is for a
+child" is what tuition *means*, not a preference a tenant may invert.
+
+**There is no `CHILD_OR_MULTIPLE_CHILDREN`.** Multiple children is an *operation* producing
+independent child-grained rows. A stored grain meaning "several children" would be a row whose money
+belongs to nobody in particular, and every per-child question asked of it afterwards would have no
+answer.
+
+## 5.1 Discount eligibility is an intersection
+
+```
+a discount applies ONLY IF   the discount policy permits this charge/category/subject
+                      AND    the charge category permits discounting
+```
+
+The policy half is `policy.params.applies_to` (`tuition | fees | all`). The category half is
+`chargeCategorySemantics(...).discountable`. Neither side can override the other.
+
+Refused as **incoherent**: `discount`, `credit`, `adjustment`, `subsidy_offset` — a reduction of a
+reduction is not something any reconciliation can explain.
+
+**Business opinion is deliberately not encoded.** `late_pickup` *is* discountable at the category
+layer. "Late fees are never discounted" is a belief many organisations hold and some do not, so the
+tenant's own policy decides. `category_not_discountable` is reported separately from
+`category_not_covered`, because "this kind of charge cannot be discounted" and "your policy does not
+cover this" are different conversations with an operator.
+
+## 5.2 A policy that does not apply to one family — the commercial policy exception
+
+A configured discount that should not reach ONE family used to be inexpressible. Deleting the
+policy took it from everyone; never configuring it took it from the tenant. The third thing is an
+**exception**: a dated, reasoned statement that one configured policy does not apply to one
+commercial relationship.
+
+```
+commercial_policy_exceptions
+    org_id
+    policy_id                          the configured policy, by its own id
+    opportunity_customer_member_id     the commercial relationship — the same through-line
+                                       enrollment_pricing_terms is scoped to
+    customer_member_id                 read from the assignment, never from the caller
+    effective_start / effective_end    a window, inclusive at both ends
+    reason                             NOT NULL, and non-empty by CHECK
+    supersedes_exception_id / superseded_at
+```
+
+**What it is not.** Not a per-assignment `discount_enabled` boolean. A switch has no reason, so
+nobody can say why six months on; no dates, so it silently rewrites what was true last period; and
+it would make the assignment a second place commercial policy is decided, which is how a surface
+and a ledger come to disagree. The command refuses `amount_cents`, `percent`, `discount_enabled`,
+`enabled`, `customer_member_id` and `org_id` in its payload rather than ignoring them.
+
+**One authority, both consumers.** `commercialPolicyExceptionService` answers exactly one question
+— which policies this relationship is excluded from on a date — and hands the ids to
+`resolveFinancialReductions`, which was EXTENDED rather than forked. Both the Assignment forecast
+(`forecastAssignmentReductions`) and the application path (`applyFinancialReductions`) call the
+same service and the same resolver, so a forecast cannot promise a discount the ledger withholds.
+
+**The exclusion says so.** An excluded policy resolves to `excluded_by_exception`, never
+`no_policy_configured`. The distinction is operational: an operator told the second goes looking
+for configuration that exists and is correct.
+
+**History is never rewritten.** An exception governs eligibility over a window. A reduction already
+posted stays posted. Ending one sets `effective_end` and records who ended it; re-excepting
+supersedes by succession, so what was in force at a past date remains answerable.
+
+**Writers.** `billing.except_commercial_policy` and `billing.end_commercial_policy_exception`, both
+`fin.write`, both subject `opportunity_customer_member`. No surface writes the table.
+
+## 6.1 The prepaid position — unapplied is not available
+
+**Owner:** `lib/financials/prepaid/availableFunds.ts`. A projection over existing money; it computes
+no money of its own.
+
+| Bucket | Meaning |
+|---|---|
+| **available** | posted, inbound, not refunded, not allocated — the only figure fit to be offered |
+| **pending** | the platform has been *told* about money it does not have |
+| **held** | deposit-restricted — **`heldSupported: false`**, see below |
+
+Anything not explicitly `posted` fails toward *do not offer it*: the cost of under-reporting is an
+operator asking a question; the cost of over-reporting is money applied that never arrived.
+
+**Held deposits are not invented.** The `deposit` policy carries `amount_cents` and `refundable`,
+but nothing marks an individual receipt as held, so the platform cannot tell a held deposit from
+ordinary prepaid money. It reports `heldCents: 0` **with `heldSupported: false`** — saying plainly
+that the zero is an absent capability, not a measurement. Silently classifying every deposit as
+spendable would let an operator spend a refundable deposit by accident.
+
+**Deposit vs prepaid — the decision:** they are **one money spine with policy metadata over it**,
+not two stores. A refundable held deposit and an account credit balance are the same unapplied money
+under different policy. A distinct financial object would only be justified if the accounting
+lifecycle genuinely diverged, and it does not.
+
+**Current Balance excludes unapplied money**, and that is the *existing* doctrine, not a new rule:
+`balance = responsibility − payments` sums only what was **applied**. So prepaid funds do not move
+Current Balance and do not reduce Due until allocation. `owes $0 with $200 prepaid` and
+`balance −$200` therefore stay two different facts, distinguishable at rest.
+
+**Application stays manual/governed.** `payment_allocations` is the only application mechanism;
+nothing auto-applies.
+
+## 3.4 Multi-child Add — one gesture, N obligations
+
+**Owner:** `charge.add` (`financialChargeActions.ts`), via `executeMultiChildAdd`.
+
+`customer_member_ids` (plural) selects one or more children; the singular `customer_member_id` still
+works unchanged. Selection is **de-duplicated**, so a double-clicked checkbox cannot bill twice.
+
+Two children at $40 produce **two independent $40 child-attributed charges**. The amount is **per
+child** and is never divided across the selection — splitting an entered amount would invent a price
+nobody quoted. The preview states both numbers: *$40 per child · 2 children selected · Total to
+create $80*.
+
+**Batch idempotency authority — the one that already exists.** No batch key, no batch table. Each
+charge goes through `writeTemplateDraftCharge` → `tpl:<template>:<occurs_on>:<scope>`, enforced by
+`charges_resolution_key_unique` scoped to the billable source. Two children are two billable sources,
+so a re-run **converges on the same two charges**. A batch-level key would be a second idempotency
+authority, and the two would disagree the first time an operator retried a partial batch with one
+child removed.
+
+**No rollback, deliberately.** Where no review boundary applies these charges *post*, and posted
+childcare money is immutable by trigger — undone by a reversing entry, never a DELETE. Unwinding a
+partial batch would mean fabricating reversals for money the operator never saw. Instead: every
+subject resolves **before** any charge is written, failures are named per child, the successes stay
+real, and the retry converges. A failed *post* does not unmake a charge — it is a draft the operator
+can post from the row.
+
+**Grain rules apply unchanged** (§3.3): a CHILD-only category requires at least one child; a
+HOUSEHOLD-only category offers no child selection; blank selection never silently means household.
+
+**Adjustments** inherit the source transaction's grain — Wrigley's charge cannot become Lennon's
+adjustment. Standalone adjustments follow their category's permitted grain and may use the same
+selection primitive.
+
+**Discounts evaluate per resulting child.** Each child's obligation is its own gross charge, so
+`resolveFinancialReductions` runs per child with that child's own eligibility facts — one sibling
+may receive 10% and the other nothing, and each reduction keeps its own subject identity and
+provenance. Reduction idempotency is `fred:<policyId>:<chargeId>`, and the charge is already
+child-specific, so a retry cannot double-reduce.
+
+**Responsibility is not part of Add.** The resulting obligations enter the existing responsibility
+model normally and are independently inspectable in Details.
+
+## 6.2 Rendering the prepaid position
+
+Projected into the read model as `vm.prepaid` by `resolveAccountPrepaidPosition`; **no component
+computes it**. A card summing unapplied cents itself would be a second answer to "what may this
+family spend", and would get the *pending* case wrong.
+
+**Zero is silence.** The adapter sends `null`, never `"$0.00"`, so an ordinary account carries no
+prepaid metric — the same density rule that removed Autopay from the metric strip.
+
+**Compact decision: an indicator, yes.** It earns its line on the `Unassigned` precedent — the test
+is whether a fact changes what the operator *does*. Due may read $150 while the family has already
+handed over $200 that is merely unallocated; without the line the card says *collect $150* about
+someone who owes nothing in cash terms. It is an indicator only: **no Apply, no Manage deposit, no
+allocation controls** — applying money is Details' work through `payment_allocations`.
+
+**Apply Payment is reused, not replaced.** There is no "use prepaid" writer. Available funds are
+applied through the canonical allocation path, which leaves payer identity unchanged and does not
+alter responsibility merely because money moved.
+
+**An absent capability is not a zero.** `heldSupported: false` is never rendered as "$0 held" —
+locked by test, because the claim would let an operator spend a refundable deposit believing none
+was held.
+
+---
+
+## 4. Recurring billing — the lifecycle, arrow by arrow
+
+There **is** a recurring billing engine. Do not write a second scheduler or generator.
+
+| Arrow | Owner |
+|---|---|
+| assignment / agreement | `child_enrollment_agreements` |
+| → commercial terms | `enrollment_pricing_terms` (accepted terms; may be an **override**) |
+| → billing cadence | `financial_policies` type `billing_cadence`; option set `commercial_billing_cadence` |
+| → billing period | `lib/financials/billingPeriod.ts` |
+| → is it due, at what price | `lib/financials/tuitionGeneration/resolveTuitionRecurrence.ts` (pure) |
+| → generation | `lib/financials/tuitionGeneration/generateTuitionCharges.ts` |
+| → operator trigger | registered action `billing.generate_tuition` (`fin.write`), with preview |
+| → consumption → obligation → charge | `lib/operationalConsumption/consumptionService.ts` → `resolved_obligations` → `writeTemplateDraftCharge` |
+| → discount resolution | `lib/financials/reductions/*` (§5) |
+| → responsibility | `financial_responsibility_arrangements` (§7) |
+| → settlement | `childcarePaymentService` + `payment_allocations` (§6) |
+| → journal attribution | `financial_journal_entries` + `financialJournalService` (§3) |
+
+**THE ENGINE IS NOT A CLOCK.** Two things are routinely conflated and must not be:
+
+| | Status |
+|---|---|
+| **Recurring billing engine** — accepted terms, cadence, period, due/not-due, the amount, idempotency, and generation | **Implemented and certified.** An operator triggers it: `billing.generate_tuition`, behind a preview that is a promise about the run that follows it. |
+| **Automatic periodic billing execution** — the month turning over and the run happening with nobody present | **Not built, and deliberately not built here.** It depends on **Governed Scheduled Work V1** (§14). |
+
+Nothing in the product fires recurring tuition on a schedule today, and no copy may imply it does.
+Operator-triggered generation is the certified V1, and it is a complete capability rather than a
+stand-in: the operator names the billing frequency and the period, previews the run, and confirms
+it. What is missing is the wakeup, not the billing.
+
+**Generation does not re-price from the catalog.** The accepted term is the money. A generator
+pricing from today's catalog would bill a family a rate they never agreed to, and would let a
+catalog edit change what an already-agreed family owes.
+
+**It refuses rather than guessing.** Two terms covering one period → `overlapping_terms`. A partial
+period with no configured proration policy → `proration_policy_required`. Billing a whole month for
+a fortnight is not a default; it is a guess with somebody's money.
+
+### The accepted price outranks the charge template
+
+`resolveAmount` in `resolveChargeFromTemplate` returns the **accepted** amount when one is present,
+before it consults `amount_strategy` at all.
+
+This is not a tidy-up. A charge template says HOW tuition posts — its category, its GL mapping, when
+it occurs, when it becomes billable, whether it needs review. It has no second opinion about WHAT
+THIS CHILD AGREED TO PAY. A tenant whose tuition template was `fixed` at $400.00 billed **every**
+generated obligation $400.00 while the families had accepted $185.00 a week and $1,450.00 a month —
+silently, on every charge, because the accepted price arrived as `resolvedAmountCents`,
+indistinguishable from a catalog rate hint.
+
+**A number cannot carry its own authority.** `acceptedAmountCents` is the authority: present means a
+commercial contract already decided this. It is threaded through the draft WRITE as well as the
+resolution, because the write re-resolves the template and a fixed amount would otherwise reinstate
+itself on the second pass.
+
+**Do not "fix" this in a tenant's configuration.** Setting a template to `rate_derived` makes one
+tenant correct and leaves the platform able to bill every other tenant a number nobody agreed to.
+
+### Cadence is operator intent, and preview is a promise
+
+One account can legitimately hold a weekly term for one child and a monthly term for another, so a
+service period alone is **not an instruction**. The Generate Tuition surface asks for a Billing
+frequency, and changing it clears a standing preview, because that preview described a different
+operation.
+
+`generationCadenceFrom` is read by **both** `buildPreview` and `execute`. They previously disagreed:
+preview defaulted to monthly while execute honoured the payload, so previewing a weekly run reported
+the monthly answer and Confirm then generated five weekly obligations. **Do not return to a
+month-only preview that can execute another cadence.**
+
+The preview echoes `cadence_key` and `service_period` in its `after` block so a caller can check
+Confirm against what was previewed.
+
+### Generated, recalculated, unchanged
+
+`writeTemplateDraftCharge` answers `created` / `recalculated` / `unchanged` / `skipped_posted`, and
+the generation result reports them as such:
+
+- **generated** — created, or an existing draft moved to a new amount or date
+- **unchanged** — a draft that already stood and still agrees; converged, *not billed again*
+- **alreadyPosted** — settled money, reported and not entered
+
+A rerun reporting its converged drafts as `generated` tells an operator they have charged a family
+twice. The ledger was right and the sentence was not, and the sentence is what an operator reads.
+
+### Effective lifecycle
+
+`resolveTuitionRecurrence` distinguishes **`term_not_yet_effective`** from **`term_already_ended`**,
+because "not yet" and "no longer" send an operator to two different places. A partial period with no
+configured proration is **refused**, not billed whole.
+
+### Idempotency — three layers, all database-enforced
+
+For each `assignment × charge rule × billing period × child`, the same obligation cannot be created
+twice. This is a **constraint**, never a read-then-insert:
+
+1. `consumption_events (org_id, idempotency_key)` UNIQUE — key `cev:tuition:<assignmentId>:<periodKey>`
+2. `charges_resolution_key_unique (org_id, billable_source_type, billable_source_id, metadata->>'resolution_key')` — key `tpl:<template_key>:<occurs_on>:<scope>`
+3. `financial_reduction_applications (org_id, idempotency_key)` UNIQUE — key `fred:<policyId>:<chargeId>`
+
+The occurrence key is **period-based and deliberately excludes the term**: a tuition occurrence is
+"this child's September", and the term is what *priced* it, not what it *is*. A successor term
+re-prices the existing draft rather than opening a second obligation. A posted consequence answers
+`skipped_posted` — posted money is immutable.
+
+---
+
+## 5. Discounts, credits, adjustments, payments, prepaids — four different things
+
+These are **not** interchangeable merely because each can reduce what is currently due.
+
+| Concept | Definition | Owner |
+|---|---|---|
+| **Discount** | changes the amount charged, under a pricing/eligibility rule | `commercial_policies` (`discount`, `sibling_discount`, `waiver`) |
+| **Credit / adjustment** | changes an established financial position | `charges` with category `credit` / `adjustment` |
+| **Payment** | settles an obligation | `payments` + `payment_allocations` |
+| **Prepaid / deposit** | money held for future application | unapplied posted payment (§6) |
+
+### Commercial reduction is producer-independent
+
+`applyFinancialReductions` reads the gross `tuition` charges a period produced — **whatever produced
+them** — and `resolveFinancialReductions` never learns where a charge came from. A manually added
+eligible tuition charge and a generated one therefore use the same authority and the same rules, and
+the same policy means the same thing for both.
+
+**Attachment grain**: the household's eligibility facts (sibling rank and count, employee household,
+read server-side and never asserted by a caller), the charge's CATEGORY, and the policy's own
+`applies_to` and effective window. No cadence, no assignment, no generator.
+
+**The Billing Period owns effective policy selection.** Policies are filtered to those effective
+across the period's bounds, and gross is selected by `service_date` inside them. Not `created_at`,
+and not one date for manual and another for recurring.
+
+**Draft reductions converge; posted reductions are immutable.** The already-posted check runs BEFORE
+anything is written; a draft reduction reconciles in place; a posted one is reported and left alone,
+and a later policy edit corrects it only by appending through the correction authority. Each
+application carries a `policy_snapshot`, so editing a policy cannot rewrite what it already reduced.
+
+**Provenance lives in `financial_reduction_applications`** — the policy, its kind, the basis, the
+base it was taken on, whether a cap bound it, the period, the child and the gross charge it reduces.
+
+### Gross stays gross
+
+A reduction is a **separate charge** in the ledger (category `discount` / `credit` / `adjustment`),
+never an edit to the tuition amount. The balance authority sums those into responsibility.
+
+**Provenance is mandatory.** `financial_reduction_applications` records the decision behind the
+reduction charge: which authored policy, what it was calculated on (`basis` percentage|amount,
+`basis_value`, `basis_amount_cents`), whether it was `capped`, who decided, and a `policy_snapshot`
+of the policy **as it was** — so editing a live policy cannot rewrite what was already applied.
+Corrections append (`reverses_id` / `reversed_by_id`); a reduction is never DELETEd.
+
+`discount_applications` / `discount_programs` belong to the **jobs/booking vertical** and are not
+this. Do not point childcare reductions at them.
+
+### Eligibility is proven from canonical facts, never asserted by a caller
+
+`lib/financials/reductions/resolveReductionEligibility.ts` reads the enrolment agreements the
+household actually holds and the employments the org actually recorded. A surface that could declare
+its own eligibility would be a surface that could grant itself money.
+
+- **Sibling** = children of the same account with an agreement **covering the service period**.
+  Ranked by enrolment start then id, so the same household ranks identically on every run.
+- **Employee household** = a linked person holding an `employments` row covering the period.
+
+### One-time vs ongoing
+
+An ongoing discount is an **effective-dated policy** (`commercial_policies` effective window)
+re-evaluated per period; its idempotency key `fred:<policyId>:<chargeId>` means "not twice for this
+obligation, yes for the next eligible period". A one-time discount is a single application. Both are
+the same mechanism with different effective boundaries — **not** a second recurring scheduler.
+
+### Discount grain
+
+A discount rule must not erase the subject identity of the charge it reduces. The reduction record
+carries `customer_member_id` / `customer_id` / `enrollment_agreement_id`. For a multi-child
+operation, eligibility is evaluated **independently per resulting child obligation** — never one
+household reduction because the operator acted once.
+
+---
+
+## 6. Deposits and prepaids — unapplied payment IS the authority
+
+**Do not build a second stored-value ledger.**
+
+A posted payment with money not yet assigned to an obligation is already a canonical, durable
+financial position:
+
+```
+unapplied = amount − activeApplied − refunded        (childcarePaymentService)
+```
+
+`readPaymentUnappliedCents` is the owner. Only `status = 'active'` allocations count, so reversing
+an application returns the obligation to the charge and the money to unapplied in the **same** write
+— not two.
+
+Recording money and applying money are deliberately **separate operations**: money can arrive before
+any obligation exists. That is the deposit case, and it already works:
+
+```
+Deposit received     $500     →  posted payment, $500 unapplied
+Obligations            $0
+Tuition charge       $300     →  apply $300
+Remaining prepaid    $200     →  unapplied
+Outstanding            $0
+```
+
+**Cash arrival is not revenue recognition.** The journal separates them: `financial_journal_entries`
+carries `obligation_delta_cents` as a column distinct from `amount_cents`, precisely because a
+receipt has an amount and changes nothing owed. One column would have invited a consumer to sum it
+and get a second, wrong answer.
+
+### Deposit vs prepayment
+
+They are **one money position with different policy metadata**, not two stores. The distinction is
+already configurable: `financial_policies` type `deposit` carries `amount_cents` and `refundable`.
+A refundable held deposit and an account credit balance are the same unapplied money under different
+policy; building two ledgers for that difference would be duplication.
+
+### Application policy — allocation is canonical but normally AUTOMATIC (W7-F050 / W7-F051, 2026-10-21)
+
+This section used to say application was manual and that an automatic sweep was a policy decision
+not yet taken. **The Director took it.** Ordinary family money settles the payer's eligible outstanding
+responsibility automatically; choosing a charge by hand is the exception.
+
+**Four facts, never collapsed.**
+
+| Fact | Authority | What it decides |
+|---|---|---|
+| Charge | `charges` | the obligation and its revenue classification (GL via its category mapping) |
+| Responsibility | `financial_responsibility_allocations` | who owes what share of the charge |
+| Payment | `payments` | money received, who paid, by what tender, and the ASSET account it landed in (stamped at receipt) |
+| Allocation | `payment_allocations` (+ `payment_responsibility_attributions`) | which obligation — and whose share — the money settles |
+
+**Allocation never recognises revenue.** Applying money writes `payment_allocations` and a
+`payment_applied` journal line (an obligation delta in the non-GL subledger). It never writes the
+charge, its GL account or its revenue: Tuition stays 4000, Materials stays 4030, and the cash side is
+the payment's own stamped destination.
+
+**The one authority:** `web/lib/financials/settlement/automaticSettlement.ts` (`planSettlementFrom`,
+pure; `planSettlement` reads and plans) and `settlement/settlePayment.ts` (`settlePayment`, the
+writer, through `applyPaymentToCharge` and `attributePaymentToResponsibility`).
+
+**Eligible obligation:** stored status posted/partially_paid/paid (never a draft — a Scheduled charge
+awaiting its period is a draft — never void); not reversed and not itself a reversal or credit;
+outstanding (amount − linked corrections − active applications of posted payments) > 0; capped at
+`currentlyCollectibleCents` (a submitted subsidy claim suppresses); `due_date` on or before the
+settlement date — the same predicate as the canonical Due / Past due classification (§8). A charge
+with no due date is not "due" and is not settled automatically; it waits for explicit allocation.
+Not-yet-due money is never taken.
+
+**Whose outstanding:** each charge's outstanding splits into what NAMED people still owe (their share
+minus attributions on still-active applications) and what the ACCOUNT owes as a whole (no arrangement,
+unassigned, or unexplained cents).
+- A **named payer** settles their own share first, then the account-owned part — never another
+  person's share (Dana paying settles Dana's 75%, never Rosa's 25%, however old Rosa's charge is). The
+  part that settled their share is written as an attribution, so their remaining responsibility falls.
+- A **household payment** (no payer named) settles only account-owned outstanding. Where named
+  people owe, the money stays **unapplied** for an operator to resolve — Alloy does not guess whose
+  debt it was.
+
+**Order:** past due first, then currently due; oldest effective due date first; then oldest invoice
+date; then charge id. One canonical deterministic default (`SETTLEMENT_POLICY_LABEL`); no rules
+engine — a second strategy is added only when an operator need exists.
+
+**Partial / exact / over.** Partial: the plan applies what it can in order; the rest of the
+obligations stay outstanding. Exact: every eligible obligation settles. Over: the eligible amount
+settles; the remainder stays unapplied on the payment — the prepaid authority (§6.1), traceable to
+that payment. Nothing is invented to consume it. No eligible obligation: the whole payment is
+unapplied; receiving legitimate money is never blocked.
+
+**Every tender, every path.** Card, bank, cash, check, money order and external payments use the same
+authority once money is recorded: the Payment command's Confirm payment (`payment.record` with
+`customer_id`), a card/bank collection (`payment.collect_card` with `customer_id`; the attempt names
+the household and its ceiling is the payer's eligible amount), provider posting
+(`canonicalPosting` → `settlePayment`) and Autopay (one collection per run for the arrangement's payer:
+their own prepaid settles first, then the remaining eligible amount is collected).
+
+**Preview / commit parity.** The Payment command shows the calculated settlement (the action's own
+preview runs `planSettlement`). Confirm recomputes from current state; if the account moved, the
+still-valid canonical result is written and reported (`settlement_changed_since_preview`).
+
+**Exceptions.** Change allocation (`payment.record` / `payment.collect_card` with `charge_id`),
+Reallocate (`payment.reverse_application` + `payment.apply_to_charge`) and Apply payment on unapplied
+money remain governed, explicit acts. History is never rewritten by the policy: allocations made
+before it stand.
+
+**Aging and settlement reconcile (W7-F053, 2026-10-21).** Both read a charge's NET owed: gross −
+discount reductions (`financial_reduction_applications`) − active applications of posted payments.
+- **Past due** (`accountDueClassification.pastDueFor`) = Σ over owed, dated, not-reversed rows due
+  before today of that net residual (dated credits net it). It is the OBLIGATION and is not reduced by
+  subsidy: where a submitted claim covers part of it, the summary says "· $X expected from funding".
+- **Settlement eligibility** (`planSettlement`) = the same due rows, each capped at
+  `currentlyCollectibleCents` (net outstanding − submitted-claim suppression), then split by
+  responsibility: a named payer's own share plus what the account owes as a whole; a household payment
+  only the latter. The Payment form states what it leaves out ("owed by other responsible people",
+  "expected from funding (submitted claim)").
+- With no subsidy claim and one payer owning everything, Past due = that payer's eligible amount. The
+  Certhouse defect that broke this ($2,005 vs $1,860) was Past due subtracting money applied from the
+  GROSS of a −$145 discounted tuition that was fully paid; every due reader now nets reductions.
+- A denied or reduced claim stops suppressing through the subsidy claim state (W7-F052's
+  reconciliation); settlement never decides funding.
+
+**Subsidy is different (W7-F052, carried).** An agency remittance is reconciled against expected
+funding (`subsidy.reconcile_remittance` / `subsidy.resolve_variance`), never auto-settled as family
+money; a $35 shortfall on an $800 expectation is classified by reconciliation, not treated as a
+partial payment.
+
+---
+
+## 7. Responsibility
+
+**Owner:** `financial_responsibility_arrangements` + `financial_responsibility_shares`.
+
+Grain matches the subject model: `customer_id` always, `customer_member_id` **nullable** — null
+being household grain, the same doctrine as §1. Effective-dated, with supersede lineage; shares are
+`percentage` \| `fixed` \| `remainder` with a priority order.
+
+Responsibility answers **who owes what**. It is assigned against obligations and rules — never
+against payment methods. It belongs in **Details** administration, not Compact, and not in Manage
+Payments.
+
+**Ordering:** a discount reduces the obligation *before* responsibility is interpreted. This is not
+a new rule — it is what the balance authority already computes:
+
+```
+responsibility = gross + discounts + funding + adjustments
+```
+
+---
+
+## 8. Account summary semantics
+
+**Owner:** `buildFinancialsCardVM` — the single balance authority. Presentation code must never
+decide accounting semantics.
+
+```
+responsibility = gross + discounts + funding + adjustments   (sum of every owed line)
+balance        = responsibility − payments                    (over the SAME rows)
+past due       = owed rows whose due date has passed, MINUS what was applied
+collectible    = resolveFamilyCollectible, per charge (subsidy-aware)
+```
+
+**Due classification (BP V2 Slice 6A).** Past due, Not yet due and Due within are classified by
+`web/lib/financials/account/accountDueClassification.ts` — moved there unchanged from the card's view
+model, which imports it, so every reader classifies one way:
+
+```
+past due       = owed (posted/partially_paid/paid), non-reversed rows due STRICTLY before today,
+                 MINUS applied money; credits kept; shown only when positive
+not yet due    = owed, non-reversed, positive rows due STRICTLY after today with a residual
+due within     = the not-yet-due rule over an INCLUSIVE window (today is due, never "not yet due")
+today          = the org-local business date (`fetchOrgBusinessDate`)
+```
+
+None of them applies submitted-claim suppression — that is `computeCollectiblePosition`'s; the card's
+"Due now" composes it in its presentation adapter. Across households the same chain runs in
+`readAccountDuePositions` (`lib/financials/account/accountDuePositions.ts`): owed dated candidates paged
+to completion, the account ledger's ownership rule, full ledgers paged per id batch,
+`readAppliedByChargeId`, Financials' location rule per charge, then the functions above — truncation is
+reported, a failed read is unavailable.
+
+Past due is the **residual, not the face amount**. `charges.status` is deliberately never advanced
+to `partially_paid` / `paid`: a stored status would be a second answer to "how much is left", and
+the first reversal would make the two disagree. The applications are the record.
+
+`unresolvedVarianceCents` sits **beside** the collectible figure and is never folded into it.
+
+### The cohort must be complete, or the card must say it cannot answer
+
+Every figure above is computed over the account's charges and receipts, so the read that produces
+them is part of the authority. PostgREST answers at most 1,000 rows to any single query and reports
+nothing when it truncates, so an unpaged read of a long-lived account returned a page and the card
+presented a balance derived from part of a ledger. Measured on the certification tenant: 2,821
+charges on the account, 1,000 read, and the Financials Workspace — which already paged — reporting
+a different figure for the same family.
+
+**One primitive pages both surfaces.** `readAllPages` (beside `readInBatches` in
+`resolveFinancialPosition.ts`) walks the cohort by `.range()` until it is complete or an explicit
+cap is reached, and every caller orders by a unique column so paging cannot repeat or skip a row.
+
+**A balance may not be partial.** The workspace answers an operational question across an
+organisation and may legitimately report "there is more than this scan carried". An account's
+balance may not: a number derived from part of a ledger is wrong, not incomplete. Reaching the
+account read's cap is therefore an **unavailability** — the card says it cannot answer — and never a
+smaller number offered as the position.
+
+---
+
+## 9. Known gaps — open, and deliberately not invented around
+
+These are reported rather than patched, because each needs a decision that is not a lane's to make.
+
+### 9.1 ~~`BILLING_PERIOD_CADENCE_CONVERGENCE_REQUIRED`~~ — **CLOSED**
+
+Billing period identity is now the interval's **boundaries**, resolved from the configured cadence
+and the agreement's own anchor. See §3.1. A weekly organisation billing a four-week span now
+produces four independent obligations with four distinct identities.
+
+### 9.2 ~~Due-date rule has no configuration authority~~ — **CLOSED**
+
+`due_date` is now a financial policy type with four strategies. See §3.2. It landed as a *policy*
+rather than a template column because due terms are how an organisation runs billing, not a property
+of one charge kind — and policies are already effective-dated and scopable.
+
+### 9.3 ~~Discount eligibility is only half an intersection~~ — **CLOSED**
+
+Both halves now vote. See §5.1.
+
+### 9.4 ~~Subject grain has no configuration authority~~ — **CLOSED at the model layer**
+
+Category semantics now declare permitted grain, and a template may narrow within it. See §3.3.
+
+**CLOSED.** The multi-child Add operation ships — see §3.4.
+
+### 9.5 ~~Prepaid is representable but not surfaced as a position~~ — **CLOSED at the model layer**
+
+`resolveAccountPrepaidPosition` and `resolveAccountFinancialPosition` project the position over
+existing money. See §6.1.
+
+**CLOSED.** The position is projected into the read model and rendered on both surfaces — see
+§6.2.
+
+---
+
+## 10. Operator configuration boundary
+
+**Organization-level Financials policy belongs on `/organization/financials`** — the canonical
+configuration surface — and nowhere else. Do not create a disconnected configuration route, and do
+not leave operator-configurable policy visible only in database or config artifacts.
+
+The chapter is `?chapter=policies`, rendered by `FinancialPoliciesConfigurationPanel` /
+`CreateFinancialPolicyForm`. That form is **registry-driven**: it renders
+`POLICY_TYPE_REGISTRY[policyType].fields` generically. A policy type added to the registry is
+therefore configurable by an operator **automatically**, with no new route and no bespoke screen.
+
+`financial_policies` scopes are `org | location | service | rate_plan`, effective-dated.
+
+### The policy-type audit
+
+Three questions, and they have three different answers — which is why counting types is misleading:
+*permitted by the database*, *declared in the application registry* (and therefore configurable by
+an operator), and *actually resolved by runtime code*.
+
+| Policy type | DB | Registry | Operator-visible | Consumed by runtime | Classification |
+|---|:--:|:--:|:--:|:--:|---|
+| `proration` | ✓ | ✓ | ✓ | ✓ (4 sites) | ACTIVE_RUNTIME_POLICY |
+| `posting_review` | ✓ | ✓ | ✓ | ✓ (4 sites) | ACTIVE_RUNTIME_POLICY |
+| `billing_cadence` | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY |
+| `grace_period` | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY |
+| `vacation_credit` | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY |
+| **`due_date`** | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY *(added this pass)* |
+| `deposit` | ✓ | ✓ | ✓ | — | DECLARED, INERT — configurable, not yet read. Holds the `refundable` flag §6.1 will need. |
+| `late_fee` | ✓ | ✓ | ✓ | — | DECLARED, INERT |
+| `nsf_fee` | ✓ | ✓ | ✓ | — | DECLARED, INERT |
+| `refund` | ✓ | ✓ | ✓ | — | DECLARED, INERT |
+| `withdrawal` | ✓ | — | — | — | FUTURE |
+| `write_off` | ✓ | — | — | — | FUTURE |
+| `adjustment_approval` | ✓ | — | — | — | FUTURE |
+| `draft_expiration` | ✓ | — | — | — | FUTURE |
+
+**The four DB-only types were deliberately NOT registered.** Registering them would make an operator
+a configuration screen for policies nothing resolves — a control that changes no behaviour, which is
+worse than an absent one because it looks like a capability. They are recorded here so a future lane
+finds them instead of inventing a parallel mechanism, and each becomes registry work *at the moment
+a runtime consumer exists for it*, not before.
+
+This is the same gap `vacation_credit` documents having had — the database permitted it, the
+application never caught up, and the consumption path read a boolean off an operational fact
+instead, putting commercial authority in the wrong place. The lesson is that a type should become
+configurable **when something reads it**, which is exactly how `due_date` was added this pass.
+
+**What is NOT configuration:** individual household or child state stays in its operational record
+and in Financials Details. Generated billing periods and transactions are operational Financials
+truth, not configuration. Configuration says *what the rules are*; the ledger says *what happened*.
+
+---
+
+## 11. Surface ownership
+
+Five surfaces, one set of authorities. **There are no host-specific financial writers**: every one
+of these reads through the canonical readers and writes through the registered actions, and a
+surface that needed its own writer would be a second financial authority wearing a screen.
+
+| Surface | Owns the question | Must not grow into |
+|---|---|---|
+| **Focus Panel Summary** (`financials` card) | What is this family's position, and what are the common next acts? | responsibility administration, discount administration, deposit administration, payer setup, payment methods, allocation management |
+| **Focus Panel Details** | Deep account truth and charge-grain administration — the ledger, lenses, filters, responsibility, reductions, corrections | a second account workspace |
+| **Financials Workspace → Accounts** | The wider operational account workspace, across households | a second ledger, a second charge writer |
+| **/organization/financials** | Financial and commercial CONFIGURATION — tuition plans, billing frequencies, catalog, policies, accounting calendar, GL | transactional money |
+| **Assignment** (`scheduling`, child grain) | What this child's assignment costs and what was agreed — the recommendation and the other authored options, canonical Accept, governed Override, the persisted accepted-term read-back, review-not-reprice, Billing Frequency, the current and next Billing Period, responsibility, and the discount forecast with its exceptions | pricing. It renders Commercial Execution's answer and records a decision; it computes no amount |
+| **Assignment Tuition card** (`billing_preview`) — **RETIRED from normal composition, Financials 11B** | Nothing, by default. It remains in the library and a tenant may still place it | being re-added as the home of tuition. Tuition is part of an Assignment, not an independent operational concept |
+
+**Why Billing Preview retired.** It was placed when tuition had nowhere else to live. Assignment
+now owns every job it was placed for, and three of its four remaining jobs moved with the decision:
+the tied-set explanation, the no-match reason, and the rejected-with-reason diagnostics are all in
+Assignment's tuition section. The fourth — a household-wide pricing overview across every
+assignment at once — is the one capability lost, and it was a reading convenience rather than an
+operator act. Nothing underneath was deleted: `buildAssignmentTuitionView`, the pricing resolver,
+`enrollment.pricing.accept` / `.override` and the rejection semantics are unchanged.
+
+**Shared command authority.** Every financial mutation on every one of these surfaces goes through
+`FINANCIAL_TRANSACTION_ACTIONS` → one executor → `/api/admin/actions/execute`. The workspace
+REQUESTS and the card PERFORMS; neither writes directly.
+
+**Shared filtering.** Subject scope is `financialsRowScope` and nothing else (§2). A surface with
+its own child filter is a second subject model.
+
+---
+
+## 12. Focus panel publication integrity — the v160/v161 finding
+
+Recorded here so no future lane repeats a seven-hypothesis investigation.
+
+A published Focus Panel Summary document carries **two independent card lists**:
+
+- `doc.sections` — the authored cards: key, tier, span, density, visibility
+- `doc.metadata.focusPanelLayout` — `{ grid: { areas, columns }, rows }`, the operator-published
+  explicit layout
+
+**The runtime renders the explicit layout.** `readFocusPanelPublishedLayout` reads the metadata one,
+and when it is present the runtime draws exactly those rows and widths.
+
+For two published versions, `billing_preview` was authored into `sections` and made visible there
+while the metadata layout continued to name six other cards. The published document said the card
+existed; the panel drew six; nothing anywhere reported an error. Every surface an investigator can
+read said the card was placed.
+
+**Publication now refuses a document whose two lists disagree.** A card authored visible and absent
+from the explicit layout, or placed by the layout and authored nowhere, is a `400` at
+`/api/admin/entity-layouts/{id}/publish` — see `focusPanelPublicationIntegrity.ts`. The rule names
+no card and protects every Focus Panel card, including ones added later.
+
+**If you republish a layout, write both projections.** A `sections` entry alone is not a placement.
+
+---
+
+## 13. `BILLING_SCHEDULER_PLATFORM_PREREQUISITE` — Governed Scheduled Work V1
+
+Financials needs work to happen when nobody is looking. So do Payments and, in time, other
+domains. The platform prerequisite for all of them is one shared capability —
+**GOVERNED SCHEDULED WORK V1** — and its contract is generic:
+
+```
+CLOCK → DUE WORK → CLAIM / LEASE → REGISTERED DOMAIN HANDLER → EXECUTE
+      → RECORD OUTCOME → RETRY / RECOVER → CONVERGE
+```
+
+**The scheduler knows no economics.** It knows when to wake something and how to run it exactly
+once; it does not know what a billing period is, what a late fee costs, or whether a card may be
+charged.
+
+| Owner | Owns |
+|---|---|
+| **Financials** | what Billing work is due; Billing Period semantics; recurring generation; charge aging; late-fee economics; financial idempotency |
+| **Payments** | Autopay authorization; payer and method; collectible resolution; collection; payment recognition |
+| **Scheduled Work** | the clock; the wakeup; claim/lease; dispatch; execution mechanics; retry and recovery; outcome recording |
+
+### The three intended consumers
+
+| Handler | The scheduler's part | The domain's part |
+|---|---|---|
+| **Periodic billing** | wake the handler on the cadence | Financials determines what is due and runs canonical generation |
+| **Charge aging / late fees** | wake the handler | Financials determines age, policy, eligibility and consequence |
+| **Autopay** | wake the handler | Payments determines authorization, payer, method, collectible and collection |
+
+### Do not build
+
+**No billing cron, no autopay cron, no late-fee cron inside Financials**, and none inside Payments.
+A domain-specific scheduler is how two clocks, two lease models and two retry stories arrive — and
+the second one is always written under deadline. Converge on Governed Scheduled Work V1.
+
+---
+
+## 14. Payments status — implemented, not certified
+
+Payment method, autopay, provider, collection, settlement and deposit-lifecycle productization is
+**not** “the next program.” Payments V1 and W7 work is **implemented** under
+`web/lib/financials/payments` (and related settlement authorities such as
+`web/lib/financials/settlement/`). Companion module docs include `payments-autopay.md`,
+`payments-collection-completion.md`, `payments-held-deposits.md`,
+`payments-payment-method-reference.md`, `payments-provider-architecture.md`, and
+`payments-provider-webhook.md`. The boundary contract remains
+[`core-payments-contract.md`](./core-payments-contract.md).
+
+Distinguish these states carefully:
+
+| State | Payments today (remeasured 2026-10-27 Slice 5 @ staging `6376564d3`) |
+|---|---|
+| **Implemented** | Yes — source and operator surfaces on staging |
+| **Tested** | Substantial W7 / Director QA evidence exists; tests are not domain certification |
+| **Deployed** | Merged to staging; do not infer production solely from merge |
+| **Certified** (AI / context-package DIRECT) | **No** — lane remains `PENDING_DISABLED` |
+| **Pending certification** | Yes — classification **PENDING — GATE** (stability prerequisite not satisfied) |
+
+### Stability gate — continuous elapsed quiet (remeasured Slice 5)
+
+Gate path: `web/lib/financials/payments`. Required: **seven consecutive quiet days** of continuous
+elapsed time (no calendar-day rounding). Unrelated documentation commits outside this path do not
+reset the gate; only substantive path changes do.
+
+| Measurement | Value |
+|---|---|
+| Staging tip at measurement | `6376564d37a8157ce9726b4a15be9f9e99e25cc5` (2026-10-27T09:53:42-07:00) |
+| Last Payments semantic change | `9e3774e0ef7e89c811b8293ee02804ed04d395ac` — 2026-10-21T11:15:18-07:00 — W7-F050/F051 ordinary automatic settlement |
+| Measurement instant (UTC) | 2026-10-27T18:14:03Z |
+| Continuous quiet elapsed | **518 325 s ≈ 5.999142 days** (< 7) |
+| Commits under path in preceding 7 days | **6** (all substantive Payments/Financials code or merges touching the path — none docs-only) |
+| Gate | **CLOSED** |
+| Earliest eligibility (if no further path change) | **2026-10-28T11:15:18-07:00** (`9e3774e0e` + 7×86400 s) |
+
+**Slice 5 decision:** gate still **CLOSED** — do **not** run full Financials / Payments domain
+certification; do **not** enable the context-package lane. Once the gate opens *and* full
+certification passes: transition `financials-payments` from `PENDING_DISABLED` to the existing
+enabled Financials lane — do not invent a new lane.
+
+Do **not** load Payments documents as certified DIRECT context while the gate is closed. Do **not**
+infer that shipped Payments capabilities are “future” or “deferred product.” Do **not** declare
+Payments certified merely because the last path commit is several days old.
+
+Accepted Core deferrals that remain (Director QA catalog `CORE_DEFERRALS` in
+`lib/qa/financialsDirectorQa/scenarioCatalog.ts`) are **not** Core defects and are **not** a claim
+that Payments is absent:
+
+- ~~`SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED`~~ — **RETIRED.** The arrangement authority always
+  accepted percentage, fixed and remainder; what was deferred was the authoring surface, and the
+  Responsibility depth card now offers all three with the reconciliation stated before Confirm.
+  The authority's own refusals — total over 100%, a second remainder, a duplicate party, a party
+  outside the org — are unchanged and remain the last word.
+- `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` — canonical provenance exists and the ledger states a
+  concise preview of it; there is no deep row-inspection surface in Core.
+- `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` — deposit policy and held-deposit foundations exist; Payments
+  held-deposit productization has progressed (see `payments-held-deposits.md`). Treat residual
+  operator-product gaps as debt against that module, not as evidence that Payments has not shipped.

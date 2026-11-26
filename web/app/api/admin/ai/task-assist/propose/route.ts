@@ -5,44 +5,33 @@ import { assembleTaskAssistOpportunityContextV1 } from "@/lib/agent/taskAssist/t
 import { createTaskAssistProposal } from "@/lib/agent/taskAssist/taskAssistProposalPersistence";
 import { parseTaskAssistProposeRequest } from "@/lib/agent/taskAssist/taskAssistProposeRouteValidation";
 import { validateTaskAssistSuggestionV1ForPropose } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
-import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
-import { computeOpenAiLiveInvocationPermitted, resolveAiEnrichmentPortalAccess } from "@/lib/ai/aiEnrichmentPermissions";
-import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
-import {
-    evaluateOrgPolicyForOpenAiTaskAssistProposeRoute,
-    evaluateOrgPolicyForStubTaskAssistProposeRoute,
-} from "@/lib/ai/aiEnrichmentRouteGuards";
+import { completeTrustAuthorization, resolveTrustAccessAuthorization } from "@/lib/ai/resolveTrustAuthorization";
+import { trustAuthorizationRefusalResponse } from "@/lib/ai/trustAuthorizationHttp";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
  * POST `/api/admin/ai/task-assist/propose` — deterministic Task Assist proposal (V1 Card 2).
  *
- * **Gates:** same portal contract as enrich-attention-suggestion (`resolveAiEnrichmentPortalAccess`);
- * org `metadata.ai_policy` must allow feature **`task_assist_draft`** with provider **stub** or **openai**.
- * Stub path also requires `AI_ENRICHMENT_STUB_ENABLED=true`. OpenAI policy branch does **not** call OpenAI here.
+ * **Gates:** resolved entirely by the canonical Trust authorization seam
+ * (`resolveTrustAccessAuthorization` then `completeTrustAuthorization`, consumer `task_assist_propose`).
+ * This route branches on no authority of its own. It is the only consumer that requires a resolvable
+ * actor, because it persists one. The openai policy branch does **not** call OpenAI here.
  *
  * **Body:** `{ entity_type: "opportunities", entity_id, channel: "sms"|"email", instruction?: string, goal?: string, persist?: boolean, expires_at?: string|null }`
  *
  * Read-only by default: no DB writes, no send, no workflows. With **`persist: true`** (explicit opt-in), inserts `task_assist_proposals` when the proposal validates (still no send).
  */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
-
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return adminContextFailureResponse(access);
-
-    const portal = resolveAiEnrichmentPortalAccess({ ctx, access });
-    if (!portal.ok) {
-        return NextResponse.json(
-            { ok: false, error: portal.error, message: portal.message },
-            { status: portal.status }
-        );
-    }
-
-    const openaiLiveInvocationPermitted = computeOpenAiLiveInvocationPermitted(access);
+    // Stage 1 of the canonical authorization seam: identity, org context, portal.
+    const gate = resolveTrustAccessAuthorization({
+        consumer: "task_assist_propose",
+        ctx: await getAdminContextCached(),
+        access: await getAdminAccessContextCached(),
+    });
+    if (!gate.ok) return trustAuthorizationRefusalResponse(gate.decision)!;
+    const { ctx } = gate;
 
     let body: unknown;
     try {
@@ -71,61 +60,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "ORG_SETTINGS_LOAD_FAILED" }, { status: 500 });
     }
 
-    const org_metadata = orgSettings?.metadata ?? {};
-    const policyQuick = parseAiPolicyFromMetadata(org_metadata);
+    // Stage 2: organization policy, reasoning mode, provider availability and
+    // actor identity. The route branches on nothing itself.
+    const authorization = completeTrustAuthorization({
+        accessDecision: gate.decision,
+        orgMetadata: orgSettings?.metadata ?? {},
+    });
+    if (!authorization.permitted) return trustAuthorizationRefusalResponse(authorization)!;
 
-    if (policyQuick.provider === "openai") {
-        if (!openaiLiveInvocationPermitted) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    error: "AI_OPENAI_FORBIDDEN",
-                    message:
-                        "Task Assist (openai policy branch) requires AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true and permission ai.enrichment.use.",
-                },
-                { status: 403 }
-            );
-        }
-        const policyGate = evaluateOrgPolicyForOpenAiTaskAssistProposeRoute(org_metadata);
-        if (!policyGate.ok) {
-            return NextResponse.json(
-                { ok: false, error: policyGate.error, message: policyGate.message },
-                { status: 403 }
-            );
-        }
-    } else if (policyQuick.provider === "stub") {
-        if (!isAiEnrichmentStubEnvEnabled()) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    error: "FEATURE_DISABLED",
-                    message: "Set AI_ENRICHMENT_STUB_ENABLED=true to enable Task Assist stub policy routes.",
-                },
-                { status: 403 }
-            );
-        }
-        const policyGate = evaluateOrgPolicyForStubTaskAssistProposeRoute(org_metadata);
-        if (!policyGate.ok) {
-            return NextResponse.json(
-                { ok: false, error: policyGate.error, message: policyGate.message },
-                { status: 403 }
-            );
-        }
-    } else {
-        return NextResponse.json(
-            {
-                ok: false,
-                error: "AI_POLICY_PROVIDER",
-                message: "Task Assist requires ai_policy.provider stub or openai with task_assist_draft allowed.",
-            },
-            { status: 403 }
-        );
-    }
-
-    const userId = access.userId.trim();
-    if (!userId) {
-        return NextResponse.json({ ok: false, error: "ACTOR_REQUIRED", message: "Authenticated user id required." }, { status: 401 });
-    }
+    // Guaranteed by `requiresActorUserId` on this consumer's descriptor.
+    const userId = authorization.evidence.actor_user_id!;
 
     const assembled = await assembleTaskAssistOpportunityContextV1({
         supabase,

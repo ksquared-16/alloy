@@ -1,91 +1,288 @@
 "use client";
 
+import {
+    captureWorkspaceLauncher,
+    restoreWorkspaceLauncher,
+    type WorkspaceLauncher,
+} from "@/lib/adminV2/runtime/focusPanel/workspaceLauncherFocus";
+import {
+    ADMIN_V2_OPEN_CURRENT_WORK_ACTION,
+    type OpenCurrentWorkActionDetail,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
-import OpportunityFocusPanelEmbeddedWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace";
-import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
-import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+// Activity cockpit is rendered ONLY when `mode === "activity"` (an operator interaction, never the
+// first-paint mode). Statically importing it pulled the whole Communications stack (~1.4k-line
+// CommunicationsDrawerSection + messaging composer/threads + tab panes) into the initial Work Unit
+// chunk, where it must download+hydrate before the first provisioning request can fire. Load it on
+// demand so it leaves the first-paint critical path; the Activity data cache is prewarmed separately
+// (focusPanelActivityPrewarm), so the switch stays fast.
+const OpportunityFocusPanelEmbeddedWorkspace = dynamic(
+    () => import("@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace"),
+    { ssr: false },
+);
+import { resolveFocusPanelModeGrid } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { cardTitle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import {
     deriveFocusPanelGridFromLayoutDoc,
     deriveFocusPanelInstanceMap,
 } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
 import {
-    buildCompositionOverrides,
     composeEffectiveCardModel,
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
-import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
-import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
+import { setFocusPanelCardParticipation } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
+import { chainDiag } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
+import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
+import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
+import {
+    buildOpportunityFocusPanelMutation,
+    resolveFocusPanelMutationOpportunityId,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
-import { publishedLayoutReadingOrder, readFocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import { publishedLayoutReadingOrder } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
     isElevatedLevel,
+    resolveElevatedCellKey,
     type FocusPanelActiveDepth,
     type FocusPanelCoordination,
+    type FocusPanelCurrentWorkWorkspaceIntent,
+    type FocusPanelCurrentWorkWorkspaceState,
     type FocusPanelDepthEntry,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    focusPanelSummaryUsesPublishedDoc,
+    resolveFocusPanelSummaryActiveDoc,
+} from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryActiveDoc";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
-import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
-import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import { FOCUS_PANEL_CARD_KEYS, type FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
 /** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
 const FOCUS_PANEL_DEPTH_MS = 240;
 
+/** Operator-facing identity for a configured card, shown while its settlement detail prepares. */
+// Card titles are declared in the Focus Panel card REGISTRY (the extensibility contract, Workstream C/D)
+// — `cardTitle(key)`. The former local `FOCUS_PANEL_CARD_TITLES` map migrated there 1:1 (incl. the
+// `milestones` card staging added — carried into the registry so its title survives the migration).
+
+/**
+ * RESERVED cell — a configured card whose SETTLEMENT detail has not yet arrived. It holds the cell's
+ * geometry (card shell + min-height) so Settlement fills it IN PLACE with no reflow, and never removes
+ * a configured cell. Per the Runtime contract, a reserved cell is NOT a blank white rectangle: it
+ * shows the card's IDENTITY (title) and a compact preparing state, so the committed panel reads as a
+ * complete surface whose secondary detail is settling — not a loading placeholder.
+ */
+/**
+ * WHY a reserved cell stopped being reserved. Two very different facts share one rendering.
+ *
+ * `not_applicable` is an ANSWER: the surface resolved this card and it does not apply to this record,
+ * so an empty cell is the truth. `phase_settled_unresolved` is the ABSENCE of one: the surface
+ * declared itself settled while this card never became ready, so the cell stops looking like it is
+ * loading — which is right for the operator and wrong for a milestone, because no fact arrived.
+ *
+ * Both render identically and both drop `data-focus-panel-cell-reserved`, so a probe that counts
+ * reserved cells cannot tell them apart and scores the second as ready. That is the difference
+ * between the two cold T6 numbers this programme measured on one build, and it is the reason the
+ * reason is now stated rather than inferred.
+ */
+export type ReservedCellSettledReason = "not_applicable" | "phase_settled_unresolved";
+
+/**
+ * The rule, in one place, so the milestone and the cell cannot drift apart.
+ *
+ * ORDER IS THE SEMANTICS. `not_applicable` is a resolution and outranks everything: a card the
+ * surface answered "does not apply" is settled whatever the phase says. An EXPLICIT `reserved` then
+ * outranks the phase inference — it is a positive statement that this cell is settling for the
+ * current subject, and calling it resolved-empty would assert a fact about the record that is false
+ * while the fact is still arriving. Only with neither of those does the settled phase decide, and
+ * that branch is the one that produces an empty cell with no answer behind it.
+ */
+export function resolveReservedCellSettledReason(input: {
+    readiness: string;
+    phase: string;
+    explicitlyReserved: boolean;
+}): ReservedCellSettledReason | null {
+    if (input.readiness === "not_applicable") return "not_applicable";
+    if (input.phase === "settled" && !input.explicitlyReserved) return "phase_settled_unresolved";
+    return null;
+}
+
+export function ReservedFocusPanelCell({
+    typeKey,
+    settledReason,
+    readiness,
+    cellSubject,
+}: {
+    typeKey: FocusPanelCardKey;
+    settledReason?: ReservedCellSettledReason | null;
+    /** The readiness the grid resolved for this cell — stated, so a reader never infers it. */
+    readiness?: string | null;
+    /** The subject of the MODEL this cell belongs to. Absent reads as UNKNOWN, never as a guess. */
+    cellSubject?: string | null;
+}) {
+    const settled = settledReason != null;
+    const title = cardTitle(typeKey);
+    // CALM NEUTRAL HOLD (Kelly). Not a loading placeholder and not a "Preparing…" spinner: the cell
+    // shows the card's IDENTITY plus a quiet, STATIC content hint (no pulse — Settlement fills it in
+    // place). It reads as a settled part of the surface whose detail is arriving, so the two-phase
+    // reveal is barely perceptible and never chatters. The panel already owns the aria-busy state, so
+    // the hold is aria-hidden rather than announcing per cell.
+    //
+    // `settled` = the card RESOLVED as not-applicable to this record. It is NOT loading, so it must
+    // NOT show the content hint (that reads as a card that loads forever). It keeps the cell (stable
+    // composition, no reflow) but renders as a quiet resolved-empty state, not a settling reserve.
+    return (
+        <div
+            className="alloy-os-ucard"
+            data-focus-panel-cell-reserved={settled ? undefined : "true"}
+            data-focus-panel-cell-not-applicable={settled ? "true" : undefined}
+            data-focus-panel-cell-preparing={settled ? undefined : typeKey}
+            // The cell's card key, on EVERY state. Without it a settled-empty cell is anonymous, so
+            // "which first-order fact never arrived" is unanswerable exactly when it matters.
+            data-focus-panel-cell-key={typeKey}
+            data-focus-panel-cell-settled-reason={settledReason ?? undefined}
+            data-focus-panel-cell-readiness={readiness ?? undefined}
+            data-focus-panel-cell-subject={cellSubject ?? undefined}
+            style={{ minHeight: "7.5rem", padding: "0.875rem", opacity: settled ? 0.72 : undefined }}
+        >
+            {title ? (
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-muted">
+                    {title}
+                </span>
+            ) : null}
+            {/*
+              * No stand-in bars. Two grey rectangles are a guess at a shape the card may not have, and
+              * in a cell stretched to a full published rowSpan they sit marooned at the top of a large
+              * empty area — which reads as a card that failed rather than one that is arriving. The
+              * identity above is the honest statement (this cell belongs to this card, its detail is
+              * settling) and the receded surface carries "not yet" without inventing content.
+              */}
+            {/*
+              * ONE QUIET LINE THAT SAYS WHAT IS HAPPENING (P0-7.4).
+              *
+              * The identity-only cell was measured holding for 8.5 s on deployed staging with nothing
+              * under the title, and the operator read it as broken rather than arriving — "reserved
+              * cards are truthful but appear as large empty bordered regions". The title alone states
+              * WHICH card this is; it never states that anything is coming.
+              *
+              * So: the card's own name, resolving. No values, no counts, no statuses, no stand-in bars,
+              * no shimmer — every objection in the comment above still holds, and none of them is
+              * answered by a second grey rectangle. A sentence is not a guess at the card's shape.
+              *
+              * Only for the SETTLING reserve. A `settled` cell resolved as not-applicable is not
+              * arriving, and telling the operator it is resolving would be a lie that never resolves.
+              */}
+            {!settled && title ? (
+                <span
+                    className="mt-1.5 block text-[12px] leading-snug text-alloy-muted/70"
+                    data-focus-panel-cell-resolving={typeKey}
+                >
+                    {`Resolving ${title.toLowerCase()}…`}
+                </span>
+            ) : null}
+        </div>
+    );
+}
+
 type Props = {
-    mode: FocusPanelMode;
-    displayVm: OpportunityDrawerViewModel;
-    drawerId: string;
-    record: Record<string, unknown>;
-    title: string;
-    perspective: RuntimePerspective | null;
-    statusLabel: string | null;
-    canMutate: boolean;
+    model: FocusPanelWorkModeModel;
     onSelectTab: (tab: DrawerTabKey) => void;
     onHeaderAction?: (action: ResolvedActionForClient) => void;
+    onModeChange?: (mode: FocusPanelMode) => void;
+    /**
+     * A card the SELECTION asked to land on (today: Search).
+     *
+     * Passed in rather than read from the drawer context because this component is
+     * deliberately source-agnostic — it renders a model and must not know where the
+     * selection came from. `subject_key` scopes the request so switching subject
+     * re-applies focus, while unrelated re-renders do not fight an operator who has
+     * since focused something else.
+     */
+    requestedCardFocus?: { card_key: string; item_id?: string | null; subject_key?: string | null } | null;
 };
 
-/** Renders a mode grid from derived Universal Card models — never from layout sections. */
+/** Renders a mode grid from a source-agnostic `FocusPanelWorkModeModel` — never the drawer VM. */
 export default function OpportunityFocusPanelModeGrid({
-    mode,
-    displayVm,
-    drawerId,
-    record,
-    title,
-    perspective,
-    statusLabel,
-    canMutate,
+    model,
     onSelectTab,
     onHeaderAction,
+    onModeChange,
+    requestedCardFocus,
 }: Props) {
-    const { grid: defaultGrid, cards } = useMemo(
-        () =>
-            deriveOpportunityFocusPanelPresentation({
-                mode,
-                displayVm,
-                record,
-                title,
-                perspective,
-                statusLabel,
-            }),
-        [mode, displayVm, record, title, perspective, statusLabel],
-    );
+    // Source-agnostic: the model is produced identically from the provisioning answer (commit-critical)
+    // or the drawer VM (enriched). The grid never knows which — configuration determines composition,
+    // readiness determines each cell's content state.
+    const {
+        mode,
+        context: operationalContext,
+        cardModels: cards,
+        cardReadiness,
+        commands,
+        title,
+        statusLabel,
+        perspective,
+        canMutate,
+    } = model;
+    // Attention subject may be the child; mutations + activity entity binding stay on the
+    // family opportunity (Record of Truth) so child-grain saves/photo patches stick.
+    const drawerId = resolveFocusPanelMutationOpportunityId({
+        subjectId: model.subject.id,
+        grain: operationalContext.grain,
+        truth: operationalContext.truth,
+    });
+    const record = operationalContext.truth;
+    const workflowActive = operationalContext.stageWorkRuntime?.primary?.state === "open";
+    const defaultGrid = useMemo(() => resolveFocusPanelModeGrid(mode, workflowActive), [mode, workflowActive]);
 
     // Summary is the configurable surface: read the org's PUBLISHED LayoutDoc (or
     // the code-built default — visually identical) and resolve per-instance config.
     // The Household card is part of this canonical composition (no flag, no
     // reference-only override).
     const isSummary = mode === "summary";
-    const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary);
-    const activeDoc = isSummary ? publishedDoc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC : null;
+    const subjectGrain = asFocusPanelSubjectGrain(model.subject.type);
+    /**
+     * Does a settled family opportunity stand behind this subject?
+     *
+     * The durable path opens a record subject-first — no Opportunity, no lens — so nothing
+     * family-scoped is authoritative and its composition stays sparse. Every other source reached
+     * this panel through an operational lens, where `overlayChildMissionOntoSettledFocusModel`
+     * states the contract: Record of Attention = the focused child, Record of Truth / Settlement =
+     * the family opportunity. That is a CONTEXT distinction, not a grain one — expressing it as a
+     * grain would have re-litigated `cardAppliesToGrain` and leaked family cards onto every child.
+     */
+    const familySettlement = model.source !== "durable_subject";
+    /*
+     * WHICH SUBJECTS COMPOSE FROM THE ORG'S PUBLISHED SURFACE.
+     *
+     * The rule lives in `focusPanelSummaryUsesPublishedDoc`, which is also what the pending
+     * skeleton asks — one answer, not two. It is `(grain, context)` rather than grain alone
+     * because the enrollment Work Unit row IS a child subject standing on a family opportunity:
+     * gating on grain alone silently overrode the operator's published Surface with a hard-coded
+     * composition on the very surface they authored it for. A person or household subject still
+     * gets its code-owned default; that is the hazard the gate exists for, and it is unchanged.
+     */
+    const usesPublishedDoc = focusPanelSummaryUsesPublishedDoc(subjectGrain, { familySettlement });
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary && usesPublishedDoc);
+    // Resolved through the SAME function the pending skeleton uses, so the surface cannot
+    // be composed from one document while loading and another once settled.
+    const activeDoc = resolveFocusPanelSummaryActiveDoc({
+        isSummary,
+        grain: subjectGrain,
+        publishedDoc,
+        context: { familySettlement },
+    });
     const instanceMap = useMemo(
         () => (activeDoc ? deriveFocusPanelInstanceMap(activeDoc) : new Map()),
         [activeDoc],
@@ -95,12 +292,19 @@ export default function OpportunityFocusPanelModeGrid({
         const derived = deriveFocusPanelGridFromLayoutDoc(activeDoc);
         return derived.rows.length > 0 ? derived : defaultGrid;
     }, [isSummary, activeDoc, defaultGrid]);
-    // Operator-published explicit layout (source of truth). When present the runtime
-    // renders these exact rows/widths; otherwise it falls back to auto-composition.
-    const publishedLayout = useMemo(
-        () => (isSummary ? readFocusPanelPublishedLayout(activeDoc) : null),
+
+    // Record-independent composition inputs for the Summary surface — the SAME derivation
+    // the pending skeleton (`FocusPanelSummarySkeleton`) uses WITHOUT cards, guaranteeing an
+    // identical grid strategy + cell positions pending → resolved (only content transitions).
+    // Here the resolved `cards` map is passed so the visibility filter applies exactly as
+    // before (behavior-preserving extraction). Non-summary modes keep the legacy grid path.
+    const summaryInputs = useMemo(
+        () => (isSummary ? deriveFocusPanelSummaryCompositionInputs(activeDoc) : null),
         [isSummary, activeDoc],
     );
+    // Operator-published explicit layout (source of truth). When present the runtime
+    // renders these exact rows/widths; otherwise it falls back to auto-composition.
+    const publishedLayout = isSummary ? summaryInputs?.publishedLayout ?? null : null;
 
     // ── Layout SOURCE tracer (the "correct → overwritten" diagnostic) ────────
     // Records, whenever the resolved layout changes, WHERE the runtime layout came from
@@ -122,21 +326,6 @@ export default function OpportunityFocusPanelModeGrid({
         (w.__focusPanelLayoutLog ||= []).push(entry);
     }, [isSummary, publishedDoc, publishedLayout, activeDoc]);
 
-    // Adapter seam: composed subject payload → Operational Context. Cards consume
-    // this boundary, never the drawer VM directly. Built once; observed by cards.
-    const operationalContext = useMemo(
-        () =>
-            buildOperationalContext({
-                subjectId: drawerId,
-                title,
-                subjectVm: displayVm,
-                truth: record,
-                perspective,
-                statusLabel,
-                canMutate,
-            }),
-        [drawerId, title, displayVm, record, perspective, statusLabel, canMutate],
-    );
 
     // Cross-card handoff orchestration: a referencing card (e.g. Readiness) asks an
     // owner card (e.g. Children) to open a Perspective. We record the request with a
@@ -149,6 +338,98 @@ export default function OpportunityFocusPanelModeGrid({
     // pushes its source; Back pops and returns to the prior card/focus.
     const depthHistoryRef = useRef<FocusPanelDepthEntry[]>([]);
     const [previousFocus, setPreviousFocus] = useState<FocusPanelDepthEntry | null>(null);
+
+    /**
+     * Current Work operational workspace — replaces the summary card grid for the
+     * active record (not a centered modal / elevated card). Closed restores cards.
+     */
+    const [currentWorkWorkspace, setCurrentWorkWorkspace] = useState<FocusPanelCurrentWorkWorkspaceState>({
+        open: false,
+        intent: null,
+    });
+    /*
+     * E2E-11 — FOCUS RETURNS TO WHAT LAUNCHED THE COMMAND.
+     *
+     * Every launch (process card, Manage, Children / Household "+", Current Work buttons) and every
+     * close (X, Cancel, complete, Escape, backdrop) passes through this grid's workspace state, so the
+     * host owns the round trip. The launcher is recorded when the workspace opens — with a selector
+     * from its own data attribute, because the summary card re-renders its buttons — and focused
+     * again once the workspace has closed and the summary is back. A Manage item's menu is gone by
+     * then, so it returns to the Manage trigger. The card's own attempt focused a ref inside a card
+     * that had already unmounted, so focus fell to <body>.
+     */
+    const workspaceLauncherRef = useRef<WorkspaceLauncher | null>(null);
+    const workspaceOpenRef = useRef(false);
+    const openCurrentWorkWorkspace = useCallback(
+        (intent: FocusPanelCurrentWorkWorkspaceIntent | null = { kind: "drill_in" }) => {
+            if (!workspaceOpenRef.current && typeof document !== "undefined") {
+                workspaceLauncherRef.current = captureWorkspaceLauncher(
+                    document,
+                    intent?.kind === "action" && Boolean(intent.resolved),
+                );
+            }
+            setCurrentWorkWorkspace({ open: true, intent: intent ?? { kind: "drill_in" } });
+        },
+        [],
+    );
+    useEffect(() => {
+        const wasOpen = workspaceOpenRef.current;
+        workspaceOpenRef.current = currentWorkWorkspace.open;
+        if (!wasOpen || currentWorkWorkspace.open) return;
+        const launcher = workspaceLauncherRef.current;
+        workspaceLauncherRef.current = null;
+        if (typeof document !== "undefined") restoreWorkspaceLauncher(document, launcher);
+    }, [currentWorkWorkspace.open]);
+    const closeCurrentWorkWorkspace = useCallback(() => {
+        setCurrentWorkWorkspace({ open: false, intent: null });
+    }, []);
+    const clearCurrentWorkWorkspaceIntent = useCallback(() => {
+        setCurrentWorkWorkspace((prev) => (prev.intent ? { ...prev, intent: null } : prev));
+    }, []);
+    useEffect(() => {
+        // Leaving Work/summary for Activity must restore identity-card composition later.
+        if (mode !== "summary" && mode !== "work") {
+            setCurrentWorkWorkspace({ open: false, intent: null });
+        }
+    }, [mode]);
+    /*
+     * E2E-03 — a record action Manage carries in (Add Child) is hosted HERE, by the same workspace the
+     * process card opens, so both placements run one command. From Activity the panel returns to
+     * Work first; the mode effect above leaves an open workspace alone once the mode is Work.
+     */
+    const subjectId = model.subject.id;
+    useEffect(() => {
+        const onOpenAction = (event: Event) => {
+            const detail = (event as CustomEvent<OpenCurrentWorkActionDetail>).detail;
+            const key = detail?.action?.key?.trim();
+            if (!key || !detail.opportunity_id) return;
+            if (detail.opportunity_id !== drawerId && detail.opportunity_id !== subjectId) return;
+            if (mode !== "summary" && mode !== "work") onModeChange?.("summary");
+            openCurrentWorkWorkspace({ kind: "action", actionKey: key, resolved: detail.action });
+        };
+        window.addEventListener(ADMIN_V2_OPEN_CURRENT_WORK_ACTION, onOpenAction as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_CURRENT_WORK_ACTION, onOpenAction as EventListener);
+    }, [drawerId, subjectId, mode, onModeChange, openCurrentWorkWorkspace]);
+    // Attention identity (queue row / subject), not resolved family opportunity id.
+    // Child Waitlist truth enrichment often flips drawerId process-instance → family
+    // opportunity without changing Attention — resetting on drawerId was closing
+    // Current Work mid-open (Message / Tour Invitation composer vanishing).
+    // Skip the initial mount: ModeGrid remounts on context enrich, and a mount-time
+    // reset was collapsing a just-opened workspace before the composer could paint.
+    const attentionSubjectId = model.subject.id;
+    const prevAttentionSubjectIdRef = useRef<string | null>(null);
+    useEffect(() => {
+        const prev = prevAttentionSubjectIdRef.current;
+        prevAttentionSubjectIdRef.current = attentionSubjectId;
+        if (prev == null || prev === attentionSubjectId) return;
+        setCurrentWorkWorkspace({ open: false, intent: null });
+    }, [attentionSubjectId]);
+
+    // In-panel depth layer: a card reports when it opens deep (focused / edit). The
+    // host raises that card and recedes the rest — no route, no drawer, no modal.
+    // Declared before requestFocus so Linked-card opens can elevate immediately.
+    const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
+
     const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         focusNonceRef.current += 1;
         setFocusRequest({ card, focus, nonce: focusNonceRef.current });
@@ -161,53 +442,158 @@ export default function OpportunityFocusPanelModeGrid({
             });
         }
     }, []);
+
+    // ── SELECTION-REQUESTED CARD + ITEM FOCUS ──
+    //
+    // A caller (today: Search) asks for a specific card, and often a specific row inside it, through
+    // the kernel's ASPECT attention — the same movement that carried the subject. Clicking a child
+    // therefore lands on Children with that child selected, rather than on the panel's default
+    // composition, and the caller never touches the DOM or owns a second focus state: this drives the
+    // existing `activeDepth`/`elevatedCellKey` machinery and the existing `focusRequest` the cards
+    // already consume.
+    //
+    // `emitFocus` is what carries the ITEM. Elevating the card alone was the gap: the panel opened
+    // Children and left the operator to find the child themselves.
+    //
+    // Keyed on the REQUEST identity (subject + card + item) so a rapid subject switch re-applies,
+    // while a re-render for any other reason does not fight an operator who has since focused
+    // something else themselves.
+    const requestedFocusKey = requestedCardFocus
+        ? `${requestedCardFocus.subject_key ?? ""}:${requestedCardFocus.card_key}:${requestedCardFocus.item_id ?? ""}`
+        : null;
+    const appliedFocusKeyRef = useRef<string | null>(null);
+    /**
+     * The card whose elevation came from OUTSIDE the panel and which has not yet reported an elevated
+     * level of its own. Null at every other time — this protects exactly one transition, never a
+     * persistent state, so the operator can always collapse the card afterwards.
+     */
+    const requestedElevationCardRef = useRef<FocusPanelCardKey | null>(null);
+    useEffect(() => {
+        if (!requestedCardFocus || !requestedFocusKey) return;
+        if (appliedFocusKeyRef.current === requestedFocusKey) return;
+        const card = requestedCardFocus.card_key;
+        if (!(FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(card)) return;
+        appliedFocusKeyRef.current = requestedFocusKey;
+        // The elevation was asked for from OUTSIDE the panel, so the target card has not taken
+        // ownership of it yet. Until it does, its own mount-time "base" report must not tear the
+        // elevation back down — see `reportPerspective`.
+        requestedElevationCardRef.current = card as FocusPanelCardKey;
+        setActiveDepth({ card: card as FocusPanelCardKey, level: "focused" });
+        const item = (requestedCardFocus.item_id ?? "").trim();
+        if (item) emitFocus(card as FocusPanelCardKey, item);
+    }, [requestedCardFocus, requestedFocusKey, emitFocus]);
+
     const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>(
         (card, focus, source) => {
             if (source) {
                 depthHistoryRef.current = [...depthHistoryRef.current, source];
                 setPreviousFocus(source);
             }
+            // Current Work is a full Focus Panel workspace, not a centered elevated card.
+            if (card === "current_work") {
+                openCurrentWorkWorkspace({ kind: "drill_in" });
+                return;
+            }
+            if (currentWorkWorkspace.open) {
+                closeCurrentWorkWorkspace();
+            }
+            // Linked cards are not in the initial grid — host them as an elevated overlay.
+            if (summaryInputs?.visibilityByCardKey.get(card) === "linked") {
+                setActiveDepth({ card, level: "focused" });
+            }
             emitFocus(card, focus);
         },
-        [emitFocus],
+        [
+            closeCurrentWorkWorkspace,
+            currentWorkWorkspace.open,
+            emitFocus,
+            openCurrentWorkWorkspace,
+            summaryInputs?.visibilityByCardKey,
+        ],
     );
     const back = useCallback(() => {
+        if (currentWorkWorkspace.open) {
+            closeCurrentWorkWorkspace();
+            return;
+        }
         const stack = depthHistoryRef.current;
         const prev = stack[stack.length - 1];
         if (!prev) return;
         depthHistoryRef.current = stack.slice(0, -1);
         setPreviousFocus(depthHistoryRef.current[depthHistoryRef.current.length - 1] ?? null);
+        if (prev.card === "current_work") {
+            setActiveDepth(null);
+            openCurrentWorkWorkspace({ kind: "drill_in" });
+            return;
+        }
+        // Leaving a Linked host for a Visible card must clear the overlay; returning
+        // to another Linked card re-hosts it.
+        if (summaryInputs?.visibilityByCardKey.get(prev.card) === "linked") {
+            setActiveDepth({ card: prev.card, level: "focused" });
+        } else {
+            setActiveDepth(null);
+        }
         emitFocus(prev.card, prev.focus);
-    }, [emitFocus]);
-    // In-panel depth layer: a card reports when it opens deep (focused / edit). The
-    // host raises that card and recedes the rest — no route, no drawer, no modal.
-    const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
+    }, [
+        closeCurrentWorkWorkspace,
+        currentWorkWorkspace.open,
+        emitFocus,
+        openCurrentWorkWorkspace,
+        summaryInputs?.visibilityByCardKey,
+    ]);
     const reportPerspective = useCallback<NonNullable<FocusPanelCoordination["reportPerspective"]>>(
         (card, level) => {
             setActiveDepth((prev) => {
-                if (isElevatedLevel(level)) return { card, level };
+                const isLinked = summaryInputs?.visibilityByCardKey.get(card) === "linked";
+                if (isElevatedLevel(level)) {
+                    // The card has taken ownership of the elevation; it no longer needs protecting
+                    // from its own base report.
+                    if (requestedElevationCardRef.current === card) requestedElevationCardRef.current = null;
+                    // Linked overlays are opened only by requestFocus. Ignore self-reports
+                    // that would reopen after dismiss while the card still has local focus.
+                    if (isLinked) return prev?.card === card ? { card, level } : prev;
+                    return { card, level };
+                }
+                // Linked host: ignore mount-time "base" (focus applies in an effect).
+                // dismiss() clears activeDepth explicitly after the close animation.
+                if (isLinked && prev?.card === card) return prev;
+                // EXTERNALLY REQUESTED elevation: ignore this card's mount-time "base" for the same
+                // reason the linked host does. A selection request (Search, a deep link) elevates a
+                // card the operator has not interacted with; the card then mounts, has nothing
+                // selected of its own, and honestly reports "base" — which cleared the elevation the
+                // request had just set. Measured: a card-focus request carrying an ITEM survived
+                // (selecting the item makes the card report an elevated level), and the identical
+                // request WITHOUT an item was torn down between frames, so "open the Household card"
+                // did nothing while "open Jane" worked.
+                if (requestedElevationCardRef.current === card && prev?.card === card) return prev;
                 // Receding/leaving: only clear if this card owned the active layer.
                 return prev?.card === card ? null : prev;
             });
         },
-        [],
+        [summaryInputs?.visibilityByCardKey],
     );
     // Return-to-base: backdrop click / ESC asks the active card to collapse. To play
     // the reverse-zoom, we hold the card elevated for one depth duration (`closing`)
     // BEFORE resetting it — so the focused card flies back to its cell instead of
-    // snapping. After the window the card resets → reports "base" → activeDepth clears.
+    // snapping. After the window the card resets; dismiss clears activeDepth (Linked
+    // hosts ignore "base" reports, so the host must clear depth explicitly).
     const [dismissed, setDismissed] = useState<FocusPanelDismissSignal | null>(null);
     const [closing, setClosing] = useState(false);
     const dismissNonceRef = useRef(0);
     const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dismiss = useCallback<NonNullable<FocusPanelCoordination["dismiss"]>>((card) => {
         if (closeTimerRef.current) return; // already closing — ignore repeat dismiss
+        // The operator is collapsing the card, so the externally-requested elevation is over. Without
+        // this the guard in `reportPerspective` would refuse the card's base report and the card
+        // could not be closed.
+        if (requestedElevationCardRef.current === card) requestedElevationCardRef.current = null;
         setClosing(true);
         closeTimerRef.current = setTimeout(() => {
             closeTimerRef.current = null;
             dismissNonceRef.current += 1;
             setDismissed({ card, nonce: dismissNonceRef.current });
             setClosing(false);
+            setActiveDepth((prev) => (prev?.card === card ? null : prev));
             // Returning to the base panel ends the handoff chain.
             depthHistoryRef.current = [];
             setPreviousFocus(null);
@@ -219,43 +605,48 @@ export default function OpportunityFocusPanelModeGrid({
         },
         [],
     );
-    const coordination = useMemo<FocusPanelCoordination>(
-        () => ({ request: focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back }),
-        [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back],
-    );
-    const elevatedCellKey = activeDepth?.card ?? null;
-
     // Edit seam (Household V1): a separate injected save capability (NOT a write on
     // the read-only Operational Context). Persists via the existing person PATCH path
     // and broadcasts the existing record-patch events → VM merge → context recompose.
+    const recordRef = useRef(record);
+    recordRef.current = record;
     const mutation = useMemo(
-        () => buildOpportunityFocusPanelMutation({ canMutate, opportunityId: drawerId, truth: record }),
+        () =>
+            buildOpportunityFocusPanelMutation({
+                canMutate,
+                opportunityId: drawerId,
+                truth: record,
+                getTruth: () => recordRef.current,
+            }),
         [canMutate, drawerId, record],
     );
 
-    // ESC returns the focused/edit card to its base Work surface. Captured before the
-    // drawer's own ESC-to-close handler and stopped, so ESC dismisses the depth layer
-    // FIRST and does not also close the whole record. Only active while a card is deep.
+    // ESC: return the focused/edit card to base (Current Work now elevates via activeDepth,
+    // so it dismisses through the same animated path). Captured before the drawer's ESC-to-close
+    // so depth dismisses without closing the record.
     useEffect(() => {
-        if (!activeDepth) return;
+        if (!currentWorkWorkspace.open && !activeDepth) return;
         const onKey = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
+            // Capture beats the drawer (an OUTER layer) by design — but it also beats every INNER
+            // layer, so an open select menu, Radix menu or inline field editor would be collapsed
+            // along with the card by one keypress. Yield to whichever is open; it closes itself.
+            if (hasInnerDismissibleLayer(document)) return;
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
-            dismiss(activeDepth.card);
+            if (activeDepth) {
+                dismiss(activeDepth.card);
+                return;
+            }
+            if (currentWorkWorkspace.open) closeCurrentWorkWorkspace();
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-    }, [activeDepth, dismiss]);
-
-    const workflowActive = Boolean(
-        displayVm.workspace.work_intent_runtime?.state === "open" ||
-            displayVm.workspace.stage_work_runtime?.primary?.state === "open",
-    );
+    }, [activeDepth, closeCurrentWorkWorkspace, currentWorkWorkspace.open, dismiss]);
 
     /** cellKey (instance) → { typeKey, config } for model + config resolution. */
-    const cellResolution = useMemo(() => {
+    const legacyCellResolution = useMemo(() => {
         const map = new Map<string, { typeKey: FocusPanelCardKey; config: FocusPanelCardConfig | null }>();
         grid.rows.forEach((row) => {
             row.cells.forEach((cell) => {
@@ -268,60 +659,165 @@ export default function OpportunityFocusPanelModeGrid({
         });
         return map;
     }, [grid, instanceMap]);
+    const cellResolution = isSummary ? summaryInputs!.cellResolution : legacyCellResolution;
+    const elevatedCellKey = useMemo(
+        () => resolveElevatedCellKey(activeDepth?.card ?? null, cellResolution),
+        [activeDepth?.card, cellResolution],
+    );
 
-    const gridRows = useMemo(
+    const legacyGridRows = useMemo(
         () =>
             grid.rows
                 .map((row) => ({
-                    cells: row.cells
-                        .filter((cell) => cards.get(cell.key as FocusPanelCardKey)?.visible !== false)
-                        .map((cell) => ({
-                            key: cell.instanceKey ?? cell.key,
-                            span: cell.span,
-                            density: cell.density,
-                        })),
+                    // Configuration-driven: every configured cell is present; readiness decides content.
+                    cells: row.cells.map((cell) => ({
+                        key: cell.instanceKey ?? cell.key,
+                        span: cell.span,
+                        density: cell.density,
+                    })),
                 }))
                 .filter((row) => row.cells.length > 0),
-        [grid, cards],
+        [grid],
+    );
+    const gridRows = isSummary ? summaryInputs!.gridRows : legacyGridRows;
+
+    /*
+     * REPORT WHAT THIS PANEL ACTUALLY PLACES, so readiness can be measured as the operator sees it.
+     *
+     * Derived from the SAME two values `renderCell` uses — the rendered rows and the cell resolution
+     * — so participation cannot drift from what is on screen, and no second composition is computed
+     * for telemetry. Linked and hidden cards are already absent from `gridRows`, so a navigable card
+     * that occupies no initial cell correctly does not count as visible readiness.
+     */
+    const placedCardKeys = useMemo(
+        () =>
+            gridRows.flatMap((row) =>
+                row.cells.map((cell) => (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey),
+            ),
+        [gridRows, cellResolution],
+    );
+    useEffect(() => {
+        setFocusPanelCardParticipation(model.subject.id, placedCardKeys);
+        /*
+         * SUMMARY_COMMIT_START / SUMMARY_COMMIT_END.
+         *
+         * Recorded inside the effect that ALREADY reports participation, so no hook, scheduler or
+         * layout effect is introduced and paint is not touched. This effect runs after React has
+         * mutated the DOM for this composition, which is the commit that produces WU-09's
+         * authoritative burst — so it brackets the commit rather than estimating it.
+         */
+        const d = chainDiag();
+        if (d && typeof performance !== "undefined") {
+            const at = performance.now();
+            if (d.commitStartAt == null) d.commitStartAt = at;
+            d.commitEndAt = at;
+            d.placedCardCount = placedCardKeys.length;
+        }
+    }, [model.subject.id, placedCardKeys]);
+
+    const focusTargets = useMemo(() => {
+        const set = new Set<FocusPanelCardKey>();
+        // Only READY cards can receive focus; reserved/not-applicable cells hold geometry only.
+        for (const row of gridRows) {
+            for (const cell of row.cells) {
+                const typeKey = (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey;
+                if (cardReadiness.get(typeKey) === "ready") set.add(typeKey);
+            }
+        }
+        if (publishedLayout) {
+            for (const cardKey of publishedLayoutReadingOrder(publishedLayout)) {
+                const typeKey = cardKey as FocusPanelCardKey;
+                if (cardReadiness.get(typeKey) === "ready") set.add(typeKey);
+            }
+        }
+        // Linked cards are navigable destinations even though they are not in the initial grid.
+        for (const linkedKey of summaryInputs?.linkedCardKeys ?? []) {
+            if (cardReadiness.get(linkedKey) === "ready") set.add(linkedKey);
+        }
+        return set;
+    }, [gridRows, cellResolution, cardReadiness, publishedLayout, summaryInputs?.linkedCardKeys]);
+
+    const resolveCommsAction = useCallback(
+        () => resolveCommunicationsComposerAction(commands),
+        [commands],
+    );
+
+    const coordination = useMemo<FocusPanelCoordination>(
+        () => ({
+            focusTargets,
+            openFocusPanelMode: onModeChange,
+            invokeHeaderAction: onHeaderAction,
+            resolveCommunicationsComposerAction: resolveCommsAction,
+            currentWorkWorkspace,
+            openCurrentWorkWorkspace,
+            closeCurrentWorkWorkspace,
+            clearCurrentWorkWorkspaceIntent,
+            request: focusRequest,
+            requestFocus,
+            activeDepth,
+            reportPerspective,
+            dismissed,
+            dismiss,
+            previousFocus,
+            back,
+        }),
+        [
+            focusTargets,
+            onModeChange,
+            onHeaderAction,
+            resolveCommsAction,
+            currentWorkWorkspace,
+            openCurrentWorkWorkspace,
+            closeCurrentWorkWorkspace,
+            clearCurrentWorkWorkspaceIntent,
+            focusRequest,
+            requestFocus,
+            activeDepth,
+            reportPerspective,
+            dismissed,
+            dismiss,
+            previousFocus,
+            back,
+        ],
     );
 
     // Composition Engine input — Summary is COMPOSED from card semantics (lanes /
     // stack), not laid out as equal grid cells. Reading order + visibility stay
     // config-driven (gridRows); the engine owns grouping + width. Work and other
     // modes keep the legacy responsive grid.
-    const composeCards = useMemo<CompositionCardInput[] | null>(() => {
-        if (!isSummary) return null;
-        return gridRows.flatMap((row) =>
-            row.cells.map((cell) => ({
-                key: cell.key,
-                typeKey: (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey,
-            })),
-        );
-    }, [isSummary, gridRows, cellResolution]);
+    const composeCards: CompositionCardInput[] | null = isSummary ? summaryInputs!.composeCards : null;
 
     // Composition overrides (Experience Builder): per-card weight / row / depth the
     // published Surface Definition declared, fed to the engine so the operator surface
     // composes per config. Keyed by card type; platform defaults fill the rest.
-    const compositionOverrides = useMemo(
-        () =>
-            isSummary
-                ? buildCompositionOverrides(
-                      Array.from(cellResolution.values()).map((r) => ({ typeKey: r.typeKey, config: r.config })),
-                  )
-                : undefined,
-        [isSummary, cellResolution],
-    );
+    const compositionOverrides = isSummary ? summaryInputs!.compositionOverrides : undefined;
 
     if (mode === "activity") {
         return (
             <OpportunityFocusPanelEmbeddedWorkspace
                 drawerId={drawerId}
                 record={record}
-                displayVm={displayVm}
+                communicationsPreview={operationalContext.communicationsPreview ?? null}
                 onSelectTab={onSelectTab}
             />
         );
     }
+
+    // Slice A: Current Work no longer replaces the canvas. When opened it elevates as a
+    // top-pinned Focus Card through the standard activeDepth/elevatedCellKey path below — its
+    // grid cell reports "focused" and FocusPanelCardGrid raises it (backdrop + top-aligned).
+
+    // Linked cards are not in the Visible grid — when focused, host them in a transient
+    // top-pinned overlay (same workspace feel; does not permanently insert into layout).
+    const linkedHostCard =
+        activeDepth
+        && summaryInputs?.visibilityByCardKey.get(activeDepth.card) === "linked"
+            ? activeDepth.card
+            : null;
+    const linkedHostModel = linkedHostCard ? cards.get(linkedHostCard) : null;
+    const linkedHostResolution = linkedHostCard
+        ? cellResolution.get(linkedHostCard) ?? { typeKey: linkedHostCard, config: null }
+        : null;
 
     return (
         <div
@@ -340,7 +836,7 @@ export default function OpportunityFocusPanelModeGrid({
                 compositionOverrides={compositionOverrides}
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
                 dataFocusPanelSplitLayout={mode === "work" ? "true" : undefined}
-                elevatedCellKey={elevatedCellKey}
+                elevatedCellKey={linkedHostCard ? null : elevatedCellKey}
                 closing={closing}
                 onBackdropClick={() => {
                     if (activeDepth) dismiss(activeDepth.card);
@@ -348,28 +844,133 @@ export default function OpportunityFocusPanelModeGrid({
                 renderCell={(key) => {
                     const resolution = cellResolution.get(key);
                     const typeKey = (resolution?.typeKey ?? key) as FocusPanelCardKey;
+                    // Configuration-driven composition: a configured cell is ALWAYS present. Readiness
+                    // decides content — reserved / not_applicable hold the cell's geometry (settlement
+                    // fills in place) and NEVER remove it.
+                    const readiness = cardReadiness.get(typeKey) ?? "reserved";
                     const baseModel = cards.get(typeKey);
-                    if (!baseModel) return null;
-                    const model = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);
+                    /*
+                     * `self_loading` mounts as well as `ready`. The card has its identity and owns its
+                     * own read, so holding it behind a blank reserve only delays a request it can
+                     * already make. It is NOT a readiness claim: the visible-ready sets above and the
+                     * readiness telemetry both still test `=== "ready"`, so nothing counts it as ready
+                     * and the card shows its own honest pending until its data lands.
+                     */
+                    const mountable = readiness === "ready" || readiness === "self_loading";
+                    if (!mountable || !baseModel) {
+                        // Once the surface declares `phase === "settled"`, any card still not ready —
+                        // `not_applicable`, or simply never produced for this record — is RESOLVED-empty,
+                        // not loading. In the `commit` phase a not-ready card is genuinely still settling →
+                        // the calm reserve. This stops a resolved card from appearing to load forever.
+                        // Read the DECLARED phase, never the producer's name (`model.source` is diagnostic).
+                        /**
+                         * An EXPLICIT `reserved` outranks the phase inference.
+                         *
+                         * The phase rule exists for cards the surface never produced: once settled,
+                         * a still-not-ready card is resolved-empty, so it cannot appear to load
+                         * forever. But a card explicitly marked `reserved` is a positive statement
+                         * that THIS cell is settling for the current subject — a child mission
+                         * whose subject just changed. Treating that as resolved-empty asserts "this
+                         * child has no What's Next", which is false while it is still arriving.
+                         *
+                         * `has()` is what separates the two: an absent key defaults to "reserved"
+                         * above, and those must keep the resolved-empty treatment.
+                         */
+                        const explicitlyReserved =
+                            cardReadiness.has(typeKey) && cardReadiness.get(typeKey) === "reserved";
+                        const settledReason = resolveReservedCellSettledReason({
+                            readiness,
+                            phase: model.phase,
+                            explicitlyReserved,
+                        });
+                        return (
+                            <ReservedFocusPanelCell
+                                typeKey={typeKey}
+                                settledReason={settledReason}
+                                readiness={readiness}
+                                cellSubject={model.subject.id}
+                            />
+                        );
+                    }
+                    const cardModel = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);
                     const receded = mode === "work" && workflowActive && typeKey === "work_launcher";
+                    /*
+                     * THE CELL STATES ITS OWN READINESS — because the card cannot.
+                     *
+                     * `data-card-subject` is the only per-card subject in the DOM, and it is fed from
+                     * `visible.displayVm.entity.id`, which by its own contract names the payload on
+                     * screen and becomes the destination ONLY at the atomic swap. Measured on deployed
+                     * 84a3e00a it was absent on all six cards for the entire switch and appeared on all
+                     * six at once at 1.8-2.3s. Any milestone built on it therefore measures full-drawer
+                     * completion, which is exactly what T6 must not mean — and that is what both prior
+                     * T6 predicates were measuring without saying so.
+                     *
+                     * This is the honest alternative: the GRID knows, at the moment it decides, which
+                     * card key this cell is, what readiness it resolved, and which subject the model it
+                     * is rendering belongs to. Stating those three is subject-bound, truth-aware and
+                     * independent of the swap. It is diagnostic only — read, never branched on.
+                     */
                     return (
+                        <div
+                            data-focus-panel-cell-key={typeKey}
+                            data-focus-panel-cell-readiness={readiness}
+                            data-focus-panel-cell-subject={model.subject.id || undefined}
+                            data-focus-panel-cell-mounted="true"
+                            // `display: contents` keeps the grid geometry EXACTLY as it was: the cell
+                            // wrapper generates no box, so the card remains the grid item it always
+                            // was. A diagnostic that moves a pixel is not a diagnostic.
+                            style={{ display: "contents" }}
+                        >
                         <FocusPanelCardRenderer
-                            model={model}
+                            model={cardModel}
                             context={operationalContext}
                             focusPanelMode={mode}
-                            onPrimaryAction={(key) => {
-                                if (key === "primary_next_action" && displayVm.actions.header_menu[0]) {
-                                    onHeaderAction?.(displayVm.actions.header_menu[0]);
+                            onPrimaryAction={(actionKey) => {
+                                if (actionKey === "primary_next_action" && commands[0]) {
+                                    onHeaderAction?.(commands[0]);
                                 }
                             }}
                             receded={receded}
                             coordination={coordination}
                             mutation={mutation}
-                            compat={{ subjectVm: displayVm, onSelectTab }}
+                            compat={{ onSelectTab }}
                         />
+                        </div>
                     );
                 }}
             />
+            {linkedHostCard && linkedHostModel && linkedHostResolution ?
+                <div
+                    className="alloy-os-focus-panel-linked-host"
+                    data-fp-linked-host="true"
+                    data-fp-elevated="true"
+                    data-fp-closing={closing ? "true" : undefined}
+                >
+                    <button
+                        type="button"
+                        className="alloy-os-focus-panel-linked-host__backdrop"
+                        aria-label="Close linked card"
+                        onClick={() => dismiss(linkedHostCard)}
+                    />
+                    <div
+                        className="alloy-os-focus-panel-linked-host__card"
+                        data-focus-panel-grid-cell={linkedHostCard}
+                    >
+                        <FocusPanelCardRenderer
+                            model={composeEffectiveCardModel(
+                                linkedHostModel,
+                                linkedHostResolution.config,
+                                record,
+                            )}
+                            context={operationalContext}
+                            focusPanelMode={mode}
+                            coordination={coordination}
+                            mutation={mutation}
+                            compat={{ onSelectTab }}
+                        />
+                    </div>
+                </div>
+            :   null}
         </div>
     );
 }

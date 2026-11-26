@@ -1,0 +1,4 @@
+{
+  "status": 400,
+  "body": "{\"ok\":false,\"error\":{\"code\":\"ACTION_BLOCKED\",\"message\":\"Select a Proposed Assignment to promote\",\"details\":{\"blockers\":[{\"code\":\"missing_assignment\",\"message\":\"Select a Proposed Assignment to promote\",\"field\":\"assignment_id\"},{\"code\":\"missing_agreement\",\"message\":\"Enrollment must be completed before this Assignment can become active\",\"field\":\"enrollment_agreement_id\"}]}},\"correlation_id\":\"e43abf6d-7526-415d-b95d-48948cd13bf4\"}"
+}

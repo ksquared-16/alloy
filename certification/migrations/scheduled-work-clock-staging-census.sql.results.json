@@ -1,0 +1,43 @@
+{
+  "trusted_host_action_id": "tha_893eb434b30b96",
+  "query_hash": "4e150d570c472b24e0bf58a1069a9197b598f3e9489c031e1d1f0e1c26aebdc9",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T18:15:52.351Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_893eb434b30b96",
+    "query_hash": "4e150d570c472b24e0bf58a1069a9197b598f3e9489c031e1d1f0e1c26aebdc9",
+    "authorization_id": "grnt_558edab8830a48e7",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T18:15:53.852Z",
+    "question_ids": [
+      "gswclock"
+    ],
+    "questions": {
+      "gswclock": {
+        "question_id": "gswclock",
+        "row_count": null,
+        "rows": [
+          {
+            "tbl_clock": true,
+            "rls_clock": true,
+            "grants_authed_anon": 0,
+            "fn_record_wake": true,
+            "fn_exec_authed_anon": 0,
+            "clock_columns": 5,
+            "ledger_20260930120000": true,
+            "employments_control": 4,
+            "observed_at": "2026-09-21 18:15:53.735419+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

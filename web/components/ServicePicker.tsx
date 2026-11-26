@@ -9,10 +9,13 @@ interface ServicePickerProps {
   className?: string;
 }
 
-type ServiceAction = { type: "modal"; defaultService: "cleaning" } | { type: "href"; href: string };
+/**
+ * One service remains. Home Cleaning was retired with the legacy cleaning product, and the modal
+ * variant of the action went with it — the surviving service is reached by link.
+ */
+type ServiceAction = { type: "modal" } | { type: "href"; href: string };
 
 const services: { label: string; action: ServiceAction }[] = [
-  { label: "Home Cleaning", action: { type: "modal", defaultService: "cleaning" } },
   { label: "Gutter Cleaning", action: { type: "href", href: "/gutters#quote-form" } },
 ];
 
@@ -42,7 +45,7 @@ export default function ServicePicker({ variant = "button", className = "" }: Se
     e?.preventDefault();
     setIsOpen(false);
     if (action.type === "modal") {
-      openModal({ defaultService: action.defaultService });
+      openModal();
     } else {
       window.location.href = action.href;
     }

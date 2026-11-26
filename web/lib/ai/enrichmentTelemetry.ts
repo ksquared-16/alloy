@@ -1,7 +1,7 @@
 /**
  * Optional `workflow_events` emission for AI enrichment (schema-bound, no PII bodies).
  * Emits only when **both** `AI_ENRICHMENT_TELEMETRY_ENABLED` and org `logging_mode === "verbose"`.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";

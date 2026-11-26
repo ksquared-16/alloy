@@ -40,6 +40,12 @@ export type PlatformActionEntry = {
 
 const CATALOG: readonly PlatformActionEntry[] = [
     // ─── Lead / case grain ───────────────────────────────────────────────────
+    // INTERNAL / RUNTIME-ONLY: `update_lead_status` and `update_child_enrollment_status`
+    // are the generic status-mutation commands that domain verbs (close_lead, waitlist_child,
+    // enroll_child) and outcome execution route through. They are retained here so the runtime
+    // can resolve label/grain (see stageActionEvaluator.getPlatformAction) — but they are NOT
+    // operator-selectable. The Lifecycle/Process action editors expose the domain verbs instead
+    // (see lib/lifecycle/lifecycleStageBaseActions.ts).
     {
         key: "update_lead_status",
         defaultLabel: "Update Lead Status",
@@ -63,6 +69,15 @@ const CATALOG: readonly PlatformActionEntry[] = [
         defaultLabel: "Schedule Tour",
         grain: "opportunity",
         category: "workflow",
+        runtimeCommandKey: null,
+        supportsMultiSubject: false,
+        confirmationPolicy: "required",
+    },
+    {
+        key: "send_tour_invitation",
+        defaultLabel: "Send Tour Invitation",
+        grain: "opportunity",
+        category: "communication",
         runtimeCommandKey: null,
         supportsMultiSubject: false,
         confirmationPolicy: "required",
@@ -107,10 +122,10 @@ const CATALOG: readonly PlatformActionEntry[] = [
     },
     {
         key: "create_task",
-        defaultLabel: "Create Task",
+        defaultLabel: "Create Work Item",
         grain: "opportunity",
         category: "workflow",
-        runtimeCommandKey: null,
+        runtimeCommandKey: "create_work_item",
         supportsMultiSubject: false,
         confirmationPolicy: "none",
     },

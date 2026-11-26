@@ -1,0 +1,696 @@
+{
+  "trusted_host_action_id": "tha_24f839d9b0758e",
+  "query_hash": "e8c3ff0b9352e8b1dce2cf2586f74bfaf3f0fef3c656927bab6ade816eaff48b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T01:38:12.173Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_24f839d9b0758e",
+    "query_hash": "e8c3ff0b9352e8b1dce2cf2586f74bfaf3f0fef3c656927bab6ade816eaff48b",
+    "authorization_id": "grnt_e9b79e933308412f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T01:38:22.572Z",
+    "question_ids": [
+      "b00_identity",
+      "b01_doc_table",
+      "b02_table_privilege",
+      "b03_sensitive_column_privilege",
+      "b04_policy",
+      "b05_trigger",
+      "b06_definer_function",
+      "b07_bucket",
+      "b08_storage_table_privilege",
+      "b09_unreferenced_object"
+    ],
+    "questions": {
+      "b00_identity": {
+        "question_id": "b00_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_head": "20261205090000",
+            "ledger_rows": 539,
+            "doc_tables": 5,
+            "buckets_total": 1,
+            "objects_total": 412,
+            "storage_objects_policies": 0,
+            "documents_rows": 378,
+            "documents_with_extracted_text": 18
+          }
+        ]
+      },
+      "b01_doc_table": {
+        "question_id": "b01_doc_table",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "document_field_definitions",
+            "rls_enabled": true,
+            "rls_forced": false,
+            "sensitive_columns": [
+              "metadata"
+            ],
+            "has_org_id": true
+          },
+          {
+            "table": "document_field_values",
+            "rls_enabled": true,
+            "rls_forced": false,
+            "sensitive_columns": [
+              "metadata",
+              "value_text"
+            ],
+            "has_org_id": true
+          },
+          {
+            "table": "document_versions",
+            "rls_enabled": true,
+            "rls_forced": false,
+            "sensitive_columns": [
+              "metadata",
+              "original_filename",
+              "storage_path"
+            ],
+            "has_org_id": true
+          },
+          {
+            "table": "documents",
+            "rls_enabled": true,
+            "rls_forced": false,
+            "sensitive_columns": [
+              "bucket",
+              "extracted_text",
+              "metadata",
+              "original_filename",
+              "storage_path"
+            ],
+            "has_org_id": true
+          },
+          {
+            "table": "form_submission_documents",
+            "rls_enabled": true,
+            "rls_forced": false,
+            "sensitive_columns": [
+              "metadata"
+            ],
+            "has_org_id": true
+          }
+        ]
+      },
+      "b02_table_privilege": {
+        "question_id": "b02_table_privilege",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "document_field_definitions",
+            "role": "anon",
+            "select": false,
+            "insert": false,
+            "update": false,
+            "delete": false,
+            "truncate": false
+          },
+          {
+            "table": "document_field_definitions",
+            "role": "authenticated",
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true,
+            "truncate": true
+          },
+          {
+            "table": "document_field_values",
+            "role": "anon",
+            "select": false,
+            "insert": false,
+            "update": false,
+            "delete": false,
+            "truncate": false
+          },
+          {
+            "table": "document_field_values",
+            "role": "authenticated",
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true,
+            "truncate": true
+          },
+          {
+            "table": "document_versions",
+            "role": "anon",
+            "select": false,
+            "insert": false,
+            "update": false,
+            "delete": false,
+            "truncate": false
+          },
+          {
+            "table": "document_versions",
+            "role": "authenticated",
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true,
+            "truncate": true
+          },
+          {
+            "table": "documents",
+            "role": "anon",
+            "select": false,
+            "insert": false,
+            "update": false,
+            "delete": false,
+            "truncate": false
+          },
+          {
+            "table": "documents",
+            "role": "authenticated",
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true,
+            "truncate": true
+          },
+          {
+            "table": "form_submission_documents",
+            "role": "anon",
+            "select": false,
+            "insert": false,
+            "update": false,
+            "delete": false,
+            "truncate": false
+          },
+          {
+            "table": "form_submission_documents",
+            "role": "authenticated",
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true,
+            "truncate": true
+          }
+        ]
+      },
+      "b03_sensitive_column_privilege": {
+        "question_id": "b03_sensitive_column_privilege",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "document_versions",
+            "column": "storage_path",
+            "role": "anon",
+            "select": false,
+            "update": false
+          },
+          {
+            "table": "document_versions",
+            "column": "storage_path",
+            "role": "authenticated",
+            "select": true,
+            "update": true
+          },
+          {
+            "table": "documents",
+            "column": "bucket",
+            "role": "anon",
+            "select": false,
+            "update": false
+          },
+          {
+            "table": "documents",
+            "column": "bucket",
+            "role": "authenticated",
+            "select": true,
+            "update": true
+          },
+          {
+            "table": "documents",
+            "column": "extracted_text",
+            "role": "anon",
+            "select": false,
+            "update": false
+          },
+          {
+            "table": "documents",
+            "column": "extracted_text",
+            "role": "authenticated",
+            "select": true,
+            "update": true
+          },
+          {
+            "table": "documents",
+            "column": "storage_path",
+            "role": "anon",
+            "select": false,
+            "update": false
+          },
+          {
+            "table": "documents",
+            "column": "storage_path",
+            "role": "authenticated",
+            "select": true,
+            "update": true
+          }
+        ]
+      },
+      "b04_policy": {
+        "question_id": "b04_policy",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "public.document_field_definitions",
+            "policy": "document_field_definitions_delete_org",
+            "cmd": "DELETE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.document_field_definitions",
+            "policy": "document_field_definitions_insert_org",
+            "cmd": "INSERT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.document_field_definitions",
+            "policy": "document_field_definitions_select_org",
+            "cmd": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text, 'manager'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.document_field_definitions",
+            "policy": "document_field_definitions_update_org",
+            "cmd": "UPDATE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.document_field_values",
+            "policy": "document_field_values_delete_org",
+            "cmd": "DELETE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.document_field_values",
+            "policy": "document_field_values_insert_org",
+            "cmd": "INSERT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.document_field_values",
+            "policy": "document_field_values_select_org",
+            "cmd": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text, 'manager'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.document_field_values",
+            "policy": "document_field_values_update_org",
+            "cmd": "UPDATE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.document_versions",
+            "policy": "document_versions_delete_org",
+            "cmd": "DELETE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.document_versions",
+            "policy": "document_versions_insert_org",
+            "cmd": "INSERT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.document_versions",
+            "policy": "document_versions_select_org",
+            "cmd": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text, 'manager'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.document_versions",
+            "policy": "document_versions_update_org",
+            "cmd": "UPDATE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_delete_org_admin",
+            "cmd": "DELETE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_medical_delete",
+            "cmd": "DELETE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "RESTRICTIVE",
+            "qual": "((doc_type IS NULL) OR (doc_type <> ALL (ARRAY['physical'::text, 'immunization_record'::text, 'health_care_plan'::text, 'medication_authorization'::text])) OR has_org_permission(org_id, 'health.manage'::text))",
+            "with_check": ""
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_medical_read",
+            "cmd": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "RESTRICTIVE",
+            "qual": "((doc_type IS NULL) OR (doc_type <> ALL (ARRAY['physical'::text, 'immunization_record'::text, 'health_care_plan'::text, 'medication_authorization'::text])) OR has_org_permission(org_id, 'health.view'::text))",
+            "with_check": ""
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_medical_update",
+            "cmd": "UPDATE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "RESTRICTIVE",
+            "qual": "((doc_type IS NULL) OR (doc_type <> ALL (ARRAY['physical'::text, 'immunization_record'::text, 'health_care_plan'::text, 'medication_authorization'::text])) OR has_org_permission(org_id, 'health.manage'::text))",
+            "with_check": ""
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_medical_write",
+            "cmd": "INSERT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "RESTRICTIVE",
+            "qual": "",
+            "with_check": "((doc_type IS NULL) OR (doc_type <> ALL (ARRAY['physical'::text, 'immunization_record'::text, 'health_care_plan'::text, 'medication_authorization'::text])) OR has_org_permission(org_id, 'health.manage'::text))"
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_select_org_admin",
+            "cmd": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text, 'manager'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_update_org_admin",
+            "cmd": "UPDATE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.documents",
+            "policy": "documents_write_org_admin",
+            "cmd": "INSERT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.form_submission_documents",
+            "policy": "form_submission_documents_all_service_role",
+            "cmd": "ALL",
+            "roles": [
+              "service_role"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "true",
+            "with_check": "true"
+          },
+          {
+            "table": "public.form_submission_documents",
+            "policy": "form_submission_documents_delete_by_org_role",
+            "cmd": "DELETE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.form_submission_documents",
+            "policy": "form_submission_documents_medical_read",
+            "cmd": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "RESTRICTIVE",
+            "qual": "((NOT is_medical_form_submission(form_submission_id)) OR has_org_permission(org_id, 'health.view'::text))",
+            "with_check": ""
+          },
+          {
+            "table": "public.form_submission_documents",
+            "policy": "form_submission_documents_mutate_by_org_role",
+            "cmd": "INSERT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "public.form_submission_documents",
+            "policy": "form_submission_documents_select_by_org_role",
+            "cmd": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text, 'manager'::text])",
+            "with_check": ""
+          },
+          {
+            "table": "public.form_submission_documents",
+            "policy": "form_submission_documents_update_by_org_role",
+            "cmd": "UPDATE",
+            "roles": [
+              "authenticated"
+            ],
+            "permissive": "PERMISSIVE",
+            "qual": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])",
+            "with_check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          }
+        ]
+      },
+      "b05_trigger": {
+        "question_id": "b05_trigger",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "documents",
+            "trigger": "trg_documents_updated_at",
+            "function": "public.set_updated_at",
+            "security_definer": false,
+            "enabled": "O"
+          },
+          {
+            "table": "form_submission_documents",
+            "trigger": "trg_sync_form_submission_documents_org",
+            "function": "public.sync_form_submission_documents_org_from_submission",
+            "security_definer": false,
+            "enabled": "O"
+          },
+          {
+            "table": "form_submission_documents",
+            "trigger": "trg_validate_form_submission_documents_doc_org",
+            "function": "public.validate_form_submission_documents_org_matches_document",
+            "security_definer": false,
+            "enabled": "O"
+          }
+        ]
+      },
+      "b06_definer_function": {
+        "question_id": "b06_definer_function",
+        "row_count": null,
+        "rows": [
+          {
+            "function": "public.certification_reset_execute",
+            "args": "p_org_id uuid, p_purpose text, p_actor text, p_graph jsonb",
+            "anon_execute": false,
+            "authenticated_execute": false,
+            "touches": [
+              "document_field_values",
+              "document_versions",
+              "documents",
+              "form_submission_documents"
+            ],
+            "touches_storage": false
+          },
+          {
+            "function": "public.seed_default_rbac",
+            "args": "p_org_id uuid",
+            "anon_execute": false,
+            "authenticated_execute": false,
+            "touches": [
+              "documents"
+            ],
+            "touches_storage": false
+          }
+        ]
+      },
+      "b07_bucket": {
+        "question_id": "b07_bucket",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "org_documents",
+            "public": false,
+            "file_size_limit": null,
+            "allowed_mime_types": null,
+            "objects": 412
+          }
+        ]
+      },
+      "b08_storage_table_privilege": {
+        "question_id": "b08_storage_table_privilege",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "storage.buckets",
+            "role": "anon",
+            "rls_enabled": true,
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true
+          },
+          {
+            "table": "storage.buckets",
+            "role": "authenticated",
+            "rls_enabled": true,
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true
+          },
+          {
+            "table": "storage.objects",
+            "role": "anon",
+            "rls_enabled": true,
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true
+          },
+          {
+            "table": "storage.objects",
+            "role": "authenticated",
+            "rls_enabled": true,
+            "select": true,
+            "insert": true,
+            "update": true,
+            "delete": true
+          }
+        ]
+      },
+      "b09_unreferenced_object": {
+        "question_id": "b09_unreferenced_object",
+        "row_count": null,
+        "rows": [
+          {
+            "bucket": "org_documents",
+            "seg1": "<uuid>",
+            "seg2": "opportunity",
+            "seg1_is_existing_org": true,
+            "objects": 28,
+            "bytes": 13276096,
+            "oldest": "2026-04-05",
+            "newest": "2026-04-06"
+          },
+          {
+            "bucket": "org_documents",
+            "seg1": "vendors",
+            "seg2": "<uuid>",
+            "seg1_is_existing_org": false,
+            "objects": 6,
+            "bytes": 4021421,
+            "oldest": "2026-03-25",
+            "newest": "2026-03-28"
+          }
+        ]
+      }
+    },
+    "row_count": 62
+  }
+}

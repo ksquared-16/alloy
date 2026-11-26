@@ -1,0 +1,105 @@
+{
+  "trusted_host_action_id": "tha_c208fb8f3dc42e",
+  "query_hash": "f31ad9f039cb0953acb8cc15bab6d477f3dfdf94cb1433cd5dee42c2d8a547b2",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T01:17:42.552Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c208fb8f3dc42e",
+    "query_hash": "f31ad9f039cb0953acb8cc15bab6d477f3dfdf94cb1433cd5dee42c2d8a547b2",
+    "authorization_id": "grnt_082486a91fec4453",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T01:17:43.704Z",
+    "question_ids": [
+      "policies_total",
+      "select_policies_org_scoped",
+      "select_policies_read_roleset",
+      "write_policies_org_scoped",
+      "write_policies_naming_manager",
+      "permissive_true_policies",
+      "service_role_policies",
+      "authenticated_write_grants",
+      "authenticated_select_grants",
+      "employments_select_policies_org_scoped"
+    ],
+    "questions": {
+      "policies_total": {
+        "question_id": "policies_total",
+        "row_count": null,
+        "rows": [
+          20
+        ]
+      },
+      "select_policies_org_scoped": {
+        "question_id": "select_policies_org_scoped",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "select_policies_read_roleset": {
+        "question_id": "select_policies_read_roleset",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "write_policies_org_scoped": {
+        "question_id": "write_policies_org_scoped",
+        "row_count": null,
+        "rows": [
+          12
+        ]
+      },
+      "write_policies_naming_manager": {
+        "question_id": "write_policies_naming_manager",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "permissive_true_policies": {
+        "question_id": "permissive_true_policies",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "service_role_policies": {
+        "question_id": "service_role_policies",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "authenticated_write_grants": {
+        "question_id": "authenticated_write_grants",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "authenticated_select_grants": {
+        "question_id": "authenticated_select_grants",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "employments_select_policies_org_scoped": {
+        "question_id": "employments_select_policies_org_scoped",
+        "row_count": null,
+        "rows": [
+          1
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}

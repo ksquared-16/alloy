@@ -1,0 +1,43 @@
+{
+  "assignmentWeekly": {
+    "frequency": "weekly",
+    "current": "2026-09-15~2026-09-21",
+    "next": "2026-09-22~2026-09-28",
+    "accepted": "Overridden $185.00 / weekly · from 2026-09-01 · Family kept the organisation rate agreed at enrolment."
+  },
+  "generationWeekly": {
+    "status": 200,
+    "raw": "{\"ok\":true,\"data\":{\"execution_result\":{\"mode\":\"preview\",\"eligibility\":{\"eligible\":true,\"blockers\":[],\"availableTransitions\":[],\"requiredInputs\":[]},\"preview\":{\"summary\":\"5 to bill, 0 not due, 0 refused for weekly 2026-09\",\"changes\":[\"79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD\",\"79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD\",\"79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD\",\"79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD\",\"79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD\"],\"after\":{\"period_key\":\"2026-09\",\"cadence_key\":\"weekly\",\"service_period\":{\"start\":\"2026-09-01\",\"end\":\"2026-09-30\"},\"counts\":{\"generated\":5,\"unchanged\":0,\"notDue\":0,\"refused\":0,\"alreadyPosted\":0,\"errors\":0},\"total_amount_cents\":92500,\"refused_outcomes\":[],\"not_due_outcomes\":[],\"error_outcomes\":[],\"already_posted_outcomes\":[]}}},\"affected_id\":null},\"correlation_id\":\"8dfe0356-432d-47da-94ca-aa963b17d0e9\"}",
+    "details": {
+      "summary": "5 to bill, 0 not due, 0 refused for weekly 2026-09",
+      "changes": [
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD"
+      ],
+      "after": {
+        "period_key": "2026-09",
+        "cadence_key": "weekly",
+        "service_period": {
+          "start": "2026-09-01",
+          "end": "2026-09-30"
+        },
+        "counts": {
+          "generated": 5,
+          "unchanged": 0,
+          "notDue": 0,
+          "refused": 0,
+          "alreadyPosted": 0,
+          "errors": 0
+        },
+        "total_amount_cents": 92500,
+        "refused_outcomes": [],
+        "not_due_outcomes": [],
+        "error_outcomes": [],
+        "already_posted_outcomes": []
+      }
+    }
+  }
+}

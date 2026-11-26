@@ -108,7 +108,7 @@ Planner may only emit:
 
 - **`band_key`** ∈ `{ summary, people, operational, financial, relationships, service_property }` (fixed set per strict schema).
 - **Item `kind`** ∈ `{ system_field, custom_field, section }` (+ alias `field` → `system_field` as today).
-- **`key`** ∈ **keys the job overview resolver can supply** for the org (union of system keys used in [`job.ts` RRS](../../web/lib/rrs/entities/job.ts) overview path + org custom fields where applicable). **No invented keys.**
+- **`key`** ∈ **keys the job overview resolver can supply** for the org (union of system keys used in [`job.ts` RRS](../../../../web/lib/rrs/entities/job.ts) overview path + org custom fields where applicable). **No invented keys.**
 - **`relationship_group_keys`** ⊆ `{ primary_customer_person, customer_account }` (job v1 registry).
 - **`header_keys`** ⊆ same allowed key set as strict header validation (`^[a-z0-9_:]+$` and semantics from overview doctrine).
 

@@ -1,0 +1,249 @@
+{
+  "persona": "admin",
+  "console_errors": [],
+  "page_errors": [],
+  "http_errors": [],
+  "blocked_non_get": [],
+  "views": [
+    {
+      "tile": "Assignments",
+      "label": "Current assignments0›",
+      "url": "/workspace/work-unit/current-assignments",
+      "terminal": "projection",
+      "active_view": "current_assignments",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Ending soon0›",
+      "url": "/workspace/work-unit/ending-soon",
+      "terminal": "projection",
+      "active_view": "assignments_ending_soon",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Upcoming changes0›",
+      "url": "/workspace/work-unit/upcoming-changes",
+      "terminal": "projection",
+      "active_view": "assignments_upcoming_changes",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Schedule gaps0›",
+      "url": "/workspace/work-unit/schedule-gaps",
+      "terminal": "projection",
+      "active_view": "schedule_gaps",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Proposed / incomplete0›",
+      "url": "/workspace/work-unit/proposed-incomplete",
+      "terminal": "projection",
+      "active_view": "assignments_proposed_incomplete",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Charges needing review0›",
+      "url": "/workspace/work-unit/charges-needing-review",
+      "terminal": "projection",
+      "active_view": "charges_needing_review",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Payment exceptions0›",
+      "url": "/workspace/work-unit/payment-exceptions",
+      "terminal": "projection",
+      "active_view": "payment_exceptions",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Funding variances0›",
+      "url": "/workspace/work-unit/funding-variances",
+      "terminal": "projection",
+      "active_view": "funding_variances",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Payments due0›",
+      "url": "/workspace/work-unit/payments-due",
+      "terminal": "projection",
+      "active_view": "payments_due",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Overdue payments0›",
+      "url": "/workspace/work-unit/overdue-payments",
+      "terminal": "projection",
+      "active_view": "overdue_payments",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    }
+  ],
+  "build": "8bb731eadbf306d269f8249da127ed09289b7076",
+  "tiles": [
+    {
+      "id": "f76244aa-f239-4810-bd3e-6402ad21edda:5b999ae2-d568-4e29-9323-5fcadfe5e59a",
+      "title": "Assignments",
+      "answer": "No signal configured yet",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "views": [
+        {
+          "label": "Current assignments0›",
+          "href": "/workspace/work-unit/current-assignments"
+        },
+        {
+          "label": "Ending soon0›",
+          "href": "/workspace/work-unit/ending-soon"
+        },
+        {
+          "label": "Upcoming changes0›",
+          "href": "/workspace/work-unit/upcoming-changes"
+        },
+        {
+          "label": "Schedule gaps0›",
+          "href": "/workspace/work-unit/schedule-gaps"
+        },
+        {
+          "label": "Proposed / incomplete0›",
+          "href": "/workspace/work-unit/proposed-incomplete"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/current-assignments"
+        }
+      ]
+    },
+    {
+      "id": "5abbc24f-9087-4c32-908e-38f622f98186:67cf201e-ee0d-4325-83dd-49a35d128c7c",
+      "title": "Billing",
+      "answer": "No signal configured yet",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "views": [
+        {
+          "label": "Charges needing review0›",
+          "href": "/workspace/work-unit/charges-needing-review"
+        },
+        {
+          "label": "Payment exceptions0›",
+          "href": "/workspace/work-unit/payment-exceptions"
+        },
+        {
+          "label": "Funding variances0›",
+          "href": "/workspace/work-unit/funding-variances"
+        },
+        {
+          "label": "Payments due0›",
+          "href": "/workspace/work-unit/payments-due"
+        },
+        {
+          "label": "Overdue payments0›",
+          "href": "/workspace/work-unit/overdue-payments"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/charges-needing-review"
+        }
+      ]
+    }
+  ],
+  "workspace_text": "STAGING — NOT PRODUCTION ⌘K All locations ▾ QP ZZ Alloy QA 0 Needs attention 0 Overdue work 0 Active children Assignments No signal No signal configured yet No open work items TODAY'S WORK Current assignments 0 › Ending soon 0 › Upcoming changes 0 › Schedule gaps 0 › Proposed / incomplete 0 › Open process → Billing No signal No signal configured yet No open work items TODAY'S WORK Charges needing review 0 › Payment exceptions 0 › Funding variances 0 › Payments due 0 › Overdue payments 0 › Open process → BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Summarize this queue Get a quick overview of details and history Identify missing information See what's needed to move forward Draft follow-up Create a personalized follow-up message / commands · ↵ to send · ⇧↵ new line BOS uses AI. Review for accuracy."
+}

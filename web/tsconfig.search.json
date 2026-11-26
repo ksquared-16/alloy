@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "lib/search/**/*.ts",
+    "app/api/admin/global-search/route.ts",
+    "app/adminV2/components/GlobalSearchBox.tsx",
+    "lib/adminV2/globalRecordSearchWarmPrefetch.ts",
+    "next-env.d.ts"
+  ]
+}

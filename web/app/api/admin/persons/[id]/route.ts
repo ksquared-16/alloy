@@ -5,6 +5,10 @@ import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { parsePersonEmployeePlacementPatchBody } from "@/lib/admin/personEmployeePlacementFields";
 import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
+import {
     COMPLETION_REQUIREMENT_VALIDATION_ERROR,
     enforcePersonCompletionOnPatch,
 } from "@/lib/completion/enforcePersonCompletionOnPatch";
@@ -50,9 +54,8 @@ export async function PATCH(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -68,7 +71,7 @@ export async function PATCH(
     const { data: existing, error: fetchErr } = await supabase
         .from("persons")
         .select(
-            "id, org_id, first_name, last_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source"
+            "id, org_id, first_name, last_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, metadata"
         )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
@@ -99,12 +102,25 @@ export async function PATCH(
                   : null
             : undefined;
 
+    // Shallow-merge metadata (jsonb, existing column) — used today for the canonical
+    // profile-photo reference (`profile_photo_document_id` / `photo_url`). Merge rather
+    // than replace so unrelated metadata keys survive an edit that only touches one key.
+    const metadataPatch =
+        body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+            ? (body.metadata as Record<string, unknown>)
+            : undefined;
+    const existingMetadata =
+        (existing as { metadata?: unknown }).metadata && typeof (existing as { metadata?: unknown }).metadata === "object"
+            ? ((existing as { metadata?: unknown }).metadata as Record<string, unknown>)
+            : {};
+
     const personUpdates: Record<string, unknown> = {};
     if (first_name !== undefined) personUpdates.first_name = first_name;
     if (last_name !== undefined) personUpdates.last_name = last_name;
     if (email !== undefined) personUpdates.email = email;
     if (phone !== undefined) personUpdates.phone = phone;
     if (date_of_birth !== undefined) personUpdates.date_of_birth = date_of_birth;
+    if (metadataPatch) personUpdates.metadata = { ...existingMetadata, ...metadataPatch };
     if (status_key !== undefined) {
         const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "persons", status_key);
         if (!chk.ok) {
@@ -167,12 +183,43 @@ export async function PATCH(
         }
     }
 
-    await upsertFieldValuesFromBody(supabase, ctx.orgId, "person", id, body, PERSON_FIELD_VALUES_EXCLUDED_KEYS);
+    const fieldValueOutcome = await upsertFieldValuesFromBody(
+        supabase,
+        ctx.orgId,
+        "person",
+        id,
+        body,
+        PERSON_FIELD_VALUES_EXCLUDED_KEYS
+    );
+
+    /**
+     * A SAVE THAT PERSISTS NOTHING MUST NOT REPORT SUCCESS.
+     *
+     * `address_line2` is not a persons column and has no `field_definitions` row for `person`, so
+     * the column whitelist above ignored it and the field-values upsert skipped it. The route
+     * still returned 200 with the unchanged row, the Focus Panel took that as success and showed
+     * the new value, and the edit was gone on reload — a silent data loss the operator could only
+     * discover by re-opening the record. Certified on Firefly's Household surface.
+     *
+     * This refuses only the case where the body asked for changes and NONE of them could land.
+     * A body that writes something plus carries an unknown key still succeeds, so callers that
+     * send incidental extra keys are unaffected.
+     */
+    if (Object.keys(personUpdates).length === 0 && fieldValueOutcome.written.length === 0 && fieldValueOutcome.skipped.length > 0) {
+        return NextResponse.json(
+            {
+                error:
+                    `No writable field in this request. Unknown for a person: ${fieldValueOutcome.skipped.join(", ")}.`,
+                unwritable_fields: fieldValueOutcome.skipped,
+            },
+            { status: 400 }
+        );
+    }
 
     const { data: updated } = await supabase
         .from("persons")
         .select(
-            "id, org_id, first_name, last_name, full_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, created_at, updated_at"
+            "id, org_id, first_name, last_name, full_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, metadata, created_at, updated_at"
         )
         .eq("id", id)
         .eq("org_id", ctx.orgId)

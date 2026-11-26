@@ -1,0 +1,403 @@
+{
+  "run": "qar_8fb0e1ffabcf",
+  "phase": "certify",
+  "summary": {
+    "passed": 45,
+    "total": 45
+  },
+  "sections": {
+    "R2-authorized": {
+      "passed": 14,
+      "total": 14
+    },
+    "R2-department-scope": {
+      "passed": 16,
+      "total": 16
+    },
+    "R2-organization": {
+      "passed": 7,
+      "total": 7
+    },
+    "R2-anonymous": {
+      "passed": 4,
+      "total": 4
+    },
+    "R2-medical": {
+      "passed": 4,
+      "total": 4
+    }
+  },
+  "results": [
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_opp1",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_opp2",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_k1",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_k2",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_unrel",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted list includes every run submission",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": 5
+    },
+    {
+      "section": "R2-authorized",
+      "case": "list filtered by child K1 returns its child-only submission",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": 1
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_opp1",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_opp2",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_k1",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_k2",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted reader reads s_unrel",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authorized",
+      "case": "unrestricted list includes every run submission",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": 5
+    },
+    {
+      "section": "R2-authorized",
+      "case": "list filtered by child K1 returns its child-only submission",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": 1
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "in scope (opportunity in QA D1): single read 200",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "out of scope (opportunity in QA D2): s_opp2 is 404 and names nothing",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "out of scope (child-only submission): s_k1 is 404 and names nothing",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "out of scope (child-only submission): s_k2 is 404 and names nothing",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "out of scope (child-only (QA D2 household)): s_unrel is 404 and names nothing",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "unfiltered list: only the in-scope submission",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": [
+        "s_opp1"
+      ]
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "list filtered by an out-of-scope subject (child K1) is empty, not a refusal",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "list filtered by an out-of-scope subject (QA D2 opportunity) is empty, not a refusal",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "list filtered by an out-of-scope subject (L1 household) is empty, not a refusal",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "list filtered by the in-scope opportunity returns it",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "intake-source for the in-scope opportunity is served",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "enrollment-packets for the in-scope opportunity is served",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "intake-source for the out-of-scope opportunity is 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "enrollment-packets for the out-of-scope opportunity is 404",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "packet-session list is served scoped (EMPTY org: no session exists, so this does not prove scope filtering)",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "admin_sessions": 0,
+      "scoped_sessions": 0,
+      "proves_scope": false
+    },
+    {
+      "section": "R2-department-scope",
+      "case": "write as scoped_ops is refused (403 = CAPABILITY, no forms.submissions \u2014 not a scope proof)",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R2-organization",
+      "case": "another organization: s_opp1 is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-organization",
+      "case": "another organization: s_opp2 is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-organization",
+      "case": "another organization: s_k1 is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-organization",
+      "case": "another organization: s_k2 is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-organization",
+      "case": "another organization: s_unrel is 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-organization",
+      "case": "another organization's list holds none of ours",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-organization",
+      "case": "another organization filtering by our child gets nothing",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-anonymous",
+      "case": "anonymous refused: ['forms', 'submissions']",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "section": "R2-anonymous",
+      "case": "anonymous refused: ['forms', 'submissions']",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "section": "R2-anonymous",
+      "case": "anonymous refused: ['forms', 'packet-sessions']",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "section": "R2-anonymous",
+      "case": "anonymous refused: ['opportunities', 'd18524e6-0706-4d78-a601-c4ca08e9777c']",
+      "persona": "anonymous",
+      "pass": true,
+      "status": 401,
+      "code": null
+    },
+    {
+      "section": "R2-medical",
+      "case": "with health.view: the allergy answer is present",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-medical",
+      "case": "without health.view: the allergy answer is withheld (absent, flagged), the standard answer kept",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "withheld": true
+    },
+    {
+      "section": "R2-medical",
+      "case": "without health.view: the list withholds it too",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-medical",
+      "case": "scoped_ops (no health.view) in scope: allergy withheld",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    }
+  ]
+}

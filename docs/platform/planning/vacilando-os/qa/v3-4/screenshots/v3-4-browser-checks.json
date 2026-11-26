@@ -1,0 +1,37 @@
+{
+  "at": "2026-08-06T18:24:48.521Z",
+  "base": "http://127.0.0.1:3026",
+  "missionId": "msn_f74ed02c126c88d7ff",
+  "checks": {
+    "missionRailApi": true,
+    "identityInRail": true,
+    "shellOk": true,
+    "shellFastEnough": true,
+    "noSinceOnShell": true,
+    "replyOk": true,
+    "directorReplied": true,
+    "directorGrounded": true,
+    "guidanceMode": true,
+    "recallOk": true,
+    "openedWithoutIndefiniteBoot": true,
+    "greenMissionRail": true,
+    "noBeigeMissionNav": true,
+    "settingsAtBottom": true,
+    "composerPresent": true,
+    "kellyMessageVisible": true,
+    "directorInThread": true,
+    "stayedOnConversation": true,
+    "refreshKeepsTurns": true
+  },
+  "timings": {
+    "shellMs": 594,
+    "openToShellMs": 1061
+  },
+  "shots": {
+    "open": "v3-4-identity-open.png",
+    "recap": "v3-4-director-recap.png",
+    "refresh": "v3-4-after-refresh.png",
+    "ops": "v3-4-ops-rail.png"
+  },
+  "sampleDirector": "Mission 2 Identity & Access Platform Objective Transform the complete…. Status: Waiting on you. Working on: A worker finished. Read the outcome, then choose one next step — reviewing alone does not change anything.. Last completed: Give me a recap of where we're at and what you recommend next.. Blocked by: Waiting on your direction — worker is idle. Worker: cursor · slot 6. Open guidance: Role hie"
+}

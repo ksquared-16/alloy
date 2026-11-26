@@ -73,6 +73,11 @@ export async function mergePublicLinkMetadataForCreate(
     supabase: SupabaseClient,
     params: MergePublicLinkMetadataParams
 ): Promise<Record<string, unknown>> {
+    // Processing intake links (Studio "Create link", including per-campus Share-by-location)
+    // also need the form's operational intent + org routing merged underneath. Without it they
+    // mint with no lead_capture/default_vertical_id, so public submissions skip intake entirely
+    // (intake_resolution_path=skipped_intake_disabled) and nothing reaches the Mailroom.
+    // Client metadata still wins on top, preserving form_context_mode and location scope.
     const formDefaults = await intakeDefaultsForFormPublicLink(supabase, params.formKey);
     const withIntent = await applyOperationalIntentToLinkMetadata(supabase, {
         orgId: params.orgId,

@@ -26,7 +26,9 @@ describe("prefetchWorkUnitOperationalBootstrap", () => {
         expect(url).toContain("focus_queue=enrolled");
         expect(url).toContain("attention_bucket=stale_quote");
         expect(url).toContain("workspace_site_id=site-9");
-        expect(url).toContain("defer_bundle=false");
+        // The canonical bootstrap now defers the primary lane — the PRV2 runtime owns the single row
+        // fetch; the bootstrap must not compute rows nothing consumes (deployed duplicate elimination).
+        expect(url).toContain("defer_bundle=true");
     });
 
     it("parses dept oper href for prefetch opts", () => {

@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { scheduleAnnouncement } from "@/lib/communications/v2/scheduleAnnouncementSendout";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * Communications V2 — schedule an announcement (Phase 1 / B7).
  * draft → scheduled at send_at; writes the recipient snapshot + fan-out execution rows
  * into the SHARED communication_scheduled_sends spine. Email/SMS without a binding →
  * skipped/provider_unavailable. In-app → operator-side only. Actual provider send is
- * gated off (Phase 3). Pattern: requireAdminOrOps -> ctx -> client; org scoped.
+ * gated off (Phase 3). Pattern: `communications.bulk.send` -> ctx -> client; org scoped.
  */
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 /** POST …/announcements/[id]/schedule — body: { send_at: ISO } */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

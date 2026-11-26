@@ -1,8 +1,20 @@
 /** Section row from GET /api/admin/field-sections */
 export type FieldSectionRegistryRow = {
+    id?: string;
     section_key: string;
     label: string;
+    description?: string | null;
     sort_order: number;
+    is_archived?: boolean;
+};
+
+export type FieldSectionDefinitionRow = {
+    id: string;
+    section_key: string;
+    label: string;
+    description: string | null;
+    sort_order: number;
+    is_archived: boolean;
 };
 
 export type FieldSectionSelectOption = { value: string; label: string };
@@ -20,9 +32,12 @@ export async function fetchFieldSectionRegistry(entityType: string): Promise<Fie
         const json = (await res.json().catch(() => ({}))) as { sections?: Record<string, unknown>[] };
         const raw = json.sections ?? [];
         return raw.map((r) => ({
+            id: r.id != null ? String(r.id) : undefined,
             section_key: String(r.section_key ?? ""),
             label: String(r.label ?? r.section_key ?? ""),
+            description: r.description != null ? String(r.description) : null,
             sort_order: typeof r.sort_order === "number" ? r.sort_order : Number(r.sort_order) || 0,
+            is_archived: r.is_archived === true,
         })).filter((r) => r.section_key.length > 0);
     } catch {
         return [];
@@ -67,6 +82,20 @@ export function mergeFieldSectionSelectOptions(
     }
 
     return out;
+}
+
+export async function fetchFieldSectionDefinitions(entityType: string): Promise<FieldSectionDefinitionRow[]> {
+    const rows = await fetchFieldSectionRegistry(entityType);
+    return rows
+        .filter((r): r is FieldSectionRegistryRow & { id: string } => typeof r.id === "string" && r.id.length > 0)
+        .map((r) => ({
+            id: r.id!,
+            section_key: r.section_key,
+            label: r.label,
+            description: r.description ?? null,
+            sort_order: r.sort_order,
+            is_archived: r.is_archived === true,
+        }));
 }
 
 export function sectionKeyInOptions(options: FieldSectionSelectOption[], sectionKey: string): boolean {

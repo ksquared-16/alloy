@@ -1,0 +1,7 @@
+{"at":"2026-11-26T07:48:29.371Z","method":"GET","path":"/api/build-info","authorization":"absent","x_cron_token":"absent","status":200}
+{"at":"2026-11-26T07:50:00.136Z","method":"POST","path":"/api/scheduled-work/wake","authorization":"bearer","x_cron_token":"present","status":200}
+{"at":"2026-11-26T07:50:02.039Z","method":"GET","path":"/api/scheduled-work/wake","authorization":"absent","x_cron_token":"absent","status":401}
+{"at":"2026-11-26T07:50:02.047Z","method":"GET","path":"/api/scheduled-work/wake","authorization":"bearer","x_cron_token":"absent","status":401}
+{"at":"2026-11-26T07:50:02.056Z","method":"POST","path":"/api/scheduled-work/wake","authorization":"absent","x_cron_token":"present","status":401}
+{"at":"2026-11-26T07:50:02.141Z","method":"GET","path":"/api/build-info","authorization":"absent","x_cron_token":"absent","status":200}
+{"at":"2026-11-26T07:50:13.815Z","method":"GET","path":"/api/build-info","authorization":"absent","x_cron_token":"absent","status":200}

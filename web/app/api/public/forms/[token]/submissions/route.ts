@@ -1,3 +1,4 @@
+import { syncPartyRowsForSubmission } from "@/lib/enrollment/participantRuntime/partyRowsIntoDrafts";
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
@@ -5,8 +6,18 @@ import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { mergePrefillIntoDraftValues } from "@/lib/forms/prefill/mergePrefillDraftValues";
+import {
+    processScopedAnswersToFieldIds,
+    sharedValuesToFieldIds,
+} from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { parsePrefillFieldMapFromMetadata } from "@/lib/forms/prefill/prefillFieldMap";
-import { resolveFormPrefillValues, shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
+import { resolveFormPrefillPayload } from "@/lib/forms/prefill/resolveFormPrefillPayload";
+import { shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
+import {
+    extractCollectionSubmissionEnvelope,
+    validateCollectionPayloadContract,
+    validateCollectionPayloadOrgSecurity,
+} from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
@@ -14,8 +25,9 @@ import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { stampFormContextFromLinkMetadata } from "@/lib/forms/formContextMode";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
-import { mergeLaunchFksPreferringSessionCrmSnapshot } from "@/lib/forms/packets/formPacketService";
+import { linkNamesRecipientPerson, resolveParticipantFksForPacketDraft } from "@/lib/forms/packets/formPacketService";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
+import type { FormPayload } from "@/lib/forms/validateSubmission";
 
 function plaintextToken(raw: string): string {
     try {
@@ -110,6 +122,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let packetSessionRow: { shared_values: unknown; crm_snapshot: unknown } | null = null;
+    // Participant attribution: on a Family Packet the resolving link owns WHO is answering, so a
+    // shared session's snapshot never overrides it. See resolveParticipantFksForPacketDraft.
+    const namesRecipient = linkNamesRecipientPerson(ctx.linkMetadata);
     if (ctx.packet) {
         const { data: psRow } = await supabase
             .from("form_packet_sessions")
@@ -124,13 +139,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             !Array.isArray(packetSessionRow.crm_snapshot)
                 ? (packetSessionRow.crm_snapshot as Record<string, unknown>)
                 : {};
-        launchFks = mergeLaunchFksPreferringSessionCrmSnapshot(launchFks, snap);
+        launchFks = resolveParticipantFksForPacketDraft({
+            launchFks,
+            crmSnapshot: snap,
+            linkNamesRecipient: namesRecipient,
+        });
     }
 
     let clientVals = (payload.values ?? {}) as Record<string, unknown>;
     if (ctx.packet && packetSessionRow) {
+        /*
+         * A previous step's value reaches this draft by IDENTITY, never by position.
+         *
+         * The raw spread this replaced put the last artifact's `field_6` into this artifact's
+         * `field_6` — a phone number on the Oregon CIS, a date on the Oregon Nonmedical Exemption.
+         * Finishing the first document made the second one unopenable, and the parent, having just
+         * signed, was shown "Invalid submission payload" instead of their next form.
+         *
+         * Both readers already existed and both already refuse this: a canonical key fills the
+         * fields that bind to it, and a process-scoped key fills the one destination it names on
+         * the one Form it names. Anything else in the shared namespace addresses nothing here.
+         */
         const sv = (packetSessionRow.shared_values ?? {}) as Record<string, unknown>;
-        clientVals = { ...sv, ...clientVals };
+        clientVals = {
+            ...sharedValuesToFieldIds(schema, sv),
+            ...processScopedAnswersToFieldIds(schema, sv, ctx.formDefinitionId),
+            ...clientVals,
+        };
     }
 
     if (ctx.packet) {
@@ -151,6 +186,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 .maybeSingle();
             if (exSub) {
                 const full = exSub as Record<string, unknown>;
+                // The child's people the conversation added since this draft was made are its rows now.
+                const healed = await syncPartyRowsForSubmission(supabase, {
+                    orgId: ctx.orgId,
+                    submissionId: String(full.id),
+                    customerMemberId: full.customer_member_id as string | null,
+                });
+                if (healed) {
+                    const p = (full.payload ?? {}) as Record<string, unknown>;
+                    full.payload = { ...p, groups: { ...((p.groups ?? {}) as Record<string, unknown>), ...healed } };
+                }
                 const { org_id: _o, ...rest } = full;
                 void _o;
                 return publicOk(rest, 201);
@@ -159,6 +204,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let serverPrefill: Record<string, string | number | boolean> = {};
+    let mergedPayloadForValidation: FormPayload = {
+        values: clientVals,
+        groups: payload.groups as FormPayload["groups"],
+        signatures: payload.signatures as FormPayload["signatures"],
+        meta: payload.meta as FormPayload["meta"],
+    };
     if (shouldApplyServerPrefill(ctx.linkMetadata)) {
         try {
             let fdRecord: Record<string, unknown> | null = null;
@@ -177,14 +228,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         ? (fdMeta as Record<string, unknown>)
                         : null;
             }
-            serverPrefill = await resolveFormPrefillValues(
+            const prefillResult = await resolveFormPrefillPayload({
                 supabase,
-                ctx.orgId,
-                ctx.linkMetadata,
-                fdRecord,
+                orgId: ctx.orgId,
+                linkMetadata: ctx.linkMetadata,
+                formDefinitionMetadata: fdRecord,
                 schema,
-                launchFks
-            );
+                launchFks,
+                savedPayload: {
+                    values: clientVals,
+                    groups: (payload.groups as FormPayload["groups"]) ?? undefined,
+                },
+            });
+            serverPrefill = prefillResult.scalarPrefill;
+            mergedPayloadForValidation = {
+                values: prefillResult.payload.values ?? {},
+                groups: prefillResult.payload.groups,
+                signatures: payload.signatures as FormPayload["signatures"],
+                meta: payload.meta as FormPayload["meta"],
+            };
         } catch (e) {
             return publicErr(e instanceof Error ? e.message : "Prefill resolve failed", 400);
         }
@@ -195,9 +257,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         mergedValues = filterPayloadValuesToSchemaFields(schema, mergedValues);
     }
 
+    const draftPayload = {
+        ...mergedPayloadForValidation,
+        values: mergedValues,
+    };
+
+    const collectionContractErrors = validateCollectionPayloadContract(schema, draftPayload, "draft");
+    if (collectionContractErrors.length > 0) {
+        return publicErr("Invalid collection payload", 400, { validation_errors: collectionContractErrors });
+    }
+
+    const collectionSecurityErrors = await validateCollectionPayloadOrgSecurity(
+        supabase,
+        ctx.orgId,
+        schema,
+        draftPayload,
+        launchFks,
+    );
+    if (collectionSecurityErrors.length > 0) {
+        return publicErr("Invalid collection item reference", 403, { validation_errors: collectionSecurityErrors });
+    }
+
     const validated = validateFormPayload({
         schemaJson: ctx.schemaJson,
-        payload: { ...payload, values: mergedValues },
+        payload: draftPayload,
         mode: "draft",
         optionValuesByFieldId,
     });
@@ -217,6 +300,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         metaStamp.prefill_snapshot = serverPrefill;
         metaStamp.prefill_applied = true;
     }
+    const collectionEnvelope = extractCollectionSubmissionEnvelope(validated.payload);
+    if (Object.keys(collectionEnvelope).length > 0) {
+        metaStamp.collection_submission_envelope = collectionEnvelope;
+    }
 
     const mergedPayload = {
         ...validated.payload,
@@ -232,7 +319,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             status: "draft",
             payload: mergedPayload as unknown as Record<string, unknown>,
             created_via_public_link_id: ctx.linkId,
-            metadata: {},
+            // Provenance only — never a product-level distinction a consumer may branch on.
+            metadata: ctx.packet && namesRecipient && launchFks.person_id
+                ? { participant_attribution: { person_id: launchFks.person_id, source: "resolving_link" } }
+                : {},
             person_id: launchFks.person_id,
             customer_id: launchFks.customer_id,
             customer_member_id: launchFks.customer_member_id,
@@ -251,6 +341,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .eq("id", ctx.packet.current_session_item_id)
             .eq("org_id", ctx.orgId);
         if (upSiErr) return publicErr(upSiErr.message, 400);
+        // A packet draft holds the child's canonical people as linked rows from its first open.
+        const healed = await syncPartyRowsForSubmission(supabase, {
+            orgId: ctx.orgId,
+            submissionId: String(row.id),
+            customerMemberId: row.customer_member_id as string | null,
+        });
+        if (healed) {
+            const p = (row.payload ?? {}) as Record<string, unknown>;
+            row.payload = { ...p, groups: { ...((p.groups ?? {}) as Record<string, unknown>), ...healed } };
+        }
     }
 
     const { org_id: _omit, ...rest } = row;

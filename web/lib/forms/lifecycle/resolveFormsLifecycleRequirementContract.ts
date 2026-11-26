@@ -7,7 +7,14 @@ import {
     LIFECYCLE_STAGE_LABELS,
     type LifecycleOperatorStage,
 } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { effectiveFieldRulesForStage } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import {
+    effectiveFieldRulesForStage,
+    effectiveFieldRulesStoredForStage,
+} from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import {
+    formRequirementMoment,
+    splitRequiredRulesByFormMoment,
+} from "@/lib/forms/lifecycle/formRequirementTiming";
 import type { ActionIntakeFieldSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import {
@@ -211,6 +218,7 @@ function resolveFromActionIntakeSpec(input: {
 
 function resolveFromLifecycleStageRules(input: {
     stage: LifecycleOperatorStage;
+    intent: string;
     departmentMetadata?: Record<string, unknown> | null;
     orgFieldDefinitions?: Partial<Record<string, OrgFieldDefinitionRow[]>> | null;
 }): Pick<
@@ -218,13 +226,24 @@ function resolveFromLifecycleStageRules(input: {
     "required" | "recommended" | "constraints" | "requirementsSource"
 > {
     const { rules, source } = effectiveFieldRulesForStage(input.stage, input.departmentMetadata ?? null);
+    const stored = effectiveFieldRulesStoredForStage(input.stage, input.departmentMetadata ?? null);
     const palette = mergeLifecycleFieldPaletteForStage(input.stage, input.orgFieldDefinitions ?? null);
     const byRule = new Map(palette.map((p) => [p.rule_id, p]));
+
+    // Honor configured requirement timing: a rule the process requires at a LATER moment is not a
+    // gap in this form. It stays a real requirement, carried as advisory with the timing that owns
+    // it, so demoting it to `recommended` in configuration is never the only escape hatch.
+    const split = splitRequiredRulesByFormMoment({
+        requiredRuleIds: rules.required_rule_ids,
+        rules: stored,
+        ruleMeta: stored.rule_meta_v1 ?? null,
+        moment: formRequirementMoment(input.stage, input.intent),
+    });
 
     const required: FormsLifecycleFieldRequirement[] = [];
     const recommended: FormsLifecycleFieldRequirement[] = [];
 
-    for (const ruleId of rules.required_rule_ids) {
+    for (const ruleId of split.blockingRuleIds) {
         const req = requirementFromRuleId({
             ruleId,
             requiredness: "required",
@@ -232,6 +251,15 @@ function resolveFromLifecycleStageRules(input: {
             paletteEntry: byRule.get(ruleId) ?? null,
         });
         if (req) required.push(req);
+    }
+    for (const ruleId of split.deferredRuleIds) {
+        const req = requirementFromRuleId({
+            ruleId,
+            requiredness: "recommended",
+            requirementSource: "lifecycle_stage",
+            paletteEntry: byRule.get(ruleId) ?? null,
+        });
+        if (req) recommended.push({ ...req, deferredTiming: split.deferredTimingByRuleId[ruleId] });
     }
     for (const ruleId of rules.recommended_rule_ids) {
         const req = requirementFromRuleId({
@@ -279,12 +307,14 @@ export function resolveFormsLifecycleRequirementContract(
             fromAction ??
             resolveFromLifecycleStageRules({
                 stage,
+                intent,
                 departmentMetadata: input.departmentMetadata,
                 orgFieldDefinitions: input.orgFieldDefinitions,
             });
     } else {
         resolved = resolveFromLifecycleStageRules({
             stage,
+            intent,
             departmentMetadata: input.departmentMetadata,
             orgFieldDefinitions: input.orgFieldDefinitions,
         });

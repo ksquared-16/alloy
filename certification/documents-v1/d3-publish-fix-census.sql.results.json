@@ -1,0 +1,39 @@
+{
+  "trusted_host_action_id": "tha_18fe9ebdc7eb43",
+  "query_hash": "501893706af7b0540c342b12ec855ec2f42975e3b1e5b4075b8534f66b1ac529",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T22:01:26.958Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_18fe9ebdc7eb43",
+    "query_hash": "501893706af7b0540c342b12ec855ec2f42975e3b1e5b4075b8534f66b1ac529",
+    "authorization_id": "grnt_196fba2914fd4fe9",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T22:01:32.329Z",
+    "question_ids": [
+      "f00_publish_fix"
+    ],
+    "questions": {
+      "f00_publish_fix": {
+        "question_id": "f00_publish_fix",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T22:01:31.61247+00:00",
+            "ledger_20261209090200": 1,
+            "ledger_head": "20261209090200",
+            "publish_raises_retryable": false,
+            "publish_raises_55000": true
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

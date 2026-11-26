@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operator Story
 
 **Status:** Canonical doctrine (June 2026). The **lived experience** of the [Canonical Interaction Model](./canonical-interaction-model.md) and [Interaction Grammar](./interaction-grammar.md). This is the narrative test: if a proposed surface or refactor breaks this story, it breaks the model.
@@ -126,7 +133,7 @@ If any column needs a *different* drawer product, a *different* navigation spine
 | Interaction laws | [`./interaction-grammar.md`](./interaction-grammar.md) |
 | Visual doctrine (look/feel; mockup bridge) | [`./alloy-visual-language.md`](./alloy-visual-language.md) |
 | Runtime Specification (synthesis; implementation bridge) | [`./alloy-runtime-specification.md`](./alloy-runtime-specification.md) |
-| Domains share one architecture | [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md) |
+| Domains share one architecture | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Relationship-scoped authority | [`../core/record-system.md`](../core/record-system.md) |
 | Location-scoped context | [`../core/placement-system.md`](../core/placement-system.md) |
 | Drawer architecture | [`./drawer-system.md`](./drawer-system.md) |

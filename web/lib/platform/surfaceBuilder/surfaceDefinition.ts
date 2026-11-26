@@ -7,7 +7,7 @@
  * `SurfaceDefinition`; the builder branches only on definition *fields* (e.g. section
  * mode), never on `surfaceType` values. No `if (surfaceType === "analytics")`.
  *
- * Plan: docs/sprints/06_2026/analytics-surface-builder/01-surfacebuilder-extraction-plan.md
+ * Plan: docs/sprints/archive/06_2026/analytics-surface-builder/01-surfacebuilder-extraction-plan.md
  */
 
 import type { ReactNode } from "react";

@@ -17,13 +17,14 @@ import type { PosPacketSummary, PosPacketStatus, PosPacketShareRow } from "@/lib
 import type { RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
 import RecordLaunchPicker from "./RecordLaunchPicker";
 import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
+import PosPacketResponsibilityEditor, { type ResponsibilityRulePayload } from "./PosPacketResponsibilityEditor";
 
 const STATUS_STYLE: Record<PosPacketStatus, { label: string; cls: string }> = {
     ready: { label: "Ready", cls: "bg-stone-100 text-stone-600" },
     shared: { label: "Shared", cls: "bg-sky-50 text-sky-700" },
     in_progress: { label: "In progress", cls: "bg-amber-50 text-amber-700" },
-    submitted: { label: "Submitted", cls: "bg-emerald-50 text-emerald-700" },
-    approved: { label: "Approved", cls: "bg-emerald-100 text-emerald-800" },
+    submitted: { label: "Submitted", cls: "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine" },
+    approved: { label: "Approved", cls: "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine" },
     rejected: { label: "Rejected", cls: "bg-rose-50 text-rose-700" },
     needs_changes: { label: "Needs changes", cls: "bg-orange-50 text-orange-700" },
     cancelled: { label: "Cancelled", cls: "bg-stone-100 text-stone-500" },
@@ -76,13 +77,24 @@ function formGroup(f: FormOption): string {
     return typeof cat === "string" && cat.trim() ? cat.trim() : "Forms";
 }
 
-export default function PosPacketsPanel() {
+export default function PosPacketsPanel({
+    embedded = false,
+    composerOnly = false,
+    onClose,
+    onCreated,
+}: {
+    embedded?: boolean;
+    /** Render ONLY the responsibility composer (no packet list/header) — hosted by the Packet Studio. */
+    composerOnly?: boolean;
+    onClose?: () => void;
+    onCreated?: () => void;
+}) {
     const [packets, setPackets] = useState<PosPacketSummary[] | null>(null);
     const [err, setErr] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     // Composer state
-    const [showCreate, setShowCreate] = useState(false);
+    const [showCreate, setShowCreate] = useState(composerOnly);
     const [formOptions, setFormOptions] = useState<FormOption[] | null>(null);
     const [selectedFormIds, setSelectedFormIds] = useState<string[]>([]);
     const [name, setName] = useState("");
@@ -93,6 +105,12 @@ export default function PosPacketsPanel() {
     const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
     const [composing, setComposing] = useState(false);
+    const [responsibilityRules, setResponsibilityRules] = useState<ResponsibilityRulePayload[]>([]);
+    const [launchBlocked, setLaunchBlocked] = useState(false);
+    const onResponsibilityChange = useCallback((rules: ResponsibilityRulePayload[], blocked: boolean) => {
+        setResponsibilityRules(rules);
+        setLaunchBlocked(blocked);
+    }, []);
     const [composeErr, setComposeErr] = useState<string | null>(null);
     const [composeResult, setComposeResult] = useState<{ name: string; form_count: number; warnings: string[]; shares: ComposeShare[] } | null>(null);
 
@@ -110,8 +128,14 @@ export default function PosPacketsPanel() {
     }, []);
 
     useEffect(() => {
-        void load();
-    }, [load]);
+        if (!composerOnly) void load();
+    }, [load, composerOnly]);
+
+    // Composer-only mode (hosted by the Packet Studio): open the create composer immediately.
+    useEffect(() => {
+        if (composerOnly) void openCreate();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [composerOnly]);
 
     const openCreate = useCallback(async () => {
         setShowCreate(true);
@@ -191,6 +215,7 @@ export default function PosPacketsPanel() {
                     ...(target ? { anchor: { entity_type: target.entity_type, entity_id: target.entity_id } } : {}),
                     child_ids: selectedChildIds,
                     recipient_ids: selectedRecipientIds,
+                    requirement_responsibilities: responsibilityRules,
                 }),
             });
             const b = (await res.json().catch(() => ({}))) as { data?: { name: string; form_count: number; warnings: string[]; shares: ComposeShare[] }; error?: string };
@@ -204,13 +229,14 @@ export default function PosPacketsPanel() {
             setSelectedFormIds([]);
             setName("");
             setDescription("");
-            await load();
+            if (!composerOnly) await load();
+            onCreated?.();
         } catch (e) {
             setComposeErr(e instanceof Error ? e.message : "Failed to create packet");
         } finally {
             setComposing(false);
         }
-    }, [name, selectedFormIds, target, selectedChildIds, selectedRecipientIds, load]);
+    }, [name, description, selectedFormIds, target, selectedChildIds, selectedRecipientIds, responsibilityRules, composerOnly, onCreated, load]);
 
     const copy = useCallback((id: string, url: string) => {
         void navigator.clipboard?.writeText(url).then(
@@ -222,27 +248,40 @@ export default function PosPacketsPanel() {
     const grouped = groupForms(formOptions);
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WorkspaceSectionHeader title="Packets" subtitle="Reusable packets built from your forms. Build one, choose who it's for, and send a link per child + recipient." />
+        <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${embedded ? "bg-alloy-stone/[0.04]" : ""}`}>
+            {embedded || composerOnly ? null : (
+                <WorkspaceSectionHeader title="Packets" subtitle="Reusable packets built from your forms. Build one, choose who it's for, and send a link per child + recipient." />
+            )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
-                        {packets ? `${packets.length} packet${packets.length === 1 ? "" : "s"}` : "Packets"}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
-                            <Plus className="h-3 w-3" aria-hidden /> {showCreate ? "Close" : "New packet"}
-                        </button>
-                        <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
-                            <RefreshCw className="h-3 w-3" aria-hidden /> Refresh
-                        </button>
+            <div className={`min-h-0 flex-1 overflow-y-auto ${embedded ? "p-5" : "p-3"}`}>
+                {composerOnly ? (
+                    <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-alloy-midnight">Compose a packet</span>
+                        {onClose ? (
+                            <button type="button" data-testid="packet-composer-close" onClick={onClose} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
+                                Back to packets
+                            </button>
+                        ) : null}
                     </div>
-                </div>
+                ) : (
+                    <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                            {packets ? `${packets.length} packet${packets.length === 1 ? "" : "s"}` : "Packets"}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <button type="button" data-testid="packet-new-button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
+                                <Plus className="h-3 w-3" aria-hidden /> {showCreate ? "Close" : "New packet"}
+                            </button>
+                            <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
+                                <RefreshCw className="h-3 w-3" aria-hidden /> Refresh
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {showCreate ? (
-                    <div className="mb-3 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
-                        <div className="text-[11px] font-semibold text-emerald-900">Build a packet</div>
+                    <div className="mb-3 space-y-3 rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.05] p-3" data-testid="packet-composer">
+                        <div className="text-[11px] font-semibold text-alloy-midnight">Build a packet</div>
 
                         {/* 1. Forms */}
                         <div>
@@ -321,21 +360,34 @@ export default function PosPacketsPanel() {
                             </div>
                         ) : null}
 
+                        {/* 5. Responsibility configuration + live household preview */}
+                        {selectedFormIds.length > 0 ? (
+                            <div className="rounded-lg border border-stone-200 bg-white/70 p-2">
+                                <div className="mb-1.5 text-[10.5px] font-medium text-stone-500">5. Who is responsible for each requirement</div>
+                                <PosPacketResponsibilityEditor
+                                    formIds={selectedFormIds}
+                                    anchor={target ? { entity_type: target.entity_type, entity_id: target.entity_id } : null}
+                                    onChange={onResponsibilityChange}
+                                />
+                            </div>
+                        ) : null}
+
                         <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description / help text (optional)" className="w-full rounded border border-stone-200 bg-white px-2 py-1 text-[11.5px] text-stone-700" />
                         <div className="flex items-center gap-2">
                             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Packet name (optional)" className="min-w-0 flex-1 rounded border border-stone-200 bg-white px-2 py-1 text-[11.5px] text-stone-700" />
                             <span className="shrink-0 text-[10px] text-stone-500">
                                 {Math.max(1, selectedChildIds.length || 1) * Math.max(1, selectedRecipientIds.length || 1)} link{(Math.max(1, selectedChildIds.length || 1) * Math.max(1, selectedRecipientIds.length || 1)) === 1 ? "" : "s"}
                             </span>
-                            <button type="button" disabled={composing || selectedFormIds.length === 0} onClick={() => void compose()} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-juniper/90 disabled:opacity-50">
+                            <button type="button" data-testid="packet-compose-submit" disabled={composing || selectedFormIds.length === 0 || launchBlocked} onClick={() => void compose()} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-juniper/90 disabled:opacity-50">
                                 <Plus className="h-3.5 w-3.5" aria-hidden /> {composing ? "Creating…" : "Create packet + links"}
                             </button>
                         </div>
+                        {launchBlocked ? <p className="text-[11px] font-medium text-rose-600" data-testid="compose-launch-blocked">Resolve the blocking responsibility issues above before launching.</p> : null}
 
                         {composeErr ? <p className="text-[11px] text-amber-700">{composeErr}</p> : null}
                         {composeResult ? (
-                            <div className="rounded border border-emerald-200 bg-white p-2">
-                                <div className="text-[11px] font-semibold text-emerald-900">{composeResult.name} · {composeResult.form_count} form{composeResult.form_count === 1 ? "" : "s"} · {composeResult.shares.length} link{composeResult.shares.length === 1 ? "" : "s"}</div>
+                            <div className="rounded border border-alloy-bend-pine/25 bg-white p-2">
+                                <div className="text-[11px] font-semibold text-alloy-midnight">{composeResult.name} · {composeResult.form_count} form{composeResult.form_count === 1 ? "" : "s"} · {composeResult.shares.length} link{composeResult.shares.length === 1 ? "" : "s"}</div>
                                 {composeResult.warnings.map((w, i) => <p key={i} className="mt-0.5 text-[10px] text-amber-600">{w}</p>)}
                                 <ul className="mt-1 space-y-1">
                                     {composeResult.shares.map((s) => (
@@ -343,8 +395,8 @@ export default function PosPacketsPanel() {
                                             <span className="min-w-0 flex-1 truncate font-mono text-stone-600">{s.url ?? s.error ?? "—"}</span>
                                             {s.url ? (
                                                 <>
-                                                    <button type="button" onClick={() => copy(s.pair_key, s.url!)} className="shrink-0 rounded border border-emerald-200 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50">{copiedId === s.pair_key ? "Copied" : "Copy"}</button>
-                                                    <a href={s.url} target="_blank" rel="noreferrer" className="shrink-0 rounded border border-emerald-200 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50">Open</a>
+                                                    <button type="button" onClick={() => copy(s.pair_key, s.url!)} className="shrink-0 rounded border border-alloy-bend-pine/25 px-1.5 py-0.5 text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.08]">{copiedId === s.pair_key ? "Copied" : "Copy"}</button>
+                                                    <a href={s.url} target="_blank" rel="noreferrer" className="shrink-0 rounded border border-alloy-bend-pine/25 px-1.5 py-0.5 text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.08]">Open</a>
                                                 </>
                                             ) : null}
                                         </li>
@@ -355,6 +407,8 @@ export default function PosPacketsPanel() {
                     </div>
                 ) : null}
 
+                {composerOnly ? null : (
+                <>
                 {err ? <div className="mb-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11.5px] text-amber-800">{err}</div> : null}
 
                 {!packets ? (
@@ -403,14 +457,16 @@ export default function PosPacketsPanel() {
                         })}
                     </ul>
                 )}
+                </>
+                )}
             </div>
         </div>
     );
 }
 
 function ShareRow({ share }: { share: PosPacketShareRow }) {
-    const linkStatus = !share.is_active ? { label: "Inactive", cls: "bg-stone-100 text-stone-500" } : share.expired ? { label: "Expired", cls: "bg-rose-50 text-rose-700" } : { label: "Active", cls: "bg-emerald-50 text-emerald-700" };
-    const progress = share.submitted ? { label: "Submitted", cls: "bg-emerald-100 text-emerald-800" } : share.opened ? { label: "Opened", cls: "bg-amber-50 text-amber-700" } : { label: "Not opened", cls: "bg-stone-100 text-stone-500" };
+    const linkStatus = !share.is_active ? { label: "Inactive", cls: "bg-stone-100 text-stone-500" } : share.expired ? { label: "Expired", cls: "bg-rose-50 text-rose-700" } : { label: "Active", cls: "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine" };
+    const progress = share.submitted ? { label: "Submitted", cls: "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine" } : share.opened ? { label: "Opened", cls: "bg-amber-50 text-amber-700" } : { label: "Not opened", cls: "bg-stone-100 text-stone-500" };
     return (
         <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1.5 text-[11px]">
             <span className="font-medium text-stone-700">{share.child_label ?? (share.child_id ? "Child" : "—")}</span>

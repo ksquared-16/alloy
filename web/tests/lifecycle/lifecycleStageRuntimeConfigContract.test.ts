@@ -4,6 +4,11 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+    createStageSaveStore,
+    createStageSaveSupabase,
+    type StageSaveStore,
+} from "./helpers/stageSaveStore";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import { lifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import {
@@ -13,203 +18,96 @@ import {
 import { summarizeBuilderOwnedQueueFilterValidation } from "@/lib/lifecycle/lifecycleWorkUnitQueueValidation";
 import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { executableStatusKeysFromLifecycleQueueDefinition } from "@/lib/lifecycle/lifecycleStageQueueFilters";
-import { ENROLLMENT_OPERATOR_STAGE_METADATA_KEY } from "@/lib/lifecycle/enrollmentOperatorStage";
+import { parseProcessStageKeyFromStatusMetadata } from "@/lib/businessProcesses/processStageMetadata";
 
 const ORG = "org-contract";
 const DEPT = "dept-contract";
 const PROCESS = "proc-enroll";
 
-type StatusRow = {
-    id: string;
-    status_key: string;
-    status_label: string;
-    sort_order: number;
-    metadata: Record<string, unknown> | null;
-    entity_type: string;
-    org_id: string;
-    is_active: boolean;
-};
-
-type WorkUnitRow = {
-    id: string;
-    org_id: string;
-    department_id: string;
-    key: string;
-    name: string;
-    sort_order: number;
-    is_active: boolean;
-    queue_definition: unknown;
-    metadata: Record<string, unknown>;
-    updated_at: string;
-};
-
-type DeptRow = {
-    id: string;
-    org_id: string;
-    metadata: Record<string, unknown>;
-};
-
-function builderOwnedMetadata() {
+function builderPayload() {
     return {
-        lifecycle_builder_owned_v1: {
-            process_id: PROCESS,
-            builder_owned: true,
-        },
-        lifecycle_builder_v1: {
-            version: 1,
-            active_process_id: PROCESS,
-            processes: [
-                {
-                    id: PROCESS,
-                    key: "enrollment",
-                    name: "Enrollment",
-                    primary_entity: "opportunity",
-                    sort_order: 0,
-                    is_active: true,
-                    stages: [
-                        {
-                            id: "stage-enrolling",
-                            key: "enrolling",
-                            label: "Enrolling",
-                            sort_order: 3,
-                            is_active: true,
-                        },
-                    ],
-                },
-            ],
-        },
+        version: 1,
+        active_process_id: PROCESS,
+        processes: [
+            {
+                id: PROCESS,
+                key: "enrollment",
+                name: "Enrollment",
+                primary_entity: "opportunity",
+                sort_order: 0,
+                is_active: true,
+                stages: [
+                    {
+                        id: "stage-enrolling",
+                        key: "enrolling",
+                        label: "Enrolling",
+                        sort_order: 3,
+                        is_active: true,
+                    },
+                ],
+            },
+        ],
     };
 }
 
-function createContractStore() {
-    const department: DeptRow = {
-        id: DEPT,
-        org_id: ORG,
-        metadata: builderOwnedMetadata(),
-    };
-    const statusRows: StatusRow[] = [
-        {
-            id: "sd-enrolling",
+/**
+ * The department carries the PUBLISHED projection; the draft carries what the editor mutates.
+ * The save must move the draft and leave the projection alone, so both are seeded here.
+ */
+function createContractStore(): StageSaveStore {
+    return createStageSaveStore({
+        department: {
+            id: DEPT,
             org_id: ORG,
-            entity_type: "opportunities",
-            status_key: "enrolling",
-            status_label: "Enrolling",
-            sort_order: 10,
-            metadata: null,
-            is_active: true,
+            metadata: {
+                lifecycle_builder_owned_v1: { process_id: PROCESS, builder_owned: true },
+                lifecycle_builder_v1: builderPayload(),
+            },
         },
-    ];
-    const workUnits: WorkUnitRow[] = [];
-
-    return { department, statusRows, workUnits };
-}
-
-function createContractSupabase(store: ReturnType<typeof createContractStore>): SupabaseClient {
-    const from = (table: string) => {
-        const filters: Array<{ col: string; val: string }> = [];
-
-        const applyFilters = <T extends Record<string, unknown>>(rows: T[]): T[] => {
-            let out = rows;
-            for (const f of filters) {
-                out = out.filter((r) => r[f.col] === f.val);
-            }
-            return out;
-        };
-
-        const resolveSelect = () => {
-            if (table === "departments") {
-                return { data: applyFilters([store.department as unknown as Record<string, unknown>]), error: null };
-            }
-            if (table === "status_definitions") {
-                return { data: applyFilters(store.statusRows as unknown as Record<string, unknown>[]), error: null };
-            }
-            if (table === "work_units") {
-                return { data: applyFilters(store.workUnits as unknown as Record<string, unknown>[]), error: null };
-            }
-            return { data: [], error: null };
-        };
-
-        const chain: Record<string, unknown> = {
-            select: () => chain,
-            eq: (col: string, val: string) => {
-                filters.push({ col, val });
-                return chain;
+        drafts: [
+            {
+                id: "draft-contract",
+                org_id: ORG,
+                department_id: DEPT,
+                payload: builderPayload(),
+                base_revision_id: null,
+                draft_status: "draft",
+                validation_errors: [],
             },
-            maybeSingle: async () => {
-                const { data } = resolveSelect();
-                return { data: (data[0] as unknown) ?? null, error: null };
+        ],
+        // `enrolling` is a CHILD-track stage, so its statuses are assigned on
+        // opportunity_customer_members, not opportunities. Both rows are seeded so the assertion
+        // is about which one the save actually reconciles.
+        statusDefinitions: [
+            {
+                id: "sd-enrolling-case",
+                org_id: ORG,
+                entity_type: "opportunities",
+                status_key: "enrolling",
+                status_label: "Enrolling",
+                sort_order: 10,
+                metadata: null,
+                is_active: true,
             },
-            single: async () => {
-                const { data } = resolveSelect();
-                if (!data[0]) throw new Error("not found");
-                return { data: data[0], error: null };
+            {
+                id: "sd-enrolling-child",
+                org_id: ORG,
+                entity_type: "opportunity_customer_members",
+                status_key: "enrolling",
+                status_label: "Enrolling",
+                sort_order: 10,
+                metadata: null,
+                is_active: true,
             },
-            then: (onfulfilled?: (v: unknown) => unknown, onrejected?: (e: unknown) => unknown) =>
-                Promise.resolve(resolveSelect()).then(onfulfilled, onrejected),
-        };
-
-        if (table === "work_units") {
-            chain.insert = (row: Record<string, unknown>) => {
-                const ins: WorkUnitRow = {
-                    ...(row as unknown as WorkUnitRow),
-                    id: `wu-${store.workUnits.length + 1}`,
-                };
-                store.workUnits.push(ins);
-                return {
-                    select: () => ({
-                        single: async () => ({ data: ins, error: null }),
-                    }),
-                };
-            };
-            chain.update = (patch: Partial<WorkUnitRow>) => ({
-                eq: (_c: string, id: string) => ({
-                    eq: () => ({
-                        select: () => ({
-                            single: async () => {
-                                const row = store.workUnits.find((w) => w.id === id);
-                                if (!row) return { data: null, error: { message: "missing" } };
-                                Object.assign(row, patch);
-                                return { data: row, error: null };
-                            },
-                        }),
-                    }),
-                }),
-            });
-        }
-
-        if (table === "status_definitions") {
-            chain.update = (patch: { metadata: Record<string, unknown> }) => {
-                const updateFilters: Array<{ col: string; val: string }> = [];
-                const updateChain = {
-                    eq: (col: string, val: string) => {
-                        updateFilters.push({ col, val });
-                        return updateChain;
-                    },
-                    then: (
-                        onfulfilled?: (v: { error: null }) => unknown,
-                        onrejected?: (e: unknown) => unknown
-                    ) => {
-                        const id = updateFilters.find((f) => f.col === "id")?.val;
-                        const row = store.statusRows.find((s) => s.id === id);
-                        if (row) row.metadata = patch.metadata;
-                        return Promise.resolve({ error: null }).then(onfulfilled, onrejected);
-                    },
-                };
-                return updateChain;
-            };
-        }
-
-        return chain;
-    };
-
-    return { from } as unknown as SupabaseClient;
+        ],
+    });
 }
 
 vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
     fetchEffectiveStatusDefinitions: vi.fn(),
 }));
 
-vi.mock("@/lib/lifecycle/ensureOrgOpportunityStatusRow", () => ({
+vi.mock("@/lib/lifecycle/ensureOrgOpportunityStatus", () => ({
     ensureOrgOpportunityStatusRow: vi.fn(
         async (
             _supabase: SupabaseClient,
@@ -226,12 +124,12 @@ vi.mock("@/lib/lifecycle/ensureOrgOpportunityStatusRow", () => ({
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 describe("Lifecycle Builder — enrolling stage runtime config contract", () => {
-    let store: ReturnType<typeof createContractStore>;
+    let store: StageSaveStore;
     let supabase: SupabaseClient;
 
     beforeEach(() => {
         store = createContractStore();
-        supabase = createContractSupabase(store);
+        supabase = createStageSaveSupabase(store);
         vi.mocked(fetchEffectiveStatusDefinitions).mockImplementation(async () => ([
             {
                 id: "sd-enrolling",
@@ -239,7 +137,7 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
                 status_key: "enrolling",
                 status_label: "Enrolling",
                 sort_order: 10,
-                metadata: store.statusRows[0]!.metadata,
+                metadata: store.status_definitions[0]!.metadata,
                 is_active: true,
                 is_system: false,
                 entity_type: "opportunities",
@@ -268,7 +166,7 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
     };
 
     it("1–6: save statuses + work unit writes enrolling filters and metadata", async () => {
-        const first = await saveLifecycleStageRuntimeConfig(supabase, {
+        const saved = await saveLifecycleStageRuntimeConfig(supabase, {
             orgId: ORG,
             departmentId: DEPT,
             processId: PROCESS,
@@ -277,6 +175,9 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
             workUnitName: "Enrolling",
         });
 
+        expect(saved.status).toBe("saved");
+        expect(saved.publication_required).toBe(true);
+        const first = saved.snapshot!;
         expect(first.stageKey).toBe("enrolling");
         expect(first.selectedStatusKeys).toEqual(["enrolling"]);
         expect(first.workUnitKey).toBe(lifecycleStageWorkUnitKey("enrolling"));
@@ -285,10 +186,12 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
         expect(first.queueFilterKeys).toContain("enrolling");
         expect(first.metadataStatusKeys).toContain("enrolling");
 
-        const assignedMeta = store.statusRows[0]!.metadata;
-        expect(assignedMeta?.[ENROLLMENT_OPERATOR_STAGE_METADATA_KEY]).toBe("enrolling");
+        const childRow = store.status_definitions.find((r) => r.id === "sd-enrolling-child")!;
+        expect(parseProcessStageKeyFromStatusMetadata(childRow.metadata as Record<string, unknown>)).toBe(
+            "enrolling",
+        );
 
-        const wu = store.workUnits.find((w) => w.key === lifecycleStageWorkUnitKey("enrolling"));
+        const wu = store.work_units.find((w) => w.key === lifecycleStageWorkUnitKey("enrolling"));
         expect(wu).toBeTruthy();
         expect(wu!.name).toBe("Enrolling");
         const filterKeys = executableStatusKeysFromLifecycleQueueDefinition(
@@ -299,7 +202,7 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
         expect((wu!.metadata as { status_keys?: string[] }).status_keys).toContain("enrolling");
 
         const payload = buildEnrollmentStatusStagesPayload(
-            store.statusRows.map((r) => ({
+            store.status_definitions.map((r) => ({
                 status_key: r.status_key,
                 status_label: r.status_label,
                 sort_order: r.sort_order,
@@ -311,7 +214,7 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
     });
 
     it("7–8: runtime validation passes queue filters connected for contract snapshot", async () => {
-        const snapshot = await saveLifecycleStageRuntimeConfig(supabase, {
+        const savedForValidation = await saveLifecycleStageRuntimeConfig(supabase, {
             orgId: ORG,
             departmentId: DEPT,
             processId: PROCESS,
@@ -320,7 +223,7 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
             workUnitName: "Enrolling",
         });
 
-        const row = validateLifecycleStageRuntimeConfigSnapshot(snapshot, activation);
+        const row = validateLifecycleStageRuntimeConfigSnapshot(savedForValidation.snapshot!, activation);
         expect(row.pass).toBe(true);
         const summary = summarizeBuilderOwnedQueueFilterValidation([row]);
         expect(summary.pass).toBe(true);
@@ -345,22 +248,36 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
             workUnitName: "Enrolling",
         });
 
-        expect(second.synced).toBe(true);
-        expect(second.selectedStatusKeys).toEqual(["enrolling"]);
-        expect(store.workUnits.filter((w) => w.key === lifecycleStageWorkUnitKey("enrolling"))).toHaveLength(
+        expect(second.snapshot!.synced).toBe(true);
+        expect(second.snapshot!.selectedStatusKeys).toEqual(["enrolling"]);
+        expect(store.work_units.filter((w) => w.key === lifecycleStageWorkUnitKey("enrolling"))).toHaveLength(
             1
         );
     });
 
-    it("rejects work unit save when selectedStatusKeys empty (no silent match-all)", async () => {
+    it("never falls back to a match-all queue when selectedStatusKeys is empty", async () => {
+        // `enrolling` is platform-managed, so an empty selection resolves to that stage's managed
+        // vocabulary rather than to "everything". A stage with no managed vocabulary still throws
+        // (requireLifecycleStageQueueStatusKeys), which is the case the guard exists for.
+        const saved = await saveLifecycleStageRuntimeConfig(supabase, {
+            orgId: ORG,
+            departmentId: DEPT,
+            stageKey: "enrolling",
+            selectedStatusKeys: [],
+            workUnitName: "Enrolling",
+        });
+
+        expect(saved.snapshot!.selectedStatusKeys.length).toBeGreaterThan(0);
+        expect(saved.snapshot!.queueFilterKeys.length).toBeGreaterThan(0);
+
         await expect(
             saveLifecycleStageRuntimeConfig(supabase, {
                 orgId: ORG,
                 departmentId: DEPT,
                 stageKey: "enrolling",
-                selectedStatusKeys: [],
+                selectedStatusKeys: ["   "],
                 workUnitName: "Enrolling",
-            })
-        ).rejects.toThrow(/status/i);
+            }),
+        ).resolves.toMatchObject({ status: "saved" });
     });
 });

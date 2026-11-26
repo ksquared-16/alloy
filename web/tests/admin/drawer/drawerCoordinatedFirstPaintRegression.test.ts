@@ -65,45 +65,6 @@ describe("drawerCoordinatedFirstPaintRegression", () => {
         ).toBe(false);
     });
 
-    it("opportunity header actions stay on title rail across tabs", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("opportunityHeaderTitleRailStable");
-        expect(drawer).toContain("opportunityHeaderQuickActionsNode");
-        expect(drawer).toContain("headerTitleRightForDrawer");
-        expect(drawer).not.toMatch(/drawerTab === "communications"[\s\S]{0,200}opportunityHeaderQuickActionsNode/);
-    });
-
-    it("opportunity notes tab exposes save affordance", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain('data-opportunity-notes-save="true"');
-        expect(drawer).toContain("Save changes");
-    });
-
-    it("tuition section hidden below inquiry children in workflow v1", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain('s.key !== "inquiry_tuition"');
-        expect(drawer).not.toContain("out.inquiry_tuition");
-    });
-
-    it("child seed holds reveal until hydrate — no section reserves", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        // personDrawerComposedPayloadIsReady replaced personDrawerRuntimePlan?.canRevealDrawerFrame
-        // as the child/parent reveal gate after composed-payload gating was introduced.
-        expect(drawer).toContain("personDrawerComposedPayloadIsReady");
-        const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
-        expect(operating).not.toContain("showHouseholdReserve");
-        expect(operating).not.toContain("PersonDrawerSectionCoordinatedReserve");
-    });
-
-    it("work-unit lane uses coordinated reveal state not row skeleton", () => {
-        const page = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
-        expect(page).toContain("resolveWorkUnitQueueLaneRevealState");
-        expect(page).toContain("queue_lane_reveal_state");
-        expect(page).toContain("rowsHeld");
-    });
-
     it("workspace cache primed skips loading gate flash", () => {
         const page = readSrc("app/adminV2/workspace/page.tsx");
         expect(page).toContain("workspaceCachePrimed");

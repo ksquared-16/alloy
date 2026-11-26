@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { documentCompositionSchema } from "@/lib/forms/documentComposition";
+import { normalizeLegacyPublishedFormSchema } from "@/lib/forms/normalizeLegacyPublishedFormSchema";
 
 /** Single visibility condition; submit evaluation uses AND across `visibility.all`. */
 export const formVisibilityConditionSchema = z
@@ -35,7 +36,7 @@ export const formRepeatRulesSchema = z
 
 export const formSignatureConfigSchema = z
     .object({
-        /** When true, submit requires `typed_full_name` for typed signatures. */
+        /** When true, every signature carries the signer's typed name: `typed_full_name` for a typed signature, `signer_printed_name` beside a drawn mark. */
         require_typed_name: z.boolean().optional(),
         /** When true, submit requires `drawn_document_id` for drawn signatures. */
         require_drawn_asset: z.boolean().optional(),
@@ -44,10 +45,89 @@ export const formSignatureConfigSchema = z
     })
     .strict();
 
-type FormVisibility = z.infer<typeof formVisibilitySchema>;
+/* Exported because the import draft now records an ACCEPTED condition and converts it to this shape. */
+export type FormVisibilityCondition = z.infer<typeof formVisibilityConditionSchema>;
+export type FormVisibility = z.infer<typeof formVisibilitySchema>;
 type FormValidateRules = z.infer<typeof formValidateRulesSchema>;
 type FormRepeatRules = z.infer<typeof formRepeatRulesSchema>;
 type FormSignatureConfig = z.infer<typeof formSignatureConfigSchema>;
+
+/**
+ * The explicit "nothing to report" a parent may give instead of typing a false value.
+ *
+ * Authored ON the field because only the author knows the honest words: "No known allergies" is a
+ * true clinical statement, "None we know of" is not the same sentence, and "Nothing to add" is a
+ * description of the click rather than an answer. The runtime already owns the AFFORDANCE — an
+ * optional need offers a skip, and `enrollmentSessionDeclines` records that it was offered and
+ * taken — so this adds the wording, never a second decline system.
+ *
+ * `offered: false` states that the author considered a skip and decided against one, which is a
+ * different fact from never having configured it.
+ */
+export const formFieldAbsenceSchema = z
+    .object({
+        label: z.string().min(1),
+        offered: z.boolean(),
+    })
+    .strict();
+
+export type FormFieldAbsence = z.infer<typeof formFieldAbsenceSchema>;
+
+/**
+ * WHOSE address a structured address group is.
+ *
+ * The group's own children already say WHAT they hold, through `field_source` (`person.address_line1`,
+ * `person.city`, …). What they cannot say is which person: two address groups on one form — a home
+ * address and a mailing address — both resolve `entity_type: "person"` and would fill from the same
+ * person, so a family would see their guardian's address offered as the billing address.
+ *
+ * `subject` is the entity the address belongs to and `role` is the relationship that selects WHICH
+ * one. Deliberately not a provider ref: the relationship leaves are name/email/phone, there is no
+ * canonical address leaf, and inventing one to fit here would put address ownership inside the Forms
+ * runtime instead of the relationship model that owns it.
+ */
+export const formGroupAddressBindingSchema = z
+    .object({
+        subject: z.string().min(1),
+        role: z.string().min(1),
+    })
+    .strict();
+
+export type FormGroupAddressBinding = z.infer<typeof formGroupAddressBindingSchema>;
+
+export const formFieldSourceRelationshipSchema = z
+    .object({
+        /** Canonical relationship leaf provider refKey (Forms registry grain). */
+        provider_ref_key: z.string().min(1),
+        relationship_id: z.string().min(1),
+        role: z.string().optional(),
+        /** Manifest/platform leaf refKey — canonical scalar leaf identity (e.g. person.primary_email). */
+        leaf_provider_ref_key: z.string().min(1),
+        /** Leaf discriminator within the relationship edge — not canonical identity alone. */
+        leaf_key: z.string().min(1),
+        target_entity_type: z.string().optional(),
+    })
+    .strict();
+
+export type FormFieldSourceRelationship = z.infer<typeof formFieldSourceRelationshipSchema>;
+
+/**
+ * A destination Alloy FILLS rather than asks.
+ *
+ * Declared on the field so that every consumer — the value-production gate, prefill, submission —
+ * reads the same statement, and so a derived box is never mistaken for a question nobody answered.
+ * `source_key` and `as_of_key` are field ids within this same schema, because a Form's payload is
+ * keyed by field id.
+ */
+export const formFieldDerivedSchema = z
+    .object({
+        kind: z.enum(["age_from_date_of_birth", "execution_date"]),
+        source_key: z.string().min(1).optional(),
+        as_of_key: z.string().min(1).optional(),
+    })
+    .strict();
+
+export type FormFieldDerived = z.infer<typeof formFieldDerivedSchema>;
 
 export const formFieldSourceSchema = z
     .object({
@@ -55,12 +135,36 @@ export const formFieldSourceSchema = z
         field_key: z.string().min(1),
         shared_value_key: z.string().optional(),
         crm_mapping_key: z.string().optional(),
+        /** Optional relationship lineage — backward compatible for scalar-only bindings. */
+        relationship: formFieldSourceRelationshipSchema.optional(),
     })
     .strict();
 
 export type FormFieldSource = z.infer<typeof formFieldSourceSchema>;
 
-export type FormFieldLayoutWidth = "full" | "half";
+export const formGroupCollectionBindingSchema = z
+    .object({
+        /** Canonical whole-collection provider refKey (e.g. children, household.members). */
+        collection_provider_ref: z.string().min(1),
+        iteration_entity_type: z.string().min(1),
+        iteration_alias: z.string().optional(),
+    })
+    .strict();
+
+export type FormGroupCollectionBinding = z.infer<typeof formGroupCollectionBindingSchema>;
+
+export const formIterationContextSchema = z
+    .object({
+        scope: z.literal("collection_item"),
+        collection_provider_ref: z.string().min(1),
+        iteration_entity_type: z.string().min(1),
+        iteration_alias: z.string().optional(),
+    })
+    .strict();
+
+export type FormIterationContext = z.infer<typeof formIterationContextSchema>;
+
+export type FormFieldLayoutWidth = "full" | "half" | "third" | "quarter";
 
 type FormFieldBase = {
     id: string;
@@ -70,21 +174,51 @@ type FormFieldBase = {
     description?: string;
     /** Input placeholder where applicable (text-like controls). */
     placeholder?: string;
-    /** Row width on desktop; half fields pair with the next half in reading order. Default full. */
+    /** Row width on desktop; fractional widths share a 12-unit row grid. Default full. */
     layout_width?: FormFieldLayoutWidth;
     /** Provenance for operational mapping (CRM, shared_values, etc.); optional for legacy/demo schemas. */
     field_source?: FormFieldSource;
     /** When true, public PATCH/submit restore values from the saved draft baseline (operator/server wins). */
     read_only?: boolean;
+    /** Alloy fills this destination from canonical truth; it is never asked. @see formFieldDerivedSchema */
+    derived?: FormFieldDerived;
     visibility?: FormVisibility;
     validate?: FormValidateRules;
     entity_hint?: string;
     pdf_slot?: string;
+    /** The author's own wording for an explicit "nothing to report". @see formFieldAbsenceSchema */
+    absence?: FormFieldAbsence;
 };
+
+/**
+ * A form-authored MARKETING CONSENT question (Communications-bound, not a value field).
+ *
+ * The family's answer is never stored in `values`: it travels as the intake marketing-consent evidence
+ * record that Approve commits through Communications (`communication_preferences`), the only consent
+ * store. The field's label is the heading and its description the note under the boxes. Each offered
+ * channel is its own box, unchecked, and the field can never be required — that would be an implicit
+ * opt-in. Wording left empty uses Communications' default wording for that channel.
+ */
+export type FormMarketingConsentConfig = {
+    channels: { email: boolean; sms: boolean };
+    wording?: { email?: string; sms?: string };
+};
+
+export const formMarketingConsentConfigSchema = z
+    .object({
+        channels: z.object({ email: z.boolean(), sms: z.boolean() }).strict(),
+        wording: z
+            .object({ email: z.string().max(500).optional(), sms: z.string().max(500).optional() })
+            .strict()
+            .optional(),
+    })
+    .strict()
+    .refine((c) => c.channels.email || c.channels.sms, { message: "A marketing consent question offers at least one channel." });
 
 /** Parsed `schema_json` field node (recursive for groups). */
 export type FormField =
     | (FormFieldBase & { type: "text"; multiline?: boolean })
+    | (FormFieldBase & { type: "text_block"; content: string; token_ids?: string[] })
     | (FormFieldBase & { type: "number" })
     | (FormFieldBase & { type: "date" })
     | (FormFieldBase & { type: "boolean" })
@@ -100,9 +234,28 @@ export type FormField =
           option_set_key?: string;
           static_options?: ReadonlyArray<{ value: string; label: string }>;
       })
-    | (FormFieldBase & { type: "file_ref" })
+    | (FormFieldBase & {
+          type: "file_ref";
+          /**
+           * The canonical document classification this upload satisfies, when one is known.
+           *
+           * Without it every upload requirement is "a file", and a family who uploads a physical
+           * cannot be told they still owe an immunization record. Optional on purpose: an unknown
+           * type stays absent rather than being guessed into the nearest key.
+           */
+          document_type?: string;
+      })
     | (FormFieldBase & { type: "signature"; signature?: FormSignatureConfig })
-    | (FormFieldBase & { type: "group"; fields: FormField[]; repeat?: FormRepeatRules });
+    | (FormFieldBase & { type: "marketing_consent"; consent: FormMarketingConsentConfig })
+    | (FormFieldBase & {
+          type: "group";
+          fields: FormField[];
+          repeat?: FormRepeatRules;
+          /** When set, repeat instances bind to a canonical collection provider. */
+          collection_binding?: FormGroupCollectionBinding;
+          /** When set, the group's address fields resolve from the person this names. */
+          address_binding?: FormGroupAddressBinding;
+      });
 
 const staticOptionRowSchema = z
     .object({
@@ -124,8 +277,10 @@ const fieldCoreSchema = z
         /** Name of PDF mapping slot for this field (hint only; mapping lives in `pdf_mapping_json`). */
         pdf_slot: z.string().min(1).optional(),
         read_only: z.boolean().optional().default(false),
+        derived: formFieldDerivedSchema.optional(),
         field_source: formFieldSourceSchema.optional(),
-        layout_width: z.enum(["full", "half"]).optional(),
+        layout_width: z.enum(["full", "half", "third", "quarter"]).optional(),
+        absence: formFieldAbsenceSchema.optional(),
     })
     .strict();
 
@@ -135,6 +290,13 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
             .extend({
                 type: z.literal("text"),
                 multiline: z.boolean().optional(),
+            })
+            .strict(),
+        fieldCoreSchema
+            .extend({
+                type: z.literal("text_block"),
+                content: z.string().default(""),
+                token_ids: z.array(z.string().min(1)).optional(),
             })
             .strict(),
         fieldCoreSchema
@@ -169,6 +331,7 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
         fieldCoreSchema
             .extend({
                 type: z.literal("file_ref"),
+                document_type: z.string().min(1).optional(),
             })
             .strict(),
         fieldCoreSchema
@@ -179,9 +342,22 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
             .strict(),
         fieldCoreSchema
             .extend({
+                type: z.literal("marketing_consent"),
+                // Never required, never derived or read-only: consent is asked, and only ever optionally.
+                required: z.literal(false).optional().default(false),
+                read_only: z.literal(false).optional().default(false),
+                derived: z.undefined().optional(),
+                field_source: z.undefined().optional(),
+                consent: formMarketingConsentConfigSchema,
+            })
+            .strict(),
+        fieldCoreSchema
+            .extend({
                 type: z.literal("group"),
                 fields: z.array(formFieldSchema).min(1),
                 repeat: formRepeatRulesSchema.optional(),
+                collection_binding: formGroupCollectionBindingSchema.optional(),
+                address_binding: formGroupAddressBindingSchema.optional(),
             })
             .strict(),
     ])
@@ -197,6 +373,16 @@ export const formSectionSchema = z
 
 export type FormSection = z.infer<typeof formSectionSchema>;
 
+export const FORM_SUBMIT_LABEL_MAX = 40;
+
+/** The authored submit label, or null when the form uses the runtime's default wording. */
+export function formSubmitLabel(schema: { submit_label?: string | null } | null | undefined): string | null {
+    const raw = schema?.submit_label;
+    if (typeof raw !== "string") return null;
+    const label = raw.trim();
+    return label ? label.slice(0, FORM_SUBMIT_LABEL_MAX) : null;
+}
+
 export const formSchemaV1Schema = z
     .object({
         schema_version: z.literal(1),
@@ -205,6 +391,12 @@ export const formSchemaV1Schema = z
         fields: z.array(formFieldSchema),
         /** Optional document composition layer — ignored by public renderer until staged (FD-4). */
         document_composition: documentCompositionSchema.optional(),
+        /**
+         * The final submit button's text on the public form ("Submit" when absent). Lives in the
+         * schema, not form metadata, so it is versioned with the published form: a draft edit never
+         * relabels a live form. Signing steps keep their own platform wording.
+         */
+        submit_label: z.string().trim().min(1).max(FORM_SUBMIT_LABEL_MAX).optional(),
     })
     .strict()
     .superRefine((data, ctx) => {
@@ -301,6 +493,40 @@ export const formSchemaV1Schema = z
         };
         walkVisibilityRefs(data.fields);
 
+        /*
+         * A question may not depend on itself, directly or through a chain. The runtime would not loop —
+         * it treats a cycle as hidden — but that is a form where none of those questions can ever be
+         * asked, which no author means. Refused here so neither Studio path can save or publish one.
+         */
+        const visibilityRefsById = new Map<string, string[]>();
+        const collectVisibilityRefs = (fields: FormField[]) => {
+            for (const f of fields) {
+                if (f.visibility) visibilityRefsById.set(f.id, f.visibility.all.map((c) => c.field_id));
+                if (f.type === "group") collectVisibilityRefs(f.fields);
+            }
+        };
+        collectVisibilityRefs(data.fields);
+        for (const start of visibilityRefsById.keys()) {
+            const seen = new Set<string>();
+            const stack = [...(visibilityRefsById.get(start) ?? [])];
+            let cyclic = false;
+            while (stack.length && !cyclic) {
+                const id = stack.pop()!;
+                if (id === start) cyclic = true;
+                else if (!seen.has(id)) {
+                    seen.add(id);
+                    stack.push(...(visibilityRefsById.get(id) ?? []));
+                }
+            }
+            if (cyclic) {
+                ctx.addIssue({
+                    code: "custom",
+                    message: `visibility of ${start} depends on itself`,
+                    path: ["fields"],
+                });
+            }
+        }
+
         const walkSelectFieldSources = (fields: FormField[], basePath: (string | number)[]) => {
             for (let fi = 0; fi < fields.length; fi++) {
                 const f = fields[fi];
@@ -337,10 +563,19 @@ export const formSchemaV1Schema = z
 
 export type FormSchemaV1 = z.infer<typeof formSchemaV1Schema>;
 
+/*
+ * ── HISTORICAL VOCABULARY, THEN STRICT PARSE ───────────────────────────────────────────────────
+ *
+ * A published version is immutable, so an artifact authored before a property was renamed keeps the
+ * old name forever. Normalization translates the NAMED historical contracts and nothing else; the
+ * strict parse below is unchanged, so a property nobody has taught the normalizer is still an
+ * error. Both entry points normalize, because a caller that forgot would meet a 500 on a family's
+ * screen rather than a failing test.
+ */
 export function validateFormSchema(schemaJson: unknown): FormSchemaV1 {
-    return formSchemaV1Schema.parse(schemaJson);
+    return formSchemaV1Schema.parse(normalizeLegacyPublishedFormSchema(schemaJson));
 }
 
 export function safeParseFormSchema(schemaJson: unknown) {
-    return formSchemaV1Schema.safeParse(schemaJson);
+    return formSchemaV1Schema.safeParse(normalizeLegacyPublishedFormSchema(schemaJson));
 }

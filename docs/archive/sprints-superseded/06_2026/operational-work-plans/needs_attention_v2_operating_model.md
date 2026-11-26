@@ -1,17 +1,17 @@
 # Needs Attention V2 — Operating Model
 
-**Path:** `docs/sprints/06_2026/needs_attention_v2_operating_model.md`  
+**Path:** `docs/sprints/archive/06_2026/needs_attention_v2_operating_model.md`  
 **Date:** 2026-06-03  
 **Status:** **Operating model frozen — discovery only** (architecture only; no implementation)  
 **Scope:** Define Alloy's **operational awareness framework** (risk, opportunity, conflict, and change signals). Not a UI sprint, schema sprint, workflow sprint, or task sprint.
 
 **Canonical inputs (frozen unless major architectural issue):**
 
-- [`completed/lifecycle_builder_hardening_closeout.md`](./completed/lifecycle_builder_hardening_closeout.md)
-- [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
+- [`completed/lifecycle_builder_hardening_closeout.md`](../../../../sprints/archive/06_2026/completed/lifecycle_builder_hardening_closeout.md)
+- [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md)
 - [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
-- [`completed/readiness_phase_1_closeout.md`](./completed/readiness_phase_1_closeout.md)
-- [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) (§4 Needs Attention architecture — planning baseline)
+- [`completed/readiness_phase_1_closeout.md`](../../../../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md)
+- [`lifecycle_v2_discovery_and_operating_model.md`](../../../../sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md) (§4 Needs Attention architecture — planning baseline)
 
 **Authority:** This document is the canonical reference for Needs Attention V2 implementation planning. Product copy, resolver extensions, and Lifecycle Builder attention profiles should align with **Human Awareness Doctrine**, **Canonical Responsibilities**, **Task Relationship Doctrine**, and §2–§10 unless an explicit exception is recorded in §11.
 
@@ -294,7 +294,7 @@ OpportunityAttentionResult {
 
 ### 1.4 Existing workspace behavior
 
-Documented in `docs/system/workspace-system.md` § Operational attention.
+Documented in `docs/archive/2026-06-superseded-system/workspace-system.md` § Operational attention.
 
 | Behavior | Detail |
 |----------|--------|
@@ -942,14 +942,14 @@ Use frozen vocabulary — not "violations," not "config only."
 | BOS grounding | `web/lib/adminV2/bos/recommendations/adapters/extractGroundingSignalsFromAttention.ts` |
 | Readiness engine | `web/lib/completion/evaluateOperationalReadiness.ts` |
 | Readiness types | `web/lib/completion/readinessTypes.ts` |
-| Workspace doctrine | `docs/system/workspace-system.md` |
+| Workspace doctrine | `docs/archive/2026-06-superseded-system/workspace-system.md` |
 | CRM NA model | `docs/product/crm-system.md` § Enrollment operational attention |
 
 ---
 
 ## Appendix B — Vocabulary alignment
 
-Per [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md):
+Per [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md):
 
 | Use | Avoid |
 |-----|-------|

@@ -1,0 +1,59 @@
+{
+  "trusted_host_action_id": "tha_7f00d56708e945",
+  "query_hash": "02eed0bba0785389c8d594151798d4eb9d142a12ab938b337d72847854f38986",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-14T20:23:46.250Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_7f00d56708e945",
+    "query_hash": "02eed0bba0785389c8d594151798d4eb9d142a12ab938b337d72847854f38986",
+    "authorization_id": "grnt_a86dae1ad55645f6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-14T20:23:51.182Z",
+    "question_ids": [
+      "creator"
+    ],
+    "questions": {
+      "creator": {
+        "question_id": "creator",
+        "row_count": null,
+        "rows": [
+          "{\"label\" : \"a92a0f18-6efb-40d0-b74f-52708e96fb03\", \"managed_qa_identity\" : true, \"auth_display_name\" : null, \"charges_3d\" : 3, \"recent\" : [{\"value\":{\"id\" : \"9674ed0d-d18a-471f-b42d-7dc74ba9ca50\", \"status\" : \"posted\", \"category\" : \"one_time\", \"template\" : \"Field trip\", \"amount_cents\" : 4000, \"service_date\" : \"2026-10-14\", \"billable_on\" : \"2026-10-14\", \"due_date\" : \"2026-11-01\", \"created_at\" : \"2026-10-14T17:03:24.66404+00:00\"}},",
+          {
+            "label": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "managed_qa_identity": false,
+            "auth_display_name": null,
+            "charges_3d": 1,
+            "recent": [
+              {
+                "value": {
+                  "id": "f2789891-0b7b-44a9-9712-7dd2ac39fecb",
+                  "status": "draft",
+                  "category": "consumable_fee",
+                  "template": "Materials",
+                  "amount_cents": 1800,
+                  "service_date": "2026-11-05",
+                  "billable_on": "2026-11-12",
+                  "due_date": "2026-11-12",
+                  "created_at": "2026-10-14T16:16:45.882591+00:00"
+                }
+              }
+            ],
+            "roles": [
+              "admin"
+            ],
+            "active_links": null,
+            "name_candidates": null
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

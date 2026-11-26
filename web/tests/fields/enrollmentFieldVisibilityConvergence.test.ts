@@ -46,14 +46,7 @@ function leadOrgFixture() {
         ],
         child: [
             {
-                field_key: "desired_program_type",
-                label: "Program",
-                entity_type: "inquiry_child",
-                is_system: true,
-                is_active: true,
-            },
-            {
-                field_key: "desired_program_category_id",
+                field_key: "program_category_id",
                 label: "Program",
                 entity_type: "inquiry_child",
                 is_system: true,
@@ -74,14 +67,14 @@ function leadOrgFixture() {
                 is_active: true,
             },
             {
-                field_key: "desired_schedule_type",
+                field_key: "schedule_type",
                 label: "Schedule",
                 entity_type: "inquiry_child",
                 is_system: true,
                 is_active: true,
             },
             {
-                field_key: "desired_start_date",
+                field_key: "start_date",
                 label: "Start Date",
                 entity_type: "inquiry_child",
                 is_system: true,
@@ -143,31 +136,25 @@ describe("enrollment field visibility convergence (E3)", () => {
         expect(keys).toContain("name");
     });
 
-    it("BP Stage Requirements Child excludes desired_program_type and duplicate Program", () => {
+    it("BP Stage Requirements Child has a single canonical Program entry", () => {
         const palette = mergeLifecycleFieldPaletteForStage("waitlist", leadOrgFixture());
         const programEntries = palette.filter(
             (f) =>
                 f.entity === "child" &&
-                (f.field_key === "desired_program_type" ||
-                    f.field_key === "desired_program_category_id" ||
-                    f.rule_id === "child:program_interest")
+                (f.field_key === "program_category_id" || f.rule_id === "child:program_interest")
         );
-        expect(programEntries.some((f) => f.field_key === "desired_program_type")).toBe(false);
-        expect(
-            programEntries.filter(
-                (f) => f.field_label === "Program" || f.field_key === "desired_program_category_id"
-            )
-        ).toHaveLength(1);
+        expect(programEntries).toHaveLength(1);
+        expect(programEntries[0]?.field_key).toBe("program_category_id");
     });
 
     it("BP Stage Requirements Child includes canonical Program and placement fields", () => {
         const palette = mergeLifecycleFieldPaletteForStage("waitlist", leadOrgFixture());
         const childKeys = palette.filter((f) => f.entity === "child").map((f) => f.field_key);
-        expect(childKeys).toContain("desired_program_category_id");
+        expect(childKeys).toContain("program_category_id");
         expect(childKeys).toContain("location_id");
         expect(childKeys).toContain("program_room_cohort_key");
-        expect(childKeys).toContain("desired_schedule_type");
-        expect(childKeys).toContain("desired_start_date");
+        expect(childKeys).toContain("schedule_type");
+        expect(childKeys).toContain("start_date");
         expect(palette.some((f) => f.rule_id === "child:first_name")).toBe(true);
         expect(palette.some((f) => f.rule_id === "child:last_name")).toBe(true);
         expect(palette.some((f) => f.rule_id === "child:date_of_birth")).toBe(true);
@@ -177,7 +164,6 @@ describe("enrollment field visibility convergence (E3)", () => {
         for (const [entity, key] of [
             ["opportunity", "quote_total"],
             ["customer", "stripe_customer_id"],
-            ["inquiry_child", "desired_program_type"],
         ] as const) {
             expect(isEnrollmentOperatorFieldVisible(entity, key, { is_system: true })).toBe(false);
             expect(isOperatorHiddenField(entity, { field_key: key, is_system: true, label: key })).toBe(true);
@@ -265,19 +251,19 @@ describe("enrollment field visibility convergence (E3)", () => {
 
     it("layout and form picker tests still pass for canonical program", () => {
         const row = {
-            field_key: "desired_program_category_id",
+            field_key: "program_category_id",
             label: "Program",
             field_type: "select",
         };
         const catalog = fieldDefToCatalog("inquiry_child", row);
         const merged = mergeCatalogWithCuratedFallback("inquiry_child", [catalog]);
-        expect(merged.some((f) => f.fieldKey === "desired_program_category_id")).toBe(true);
+        expect(merged.some((f) => f.fieldKey === "program_category_id")).toBe(true);
 
         const picker = buildFormSystemFieldPicker(
             [
                 {
                     entity_type: "inquiry_child",
-                    field_key: "desired_program_category_id",
+                    field_key: "program_category_id",
                     field_type: "select",
                     label: "Program",
                     is_system: true,
@@ -286,7 +272,7 @@ describe("enrollment field visibility convergence (E3)", () => {
             ],
             []
         );
-        expect(picker.some((e) => e.field_key === "desired_program_category_id")).toBe(true);
+        expect(picker.some((e) => e.field_key === "program_category_id")).toBe(true);
     });
 
     it("E3 repair migration is idempotent (no deletes)", () => {
@@ -302,7 +288,13 @@ describe("enrollment field visibility convergence (E3)", () => {
 
     it("classifies integration and legacy_compatibility tiers", () => {
         expect(childcareFieldCatalogClass("customer", "stripe_customer_id")).toBe("integration");
-        expect(childcareFieldCatalogClass("inquiry_child", "desired_program_type")).toBe("legacy_compatibility");
+        // No built-in legacy_compatibility keys remain (the canonical-fields migration dropped the
+        // last alias); the tier survives for config-forced classification only.
+        expect(
+            childcareFieldCatalogClass("inquiry_child", "some_org_field", {
+                operator_catalog_class: "legacy_compatibility",
+            })
+        ).toBe("legacy_compatibility");
         expect(childcareFieldCatalogClass("opportunity", "quote_total")).toBe("legacy_home_services");
     });
 });

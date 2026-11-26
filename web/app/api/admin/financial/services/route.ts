@@ -11,6 +11,7 @@ import {
 } from "@/lib/financials/services/financialServicesStore";
 import { SERVICE_CAPABILITIES, type ServiceCapabilityMap } from "@/lib/financials/services/serviceCapabilities";
 import { operationalEnrollmentErrorResponse } from "@/lib/childcareOperational/operationalEnrollmentApi";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /** Pull switchboard / revenue / program fields off the request body (operator-facing keys). */
 function metadataFromBody(body: Record<string, unknown>): Pick<FinancialServiceInput, "capabilities" | "defaultChargeCategory" | "programs"> {
@@ -54,6 +55,8 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

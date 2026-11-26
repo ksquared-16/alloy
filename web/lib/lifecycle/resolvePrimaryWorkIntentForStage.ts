@@ -4,6 +4,7 @@
  */
 
 import type { StageOperatingPlanV1, StageWorkDuePolicy, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { stageWorkChildKeySegment } from "@/lib/lifecycle/stageWorkChildSubject";
 import { resolveEffectivePrimaryWorkTemplate } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 import { resolveWorkDefinitionKeyFromTemplate } from "@/lib/lifecycle/resolveWorkDefinitionKeyFromTemplate";
 
@@ -75,14 +76,18 @@ export function buildLifecycleIntentIdempotencyKey(params: {
     opportunityId: string;
     stageKey: string;
     workIntentKey: string;
+    /** The child this work belongs to, at a child stage. */
+    subjectChildId?: string | null;
 }): string {
-    return `lifecycle_intent:${params.orgId.trim()}:${params.opportunityId.trim()}:${params.stageKey.trim()}:${params.workIntentKey.trim()}`;
+    return `lifecycle_intent:${params.orgId.trim()}:${params.opportunityId.trim()}:${params.stageKey.trim()}:${params.workIntentKey.trim()}${stageWorkChildKeySegment(params.subjectChildId ?? null)}`;
 }
 
 export function buildLifecycleIntentSubjectFingerprint(params: {
     orgId: string;
     opportunityId: string;
     stageKey: string;
+    /** The child this work belongs to, at a child stage. */
+    subjectChildId?: string | null;
 }): string {
-    return `${params.orgId.trim()}:opportunities:${params.opportunityId.trim()}:stage:${params.stageKey.trim()}`;
+    return `${params.orgId.trim()}:opportunities:${params.opportunityId.trim()}:stage:${params.stageKey.trim()}${stageWorkChildKeySegment(params.subjectChildId ?? null)}`;
 }

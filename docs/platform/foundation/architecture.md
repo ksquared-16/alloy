@@ -1,8 +1,15 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-10-27
+supersedes: []
+---
+
 # Architecture
 
-**Status:** Canonical (June 2026 rebaseline). Describes **current** platform architecture — not sprint history.
+**Status:** Canonical (July 2026 stabilization). Describes **current** platform architecture — not sprint history.
 
-> **Runtime convergence note (June 2026).** The operator runtime has converged on a **View Model–first** ownership model: each route composes one above-fold **Surface ViewModel** that owns reveal (`reveal.canCommit`), and the operator works a **condensed queue → Focus Panel** surface. The "drawer VM / composed drawer payload" stack referenced below is the **protected reveal/payload infrastructure that sits *behind* the Focus Panel** — not a competing product surface, and not a path to expand. Canonical source: [`../operator/surface-view-model-composition.md`](../operator/surface-view-model-composition.md), [`../operator/alloy-runtime-specification.md`](../operator/alloy-runtime-specification.md) (Part 16), [`../operator/focus-panel-runtime-cutover-report.md`](../operator/focus-panel-runtime-cutover-report.md), and the locked [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md). **Legacy loading paths must not be expanded.**
+> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. The **K1–K4 runtime kernel** (`../runtime/alloy-runtime-kernel.md`) is not a tenth entry in this register: `../runtime/runtime-implementation-authorization.md` states it directly — "**Not** a new foundational runtime — K1–K4 is the kernel; no fifth system." The kernel is the substrate beneath these subsystems, not one of them. Note also that the kernel doc reclassifies several of the runtimes named here; see `docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md` D2. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
 
 ---
 
@@ -29,13 +36,32 @@
 
 ---
 
+## Foundational runtimes (July 2026)
+
+| Runtime | Responsibility | Canonical reference |
+|---------|----------------|---------------------|
+| **Presentation Runtime** | One presentation tree for Workspace, Work Unit, Queue, Focus Panel, Right Rail | [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md) |
+| **Surface Host** | Client-held surfaces; focus exchange without route teardown | [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md) |
+| **Focus Panel Runtime** | Canonical record execution surface (cards, Current Work, embeds) | [`../operator/focus-panel-architecture-vocabulary.md`](../operator/focus-panel-architecture-vocabulary.md) |
+| **VM Runtime** | Entity compose, cache, reveal for Opportunity / Person / Child | [`../operator/drawer-system.md`](../operator/drawer-system.md) |
+| **Business Process Runtime** | Process tiles → Work Views → Focus Panel / durable record; staged lifecycle **or** domain projection (Enrollment / Assignments / Billing) | [`../core/business-process-system.md`](../core/business-process-system.md) |
+| **Processing Runtime** | Digital Mailroom operational workspace plus inbound identity resolution, review, approval, and commit execution | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
+| **Communications Runtime** | Command Center + Activity embed | [`../modules/communications-platform.md`](../modules/communications-platform.md) |
+| **Configuration Runtime** | Settings control plane (`/settings/*`) | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |
+| **Current Work Runtime** | Stage work completion inside Focus Panel | [`../operator/current-work-surface.md`](../operator/current-work-surface.md) |
+
+There is still **no tenth foundational runtime**. Domain-projection processes (Assignments, Billing) and the durable record surface run **inside** Business Process / Focus Panel — they are not new register entries. Unsupported historical entity drawers are **gone** (`AdminEntityDrawer` was deleted 2026-08); rollback is deployment/Git-based only.
+
+---
+
 ## Operator plane
 
 | Layer | Route pattern | Responsibility |
 |-------|---------------|----------------|
 | Landing | `/workspace` | Business process tiles, KPI strip |
-| Stage execution | `/workspace/work-unit/:slug` | Queues, filters, actions rail |
-| Record detail | `…/:recordId` | Drawer VM on same route |
+| Stage / Work View execution | `/workspace/work-unit/:viewSlug` | Queues, Work Views, filters, actions rail |
+| Record focus | `?subject_id=` (+ optional `work_view_id`) on the work-unit route | Focus Panel on the selected subject |
+| Durable record | `/workspace/record/{person\|child\|household}/:id` | Durable-record surface (Assignments/Billing Focus entries) |
 
 **Shell:** `AdminV2Shell` — persistent sidebar, BOS bar, site filter context.
 
@@ -45,12 +71,29 @@
 
 ## Configuration plane
 
-| Layer | Route | Responsibility |
-|-------|-------|----------------|
-| Admin home | `/admin` | Settings hub |
-| Business processes | `/admin/settings/lifecycle` | Stage builder, operating plans |
-| Control plane | `/admin/settings/*` | Fields, layouts, actions, statuses |
-| Authoring | `/admin/forms`, `/admin/workflows` | Forms and workflow definitions |
+> **Corrected 2026-09-30.** This table previously named `/admin` as the settings hub and
+> `/admin/settings/*` as the control plane. Measured against `web/next.config.ts`, three of its four
+> rows were wrong: bare `/admin` and `/admin/settings` **redirect** to `/organization`, and
+> `/admin/settings/*` redirects to `/settings/*`. The row that was right is the authoring row —
+> `/admin/*` remains canonical as a prefix for non-settings modules. The error mattered because this
+> document and [`system-overview.md`](system-overview.md) were both marked canonical and disagreed
+> about Alloy's own configuration URLs, and because an agent told to look in `web/app/admin/settings`
+> finds no such directory.
+
+**This document does not own product URLs.** [`../../system/routing-doctrine.md`](../../system/routing-doctrine.md)
+does, and the code outranks both: `web/lib/admin/canonicalAdminRoutes.ts` and `web/next.config.ts`.
+What follows is the shape only.
+
+Three canonical bases coexist:
+
+| Canonical base | Serves | Compatibility |
+|---|---|---|
+| `/organization` | configuration landing and its domain surfaces (access, surfaces, processes, programs, financials, data-model, …) | bare `/admin`, `/admin/settings`, `/settings` and `/settings/organization` all redirect here |
+| `/settings/*` | settings sub-surfaces — fields, layouts, actions, statuses, lifecycle | `/admin/settings/*` redirects here |
+| `/admin/*` | non-settings admin modules — forms, workflows, messages, tasks, finance, ai-activity | canonical as a **prefix**; only the bare root redirects. Any `/admin/*` outside `CANONICAL_ADMIN_PATH_PREFIXES` redirects to `/legacy-admin/*` |
+
+**URLs are not filesystem paths.** All three bases are **rewritten** onto the implementation tree
+`web/app/adminV2/**`. There is no `web/app/organization` and no `web/app/settings`.
 
 Four-plane settings model: Fields · Field grouping · Layouts · Actions — see `../modules/configuration-platform.md`.
 
@@ -62,6 +105,7 @@ Four-plane settings model: Fields · Field grouping · Layouts · Actions — se
 - **CRM scope:** Department + site visibility via `user_access_profiles`
 - **Writes:** Privileged mutations through server routes with service role where required
 - **Events:** Append-oriented `workflow_events` → `workflowRun.ts`
+- **Inbound identity:** `processing_cases` + facts/resolutions + immutable Commit Plans/approvals/attempts; registered semantic commands own physical record mutation
 
 ---
 
@@ -75,7 +119,25 @@ Queue row (preview)
     → drawer VM render  →  buildOperationalContext() → Focus Panel cards
 ```
 
-Opportunity VM is canonical; Person/Child VM cutover in progress. The composed payload + drawer VM is **reveal/payload infrastructure**; the operator-facing surface is the **Focus Panel** (one runtime, one operational subject) composed via `buildOperationalContext()`. See [`../operator/focus-panel-runtime-cutover-report.md`](../operator/focus-panel-runtime-cutover-report.md) and [`../operator/operational-context-boundary.md`](../operator/operational-context-boundary.md). Do not add new drawer-product surfaces or new queue-row renderers outside the condensed path.
+The composed payload path is **reveal/payload infrastructure** (compose, cache, reveal) behind the Focus Panel — not a competing product surface. Opportunity/Person/Child **drawer VM product runtimes were retired**; the operator-facing surface is the **Focus Panel** (one runtime, one operational subject) composed via `buildOperationalContext()`. Locations operate through **Settings** (`/settings/locations`), not a drawer. See [`../operator/drawer-system.md`](../operator/drawer-system.md) and [`../operator/operational-context-boundary.md`](../operator/operational-context-boundary.md). Do not add new drawer-product surfaces or new queue-row renderers outside the condensed path.
+
+---
+
+## Embedded workspace pattern (Preview VM)
+
+Record-scoped embedded workspaces inside the Focus Panel (Communications Activity, and future Processing/Documents/Scheduling embeds) use a **Preview VM → immediate render → background hydrate → full VM** load path. This avoids a second loading shell when the operator switches tabs inside an already-selected record.
+
+```
+Selected record
+  → Preview VM on selection payload (first paint)
+  → Embedded workspace renders immediately
+  → Background prefetch → full workspace VM
+  → Warm cache on revisit
+```
+
+**Canonical reference:** Communications Activity (`surfaceVariant="activity_embed"`) — see `../../sprints/archive/2026-07/communications-preview-vm-doctrine.md` (historical: `../../sprints/archive/2026-07/communications-preview-vm-doctrine.md`) and [`../modules/communications-platform.md`](../modules/communications-platform.md) § Focus Panel Activity embed.
+
+**Reuse intent:** Processing, Documents, Scheduling, Billing, Attendance, and future embedded workspaces should adopt the same pattern — not fork parallel load paths.
 
 ---
 
@@ -83,24 +145,25 @@ Opportunity VM is canonical; Person/Child VM cutover in progress. The composed p
 
 | Operator concept | Runtime construct |
 |------------------|-------------------|
-| Business Process | `lifecycles` + landing catalog |
-| Stage | Queue lane + stage metadata + membership rules |
-| Record | Entity row + drawer payload |
-| *(internal)* Work Unit | `work_units` + `queue_definition` + slug bootstrap |
+| Business Process | Published `business_process_revisions` (from drafts) → department landing catalog; model is **staged lifecycle** (Enrollment) or **domain projection** (Assignments / Billing) — see [`../core/business-process-system.md`](../core/business-process-system.md) |
+| Stage | Persisted `stage_key` on the stage owner (`opportunities` for family/case; `process_instances` for child) + Work View lens |
+| Record / subject | Focus Panel subject (`?subject_id=`) or durable record route — never a retired `/:recordId` drawer path |
+| *(internal)* Work Unit | Host work-unit + Work View slug bootstrap (`workViewRouteKeyFromLabel`); `queue_definition` remains execution infrastructure |
 
 ---
 
-## Legacy & transitional
+## Compatibility infrastructure (not product runtime)
 
 | Item | Status |
 |------|--------|
-| `/legacy-admin` | Unmigrated modules |
-| Dept UUID routes | Compat/tests only |
-| `AdminEntityDrawerLegacy` | Shrinking per entity |
-| `contacts` table | Compatibility reads/writes |
-| `messages` / `messages_outbox` | Legacy parallel to `communication_*` |
+| `/legacy-admin` route tree | **Archived** — landing redirects to `/workspace`; shared client modules remain as import-path debt |
+| Dept UUID routes | Compat/tests only — not operator product path |
+| `contacts` table | Compatibility reads/writes — `persons` + `customer_persons` canonical |
+| `messages` / `messages_outbox` | Legacy parallel to `communication_*` — retirement documented |
 
-Inventory: `../../system/legacy-architecture-inventory.md`
+**Deleted (July 2026):** `AdminEntityDrawerLegacy` — no supported legacy entity drawer runtime.
+
+Inventory: `../../system/legacy-architecture-inventory.md` (historical reference)
 
 ---
 
@@ -117,10 +180,14 @@ See `../governance/deployment-and-environments.md`.
 ## Related docs
 
 - `os-runtime-map.md` (**OS Runtime Map** — the nine runtime layers, the three flows, the client/server seam, the Effects/Integration service, and the Architecture Evolution & Known Gaps appendix)
+  **These are a different nine.** The nine *layers* (Kernel · Intent · Navigation · Experience · Surface · Card · Record · Entity · Operational/BOS) are a decomposition of the stack; the nine *foundational runtimes* named at the top of this document are operator-plane subsystems. The two lists are not versions of each other, and matching counts is a coincidence.
 - `system-overview.md`
 - `../core/business-process-system.md`
 - `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
 - `../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
-- `../platform-capabilities.md` (capability model — new operational modules are designed API-first)
+- [`platform-capabilities.md`](platform-capabilities.md) (capability model — new operational modules are designed API-first)
+- [`platform-manifesto.md`](platform-manifesto.md) (constitutional doctrine)
+- [`../milestones/certification-july-2026.md`](../milestones/certification-july-2026.md) (July 2026 certification)
+- `../milestones/stabilization-july-2026.md` (July 2026 stabilization milestone)
 - `../../system/repository-state-2026-06.md` (point-in-time snapshot)
 - `docs/schema/` (generated schema reference)

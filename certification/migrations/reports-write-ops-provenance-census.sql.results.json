@@ -1,0 +1,65 @@
+{
+  "trusted_host_action_id": "tha_0aefd3bce99b2e",
+  "query_hash": "e700bfd756f9c0581b43f43816ac7c578d0d83525653c274790609e47982c1f6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T21:12:01.642Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0aefd3bce99b2e",
+    "query_hash": "e700bfd756f9c0581b43f43816ac7c578d0d83525653c274790609e47982c1f6",
+    "authorization_id": "grnt_5b6b82a04cd74b36",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T21:12:02.805Z",
+    "question_ids": [
+      "ops_write_grants",
+      "provenance",
+      "correctable",
+      "read_preserved",
+      "nonvacuity"
+    ],
+    "questions": {
+      "ops_write_grants": {
+        "question_id": "ops_write_grants",
+        "row_count": null,
+        "rows": [
+          "rows=1 allowed=1 system_role=1 custom_role=0"
+        ]
+      },
+      "provenance": {
+        "question_id": "provenance",
+        "row_count": null,
+        "rows": [
+          "0bbaad43-1235-401e-88ea-62e0881e950a ~ ops ~ A_UNTOUCHED_SEED ~ key_events=0 role_events=0"
+        ]
+      },
+      "correctable": {
+        "question_id": "correctable",
+        "row_count": null,
+        "rows": [
+          "class_A=1 class_B=0 class_C=0"
+        ]
+      },
+      "read_preserved": {
+        "question_id": "read_preserved",
+        "row_count": null,
+        "rows": [
+          "ops_write_orgs=1 of_which_hold_reports_read=1"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "grants_total=330 ops_roles=3 mutation_events=40"
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

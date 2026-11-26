@@ -7,7 +7,7 @@ import {
     transformWorkspaceApiDepartmentsToTiles,
     workspaceRenderedTileFailureReason,
 } from "@/lib/workspace/workspaceRootTilePipeline";
-import type { WorkspaceRootDepartmentRow } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import type { WorkspaceRootDepartmentRow } from "@/lib/workspace/workspaceRootDepartmentTypes";
 
 const root = resolve(__dirname, "../..");
 
@@ -29,9 +29,6 @@ describe("workspaceRootTilePipeline", () => {
     });
 
     it("does not filter out zero-work-unit lifecycle departments", () => {
-        const grid = read("components/admin/workspace/WorkspaceRootDepartmentGrid.tsx");
-        expect(grid).not.toMatch(/workUnitCount\s*===\s*0/);
-        expect(grid).not.toMatch(/workUnitCount\s*>\s*0/);
         const tiles = transformWorkspaceApiDepartmentsToTiles([
             { id: "lifecycle-dept", key: "sales", name: "Sales", is_active: true },
         ]);
@@ -60,14 +57,6 @@ describe("workspace tile visibility integration", () => {
         expect(validate).toContain("traceWorkspaceRootDepartmentTiles");
     });
 
-    it("workspace page uses shared tile pipeline and busts cache on departments-changed", () => {
-        const page = read("app/adminV2/workspace/page.tsx");
-        expect(page).toContain("transformWorkspaceApiDepartmentsToTiles");
-        expect(page).toContain("alloy:workspace-departments-changed");
-        expect(page).toContain("bustWorkspaceDepartmentsFetchDedupe");
-        expect(page).toContain('cache: "no-store"');
-    });
-
     it("notify busts session cache and fetch dedupe", () => {
         const notify = read("lib/workspace/notifyWorkspaceDepartmentsChanged.ts");
         expect(notify).toContain("invalidateAdminV2WorkspaceSessionCache");
@@ -78,12 +67,6 @@ describe("workspace tile visibility integration", () => {
         expect(read("lib/workspace/workspaceBrowserTileTruth.ts")).toContain("evaluateWorkspaceBrowserTileTruth");
         expect(read("components/adminV2/settings/lifecycle/LifecycleActivationValidation.tsx")).toContain(
             "evaluateWorkspaceBrowserTileTruth"
-        );
-    });
-
-    it("dev debug panel is development-only", () => {
-        expect(read("components/admin/workspace/WorkspaceTileDebugPanel.tsx")).toContain(
-            "isLifecycleDebugUiEnabled"
         );
     });
 });

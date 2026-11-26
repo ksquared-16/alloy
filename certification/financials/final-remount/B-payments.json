@@ -1,0 +1,21 @@
+{
+  "present": true,
+  "box": {
+    "top": 312,
+    "left": 416,
+    "width": 608,
+    "height": 276,
+    "bottom": 588
+  },
+  "insideViewport": true,
+  "text": "PAYMENTS PAYMENT METHODS Add card Add bank account No payment method on file. Add a card or a bank account above to collect from this family automatically. AUTOPAY Add a usable payment method before setting up Autopay. Close",
+  "nativeDates": 0,
+  "alloyDates": 0,
+  "buttons": [
+    "Add card",
+    "Add bank account",
+    "Close"
+  ],
+  "avatars": 0,
+  "horizontalOverflow": false
+}

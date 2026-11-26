@@ -1,0 +1,61 @@
+{
+ "schema": "documents.d9h1.case11_link_audit.v1",
+ "qa_run_id": "qar_7d7ec3d86bdd",
+ "census_request_id": "gar_3ae29f364c7704",
+ "trusted_host_action_id": "tha_98194047dad66d",
+ "query_sha256": "837416d15d799a03521c0eedf9ef5a17faf7056e676c2d109cbd5b3aa11774d8",
+ "executed_at": "2026-11-08T17:26:36.433Z",
+ "checks": {
+  "d9_l11_link_rows_present": true,
+  "d9_l11_attribution_complete": true,
+  "d9_l11_no_scope_cert_links": true,
+  "d9_l11_no_secondary_links": true
+ },
+ "rows": [
+  {
+   "event_id": "c8a1927e-5ee8-4689-89db-56defda5a3c4",
+   "created_at": "2026-11-08T17:24:13.042475+00:00",
+   "document_id": "8abce264-a874-414d-839d-6ea961e93b79",
+   "org": "qa_shared",
+   "application": "d9-documents-read-cert",
+   "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+   "credential_id": "dfb8d936-924d-4440-b952-0a0cfdee99aa"
+  },
+  {
+   "event_id": "1fae7458-e038-48a2-858c-72a7fc2942c8",
+   "created_at": "2026-11-08T17:24:13.904494+00:00",
+   "document_id": "8abce264-a874-414d-839d-6ea961e93b79",
+   "org": "qa_shared",
+   "application": "d9-documents-read-cert",
+   "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+   "credential_id": "dfb8d936-924d-4440-b952-0a0cfdee99aa"
+  }
+ ],
+ "criterion_1_two_T_A_rows_on_D_STD_C": true,
+ "criterion_2_no_refused_call_audited": true,
+ "criterion_3_audited_before_response": "inconclusive",
+ "timing": [
+  {
+   "call_index": 1,
+   "event_id": "c8a1927e-5ee8-4689-89db-56defda5a3c4",
+   "sent_at": "2026-11-08T17:24:12.266036+00:00",
+   "created_at": "2026-11-08T17:24:13.042475+00:00",
+   "response_at": "2026-11-08T17:24:13.182735+00:00",
+   "margin_after_sent_s": 0.776,
+   "margin_before_response_s": 0.14,
+   "verdict": "inconclusive"
+  },
+  {
+   "call_index": 2,
+   "event_id": "1fae7458-e038-48a2-858c-72a7fc2942c8",
+   "sent_at": "2026-11-08T17:24:13.182778+00:00",
+   "created_at": "2026-11-08T17:24:13.904494+00:00",
+   "response_at": "2026-11-08T17:24:13.986198+00:00",
+   "margin_after_sent_s": 0.722,
+   "margin_before_response_s": 0.082,
+   "verdict": "inconclusive"
+  }
+ ],
+ "verdict": "TIMING_INCONCLUSIVE",
+ "note": "Timing compares the database clock (created_at) with the driver host clock (sent_at/response_at); a margin under 2 s is clock-bounded and goes to Kelly. Audit-before-sign order is the route's (externalDocumentAuthority.ts recordDocumentAudit then createSignedUrl), proven by code and D9.1 route tests, not by this census."
+}

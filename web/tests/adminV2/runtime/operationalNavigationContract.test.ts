@@ -158,21 +158,20 @@ describe("Work Unit → Focus Panel: in-page transition, queue always mounted", 
 });
 
 // ---------------------------------------------------------------------------
-// Settings exclusion — hard nav preserved for non-operational routes
+// Settings / Organization Continuity — soft-nav eligible (Checkpoint A)
 // ---------------------------------------------------------------------------
 
-describe("Settings routes: excluded from OS nav contract", () => {
-    it("adminV2CommitNavigation still exported and used for non-workspace navigation", () => {
+describe("Settings routes: Configuration Continuity soft-nav", () => {
+    it("adminV2CommitNavigation still exported as hard-nav recovery floor", () => {
         const shell = read("lib/adminV2/shellNavigation.ts");
         expect(shell).toContain("export function adminV2CommitNavigation(");
         expect(shell).toContain("window.location.assign(next)");
     });
 
-    it("adminV2SoftSidebarNavEnabled excludes non-workspace paths", () => {
+    it("Organization / Settings are soft-nav eligible via Configuration Continuity", () => {
         const shell = read("lib/adminV2/shellNavigation.ts");
+        expect(shell).toContain("isConfigurationSoftNavEligibleHref");
         expect(shell).toContain("isAdminV2SoftNavEligibleHref");
-        // Settings routes must not be classified as soft-nav eligible
-        expect(shell).toContain("isOperatorWorkspacePath");
     });
 });
 

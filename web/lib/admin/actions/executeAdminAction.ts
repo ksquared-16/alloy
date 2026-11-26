@@ -28,6 +28,11 @@ import {
     validateOpportunityStatusTransitionForAction,
 } from "@/lib/admin/actions/entryLifecycleActions";
 import {
+    fetchDepartmentMetadataForWorkUnit,
+} from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { resolveCreateLeadWorkViewForHandoff } from "@/lib/platform/commands/createLead/resolveCreateLeadWorkViewForHandoff";
+import { invalidateWorkUnitQueueItemsServerCacheForWorkUnit } from "@/lib/workspace/workUnitQueueItemsServerCache";
+import {
     executeConfirmTourAction,
     executeRecordTourOutcomeAction,
 } from "@/lib/admin/actions/executeTourBookingActions";
@@ -40,6 +45,7 @@ import {
     stampChildEnrollmentDatesIfBlank,
     todayEnrollmentDateIso,
 } from "@/lib/admin/actions/executeApproveEnrollmentAction";
+import { stampEnrollmentDateOnProcessInstances } from "@/lib/enrollment/stampEnrollmentDateOnProcessInstances";
 import type { OperationalEnrollmentHandoffResult } from "@/lib/childcareOperational/enrollmentAgreementHandoff";
 import { executeOperationalEnrollmentHandoffFromApprovedOpportunity } from "@/lib/childcareOperational/enrollmentAgreementHandoff";
 import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
@@ -49,6 +55,7 @@ import { preflightOpportunityActionOrNull } from "@/lib/admin/actions/adminActio
 import { applyMetadataAutoPopulate } from "@/lib/completion/applyAutoPopulateInstructions";
 import { autoPopulateForLifecycleAction } from "@/lib/completion/lifecycleActionRequirementCatalog";
 import { WAITLISTED_STATUS_KEY } from "@/lib/admin/actions/lifecycleActionMetadataKeys";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
 
 export type ExecuteAdminActionCtx = {
     orgId: string;
@@ -69,6 +76,24 @@ export type ExecuteAdminActionInput = {
     };
     payload?: Record<string, unknown>;
 };
+
+/**
+ * A family case cannot close out from under its children (E2E-09). The legacy definition-driven
+ * branches below write `opportunities.status_key` directly, so they ask the same shared rule every
+ * other close path asks — after transition validation, before any write.
+ */
+async function refuseFamilyCloseOrNull(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+    targetStatusKey: string,
+    correlationId: string,
+    closesCase = false,
+): Promise<{ ok: false; correlation_id: string; error: string; status: number } | null> {
+    const refusal = await familyCloseRefusal(supabase, { orgId, opportunityId, targetStatusKey, closesCase });
+    if (!refusal) return null;
+    return { ok: false, correlation_id: correlationId, error: refusal.error, status: 409 };
+}
 
 export type ExecuteAdminActionResult =
     | {
@@ -301,10 +326,15 @@ export async function executeAdminAction(
         } catch (e) {
             // executeCreateLeadAction throws (rather than returning EntryLifecycleActionError) when a
             // downstream native insert fails — e.g. ensureCustomerForPersonNative on a stale/diverged
-            // schema. Translate to operator-safe copy and a highly searchable server log instead of an
-            // unhandled 500. Searchable on: action_key=create_lead + correlation_id.
+            // schema (missing column), or a CHECK-constraint rejecting a value the application path
+            // considers canonical (e.g. chk_pcs_source_kind vs the deployed source_kind vocabulary).
+            // Both are record-model-out-of-sync failures, NOT bad operator input: the operator never
+            // types a source_kind or a column name. Translate to operator-safe copy that does not blame
+            // the entered information and does not leak DB/constraint details, plus a highly searchable
+            // server log. Searchable on: action_key=create_lead + correlation_id.
             const technical = e instanceof Error ? e.message : String(e);
-            const schemaOutOfSync = /PGRST204|schema cache|Could not find the .* column/i.test(technical);
+            const schemaOutOfSync =
+                /PGRST204|schema cache|Could not find the .* column|violates check constraint/i.test(technical);
             console.error("[executeAdminAction] create_lead execution threw", {
                 action_key: actionKey,
                 correlation_id: correlationId,
@@ -316,7 +346,7 @@ export async function executeAdminAction(
                 ok: false,
                 correlation_id: correlationId,
                 error: schemaOutOfSync
-                    ? "I couldn't create the lead because the record model is out of sync. This needs an admin fix."
+                    ? "I couldn't create the lead because the record model is out of sync — this is a system issue, not the information you entered. Your draft is saved; an administrator needs to apply a fix before you retry."
                     : "I couldn't create the lead. Review the information and try again.",
                 status: schemaOutOfSync ? 500 : 400,
             };
@@ -324,23 +354,50 @@ export async function executeAdminAction(
         if (!created.ok) {
             return { ok: false, correlation_id: correlationId, error: created.error, status: created.status };
         }
+
+        let workViewId: string | null = null;
+        let workViewRouteKey: string | null = null;
+        if (created.work_unit_id) {
+            try {
+                const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(
+                    supabase,
+                    ctx.orgId,
+                    created.work_unit_id,
+                );
+                const handoff = resolveCreateLeadWorkViewForHandoff({
+                    departmentMetadata,
+                    statusKey: created.status_key,
+                    stageKey: created.stage_key,
+                });
+                workViewId = handoff?.workViewId ?? null;
+                workViewRouteKey = handoff?.workViewRouteKey ?? null;
+            } catch {
+                // Routing enrichment is best-effort — create already succeeded.
+            }
+        }
+
         return await withActionExecutedEmit(
             supabase,
             ctx,
             correlationId,
             actionKey,
             entityTypeRaw,
-            created.opportunity_id,
+            created.mode === "committed" ? created.opportunity_id : created.processing_case_id,
             {
-                kind: "create_lead",
-                opportunity_id: created.opportunity_id,
-                person_id: created.person_id,
-                customer_id: created.customer_id,
-                // Surface the lead's assigned work unit + written status so the client success contract
-                // can invalidate the right work-unit queue/counts and prove New Leads membership.
+                mode: created.mode,
+                processing_case_id: created.processing_case_id,
+                readiness: created.readiness,
+                idempotency_key: created.idempotency_key,
                 work_unit_id: created.work_unit_id,
+                work_unit_key: created.work_unit_key,
+                work_view_id: workViewId,
+                work_view_route_key: workViewRouteKey,
                 status_key: created.status_key,
-            }
+                stage_key: created.stage_key,
+                ...(created.mode === "committed"
+                    ? { opportunity_id: created.opportunity_id }
+                    : {}),
+            },
         );
     }
 
@@ -578,6 +635,10 @@ export async function executeAdminAction(
                 if (!transition.ok) {
                     return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
                 }
+                const afterFamilyRefusal = await refuseFamilyCloseOrNull(
+                    supabase, ctx.orgId, entityId, afterUpdateStatusKey, correlationId,
+                );
+                if (afterFamilyRefusal) return afterFamilyRefusal;
                 const _afterStatusPatch: Record<string, unknown> = { status_key: afterUpdateStatusKey };
                 await normalizeOpportunityWritePayload(supabase, _afterStatusPatch, "executeAdminAction:open_form.after");
                 const { data: updated, error: upErr } = await supabase
@@ -748,6 +809,12 @@ export async function executeAdminAction(
                     return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
                 }
 
+                // `mark_lost` writes `lost`: a close, whatever the status string.
+                const formFamilyRefusal = await refuseFamilyCloseOrNull(
+                    supabase, ctx.orgId, entityId, statusKey, correlationId,
+                    formKey === "mark_lost" || actionKey === "mark_lost",
+                );
+                if (formFamilyRefusal) return formFamilyRefusal;
                 const _openFormStatusPatch: Record<string, unknown> = { status_key: statusKey, metadata: nextMd };
                 if (formKey === "mark_lost" || actionKey === "mark_lost") {
                     const lostCheck = await validateMarkLostPayload(merged);
@@ -1013,6 +1080,12 @@ export async function executeAdminAction(
             const existing = transitionCtx.existing;
             const oldStatusKey = transitionCtx.oldStatusKey;
 
+            const statusFamilyRefusal = await refuseFamilyCloseOrNull(
+                supabase, ctx.orgId, entityId, statusKey, correlationId,
+                actionKey === "mark_lost",
+            );
+            if (statusFamilyRefusal) return statusFamilyRefusal;
+
             let operationalEnrollmentHandoff: OperationalEnrollmentHandoffResult | null = null;
             if (actionKey === APPROVE_ENROLLMENT_ACTION_KEY) {
                 if (await isChildcareOperationalEnrollmentV1EnabledForOrg(supabase, ctx.orgId)) {
@@ -1091,6 +1164,19 @@ export async function executeAdminAction(
                         );
                     } catch (e) {
                         console.error("[executeAdminAction] stampChildEnrollmentDatesIfBlank", e);
+                    }
+                    // Process-grain stamp (canonical). Opportunity metadata remains compat projection.
+                    // Source marks this as approve-path bridge until paperwork-completion outcomes own it.
+                    try {
+                        await stampEnrollmentDateOnProcessInstances(supabase, {
+                            orgId: ctx.orgId,
+                            opportunityId: entityId,
+                            enrollmentDate,
+                            source: "compat_approve_enrollment",
+                            actorUserId: ctx.userId,
+                        });
+                    } catch (e) {
+                        console.error("[executeAdminAction] stampEnrollmentDateOnProcessInstances", e);
                     }
                 }
             }

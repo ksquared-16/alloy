@@ -99,6 +99,7 @@ function adminContext(org = orgId) {
         userId: "user-1",
         role: "admin",
         roleKeys: ["admin"],
+        permissionKeys: [],
         status: 200,
     } as Awaited<ReturnType<typeof getAdminContextCached>>);
 }
@@ -122,11 +123,11 @@ describe("validateCustomerMemberPatchBody", () => {
     });
 
     it("rejects OCM/enrollment fields", () => {
-        const result = validateCustomerMemberPatchBody({ desired_start_date: "2026-09-01" });
+        const result = validateCustomerMemberPatchBody({ start_date: "2026-09-01" });
         expect(result.ok).toBe(false);
         if (!result.ok) {
             expect(result.error).toContain("inquiry_child");
-            expect(result.error).toContain("desired_start_date");
+            expect(result.error).toContain("start_date");
         }
     });
 
@@ -179,7 +180,7 @@ describe("customer-members PATCH route", () => {
             chainableSupabase({
                 customerMembersSelect: { data: { id: memberId }, error: null },
                 customerMembersUpdate: { data: memberRow, error: null },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {
@@ -206,7 +207,7 @@ describe("customer-members PATCH route", () => {
                     ],
                     error: null,
                 },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {
@@ -234,7 +235,7 @@ describe("customer-members PATCH route", () => {
         vi.mocked(createAdminClient).mockReturnValue(
             chainableSupabase({
                 customerMembersSelect: { data: null, error: null },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {
@@ -293,7 +294,7 @@ describe("customer-members GET route", () => {
                     },
                     error: null,
                 },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const res = await GET(new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`), {
@@ -319,7 +320,7 @@ describe("customer-members GET route", () => {
         vi.mocked(createAdminClient).mockReturnValue(
             chainableSupabase({
                 customerMembersSelect: { data: null, error: null },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const res = await GET(new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`), {
@@ -334,7 +335,7 @@ describe("OCM route isolation — profile config fields stay off inquiry_child",
         expect(assertNoChildProfileKeysOnOcmPatch({ gender: "female" })).toBeTruthy();
         expect(assertNoChildProfileKeysOnOcmPatch({ allergies: "peanut" })).toBeTruthy();
         expect(assertNoChildProfileKeysOnOcmPatch({ medical_notes: "asthma" })).toBeTruthy();
-        expect(assertNoChildProfileKeysOnOcmPatch({ desired_start_date: "2026-09-01" })).toBeNull();
+        expect(assertNoChildProfileKeysOnOcmPatch({ start_date: "2026-09-01" })).toBeNull();
     });
 
     it("customer_member PATCH targets customer_member entity_type only", async () => {
@@ -345,7 +346,7 @@ describe("OCM route isolation — profile config fields stay off inquiry_child",
                     data: [{ field_key: "medical_notes", entity_type: "customer_member" }],
                     error: null,
                 },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {

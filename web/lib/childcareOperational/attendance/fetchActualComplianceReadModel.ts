@@ -36,6 +36,7 @@ export async function fetchActualComplianceReadModel(
     const { resolveTiers, resolveCapacityBinding } = buildRoomConfigResolvers({
         agreements: loaded.agreements,
         placements: loaded.placements,
+        assignments: loaded.assignments,
         config: loaded.config,
         ageGroupByRoomLocationId: loaded.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: loaded.ageGroupByProgramCategoryId,
@@ -48,6 +49,7 @@ export async function fetchActualComplianceReadModel(
         placements: loaded.placements,
         assignments: loaded.assignments,
         patternsById: loaded.patternsById,
+        weekdaysByAssignmentId: loaded.weekdaysByAssignmentId,
     });
 
     const events = await listAttendanceEvents(supabase, input.orgId, {

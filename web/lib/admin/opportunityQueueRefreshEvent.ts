@@ -33,6 +33,45 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     "family_contacts_registry",
     "registry_action",
     "delete_lead",
+    // Stage-changing Current Work outcomes move membership + counts; Focus Panel stays open.
+    "stage_work_outcome",
+    // Child Enrollment waitlist moves candidate-grain Waitlist membership + case-grain Lead
+    // re-evaluation. Event id is the family opportunity; Waitlist rows are child/candidate ids, so
+    // membership classification is required for off-screen / cross-lane refetch + pill counts.
+    "waitlist_child",
+    "move_to_waitlist",
+    // A per-child Decision path (Offer spot, Waitlist, Begin Enrolling, Not Enrolling) moves that
+    // child between child-grain lanes (Offers, Waitlist, Registration) and can move the family in or
+    // out of Decision. The event id is the family; those rows are process instances, so without
+    // membership classification nothing on a child lane ever matched and the list stayed stale.
+    "participant_decision",
+    // Every lifecycle mutation moves a record between Work Views (Lead → Tour → Decision, child
+    // Offered → Enrolling / Waitlist) or changes what a view counts. Listed so a mutation made from
+    // a drawer, header, right rail or Process card refetches rows AND sibling counts like a Focus
+    // Panel outcome does — a family that moved to Decision must not stay in New until a reload.
+    "record_tour_outcome",
+    "reschedule_tour",
+    "confirm_tour",
+    "cancel_tour",
+    "update_enrollment_status",
+    "move_to_stage",
+    "offer_spot",
+    "offer_response",
+    "stage_work.start",
+    "complete_stage_work",
+    "review_enrollment_packet",
+    // Records/Operations child mutations. Neither has an Opportunity subject, so both broadcast —
+    // but both change what derived surfaces COUNT: `child.add` adds a durable child, and
+    // `enrollment.start` creates a journey and its participant packet. Listed here so listeners
+    // refetch rows AND counts rather than patching a row that may not be on screen at all.
+    "child.add",
+    "enrollment.start",
+    // A child RENAME changes row LABELS wherever that child is drawn — the queue row, the
+    // Assignments card, Operations — and this set is explicitly "membership, sort order, OR ROW
+    // LABELS/COUNTS". Proven live: without it the identity signal fired, totals re-resolved, and the
+    // Assignments card next to the edited card kept the old name, because the mutated opportunity is
+    // not the visible row's entity id and nothing else made the event actionable.
+    "inquiry_child_identity",
 ]);
 
 /**

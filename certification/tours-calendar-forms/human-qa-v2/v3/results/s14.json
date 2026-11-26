@@ -1,0 +1,86 @@
+{
+ "standaloneControls": 1,
+ "standaloneUnchecked": true,
+ "G5_submit": true,
+ "G5": {
+  "approveLabel": "Approve — Link existing",
+  "caseConsentAfter": "MARKETING CONSENT | Email news: yes | Not applied — the person had opted out; the opt-out stands | Text news: no | Nothing recorded — no consent given | Captured Oct 29, 2026 · 12:33 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | Robin Qav2 · qa+v3-email@northwind.invalid · 5415550199 | EXISTING RE",
+  "approve": {
+   "status": 200,
+   "person": "f8ed7bfc-82cb-4006-b20b-9e237dfee348",
+   "matchedExisting": true,
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "f8ed7bfc-82cb-4006-b20b-9e237dfee348",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "preserved_opt_out"
+     },
+     {
+      "channel": "sms",
+      "outcome": "skipped_unset"
+     }
+    ],
+    "replayed": false
+   }
+  }
+ },
+ "G5_person": [
+  {
+   "key": "email_marketing",
+   "state": "opted_out",
+   "history": [
+    "public_intake opted_out->opted_out",
+    "operator_person_record opted_in->opted_out",
+    "public_intake ->opted_in"
+   ]
+  },
+  {
+   "key": "sms_marketing",
+   "state": "unset",
+   "history": []
+  }
+ ],
+ "G6_submit": true,
+ "G6": {
+  "approveLabel": "Approve — Link existing",
+  "caseConsentAfter": "MARKETING CONSENT | Email news: no | Nothing recorded — no consent given | Text news: yes | Not applied — the person had opted out; the opt-out stands | Captured Oct 29, 2026 · 12:33 AM · wording form_field.v1:9c83012b | WHAT ALLOY FOUND | ALLOY READ THIS AS | Robin Smsqa · qa+v3b-sms@northwind.invalid · 5415550133 | EXISTING RE",
+  "approve": {
+   "status": 200,
+   "person": "e765b1ad-13f6-48a4-8fa2-c6486de192e4",
+   "matchedExisting": true,
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "e765b1ad-13f6-48a4-8fa2-c6486de192e4",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "skipped_unset"
+     },
+     {
+      "channel": "sms",
+      "outcome": "preserved_opt_out"
+     }
+    ],
+    "replayed": false
+   }
+  }
+ },
+ "G6_person": [
+  {
+   "key": "email_marketing",
+   "state": "unset",
+   "history": []
+  },
+  {
+   "key": "sms_marketing",
+   "state": "opted_out",
+   "history": [
+    "public_intake opted_out->opted_out",
+    "operator_person_record opted_in->opted_out",
+    "public_intake ->opted_in"
+   ]
+  }
+ ]
+}

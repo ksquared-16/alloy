@@ -1,6 +1,6 @@
 /**
  * Operational Proposal — shared presentation types and labels (BOS UX coherence Card 7).
- * @see docs/sprints/05_2026/bos_ux_coherence_design.md §5
+ * @see docs/sprints/archive/05_2026/bos_ux_coherence_design.md §5
  */
 
 import type { BosCapabilityKey, BosProposalStatus, BosRiskLevel } from "@/lib/bos/bosCapability";

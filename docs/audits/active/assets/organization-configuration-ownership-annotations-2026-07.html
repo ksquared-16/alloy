@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Organization Configuration — ownership annotations (2026-07)</title>
+  <style>
+    :root {
+      --midnight: #13212b; --pine: #2f6f5e; --pine-soft: rgba(47,111,94,.08);
+      --sand: #f4f2ee; --white: #fff; --line: rgba(19,33,43,.1); --muted: rgba(19,33,43,.55);
+    }
+    body { margin: 0; font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; color: var(--midnight); background: #e8e4dc; }
+    header { background: var(--midnight); color: #f5f3ef; padding: 14px 18px; }
+    header h1 { margin: 0; font-size: 15px; }
+    header p { margin: 6px 0 0; font-size: 12px; opacity: .75; }
+    main { max-width: 960px; margin: 0 auto; padding: 20px 14px 64px; }
+    .card { background: var(--sand); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+    .card h2 { margin: 0 0 6px; font-size: 15px; }
+    .card p, .card li { font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .card ul { margin: 8px 0 0; padding-left: 18px; }
+    .chip { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; background: var(--pine-soft); color: var(--pine); margin-right: 4px; }
+    .chip.hub { background: rgba(19,33,43,.08); color: var(--midnight); }
+    .chip.col { background: rgba(47,111,94,.16); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--white); margin-top: 8px; }
+    th, td { border: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+    th { background: #faf9f7; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    pre { background: #0f1a22; color: #d7efe6; padding: 12px; border-radius: 8px; font-size: 11px; overflow-x: auto; }
+    a { color: var(--pine); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Ownership annotations — implementation-ready (no redesign)</h1>
+    <p>Companion to <code>organization-configuration-relationship-model-2026-07.md</code> · annotates IA, not layouts</p>
+  </header>
+  <main>
+
+    <div class="card">
+      <h2>Organization peers</h2>
+      <p>
+        <span class="chip hub">Hub</span> Programs &amp; Locations · Financials · Access · Data Model · Business Processes · Surfaces
+        · <span class="chip col">Collection</span> Programs · Locations (launched from Programs &amp; Locations)
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Programs</h2>
+      <table>
+        <tr><th>Axis</th><th>Frozen answer</th></tr>
+        <tr><td>Defined once</td><td>Organization Program identity + Delivery Options</td></tr>
+        <tr><td>Assigned</td><td>Publish revision → assign → LPC</td></tr>
+        <tr><td>Inherited</td><td>Partial — offering uses org definition until Location supplies</td></tr>
+        <tr><td>Overridden</td><td>Coarse: description, offered, evidence, is_active, metadata</td></tr>
+        <tr><td>Executed locally</td><td>Offering / enrollment / capacity / schedule at Location</td></tr>
+      </table>
+      <ul>
+        <li><strong>Org fields:</strong> key, label, category, eligibility, audience, resource type, qualifications, default policies/commercial posture</li>
+        <li><strong>Location fields:</strong> offered, local authorization evidence, active, local description override</li>
+        <li><strong>Not Program-owned:</strong> rooms, capacity, schedules</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Locations / Rooms</h2>
+      <p>Rooms = Location-owned units (<code>parent_location_id</code>). Not org-defined, not reusable templates, not inherited.</p>
+      <ul>
+        <li>Schedules · capacity metadata/rules · tours → Location-scoped</li>
+        <li>Placement → Business Process–owned ranking, surfaced on Location</li>
+        <li>Access tab → site-scope assignment (not inheritance)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Tuition / Financials</h2>
+      <table>
+        <tr><th>Chapter</th><th>Ownership</th></tr>
+        <tr><td>Tuition</td><td>Financials SoR · Org default → Inherited → Location override · executed at charge</td></tr>
+        <tr><td>Catalog / Fees / Policies / Accounting</td><td>Financials owns</td></tr>
+        <tr><td>Simulator</td><td>Utility — not a collection</td></tr>
+        <tr><td>Funding</td><td>Processing boundary — not Financials config</td></tr>
+        <tr><td>Programs</td><td>Referenced only — managed in Programs</td></tr>
+      </table>
+      <p>Financials mockup pack annotations: <a href="./organization-financials-mockups-2026-07.html">organization-financials-mockups-2026-07.html</a> (Rev 3).</p>
+    </div>
+
+    <div class="card">
+      <h2>Data Model · BP · Surfaces · Access</h2>
+      <ul>
+        <li><strong>Data Model</strong> — Organization only; no Location assignment/override</li>
+        <li><strong>Business Processes</strong> — Org definition + activation/assignment; Location override unproven (do not claim)</li>
+        <li><strong>Surfaces</strong> — Org definition + publication + partial assignment; Location override forbidden</li>
+        <li><strong>Access</strong> — permission + visibility + assignment — <em>not</em> inheritance</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Dependency sketch</h2>
+      <pre>Programs → Locations → Rooms → Schedules/Capacity
+Programs → Financials → Tuition
+Programs → Enrollment
+Business Processes → Placement (Location surface)
+Locations → Access (site-scope assignment)
+Data Model → (vocabulary for all)
+Access → (authorization for all)</pre>
+    </div>
+
+  </main>
+</body>
+</html>

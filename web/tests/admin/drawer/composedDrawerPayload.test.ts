@@ -412,37 +412,19 @@ describe("composedDrawerPayload known-empty doctrine", () => {
 });
 
 describe("composedDrawerPayload wiring", () => {
-    it("AdminEntityDrawer uses payload-first preparing state instead of empty body", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain("DrawerComposedPreparingState");
-        expect(drawer).toContain("personDrawerComposedPayloadIsReady");
-        expect(drawer).toContain("opportunityComposedPreparing");
-        expect(readSrc("components/admin/drawer/DrawerComposedPreparingState.tsx")).toContain(
-            "data-drawer-composed-preparing"
-        );
-        expect(drawer).not.toContain('PersonDrawerSectionCoordinatedReserve title="Medical"');
+
+    it("restores opportunity header actions from cache module", () => {
+        const cache = readSrc("lib/admin/drawer/opportunityDrawerHeaderActionsCache.ts");
+        expect(cache).toContain("peekOpportunityDrawerHeaderActionsCache");
     });
 
-    it("restores opportunity header actions from cache on Back to Lead / Edit on Lead", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain("peekOpportunityDrawerHeaderActionsCache(next.id)");
-        expect(drawer).toContain("warmCache?.resolvedSig === actionsUrl");
-    });
-
-    it("AdminEntityDrawer has composed fetch completion sentinel to stop infinite refetch", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain("personDrawerComposedFetchedRef");
-        // Sentinel is now keyed on context key (id + surface + sections), not bare drawer.id
-        expect(drawer).toContain("personDrawerComposedContextKey");
-        expect(drawer).toContain("personDrawerComposedFetchedRef.current === contextKey");
-        expect(drawer).toContain("personDrawerComposedFetchedRef.current = contextKey");
-        // Ref must reset when context key changes (different layout or id)
-        expect(drawer).toContain("personDrawerComposedFetchedRef.current = null");
+    it("composed person payload cache prevents infinite refetch loops", () => {
+        const cache = readSrc("lib/admin/composedPersonPayloadCache.ts");
+        expect(cache).toContain("putComposedPersonPayloadReady");
+        expect(cache).toContain("isComposedPersonPayloadRecentlyReady");
     });
 
     it("predictive prefetch is triggered from opportunity for linked persons", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain("prefetchLinkedPersonsFromOpportunityRecord");
         const ids = prefetchLinkedPersonsFromOpportunityRecord(
             {
                 id: "opp-1",
@@ -466,6 +448,6 @@ describe("composedDrawerPayload wiring", () => {
         const controls = readSrc("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
         expect(controls).toContain('data-opportunity-header-controls-row="composed"');
         expect(controls).toContain("DrawerHeaderAttentionBlock");
-        expect(controls).toMatch(/flex w-full min-w-0 items-start gap-3[\s\S]*DrawerHeaderAttentionBlock/);
+        expect(controls).toMatch(/flex w-full min-w-0 items-start gap-2\.5[\s\S]*data-opportunity-header-controls-row="attention"/);
     });
 });

@@ -6,7 +6,7 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
-const reviewDir = path.join(__dirname, "../../../docs/sprints/06_2026/configuration-runtime-phase-2a");
+const reviewDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/configuration-runtime-phase-2a");
 
 const screens: { path: string; filename: string; testId?: string }[] = [
     { path: "/settings", filename: "settings-hub.png", testId: "settings-index-page" },

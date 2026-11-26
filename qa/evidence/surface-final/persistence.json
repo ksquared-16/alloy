@@ -1,0 +1,25 @@
+{
+  "arranged": [
+    "attendance:6:8/2",
+    "billing_preview:6:6/2",
+    "business_process:8:1/2",
+    "children:6:3/4",
+    "financials:4:1/2",
+    "health_safety:6:10/2",
+    "household:6:7/4",
+    "readiness_kpi:4:3/3"
+  ],
+  "reloaded": [
+    "attendance:6:8/2",
+    "billing_preview:6:6/2",
+    "business_process:8:1/2",
+    "children:6:3/4",
+    "financials:4:1/2",
+    "health_safety:6:10/2",
+    "household:6:7/4",
+    "readiness_kpi:4:3/3"
+  ],
+  "arrangedBand": 10,
+  "reloadedBand": 10,
+  "pageErrors": []
+}

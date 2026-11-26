@@ -1,6 +1,6 @@
 # Lifecycle greenfield vs cutover — product decision
 
-**Path:** `docs/sprints/06_2026/lifecycle_greenfield_vs_cutover_decision.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_greenfield_vs_cutover_decision.md`  
 **Status:** **Decision pending** — no implementation until approved  
 **Date:** 2026-06-02  
 

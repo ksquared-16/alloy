@@ -1,0 +1,17 @@
+import { open, OUT, riversideTours } from "./lib.mjs";
+const { browser, page, errors } = await open();
+await riversideTours(page);
+await page.getByRole("button", { name: /^Edit location$/ }).click(); await page.waitForTimeout(2500);
+const sel = page.getByTestId("locations-site-timezone");
+await sel.waitFor({ timeout: 15000 });
+console.log("tz before:", JSON.stringify(await sel.inputValue()));
+await sel.selectOption("America/Los_Angeles");
+const resp = page.waitForResponse(r => r.request().method() !== "GET" && /location/i.test(r.url()), { timeout: 20000 }).catch(() => null);
+await page.getByTestId("locations-site-save").click(); const r = await resp;
+console.log("save", r ? `${r.status()} ${r.url().replace(/^https?:\/\/[^/]+/, "")}` : "none");
+await page.waitForTimeout(2500);
+await riversideTours(page);
+await page.getByRole("tab", { name: /^Overview$/ }).click(); await page.waitForTimeout(2000);
+console.log("overview tz:", (await page.getByTestId("locations-overview-timezone").innerText().catch(() => "?")).replace(/\n+/g, " | "));
+console.log("errors", JSON.stringify(errors.slice(0, 4)));
+await browser.close();

@@ -1,228 +1,351 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-30
+supersedes: []
+---
+
 # Operational Calculations
 
-**Status:** Canonical (June 2026). Platform doctrine for the trusted, versioned definitions of measurable business facts.
+**Status:** Canonical platform doctrine. **Re-founded 2026-07-17** on the architecture proven in code by Operational Calculation Registry V1, Configuration Event Propagation, and Phase 6 Childcare Operational Convergence. **Amended 2026-07-27** to introduce a constrained **Organization Calculation** authoring layer (Path B) that composes approved platform functions without replacing platform handlers.
 
-**Relationship to existing platform:** This doctrine **formalizes and governs** the calculation layer that already exists in the Operational Intelligence Platform (OIP). It does **not** introduce a second metric system, a new compute engine, or new snapshot tables. An Operational Calculation is a *governed descriptor* that points at an existing OIP resolver. The math stays in OIP. See [`../modules/ai-platform.md`](../modules/ai-platform.md), [`business-process-system.md`](business-process-system.md), [`placement-system.md`](placement-system.md).
+> **What changed (2026-07-17).** The June-2026 conception described here framed an Operational Calculation as a *governance descriptor over an OIP metric key* — "the math stays in OIP", registry under `web/lib/analytics/`. That framing is **superseded**. Operational Calculations is its **own platform layer** — a deterministic truth runtime (`web/lib/operationalCalculations/`) with the frozen pattern **Definition → Handler → Runtime → Result**. It is **not** part of OIP and **not** an analytics registry. The `web/lib/analytics/calculations/*` registry is the **Operational Intelligence** (analytics) layer and is governed by [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md), not by this doctrine.
 
----
-
-## 1. Philosophy
-
-Every number an operator trusts — Enrollment Health, Tour Conversion, Revenue, AR Aging, Ratio Compliance — is a **measurable business fact**. Today those facts are computed in OIP resolvers and consumed, with subtly different framing, by many surfaces: Analytics, workspace headers, work-unit metrics, Business Process tiles, Focus Panel cards, Reports, Optimization Centers, BOS, and (increasingly) AI reasoning.
-
-The risk is **drift**: the same fact computed two ways, or framed with two different grains, two different windows, two different "what counts" rules. When that happens, operators stop trusting the platform.
-
-**Operational Calculations** are the answer. They are the canonical, versioned, governed definitions of those facts.
-
-- They are **not** Analytics. Analytics *displays* calculations.
-- They are **not** Reports. Reports *arrange* calculations over time and grain.
-- They are **not** Charts. Charts *shape* calculation output into series.
-- They are **not** Cards. Cards *render* a single resolved calculation.
-- They are **not** a new compute engine. OIP already computes; calculations *describe and govern* that computation.
-
-> **One fact, one definition, one owner, many consumers.** No consumer defines its own calculation. Every operational number originates from a registered Operational Calculation.
-
-Treat calculations like **APIs**: stable contracts, explicit versions, documented consumers, deliberate deprecation.
+> **What changed (2026-07-27 — Path B).** Organizations may author **versioned, read-only calculations** by composing **approved platform inputs and functions** through a typed expression AST. They may **not** write SQL, JavaScript, arbitrary table references, or redefine protected operational invariants. Platform Operational Calculations remain the sole owner of protected domain handlers, canonical data access, effective-date semantics, ratio/capacity invariants, the typed function registry, validation, evaluation, authorization, and dependency safety. See §3.1 and `../../sprints/07_2026/operational-calculations-product-realization/OC-ORGANIZATION-CALCULATION-DESIGN.md`.
 
 ---
 
-## 2. Ownership
+## 0. Operational Intelligence — certification record, measured 2026-09-30
 
-An Operational Calculation is the **shared source of truth** for:
+**State:** `OPERATIONAL_INTELLIGENCE_DOCUMENTATION_CONTEXT_READY`. Measured against staging `c500c7a4e`.
+Row counts are from the certification stack.
 
-| Consumer | What it consumes |
-|---|---|
-| Analytics surfaces | Resolved values, comparisons, breakdowns, drill targets |
-| Workspace header metrics | Point values + health |
-| Work Unit metrics | Scoped point values |
-| Business Process tiles | Pack-scoped KPI values |
-| Focus Panel metrics | Record-grain values (via Operational Context) |
-| Reports | Tabular period output |
-| Optimization Centers | Constraint diagnoses + simulation inputs |
-| BOS | Recommendation triggers |
-| AI reasoning (future) | Trusted facts for grounding |
+### The four output families, and what each one IS
 
-**Rule:** a consumer never re-derives a fact. If a surface needs a number that does not yet exist as a calculation, the answer is to **register a calculation**, not to compute locally.
+"Intelligence" is not a catch-all for every derived datum. Four families exist, and they differ in the
+property that matters most for a benchmark consumer — whether the value is **authored** or **derived**:
 
-The **Calculation Logic Owner** named in each descriptor is accountable for the underlying OIP resolver and its correctness. The descriptor is the contract; the owner maintains the implementation behind it.
+| Family | Storage | Authored or derived | Rows | Can it mutate domain state? |
+|---|---|---|---|---|
+| **Operational Expectations** | `operational_expectations` + `operational_expectation_ratifications` | **AUTHORED** by an operator, then ratified | **1,243** / **258** | No |
+| **Operational Questions** | answered on demand; history appended to `org_settings.metadata` | **DERIVED**, computed per request | 4 question kinds | No |
+| **Metrics** | `metric_definitions`, `metric_snapshots`, `metric_rollups`, `metric_visualizations`, `metric_placements` | **DERIVED**, snapshot append-only | 7 / 36 / 0 | No |
+| **Observations** | `trust_decision_observations`, `communication_ingress_eligibility_observations` | **DERIVED** records of a decision | 0 / 32 | No |
+
+The four question kinds are `operational_question_future_room_capacity`,
+`operational_question_room_utilization`, `operational_question_room_utilization_fte` and
+`operational_question_equivalent_child_count`.
+
+**Operational Expectations are the exception that matters.** They are the one OI family that is *authored*
+rather than derived — an operator states what should be true and a ratification records that it was
+accepted. They are not a metric and not a projection, and nothing derives them from observed state.
+
+### Refresh and staleness — per family, because they differ
+
+| Family | When generated | Refresh | Staleness knowable from |
+|---|---|---|---|
+| Metrics | on snapshot write | `admin/metrics/snapshots/write` POST — **two branches**: an `x-cron-token` machine credential for all orgs (scheduled) or an operator session holding `reports.write` for one org | `metric_snapshots.computed_at`; snapshots are **append-only**, so history is durable and a stale value is visibly old rather than silently overwritten |
+| Operational Questions | per request, on demand | recomputed every call; nothing is cached as current | the answer carries its own evaluation context; persisted history is a record of past answers, not a current value |
+| Operational Expectations | when authored | only by authoring again | authored rows carry their own effective semantics |
+| Observations | when the decision they record is made | not refreshed — they record an event | the observation's own timestamp |
+
+**There is no OI cache presenting a stale value as current.** Metrics keep history and say when they were
+computed; questions recompute. A consumer must still read `computed_at` rather than assume freshness.
+
+### Reading OI is not authoring OI
+
+This distinction is enforced, not merely stated. `reports.read` and `reports.write` are separate, and
+`20260915120000` deliberately withheld `reports.write` from the ops default package while leaving
+`reports.read` in place — so **Operational Intelligence stays readable and only authoring narrows**.
+
+Measured surface: **44 route files · 62 handlers (33 write, 29 read) · 2 mounted UI pages**. 31 of 33
+writes declare a capability — `reports.write` ×29, `reports.read` ×2 (non-persisting evaluations declared
+read-like on proven behaviour rather than on their verb). The two that do not:
+
+- **`admin/operational-questions/answer` POST** — admission is deliberately open so a `reports.read`
+  holder can ASK, while the durable observation-history append is gated on `reports.write` through
+  `canManageAnalytics`. Before 2026-09-30 it persisted by default for any portal member, and a caller
+  could force it with a request flag. Recorded as conditional **side-effect** authority in
+  `ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT` and locked by
+  `web/tests/docs/operationalIntelligenceWriteAuthority.test.ts`.
+- **`admin/operational-questions/bos` POST** — session-gated and **read-only**: its entire import closure
+  contains no insert, update, upsert, delete or `saveOrgMetadata`. A POST-shaped read.
+
+**Zero unexplained side-effect authority.**
+
+### OI is not AI, and neither one is a command
+
+Operational Intelligence is **deterministic**: registered calculations with declared handlers, evaluated
+server-side (§5 Determinism, §6 Registry below). The BOS turn is a reasoning surface that *consumes* OI —
+it parses an intent and runs a question — and it **writes nothing**.
+
+**Nothing in OI executes a domain mutation.** No OI path writes a placement, an assignment, an attendance
+event, a charge or a payment. A recommendation is a value, not an act; turning one into an act requires a
+registered domain command with its own authority. Do not read a projection as a decision, or an OI write
+capability as permission to change the thing the number describes.
+
+### Benchmark inference contract
+
+**SAFE, because measured:** OI outputs derive from named upstream authorities and never replace them; an
+observation or measurement is distinct from the source domain truth it summarises; read authority
+(`reports.read`) and author authority (`reports.write`) are different and separately granted; metric
+snapshots are append-only and carry `computed_at`; Operational Expectations are authored and ratified
+rather than derived; nothing in OI mutates domain state.
+
+**FORBIDDEN:** a metric is the canonical source fact · a projection is durable future truth · a
+recommendation is an authorized action · a stale observation is current state (read `computed_at`) · an OI
+write capability confers domain mutation permission · AI/BOS capability implies OI capability · the BOS
+turn persists anything (it does not) · `metric_rollups` is in use (**0 rows** — implemented, unexercised).
+
+### Evidence treatment
+
+`docs/platform/analytics/metric-platform-doctrine.md` and `metric-data-model.md` own the metric platform
+(DIRECT). `operational-expectations-system-design.md` is **frozen** and is REFERENCE_ON_DEMAND for the
+two-ledger ontology this document reconciles with in §2. `analytics-v2-roadmap.md` is PLANNED_ONLY.
+`certification/**` OI artifacts and audit trees are EXCLUDE_HISTORY — they prove releases, not doctrine.
+
+## 1. Purpose
+
+**Operational Calculations deterministically derive operational truth** from canonical inputs (Operational Facts, committed Intent) and governed Configuration. A calculation answers a factual operational question — *how many staff does this room require?*, *what is the binding capacity?*, *how many children are expected here on this date?* — and returns a **typed, versioned, reproducible** result.
+
+A calculation **measures what IS**. It never asserts what SHOULD be (that is Operational Expectations) and never analyzes trends over time (that is Operational Intelligence). It carries **no judgment** — no healthy/unhealthy, compliant/breached, pass/fail.
+
+> **One fact, one definition, one owner, many consumers.** No consumer re-derives a fact. Every operational number originates from a registered Operational Calculation Definition **or** from a published Organization Calculation that evaluates exclusively through the platform runtime.
 
 ---
 
-## 3. What every Operational Calculation declares
+## 2. The four operational layers
 
-Each calculation is a declarative descriptor with these fields. They mirror, and are validated against, the existing OIP `MetricDefinition` it wraps.
+Alloy separates four operational responsibilities. Each has one owner; none may absorb another.
 
-| Field | Meaning |
-|---|---|
-| **Calculation Key** | Stable identifier. For wrapped OIP facts this **is** the `OipMetricKey` (e.g. `enrollment.tour_conversion_rate`). |
-| **Business Process** | Owning process / pack (`enrollment`, `communications`, `forms`, `operational_health`, `financial`, `capacity`). |
-| **Question Answered** | The operator question in one sentence ("How many scheduled tours actually happened?"). |
-| **Grain** | Supported entity scopes (`org`, `site`, `department`, `work_unit`, `record`). Reuses `MetricEntityScope`. |
-| **Aggregation Rules** | How values combine across grain (`count`, `sum`, `avg`, `rate`, `ratio`, `median`). |
-| **Dimensions** | Segmentable dimensions (`lifecycle_stage`, `status_key`, `site_id`, …) — validated against the source adapter's `supportedDimensions`. |
-| **Required Inputs** | Source tables / read models the calculation depends on. |
-| **Dependencies** | Other calculations this one composes (for rollups / health scores). |
-| **Calculation Logic Owner** | The OIP resolver / team accountable for correctness. |
-| **Snapshot Strategy** | `event_window`, `entity_snapshot`, or `evaluator_snapshot`; whether values are exhaustive or bounded. |
-| **Refresh Strategy** | Live evaluation vs snapshot cadence (`metric_platform_snapshots`). |
-| **Consumers** | Declared downstream surfaces (used for impact analysis on change). |
-| **Permissions** | Access-scope rule (org/site/department) enforced via `AdminAccessScopeDimensions`. |
-| **Version** | Monotonic version of the *contract* (not the data). |
-| **Testing Strategy** | How correctness is proven (fixture, golden snapshot, parity test). |
-| **Deprecation Strategy** | Replacement key + sunset rule when retired. |
-
-A descriptor is **invalid** if it claims a grain, dimension, or source the underlying OIP definition does not support. Registry integrity tests enforce this.
-
----
-
-## 4. Architecture
-
-```
-Business Process
-  → Operational Calculation (governed descriptor)        ← THIS DOCTRINE
-      → OIP resolver / source adapter (computes)         ← existing, frozen
-      → metric_platform_snapshots (pre-computed)         ← existing, frozen
-  → Metric Resolver (point / trend / breakdown)          ← existing + 1 new (breakdown)
-  → Resolved surface model (presentation-ready)
-  → Analytics Renderer / Card
-  → Surface
-```
-
-The descriptor layer sits **above** OIP and **below** every consumer. It is the contract surface. Crucially:
-
-- **Calculations do not compute.** They reference `OipMetricKey` and delegate to `evaluateMetricDefinition` / snapshot reads.
-- **Calculations are not surfaces.** A surface (Analytics dashboard, report, header) *requests* a calculation at a grain.
-- **The UI never knows where a calculation originates.** It asks for a key at a grain and receives a presentation-ready result.
-
-### 4.1 The runtime contract
-
-A surface section asks the platform *what question, what scope, what grain, what drill* — never *how to compute*:
-
-```
-Surface declaration
-  → AnalyticsContext (org, access scope, filters, date range)
-  → a request (calculation key + grain + groupBy + drill)
-  → Provider dispatch (point / trend / breakdown / report / optimization)
-  → resolved surface model (formatted value, health, comparison, segments, drill)
-  → Renderer
-```
-
-`AnalyticsContext` is defined in `web/lib/analytics/runtime/types.ts`; the request and the resolved result are realized by the server model builder (`operationalSurface.ts` → `OperationalSurfaceModel`). They **extend**, and never replace, `MetricEvaluationContext` / `MetricResolveContext` / `AdminAccessScopeDimensions`.
-
-### 4.2 Provider dispatch (no new engine)
-
-| Provider | Resolves via | Status |
-|---|---|---|
-| Point / health | `evaluateMetricDefinition`, snapshot read | Existing |
-| Trend / comparison | snapshot series + period-over-period | Existing |
-| Breakdown / segments | `evaluateMetricBreakdown` (group-by) | **New, Phase 2** |
-| Chart series | breakdown output reshaped (presentation only) | Phase 2 |
-| Report rows | report provider | Phase 3 |
-| Optimization | `childcareOperational/*` read models wrapped | Phase 3 |
-
----
-
-## 5. Lifecycle
-
-A calculation moves through governed states, mirroring `MetricDefinitionStatus`:
-
-```
-draft → active → archived
+```text
+Operational Facts          authored observations — "what IS" (immutable, effective-dated)
+        +
+Configuration              governed rules and policy (the inputs calculations read)
+        ↓
+Operational Calculations   deterministic derivation of operational truth   ← THIS DOCTRINE
+        │                    ├── Platform Definitions / Handlers (code-owned)
+        │                    └── Organization Calculations (typed AST over approved functions)
+        ↓
+Calculated Operational Truth
+        ├── operator surfaces
+        ├── Operational Expectations   evaluation / judgment over facts + calculations
+        ├── commands / readiness
+        └── Operational Intelligence   metrics / trends / KPIs / analytics / insight
 ```
 
-- **draft** — registered, not yet consumed in production surfaces.
-- **active** — a stable contract; consumers may bind. Breaking changes require a version bump.
-- **archived** — superseded; descriptor names its replacement key and a sunset window.
+- **Calculations derive truth.** **Expectations evaluate truth.** **Intelligence analyzes truth.** **Configuration steers inputs and policy.** Code owns executable semantics and protected invariants; Organization Calculations compose only what the platform exposes.
 
-**Versioning rule:** the descriptor `version` tracks the *contract* (grain, dimensions, question, semantics). A pure performance change to the underlying resolver does **not** bump the version. A change to *what counts* (numerator/denominator, window, grain) **does**, and must list the affected `Consumers`.
+**Reconciliation with the frozen ontology.** This ordering is a *responsibility stack*, not a derivation chain. The frozen [`./operational-expectations-system-design.md`](./operational-expectations-system-design.md) establishes **two authored ledgers** — Operational Facts ("what IS") and Operational Expectations ("what SHOULD / WILL be") — **neither derived from the other**. Operational Calculations does not sit *between* them: it is the deterministic derivation capability whose **results are an input to both** Expectation evaluation and Intelligence. In the truth-flow axis ([`./operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md)), the derived **L3 Projections** (expected occupancy/staffing/ratio) **are** registered Operational Calculations. The two judgment/analysis flows are explicit:
 
-**Deprecation rule:** never delete a key in active use. Archive it, point it at a successor, and let consumers migrate within the sunset window. The registry's consumer list is what makes safe deprecation possible.
-
----
-
-## 6. Registration
-
-Calculations are registered **declaratively** in code — the canonical source of truth — alongside the OIP registry they wrap:
-
-```
-web/lib/analytics/calculations/
-  registry.ts        ← OPERATIONAL_CALCULATIONS: Record<key, OperationalCalculation>
-  types.ts           ← OperationalCalculation descriptor type
+```text
+Facts + Calculation Results + Authored Expectations → Expectation Evaluation → judgments / gaps / attention
+Facts + Calculation Results + historical snapshots  → Operational Intelligence → metrics / trends / KPIs / reports
 ```
 
-The registry is the operational analogue of the Entity Registry, Action Registry, Field Registry, and Surface Registry — but focused on **facts**.
-
-Design rules:
-
-- **Declarative over imperative.** A calculation is data, not a class.
-- **Wrap, don't fork.** Every descriptor references an `OipMetricKey`; integrity tests assert the OIP definition exists and supports the declared grain/dimensions.
-- **No over-engineering.** Start with the facts that exist. Add governance metadata; do not invent speculative calculations.
-- **Single registration point.** One registry, queried by key, by business process, and by consumer.
+Neither Expectations nor Intelligence is the calculation authority.
 
 ---
 
-## 7. Runtime
+## 3. Core architecture — Definition → Handler → Runtime → Result
 
-The runtime is intentionally thin — it is wiring, not a framework.
+The frozen platform pattern (`web/lib/operationalCalculations/`):
 
-| Component | Path | Role |
-|---|---|---|
-| `OperationalCalculationRegistry` | `web/lib/analytics/calculations/registry.ts` | Catalog + lookup of governed descriptors |
-| `AnalyticsContext` | `web/lib/analytics/runtime/types.ts` | Scope/filter envelope passed into every request |
-| `DrillResolver` | `web/lib/analytics/runtime/drillResolver.ts` | Calculation + selection → `NavigationIntent` |
-| Surface model builder | `web/lib/analytics/runtime/operationalSurface.ts` | Resolves metrics + breakdown + drills (server) |
-| Runtime surface | `web/components/adminV2/intelligence/OperationalIntelligencePanel.tsx` | Renders the model inside the Workspace → Analytics modal |
-| Metric resolvers | `web/lib/metrics/*` | Existing OIP computation (frozen) |
+```text
+Definition   the governed, versioned identity the registry holds. Never computes.
+    ↓
+Handler      the code that computes. Pure, code-owned, never free-form tenant code.
+    ↓
+Runtime      deterministic orchestration; stamps the governed envelope + injected clock.
+    ↓
+Result       the typed operational truth: value, scope, effective time, provenance,
+             versions, resolution status. Derived, never a system of record.
+```
 
-**Surface model, not a routed page.** The Operational Intelligence runtime renders inside the existing Workspace → Analytics modal (client state), fed by `GET /api/admin/intelligence/operational` which wraps the server model builder. Routes are implementation details, not product surfaces.
+Ownership:
 
-**Three distinct surfaces (do not conflate):**
+- **Definition** (`definition.ts`) owns identity, family, versions, declared inputs (rule shapes / scopes / effective-time), the **handler binding**, declared consumers, `expectationBindable`, and governance metadata. It holds no value.
+- **Handler** owns calculation execution. A `pure` handler wraps an existing pure resolver; an `oip` handler names an OIP metric key (served by the Intelligence layer, not resolved here in V1). Handlers remain **code-owned**. Organization Calculations do **not** replace handlers; they **call** approved handler outputs and approved composition functions through the platform evaluator.
+- **Runtime** (`runtime.ts`) owns deterministic orchestration and Result construction. The clock is **injected**, never wall-time.
+- **Result** (`resultContract.ts`) owns the calculated value, scope, effective coordinate, provenance (`appliedRules`), the reproducibility triad (contract / engine / config versions), and resolution status.
+- **Registry** (`registry.ts`) owns discovery of registered Definitions. It is the **one resolution path** for platform keys and **fails closed** — an unregistered key throws.
+- **Family** groups related Definitions under this one platform architecture. A family is a **registration**, not a separate runtime or competing registry.
 
-| Surface | Where | Purpose |
-|---|---|---|
-| **Runtime** | Workspace → Analytics modal ("Operational Intelligence") | Operators view/use live metrics, breakdown, drill |
-| **Dashboard config** | `/settings/surfaces` (Dashboards & Analytics) | Compose/preview Analytics surfaces; "Open in Workspace" deep-links to the runtime modal |
-| **Metric/admin builder** | `/settings/analytics` ("Analytics Configuration") | Metric definitions, sources, targets, rollups, snapshots — **not** the runtime product |
+### 3.1 Organization Calculation layer (Path B — constrained)
 
-**Doctrine:** presentation never computes; context is server-trusted (never trust client `org_id`); every visualization declares grain; no metric dead-ends — a calculation either declares a drill or is explicitly `exploratoryOnly`.
+Organization Calculations are a **distinct authored layer** that evaluates **only** through the platform Operational Calculations runtime.
+
+```text
+Approved platform inputs / functions  +  typed expression AST  +  org lifecycle
+        ↓
+Organization Calculation (draft → published → archived; immutable versions)
+        ↓
+Platform evaluator (validation, dependency graph, authorization, explanation)
+        ↓
+Typed Result (read-only; never mutates authoritative data)
+        ↓
+Consumers (Measurements / KPIs, rules, assignment, planning, surfaces, BOS)
+```
+
+**Organization Calculation owns:**
+
+| Concern | Notes |
+| ------- | ----- |
+| Name and description | Administrator-facing identity |
+| Subject / grain | e.g. room, program, site, org |
+| Typed expression AST | Closed node set — not a string formula language |
+| References to approved platform inputs/functions | Registry keys + approved projections only |
+| Constants and supported operators | Bounded arithmetic and listed composition ops |
+| Temporal / scope parameters | Effective-date and scope bindings declared, not invented |
+| Lifecycle | `draft` → `published` → `archived` |
+| Immutable versions | Publish freezes AST + dependency set |
+| Dependency graph | Declared refs; cycle detection fail-closed |
+| Consumer bindings | Which products may read this published result |
+| Audit metadata | Who authored / published / archived |
+
+**Platform Operational Calculations continues to own exclusively:**
+
+| Concern | Notes |
+| ------- | ----- |
+| Protected domain handlers | Ratio, capacity, occupancy, placement, … |
+| Canonical data access | Facts, config bundles, committed intent reads |
+| Effective-date semantics | Injected clock; reproducibility |
+| Ratio and capacity invariants | Distinct kinds; `null` ≠ 0; no invented coverage |
+| Typed function registry | What Organization Calculations may call |
+| Validation | Type check, dependency safety, authorization |
+| Evaluation | AST evaluation + Result envelope |
+| Authorization | Who may author / publish / evaluate |
+| Dependency safety | Fail closed on unknown refs, cycles, unsupported ops |
+
+**Hard forbids (Organization Calculation authoring):**
+
+- SQL, JavaScript, scripting, or arbitrary expression languages
+- Arbitrary table / column references outside the approved input catalog
+- Redefining protected ratio, capacity, licensing, or occupancy invariants
+- Mutating authoritative Facts, Configuration, or Intent
+- Emitting judgment (healthy/unhealthy, compliant/breached)
+- Bypassing the platform evaluator or Result contract
+
+**Measurements (OI) remain downstream.** They consume **published** calculation results (platform and/or organization) and own targets, health, snapshots, and trends — they do not author calculation math.
 
 ---
 
-## 8. Consumers
+## 4. The result contract
 
-Consumers bind to a calculation **by key at a grain**, never to a resolver:
+A Result carries the family-typed value plus a **resolution status** — `resolved`, `incomplete`, `not_configured`, `conflicted`, `partial`. **None of these is a verdict.** `incomplete` does not mean "violated"; `not_configured` does not mean "compliant". A consumer that reads a resolution status as a verdict has invented a judgment — that is Operational Expectations, not Operational Calculations.
 
-- **Analytics** requests `{ key, grain, groupBy?, drill? }` and renders the resolved result.
-- **Headers / tiles** request point values through the existing placement pipeline.
-- **Focus Panel** requests record-grain values via Operational Context (`context_type=record`).
-- **Reports** request tabular period output.
-- **Optimization Centers** request constraint diagnoses.
-- **AI** (future) reads resolved calculations as grounded facts.
+Calculation results **do not contain**:
 
-Each consumer is declared on the descriptor so that a change to a calculation produces a precise impact list.
+- healthy / unhealthy
+- compliant / non-compliant
+- pass / fail
+- breached / unmet
+- good / bad
+- warning / critical **as judgment states**
+
+Structured warnings may communicate **incomplete inputs or resolution conditions** (e.g. "child count exceeds the highest configured tier", "occupancy unknown"), never operational judgment.
+
+**Values are typed, never a forced scalar.** The value union is family-typed (`requirement`, `capacity`, `scalar`, `set`, `ordering`, `money`, `completeness`). A forced-scalar shape is exactly why the scalar-only OIP metric model is **not** the reference for operational truth. `null` means "unknown / not configured" — never 0, never Infinity, never a coerced default.
+
+Organization Calculation results for the proving slice use the **`scalar`** member (or a declared projection of a family value) and still carry resolution status + explanation steps — never a verdict.
 
 ---
 
-## 9. Testing
+## 5. Determinism
+
+- **Injected time.** Any evaluation-time input is supplied by an injected clock; results are reproducible.
+- **Deterministic handler selection.** The registry resolves a key to exactly one handler, fail-closed on unknown keys and unsupported handler kinds.
+- **Deterministic AST evaluation.** Same published Organization Calculation version + request + injected clock ⇒ identical Result and explanation.
+- **No hidden judgment.** A calculation never emits a verdict.
+- **No LLM calculation.** Handlers and the AST evaluator are pure code, never model inference.
+- **No client-side calculation authority.** Presentation never computes operational truth.
+
+---
+
+## 6. Registry and family model
+
+There is **one** Operational Calculation Definition Registry for **platform** Definitions. Families are registrations within it, not competing registries:
+
+```text
+Operational Calculation Platform
+  └── Canonical Definition Registry   (web/lib/operationalCalculations/registry.ts)
+        ├── Resource Requirements & Capacity family
+        ├── Scheduling & Occupancy family
+        ├── Attendance family        (future)
+        ├── Commercial family        (future)
+        └── future families
+```
+
+Organization Calculations are **not** entries in that code registry. They are **org-scoped authored objects** whose evaluation **resolves dependencies** against the platform registry (and approved projections) through the platform evaluator.
+
+- **Families are registrations, not separate runtimes.** Adding a family appends its Definitions to the registry; it never redesigns the platform.
+- **Domain-local descriptor catalogs are transitional.** A domain module may hold resolvers the handlers wrap, but the *governed catalog* is the one registry above.
+- **OIP's analytics metric registry is a separate system.** `web/lib/analytics/calculations/*` and `web/lib/metrics/*` are Operational Intelligence. Registry convergence must **not** force structured operational truth into scalar analytics contracts; the OIP metric key is available as a distinct `oip` handler kind, and its convergence is a later roadmap phase.
+
+---
+
+## 7. Boundaries — Facts, Calculations, Expectations, Intelligence, Configuration, Code
+
+- **Calculations derive truth** from Facts + Configuration + committed Intent (+ published Organization Calculation ASTs evaluated by the platform).
+- **Expectations evaluate truth** — authored intent compared against Facts + Calculation Results yields derived judgment/gaps. Owned by [`./operational-expectations-system-design.md`](./operational-expectations-system-design.md) (frozen). A Definition marks `expectationBindable` where an Expectation Condition may bind its key.
+- **Intelligence analyzes truth** — metrics, trends, KPIs, dashboards over Facts + Calculation Results + history. Owned by [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md). Measurements consume published calculation results; they own targets/health/snapshots/trends.
+- **Configuration steers inputs and policy** — [`./configuration-ownership-and-inheritance.md`](./configuration-ownership-and-inheritance.md). Configuration changes are propagated to the runtime as canonical events + invalidation predicates (Configuration Event Propagation); the runtime stays deterministic and does not observe config mutations directly.
+- **Code owns executable semantics and protected invariants** — handlers and the approved function/operator set are code-owned. Tenants compose approved functions via typed AST; they never author handlers, SQL, or free scripts.
+
+---
+
+## 8. Registered families and maturity
+
+Document only what is implemented.
+
+**Resource Requirements & Capacity** (V1 — `families/resourceRequirementsAndCapacity.ts`)
+- `resource.required_staff`, `resource.ratio`, `capacity.room_binding`, `capacity.remaining`.
+- Each wraps an already-built, already-tested canonical resolver (`resolveRatio`, `resolveOperationalCapacity`); no invented math.
+- Configuration Event Propagation present. No frontend-specific calculation authority.
+- **Proving-slice inputs** for Organization Calculations: scalar projections of `capacity.room_binding` kinds (`physical`, `licensed`, `operational`, `ratioLimited`, `binding`) under room + effective date.
+
+**Scheduling & Occupancy** (Phase 6 — `families/scheduling.ts`)
+- `occupancy.expected`, `occupancy.actual` (scalar); `scheduling.expected_staffing`, `scheduling.actual_staffing` (requirement).
+- Registered as an Operational Calculation family; expected and actual required-staff production seams converge through the canonical resolver, observable behavior preserved.
+- The ratio/capacity keys are **not** duplicated here — they are the Resource & Capacity family, which declares `scheduling` as a consumer.
+- **Deferred (not yet registered):** actual staffing gap / over-capacity, attendance adherence variance, days-per-week policy. These compare a fact against an expectation — that comparison is Operational Expectations, not a calculation. A future wave registers the pure facts and moves the comparison to evaluation.
+
+No other families and no frontend surfaces are complete.
+
+---
+
+## 9. Lifecycle & governance
+
+### Platform Definitions
+
+- **Lifecycle:** `draft → active → archived`. An archived Definition names its successor + sunset.
+- **One owner per calculation.** The declared logic owner is accountable for the underlying math.
+- **Versioned, impact-scoped change.** A change to *what counts* bumps the contract version and names affected consumers (the Definition's declared consumer list is the impact set). A pure performance change does not bump the version.
+- **No shadow facts.** A surface computing its own number is a governance violation; the fix is registration.
+- **Deprecation is deliberate.** Archive with a successor; never silently delete a key in active use.
+- **The platform registry is canonical for handlers.** Code registration is the source of truth for protected math.
+
+### Organization Calculations
+
+- **Lifecycle:** `draft → published → archived`.
+- **Publish creates an immutable version** (AST + dependency set + metadata freeze).
+- **Drafts are not runtime truth** for operator surfaces unless an explicit preview path is authorized.
+- **Archived versions remain readable** for audit; they are not default evaluation targets.
+- **Consumer bindings** declare which products may read a published calculation; unbound consumers must not invent values.
+
+---
+
+## 10. Testing
 
 | Layer | What it proves |
 |---|---|
-| Registry integrity | Every descriptor wraps a real `OipMetricKey`; declared grain/dimensions ⊆ source support; no orphan consumers. |
-| Resolver parity | A calculation's resolved value equals the OIP value for the same scope (no drift introduced by the descriptor layer). |
-| Drill resolution | Every non-`exploratoryOnly` calculation resolves a valid `NavigationIntent`; access scope respected. |
-| Modal deep-link + drill guard | `?workspaceModal=analytics` opens the runtime modal; drills navigate internal paths only. |
-
-Tests live under `web/tests/analytics/`. Existing OIP/metric tests remain authoritative for the math itself.
-
----
-
-## 10. Governance
-
-- **One owner per calculation.** The Calculation Logic Owner is accountable for correctness.
-- **Change is versioned and impact-scoped.** A semantic change bumps the version and names affected consumers.
-- **No shadow facts.** A surface computing its own number is a governance violation; the fix is registration.
-- **Deprecation is deliberate.** Archive with a successor; never silently delete.
-- **The registry is canonical.** Code registration is the source of truth; database `metric_definitions` rows are the runtime projection.
+| Registry conformance | Every Definition has a valid `<family>.<name>` key, a supported rule shape, a known result kind, a bound handler; resolution fails closed. |
+| Handler parity | A registered result equals the underlying canonical resolver's output for the same inputs (no drift introduced by the governance layer). |
+| Determinism | Same Definition + request + injected clock ⇒ byte-identical result. |
+| Organization AST | Type check, dependency closure, cycle detection, null semantics, explanation steps; same published version + request + clock ⇒ identical Result. |
+| Layer boundaries | The truth runtime never imports the frozen Operational Expectations ledger and never imports the analytics/OIP registry for computation. |
+| No judgment | Calculation results carry resolution status + structured warnings, never a verdict. |
+| Read-only | Evaluation never mutates Facts, Configuration, or Intent. |
 
 ---
 
@@ -230,27 +353,26 @@ Tests live under `web/tests/analytics/`. Existing OIP/metric tests remain author
 
 | Temptation | Why not |
 |---|---|
-| A second metric compute engine | OIP already computes; calculations describe and govern. |
-| New snapshot / metric tables | `metric_platform_snapshots` + OIP are authoritative. |
-| Client-side calculation | Violates the presentation-never-computes doctrine. |
-| A `CompositionEngine` class for Analytics | `placementResolver` + `renderMetricPlacements` already compose. |
-| Per-surface calculation definitions | One definition, many consumers — by doctrine. |
-| Duplicating OIP keys | Wrap the key; integrity tests forbid forks. |
+| Describe Operational Calculations as part of OIP | Calculations are their own truth layer; OIP analyzes their results. |
+| Force operational truth into a scalar metric | The result value is family-typed; four shapes are non-scalar. |
+| Put a verdict in a calculation result | Judgment is Operational Expectations; calculations carry none. |
+| A second Definition registry per domain | One platform registry; families are registrations. |
+| Author a **handler** in config / free JS / SQL | Handlers are code-owned; Organization Calculations compose approved functions only. |
+| A broad generic formula builder before a proving slice | Start with a closed AST + capacity composition; expand the catalog deliberately. |
+| Have the runtime observe config mutations | Configuration Event Propagation feeds the runtime; it stays deterministic. |
+| Let Organization Calculations redefine ratio/capacity invariants | Protected math stays in platform handlers; org ASTs may only compose approved projections. |
 
 ## Appendix B — Key file index
 
 | Concern | Path |
 |---|---|
-| Calculation descriptor type | `web/lib/analytics/calculations/types.ts` |
-| Calculation registry | `web/lib/analytics/calculations/registry.ts` |
-| Analytics runtime types | `web/lib/analytics/runtime/types.ts` |
-| Surface model builder | `web/lib/analytics/runtime/operationalSurface.ts` |
-| Runtime surface (modal) | `web/components/adminV2/intelligence/OperationalIntelligencePanel.tsx` |
-| Runtime data API | `web/app/api/admin/intelligence/operational/route.ts` |
-| DrillResolver | `web/lib/analytics/runtime/drillResolver.ts` |
-| OIP registry (wrapped) | `web/lib/metrics/registry.ts` |
-| OIP metric types | `web/lib/metrics/types.ts` |
-| Metric platform types | `web/lib/metrics/platform/types.ts` |
-| Render pipeline | `web/lib/metrics/platform/renderMetricPlacements.ts` |
-| Runtime convergence analysis | `docs/sprints/06_2026/analytics-operational-intelligence-platform/04-runtime-convergence.md` |
-</invoke>
+| Definition + Handler | `web/lib/operationalCalculations/definition.ts` |
+| Result contract | `web/lib/operationalCalculations/resultContract.ts` |
+| Runtime | `web/lib/operationalCalculations/runtime.ts` |
+| Registry | `web/lib/operationalCalculations/registry.ts` |
+| Resource & Capacity family | `web/lib/operationalCalculations/families/resourceRequirementsAndCapacity.ts` |
+| Scheduling & Occupancy family | `web/lib/operationalCalculations/families/scheduling.ts` |
+| Configuration Event Propagation | `web/lib/operationalCalculations/propagation/` |
+| Organization Calculation design (Path B) | `docs/sprints/07_2026/operational-calculations-product-realization/OC-ORGANIZATION-CALCULATION-DESIGN.md` |
+| Operational Intelligence (analytics — separate system) | `web/lib/analytics/calculations/`, `web/lib/metrics/` |
+| Operational Expectations (evaluation — frozen) | `web/lib/operationalExpectations/` |

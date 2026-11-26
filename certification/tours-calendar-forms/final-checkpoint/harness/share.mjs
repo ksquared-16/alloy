@@ -1,0 +1,26 @@
+import { open, OUT, openForm, riversideTours, RIVERSIDE } from "./lib.mjs";
+import fs from "node:fs";
+const { browser, page, errors } = await open();
+const log = {};
+await openForm(page);
+const dist = page.getByTestId("form-builder-distribution-section");
+await dist.waitFor({ timeout: 20000 });
+if (!(await page.getByTestId("form-location-share-links").count())) { await dist.getByRole("button").first().click(); await page.waitForTimeout(1500); }
+await page.getByTestId(`location-link-create-${RIVERSIDE}`).click(); await page.waitForTimeout(3000);
+log.row = (await page.getByTestId(`location-share-site-row-${RIVERSIDE}`).innerText()).replace(/\n+/g, " | ");
+await page.keyboard.press("Escape");
+await riversideTours(page);
+await page.getByText("Preview & Share").first().click(); await page.waitForTimeout(3500);
+const pub = page.getByRole("button", { name: /Publish tour calendar here/ }).first();
+const resp = page.waitForResponse((r) => r.request().method() === "PATCH", { timeout: 20000 }).catch(() => null);
+await pub.click(); const r = await resp; log.publishPatch = r ? r.status() : "none";
+await page.waitForTimeout(3000);
+const snippets = await page.locator("main code, main pre, main textarea, main input[readonly]").evaluateAll((e) => e.map((x) => x.value || x.textContent || ""));
+const hosted = snippets.map((s) => (s.match(/https?:\/\/[^\s"'<>]+\/tours\/[^\s"'<>]+/) || [])[0]).find(Boolean);
+const iframe = snippets.find((s) => /<iframe/i.test(s));
+log.hostedFound = Boolean(hosted); log.iframeFound = Boolean(iframe);
+fs.writeFileSync(new URL("./tour-url.secret", import.meta.url), JSON.stringify({ hosted, iframe }));
+await page.screenshot({ path: `${OUT}setup-share-published.png`, fullPage: false });
+log.errors = errors.slice(0, 5);
+console.log(JSON.stringify(log, null, 1));
+await browser.close();

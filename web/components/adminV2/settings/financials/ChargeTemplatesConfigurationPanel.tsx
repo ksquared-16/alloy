@@ -91,7 +91,7 @@ export default function ChargeTemplatesConfigurationPanel({ canMutate, todayYmd 
             { key: "amount_strategy", label: "Amount strategy", type: "select", options: amountStrategyOptions, defaultValue: t?.amount_strategy ?? "fixed" },
             { key: "amount", label: "Amount (fixed only)", type: "money", defaultValue: centsToDollars(t?.amount_cents ?? null) },
             { key: "occurs_on_strategy", label: "Occurs on", type: "select", options: occursOnOptions, defaultValue: t?.occurs_on_strategy ?? "now" },
-            { key: "billable_on_strategy", label: "Billable on", type: "select", options: billableOnOptions, defaultValue: t?.billable_on_strategy ?? "immediate" },
+            { key: "billable_on_strategy", label: "Billable on", type: "select", options: billableOnOptions, defaultValue: t?.billable_on_strategy ?? "billing_policy" },
             { key: "billable_offset_days", label: "Offset days", type: "number", defaultValue: t?.billable_offset_days != null ? String(t.billable_offset_days) : "" },
             { key: "default_gl_mapping_key", label: "Default GL mapping", type: "select", options: glMappingOptions, defaultValue: t?.default_gl_mapping_key ?? "" },
             { key: "default_responsibility_key", label: "Default responsibility", type: "select", options: responsibilityOptions, defaultValue: t?.default_responsibility_key ?? "" },

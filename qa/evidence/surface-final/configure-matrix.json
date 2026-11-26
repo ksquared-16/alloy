@@ -1,0 +1,49 @@
+{
+  "rows": [
+    {
+      "card": "business_process",
+      "inspectorOpen": true,
+      "widthControlUsed": true,
+      "widthApplied": 6,
+      "selectedDragActivated": true,
+      "selectedPreviewMatchesCommit": true,
+      "unselectedDragActivated": true,
+      "band": 0,
+      "overlaps": 0
+    },
+    {
+      "card": "financials",
+      "inspectorOpen": true,
+      "widthControlUsed": true,
+      "widthApplied": 6,
+      "selectedDragActivated": true,
+      "selectedPreviewMatchesCommit": true,
+      "unselectedDragActivated": true,
+      "band": 0,
+      "overlaps": 0
+    },
+    {
+      "card": "attendance",
+      "inspectorOpen": true,
+      "widthControlUsed": true,
+      "widthApplied": 6,
+      "selectedDragActivated": true,
+      "selectedPreviewMatchesCommit": true,
+      "unselectedDragActivated": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "card": "children",
+      "inspectorOpen": false,
+      "widthControlUsed": false,
+      "widthApplied": null,
+      "selectedDragActivated": true,
+      "selectedPreviewMatchesCommit": true,
+      "unselectedDragActivated": true,
+      "band": 11,
+      "overlaps": 0
+    }
+  ],
+  "pageErrors": []
+}

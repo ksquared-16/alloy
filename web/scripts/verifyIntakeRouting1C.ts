@@ -1,6 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
- * Runtime Test 1C verification — exercises applyFormIntakeSafe with live link metadata.
+ * Runtime Test 1C verification — DEPRECATED: applyFormIntakeSafe retired (E1).
+ * Use ingestPublicFormThroughProcessing for authoritative public-form intake.
  * Run from web/: npx tsx --tsconfig tsconfig.json scripts/verifyIntakeRouting1C.ts
  */
 import { config as loadEnv } from "dotenv";

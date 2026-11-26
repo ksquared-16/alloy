@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { effectiveScheduleStatusKey, fetchScheduleStatusKeyByFk } from "@/lib/admin/scheduleEffectiveStatusKey";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,13 @@ export async function GET(
     if (!jobId) return NextResponse.json({ error: "Missing job id" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const allowedRead = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
     const orgId = ctx.orgId;
 
     const { data: job, error: jobErr } = await supabase

@@ -40,4 +40,48 @@ describe("bindingEligibleForOutboundComposer", () => {
         };
         expect(bindingEligibleForOutboundComposer(b)).toBe(false);
     });
+
+    it("accepts active Twilio SMS with configured secret ref", () => {
+        const b: BindingSummary = {
+            id: "4",
+            channel: "sms",
+            provider: "twilio",
+            status: "active",
+            secret_ref: "env:TWILIO_AUTH_TOKEN",
+        };
+        expect(bindingEligibleForOutboundComposer(b)).toBe(true);
+        expect(availableComposerChannels([b]).includes("sms")).toBe(true);
+    });
+
+    it("rejects SMS when secret_ref is unconfigured or provider is not Twilio", () => {
+        const unconfigured: BindingSummary = {
+            id: "5",
+            channel: "sms",
+            provider: "twilio",
+            status: "active",
+            secret_ref: "unconfigured",
+        };
+        const wrongProvider: BindingSummary = {
+            id: "6",
+            channel: "sms",
+            provider: "vonage",
+            status: "active",
+            secret_ref: "env:TWILIO_AUTH_TOKEN",
+        };
+        expect(bindingEligibleForOutboundComposer(unconfigured)).toBe(false);
+        expect(bindingEligibleForOutboundComposer(wrongProvider)).toBe(false);
+        expect(availableComposerChannels([unconfigured, wrongProvider]).includes("sms")).toBe(false);
+    });
+
+    it("rejects pending_verification SMS even with secret ref", () => {
+        const b: BindingSummary = {
+            id: "7",
+            channel: "sms",
+            provider: "twilio",
+            status: "pending_verification",
+            secret_ref: "env:TWILIO_AUTH_TOKEN",
+        };
+        expect(bindingEligibleForOutboundComposer(b)).toBe(false);
+        expect(availableComposerChannels([b]).includes("sms")).toBe(false);
+    });
 });

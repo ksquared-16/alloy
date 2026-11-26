@@ -1,0 +1,614 @@
+/**
+ * SUBJECT CONTEXT ASSEMBLY — pure, and shared by every consumer.
+ *
+ * These builders hold the whole of "which business contexts apply to this subject". They take rows
+ * that someone else fetched (Search batches them across a candidate set; the durable record host
+ * fetches them for one subject) and return the same `SubjectContext[]` either way.
+ *
+ * PURE ON PURPOSE. The two consumers have genuinely different fetch strategies — Search must batch
+ * by id set to keep its query count constant, a record host must not pay for a batch of one — and
+ * the thing that must NOT differ is the answer. Keeping the judgement pure is what makes the shared
+ * authority real rather than nominal: there is no second place where a context could be decided.
+ *
+ * Nothing here fetches, and nothing here re-decides eligibility. `resolveOperationalMemberships`
+ * already applied grain, predicate support, access and operability; these functions only shape.
+ */
+
+import type {
+    SubjectContext,
+    SubjectOperationalMembershipRef,
+} from "@/lib/context/subjectContextTypes";
+import { stageWorkViewCacheKey } from "@/lib/workUnits/hostWorkUnitResolver";
+import {
+    processOffersChildGrainAt,
+    resolveOperationalMemberships,
+} from "@/lib/search/searchOperationalMemberships";
+import {
+    resolveProcessDetail,
+    type SearchProcessConfiguration,
+} from "@/lib/search/searchProcessConfiguration";
+import type { PersonEmploymentComposition } from "@/lib/employment/buildPersonEmploymentComposition";
+
+/** One `process_instances` row, in the shape both consumers already read it. */
+export type SubjectProcessRow = {
+    /**
+     * `process_instances.id` — the PARTICIPATION.
+     *
+     * For a child-grain Work View this is the row identity the runtime selects on. It is deliberately
+     * not the durable child: one child can hold two participations across two leads, and those are
+     * two different rows.
+     */
+    id: string;
+    subject_id: string;
+    process_key: string;
+    stage_key: string | null;
+    state: string | null;
+    location_id: string | null;
+    context_type: string | null;
+    context_id: string | null;
+};
+
+/** One live `schedule_assignments` row joined to its configured pattern label. */
+export type SubjectScheduleRow = {
+    pattern_label: string;
+    site_location_id: string | null;
+};
+
+/** The grain a context set is being built for. `family` covers households and their adults. */
+export type SubjectContextGrain = "child" | "family";
+
+export type BuildProcessContextsInput = {
+    grain: SubjectContextGrain;
+    /** Every id this subject's participations could be keyed on — its own id, and its person id. */
+    subjectKeys: readonly string[];
+    /** Participations indexed by `subject_id`. */
+    processBySubject: ReadonlyMap<string, readonly SubjectProcessRow[]>;
+    processConfig: SearchProcessConfiguration;
+    /** `opportunities.id` → the Work Unit key that holds it. */
+    hostWorkUnitKeys: ReadonlyMap<string, string>;
+    /** `stageWorkViewCacheKey(opportunityId, stageKey)` → configured Work View id. */
+    stageWorkViewTargets: ReadonlyMap<string, string>;
+    /** Materialized family rows, for family-grain predicate evaluation. */
+    familyMembershipRows: ReadonlyMap<string, Record<string, unknown>>;
+    /** Location resolved so far; a participation may supply the first one. */
+    locationId: string | null;
+    /**
+     * E2E-17/E2E-18 — a participation's `context_id` → its Opportunity. A journey anchored to its
+     * Enrollment Participation carries the PARTICIPATION id in `context_id`, while every map above is
+     * keyed by Opportunity id, so reading them by `context_id` found nothing: the membership lost its
+     * Work Unit (no `Go to`, no Search destination) and named the participation as its host. Absent
+     * entries map to themselves, so journeys anchored to the Opportunity are unchanged.
+     */
+    opportunityIdByContextId?: ReadonlyMap<string, string>;
+};
+
+export type BuildProcessContextsResult = {
+    contexts: SubjectContext[];
+    /** The location after participations had a chance to supply one. */
+    locationId: string | null;
+};
+
+/**
+ * Every process participation this subject holds, as contexts.
+ *
+ * One context per PROCESS, not per participation: a child with two leads in one process is in that
+ * process once, and the memberships below carry the per-participation rows.
+ */
+export function buildSubjectProcessContexts(
+    input: BuildProcessContextsInput,
+): BuildProcessContextsResult {
+    const contexts: SubjectContext[] = [];
+    let locationId = input.locationId;
+    const seenProcessKeys = new Set<string>();
+    const casesByProcess = participationCasesByProcess(input);
+
+    for (const sk of input.subjectKeys) {
+        for (const row of input.processBySubject.get(sk) ?? []) {
+            const configured = input.processConfig.byKey.get(row.process_key);
+            // Configuration can only REMOVE a process from view, never add one.
+            if (configured && !configured.operator_has_access) continue;
+            if (seenProcessKeys.has(row.process_key)) continue;
+            seenProcessKeys.add(row.process_key);
+
+            if (!locationId && row.location_id) locationId = row.location_id;
+            const contextId = (row.context_id ?? "").trim() || null;
+            const hostOpportunityId = contextId ? input.opportunityIdByContextId?.get(contextId) ?? contextId : null;
+
+            const memberships: SubjectOperationalMembershipRef[] | null = configured
+                ? resolveOperationalMemberships({
+                      process: configured,
+                      subject: {
+                          grain: input.grain,
+                          stageKey: row.stage_key,
+                          row:
+                              input.grain === "child" || !hostOpportunityId
+                                  ? null
+                                  : input.familyMembershipRows.get(hostOpportunityId) ?? null,
+                          // THE ROW IDENTITY, at the grain the lens actually rows at. A child-grain
+                          // lens selects PARTICIPATIONS, so the participation this membership was
+                          // evaluated from IS the member — not the durable child (one child, two
+                          // leads, two rows) and not the case.
+                          memberRowId: input.grain === "child" ? row.id : hostOpportunityId,
+                      },
+                  }).map((m) => ({
+                      work_view_id: m.workViewId,
+                      label: m.workViewLabel,
+                      row_grain: m.rowGrain,
+                      host_work_unit_key: hostOpportunityId
+                          ? input.hostWorkUnitKeys.get(hostOpportunityId) ?? null
+                          : null,
+                      host_entity_id: hostOpportunityId,
+                      operational_member_id: m.operationalMemberId,
+                  }))
+                : null;
+
+            /*
+             * ONE CASE, OR NO ANSWER. A child participating in this process in two cases has two
+             * truthful family answers, and the row this loop happened to read first is not a reason to
+             * prefer one. Ambiguity is stated, never resolved by order.
+             */
+            const ambiguous = (casesByProcess.get(row.process_key)?.size ?? 0) > 1;
+
+            /*
+             * FAMILY-GRAIN FALLBACK — only where the process has no child grain for this child.
+             *
+             * A process that works this stage at the case (the Enrolling lens is authored case-grain)
+             * cannot select the child, and offering nothing would leave the operator no way into the
+             * process from the child. The child's OWN case answers instead, evaluated by the same
+             * family predicates every family subject is — never the first family, never another
+             * process. Where a child lens does cover the stage, its verdict stands.
+             */
+            const familyFallback =
+                input.grain === "child" &&
+                configured &&
+                hostOpportunityId &&
+                !ambiguous &&
+                !(memberships ?? []).length &&
+                !processOffersChildGrainAt(configured, row.stage_key)
+                    ? resolveFamilyFallbackMemberships(input, configured, hostOpportunityId)
+                    : null;
+
+            contexts.push({
+                kind: "process",
+                key: row.process_key,
+                label: configured?.label ?? row.process_key,
+                detail: resolveProcessDetail(configured, row.stage_key, row.state),
+                // The process runs IN a context; that context entity owns the authoritative surface.
+                // A participation-anchored journey is hosted by the Opportunity it maps back to.
+                destination_entity_type:
+                    hostOpportunityId && hostOpportunityId !== contextId ? "opportunity" : row.context_type,
+                destination_entity_id: hostOpportunityId,
+                // Where that context is WORKED. Read from the host record's own queue membership —
+                // never from the process key, which names a different namespace.
+                destination_work_unit_key: hostOpportunityId
+                    ? input.hostWorkUnitKeys.get(hostOpportunityId) ?? null
+                    : null,
+                // …and where THIS PARTICIPANT is worked. A sibling in the same case can sit in a
+                // different stage, so the family answer above cannot be right for both.
+                destination_work_view_id:
+                    hostOpportunityId && row.stage_key
+                        ? input.stageWorkViewTargets.get(
+                              stageWorkViewCacheKey(hostOpportunityId, row.stage_key),
+                          ) ?? null
+                        : null,
+                // The ADDRESSING axes, carried raw. `detail` above is a renameable sentence; a
+                // configured surface variant must never be resolved against one.
+                stage_key: row.stage_key,
+                state: row.state,
+                operational_memberships: ambiguous ? [] : familyFallback?.length ? familyFallback : memberships,
+                ...(ambiguous ? { participation_ambiguous: true } : {}),
+            });
+        }
+    }
+
+    return { contexts, locationId };
+}
+
+/** The opportunity a participation row is hosted by — the same mapping the builder applies. */
+function hostOpportunityOf(
+    row: SubjectProcessRow,
+    opportunityIdByContextId?: ReadonlyMap<string, string>,
+): string | null {
+    const contextId = (row.context_id ?? "").trim() || null;
+    return contextId ? opportunityIdByContextId?.get(contextId) ?? contextId : null;
+}
+
+/** process_key → the distinct cases this subject participates in it through. */
+function participationCasesByProcess(input: BuildProcessContextsInput): Map<string, Set<string>> {
+    const out = new Map<string, Set<string>>();
+    for (const sk of input.subjectKeys) {
+        for (const row of input.processBySubject.get(sk) ?? []) {
+            const host = hostOpportunityOf(row, input.opportunityIdByContextId);
+            if (!host) continue;
+            const set = out.get(row.process_key) ?? new Set<string>();
+            set.add(host);
+            out.set(row.process_key, set);
+        }
+    }
+    return out;
+}
+
+/**
+ * The child's own case, evaluated at FAMILY grain.
+ *
+ * No materialized case row (another organization's case never loads; a read failure loads nothing)
+ * means no membership is claimed — the same "unproven is not true" rule the family path applies.
+ */
+function resolveFamilyFallbackMemberships(
+    input: BuildProcessContextsInput,
+    configured: Parameters<typeof resolveOperationalMemberships>[0]["process"],
+    hostOpportunityId: string,
+): SubjectOperationalMembershipRef[] {
+    const caseRow = input.familyMembershipRows.get(hostOpportunityId) ?? null;
+    if (!caseRow) return [];
+    const caseStage = typeof caseRow.stage_key === "string" ? caseRow.stage_key : null;
+    return resolveOperationalMemberships({
+        process: configured,
+        subject: { grain: "family", stageKey: caseStage, row: caseRow, memberRowId: hostOpportunityId },
+    }).map((m) => ({
+        work_view_id: m.workViewId,
+        label: m.workViewLabel,
+        row_grain: m.rowGrain,
+        host_work_unit_key: input.hostWorkUnitKeys.get(hostOpportunityId) ?? null,
+        host_entity_id: hostOpportunityId,
+        operational_member_id: m.operationalMemberId,
+    }));
+}
+
+/**
+ * The HOUSEHOLD's business processes, for a subject that has none of its own — a parent, a household.
+ *
+ * Only children participate in Enrollment, so a parent's own contexts are empty and Search could offer
+ * nothing but the parent's record and a Household card. The household IS in the process, through its
+ * children's case: each process its children participate in is that household's process, and the case
+ * is evaluated at FAMILY grain by the same family predicates `resolveFamilyFallbackMemberships` uses —
+ * the household selected as the row, never one child.
+ *
+ * `childKeys` are the household's own children (`customer_members.id`, and their person ids). Rules:
+ *
+ *   - One context per process, after the subject's own: a process the subject already holds is not
+ *     restated.
+ *   - Two cases in one process ⇒ ambiguous, stated rather than resolved by order.
+ *   - Nothing proven, nothing shown: a process whose case sits in no family cohort is omitted. A
+ *     household has no participation row to fall back to, and naming the process anyway would offer
+ *     the operator a destination with nowhere to land.
+ */
+export function buildHouseholdProcessContexts(
+    input: Omit<BuildProcessContextsInput, "grain" | "subjectKeys" | "locationId"> & {
+        childKeys: readonly string[];
+        /** Processes the subject already holds through its own participation. */
+        heldProcessKeys?: ReadonlySet<string>;
+    },
+): SubjectContext[] {
+    const casesByProcess = participationCasesByProcess({ ...input, grain: "family", subjectKeys: input.childKeys, locationId: null });
+    const contexts: SubjectContext[] = [];
+
+    for (const [processKey, cases] of casesByProcess) {
+        if (input.heldProcessKeys?.has(processKey)) continue;
+        const configured = input.processConfig.byKey.get(processKey);
+        if (!configured || !configured.operator_has_access) continue;
+
+        if (cases.size > 1) {
+            contexts.push({
+                kind: "process",
+                key: processKey,
+                label: configured.label,
+                detail: null,
+                operational_memberships: [],
+                participation_ambiguous: true,
+            });
+            continue;
+        }
+
+        const [caseId] = [...cases];
+        const memberships = resolveFamilyFallbackMemberships(
+            { ...input, grain: "family", subjectKeys: input.childKeys, locationId: null },
+            configured,
+            caseId,
+        );
+        if (!memberships.length) continue;
+
+        const caseRow = input.familyMembershipRows.get(caseId) ?? null;
+        const caseStage = typeof caseRow?.stage_key === "string" ? caseRow.stage_key : null;
+        contexts.push({
+            kind: "process",
+            key: processKey,
+            label: configured.label,
+            detail: resolveProcessDetail(configured, caseStage, null),
+            destination_entity_type: "opportunity",
+            destination_entity_id: caseId,
+            destination_work_unit_key: input.hostWorkUnitKeys.get(caseId) ?? null,
+            stage_key: caseStage,
+            state: null,
+            operational_memberships: memberships,
+        });
+    }
+    return contexts;
+}
+
+/**
+ * The cases whose materialized rows a CHILD's family-grain fallback will read.
+ *
+ * Both loaders call this so neither pays for rows the builder will not use: only a child
+ * participation in a process with no child grain at its stage, hosted by exactly one case.
+ */
+export function childFamilyFallbackCaseIds(params: {
+    processRows: readonly SubjectProcessRow[];
+    processConfig: SearchProcessConfiguration;
+    opportunityIdByContextId?: ReadonlyMap<string, string>;
+}): string[] {
+    const out = new Set<string>();
+    for (const row of params.processRows) {
+        const configured = params.processConfig.byKey.get(row.process_key);
+        if (!configured || !configured.operator_has_access) continue;
+        if (processOffersChildGrainAt(configured, row.stage_key)) continue;
+        const host = hostOpportunityOf(row, params.opportunityIdByContextId);
+        if (host) out.add(host);
+    }
+    return [...out];
+}
+
+/**
+ * The child's live schedule, as a context.
+ *
+ * Child grain only — a household never carries a schedule, and rolling one up to household level
+ * would be a misleading single answer for several children.
+ */
+export function buildSubjectScheduleContext(
+    schedule: SubjectScheduleRow | null | undefined,
+    locationLabel: string | null,
+): SubjectContext | null {
+    if (!schedule) return null;
+    return {
+        kind: "schedule",
+        key: "schedule",
+        /*
+         * ASSIGNMENT, not Schedule.
+         *
+         * The card this chip opens has been titled "Assignments" since the registry
+         * gave it a title, and the two names described one thing. Staff & Workforce V2
+         * settles the noun: Assignment is the durable operating plan, and a future
+         * scheduling experience is a different, later idea that must not borrow this
+         * word first. The KIND stays `schedule` because it keys stored layouts and
+         * URLs — the operator-facing label is what had to converge.
+         */
+        label: "Assignment",
+        detail: schedule.pattern_label,
+        secondary: locationLabel,
+        // The site the commitment is AT. Every canonical scheduling read is site-scoped, and this
+        // row is where the site is stated — so the Schedule card composes against the same site the
+        // chip describes, instead of re-deriving one and eventually disagreeing with it.
+        site_location_id: schedule.site_location_id ?? null,
+    };
+}
+
+/**
+ * Whether this person works here, as a context.
+ *
+ * PERSON-GRAIN, AND CARRIED VERBATIM. `PersonEmploymentComposition` is produced by `lib/employment`
+ * and decided there; this only phrases it. Nothing about employment is judged in the context layer.
+ *
+ * Returns null when the person is not staff — "never employed" is an answer, and a context that
+ * exists to say "no relationship" would put an empty destination in a selector.
+ *
+ * There is NO Work View and NO work unit here, and that is not a gap: employment is a standing, not
+ * a queue position. A destination resolver reads the absence and offers a record destination only.
+ */
+export function buildSubjectEmploymentContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    const current = employment.current ?? null;
+    const detail = current
+        ? [current.position_label, current.state_label].filter(Boolean).join(" · ") || null
+        : "Not currently employed";
+
+    return {
+        kind: "employment",
+        key: "employment",
+        label: "Employment",
+        detail,
+        secondary: current?.primary_location_label ?? null,
+        // The person IS the record that owns employment. There is no case, and naming one would be
+        // the case creeping back into a person's own standing.
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: current?.status ?? null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * The credentials this staff member holds, as a context.
+ *
+ * ── WHY IT IS GATED ON EMPLOYMENT, NOT ON HOLDING ANYTHING ──
+ *
+ * The option is offered whenever the person is staff, INCLUDING when they hold nothing. "No
+ * qualifications recorded" is an answer an operator needs — often the one they opened the record
+ * for — and hiding the context until a credential exists would make the empty state unreachable
+ * precisely when it matters.
+ *
+ * It is NOT offered to a person who has never worked here: a qualification hangs off an
+ * employment, so there is nothing for the context to be about. That mirrors the Employment context
+ * above and the card's own visibility rule, so the three agree rather than each deciding.
+ *
+ * No detail line is derived here. Standing depends on the organisation's calendar day and is
+ * resolved server-side by the card; computing a summary here would be a second resolver for one
+ * answer, and it would be stale the morning a credential expired.
+ */
+export function buildSubjectQualificationsContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "qualifications",
+        key: "qualifications",
+        label: "Qualifications",
+        detail: null,
+        secondary: null,
+        // The person owns the record their credentials hang off, exactly as with employment.
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * When this staff member can work, as a context.
+ *
+ * Gated on EMPLOYMENT, not on having a pattern. "No availability pattern set" is an
+ * answer an operator opens the record to act on, and hiding the context until a
+ * pattern exists would make the empty state unreachable exactly when it matters.
+ *
+ * No detail is derived here: the resolved answer depends on the organisation's day
+ * and is computed server-side by the card's own read. A summary computed in the
+ * context would be a second resolver, and stale the morning an exception applied.
+ */
+export function buildSubjectAvailabilityContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "availability",
+        key: "availability",
+        label: "Availability",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * Whether this staff member is ready, as a context.
+ *
+ * Gated on EMPLOYMENT like its siblings. No detail is derived here: the verdict
+ * depends on the organisation's day and is computed by the card's own server-side
+ * read, so a summary in the context would be a second readiness answer.
+ */
+export function buildSubjectReadinessContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "readiness",
+        key: "readiness",
+        label: "Readiness",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * Compensation, as a context — offered only to a caller who may see it.
+ *
+ * `canRead` is not a convenience flag: the durable-record route resolves it from
+ * `ctx.permissionKeys`, and passing `false` must produce NOTHING rather than a
+ * placeholder. No detail is carried either, for the same reason the readiness
+ * context carries none — a rate in the chip line would leak the very fact the
+ * capability exists to withhold.
+ */
+export function buildSubjectCompensationContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+    canRead: boolean,
+): SubjectContext | null {
+    if (!canRead) return null;
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "compensation",
+        key: "compensation",
+        label: "Compensation",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * The record's own information, as a context.
+ *
+ * ── WHY IDENTITY IS A CHOICE AND NOT THE FRAME ──
+ *
+ * The durable record used to open as an identity page with the other contexts arranged underneath
+ * it. That made identity the frame and everything else an accessory, and it is not how an operator
+ * arrives: someone opening Lennon is as likely to want his schedule as his date of birth. Listing
+ * identity beside the others lets them say which, instead of paying for a composition they did not
+ * ask for on the way to the one they did.
+ *
+ * It resolves the canonical `child_identity` card — the same card the durable child composition
+ * already builds. No configuration, no second composition.
+ */
+export function buildSubjectIdentityContext(
+    grain: "child" | "family" | "person",
+    label: string,
+): SubjectContext | null {
+    // Child grain only for now. A person's identity card is Employment, which is already its own
+    // context; offering "Person" beside it would be two names for one card.
+    if (grain !== "child") return null;
+    return {
+        kind: "identity",
+        key: "identity",
+        label,
+        detail: null,
+    };
+}
+
+/**
+ * The subject's household, as a context.
+ *
+ * CHILD GRAIN ONLY, and the reason is the same one `buildSubjectScheduleContext` records for itself:
+ * a household rolled up to household level is a misleading single answer. Here the direction is
+ * reversed — a household asked about its own household is a tautology — but the rule is identical.
+ *
+ * Returns null when the child has no household. `customer_members.customer_id` is nullable, and a
+ * child without a family is a real state; an option that opens nothing is worse than no option.
+ *
+ * It carries the household's id as its destination so the host composes the EXISTING durable
+ * household (`composeDurableHouseholdSubject`) rather than reaching for a case. There is no Work
+ * Unit here and there must not be one: a family is a record, not a queue position.
+ */
+export function buildSubjectHouseholdContext(
+    householdId: string | null | undefined,
+    householdName: string | null | undefined,
+): SubjectContext | null {
+    const id = (householdId ?? "").trim();
+    if (!id) return null;
+    return {
+        kind: "relationship",
+        key: "household",
+        label: "Household",
+        detail: (householdName ?? "").trim() || null,
+        destination_entity_type: "customers",
+        destination_entity_id: id,
+    };
+}

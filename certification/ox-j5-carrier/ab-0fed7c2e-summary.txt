@@ -1,0 +1,18 @@
+samples=21  valid switches=21  cold (a drawer request ran)=20
+
+safe frame (T4_snapshot)                       n=20/20  P50=6ms  P95=10ms  min=5 max=13
+carrier mounted                                n=20/20  P50=424ms  P95=1883ms  min=45 max=7684
+FIRST ACTIONABLE strict (T5_executable)        n=20/20  P50=424ms  P95=1883ms  min=45 max=7684   target P50<750 P95<1250 -> NOT MET
+FIRST ACTIONABLE historical (T5_action_enabled) n=20/20  P50=424ms  P95=1883ms  min=45 max=7684
+full drawer visible (T4_visible)               n=20/20  P50=2765ms  P95=5247ms  min=2008 max=7740
+ALL FIRST ORDER (T6_first_order)               n=20/20  P50=2765ms  P95=5247ms  min=2008 max=7740   target P50<1000 P95<1500 -> NOT MET
+
+carrier arrivals within the click event : 23/20
+  arrival rel_to_click   P50=432ms P95=8096ms min=41 max=8201  (negative = before the click)
+  server flush into compose P50=428ms min=339 max=7769
+  ready BEFORE click: 0/23   after click: 23/23
+  executable actions per carrier: min=4 max=4 of 11
+
+mixed-subject frames total : 0
+rail still present after settle: 0/20 (expected 0 - phase 2 replaces it)
+operator acts this much earlier than the record exists: P50=2134ms min=56 max=4196

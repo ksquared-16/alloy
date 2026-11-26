@@ -7,14 +7,14 @@ import {
 } from "@/lib/admin/discountProgramAdmin";
 import { evaluateDeletionEligibility } from "@/lib/admin/deletionEligibility";
 import { NextRequest, NextResponse } from "next/server";
+import { OPS_JOBS_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 
 /** DELETE: remove discount program and related benefit/qualifier/commitment rows (not legacy discount_codes). */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireSchedulingJobsCapability(ctx, OPS_JOBS_WRITE);
+    if (denied) return denied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -41,9 +41,8 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireSchedulingJobsCapability(ctx, OPS_JOBS_WRITE);
+    if (denied) return denied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

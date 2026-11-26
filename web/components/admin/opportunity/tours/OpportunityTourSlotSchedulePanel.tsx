@@ -1,5 +1,6 @@
 "use client";
 
+import { isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
@@ -14,6 +15,7 @@ import {
     formatTourSlotWindowRangeLabel,
     tourSlotWindowBoundsUtc,
 } from "@/lib/tours/availability/tourSlotWindowPagination";
+import { peekWarmTourSchedule, peekWarmTourScheduleForQuery } from "@/lib/tours/tourScheduleWarmCache";
 
 /** Furthest page (0-based) — ~1 year of 14-day windows without unbounded queries. */
 const MAX_RANGE_PAGE_INDEX = 26;
@@ -32,10 +34,17 @@ export type OpportunityTourSlotSchedulePanelProps = {
 
 export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSchedulePanelProps) {
     const { opportunityId, locationId, mode, primaryBooking, onCancel, onSuccess, footerSlot } = props;
-    const [rulesById, setRulesById] = useState<Record<string, { approval_required: boolean }>>({});
-    const [slots, setSlots] = useState<AvailableTourSlot[]>([]);
-    const [slotsLoading, setSlotsLoading] = useState(true);
+    // Warm-first: if operator intent already warmed this work unit's initial availability, render it
+    // synchronously (no skeleton) and re-verify fresh in the background. Only the page-0 window is warm.
+    const warmInitial = mode === "schedule" ? peekWarmTourSchedule(opportunityId, locationId) : null;
+    const [rulesById, setRulesById] = useState<Record<string, { approval_required: boolean }>>(
+        warmInitial?.rulesById ?? {},
+    );
+    const [slots, setSlots] = useState<AvailableTourSlot[]>(warmInitial?.slots ?? []);
+    const [slotsLoading, setSlotsLoading] = useState(!warmInitial);
     const [slotsErr, setSlotsErr] = useState<string | null>(null);
+    // Mirror of `slots` so the background refresh never re-flashes the skeleton when warm data is shown.
+    const slotsRef = useRef<AvailableTourSlot[]>(warmInitial?.slots ?? []);
     const [selectedSlot, setSelectedSlot] = useState<AvailableTourSlot | null>(null);
     const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -55,7 +64,9 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
     const loadSlots = useCallback(async () => {
         const gen = ++loadGeneration.current;
         setSlotsErr(null);
-        setSlotsLoading(true);
+        // Only show the skeleton when there is nothing to show yet — a warm/background refresh keeps
+        // the current availability on screen (no skeleton flash) and swaps in fresh values silently.
+        setSlotsLoading(slotsRef.current.length === 0);
         setSelectedSlot(null);
         const qs = new URLSearchParams({
             location_id: locationId,
@@ -66,11 +77,31 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
             qs.set("exclude_booking_id", primaryBooking.id);
         }
         const slotsUrl = `/api/admin/tours/slots?${qs.toString()}`;
+
+        // R-005. The warm cache already holds this exact query on the common path (schedule
+        // mode, page 0, nothing excluded), so re-issuing it was a guaranteed duplicate of both
+        // the slots read and the approval-rules read. Ask the cache whether its entry covers
+        // THIS query rather than assuming; a reschedule excludes a booking and paging moves the
+        // window, and both are genuinely different queries that still fetch.
+        const warmForThisQuery = peekWarmTourScheduleForQuery(opportunityId, locationId, {
+            windowFrom,
+            windowTo,
+            excludeBookingId: mode === "reschedule" ? primaryBooking?.id ?? null : null,
+        });
+        if (warmForThisQuery) {
+            slotsRef.current = warmForThisQuery.slots;
+            setSlots(warmForThisQuery.slots);
+            setRulesById(warmForThisQuery.rulesById);
+            setSlotsLoading(false);
+            return;
+        }
+
         try {
             const slotsRes = await fetch(slotsUrl, { credentials: "include" });
             if (gen !== loadGeneration.current) return;
             const slotsJ = (await slotsRes.json()) as { slots?: AvailableTourSlot[]; error?: string };
             if (!slotsRes.ok) throw new Error(slotsJ.error ?? slotsRes.statusText);
+            slotsRef.current = slotsJ.slots ?? [];
             setSlots(slotsJ.slots ?? []);
 
             if (mode === "schedule") {
@@ -105,21 +136,27 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
         void loadSlots();
     }, [loadSlots]);
 
-    const grouped = useMemo(() => groupTourSlotsByLocalDate(slots), [slots]);
+    // Only slots on the site's tomorrow or later are bookable (tourEarliestDate — the service refuses
+    // the rest); each slot carries its site's timezone, so "today" is the site's today.
+    const bookableSlots = useMemo(
+        () => slots.filter((slot) => !slot.timezone || isTourStartAllowed(new Date(slot.startAt), slot.timezone)),
+        [slots],
+    );
+    const grouped = useMemo(() => groupTourSlotsByLocalDate(bookableSlots), [bookableSlots]);
 
     useEffect(() => {
         if (slotsLoading) return;
-        if (slots.length === 0) {
+        if (bookableSlots.length === 0) {
             setSelectedDayKey(null);
             return;
         }
-        const { orderedDayKeys, byDay } = groupTourSlotsByLocalDate(slots);
+        const { orderedDayKeys, byDay } = groupTourSlotsByLocalDate(bookableSlots);
         const first = orderedDayKeys[0] ?? null;
         setSelectedDayKey((prev) => {
             if (prev && byDay.has(prev)) return prev;
             return first;
         });
-    }, [slotsLoading, slots]);
+    }, [slotsLoading, bookableSlots]);
 
     const slotsForSelectedDay = useMemo(() => {
         if (!selectedDayKey) return [];
@@ -219,8 +256,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                     </div>
                 </div>
                 <div className="mt-1 text-[11px] text-alloy-midnight/50">
-                    {TOUR_SLOT_PAGE_DAYS}-day windows (UTC). Pick a day, then a time —{" "}
-                    <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code> stays the source of truth.
+                    Choose a day, then an available time to book the tour.
                 </div>
             </div>
             <div className="max-h-[70vh] space-y-3 overflow-auto px-5 py-4">
@@ -267,10 +303,10 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                                             type="button"
                                             role="tab"
                                             aria-selected={selected}
-                                            className={`shrink-0 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-midnight/25 ${
+                                            className={`shrink-0 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/30 ${
                                                 selected
-                                                    ? "border-alloy-midnight bg-alloy-midnight text-white"
-                                                    : "border-alloy-stone/20 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
+                                                    ? "border-alloy-bend-pine bg-alloy-bend-pine text-white"
+                                                    : "border-alloy-stone/25 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
                                             }`}
                                             onClick={() => {
                                                 setSelectedDayKey(dayKey);
@@ -310,10 +346,10 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                                                     key={`${s.startAt}-${s.ruleId}`}
                                                     type="button"
                                                     aria-pressed={sel}
-                                                    className={`rounded-md border px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-midnight/25 ${
+                                                    className={`rounded-md border px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/30 ${
                                                         sel
-                                                            ? "border-alloy-midnight bg-alloy-midnight/10 text-alloy-midnight"
-                                                            : "border-alloy-stone/20 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
+                                                            ? "border-alloy-bend-pine bg-alloy-bend-pine/10 text-alloy-midnight"
+                                                            : "border-alloy-stone/25 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
                                                     }`}
                                                     onClick={() => setSelectedSlot(s)}
                                                 >
@@ -332,7 +368,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                         ) : null}
 
                         {selectedSlot ? (
-                            <div className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/5 px-3 py-2 text-[11px] text-alloy-midnight">
+                            <div className="rounded-lg border border-alloy-bend-pine/30 bg-alloy-bend-pine/5 px-3 py-2 text-[11px] text-alloy-midnight">
                                 <span className="font-semibold">Selected:</span>{" "}
                                 {formatTourSlotTimeRangeLabel(selectedSlot)} ({localDateKeyForSlot(selectedSlot)})
                             </div>
@@ -343,12 +379,16 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                 {footerSlot ? <div className="border-t border-alloy-stone/10 pt-3">{footerSlot}</div> : null}
 
                 <div className="flex justify-end gap-2 border-t border-alloy-stone/10 pt-3">
-                    <button type="button" className="rounded-lg border px-3 py-1.5 text-xs" onClick={onCancel}>
+                    <button
+                        type="button"
+                        className="rounded-lg border border-alloy-stone/30 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight transition-colors hover:bg-alloy-stone/5"
+                        onClick={onCancel}
+                    >
                         Cancel
                     </button>
                     <button
                         type="button"
-                        className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-xs font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
+                        className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90 disabled:pointer-events-none disabled:opacity-45"
                         disabled={!selectedSlot || saving || slotsLoading}
                         aria-disabled={!selectedSlot || saving || slotsLoading}
                         onClick={() => void createFromSlot()}

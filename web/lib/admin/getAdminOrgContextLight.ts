@@ -1,7 +1,11 @@
 /**
  * Lightweight admin portal context for count/summary routes.
- * Resolves authenticated userId + primary orgId + portal eligibility only —
- * no permission grants or department/site scope dimensions.
+ * Resolves authenticated userId + primary orgId + portal admission only —
+ * no full permission grant union and no department/site scope dimensions.
+ *
+ * W-13: "portal eligibility" here is the `portal.access` capability, read for this org, not a role
+ * name. The one grant row it costs is the price of this path answering the same question the full
+ * resolver answers.
  */
 
 import { cache } from "react";
@@ -49,6 +53,17 @@ const loadAdminOrgContextLightOnce = cache(async (): Promise<AdminOrgContextLigh
             return { ok: false, status: 403 };
         }
         if (!core.portalEligible) {
+            /*
+             * W-13 — both outcomes are 403, and the line below is the only place they stay apart.
+             * `no-capability` is an answer about this principal's grants; `unresolved` is a failed
+             * read that already logged itself through the W-43 channel. An operator debugging a
+             * lockout needs to know which one they are looking at, and the HTTP status cannot tell
+             * them.
+             */
+            console.warn(
+                `[access-identity][W-13][portal-denied] where=getAdminOrgContextLight ` +
+                    `user_id=${userId} org_id=${core.orgId} reason=${core.admission}`
+            );
             return { ok: false, status: 403 };
         }
 

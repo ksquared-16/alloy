@@ -7,6 +7,8 @@ import { BOS_IDENTITY } from "@/lib/bos/bosIdentityTokens";
 export type CommandRailExecutableAction = {
     id: string;
     label: string;
+    /** Optional operator-facing why / consequence under the label. */
+    reason?: string;
     disabled?: boolean;
     busy?: boolean;
     emphasized?: boolean;
@@ -49,8 +51,15 @@ export function CommandRailExecutableActionList({ actions }: { actions: CommandR
                             <span className="adminv2-command-rail-executable-action-icon" aria-hidden>
                                 <Icon stroke={BOS_IDENTITY.bendPine} strokeWidth={1.75} className="h-4 w-4" />
                             </span>
-                            <span className="adminv2-command-rail-executable-action-label">
-                                {action.busy ? "…" : action.label}
+                            <span className="adminv2-command-rail-executable-action-copy min-w-0 flex-1 text-left">
+                                <span className="adminv2-command-rail-executable-action-label block">
+                                    {action.busy ? "…" : action.label}
+                                </span>
+                                {action.reason ?
+                                    <span className="mt-0.5 block text-[11px] font-normal leading-snug text-alloy-midnight/45">
+                                        {action.reason}
+                                    </span>
+                                :   null}
                             </span>
                             <ChevronRight
                                 className="adminv2-command-rail-executable-action-chevron h-4 w-4 shrink-0"

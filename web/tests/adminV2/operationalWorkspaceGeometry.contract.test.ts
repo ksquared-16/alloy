@@ -25,6 +25,7 @@ describe("Operational Workspace Geometry — platform contract", () => {
         expect(rule).toContain("--operational-workspace-width");
         // Width + max-width are derived from the measured band (scaled by the fill ratio), not a fixed px cap.
         expect(rule).toContain("--operational-workspace-fill");
+        expect(rule).toMatch(/--operational-workspace-fill:\s*0\.95/);
         expect(rule).toMatch(/max-width:\s*calc\([\s\S]*?--operational-workspace-width/);
         expect(rule).toContain("transform: none !important");
         // Never width-capped at a fixed pixel value.
@@ -51,7 +52,8 @@ describe("Operational Workspace Geometry — platform contract", () => {
         expect(geom).toContain("computeOperationalWorkspaceBounds");
         expect(geom).toContain('OPERATIONAL_WORKSPACE_ATTR = "data-operational-workspace"');
         // Classification is driven by the marker attribute, not feature-specific branches.
-        expect(geom).toContain("OPERATIONAL_WORKSPACE_OPEN_SELECTOR");
+        expect(geom).toContain("resolveOperationalBosRailLeft");
+        expect(geom).toContain('bosPresentation !== "pinned"');
 
         // Strip comments; the executable geometry logic must not branch on feature names.
         const code = geom

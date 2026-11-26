@@ -1,8 +1,8 @@
 /**
  * Lifecycle subject + work-unit surface context contracts.
  *
- * @see docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md
- * @see docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md
+ * @see docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md
+ * @see docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md
  * @see docs/system/work-unit-surface-context-contract.md
  *
  * Frozen architecture contracts for Layout Configuration and queue/drawer runtime.
@@ -31,7 +31,9 @@ export type LifecycleSubjectType =
     | "customer"
     | "vendor"
     | "associate"
-    | "agent";
+    | "agent"
+    /** BP V2 S2 — a durable person (staff) row from a domain projection. */
+    | "person";
 
 /** Queue membership grains implemented today in queue_definition v2. */
 export type QueueMembershipGrain = "case" | "child" | "candidate";
@@ -62,6 +64,19 @@ export type QueueRowSubjectPresentation = {
     subject_type: LifecycleSubjectType;
     subject_id: string;
     display_name: string;
+    /** Effective process stage key when known (variant matching / Focus Panel). */
+    stage_key?: string | null;
+    /** ISO date-of-birth when known from inquiry / household child payload. */
+    date_of_birth?: string | null;
+    /** Compact age label (e.g. `2y2m`, `6m`) derived from DOB or inquiry age. */
+    age_label?: string | null;
+    /** Gender label when hydrated on queue row inquiry child payload. */
+    gender_label?: string | null;
+    /**
+     * Request-scoped profile image URL (from `resolved_photo_url` / identity photo adapter).
+     * Optional + additive — CondensedQueueRow shows an image when present, else initials.
+     */
+    image_url?: string | null;
 };
 
 export type QueueRowCaseContext = {
@@ -106,6 +121,12 @@ export type RelatedSubjectSummary = {
     program_label?: string | null;
     room_label?: string | null;
     schedule_label?: string | null;
+    /** ISO date-of-birth when known from inquiry / household child payload. */
+    date_of_birth?: string | null;
+    /** Compact age label (e.g. `2y2m`, `6m`) derived from DOB or inquiry age. */
+    age_label?: string | null;
+    /** Gender label when hydrated on queue row inquiry child payload. */
+    gender_label?: string | null;
 };
 
 export type QueueRowAttentionSummary = {
@@ -122,6 +143,10 @@ export type QueueRowCurrentWorkSummary = {
     label: string;
     state: "open" | "completed" | "planned" | "none";
     due_label: string | null;
+    /** e.g. "2 of 3 complete" — work language, not stage/status. */
+    progress_hint: string | null;
+    /** Primary blocker or attention reason for the queue hint line. */
+    blocker_hint: string | null;
 };
 
 export type QueueRowNextBestAction = {
@@ -136,7 +161,11 @@ export type QueueRowPresentationMode = "single_subject" | "grouped_subjects";
 export type QueueRowCountUnit = "enrollment_track" | "cases" | "children" | "candidates";
 
 export type QueueRowDrawerOpen = {
-    entity_type: "opportunities";
+    /**
+     * `opportunities` for every lifecycle row. A domain-projection row (BP V2 S2) names the durable
+     * record it opens instead — the table of the canonical record, never an assignment or a charge.
+     */
+    entity_type: "opportunities" | "persons" | "customer_members" | "customers";
     entity_id: string;
     /** Single-child focus — row click or child line click inside grouped card. */
     active_subject?: LifecycleSubjectRef;
@@ -173,6 +202,18 @@ export type QueueRowContext = {
 
     /** Operator stage label for the queue lane (e.g. "Tours", "New Leads"). */
     row_stage: string;
+    /**
+     * Effective process stage KEY for this row (e.g. `waitlist`). Distinct from `row_stage`
+     * (operator label). Required for Queue Row variant `appliesWhen.stage_key` matching.
+     */
+    row_stage_key?: string | null;
+    /**
+     * Configured stage key → the tenant's authored label. Additive and optional: configured stages
+     * are the only runtime stage vocabulary, so a per-row stage can render in the operator's own
+     * words ("Tours") rather than a humanized key ("Tour"). Absent when no stage list is in scope,
+     * in which case the key is humanized.
+     */
+    stage_labels_by_key?: Record<string, string>;
     lifecycle_key: string;
     row_status_key: string;
     row_status_label: string;
@@ -209,6 +250,88 @@ export type QueueRowContext = {
      * TODO(phase-1): populate from OCM columns in partial adapter.
      */
     placement_context?: SubjectPlacementContext | null;
+
+    /**
+     * BP V2 S2 — present ONLY on a row a registered domain projection produced. It names the durable
+     * record the row opens (`subject`) and, separately, the domain fact that put it in the cohort
+     * (`source`). The source is context: it is never the identity of what opens.
+     */
+    domain_projection?: {
+        domain: "assignments" | "billing";
+        projection_key: string;
+        subject: { type: "child" | "person" | "household"; id: string };
+        source: {
+            kind: "schedule_assignment" | "charge" | "enrollment_agreement" | "collection_attempt";
+            id: string;
+            count: number;
+            status_label: string;
+        };
+        site_location_id: string | null;
+        /** BP V2 S3 — the source-backed facts behind the row's reason (read, never stored). */
+        detail?: {
+            reason: string;
+            start_date?: string | null;
+            end_date?: string | null;
+            site_label?: string | null;
+            room_location_id?: string | null;
+            room_label?: string | null;
+            assignment_type_label?: string | null;
+            is_primary?: boolean | null;
+            days_until?: number | null;
+        } | null;
+    } | null;
+
+    /**
+     * Waitlist ranking context for candidate-grain rows (Variants Phase 5). Populated from the
+     * placement waitlist projection; absent for non-candidate rows. Presentation-only — the compact
+     * row's Subject Focus (`placement_candidate_child`) surfaces the position as supporting context.
+     * Optional + additive → the frozen contract version does not change.
+     */
+    waitlist_context?: {
+        position_label?: string | null;
+        wait_since?: string | null;
+        /** Placement priority score when projected (optional display). */
+        priority?: number | null;
+        /** Placement System candidate id — required for manual-position adjustment. */
+        placement_candidate_id?: string | null;
+        /** True when published Waitlist variant exposes placement adjustment and a candidate is attached. */
+        can_adjust_placement?: boolean | null;
+        /**
+         * Typed precedence outcome from the placement position owner. Operator-safe and never
+         * shadow-gated; copy is resolved at the presentation layer, not stored here.
+         */
+        /**
+         * The GROUP-LOCAL range a manual position may legally address, from the placement engine.
+         * `position_label` is section-scoped; a pin is cohort-scoped. The Adjust control must bound
+         * itself on this and never recompute it — one placement authority.
+         */
+    } | null;
+
+    /**
+     * Time in current operational stage / cohort membership (not Work View age, not updated_at).
+     * Additive — CondensedQueueRow shows compact age at the right edge when present.
+     */
+    operational_state?: {
+        /** Authoritative stage key for this row subject. */
+        stage_key: string | null;
+        /** ISO entry time for the current stage membership occurrence. */
+        entered_at: string | null;
+        /** Resolver provenance. */
+        source: "persisted_stage_entered_at" | "intake_created_at" | "unknown";
+        /** Compact label (`12m`, `3h`, `2d`) — null when unknown. */
+        age_compact: string | null;
+        /** Accessible full label — null when unknown. */
+        age_accessible: string | null;
+    } | null;
+
+    /**
+     * Personal seen/unseen for the current operator on this stage membership occurrence.
+     * Absent when the viewer is anonymous or acknowledgement is not hydrated.
+     */
+    personal_seen?: {
+        unseen: boolean;
+        occurrence_key: string | null;
+    } | null;
 };
 
 export type DrawerSubjectFocusMode =
@@ -229,8 +352,10 @@ export type DrawerSubjectContext = {
 };
 
 /**
- * Count unit for queue lane totals — mirrors queue_definition v2 `count_unit` when present.
- * TODO(phase-6): wire count_unit from normalized queue entry in summaries API.
+ * Count unit for queue lane totals — labels what a row/count represents so N is never ambiguous
+ * (households vs children vs candidates). Wired from the lane's queue_membership_v1.count_unit via
+ * laneRouting.countUnit (see queueMembershipRuntimeResolver / QueueService / attachQueueRowContextToItems).
+ * The workspace work-view TOTAL label is the one remaining surface not yet carrying it.
  */
 export type WorkUnitQueueCountUnit = "cases" | "children" | "candidates";
 
@@ -256,7 +381,7 @@ export type WorkUnitSurfaceContext = {
     queue_key: string;
     queue_grain: LifecycleSubjectType;
     lifecycle_key: string;
-  /** TODO(phase-6): populate from NormalizedQueueEntry.count_unit. */
+  /** Populated from the lane's count_unit (laneRouting.countUnit) — households/children/candidates. */
     count_unit?: WorkUnitQueueCountUnit;
     rows: WorkUnitSurfaceContextRow[];
     drawer?: WorkUnitSurfaceDrawerContext;

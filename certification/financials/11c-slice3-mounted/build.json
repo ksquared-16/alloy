@@ -1,0 +1,10 @@
+{
+  "gitSha": "76a8f3fc840cf46ff250ee69a02a9b0cbe19c59c",
+  "gitBranch": "staging",
+  "gitMessage": "Merge pull request #1168 from ksquared-16/agent/financials-11c-slice3\n\nFinancials 11C slice 3 — discounts as a family capability, Policies convergence, Billing IA",
+  "vercelEnv": "preview",
+  "vercelUrl": "workwithalloy-cxy242h2g-kellys-projects-2fc9d5eb.vercel.app",
+  "vercelDeploymentId": "dpl_7E1nSgQqLG9j3sdiopkJ7XwEMZdr",
+  "nodeEnv": "production",
+  "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+}

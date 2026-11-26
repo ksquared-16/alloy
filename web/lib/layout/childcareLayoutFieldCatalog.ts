@@ -2,13 +2,18 @@
  * Childcare layout field catalog — operator-facing starter allowlist.
  *
  * Source of truth for storage paths:
- * docs/platform_convergence/childcare_field_catalog_source_matrix.md
+ * docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/childcare_field_catalog_source_matrix.md
  *
  * Internal refKeys (e.g. inquiry_child.*) remain; picker labels and grouping
  * are operator-facing only.
  */
 
 import type { LayoutPickerAnchorEntity } from "./platformFieldResolutionManifest";
+import {
+    CHILD_PROFILE_PERSON_SHADOW_REF_KEYS,
+    CHILD_PROFILE_REF_KEYS,
+    deriveChildProfileCatalogRows,
+} from "@/lib/fields/customerMemberProfileSurfaces";
 
 export type ChildcareOperatorEntity = "lead" | "child" | "parent" | "household" | "location";
 
@@ -263,12 +268,16 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageTable: "customer_members",
         storageColumn: "first_name",
     }),
-    childField("child.preferred_name", "Preferred name", "text", 30, {
-        entityType: "customer_member",
-        fieldKey: "preferred_name",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
+    // Child-profile config fields, DERIVED from the canonical manifest. Adding a durable child fact
+    // is a manifest row; this catalog follows it. @see lib/fields/customerMemberProfileSurfaces
+    ...deriveChildProfileCatalogRows().map((row) =>
+        childField(row.refKey, row.pickerLabel, row.fieldType, row.sortOrder, {
+            entityType: row.defEntityType,
+            fieldKey: row.defFieldKey,
+            storageTable: row.storageTable,
+            storageColumn: row.storageColumn,
+        })
+    ),
     childField("child.date_of_birth", "Date of birth", "date", 40, {
         entityType: "child",
         fieldKey: "date_of_birth",
@@ -276,51 +285,41 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageColumn: "dob",
     }),
     childField("child.age", "Age", "text", 50, { computed: true, storageTable: "customer_members", storageColumn: "dob" }),
-    childField("child.gender", "Gender", "select", 60, {
-        entityType: "customer_member",
-        fieldKey: "gender",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
-    childField("child.allergies", "Allergies", "text", 70, {
-        entityType: "customer_member",
-        fieldKey: "allergies",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
-    childField("child.medical_notes", "Medical notes", "text", 80, {
-        entityType: "customer_member",
-        fieldKey: "medical_notes",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
-    childField("child.special_instructions", "Special instructions", "text", 90, {
-        entityType: "customer_member",
-        fieldKey: "special_instructions",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
 
     // Child enrollment — inquiry_child.* / OCM
-    childField("inquiry_child.desired_program_type", "Program interest", "select", 110, {
+    childField("inquiry_child.program_category_id", "Program", "select", 110, {
         entityType: "inquiry_child",
-        fieldKey: "desired_program_type",
+        fieldKey: "program_category_id",
         storageTable: "opportunity_customer_members",
-        storageColumn: "desired_program_type",
+        storageColumn: "program_category_id",
         enrollmentDetail: true,
     }),
-    childField("inquiry_child.desired_schedule_type", "Schedule interest", "select", 120, {
+    childField("inquiry_child.schedule_type", "Schedule", "select", 120, {
         entityType: "inquiry_child",
-        fieldKey: "desired_schedule_type",
+        fieldKey: "schedule_type",
         storageTable: "opportunity_customer_members",
-        storageColumn: "desired_schedule_type",
+        storageColumn: "schedule_type",
         enrollmentDetail: true,
     }),
-    childField("inquiry_child.desired_start_date", "Desired start date", "date", 130, {
+    childField("inquiry_child.start_date", "Desired start date", "date", 130, {
         entityType: "inquiry_child",
-        fieldKey: "desired_start_date",
+        fieldKey: "start_date",
         storageTable: "opportunity_customer_members",
-        storageColumn: "desired_start_date",
+        storageColumn: "start_date",
+        enrollmentDetail: true,
+    }),
+    childField("inquiry_child.requested_days_per_week", "Requested Days per Week", "number", 132, {
+        entityType: "inquiry_child",
+        fieldKey: "requested_days_per_week",
+        storageTable: "opportunity_customer_members",
+        storageColumn: "field_values",
+        enrollmentDetail: true,
+    }),
+    childField("inquiry_child.weekdays", "Preferred Weekdays", "multiselect", 134, {
+        entityType: "inquiry_child",
+        fieldKey: "weekdays",
+        storageTable: "opportunity_customer_members",
+        storageColumn: "field_values",
         enrollmentDetail: true,
     }),
     childField("inquiry_child.program_room_cohort_key", "Room / cohort", "select", 140, {
@@ -470,11 +469,8 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
 export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
     "person.relationship_to_child",
     "person.secondary_phone",
-    "person.special_instructions",
-    "person.gender",
-    "person.allergies",
-    "person.medical_notes",
-    "person.preferred_name",
+    // Every child-profile fact's person-grain spelling, derived — not re-listed by hand.
+    ...CHILD_PROFILE_PERSON_SHADOW_REF_KEYS,
     "customer.primary_contact",
     "customer.secondary_contact",
     "customer.address_line1",
@@ -483,6 +479,8 @@ export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
     "location.address_line1",
     "location.operating_hours",
     "location.status",
+    // Opportunity-level legacy field (metadata storage) — NOT the OCM participation
+    // field renamed in the 20260711 S2 migration; keeps its stored legacy key.
     "opportunity.desired_start_date",
     "opportunity.program_type",
     "opportunity.schedule_type",
@@ -494,13 +492,7 @@ export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
  * Child profile config fields on customer_member — seeded by FC-CM-1 migration.
  * Layout picker refKeys remain child.*; field_definitions entity_type = customer_member.
  */
-export const CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS = [
-    "child.preferred_name",
-    "child.gender",
-    "child.allergies",
-    "child.medical_notes",
-    "child.special_instructions",
-] as const;
+export const CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS: readonly string[] = CHILD_PROFILE_REF_KEYS;
 
 /** Lead-only primary contact projections (not field_definitions; opportunity anchor). */
 export const CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS = [
@@ -528,7 +520,7 @@ export const CHILDCARE_HIDDEN_REF_KEYS = new Set<string>([
     "person.person_number",
     "location.location_number",
     "child.program",
-    "child.desired_start_date",
+    "child.start_date",
     "child.status",
     "child.location",
     "child.room",

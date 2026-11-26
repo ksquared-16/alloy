@@ -55,15 +55,42 @@ function granularTourDepartmentMetadata(): Record<string, unknown> {
                     primary_entity: "opportunity",
                     sort_order: 0,
                     is_active: true,
+                    // Real department metadata declares a grain per stage; these fixtures
+                    // did not, so the grain guard correctly refused to validate a move onto a
+                    // stage that says nothing about which journey it belongs to.
                     stages: [
-                        { id: "s1", key: "tour_scheduled", label: "Tour Scheduled", sort_order: 0, is_active: true },
-                        { id: "s2", key: "tour_completed", label: "Tour Completed", sort_order: 1, is_active: true },
-                        { id: "s3", key: "decision_pending", label: "Decision Pending", sort_order: 2, is_active: true },
+                        { id: "s1", key: "tour_scheduled", label: "Tour Scheduled", sort_order: 0, is_active: true, grain: "family" },
+                        { id: "s2", key: "tour_completed", label: "Tour Completed", sort_order: 1, is_active: true, grain: "family" },
+                        { id: "s3", key: "decision_pending", label: "Decision Pending", sort_order: 2, is_active: true, grain: "family" },
                     ],
                 },
             ],
         },
     };
+}
+
+// S4: move_to_stage now persists stage_key via supabase.update — chainable no-op stub.
+// Targets also READ their prior value before writing, so the transaction has an inverse to
+// compensate with; the stub answers that read with a plausible pre-move row.
+function makeChainableUpdateSupabase() {
+    // The canonical stage-move guard reads department metadata to verify the target stage is
+    // configured; `departments` must return the granular process (which contains decision_pending).
+    const stagePatches: Array<Record<string, unknown>> = [];
+    const from = vi.fn((table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.update = (patch: Record<string, unknown>) => {
+            if (table === "opportunities") stagePatches.push(patch);
+            return chain;
+        };
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.maybeSingle = async () =>
+            table === "departments"
+                ? { data: { metadata: granularTourDepartmentMetadata() }, error: null }
+                : { data: { status_key: "tour_completed", close_reason_key: null, stage_key: "tour_completed" }, error: null };
+        return chain;
+    });
+    return { from, stagePatches };
 }
 
 function makeSupabaseForStageEntry(statusMetadata: Record<string, unknown> | null = null) {
@@ -97,7 +124,9 @@ describe("tourBpRuntimeIntegration", () => {
         mockResolveDept.mockResolvedValue(departmentId);
     });
 
-    it("binds tour opportunity statuses to granular builder stages in vocabulary metadata", () => {
+    it("no longer emits stage metadata on statuses (S4: stage is a persisted column)", () => {
+        // S4 status collapse: enrollmentStatusVocabularyMetadata must NOT emit process_stage_key /
+        // stage_key — stage is the persisted stage_key column, not status-derived metadata.
         const scheduled = enrollmentStatusVocabularyMetadata({
             status_key: "tour_scheduled",
             status_label: "Tour Scheduled",
@@ -106,17 +135,9 @@ describe("tourBpRuntimeIntegration", () => {
             entity_type: "opportunities",
             track_key: "family_track",
         });
-        expect(scheduled.process_stage_key).toBe("tour_scheduled");
-
-        const noShow = enrollmentStatusVocabularyMetadata({
-            status_key: "tour_no_show",
-            status_label: "Tour No-Show",
-            sort_order: 32,
-            stage_key: "tour_scheduled",
-            entity_type: "opportunities",
-            track_key: "family_track",
-        });
-        expect(noShow.process_stage_key).toBe("tour_scheduled");
+        expect(scheduled.process_stage_key).toBeUndefined();
+        expect(scheduled.stage_key).toBeUndefined();
+        expect(scheduled.seed_source).toBe("enrollment_alignment_status_collapse_v1");
     });
 
     it("resolves granular legacy stage assignment when coarse tour stage is not configured", () => {
@@ -254,7 +275,7 @@ describe("tourBpRuntimeIntegration", () => {
             templateKey: "record_tour_outcome_work",
         });
         expect(fingerprint).toBe(
-            `bp:${orgId}:opportunities:${opportunityId}:tour_completed:record_tour_outcome_work`,
+            `bpw:${orgId}:opportunities:${opportunityId}:record_tour_outcome_work`,
         );
 
         mockInstantiate
@@ -400,8 +421,9 @@ describe("tourBpRuntimeIntegration", () => {
 
     it("advances to decision_pending after tour_completed outcome", async () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
+        const supabase = makeChainableUpdateSupabase();
         const result = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn() } as never,
+            supabase: supabase as never,
             orgId,
             userId,
             departmentId,
@@ -412,9 +434,10 @@ describe("tourBpRuntimeIntegration", () => {
 
         expect(result.errors).toEqual([]);
         expect(result.status_updated).toBe(true);
-        expect(mockUpdateStatus).toHaveBeenCalledWith(
-            expect.objectContaining({ newStatusKey: "decision_pending" }),
-        );
+        // The tour_completed rule sets the family case status open and advances the STAGE to
+        // decision_pending (which is configured in the granular process — the guard allows it).
+        expect(mockUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ newStatusKey: "open" }));
+        expect(supabase.stagePatches).toContainEqual(expect.objectContaining({ stage_key: "decision_pending" }));
     });
 
     it("domain lifecycle bridge delegates to updateOpportunityStatusWithEvent with domain metadata", async () => {
@@ -470,7 +493,7 @@ describe("tourBpRuntimeIntegration", () => {
 
         const tourCompletedPlan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
         const outcome = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn() } as never,
+            supabase: makeChainableUpdateSupabase() as never,
             orgId,
             userId,
             departmentId,

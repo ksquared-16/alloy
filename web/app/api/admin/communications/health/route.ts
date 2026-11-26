@@ -3,6 +3,10 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
+import {
     computeCommunicationHealth,
     type HealthMessage,
 } from "@/lib/communications/v2/communicationHealth";
@@ -19,6 +23,8 @@ export async function GET(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const threadId = new URL(req.url).searchParams.get("thread_id");
     if (!threadId) {

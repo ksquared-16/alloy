@@ -1,0 +1,26 @@
+{
+  "at": "2026-07-22T17:38:00Z",
+  "ok": true,
+  "localhost": "http://127.0.0.1:3014",
+  "auth": "slot4 storage-state / qa-slot4-ui@example.com",
+  "verified": [
+    "GET /api/admin/configuration/programs → 10 programs, 3 locations",
+    "Programs page loads Alloy shell with ProgramsObjectSelector (10 rows)",
+    "No Delivery Options / Working draft / Stable key / tablist on Programs surface",
+    "Selected Program shows About + Locations + Schedule tiles",
+    "Select updates URL ?programId=",
+    "Create Program (hidden create/validate/publish) selects new Program in UI",
+    "Edit + Locations round-trip exercised in prior passes"
+  ],
+  "limitations": [
+    "Dev server was memory-unstable under 3 concurrent servers; QA required stopping wt1 and wt5 temporarily",
+    "Archive/delete/manage-locations save not fully re-certified in the final pass",
+    "ProgramsPublicationWorkspace remains in repo unused by the route (legacy tests still import it)"
+  ],
+  "screenshots": [
+    "01-programs-landing.png",
+    "02-selected-program.png",
+    "03-tiles.png",
+    "07-created.png"
+  ]
+}

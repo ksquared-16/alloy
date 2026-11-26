@@ -16,6 +16,7 @@ import {
 } from "@/lib/admin/relationship/relationshipActionRegistry";
 import { resolveRelationshipScopeTargets } from "@/lib/admin/relationship/relationshipActionScope";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import IdentityResolvedEmergencyContactModal from "@/components/admin/focusPanel/emergencyContacts/IdentityResolvedEmergencyContactModal";
 
 type IdentityMode = "existing" | "create";
 
@@ -32,7 +33,7 @@ type Props = {
 
 type WizardStep = 1 | 2 | 3 | 4;
 
-export default function RelationshipActionGuidedModal({
+function RelationshipActionGuidedWizard({
     open,
     actionKey,
     context,
@@ -529,4 +530,21 @@ function Field(props: {
             />
         </label>
     );
+}
+
+/** Routes emergency-contact to the identity-resolved one-surface flow. */
+export default function RelationshipActionGuidedModal(props: Props) {
+    if (props.actionKey === "add_emergency_contact") {
+        return (
+            <IdentityResolvedEmergencyContactModal
+                open={props.open}
+                context={props.context}
+                anchorRecord={props.anchorRecord}
+                onClose={props.onClose}
+                initialProposal={props.initialProposal}
+                onSuccess={props.onSuccess}
+            />
+        );
+    }
+    return <RelationshipActionGuidedWizard {...props} />;
 }

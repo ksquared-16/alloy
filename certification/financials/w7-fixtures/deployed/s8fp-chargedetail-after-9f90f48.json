@@ -1,0 +1,57 @@
+{
+ "strip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $18.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+ "open": {
+  "fixedFinancialsLayers": [
+   "charge_detail"
+  ],
+  "commandBackdrops": 1,
+  "floor": {
+   "role": "floor",
+   "inert": true,
+   "position": "static",
+   "focusableOutsideInert": 0
+  },
+  "chargeDetail": {
+   "role": "dialog",
+   "modal": "true",
+   "label": "Charge details"
+  },
+  "overrideProseVisible": false,
+  "overrideMark": "Charge-type override · 7 days after service",
+  "buttons": {
+   "edit": {
+    "text": "Edit draft",
+    "bg": "rgb(0, 162, 131)",
+    "color": "rgb(255, 255, 255)",
+    "border": "rgb(255, 255, 255) 0px",
+    "h": 30
+   },
+   "cancel": {
+    "text": "Cancel draft",
+    "bg": "rgb(255, 255, 255)",
+    "color": "rgb(179, 38, 30)",
+    "border": "color(srgb 0.701961 0.14902 0.117647 / 0.4) 1px",
+    "h": 30
+   },
+   "close": {
+    "text": "Close",
+    "bg": "rgba(0, 0, 0, 0)",
+    "color": "rgb(39, 63, 82)",
+    "border": "color(srgb 0.152941 0.247059 0.321569 / 0.18) 1px",
+    "h": 30
+   }
+  },
+  "text": "CHARGE DETAILS ⏎ Materials ⏎ Draft charge · W7 QA · Monthly Family ⏎ APPLIES TO ⏎ Milo Monthly ⏎ RESPONSIBILITY ⏎ Mara Monthly · 100% ⏎ AMOUNT ⏎ Charge ⏎ $18.00 ⏎ DATES ⏎ SERVICE DATE ⏎ Nov 5, 2026 ⏎ BILLING PERIOD ⏎ November 2026 ⏎ INVOICE DATE ⏎ Nov 12, 2026 ⏎ DUE DATE ⏎ Nov 12, 2026 ⏎ POSTINGDraft · Posts Nov 1, 2026 ⏎ RESPONSIBILITY & FUNDING ⏎ Mara Monthly ⏎ 100% responsible · $18.00 ⏎ Expected funding · None ⏎ Manage funding ⏎ Manage responsibility ⏎ HISTORY ⏎ Created by ⏎ Kelly Kurzman ⏎ Created ⏎ Oct 14, 2026 at 9:16 AM ⏎ COLLECTION ⏎ Outstanding ⏎ $0.00 ⏎ Edit draft ⏎ Cancel draft ⏎ Close"
+ },
+ "afterInsideClick": 1,
+ "afterEscape": {
+  "cd": 0,
+  "floorRole": "floor",
+  "floorInert": 0
+ },
+ "afterBackdropClick": {
+  "cd": 0,
+  "accountStillOpen": 1
+ },
+ "executeCalls": 0
+}

@@ -6,36 +6,8 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 
-function assertValidSupabaseHttpUrl(supabaseUrl: string): void {
-    let u: URL;
-    try {
-        u = new URL(supabaseUrl);
-    } catch {
-        throw new Error(
-            "NEXT_PUBLIC_SUPABASE_URL is not a valid URL. Use https://<project-ref>.supabase.co from Project Settings → API."
-        );
-    }
-    if (u.protocol !== "https:") {
-        throw new Error(
-            "NEXT_PUBLIC_SUPABASE_URL must use https. Fix your .env.local and restart `next dev`."
-        );
-    }
-    if (!u.hostname || u.hostname.includes(" ")) {
-        throw new Error(
-            "NEXT_PUBLIC_SUPABASE_URL has an invalid hostname. Check for typos, quotes, or whitespace in .env.local."
-        );
-    }
-    const lower = supabaseUrl.toLowerCase();
-    if (
-        lower.includes("your_project_ref") ||
-        lower.includes("placeholder") ||
-        lower.includes("example.supabase.co")
-    ) {
-        throw new Error(
-            "NEXT_PUBLIC_SUPABASE_URL still looks like a placeholder. Set the real project URL from Supabase Dashboard → Project Settings → API."
-        );
-    }
-}
+import { authCookieNameFor, browserSupabaseUrl } from "@/lib/supabase/browserTransport";
+import { assertValidSupabaseHttpUrl } from "@/lib/supabase/supabaseUrlPolicy";
 
 export function createClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -50,8 +22,9 @@ export function createClient() {
     assertValidSupabaseHttpUrl(supabaseUrl);
 
     const looksLikeSupabaseJwt = supabaseAnonKey.startsWith("eyJ");
+    const looksLikeLocalPublishable = supabaseAnonKey.startsWith("sb_publishable_");
     const keyLooksPlaceholder =
-        !looksLikeSupabaseJwt ||
+        (!looksLikeSupabaseJwt && !looksLikeLocalPublishable) ||
         supabaseAnonKey.length < 80 ||
         /^your_/i.test(supabaseAnonKey) ||
         /anon_public_key/i.test(supabaseAnonKey);
@@ -61,5 +34,21 @@ export function createClient() {
         );
     }
 
-    return createBrowserClient(supabaseUrl, supabaseAnonKey);
+    /*
+     * THE URL IS VALIDATED, THEN THE TRANSPORT IS CHOSEN.
+     *
+     * `supabaseUrl` stays the canonical identity — it is what the deployed-database
+     * classifier reads and what the cookie name is pinned from. What changes is
+     * where the browser SENDS the request: a loopback URL names the machine the
+     * browser is on, which is the execution host only by luck. See browserTransport.
+     */
+    const origin = typeof window !== "undefined" ? window.location.origin : null;
+    const target = browserSupabaseUrl(supabaseUrl, origin);
+    const cookieName = authCookieNameFor(supabaseUrl);
+
+    return createBrowserClient(
+        target,
+        supabaseAnonKey,
+        cookieName ? { cookieOptions: { name: cookieName } } : undefined
+    );
 }

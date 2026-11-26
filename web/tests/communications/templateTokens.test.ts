@@ -56,14 +56,16 @@ describe("communication token catalog", () => {
     it("groups every token and drops empty groups", () => {
         const grouped = listCommunicationTokensByGroup();
         const flattened = grouped.flatMap((g) => g.tokens);
-        expect(flattened).toHaveLength(COMMUNICATION_TOKEN_CATALOG.length);
+        // The picker offers every token except those retired from it (`offered: false`), which still resolve.
+        expect(flattened).toHaveLength(COMMUNICATION_TOKEN_CATALOG.filter((t) => t.offered !== false).length);
         for (const g of grouped) expect(g.tokens.length).toBeGreaterThan(0);
     });
 
     it("filters tokens by search query", () => {
         const grouped = filterCommunicationTokens("tour");
         const paths = grouped.flatMap((g) => g.tokens.map((t) => t.path));
-        expect(paths).toContain("opportunity.metadata.tour_date");
+        expect(paths).toContain("tour_date_label");
+        expect(paths).not.toContain("opportunity.metadata.tour_date");
         expect(paths).not.toContain("org.name");
     });
 

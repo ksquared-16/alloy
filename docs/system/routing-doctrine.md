@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-09-30
+supersedes: []
+---
+
 # Routing doctrine
 
 **Path:** `docs/system/routing-doctrine.md`  
@@ -27,16 +34,42 @@ Department UUID routes are **internal/compat** — not the operator home path.
 
 ## Canonical admin / config URLs
 
+> **Corrected 2026-09-30.** This section is the single source of truth for product URLs, and it had
+> gone stale on exactly that. It named `/admin` as the config landing and `/admin/settings/*` as the
+> settings namespace, and stated that `/admin/settings` redirects to `/admin`. Measured against
+> `web/next.config.ts` and `web/lib/admin/canonicalAdminRoutes.ts`: the landing is `/organization`,
+> `/admin/settings/*` redirects to `/settings/*`, and `/admin/settings` redirects to `/organization`
+> — not to `/admin`. The stale copy had also propagated into
+> [`../platform/foundation/architecture.md`](../platform/foundation/architecture.md), which was
+> corrected in the same pass.
+
+**Three canonical bases coexist.** This is the part most often got wrong: `/admin` is not retired —
+it is no longer the *config landing*, while remaining canonical as a prefix for non-settings modules.
+
 | URL | Role |
 |-----|------|
-| `/admin` | Admin / settings / config landing (not operator home) |
-| `/admin/settings/*` | Settings sub-surfaces (lifecycle hub, fields, layouts, actions, …) |
+| `/organization` | **Configuration landing** (`CANONICAL_ORGANIZATION_BASE`) |
+| `/organization/{access,surfaces,processes,programs,locations,financials,data-model,staff,communications,integrations,commands,calculations,programs-locations,operational-intelligence}` | Organization domain surfaces |
+| `/settings/*` | **Settings sub-surfaces** (`CANONICAL_SETTINGS_BASE`) — fields, layouts, actions, statuses, lifecycle |
 | `/admin/forms` | Forms module |
 | `/admin/workflows` | Automations hub |
 | `/admin/ai-activity` | AI activity strip destination |
-| `/admin/tasks`, `/admin/messages`, … | Other canonical AdminV2 modules (see `CANONICAL_ADMIN_PATH_PREFIXES`) |
+| `/admin/tasks`, `/admin/messages`, `/admin/finance`, … | Other canonical AdminV2 modules (see `CANONICAL_ADMIN_PATH_PREFIXES`) |
 
-Exact `/admin/settings` redirects to `/admin` (settings index is the admin landing).
+**Compatibility redirects** (all 307/302, `permanent: false`):
+
+| From | To |
+|-----|-----|
+| `/admin`, `/admin/settings`, `/settings`, `/settings/organization` | `/organization` |
+| `/admin/settings/:path*` | `/settings/:path*` |
+| `/adminV2`, `/admin/v2`, `/adminv2` (bare) | `/organization` |
+| `/settings/commercial`, `/settings/commercial/tuition` | `/organization/financials` |
+| `/settings/surfaces`, `/settings/layouts` | `/organization/surfaces` |
+| `/settings/users-roles`, `/settings/user-access` | `/organization/access` |
+
+**Rewrites** then serve every canonical base from the implementation tree: `/organization` →
+`/adminV2/settings/organization`, `/settings/:path*` → `/adminV2/settings/:path*`. So a browser URL
+never matches its filesystem path, and `web/app/organization` does not exist.
 
 ---
 
@@ -44,7 +77,7 @@ Exact `/admin/settings` redirects to `/admin` (settings index is the admin landi
 
 | URL | Behavior |
 |-----|----------|
-| `/adminV2`, `/adminV2/*` | 302 → `/admin`, `/admin/*` |
+| `/adminV2/*` | 302 → `/admin/*` (the **bare** `/adminV2` goes to `/organization`, not `/admin`) |
 | `/admin/v2`, `/adminv2`, and `/*` variants | 302 → `/admin/*` |
 | `/admin/workspace/*` | Rewrites to operator tree; prefer `/workspace` in product nav |
 
@@ -117,6 +150,27 @@ Slug routes (`/workspace/work-unit/:slug`) are the **operator** entry. Dept/uuid
 - Never assume department-first URLs in operator UX copy or docs.
 - Drawer URL changes must preserve warm navigation and slug-route shell (see **`platform-performance-doctrine.md`**).
 
+### Runtime mode is not audience
+
+`NODE_ENV` says which build is running. It never says who is looking.
+
+Alloy's certification and Human-QA hosts run development servers **on purpose**, and real operators
+view them over the tailnet — so `NODE_ENV !== "production"` is true on exactly the machines where
+operators are invited to look. "Dev-only" and "developer-only" are different sets.
+
+- **`NODE_ENV` alone must never determine the visibility of rendered developer or debug UI on an
+  operator surface.**
+- Developer UI requires either an explicit opt-in —
+  `process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_<AREA>_DEBUG === "1"` — or a
+  surface under **`/dev/*`**, which refuses to exist in production.
+- Enforced by the prebuild gate `check:runtime-mode-audience`
+  (`web/scripts/checkRuntimeModeAudienceGating.mjs`), whose invariant is **zero**, not a ceiling.
+  Non-rendered uses — logging, timeouts, safety refusals, tests — are untouched.
+
+Two surfaces reached an operator before this rule existed: a sign-in diagnostic that named an
+internal loopback address as the auth endpoint, and a Processing control offering to delete the
+fixture a Human-QA walkthrough was walking. Both were added inside commits about something else.
+
 ---
 
 ## Related docs
@@ -130,4 +184,5 @@ Slug routes (`/workspace/work-unit/:slug`) are the **operator** entry. Dept/uuid
 
 ## When this doc must be updated
 
-Public URL additions, middleware redirect rule changes, rewrite map changes, or drawer URL contract changes.
+Public URL additions, middleware redirect rule changes, rewrite map changes, drawer URL contract
+changes, or a new class of surface that operators may or may not see.

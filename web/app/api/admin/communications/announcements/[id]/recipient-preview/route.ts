@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+} from "@/lib/communications/communicationsAuthority";
 import {
     mapSavedAnnouncementTargets,
     runAnnouncementRecipientPreview,
@@ -13,15 +16,15 @@ import {
  * typed rows adapt as fallback) into the audience-spec preview shape (grain, matched_families,
  * matched_children, total_recipients, counts_by_channel, per_filter, sample, capped).
  * A custom row missing/invalid rule.audience_spec → 400 (never broadens to all families).
- * NO writes, NO send, NO schedule, NO provider. Pattern: requireAdminOrOps -> ctx -> client; org scoped.
+ * NO writes, NO send, NO schedule, NO provider. Pattern: `communications.bulk.send` -> ctx -> client; org scoped.
  */
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 /** POST …/announcements/[id]/recipient-preview — count-only audience resolution. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

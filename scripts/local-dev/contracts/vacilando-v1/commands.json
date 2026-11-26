@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alloy.local/contracts/vacilando-v1/commands.json",
+  "title": "Vacilando Runtime — command + audit contracts (v1)",
+  "schema_version": "vacilando.command.v1",
+  "description": "The contract for the Vacilando command runtime: how the loopback control plane turns an operator intent into a toolkit effect, safely. A command is a REGISTERED key mapped to an explicit alloy-* CLI (or an internal read). There is no arbitrary shell, no request-supplied executable path, and no way to run anything not defined in the registry. Consequential commands preview → confirm. Release, promotion, merge, and destructive git are intentionally unsupported.",
+  "lifecycle": ["resolve", "validate", "eligibility", "preview", "confirm", "execute", "audit", "refresh"],
+  "request": {
+    "preview": "POST /api/commands/preview  { command, input }  → resolve+validate+eligibility+preview; NEVER executes.",
+    "execute": "POST /api/commands  { command, input, confirm, actor }  → runs through the registry after the confirmation policy is satisfied.",
+    "notes": [
+      "`command` must be a registered key; unknown keys → 404 unknown_command.",
+      "`input` is validated against the command's declarative schema; unexpected or malformed fields → 400 invalid_input.",
+      "`confirm` must be true for consequential commands; otherwise → 428 confirmation_required.",
+      "The request never carries an argv, a shell string, or an executable path."
+    ]
+  },
+  "command_definition": {
+    "key": "stable command key (e.g. worker.pause)",
+    "risk": "low | consequential",
+    "execution": "cli | internal",
+    "bin": "FIXED alloy-* basename (cli only); resolved to an absolute path under the toolkit — never from the request",
+    "input": "declarative field schema (types: slot, key, id, name, text); fail-closed",
+    "buildArgv": "pure fn: validated input → argument array (cli only). No string interpolation into a shell.",
+    "resolveTarget": "fn: input + snapshot → the authoritative target record",
+    "eligibility": "fn: target + snapshot → { eligible, reason }",
+    "preview": "fn → { summary, authoritative_target, effects[] }",
+    "confirmation": "none | required",
+    "refresh": "which authoritative projections to recompute after execution (e.g. [\"snapshot\"])"
+  },
+  "registered_commands": {
+    "runtime.refresh": "internal — recompute the projection from authoritative sources.",
+    "sprint.inspect": "internal read — return the projected sprint/worker/repository slice for a slot.",
+    "worker.doctor": "alloy-worker-doctor <slot>  — read-only health diagnosis (never --recover). low.",
+    "worker.pause": "alloy-worker-pause <slot>  — stop the slot's provider/server/browser (reversible). consequential, confirm.",
+    "worker.resume": "alloy-worker-resume <slot>  — restore from pause. consequential, confirm.",
+    "question.answer": "alloy-product-decide <key> <decision-id> --choice <c> --decided-by <n> --reason <r>  — answer a pending question. consequential, confirm; eligible only when an OPEN decision matches."
+  },
+  "unsupported": {
+    "promotion.promote": "Human-only; the toolkit prints but never executes push/PR. Release is never auto-approved.",
+    "repo.push": "Not an executable toolkit command (printed, never run).",
+    "repo.merge": "Landing happens through PR review into staging, by a human.",
+    "worktree.delete": "Destructive git/worktree deletion is out of Phase 1 policy; requires explicit human action."
+  },
+  "audit": {
+    "schema_version": "vacilando.audit.v1",
+    "storage": "append-only JSONL at <runtime-root>/vacilando/audit.jsonl — an EXECUTION audit, not a parallel state store.",
+    "event": {
+      "required": ["schema_version", "id", "occurred_at", "actor", "command", "outcome"],
+      "fields": {
+        "id": "deterministic sha256(occurred_at|command|actor|input|outcome) prefixed evt_",
+        "actor": "who/what initiated the command",
+        "command": "the registered command key that ran",
+        "input": "validated input (secret-shaped keys redacted; long values truncated)",
+        "target": "the sprint/worker/worktree/approval it targeted",
+        "preview_summary": "the preview that was confirmed",
+        "confirmed": "whether explicit confirmation was given",
+        "outcome": "succeeded | failed | refused | blocked",
+        "exit": "toolkit exit code (cli commands)",
+        "sources_refreshed": "which authoritative projections refreshed afterward"
+      }
+    }
+  },
+  "invariants": [
+    "Unknown command keys and malformed input fail closed.",
+    "Commands execute ONLY through explicitly registered adapters over existing alloy-* tooling.",
+    "No arbitrary shell: execFile with an argument array, shell disabled; no request-supplied paths.",
+    "Consequential commands require preview → explicit confirmation; confirmation cannot be bypassed.",
+    "Release, promotion, merge, and destructive git are unsupported — surfaced with a reason, never simulated.",
+    "Every execution (and every refusal/block) is audited; the canonical projection refreshes after execution.",
+    "The SPA is presentation-only; it holds no orchestration logic and talks only to /api/*."
+  ]
+}

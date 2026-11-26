@@ -4,6 +4,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { provisionPersonChildRelationshipPlatformConfig } from "@/lib/fields/personChildRelationship/provisionPersonChildRelationshipPlatformConfig";
+import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 
 function slugify(name: string): string {
     const base = name
@@ -19,6 +21,10 @@ export type CreateOrgParams = {
     name: string;
     industry_key: string;
     admin_user_id: string;
+    /** Optional frozen id (Shared QA B2). When set, insert uses this id exactly. */
+    org_id?: string;
+    /** Optional frozen slug. When omitted, a random suffix is appended. */
+    slug?: string;
 };
 
 export type CreateOrgResult =
@@ -48,16 +54,24 @@ export async function createOrgAndAssignAdmin(supabase: SupabaseClient, params: 
         return { ok: false, error: `Unknown or inactive industry_key: ${industry_key}` };
     }
 
-    const slug = `${slugify(name)}-${crypto.randomUUID().slice(0, 8)}`;
+    const requestedSlug = typeof params.slug === "string" ? params.slug.trim() : "";
+    const slug = requestedSlug || `${slugify(name)}-${crypto.randomUUID().slice(0, 8)}`;
+    const requestedOrgId = typeof params.org_id === "string" ? params.org_id.trim() : "";
+    if (requestedOrgId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedOrgId)) {
+        return { ok: false, error: "org_id is not a canonical uuid" };
+    }
+
+    const insertRow: Record<string, string> = {
+        name,
+        slug,
+        status: "active",
+        industry_id,
+    };
+    if (requestedOrgId) insertRow.id = requestedOrgId;
 
     const { data: orgRow, error: orgErr } = await supabase
         .from("orgs")
-        .insert({
-            name,
-            slug,
-            status: "active",
-            industry_id,
-        })
+        .insert(insertRow)
         .select("id")
         .single();
 
@@ -67,17 +81,25 @@ export async function createOrgAndAssignAdmin(supabase: SupabaseClient, params: 
 
     const org_id = (orgRow as { id: string }).id;
 
-    const { error: roleErr } = await supabase.from("user_roles").upsert(
-        {
-            user_id: admin_user_id,
-            org_id,
-            role: "admin",
-        },
-        { onConflict: "user_id,org_id,role" }
-    );
+    // W-5/G4: this is the fifth membership writer — a route-file text census misses
+    // it because the route names `user_roles` only in a doc comment. It must use the
+    // same atomic path, or it grows W-0 Q4 exactly like the create route did.
+    // The org was just inserted above, so no membership can pre-exist for the pair.
+    const membership = await createMembershipWithAccessProfile(supabase, {
+        userId: admin_user_id,
+        orgId: org_id,
+        role: "admin",
+    });
 
-    if (roleErr) {
-        return { ok: false, error: `user_roles: ${roleErr.message}` };
+    if (!membership.ok) {
+        return { ok: false, error: `user_roles: ${membership.error}` };
+    }
+
+    try {
+        await provisionPersonChildRelationshipPlatformConfig(supabase, org_id);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "relationship platform provisioning failed";
+        return { ok: false, error: message };
     }
 
     return { ok: true, org_id, slug, industry_id };

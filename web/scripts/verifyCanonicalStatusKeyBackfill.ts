@@ -114,7 +114,7 @@ async function main() {
             console.error(`[${table}] query error:`, error.message);
             process.exit(1);
         }
-        const gaps = (data ?? []) as GapRow[];
+        const gaps = (data ?? []) as unknown as GapRow[];
         totalGaps += gaps.length;
         const scope = orgId ? `org ${orgId}` : "all orgs";
         console.log(`\n${table}: rows with legacy ${legacyCol} but null status_key (${scope}, sample max 25): ${gaps.length}`);

@@ -1,15 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ConfigScopeSelector, type ScopedLocation } from "@/components/configRuntime/ConfigScopeSelector";
 import { ConfigReadinessCard } from "@/components/configRuntime/ConfigReadinessCard";
 import OwnershipBadge from "@/components/configRuntime/OwnershipBadge";
 import type { ConfigScope } from "@/lib/configRuntime/scope";
 import {
     type TuitionRateRow,
-    type TuitionBillingPeriod,
-    TUITION_BILLING_PERIODS,
-    DEFAULT_BILLING_PERIOD,
     formatRateCents,
     parseDollarsToCents,
     tuitionRateCellKey,
@@ -17,41 +14,53 @@ import {
     buildLocationOnlyRateMap,
     computeTuitionReadiness,
 } from "@/lib/commercial/tuitionRates";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type ScheduleOption = { key: string; label: string };
-type ProgramOption = { key: string; label: string };
+import type { BillingCadence } from "@/lib/commercial/billingCadences";
+import type { ProgramOffering } from "@/lib/programs/programOfferings";
+import {
+    type ProgramOfferingVariant,
+    describeVariant,
+    sortVariants,
+    groupVariantsByOffering,
+    isDefaultVariant,
+} from "@/lib/programs/programOfferingVariants";
 
 // ─── TuitionCell ─────────────────────────────────────────────────────────────
 
 type CellProps = {
-    programKey: string;
-    scheduleKey: string;
-    billingPeriod: TuitionBillingPeriod;
+    variantId: string;
+    cadenceKey: string;
     rateRow: TuitionRateRow | undefined;
     orgDefaultRow: TuitionRateRow | undefined;
     locationId: string | null;
     onSave: (
-        programKey: string,
-        scheduleKey: string,
-        payload: { rate_cents?: number; not_offered?: boolean },
+        variantId: string,
+        cadenceKey: string,
+        payload: {
+            rate_cents?: number;
+            not_offered?: boolean;
+            effective_start?: string | null;
+            effective_end?: string | null;
+        },
     ) => Promise<void>;
     onClear: (rateId: string) => Promise<void>;
+    canManage: boolean;
 };
 
 function TuitionCell({
-    programKey,
-    scheduleKey,
-    billingPeriod,
+    variantId,
+    cadenceKey,
     rateRow,
     orgDefaultRow,
     locationId,
     onSave,
     onClear,
+    canManage,
 }: CellProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
+    const [effectiveStart, setEffectiveStart] = useState("");
+    const [effectiveEnd, setEffectiveEnd] = useState("");
+    const [dateError, setDateError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,24 +72,38 @@ function TuitionCell({
     const inheritedRate = isInherited ? orgDefaultRow?.rate_cents : null;
 
     function startEdit() {
-        if (isNotOffered) return;
+        if (!canManage || isNotOffered) return;
         setDraft(displayRate != null ? String(displayRate / 100) : "");
+        setEffectiveStart(rateRow?.effective_start ?? "");
+        setEffectiveEnd(rateRow?.effective_end ?? "");
+        setDateError(null);
         setEditing(true);
         setTimeout(() => inputRef.current?.select(), 0);
     }
 
     async function commitEdit() {
         const cents = parseDollarsToCents(draft);
-        if (cents === null) { setEditing(false); return; }
+        if (cents === null) {
+            setDateError("Enter a valid non-negative rate.");
+            return;
+        }
+        if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+            setDateError("Effective end must be on or after effective start.");
+            return;
+        }
         setSaving(true);
-        await onSave(programKey, scheduleKey, { rate_cents: cents });
+        await onSave(variantId, cadenceKey, {
+            rate_cents: cents,
+            effective_start: effectiveStart || null,
+            effective_end: effectiveEnd || null,
+        });
         setSaving(false);
         setEditing(false);
     }
 
     async function toggleNotOffered() {
         setSaving(true);
-        await onSave(programKey, scheduleKey, { not_offered: !isNotOffered });
+        await onSave(variantId, cadenceKey, { not_offered: !isNotOffered });
         setSaving(false);
     }
 
@@ -93,20 +116,71 @@ function TuitionCell({
 
     if (editing) {
         return (
-            <td className="px-3 py-1">
-                <input
-                    ref={inputRef}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={commitEdit}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter") void commitEdit();
-                        if (e.key === "Escape") setEditing(false);
-                    }}
-                    className="w-full border border-pine-400 rounded px-2 py-0.5 text-sm text-right focus:outline-none"
-                    placeholder="0.00"
-                    autoFocus
-                />
+            <td className="min-w-56 px-3 py-2" data-testid={`tuition-rate-editor-${variantId}-${cadenceKey}`}>
+                <div className="space-y-2">
+                    <label className="block">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Rate</span>
+                        <input
+                            ref={inputRef}
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void commitEdit();
+                                if (e.key === "Escape") setEditing(false);
+                            }}
+                            className="mt-0.5 w-full rounded border border-pine-400 px-2 py-1 text-right text-sm focus:outline-none"
+                            placeholder="0.00"
+                            autoFocus
+                        />
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <label>
+                            <span className="text-[10px] font-semibold text-gray-500">Effective from</span>
+                            <input
+                                type="date"
+                                value={effectiveStart}
+                                onChange={(event) => {
+                                    setEffectiveStart(event.target.value);
+                                    setDateError(null);
+                                }}
+                                className="mt-0.5 w-full rounded border border-gray-200 px-1.5 py-1 text-[11px]"
+                                data-testid="tuition-rate-effective-start"
+                            />
+                        </label>
+                        <label>
+                            <span className="text-[10px] font-semibold text-gray-500">Effective until</span>
+                            <input
+                                type="date"
+                                value={effectiveEnd}
+                                min={effectiveStart || undefined}
+                                onChange={(event) => {
+                                    setEffectiveEnd(event.target.value);
+                                    setDateError(null);
+                                }}
+                                className="mt-0.5 w-full rounded border border-gray-200 px-1.5 py-1 text-[11px]"
+                                data-testid="tuition-rate-effective-end"
+                            />
+                        </label>
+                    </div>
+                    {dateError ? <p className="text-[10px] text-red-600">{dateError}</p> : null}
+                    <div className="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            className="text-[11px] font-medium text-gray-500"
+                            onClick={() => setEditing(false)}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded bg-pine-600 px-2 py-1 text-[11px] font-semibold text-white"
+                            onClick={() => void commitEdit()}
+                            disabled={saving}
+                        >
+                            {saving ? "Saving…" : "Save rate"}
+                        </button>
+                    </div>
+                </div>
             </td>
         );
     }
@@ -116,10 +190,16 @@ function TuitionCell({
             className={[
                 "px-3 py-2 text-right text-sm group relative select-none",
                 isNotOffered ? "text-gray-300" : isInherited ? "text-gray-400 italic" : "text-gray-800",
-                saving ? "opacity-50" : "cursor-pointer hover:bg-gray-50",
+                saving || !canManage ? "opacity-70" : "cursor-pointer hover:bg-gray-50",
             ].join(" ")}
             onClick={isNotOffered ? undefined : startEdit}
-            title={isInherited ? "Inherited from org default — click to override" : undefined}
+            title={
+                isInherited
+                    ? "Inherited from Organization — click to create a Location override"
+                    : isLocOverride
+                      ? "Location override — × restores Organization default"
+                      : undefined
+            }
         >
             {isNotOffered ? (
                 <span className="flex items-center justify-end gap-1">
@@ -139,12 +219,12 @@ function TuitionCell({
                         <span className="w-1.5 h-1.5 rounded-full bg-pine-500 flex-shrink-0" />
                     )}
                     <span>{formatRateCents(displayRate)}</span>
-                    {isLocOverride && rateRow?.id && (
+                    {canManage && isLocOverride && rateRow?.id && (
                         <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void clearOverride(); }}
                             className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-xs leading-none"
-                            title="Remove override — inherit org default"
+                            title="Restore Organization default"
                         >
                             ×
                         </button>
@@ -155,8 +235,14 @@ function TuitionCell({
             ) : (
                 <span className="text-gray-200">—</span>
             )}
+            {rateRow?.effective_start || rateRow?.effective_end ?
+                <span className="mt-0.5 block text-[10px] not-italic text-gray-400">
+                    {rateRow.effective_start ? `From ${rateRow.effective_start}` : "Current"}
+                    {rateRow.effective_end ? ` through ${rateRow.effective_end}` : ""}
+                </span>
+            :   null}
 
-            {!isNotOffered && (
+            {canManage && !isNotOffered && (
                 <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }}
@@ -214,29 +300,32 @@ function CompareCell({ orgRow, locRow, locationLabel }: CompareCellProps) {
     );
 }
 
-// ─── Fallback schedules ───────────────────────────────────────────────────────
-
-const FALLBACK_SCHEDULES: ScheduleOption[] = [
-    { key: "full_time", label: "Full Time" },
-    { key: "part_time", label: "Part Time" },
-    { key: "drop_in", label: "Drop-In" },
-    { key: "before_school", label: "Before School" },
-    { key: "after_school", label: "After School" },
-];
-
 // ─── Main workspace ───────────────────────────────────────────────────────────
 
 type WorkspaceMode = "edit" | "compare";
 
-export function TuitionGridWorkspace() {
-    const [orgId, setOrgId] = useState<string | null>(null);
+export function TuitionGridWorkspace({
+    programKey,
+    embedded = false,
+    canManage = true,
+    scopedRates,
+    scopedLocations,
+    onReload,
+}: {
+    programKey?: string;
+    embedded?: boolean;
+    canManage?: boolean;
+    scopedRates?: TuitionRateRow[];
+    scopedLocations?: ScopedLocation[];
+    onReload?: () => Promise<void>;
+} = {}) {
     const [locations, setLocations] = useState<ScopedLocation[]>([]);
     const [scope, setScope] = useState<ConfigScope | null>(null);
 
-    const [programs, setPrograms] = useState<ProgramOption[]>([]);
-    const [schedules, setSchedules] = useState<ScheduleOption[]>(FALLBACK_SCHEDULES);
+    const [offerings, setOfferings] = useState<ProgramOffering[]>([]);
+    const [variants, setVariants] = useState<ProgramOfferingVariant[]>([]);
+    const [cadences, setCadences] = useState<BillingCadence[]>([]);
 
-    const [billingPeriod, setBillingPeriod] = useState<TuitionBillingPeriod>(DEFAULT_BILLING_PERIOD);
     const [rates, setRates] = useState<TuitionRateRow[]>([]);
     const [allRates, setAllRates] = useState<TuitionRateRow[]>([]);
 
@@ -254,35 +343,48 @@ export function TuitionGridWorkspace() {
         async function boot() {
             setLoading(true);
             try {
-                const [ctxRes, locRes, schedRes] = await Promise.all([
-                    fetch("/api/admin/context"),
+                const [locRes, offeringRes, cadenceRes] = await Promise.all([
                     fetch("/api/admin/locations"),
-                    fetch("/api/admin/option-sets/childcare_schedule_type"),
+                    fetch(
+                        `/api/admin/programs/offerings?active_only=true${
+                            programKey ? `&program_key=${encodeURIComponent(programKey)}` : ""
+                        }`,
+                    ),
+                    fetch("/api/admin/commercial/billing-cadences"),
                 ]);
 
-                const ctxJson = await ctxRes.json();
-                const oid: string = ctxJson.orgId ?? ctxJson.org_id ?? "";
-                setOrgId(oid);
+                const locJson = await locRes.json();
+                const rawLocs: Record<string, unknown>[] = locJson.locations ?? [];
+                const oid: string = String(rawLocs[0]?.org_id ?? "org");
                 setScope({ kind: "org", orgId: oid });
 
-                const locJson = await locRes.json();
-                const locs: ScopedLocation[] = (locJson.locations ?? []).map(
-                    (l: Record<string, unknown>) => ({
-                        id: String(l.id ?? ""),
-                        name: String(l.name ?? ""),
-                    }),
-                );
+                const locs: ScopedLocation[] = scopedLocations ?? rawLocs.map((l) => ({
+                    id: String(l.id ?? ""),
+                    name: String(l.name ?? ""),
+                }));
                 setLocations(locs);
 
-                if (schedRes.ok) {
-                    const schedJson = await schedRes.json();
-                    const items: ScheduleOption[] = (schedJson.items ?? []).map(
-                        (v: Record<string, unknown>) => ({
-                            key: String(v.value ?? v.key ?? ""),
-                            label: String(v.label ?? v.value ?? ""),
-                        }),
-                    );
-                    if (items.length > 0) setSchedules(items);
+                if (offeringRes.ok) {
+                    const j = await offeringRes.json();
+                    const loadedOfferings: ProgramOffering[] = j.offerings ?? [];
+                    setOfferings(loadedOfferings);
+
+                    // Load variants for all offerings in parallel
+                    if (loadedOfferings.length > 0) {
+                        const variantResults = await Promise.all(
+                            loadedOfferings.map((o) =>
+                                fetch(`/api/admin/programs/offerings/${o.id}/variants`)
+                                    .then((r) => r.ok ? r.json() : { variants: [] })
+                                    .then((j: { variants?: ProgramOfferingVariant[] }) => j.variants ?? []),
+                            ),
+                        );
+                        setVariants(variantResults.flat());
+                    }
+                }
+
+                if (cadenceRes.ok) {
+                    const j = await cadenceRes.json();
+                    setCadences(j.cadences ?? []);
                 }
             } catch (e) {
                 setError(String(e));
@@ -291,51 +393,38 @@ export function TuitionGridWorkspace() {
             }
         }
         void boot();
-    }, []);
-
-    // ── Programs ──────────────────────────────────────────────────────────────
-
-    useEffect(() => {
-        async function loadPrograms() {
-            try {
-                const res = await fetch("/api/admin/location-program-categories");
-                const json = await res.json();
-                const cats: ProgramOption[] = (json.categories ?? []).map(
-                    (c: Record<string, unknown>) => ({
-                        key: String(c.key ?? c.id ?? ""),
-                        label: String(c.label ?? c.name ?? ""),
-                    }),
-                );
-                setPrograms(cats);
-            } catch {
-                // silent — grid shows empty
-            }
-        }
-        void loadPrograms();
-    }, []);
+    }, [programKey, scopedLocations]);
 
     // ── Rates ──────────────────────────────────────────────────────────────────
 
     const loadRates = useCallback(async () => {
         if (!scope) return;
+        const locationId = scope.kind === "location" ? scope.locationId : null;
+        if (scopedRates) {
+            setAllRates(scopedRates);
+            setRates(
+                scopedRates.filter(
+                    (rate) => rate.location_id === null || rate.location_id === locationId,
+                ),
+            );
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
-            const locationId = scope.kind === "location" ? scope.locationId : null;
-            const params = new URLSearchParams({ billing_period: billingPeriod });
+            const params = new URLSearchParams();
             if (locationId) params.set("location_id", locationId);
             const res = await fetch(`/api/admin/commercial/tuition-rates?${params}`);
             const json = await res.json();
             setRates(json.rates ?? []);
 
-            const allParams = new URLSearchParams();
-            if (locationId) allParams.set("location_id", locationId);
-            const allRes = await fetch(`/api/admin/commercial/tuition-rates?${allParams}`);
+            const allRes = await fetch(`/api/admin/commercial/tuition-rates`);
             const allJson = await allRes.json();
             setAllRates(allJson.rates ?? []);
         } finally {
             setLoading(false);
         }
-    }, [scope, billingPeriod]);
+    }, [scope, scopedRates]);
 
     useEffect(() => { void loadRates(); }, [loadRates]);
 
@@ -344,32 +433,37 @@ export function TuitionGridWorkspace() {
     const locationId = scope?.kind === "location" ? scope.locationId : null;
     const rateMap = buildTuitionRateMap(rates, locationId);
     const orgOnlyMap = buildTuitionRateMap(rates, null);
+    const variantsByOffering = groupVariantsByOffering(variants);
 
     const readiness = computeTuitionReadiness(
-        programs.map((p) => p.key),
-        schedules.map((s) => s.key),
-        billingPeriod,
+        variants.map((v) => v.id),
+        cadences.map((c) => c.item_key),
         allRates,
     );
 
     const scopeLabel =
         scope?.kind === "org"
-            ? "Org Default"
+            ? "Organization default"
             : locations.find((l) => scope?.kind === "location" && l.id === scope.locationId)?.name ?? "Location";
 
     // ── Save helpers ──────────────────────────────────────────────────────────
 
     async function saveCell(
-        programKey: string,
-        scheduleKey: string,
-        payload: { rate_cents?: number; not_offered?: boolean },
+        variantId: string,
+        cadenceKey: string,
+        payload: {
+            rate_cents?: number;
+            not_offered?: boolean;
+            effective_start?: string | null;
+            effective_end?: string | null;
+        },
     ) {
         setSaving(true);
         try {
             const body = {
-                program_key: programKey,
-                schedule_key: scheduleKey,
-                billing_period: billingPeriod,
+                variant_id: variantId,
+                cadence_key: cadenceKey,
+                payer_type: "private_pay",
                 location_id: locationId,
                 ...payload,
             };
@@ -382,7 +476,8 @@ export function TuitionGridWorkspace() {
                 const j = await res.json();
                 setError((j as { error?: string }).error ?? "Save failed");
             } else {
-                await loadRates();
+                if (onReload) await onReload();
+                else await loadRates();
             }
         } finally {
             setSaving(false);
@@ -393,7 +488,8 @@ export function TuitionGridWorkspace() {
         setSaving(true);
         try {
             await fetch(`/api/admin/commercial/tuition-rates/${rateId}`, { method: "DELETE" });
-            await loadRates();
+            if (onReload) await onReload();
+            else await loadRates();
         } finally {
             setSaving(false);
         }
@@ -412,17 +508,20 @@ export function TuitionGridWorkspace() {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            program_key: r.program_key,
-                            schedule_key: r.schedule_key,
-                            billing_period: r.billing_period,
+                            variant_id: r.variant_id,
+                            cadence_key: r.cadence_key,
+                            payer_type: r.payer_type,
                             location_id: locationId,
                             rate_cents: r.rate_cents,
                             not_offered: r.not_offered,
+                            effective_start: r.effective_start,
+                            effective_end: r.effective_end,
                         }),
                     }),
                 ),
             );
-            await loadRates();
+            if (onReload) await onReload();
+            else await loadRates();
         } finally {
             setBulkCopying(false);
         }
@@ -446,14 +545,23 @@ export function TuitionGridWorkspace() {
         );
     }
 
+    // Build ordered list of (offering, sorted variants) for grid rows
+    const offeringRows = offerings.map((offering) => ({
+        offering,
+        variants: sortVariants(variantsByOffering.get(offering.id) ?? []),
+    }));
+
     return (
-        <div className="space-y-5">
+        <div className="space-y-5" data-testid={embedded ? "program-pricing-matrix" : "tuition-grid-workspace"}>
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-xl font-semibold text-gray-900">Tuition Grid</h1>
+                    <h1 className={`${embedded ? "text-base" : "text-xl"} font-semibold text-gray-900`}>
+                        {embedded ? "Pricing matrix" : "Tuition Grid"}
+                    </h1>
                     <p className="text-sm text-gray-500 mt-0.5">
-                        Program × schedule rates, by billing period. Org defaults inherit to all sites.
+                        Organization default rates inherit to Locations. Location override replaces the inherited
+                        value until restored. Effective value = Location override ?? Organization default.
                     </p>
                 </div>
                 <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm flex-shrink-0">
@@ -482,9 +590,12 @@ export function TuitionGridWorkspace() {
                     </button>
                 </div>
             )}
+            {saving ?
+                <p className="text-xs font-medium text-alloy-bend-pine">Saving pricing…</p>
+            :   null}
 
-            {programs.length > 0 && (
-                <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
+            {variants.length > 0 && (
+                <ConfigReadinessCard readiness={readiness} scopeLabel="Organization default" />
             )}
 
             {mode === "edit" && (
@@ -496,31 +607,14 @@ export function TuitionGridWorkspace() {
                         loading={loading}
                     />
 
-                    {/* Billing period tabs */}
-                    <div className="flex gap-0 border-b border-gray-200">
-                        {TUITION_BILLING_PERIODS.map((bp) => (
-                            <button
-                                key={bp.key}
-                                type="button"
-                                onClick={() => setBillingPeriod(bp.key)}
-                                className={[
-                                    "px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
-                                    billingPeriod === bp.key
-                                        ? "border-pine-500 text-pine-700"
-                                        : "border-transparent text-gray-500 hover:text-gray-700",
-                                ].join(" ")}
-                            >
-                                {bp.label}
-                            </button>
-                        ))}
-                    </div>
-
                     {/* Bulk copy banner */}
                     {locationId && (
                         <div className="flex items-center justify-between bg-pine-50 border border-pine-200 rounded-lg px-4 py-2.5 text-sm">
                             <span className="text-pine-700">
-                                Viewing <strong>{scopeLabel}</strong> — green dot = local override, italic = inherited.
+                                Viewing <strong>{scopeLabel}</strong> — green = Location override, italic =
+                                Inherited from Organization, plain at org scope = Organization default.
                             </span>
+                            {canManage ?
                             <button
                                 type="button"
                                 onClick={() => void bulkCopyOrgToLocation()}
@@ -529,55 +623,77 @@ export function TuitionGridWorkspace() {
                             >
                                 {bulkCopying ? "Copying…" : "Copy org defaults → this location"}
                             </button>
+                            : null}
                         </div>
                     )}
 
                     {/* Grid */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                        {programs.length === 0 ? (
+                        {offeringRows.length === 0 ? (
                             <div className="py-12 text-center text-sm text-gray-400">
-                                No programs configured.{" "}
-                                <a href="/admin/commercial/programs" className="text-pine-600 underline">
-                                    Set up programs first.
+                                No offerings configured.{" "}
+                                <a href="/settings/commercial" className="text-pine-600 underline">
+                                    Set up offerings first.
                                 </a>
                             </div>
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50">
-                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-40">
-                                            Program
+                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-48">
+                                            Offering / Variant
                                         </th>
-                                        {schedules.map((s) => (
-                                            <th key={s.key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
-                                                {s.label}
+                                        {cadences.map((c) => (
+                                            <th key={c.item_key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
+                                                {c.label}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {programs.map((prog, pi) => (
-                                        <tr key={prog.key} className={pi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
-                                            <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
-                                                {prog.label}
-                                            </td>
-                                            {schedules.map((sched) => {
-                                                const cellKey = tuitionRateCellKey(prog.key, sched.key, billingPeriod);
-                                                return (
-                                                    <TuitionCell
-                                                        key={cellKey}
-                                                        programKey={prog.key}
-                                                        scheduleKey={sched.key}
-                                                        billingPeriod={billingPeriod}
-                                                        rateRow={rateMap.get(cellKey)}
-                                                        orgDefaultRow={orgOnlyMap.get(cellKey)}
-                                                        locationId={locationId}
-                                                        onSave={saveCell}
-                                                        onClear={clearCell}
-                                                    />
-                                                );
-                                            })}
-                                        </tr>
+                                    {offeringRows.map(({ offering, variants: offeringVariants }) => (
+                                        <Fragment key={offering.id}>
+                                            {/* Offering group header row */}
+                                            <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
+                                                <td
+                                                    colSpan={cadences.length + 1}
+                                                    className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                                                >
+                                                    {offering.label}
+                                                </td>
+                                            </tr>
+                                            {/* One row per variant */}
+                                            {offeringVariants.map((variant, vi) => (
+                                                <tr
+                                                    key={variant.id}
+                                                    className={vi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                                                >
+                                                    <td className="px-4 py-2 text-gray-700 whitespace-nowrap pl-6">
+                                                        {isDefaultVariant(variant) ? (
+                                                            <span className="text-gray-400 italic text-xs">Default</span>
+                                                        ) : (
+                                                            describeVariant(variant)
+                                                        )}
+                                                    </td>
+                                                    {cadences.map((cadence) => {
+                                                        const cellKey = tuitionRateCellKey(variant.id, cadence.item_key);
+                                                        return (
+                                                            <TuitionCell
+                                                                key={cellKey}
+                                                                variantId={variant.id}
+                                                                cadenceKey={cadence.item_key}
+                                                                rateRow={rateMap.get(cellKey)}
+                                                                orgDefaultRow={orgOnlyMap.get(cellKey)}
+                                                                locationId={locationId}
+                                                                onSave={saveCell}
+                                                                onClear={clearCell}
+                                                                canManage={canManage}
+                                                            />
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>
@@ -592,7 +708,7 @@ export function TuitionGridWorkspace() {
                                     <span className="w-2 h-2 rounded-full bg-pine-500" />
                                     Location override
                                 </span>
-                                <span className="italic">Italic = inherited from org</span>
+                                <span className="italic">Italic = Inherited from Organization</span>
                             </>
                         )}
                         <span>
@@ -624,20 +740,6 @@ export function TuitionGridWorkspace() {
                                 <option key={l.id} value={l.id}>{l.name}</option>
                             ))}
                         </select>
-
-                        {/* Billing period also applies in compare */}
-                        <div className="flex gap-0 border border-gray-200 rounded overflow-hidden text-xs ml-auto">
-                            {TUITION_BILLING_PERIODS.map((bp) => (
-                                <button
-                                    key={bp.key}
-                                    type="button"
-                                    onClick={() => setBillingPeriod(bp.key)}
-                                    className={`px-3 py-1.5 ${billingPeriod === bp.key ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                                >
-                                    {bp.label}
-                                </button>
-                            ))}
-                        </div>
                     </div>
 
                     {compareLocationId && compareLocMap ? (
@@ -645,34 +747,53 @@ export function TuitionGridWorkspace() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50">
-                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-40">
-                                            Program
+                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-48">
+                                            Offering / Variant
                                         </th>
-                                        {schedules.map((s) => (
-                                            <th key={s.key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
-                                                {s.label}
+                                        {cadences.map((c) => (
+                                            <th key={c.item_key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
+                                                {c.label}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {programs.map((prog, pi) => (
-                                        <tr key={prog.key} className={pi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
-                                            <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
-                                                {prog.label}
-                                            </td>
-                                            {schedules.map((sched) => {
-                                                const cellKey = tuitionRateCellKey(prog.key, sched.key, billingPeriod);
-                                                return (
-                                                    <CompareCell
-                                                        key={cellKey}
-                                                        orgRow={orgOnlyMap.get(cellKey)}
-                                                        locRow={compareLocMap.get(cellKey)}
-                                                        locationLabel={compareLocLabel}
-                                                    />
-                                                );
-                                            })}
-                                        </tr>
+                                    {offeringRows.map(({ offering, variants: offeringVariants }) => (
+                                        <Fragment key={offering.id}>
+                                            <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
+                                                <td
+                                                    colSpan={cadences.length + 1}
+                                                    className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                                                >
+                                                    {offering.label}
+                                                </td>
+                                            </tr>
+                                            {offeringVariants.map((variant, vi) => (
+                                                <tr
+                                                    key={variant.id}
+                                                    className={vi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                                                >
+                                                    <td className="px-4 py-2 text-gray-700 whitespace-nowrap pl-6">
+                                                        {isDefaultVariant(variant) ? (
+                                                            <span className="text-gray-400 italic text-xs">Default</span>
+                                                        ) : (
+                                                            describeVariant(variant)
+                                                        )}
+                                                    </td>
+                                                    {cadences.map((cadence) => {
+                                                        const cellKey = tuitionRateCellKey(variant.id, cadence.item_key);
+                                                        return (
+                                                            <CompareCell
+                                                                key={cellKey}
+                                                                orgRow={orgOnlyMap.get(cellKey)}
+                                                                locRow={compareLocMap.get(cellKey)}
+                                                                locationLabel={compareLocLabel}
+                                                            />
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>

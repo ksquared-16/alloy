@@ -2,11 +2,36 @@
  * Completion policy helpers for stage_operating_plan_v1 work templates.
  */
 
-import type { StageWorkCompletionPolicyV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type {
+    StageWorkCompletionPolicyV1,
+    StageWorkSufficientCommandResultV1,
+    StageWorkTemplateV1,
+} from "@/lib/lifecycle/stageOperatingPlanV1";
+
+/** Capability identity the communications send path publishes results under. */
+export const COMMUNICATIONS_SEND_CAPABILITY_KEY = "communications_send";
 
 function finiteInt(value: unknown): number | null {
     if (typeof value !== "number" || !Number.isFinite(value)) return null;
     return Math.max(0, Math.floor(value));
+}
+
+function normalizeSufficientCommandResults(
+    raw: unknown,
+): StageWorkSufficientCommandResultV1[] | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    const out: StageWorkSufficientCommandResultV1[] = [];
+    for (const entry of raw) {
+        if (entry == null || typeof entry !== "object") continue;
+        const e = entry as Record<string, unknown>;
+        const capability = typeof e.capability === "string" ? e.capability.trim() : "";
+        const result = typeof e.result === "string" ? e.result.trim() : "";
+        const satisfies =
+            typeof e.satisfies_outcome_key === "string" ? e.satisfies_outcome_key.trim() : "";
+        if (!capability || !result || !satisfies) continue;
+        out.push({ capability, result, satisfies_outcome_key: satisfies });
+    }
+    return out.length ? out : undefined;
 }
 
 export function normalizeCompletionPolicy(
@@ -25,6 +50,13 @@ export function normalizeCompletionPolicy(
     if (window != null && window > 0) policy.window_days = window;
     if (raw.repeat_until_outcome === true) policy.repeat_until_outcome = true;
     if (repeatDue != null && repeatDue > 0) policy.repeat_due_days = repeatDue;
+    if ((raw as { requires_all_participants_resolved?: unknown }).requires_all_participants_resolved === true) {
+        policy.requires_all_participants_resolved = true;
+    }
+    const sufficient = normalizeSufficientCommandResults(
+        (raw as { sufficient_command_results?: unknown }).sufficient_command_results,
+    );
+    if (sufficient) policy.sufficient_command_results = sufficient;
 
     if (!Object.keys(policy).length) return undefined;
     if (policy.min_attempts != null && policy.max_attempts != null && policy.min_attempts > policy.max_attempts) {
@@ -78,6 +110,122 @@ export function completionPolicyForWorkTemplate(
     template: Pick<StageWorkTemplateV1, "completion_policy"> | null | undefined,
 ): StageWorkCompletionPolicyV1 | undefined {
     return normalizeCompletionPolicy(template?.completion_policy);
+}
+
+/**
+ * Platform-owned default command-result sufficiency for recognized canonical work templates.
+ * Operators never see these runtime result keys — they are engine vocabulary only.
+ * Explicit entries for a given capability override the platform default for that capability
+ * only — authoring schedule_tour sufficiency must not wipe communications_send defaults.
+ */
+export const PLATFORM_DEFAULT_SUFFICIENT_COMMAND_RESULTS: Readonly<
+    Record<string, readonly StageWorkSufficientCommandResultV1[]>
+> = {
+    contact_family: [
+        {
+            capability: COMMUNICATIONS_SEND_CAPABILITY_KEY,
+            result: "sent",
+            satisfies_outcome_key: "left_message",
+        },
+        {
+            capability: "schedule_tour",
+            result: "confirmed",
+            satisfies_outcome_key: "tour_scheduled",
+        },
+    ],
+};
+
+function canonicalWorkTemplateKey(
+    template:
+        | Partial<Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">>
+        | null
+        | undefined,
+): string | null {
+    if (!template) return null;
+    const fromDef = typeof template.work_definition_key === "string" ? template.work_definition_key.trim() : "";
+    if (fromDef) return fromDef;
+    const fromKey = typeof template.template_key === "string" ? template.template_key.trim() : "";
+    return fromKey || null;
+}
+
+/** True when the template authors an explicit sufficient_command_results list. */
+export function hasExplicitSufficientCommandResults(
+    template: Pick<StageWorkTemplateV1, "completion_policy"> | null | undefined,
+): boolean {
+    const entries = completionPolicyForWorkTemplate(template)?.sufficient_command_results;
+    return Boolean(entries?.length);
+}
+
+/**
+ * Resolve the authored outcome that an objective capability result satisfies for a
+ * work template (R2). Returns null when configuration does not declare this result
+ * sufficient — in which case a successful command must NOT auto-complete the work.
+ * Keyed on the objective result, so a "failed" result can never resolve a "sent"
+ * mapping, and an operator declaration can never arrive through this path.
+ */
+export function resolveSufficientCommandResultOutcome(
+    template: Pick<StageWorkTemplateV1, "completion_policy"> | null | undefined,
+    capability: string,
+    result: string,
+): string | null {
+    const policy = completionPolicyForWorkTemplate(template);
+    const entries = policy?.sufficient_command_results;
+    if (!entries?.length) return null;
+    const cap = capability.trim();
+    const res = result.trim();
+    if (!cap || !res) return null;
+    for (const entry of entries) {
+        if (entry.capability === cap && entry.result === res) {
+            return entry.satisfies_outcome_key;
+        }
+    }
+    return null;
+}
+
+/**
+ * Effective sufficiency resolution (product decision, July 2026; capability-scoped merge Aug 2026):
+ * 1. When the work item authors any `sufficient_command_results` for this capability, those
+ *    entries alone decide (including reply-required overrides that intentionally exclude "sent").
+ * 2. Else platform default for that capability on recognized canonical templates (e.g. contact_family).
+ * 3. Else no inference — unknown/custom work never auto-completes from a send.
+ *
+ * Capability scoping prevents a partial authored list (e.g. only schedule_tour) from wiping
+ * platform communications_send sufficiency on contact_family.
+ */
+export function resolveEffectiveSufficientCommandResultOutcome(
+    template:
+        | (Pick<StageWorkTemplateV1, "completion_policy"> &
+              Partial<Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">>)
+        | null
+        | undefined,
+    capability: string,
+    result: string,
+): string | null {
+    const cap = capability.trim();
+    if (!cap) return null;
+
+    const explicit = completionPolicyForWorkTemplate(template)?.sufficient_command_results ?? [];
+    const explicitForCapability = explicit.filter((entry) => entry.capability === cap);
+    if (explicitForCapability.length > 0) {
+        return resolveSufficientCommandResultOutcome(
+            { completion_policy: { sufficient_command_results: explicitForCapability } },
+            cap,
+            result,
+        );
+    }
+
+    const canonicalKey = canonicalWorkTemplateKey(template);
+    const defaults = canonicalKey ? PLATFORM_DEFAULT_SUFFICIENT_COMMAND_RESULTS[canonicalKey] : undefined;
+    if (!defaults?.length) return null;
+
+    const defaultsForCapability = defaults.filter((entry) => entry.capability === cap);
+    if (!defaultsForCapability.length) return null;
+
+    return resolveSufficientCommandResultOutcome(
+        { completion_policy: { sufficient_command_results: [...defaultsForCapability] } },
+        cap,
+        result,
+    );
 }
 
 export function shouldRepeatWorkAfterRetryOutcome(

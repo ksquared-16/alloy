@@ -1,0 +1,39 @@
+{
+  "trusted_host_action_id": "tha_333e1e5193243a",
+  "query_hash": "92c50e2d6f434aa934cf874b6d45525558677a0b19af8609d9656d9e23e88c47",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-27T04:07:38.630Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_333e1e5193243a",
+    "query_hash": "92c50e2d6f434aa934cf874b6d45525558677a0b19af8609d9656d9e23e88c47",
+    "authorization_id": "grnt_67381c06a1294252",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-27T04:07:45.001Z",
+    "question_ids": [
+      "s1_slot_capacity_guard"
+    ],
+    "questions": {
+      "s1_slot_capacity_guard": {
+        "question_id": "s1_slot_capacity_guard",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_has_version": true,
+            "ledger_has_old_version": false,
+            "function_present": true,
+            "trigger_present": true,
+            "trigger_enabled": "O"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

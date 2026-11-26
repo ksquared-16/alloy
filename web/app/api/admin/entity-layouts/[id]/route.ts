@@ -12,11 +12,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { LAYOUTS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { deleteLayout, getLayoutById, updateDraft } from "@/lib/layout/entityLayoutsRepo";
+import { invalidateFocusPanelSummaryConfigRead } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryConfigInvalidation";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -58,7 +60,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     const { id } = await params;
     let body: Record<string, unknown> = {};
@@ -78,7 +81,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             );
         }
 
-        const patch: { name?: string; doc?: LayoutDoc } = {};
+        const patch: { name?: string; doc?: LayoutDoc; expectedUpdatedAt?: string | null } = {};
         if (typeof body.name === "string") patch.name = body.name.trim();
         if (body.doc !== undefined) {
             const parsed = parseLayoutDoc(body.doc, { inferSurfaceKey: true });
@@ -87,19 +90,33 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             }
             patch.doc = parsed.doc;
         }
+        if (body.expectedUpdatedAt !== undefined) {
+            patch.expectedUpdatedAt =
+                body.expectedUpdatedAt === null || typeof body.expectedUpdatedAt === "string"
+                    ? (body.expectedUpdatedAt as string | null)
+                    : undefined;
+        }
         if (patch.name === undefined && patch.doc === undefined) {
             return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
         }
 
-        const updated = await updateDraft(supabase, id, patch);
-        logAdminAudit({
-            entity: "entity_layouts",
-            id,
-            changed_fields: Object.keys(patch),
-            actor_user_id: ctx.userId,
-            role: ctx.role,
-        });
-        return NextResponse.json(updated);
+        try {
+            const updated = await updateDraft(supabase, id, patch);
+            logAdminAudit({
+                entity: "entity_layouts",
+                id,
+                changed_fields: Object.keys(patch).filter((k) => k !== "expectedUpdatedAt"),
+                actor_user_id: ctx.userId,
+                role: ctx.role,
+            });
+            return NextResponse.json(updated);
+        } catch (e) {
+            const err = e as Error & { code?: string };
+            if (err.code === "STALE_LAYOUT_WRITE") {
+                return NextResponse.json({ error: err.message, code: "STALE_LAYOUT_WRITE" }, { status: 409 });
+            }
+            throw e;
+        }
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 400 });
     }
@@ -118,6 +135,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         const { supabase, record } = await loadOwned(id, ctx.orgId);
         if (!record) return notFound();
         await deleteLayout(supabase, id);
+        // Deleting a published Summary row changes which variant resolves — bust the `fps:` config read.
+        if (record.status === "published") {
+            invalidateFocusPanelSummaryConfigRead(ctx.orgId, record);
+        }
         logAdminAudit({
             entity: "entity_layouts",
             id,

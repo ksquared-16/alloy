@@ -8,7 +8,7 @@ import {
     parseEnrollmentEmailTemplatesFromPacketMetadata,
 } from "@/lib/forms/packets/enrollmentPacketEmailTemplate";
 
-type PacketDefRow = { id: string; name: string; key: string; is_active?: boolean | null };
+type PacketDefRow = { id: string; name: string; key: string; is_active?: boolean | null; metadata?: Record<string, unknown> | null };
 
 type PacketItemRow = {
     sequence_index: number;
@@ -258,7 +258,11 @@ export default function OpportunityEnrollmentPacketModal({
                 const res = await fetch("/api/admin/forms/packet-definitions");
                 const json = (await res.json().catch(() => ({}))) as { data?: PacketDefRow[]; error?: string };
                 if (!res.ok) throw new Error(json.error ?? "Could not load packets");
-                const rows = Array.isArray(json.data) ? json.data : [];
+                // The Business-Process-derived Enrollment packet is sent with Start enrollment (eligibility,
+                // journey, payer), never from this picker — the server refuses it here too.
+                const rows = (Array.isArray(json.data) ? json.data : []).filter(
+                    (r) => r.metadata?.derived_from !== "business_process_requirements",
+                );
                 if (!cancelled) setDefs(rows);
             } catch (e) {
                 if (!cancelled) setDefsErr(e instanceof Error ? e.message : "Load failed");

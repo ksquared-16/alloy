@@ -1,0 +1,345 @@
+/**
+ * Child Attention + family Settlement: keep Settlement chrome (household, children, billing)
+ * from the family opportunity VM, but never let the family's persisted stage / Current Work
+ * replace the focused child's published stage mission.
+ *
+ * Record of Attention = child (effective stage + stage Work Templates).
+ * Record of Truth / Settlement = family opportunity.
+ */
+
+import type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
+import { buildCurrentWorkCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { deriveChildIdentityCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildFocusPanelCards";
+import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+import { mergeSubjectIdentityTruthOntoSettled } from "@/lib/adminV2/runtime/focusPanel/mergeSubjectIdentityTruthOntoSettled";
+import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+
+function trimOrNull(value: unknown): string | null {
+    const text = value != null ? String(value).trim() : "";
+    return text || null;
+}
+
+/**
+ * The focused child's own row inside the family's settled children collection, matched on the
+ * member id — the identity of record for a child. It carries facts the child bindings do not,
+ * notably `dob`.
+ */
+function inquiryChildRow(
+    truth: Record<string, unknown>,
+    memberId: string | null,
+): Record<string, unknown> | null {
+    if (!memberId) return null;
+    const rows = truth._inquiry_children;
+    if (!Array.isArray(rows)) return null;
+    return (
+        (rows as unknown[]).find(
+            (row): row is Record<string, unknown> =>
+                Boolean(row)
+                && typeof row === "object"
+                && trimOrNull((row as Record<string, unknown>).customer_member_id) === memberId,
+        ) ?? null
+    );
+}
+
+export function overlayChildMissionOntoSettledFocusModel(
+    settled: FocusPanelWorkModeModel,
+    commitCritical: FocusPanelCommitCriticalInput,
+    options?: {
+        /**
+         * The child attention is CURRENTLY on. When it names a different child than the answer
+         * this overlay was built from, the answer's mission is the PREVIOUS child's.
+         */
+        attentionSubjectId?: string | null;
+    },
+): FocusPanelWorkModeModel {
+    const grain = commitCritical.subjectGrain?.grain;
+    if (grain !== "child") return settled;
+
+    /**
+     * CHILD MISSION IS SUBJECT-SCOPED — it may never outlive its subject.
+     *
+     * The header now commits the new child's identity from the clicked row's canonical context, so
+     * it moves at ~150ms while this answer still describes the child the operator just left. The
+     * FAMILY cards (household, children, billing, assignments) are authoritative for the same
+     * family and stay — they are not stale, they are shared. The two cards this overlay itself
+     * produces are the child's own, and showing the previous child's What's Next under the new
+     * child's name would assert something false about them.
+     *
+     * So exactly those cards go to the canonical reserve — the calm hold that keeps the cell's
+     * geometry and shows the card's title while its detail settles. The panel is never blanked and
+     * no family card is disturbed.
+     */
+    const attentionSubjectId = options?.attentionSubjectId?.trim() || null;
+    const missionIsForAnotherChild =
+        attentionSubjectId != null && attentionSubjectId !== commitCritical.subjectId;
+
+    /*
+     * THE SETTLED CONTEXT MUST BE THIS CHILD'S FAMILY.
+     *
+     * The family cards and the activity feed come from the settled model — the family Drawer VM —
+     * while the child's mission comes from the child's answer. When the operator moves from one
+     * family's row to another family's child, the settled model can still be the FIRST family for a
+     * moment, and the Process card's "Last action" then read that family's events under this child's
+     * name (deployed: "Ava ZZQA1467FAMB moved to Enrolling" on Family C's Ava, though every event is
+     * correctly attributed in storage). Family-derived truth from another family is never shown:
+     * those cards hold in the calm reserved state until the right family settles.
+     */
+    const childFamily = (() => {
+        const v = commitCritical.subjectIdentityTruth?.["child.family_opportunity_id"];
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+    })();
+    const settledFamily = typeof settled.subject?.id === "string" && settled.subject.id.trim() ? settled.subject.id.trim() : null;
+    const settledIsAnotherFamily = childFamily != null && settledFamily != null && childFamily !== settledFamily;
+
+    const stageWorkRuntime = commitCritical.stageWorkRuntime;
+    const publishedStageInputs = commitCritical.publishedStageInputs;
+    const situation = commitCritical.situation;
+
+    const nextActionLabel = commitCritical.primaryAction?.label ?? null;
+    const cardModels = new Map(settled.cardModels);
+    cardModels.set(
+        "current_work",
+        buildCurrentWorkCardModel({
+            stageWorkRuntime,
+            nextActionLabel,
+        }),
+    );
+
+    const cardReadiness = new Map(settled.cardReadiness);
+    if (settledIsAnotherFamily) {
+        for (const key of cardReadiness.keys()) cardReadiness.set(key, "reserved");
+    }
+    cardReadiness.set("current_work", "ready");
+
+    const subjectType = commitCritical.subjectGrain?.subjectType ?? "child";
+    const subjectLabel =
+        (typeof commitCritical.subjectIdentityTruth?.["child.display_name"] === "string"
+            ? String(commitCritical.subjectIdentityTruth["child.display_name"]).trim()
+            : null) || settled.title;
+
+    /**
+     * `child_identity` — the card the CHILD composition asks for, produced on the lens path.
+     *
+     * The grid composes a non-case subject from `focusPanelSummaryDefaultDocForGrain`, and the child
+     * composition's one card is `child_identity`. That key was only ever derived on the
+     * subject-first durable path (`deriveChildFocusPanelCards`), which "arrives subject-first and
+     * never through a lens". So on a child-grain Work View the cell composed correctly and had no
+     * producer, resolving `visible: false` → `not_applicable`: an authored cell reading as
+     * inapplicable purely because nothing could fill it (R-017).
+     *
+     * The same derivation is reused rather than reimplemented — one child card, two entry paths.
+     * The subject is assembled from what the lens already carries: the child bindings for identity,
+     * and the focused child's own row in the settled family collection for `dob`, which the
+     * bindings do not include. A missing DOB is a state the card states honestly, not a failure.
+     */
+    const childMemberId = trimOrNull(commitCritical.subjectIdentityTruth?.["child.customer_member_id"]);
+    /*
+     * The child's OWN stage as the runtime published it alongside the child's own identity. Used
+     * only where `situation` is silent; it is the same provider-resolved effective stage, never the
+     * family's and never the lens's.
+     */
+    const childOwnStageKey = trimOrNull(commitCritical.subjectIdentityTruth?.["child.stage_key"]);
+    const childOwnStageLabel =
+        (childOwnStageKey
+            ? settled.context.businessProcess?.stages?.find((s) => s.key === childOwnStageKey)?.label
+            : null) ?? null;
+    const childRow = inquiryChildRow(settled.context.truth, childMemberId);
+    const childSubject: DurableChildSubject = {
+        memberId: childMemberId ?? commitCritical.subjectId,
+        // Enrichment on the durable path, and not carried by the lens. Null is ordinary, not an error.
+        personId: null,
+        householdId: null,
+        label: subjectLabel,
+        dateOfBirth: trimOrNull(childRow?.dob),
+        householdName: trimOrNull(commitCritical.subjectIdentityTruth?.["child.family_name"]),
+        // A lens row exists because the child is in an operating cohort.
+        isActive: true,
+        truth: settled.context.truth,
+    };
+    cardModels.set("child_identity", deriveChildIdentityCard(childSubject, new Date()));
+    cardReadiness.set("child_identity", "ready");
+
+    const commands: ResolvedActionForClient[] = commitCritical.primaryAction
+        ? [
+              {
+                  key: commitCritical.primaryAction.actionRef,
+                  label: commitCritical.primaryAction.label,
+                  description: null,
+                  action_type: "workflow",
+                  icon: null,
+                  style: null,
+                  display_style: "button",
+                  payload: {},
+                  workflow_id: null,
+              },
+          ]
+        : settled.commands;
+
+    /**
+     * CHILD MISSION MAY NOT OUTLIVE ITS SUBJECT.
+     *
+     * The header commits the new child from canonical queue context at ~150ms while this answer
+     * still describes the child the operator left. The FAMILY cards are authoritative for the same
+     * family and stay — they are shared, not stale. The two cards this overlay itself produces are
+     * the child's own, and showing the previous child's What's Next under the new child's name
+     * would assert something false.
+     *
+     * The cells KEEP their entries so the grid keeps composing them — dropping an entry removes the
+     * cell from its lane, which is a card vanishing and reappearing rather than a hold. Only
+     * `current_work` is rebuilt EMPTY so it asserts nothing; `reserved` readiness is what the grid
+     * reads, and it renders the calm titled hold in place. The panel is never blanked.
+     */
+    if (missionIsForAnotherChild) {
+        cardModels.set(
+            "current_work",
+            buildCurrentWorkCardModel({ stageWorkRuntime: null, nextActionLabel: null }),
+        );
+        cardReadiness.set("current_work", "reserved");
+        cardReadiness.set("child_identity", "reserved");
+    }
+
+    return {
+        ...settled,
+        subject: {
+            id: commitCritical.subjectId,
+            type: subjectType,
+            label: subjectLabel,
+        },
+        context: {
+            ...settled.context,
+            grain: "child",
+            subject: {
+                type: subjectType,
+                id: commitCritical.subjectId,
+                label: subjectLabel,
+            },
+            /*
+             * THE FOCUSED CHILD IS THE SCOPED PARTICIPANT.
+             *
+             * The settled context resolves `participantScope` by matching a selection against the
+             * FAMILY's children — the right rule for a case panel, and no rule at all here: this
+             * overlay already knows which child it is about, because that is what it exists to say.
+             * Leaving the settled answer in place meant a child-grain panel carried NO scope, and
+             * the Attendance card asked the operator to "select a child" on that child's own record.
+             *
+             * `childMemberId` comes from `subjectIdentityTruth`, the same binding this overlay uses
+             * for the identity card, so the participant and the subject can never disagree. Stated
+             * rather than resolved: there is nothing ambiguous about the record of attention.
+             */
+            participantScope: childMemberId
+                ? {
+                      participationId: commitCritical.subjectId,
+                      customerMemberId: childMemberId,
+                      personId: null,
+                      displayName: subjectLabel,
+                      /*
+                       * THE RESOLVED PHOTO FIRST — the signed, actor-scoped URL that actually
+                       * renders. `photo_url` is the stored document reference and is null on every
+                       * child, so reading it alone made this overlay overwrite a correctly resolved
+                       * scope with an empty image and drop the header back to initials for a child
+                       * whose photo the queue row beside it was already showing.
+                       */
+                      imageUrl:
+                          trimOrNull(commitCritical.subjectIdentityTruth?.["child.resolved_photo_url"])
+                          ?? trimOrNull(childRow?.resolved_photo_url)
+                          ?? trimOrNull(childRow?.photo_url)
+                          /*
+                           * AND NO FALLBACK TO THE SETTLED SCOPE (P0-7.2).
+                           *
+                           * This chain used to end `?? settled.context.participantScope?.imageUrl`.
+                           * During a hold that scope belongs to the PREVIOUS child, so when this
+                           * child's photo was absent from truth and `childRow` was not found in the
+                           * held family's roster, the prior child's face was laundered forward and
+                           * presented as this child's. That is not a stale frame — it is a false
+                           * statement about who the operator is looking at.
+                           *
+                           * Null is the honest answer; the avatar shows initials until the real photo
+                           * resolves. The comment above still holds for the two `childRow` terms: they
+                           * are THIS child's photo, and dropping them was the defect it describes.
+                           */
+                          ?? null,
+                      // Same rule as the process block below: the child's own stage, or none.
+                      stageKey: situation?.stageKey ?? childOwnStageKey,
+                      stageLabel: situation?.stageLabel ?? childOwnStageLabel,
+                  }
+                : settled.context.participantScope,
+            /*
+             * PRESERVED, NOT REBUILT. This overlay changes the MISSION — which stage the operator is
+             * being pointed at — and nothing else about the process.
+             *
+             * It used to rebuild the struct field by field, naming `stages` explicitly so the
+             * configured rail would survive. That was the right instinct applied the wrong way: the
+             * explicit line was the only UNGUARDED access, so a context without a business process
+             * crashed the overlay outright — six guard tests failed on
+             * "Cannot read properties of undefined (reading 'stages')" while the two lines above it,
+             * which happened to be `??`-guarded, passed. Spreading preserves EVERY field including
+             * ones added later, and is safe when there is nothing to spread.
+             */
+            /*
+             * ── THE CHILD'S STAGE, OR NONE — NEVER THE FAMILY'S ──
+             *
+             * `situation` is the child's own composed position: the effective stage the provider
+             * resolved from the child's process instance, which is the only record that owns it.
+             * When it is present it is the answer, as it always was.
+             *
+             * What changed is the ELSE. These three fields used to fall through to the settled
+             * context, which describes the FAMILY — so a child whose own stage had not resolved
+             * inherited the household's position and the Process card stated it as the child's.
+             * Before the rail stopped reading the work unit, that inherited value was the LENS, and
+             * every candidate opened from Waitlist read "Waitlist" whatever its process instance
+             * said. Both are the same substitution: a stage that belongs to something other than
+             * the subject, presented as the subject's.
+             *
+             * `child.stage_key` is the child's own stage carried on its identity bindings, so it is
+             * the one sanctioned second source — the same fact as `situation`, by another route,
+             * never a different record's. Past that there is nothing truthful left to say, and the
+             * fields resolve to null. A card with no stage renders as unstaged, which is a state it
+             * already knows how to show.
+             */
+            businessProcess: {
+                ...settled.context.businessProcess,
+                key: situation?.stageKey ?? childOwnStageKey,
+                label: situation?.stageLabel ?? childOwnStageLabel,
+                stageKey: situation?.stageKey ?? childOwnStageKey,
+            },
+            stageWorkRuntime,
+            /*
+             * THE CHILD'S OWN CARD TRUTH, OR NONE — NEVER THE FAMILY'S.
+             *
+             * Current Work renders, and executes, from `operationalProjection.currentWork` — the
+             * server's projection for the subject it was composed for. Spreading the settled context
+             * kept the FAMILY's when the operator opened the family first and then a child: the card
+             * showed the child's work but carried the family's execution subject, which names no
+             * child, and "Enrollment complete" was refused at the child-subject guard every time.
+             * The child's own answer carries its own projection; while the answer still describes
+             * another child, there is no truthful one to show.
+             */
+            operationalProjection: missionIsForAnotherChild ? null : (commitCritical.operationalProjection ?? null),
+            publishedStageInputs,
+            signals: {
+                ...settled.context.signals,
+                work: {
+                    ...settled.context.signals.work,
+                    nextActionLabel,
+                },
+            },
+            truth: {
+                ...mergeSubjectIdentityTruthOntoSettled(
+                    // Another family's truth (its activity feed included) is not this child's.
+                    settledIsAnotherFamily ? ({ id: commitCritical.subjectId } as typeof settled.context.truth) : settled.context.truth,
+                    commitCritical.subjectIdentityTruth,
+                ),
+                ...(stageWorkRuntime ? { _stage_work_runtime: stageWorkRuntime } : {}),
+            },
+        },
+        cardModels,
+        cardReadiness,
+        // A stale answer's `subjectLabel` is the PREVIOUS child. The header already commits the new
+        // child from queue context, so the model falls back to the family title rather than
+        // asserting a child it can no longer speak for.
+        title: missionIsForAnotherChild ? settled.title : subjectLabel,
+        statusLabel: situation?.stageLabel ?? settled.statusLabel,
+        commands,
+    };
+}

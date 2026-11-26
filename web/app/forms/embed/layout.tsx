@@ -7,5 +7,9 @@ export const metadata: Metadata = {
 
 /** Embed-only shell: no marketing chrome (see ConditionalSiteLayout + StagingBanner). */
 export default function PublicFormEmbedLayout({ children }: { children: React.ReactNode }) {
-    return <div className="min-h-screen bg-white text-neutral-900 antialiased">{children}</div>;
+    return (
+        <div className="alloy-participant-surface min-h-screen bg-white text-neutral-900 antialiased">
+            {children}
+        </div>
+    );
 }

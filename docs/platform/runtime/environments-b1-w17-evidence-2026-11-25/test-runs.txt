@@ -1,0 +1,43 @@
+# B1 test runs, 2026-11-26T04:58Z, worktree HEAD e53a318cb068 (before this evidence commit)
+
+## step-1 merge tree: git merge-tree --write-tree HEAD origin/staging
+HEAD=e53a318cb0680c90ae22f457e8673bfa548b3c22 origin/staging=8321949771f7fb6b2f04de6feb1fdd6ccb8e1484 (local ref, not fetched)
+rc=0 tree=3a4242f43ac54d052fb13abc8106460d591e74ab
+migrations in merge tree: 558; head: supabase/migrations/20261223090000_w17_selftest_org_retirement.sql
+highest on origin/staging: supabase/migrations/20261222090000_documents_w_c1_audit_linkage.sql
+highest on this branch before B1: supabase/migrations/20261221100000_app_installations_reinstall_after_revoke.sql
+merge tree vs origin/main, vacilando-tier2.yml: identical
+schedule: lines in merge tree's vacilando-tier2.yml: 0
+merge tree vs origin/staging, paths that differ outside migrations and workflow: 170 (E1-E4 and docs; not migrations)
+
+## release-lib classification of the new file
+{"class":"expand","destructive":[],"idempotency_warnings":[]}
+
+## node scripts/migration-preflight.mjs
+repo: 557 files, 557 unique versions
+preflight OK — migration history is consistent
+rc=0
+
+## npm run test:release-procedure
+# tests 28
+# pass 28
+# fail 0
+
+## npm run test:release-rehearsal
+# tests 17
+# pass 17
+# fail 0
+
+## npm run test:settings-checklist
+# tests 6
+# pass 6
+# fail 0
+
+## node --test scripts/local-dev/tests/development-migration-parity.test.mjs scripts/local-dev/tests/migration-execution-outcome.test.mjs
+# tests 61
+# pass 61
+# fail 0
+
+## (web) npm run test -- tests/financials/migrationVersionOrdering.test.ts tests/scripts/migrationPreflight.test.ts
+ Test Files  2 passed (2)
+      Tests  9 passed (9)

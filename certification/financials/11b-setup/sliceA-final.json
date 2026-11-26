@@ -1,0 +1,93 @@
+{
+  "performance": {
+    "shellUsableMs": 124,
+    "pricingOptionsMs": 128,
+    "acceptedTermMs": 129,
+    "billingPeriodMs": 132,
+    "totalFromNavigationMs": 15396
+  },
+  "shellNotBlocked": true,
+  "responsive": {
+    "1280": {
+      "width": 658,
+      "height": 192,
+      "overflows": false,
+      "regionClipped": false,
+      "lines": [
+        {
+          "a": "data-assignment-accepted-term",
+          "clipped": false,
+          "right": 1148
+        },
+        {
+          "a": "data-assignment-billing-period",
+          "clipped": false,
+          "right": 1148
+        },
+        {
+          "a": "data-assignment-tuition-recommended",
+          "clipped": false,
+          "right": 1148
+        }
+      ]
+    },
+    "1440": {
+      "width": 658,
+      "height": 192,
+      "overflows": false,
+      "regionClipped": false,
+      "lines": [
+        {
+          "a": "data-assignment-accepted-term",
+          "clipped": false,
+          "right": 1276
+        },
+        {
+          "a": "data-assignment-billing-period",
+          "clipped": false,
+          "right": 1276
+        },
+        {
+          "a": "data-assignment-tuition-recommended",
+          "clipped": false,
+          "right": 1276
+        }
+      ]
+    },
+    "1680": {
+      "width": 658,
+      "height": 192,
+      "overflows": false,
+      "regionClipped": false,
+      "lines": [
+        {
+          "a": "data-assignment-accepted-term",
+          "clipped": false,
+          "right": 1396
+        },
+        {
+          "a": "data-assignment-billing-period",
+          "clipped": false,
+          "right": 1396
+        },
+        {
+          "a": "data-assignment-tuition-recommended",
+          "clipped": false,
+          "right": 1396
+        }
+      ]
+    }
+  },
+  "discounts": {
+    "status": 200,
+    "total": 92500,
+    "counts": {
+      "generated": 5,
+      "unchanged": 0,
+      "notDue": 0,
+      "refused": 0,
+      "alreadyPosted": 0,
+      "errors": 0
+    }
+  }
+}

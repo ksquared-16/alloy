@@ -3,6 +3,10 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { aggregateDeliverability } from "@/lib/communications/v2/deliverability";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * GET /api/admin/communications/deliverability — org-wide delivery metrics from delivery events.
@@ -14,6 +18,8 @@ export async function GET() {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const supabase = createAdminClient();
     const { data, error } = await supabase

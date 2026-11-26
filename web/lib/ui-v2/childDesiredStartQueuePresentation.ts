@@ -1,6 +1,6 @@
 /**
  * Child-level desired start display for work-unit / queue CRM compact rows.
- * Opportunity-level `desired_start_date` is legacy (placement); queue UI uses OCM dates only.
+ * Opportunity-level `desired_start_date` (unrenamed legacy metadata field) is placement legacy; queue UI uses OCM dates only.
  */
 
 export function normalizeIsoDateOnly(value: string | null | undefined): string | null {
@@ -12,7 +12,7 @@ export function normalizeIsoDateOnly(value: string | null | undefined): string |
 }
 
 /** Compact operator summary for one or more child desired start dates on an inquiry. */
-export function summarizeChildDesiredStartDates(dates: (string | null | undefined)[]): string | null {
+export function summarizeChildStartDates(dates: (string | null | undefined)[]): string | null {
     const unique = new Set<string>();
     for (const raw of dates) {
         const d = normalizeIsoDateOnly(raw);
@@ -24,7 +24,7 @@ export function summarizeChildDesiredStartDates(dates: (string | null | undefine
 }
 
 export function childDesiredStartSummaryFromOcmRows(
-    rows: { desired_start_date?: string | null }[]
+    rows: { start_date?: string | null }[]
 ): string | null {
-    return summarizeChildDesiredStartDates(rows.map((r) => r.desired_start_date ?? null));
+    return summarizeChildStartDates(rows.map((r) => r.start_date ?? null));
 }

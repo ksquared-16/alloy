@@ -15,8 +15,9 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
-import ReviewDecideCard, { DECISION_TO_ACTION, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
+import ReviewDecideCard, { DECISION_TO_ACTION, leadPlacementBlock, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
 import ClassificationPanel from "@/app/adminV2/processing/ClassificationPanel";
+import IdentityReviewPanel from "@/app/adminV2/processing/IdentityReviewPanel";
 import type { StoredProcessingExtraction } from "@/lib/pos/processingCase/extraction/types";
 import { isExtractionStale } from "@/lib/pos/processingCase/extraction/processingCaseExtractionDb";
 import type { StoredDocumentFormPreview } from "@/lib/pos/processingCase/structure/types";
@@ -48,6 +49,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
     email_attachment: "Email",
     import: "Import",
     recreated_document: "Recreated",
+    participant_child_request: "Family request",
 };
 
 const RECORD_TYPE_LABELS: Record<string, string> = {
@@ -98,7 +100,7 @@ function OpenDocumentButton({ documentId }: { documentId: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void open()}
-                className="text-[11.5px] font-medium text-emerald-700 underline-offset-2 hover:underline disabled:opacity-50"
+                className="text-[11.5px] font-medium text-alloy-bend-pine underline-offset-2 hover:underline disabled:opacity-50"
             >
                 {busy ? "Opening…" : "Open document"}
             </button>
@@ -107,22 +109,25 @@ function OpenDocumentButton({ documentId }: { documentId: string }) {
     );
 }
 
-/** FP12 — Workflow A: "Create form from document" → draft form outline. Preview only; no form created/published. */
+/** Generate handoff — opens Form Builder inside Processing Studio. Never /admin/forms. */
 function FormDraftSection({
     caseId,
     primarySourceKind,
     initial,
     created,
+    onOpenForm,
 }: {
     caseId: string;
     primarySourceKind: string | null;
     initial: StoredFormDraftPreview | null;
     created: { form_id: string; form_version_id: string; created_at: string } | null;
+    onOpenForm?: (formId: string) => void;
 }) {
     const [draft, setDraft] = useState<StoredFormDraftPreview | null>(initial);
     const [busy, setBusy] = useState(false);
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [localCreatedId, setLocalCreatedId] = useState<string | null>(created?.form_id ?? null);
 
     if (primarySourceKind !== "document") return null;
 
@@ -152,10 +157,13 @@ function FormDraftSection({
                 method: "POST",
                 credentials: "same-origin",
             });
-            const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string; builder_path?: string }; error?: string };
+            const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string }; error?: string };
             if (!res.ok) throw new Error(body.error || `Couldn’t create form (${res.status})`);
-            const path = body.data?.builder_path ?? (body.data?.form_id ? `/admin/forms/${body.data.form_id}` : null);
-            if (path) window.location.href = path; // open the unpublished form in the builder
+            const formId = body.data?.form_id ?? null;
+            if (formId) {
+                setLocalCreatedId(formId);
+                onOpenForm?.(formId);
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Couldn’t create form");
         } finally {
@@ -164,12 +172,12 @@ function FormDraftSection({
     };
 
     const fieldById = (id: string) => draft?.fields.find((f) => f.id === id);
-    const builderPath = created ? `/admin/forms/${created.form_id}` : null;
+    const readyFormId = localCreatedId ?? created?.form_id ?? null;
 
     return (
-        <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
+        <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Set up this document</span>
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Set up this document</span>
                 {draft ? (
                     <span className="text-[10px] text-stone-400">
                         {draft.generator_version} · {formatWhen(draft.generated_at)}
@@ -178,15 +186,16 @@ function FormDraftSection({
             </div>
 
             <div className="mb-2 flex flex-wrap items-center gap-2">
-                {created ? (
+                {readyFormId ? (
                     <>
-                        <a
-                            href={builderPath ?? "#"}
+                        <button
+                            type="button"
+                            onClick={() => onOpenForm?.(readyFormId)}
                             className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276]"
                         >
-                            Open in Forms builder
-                        </a>
-                        <span className="text-[11px] text-emerald-700">Reusable template created (draft) — tweak &amp; publish in the builder.</span>
+                            Open in Studio
+                        </button>
+                        <span className="text-[11px] text-alloy-bend-pine">Form created — continue in Studio Form Builder.</span>
                     </>
                 ) : (
                     <>
@@ -205,7 +214,7 @@ function FormDraftSection({
                                 onClick={() => void createForm()}
                                 className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
                             >
-                                {creating ? "Creating…" : "Create reusable template"}
+                                {creating ? "Generating…" : "Generate form"}
                             </button>
                         ) : null}
                     </>
@@ -215,8 +224,7 @@ function FormDraftSection({
 
             {!draft ? (
                 <p className="text-[12px] text-stone-500">
-                    Set this document up once: Alloy detects what it can, you review the detected fields and tweak them in the
-                    Forms builder, then save it as a reusable template for future uploads. Nothing is created or published until you review it.
+                    Alloy detects questions on this document. Review them, generate a native form, then finish in Studio.
                 </p>
             ) : (
                 <div>
@@ -521,7 +529,13 @@ function ExtractionSection({
     );
 }
 
-export default function ProcessingCaseDetailContent({ caseId }: { caseId: string }) {
+export default function ProcessingCaseDetailContent({
+    caseId,
+    onOpenForm,
+}: {
+    caseId: string;
+    onOpenForm?: (formId: string) => void;
+}) {
     const [data, setData] = useState<DetailResponse["data"] | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -639,12 +653,12 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
     return (
         <div className="flex h-full min-h-0 flex-col">
             {/* Context header */}
-            <div className="shrink-0 border-l-2 border-alloy-juniper bg-emerald-50/60 px-4 py-3">
+            <div className="shrink-0 border-l-2 border-alloy-juniper bg-alloy-bend-pine/[0.07] px-4 py-3">
                 <div className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-medium text-stone-900">
                         {primary?.display.label ?? "Processing case"}
                     </span>
-                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-bend-pine">
                         {statusLabel(detail.status)}
                     </span>
                 </div>
@@ -675,6 +689,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     primarySourceKind={primary?.kind ?? null}
                     initial={detail.formDraftPreview}
                     created={detail.formDraftCreated}
+                    onOpenForm={onOpenForm}
                 />
 
                 {/* What Alloy found (facts) + what it maps to (candidates) — proposals only. */}
@@ -691,7 +706,10 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                 />
 
                 {/* Core POS moment: what Alloy understood + what it recommends */}
-                {!isClosed ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
+                {!isClosed && !detail.subjectRemoved ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
+
+                {/* D3 — identity review → plan → approval → explicit commit (canonical operator workflow). */}
+                <IdentityReviewPanel caseId={caseId} />
 
                 <section className="mb-5">
                     <Eyebrow>Evidence</Eyebrow>
@@ -765,7 +783,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                             {proposed.length > 0 ? ` · ${proposed.length} proposed value${proposed.length === 1 ? "" : "s"}` : ""}
                         </div>
                         {isClosed ? (
-                            <div className="text-emerald-700">
+                            <div className="text-alloy-bend-pine">
                                 {statusLabel(detail.status)} · {formatWhen(detail.updatedAt ?? detail.createdAt)}
                                 {approveResult?.recordId
                                     ? ` · ${approveResult.created ? "created" : "linked"} ${RECORD_TYPE_LABELS[approveResult.recordType ?? ""] ?? approveResult.recordType} ${approveResult.recordId}`
@@ -778,9 +796,14 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
 
             {/* Docked action bar */}
             <div className="shrink-0 border-t border-stone-200 bg-stone-50/80 px-4 py-3">
-                {isClosed ? (
+                {detail.subjectRemoved ? (
+                    <div className="text-[12.5px] text-stone-700" data-processing-subject-removed="banner">
+                        <span className="font-semibold">Evidence only</span> — the family or child this paperwork was for no
+                        longer exists. It is kept as a record and cannot be approved or committed.
+                    </div>
+                ) : isClosed ? (
                     <div className="flex items-center gap-2 text-[12.5px] text-stone-700">
-                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-alloy-bend-pine/[0.14] text-alloy-bend-pine">✓</span>
                         <span>
                             {statusLabel(detail.status)}
                             {approveResult?.recordId
@@ -794,7 +817,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     <>
                         <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="text-[12.5px] text-stone-800">
-                                <span className="text-[10.5px] font-medium uppercase tracking-wide text-emerald-700">Operator decision</span>
+                                <span className="text-[10.5px] font-medium uppercase tracking-wide text-alloy-bend-pine">Operator decision</span>
                                 <div>
                                     {recommendedActionLabel
                                         ? `Alloy recommends “${recommendedActionLabel}” — approve to execute, or choose another.`
@@ -817,7 +840,8 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                             {/* Real, preserved approve path — executes Alloy's link-or-create handoff. */}
                             <button
                                 type="button"
-                                disabled={approving}
+                                disabled={approving || Boolean(leadPlacementBlock(rec))}
+                                title={leadPlacementBlock(rec) ?? undefined}
                                 onClick={() => void approve()}
                                 className="rounded-md bg-[#00A283] px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
                             >

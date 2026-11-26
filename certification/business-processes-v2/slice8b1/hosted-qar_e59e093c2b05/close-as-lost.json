@@ -1,0 +1,84 @@
+{
+  "tasks_before": [
+    {
+      "id": "35c800ed-2804-4745-97eb-4b77272b3682",
+      "title": "Contact Family",
+      "status": "open",
+      "due_at": "2026-10-24T02:15:44.468+00:00",
+      "stage_key": null,
+      "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+      "template_key": null
+    }
+  ],
+  "complete": {
+    "ok": true,
+    "outcome_execution": {
+      "applied_targets": [
+        {
+          "kind": "update_family_case_status",
+          "status_key": "closed",
+          "close_reason_key": "lost"
+        },
+        {
+          "kind": "move_to_stage",
+          "transition_ref": "lead_to_closed_lost"
+        }
+      ],
+      "failed_targets": [],
+      "errors": [],
+      "degraded": [],
+      "queue_refresh_opportunity_id": "de17caff-d706-44e8-b9d1-07aa58caa44b",
+      "needs_attention_set": false,
+      "status_updated": true
+    },
+    "queue_refresh_opportunity_id": "de17caff-d706-44e8-b9d1-07aa58caa44b",
+    "scheduled_tour_closed": null,
+    "transaction": {
+      "outcome": "committed",
+      "ok": true,
+      "changed": true,
+      "correlation_id": "f557a708-366c-4027-bdb4-bdd6e4d400c8",
+      "capability": "record_outcome",
+      "steps": [
+        {
+          "name": "validate",
+          "stage": "validate",
+          "boundary": "inside",
+          "status": "ok",
+          "duration_ms": 2
+        },
+        {
+          "name": "work_state",
+          "stage": "persist",
+          "boundary": "inside",
+          "status": "ok",
+          "duration_ms": 103
+        },
+        {
+          "name": "apply_outcome_rules",
+          "stage": "business_process",
+          "boundary": "inside",
+          "status": "ok",
+          "duration_ms": 982
+        },
+        {
+          "name": "contact_outcome_trace",
+          "stage": "activity",
+          "boundary": "inside",
+          "status": "ok",
+          "duration_ms": 38
+        }
+      ],
+      "degraded": [],
+      "duration_ms": 1125
+    },
+    "correlation_id": "f557a708-366c-4027-bdb4-bdd6e4d400c8"
+  },
+  "tasks_after": [
+    {
+      "id": "35c800ed-2804-4745-97eb-4b77272b3682",
+      "status": "completed",
+      "title": "Contact Family"
+    }
+  ]
+}

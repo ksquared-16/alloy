@@ -4,17 +4,28 @@ import type {
     OipMetricKey,
     ResolvedMetricValue,
 } from "@/lib/metrics/types";
-import { getMetricDefinition } from "@/lib/metrics/registry";
+import { getMetricDefinition, isLiveOnlyMetric } from "@/lib/metrics/registry";
 import { kpiForMetric } from "@/lib/metrics/kpiRegistry";
 import { evaluateKpiForMetric } from "@/lib/metrics/kpiEvaluator";
 import { readLatestMetricSnapshot } from "@/lib/metrics/snapshots/readMetricSnapshot";
 import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import {
+    metricUnavailable,
+    orgScopeOnlyRefusal,
+    snapshotReadableForScope,
+} from "@/lib/metrics/metricScopeGuard";
+import {
     resolveEnrollmentTimeToScheduleTour,
     resolveEnrollmentTourConversionRate,
-    resolveEnrollmentLeadCount,
     resolveEnrollmentTourCompletedCount,
 } from "@/lib/metrics/resolvers/eventWindowMetrics";
+import {
+    resolveEnrollmentActiveLeads,
+    resolveEnrollmentActiveFamilies,
+    resolveEnrollmentNewLeads,
+    resolveEnrollmentWaitlisted,
+    resolveEnrollmentLeadCountCompat,
+} from "@/lib/metrics/resolvers/enrollmentParticipantMetrics";
 import {
     resolveOpsWorkOverdueCount,
 } from "@/lib/metrics/resolvers/entitySnapshotMetrics";
@@ -32,15 +43,78 @@ import {
     resolveOpsNeedsAttentionCount,
     resolveOpsReadinessGapCount,
 } from "@/lib/metrics/resolvers/operationalHealthMetrics";
+import {
+    resolveFinancialsChargesAwaitingPostCount,
+    resolveFinancialsCurrentlyCollectibleAmount,
+    resolveFinancialsGrossChargesPostedAmount,
+    resolveFinancialsOutstandingAmount,
+    resolveFinancialsPaymentsReceivedAmount,
+    resolveFinancialsUnappliedPaymentsAmount,
+    resolveFinancialsUnresolvedSubsidyVarianceAmount,
+} from "@/lib/metrics/resolvers/financialsMetrics";
+import { resolveAttendanceOccupancyCount } from "@/lib/metrics/resolvers/attendanceOccupancyMetrics";
+import {
+    resolveAttendanceConsequenceReviewCount,
+    resolveAttendanceCorrectionRate,
+    resolveAttendanceUnmappedEventCount,
+} from "@/lib/metrics/resolvers/attendanceHealthMetrics";
+import {
+    resolveAttendanceCheckedOutCount,
+    resolveAttendanceExpectedCount,
+    resolveAttendanceHereNowCount,
+    resolveAttendanceKnownAwayCount,
+    resolveAttendanceNotArrivedCount,
+    resolveAttendanceUnknownStateCount,
+} from "@/lib/metrics/resolvers/attendanceServiceDayMetrics";
+import {
+    resolveTrustDeterministicResolutionRate,
+    resolveTrustEscalatedDecisionCount,
+    resolveTrustExecutionsCommittedCount,
+    resolveTrustGovernedDecisionsCompleted,
+    resolveTrustGovernedDecisionsCreated,
+    resolveTrustGovernedRefusalRate,
+    resolveTrustProviderCostUnits,
+    resolveTrustReasoningFailureRate,
+    resolveTrustReasoningLatencyP50,
+    resolveTrustRecommendationRate,
+} from "@/lib/metrics/resolvers/trustMetrics";
 
 async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
     switch (key) {
+        case "attendance.correction_rate":
+            return resolveAttendanceCorrectionRate(ctx);
+        case "attendance.unmapped_event_count":
+            return resolveAttendanceUnmappedEventCount(ctx);
+        case "attendance.consequence_review_count":
+            return resolveAttendanceConsequenceReviewCount(ctx);
+        case "attendance.occupancy_count":
+            return resolveAttendanceOccupancyCount(ctx);
+        case "attendance.expected_count":
+            return resolveAttendanceExpectedCount(ctx);
+        case "attendance.here_now_count":
+            return resolveAttendanceHereNowCount(ctx);
+        case "attendance.not_arrived_count":
+            return resolveAttendanceNotArrivedCount(ctx);
+        case "attendance.checked_out_count":
+            return resolveAttendanceCheckedOutCount(ctx);
+        case "attendance.known_away_count":
+            return resolveAttendanceKnownAwayCount(ctx);
+        case "attendance.unknown_state_count":
+            return resolveAttendanceUnknownStateCount(ctx);
         case "enrollment.time_to_schedule_tour":
             return resolveEnrollmentTimeToScheduleTour(ctx);
         case "enrollment.tour_conversion_rate":
             return resolveEnrollmentTourConversionRate(ctx);
         case "enrollment.lead_count":
-            return resolveEnrollmentLeadCount(ctx);
+            return resolveEnrollmentLeadCountCompat(ctx);
+        case "enrollment.active_leads":
+            return resolveEnrollmentActiveLeads(ctx);
+        case "enrollment.active_families":
+            return resolveEnrollmentActiveFamilies(ctx);
+        case "enrollment.new_leads":
+            return resolveEnrollmentNewLeads(ctx);
+        case "enrollment.waitlisted":
+            return resolveEnrollmentWaitlisted(ctx);
         case "enrollment.tour_completed_count":
             return resolveEnrollmentTourCompletedCount(ctx);
         case "comms.delivery_rate":
@@ -61,6 +135,40 @@ async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): 
             return resolveOpsNeedsAttentionCount(ctx);
         case "ops.readiness_gap_count":
             return resolveOpsReadinessGapCount(ctx);
+        case "financials.outstanding_amount":
+            return resolveFinancialsOutstandingAmount(ctx);
+        case "financials.currently_collectible_amount":
+            return resolveFinancialsCurrentlyCollectibleAmount(ctx);
+        case "financials.gross_charges_posted_amount":
+            return resolveFinancialsGrossChargesPostedAmount(ctx);
+        case "financials.payments_received_amount":
+            return resolveFinancialsPaymentsReceivedAmount(ctx);
+        case "financials.unapplied_payments_amount":
+            return resolveFinancialsUnappliedPaymentsAmount(ctx);
+        case "financials.unresolved_subsidy_variance_amount":
+            return resolveFinancialsUnresolvedSubsidyVarianceAmount(ctx);
+        case "financials.charges_awaiting_post_count":
+            return resolveFinancialsChargesAwaitingPostCount(ctx);
+        case "trust.governed_decisions_created":
+            return resolveTrustGovernedDecisionsCreated(ctx);
+        case "trust.governed_decisions_completed":
+            return resolveTrustGovernedDecisionsCompleted(ctx);
+        case "trust.recommendation_rate":
+            return resolveTrustRecommendationRate(ctx);
+        case "trust.governed_refusal_rate":
+            return resolveTrustGovernedRefusalRate(ctx);
+        case "trust.reasoning_failure_rate":
+            return resolveTrustReasoningFailureRate(ctx);
+        case "trust.deterministic_resolution_rate":
+            return resolveTrustDeterministicResolutionRate(ctx);
+        case "trust.escalated_decision_count":
+            return resolveTrustEscalatedDecisionCount(ctx);
+        case "trust.reasoning_latency_p50":
+            return resolveTrustReasoningLatencyP50(ctx);
+        case "trust.provider_cost_units":
+            return resolveTrustProviderCostUnits(ctx);
+        case "trust.executions_committed_count":
+            return resolveTrustExecutionsCommittedCount(ctx);
         default: {
             const _exhaustive: never = key;
             throw new Error(`Unhandled metric key: ${_exhaustive}`);
@@ -120,9 +228,43 @@ async function resolveFromSnapshotIfAvailable(
 }
 
 export async function resolveSingleMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
-    if (ctx.mode === "snapshot") {
-        const snap = await resolveFromSnapshotIfAvailable(ctx, key);
-        if (snap) return snap;
+    /*
+     * A live-only metric is never satisfied from storage, even when the caller
+     * asked for snapshot resolution.
+     *
+     * The snapshot read below applies a freshness bound (24h by default) and
+     * stamps what it returns `resolveMode: "snapshot"` with the snapshot's own
+     * `computed_at`. For a windowed metric that is exactly right. For "how many
+     * children are here right now" it is meaningless: a count from 23 hours ago
+     * is inside the bound and is still the wrong answer, because attendance
+     * turns over completely within a day. No age is short enough, so the policy
+     * lives on the metric rather than on the clock.
+     *
+     * Refusing here rather than at the surface means every consumer — API, BOS
+     * read, workspace card, a future one nobody has written — inherits the
+     * guarantee, and `resolveMode` stays honest because the value really was
+     * resolved live.
+     */
+    /*
+     * WS0-A — a metric with no scope linkage answers only an unnarrowed, unrestricted request.
+     * Checked before BOTH paths so live and snapshot refuse identically.
+     */
+    const orgOnly = orgScopeOnlyRefusal(ctx, key);
+    if (orgOnly) return metricUnavailable(ctx, key, orgOnly);
+
+    /*
+     * WS0-A — a snapshot is canonical (unrestricted) truth for its scope. A restricted caller whose
+     * own live read would differ resolves live instead, so the stored org figure never stands in
+     * for their narrowed one. `resolveMode` stays honest: the value really was resolved live.
+     */
+    if (ctx.mode === "snapshot" && !isLiveOnlyMetric(key)) {
+        const { scopeType, scopeId } = snapshotScope(ctx);
+        if (snapshotReadableForScope(ctx.scope, scopeType, scopeId)) {
+            const snap = await resolveFromSnapshotIfAvailable(ctx, key);
+            if (snap) return snap;
+        }
+        // Whatever was asked for, this value is resolved live — say so.
+        return resolveLiveMetric({ ...ctx, mode: "live" }, key);
     }
     return resolveLiveMetric(ctx, key);
 }
@@ -134,21 +276,40 @@ export async function resolveMetrics(params: {
     includeKpi?: boolean;
 }): Promise<MetricResolveResult[]> {
     const { ctx, keys, orgMetadata, includeKpi = true } = params;
-    const results: MetricResolveResult[] = [];
 
-    for (const key of keys) {
-        const metric = await resolveSingleMetric(ctx, key);
-        const result: MetricResolveResult = { metric };
-
-        if (includeKpi) {
-            const kpiKey = kpiForMetric(key);
-            if (kpiKey) {
-                result.kpi = evaluateKpiForMetric({ kpiKey, metric, orgMetadata });
+    /*
+     * KEYS RESOLVE CONCURRENTLY.
+     *
+     * They were resolved in a `for await` loop, so the request paid their sum. Measured on the
+     * canonical Work Unit header request (deployed, warm, 6 reps): the three keys cost 838 + 230 +
+     * 200ms of metric work individually but 1,041ms combined, against a parallel floor of ~838ms —
+     * the slowest key. The serial edge is worth roughly 200ms and nothing requires it.
+     *
+     * Nothing shared is WRITTEN here. Each resolver derives its own scope from the same immutable
+     * `ctx`, reads, and returns a value; there is no ordering dependency between keys and no
+     * mutation either could observe. The KPI evaluation below is pure and per-metric.
+     *
+     * FAILURE SEMANTICS ARE UNCHANGED, DELIBERATELY. `resolveSingleMetric` already throws on a
+     * failed key and the loop propagated that, so one bad key failed the whole request.
+     * `Promise.all` preserves exactly that contract — this change is about WHEN keys run, not about
+     * what a failure means. `allSettled` would be a different (arguably better) contract and is not
+     * this slice's decision to make.
+     */
+    const results = await Promise.all(
+        keys.map(async (key): Promise<MetricResolveResult> => {
+            const metric = await resolveSingleMetric(ctx, key);
+            const result: MetricResolveResult = { metric };
+            if (includeKpi) {
+                const kpiKey = kpiForMetric(key);
+                if (kpiKey) {
+                    result.kpi = evaluateKpiForMetric({ kpiKey, metric, orgMetadata });
+                }
             }
-        }
+            return result;
+        }),
+    );
 
-        results.push(result);
-    }
-
+    // Order follows `keys`, exactly as the sequential loop produced it — consumers index by
+    // position in some call sites, so preserving it is part of preserving the contract.
     return results;
 }

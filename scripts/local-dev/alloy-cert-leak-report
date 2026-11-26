@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# Report or safely remove certification metadata leaked into the production runtime.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-cert-leak-report
+  alloy-cert-leak-clean --confirm
+
+Identifies managed-agent metadata (and matching PID/log sidecars) that look like
+certification fixture leaks under the production runtime root.
+
+Safe selection rules (all must match):
+  - metadata name starts with cert-
+  - OR ALLOY_CERT_FIXTURE=1
+  - OR ALLOY_WORKTREE_PATH is under /tmp/alloy-*-cert.*
+  - path is NOT under /Users/Kelly/Code/alloy-worktrees/
+  - refuses unrelated managed-agent metadata
+
+alloy-cert-leak-report   report-only (default)
+alloy-cert-leak-clean --confirm
+  requires interactive confirmation, then deletes only listed metadata/PID/log files.
+  Never deletes Git worktrees, branches, or retained /tmp certification trees.
+EOF
+}
+
+alloy_cert_leak_is_candidate() {
+  local path="$1"
+  local name base wt_path cert_flag
+  base="$(basename "$path" .env)"
+  name="$base"
+
+  # Never touch real worktree metadata by path content.
+  wt_path="$(grep -E '^ALLOY_WORKTREE_PATH=' "$path" 2>/dev/null | head -1 | sed 's/^ALLOY_WORKTREE_PATH=//;s/^"//;s/"$//' || true)"
+  case "$wt_path" in
+    /Users/Kelly/Code/alloy-worktrees/*|/Users/*/Code/alloy-worktrees/*)
+      return 1
+      ;;
+  esac
+
+  cert_flag="$(grep -E '^ALLOY_CERT_FIXTURE=' "$path" 2>/dev/null | head -1 || true)"
+  if [[ "$name" == cert-* ]]; then
+    case "$wt_path" in
+      /tmp/alloy-*-cert.*|/tmp/alloy-*-cert.*/*|/private/tmp/alloy-*-cert.*|/private/tmp/alloy-*-cert.*/*)
+        return 0
+        ;;
+      "")
+        # Name marker alone is insufficient without path or fixture flag.
+        [[ "$cert_flag" == *1* ]] && return 0
+        return 1
+        ;;
+      *)
+        # cert-* name with /tmp cert path already handled; other paths refused.
+        [[ "$cert_flag" == *1* ]] && return 0
+        case "$wt_path" in
+          /tmp/alloy-*-cert*|/private/tmp/alloy-*-cert*) return 0 ;;
+        esac
+        return 1
+        ;;
+    esac
+  fi
+
+  if [[ "$cert_flag" == *1* ]]; then
+    case "$wt_path" in
+      /tmp/alloy-*-cert*|/private/tmp/alloy-*-cert*) return 0 ;;
+    esac
+  fi
+
+  case "$wt_path" in
+    /tmp/alloy-engineering-cert.*|/tmp/alloy-engineering-cert.*/*|/tmp/alloy-product-cert.*|/tmp/alloy-product-cert.*/*)
+      return 0
+      ;;
+    /private/tmp/alloy-engineering-cert.*|/private/tmp/alloy-engineering-cert.*/*|/private/tmp/alloy-product-cert.*|/private/tmp/alloy-product-cert.*/*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+alloy_cert_leak_collect() {
+  local meta_dir="$1"
+  local f
+  shopt -s nullglob
+  for f in "$meta_dir"/*.env; do
+    if alloy_cert_leak_is_candidate "$f"; then
+      printf '%s\n' "$f"
+    fi
+  done
+  shopt -u nullglob
+}
+
+alloy_cert_leak_sidecars() {
+  local meta_path="$1"
+  local name root
+  name="$(basename "$meta_path" .env)"
+  root="$(alloy_default_runtime_root)"
+  for side in \
+    "$root/pids/${name}.pid" \
+    "$root/logs/${name}.log" \
+    "$root/instructions/${name}.md"
+  do
+    [[ -e "$side" ]] && printf '%s\n' "$side"
+  done
+}
+
+main() {
+  local mode="report" confirm=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --confirm) confirm=1; mode="clean"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      report) mode="report"; shift ;;
+      clean) mode="clean"; shift ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  [[ "$mode" != "clean" || "$confirm" -eq 1 ]] \
+    || alloy_die "refusing clean without --confirm (run alloy-cert-leak-report first)"
+
+  # Always evaluate production runtime — never the active fixture root.
+  local prod_root meta_dir
+  prod_root="$(alloy_default_runtime_root)"
+  meta_dir="${prod_root}/metadata"
+
+  alloy_info "Production runtime root: $prod_root"
+  alloy_info "Scanning: $meta_dir"
+  alloy_info ""
+
+  if [[ ! -d "$meta_dir" ]]; then
+    alloy_info "No production metadata directory — nothing to report."
+    exit 0
+  fi
+
+  local -a candidates=()
+  local f
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    candidates+=("$f")
+  done < <(alloy_cert_leak_collect "$meta_dir")
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    alloy_info "No certification metadata leaks found."
+    exit 0
+  fi
+
+  alloy_info "Proposed removals (${#candidates[@]} metadata file(s)):"
+  local side
+  for f in "${candidates[@]}"; do
+    printf '  META  %s\n' "$f"
+    grep -E '^(ALLOY_WORKTREE_NAME|ALLOY_WORKTREE_PATH|ALLOY_WORKTREE_SLOT|PORT)=' "$f" 2>/dev/null \
+      | sed 's/^/        /' || true
+    while IFS= read -r side; do
+      [[ -n "$side" ]] || continue
+      printf '  SIDE  %s\n' "$side"
+    done < <(alloy_cert_leak_sidecars "$f")
+  done
+
+  if [[ "$mode" == "report" ]]; then
+    alloy_info ""
+    alloy_info "Report only. To delete these files after review:"
+    alloy_info "  alloy-cert-leak-clean --confirm"
+    exit 0
+  fi
+
+  alloy_confirm "Delete ${#candidates[@]} leaked certification metadata file(s) from production runtime?"
+
+  for f in "${candidates[@]}"; do
+    rm -f "$f"
+    while IFS= read -r side; do
+      [[ -n "$side" ]] || continue
+      rm -f "$side"
+    done < <(alloy_cert_leak_sidecars "$f")
+    alloy_info "removed: $f"
+  done
+
+  alloy_info "Cleanup complete. Retained /tmp certification trees were not modified."
+}
+
+main "$@"

@@ -1,0 +1,622 @@
+/**
+ * Build shared IdentityCardVM from nested surface config + record truth.
+ */
+
+import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    fieldPresentationLabel,
+    groupShowAvatarForNestedGroup,
+    groupUseProfilePhotosForNestedGroup,
+    nestedGroupLabel,
+    groupDefsFor,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+
+import { fieldIsLinked, fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import type {
+    HouseholdEvidenceChild,
+    HouseholdEvidenceContact,
+    HouseholdEvidenceGroup,
+} from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
+import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { withHouseholdRoleMergedGroups } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
+import {
+    generateDefaultPlacementsForGroup,
+    identitySurfaceFromNestedConfig,
+    reconcileIdentityNestedConfig,
+    resolveIdentityFieldPolicy,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import {
+    composedIdentityDisplayName,
+    resolveIdentityFieldValue,
+    type IdentityComposeSubject,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
+import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
+import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
+import { isIdentityFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import { resolveIdentityFieldLinkContract, normalizeIdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
+import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { resolveIdentityPlacementLabelMode } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import {
+    isCompactTitleRedundantIdentityField,
+    resolveCompactIdentitySummaryLabelMode,
+} from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
+import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import { resolveIdentityFieldEditControl } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
+import { assignmentOwnsProgramRoomField, isLocationIdentityFieldRef, isProgramIdentityFieldRef, isRoomIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
+import { trimOrNull } from "@/lib/completion/valueEmpty";
+import {
+    enabledEvidenceSections,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvidenceCollectionVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { inferAvatarRoleFromSectionKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+
+
+function householdContactFieldSaveSupported(fieldRef: string): boolean {
+    return personContactSaveKeyForIdentityFieldRef(fieldRef) !== null;
+}
+
+function initialsFor(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0]!.charAt(0).toUpperCase();
+    return (parts[0]!.charAt(0) + parts[parts.length - 1]!.charAt(0)).toUpperCase();
+}
+
+function catalogLabel(
+    fieldRef: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): string {
+    return resolveCanonicalIdentityFieldLabel(fieldRef, tenantFieldDefinitions);
+}
+
+function resolveEvidenceCollectionsForGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+): IdentityEvidenceCollectionVM[] {
+    const group = config.groups.find((entry) => entry.key === groupKey);
+    const configured = (group?.evidenceCollections ?? []).map((collection) => ({
+        key: collection.key,
+        label: collection.label,
+        enabled: collection.enabled !== false,
+    }));
+    if (configured.length > 0) return configured;
+
+    if (config.surfaceId === "children_surface" && (groupKey === "roster" || groupKey === "identity")) {
+        return enabledEvidenceSections(config).map((section) => ({
+            key: section.key,
+            label:
+                nestedGroupLabel(config, section.key)
+                ?? groupDefsFor(config.surfaceId).find((def) => def.key === section.key)?.label
+                ?? section.key,
+            enabled: true,
+        }));
+    }
+
+    return [];
+}
+
+
+function placementsForIdentityGroupPurpose(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    purpose: "summary" | "context_facts" | "details",
+): ReturnType<typeof generateDefaultPlacementsForGroup> {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return [];
+    // Always re-pack from key order + fieldLayoutWidths. Stored fieldPlacements may be
+    // stale after Builder beside/reorder; regenerate preserves policy/label/icon only.
+    return generateDefaultPlacementsForGroup(group).filter((placement) =>
+        storageTierMatchesPurpose(placement.tier, purpose),
+    );
+}
+
+function buildRecordRows(args: {
+    config: NestedSurfaceConfig;
+    groupKey: string;
+    subject: IdentityComposeSubject;
+    purpose: "summary" | "context_facts" | "details";
+    canMutate: boolean;
+    isFieldSaveSupported?: (fieldRef: string) => boolean;
+    editGroupKey?: string;
+    maskedChannels?: boolean;
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+}): ReturnType<typeof resolveIdentityFieldRows> {
+    const group = args.config.groups.find((g) => g.key === args.groupKey);
+    if (!group) return [];
+    // Display membership is the authored group only. `editGroupKey` inherits
+    // editability/link policy — it must not inject child_edit / contact_edit fields
+    // into the published Focus surface (that leaked Start date and scrambled order).
+    const placements = placementsForIdentityGroupPurpose(args.config, args.groupKey, args.purpose);
+    const inputs: IdentityFieldRowInput[] = [];
+    for (const placement of placements) {
+        const policy = resolveIdentityFieldPolicy({
+            config: args.config,
+            groupKey: args.groupKey,
+            fieldRef: placement.fieldRef,
+            editGroupKey: args.editGroupKey,
+            tier: args.purpose,
+        });
+        if (!fieldShouldRender(policy)) continue;
+        const authoredLabelModeEarly =
+            placement.labelMode === "hidden"
+            || placement.labelMode === "eyebrow"
+            || placement.labelMode === "visible"
+                ? placement.labelMode
+                : group.fieldModes?.[placement.fieldRef]?.showLabel === false
+                  ? ("hidden" as const)
+                  : group.fieldModes?.[placement.fieldRef]?.showLabel === true
+                    ? ("visible" as const)
+                    : null;
+        // Compact summary: omit title-redundant name parts entirely (runtime projection only).
+        if (
+            args.purpose === "summary"
+            && authoredLabelModeEarly == null
+            && isCompactTitleRedundantIdentityField(placement.fieldRef)
+        ) {
+            continue;
+        }
+        const isMaskedChannel =
+            args.maskedChannels
+            && args.subject.kind === "person"
+            && (placement.fieldRef === "person.phone" || placement.fieldRef === "person.email");
+        const value = isMaskedChannel
+            ? "Contact details restricted"
+            : resolveIdentityFieldValue(args.subject, placement.fieldRef);
+        const saveSupported =
+            args.isFieldSaveSupported?.(placement.fieldRef)
+            ?? isIdentityFieldSaveSupported(placement.fieldRef);
+        const linkContract = resolveIdentityFieldLinkContract(placement.fieldRef);
+        const hasExplicitPolicy = Boolean(
+            placement.policy
+            || group.fieldPolicies?.[placement.fieldRef]
+            || (args.editGroupKey
+                ? args.config.groups.find((g) => g.key === args.editGroupKey)?.fieldPolicies?.[
+                      placement.fieldRef
+                  ]
+                : undefined),
+        );
+        const childHasPrimary =
+            args.subject.kind === "child"
+            && "hasCommittedPrimaryAssignment" in args.subject.value
+            && (args.subject.value as ChildrenEvidenceChild).hasCommittedPrimaryAssignment === true;
+        const assignmentOwned = assignmentOwnsProgramRoomField(placement.fieldRef);
+        const isProgramField = isProgramIdentityFieldRef(placement.fieldRef);
+        const isRoomField = isRoomIdentityFieldRef(placement.fieldRef);
+        const isLocationField = isLocationIdentityFieldRef(placement.fieldRef);
+        const childEvidence =
+            args.subject.kind === "child" ? (args.subject.value as ChildrenEvidenceChild) : null;
+        // Program: Editable before primary assignment (desired program select). Once a
+        // primary classroom exists, Assignments owns Program (derived / Linked).
+        // Location: Editable per child (siblings may differ; sites change). Legacy Linked
+        // configs coerce to Editable — Location is never Assignments-owned.
+        // Room: Linked → Assignments (room is never a free inquiry dropdown here).
+        // Older configs authored Program as Linked — without a primary, that is treated
+        // as Editable so operators can set Desired Program from a dropdown.
+        const effectivePolicy = (() => {
+            if (assignmentOwned && childHasPrimary) return "linked";
+            if (isLocationField) {
+                if (policy === "read-only" || policy === "hidden") return policy;
+                return "editable";
+            }
+            if (isProgramField && !childHasPrimary) {
+                if (policy === "read-only" || policy === "hidden") return policy;
+                return "editable";
+            }
+            if (hasExplicitPolicy) return policy;
+            if (isRoomField) return "linked";
+            if (assignmentOwned) return "linked";
+            if (policy === "read-only" && linkContract.canOfferLinked) return "linked";
+            return policy;
+        })();
+        const editableBase = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
+        // Primary assignment locks Program/Room even if authored Editable.
+        const editable = editableBase && !(assignmentOwned && childHasPrimary);
+        const linked =
+            (fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked)
+            || (assignmentOwned && childHasPrimary && linkContract.canOfferLinked)
+            || (isRoomField && !hasExplicitPolicy && linkContract.canOfferLinked);
+        const homeroomNames = childEvidence ? trimOrNull(childEvidence.room) : null;
+        // Program never shows a derivation line — the field value IS the program.
+        // Room, once enrolled, is the derived homeroom set; before that it points to Assignments.
+        const derivedSourceLabel =
+            isProgramField
+                ? null
+                : assignmentOwned && childHasPrimary && homeroomNames
+                  ? `Derived homeroom: ${homeroomNames}`
+                  : assignmentOwned && childHasPrimary
+                    ? "No homeroom — a classroom provides one when configured for a Homeroom use"
+                    : isRoomField && !childHasPrimary
+                      ? "Set up in Assignments"
+                      : isLocationField && childEvidence?.locationInherited
+                        ? "Inherited from lead"
+                        : null;
+        const linkTarget = linked
+            ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
+                ?? linkContract.defaultTarget
+            : null;
+        const authoredLabelMode = authoredLabelModeEarly;
+        const placementForRuntime = {
+            ...placement,
+            labelMode: resolveCompactIdentitySummaryLabelMode({
+                fieldRef: placement.fieldRef,
+                authoredLabelMode:
+                    authoredLabelMode
+                    ?? resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+                purpose: args.purpose,
+                treatResolvedVisibleAsUnauthored: authoredLabelMode == null,
+            }),
+        };
+        inputs.push({
+            placement: placementForRuntime,
+            label: fieldPresentationLabel(
+                args.config,
+                args.groupKey,
+                placement.fieldRef,
+                catalogLabel(placement.fieldRef, args.tenantFieldDefinitions),
+            ),
+            value,
+            icon:
+                group.fieldModes?.[placement.fieldRef]?.showIcon === false
+                    ? undefined
+                    : resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
+            policy: effectivePolicy,
+            editable,
+            linked,
+            linkLabel: linked
+                ? (childHasPrimary && isProgramField
+                    ? "Change in Assignments"
+                    : childHasPrimary && derivedSourceLabel
+                      ? "Change in Assignments"
+                      : isRoomField && !childHasPrimary
+                        ? "Set up in Assignments"
+                        : linkContract.linkLabel)
+                : null,
+            linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
+            linkTarget,
+            derivedSourceLabel,
+            editControl: (() => {
+                const control = resolveIdentityFieldEditControl(
+                    placement.fieldRef,
+                    args.tenantFieldDefinitions,
+                );
+                if (control.kind === "placement_select" && args.subject.kind === "child") {
+                    const child = args.subject.value as ChildrenEvidenceChild;
+                    if (control.placement === "program") {
+                        return {
+                            ...control,
+                            siteLocationId: child.locationId ?? null,
+                            programCategoryId: child.programCategoryId ?? null,
+                        };
+                    }
+                    if (control.placement === "site") {
+                        return {
+                            ...control,
+                            siteLocationId: child.locationId ?? null,
+                        };
+                    }
+                }
+                return control;
+            })(),
+        });
+    }
+    return resolveIdentityFieldRows(inputs);
+}
+
+function contactSubject(contact: HouseholdEvidenceContact): IdentityComposeSubject {
+    return { kind: "person", value: contact };
+}
+
+function childSubject(child: HouseholdEvidenceChild | ChildrenEvidenceChild): IdentityComposeSubject {
+    return { kind: "child", value: child };
+}
+
+function finalizeIdentityRecordVM(args: {
+    id: string;
+    title: string;
+    avatar?: IdentityRecordVM["avatar"];
+    badge?: string | null;
+    summaryRows: IdentityFieldRowVM[];
+    contextFactRows: IdentityFieldRowVM[];
+    detailRows: IdentityFieldRowVM[];
+    evidenceCollections?: IdentityRecordVM["evidenceCollections"];
+}): IdentityRecordVM {
+    const contextRows = composeContextCollectionRows(args.contextFactRows);
+    return {
+        id: args.id,
+        title: args.title,
+        avatar: args.avatar,
+        badge: args.badge,
+        summaryRows: args.summaryRows,
+        contextFactRows: args.contextFactRows,
+        contextRows,
+        detailRows: args.detailRows,
+        detailsRows: args.detailRows,
+        expandedRows: args.detailRows,
+        canShowDetails: args.detailRows.length > 0 || args.contextFactRows.length > 0,
+        canExpand: args.detailRows.length > 0 || args.contextFactRows.length > 0,
+        evidenceCollections: args.evidenceCollections,
+    };
+}
+
+function buildContactRecordVM(args: {
+    config: NestedSurfaceConfig;
+    groupKey: string;
+    contact: HouseholdEvidenceContact;
+    canMutate: boolean;
+    maskedChannels?: boolean;
+}): IdentityRecordVM {
+    const subject = contactSubject(args.contact);
+    const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
+    const summaryRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "summary",
+        canMutate: args.canMutate,
+        editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
+        maskedChannels: args.maskedChannels,
+    });
+    const contextFactRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "context_facts",
+        canMutate: args.canMutate,
+        editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
+        maskedChannels: args.maskedChannels,
+    });
+    const detailRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "details",
+        canMutate: args.canMutate,
+        editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
+        maskedChannels: args.maskedChannels,
+    });
+    return finalizeIdentityRecordVM({
+        id: args.contact.personId,
+        title: composedIdentityDisplayName(subject, args.config, args.groupKey, args.contact.name),
+        avatar: {
+            imageUrl: useProfilePhotos ? args.contact.imageUrl ?? null : null,
+            initials: args.contact.initials || initialsFor(args.contact.name),
+            visible: showAvatar,
+            role: inferAvatarRoleFromSectionKey(args.groupKey),
+        },
+        badge: args.contact.roleLabel,
+        summaryRows,
+        contextFactRows,
+        detailRows,
+        evidenceCollections: resolveEvidenceCollectionsForGroup(args.config, args.groupKey),
+    });
+}
+
+function buildChildRecordVM(args: {
+    config: NestedSurfaceConfig;
+    groupKey: string;
+    child: HouseholdEvidenceChild | ChildrenEvidenceChild;
+    canMutate: boolean;
+    isFieldSaveSupported?: (fieldRef: string) => boolean;
+}): IdentityRecordVM {
+    const subject = childSubject(args.child);
+    const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
+    const summaryRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "summary",
+        canMutate: args.canMutate,
+        isFieldSaveSupported: args.isFieldSaveSupported,
+        editGroupKey: "child_edit",
+    });
+    const contextFactRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "context_facts",
+        canMutate: args.canMutate,
+        isFieldSaveSupported: args.isFieldSaveSupported,
+        editGroupKey: "child_edit",
+    });
+    const detailRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "details",
+        canMutate: args.canMutate,
+        isFieldSaveSupported: args.isFieldSaveSupported,
+        editGroupKey: "child_edit",
+    });
+    const name = "name" in args.child ? args.child.name : "Child";
+    const rawImageUrl = "imageUrl" in args.child ? args.child.imageUrl ?? null : null;
+    return finalizeIdentityRecordVM({
+        id: args.child.id,
+        title: composedIdentityDisplayName(subject, args.config, args.groupKey, name),
+        avatar: {
+            imageUrl: useProfilePhotos ? rawImageUrl : null,
+            initials: initialsFor(name),
+            visible: showAvatar,
+            role: "child",
+        },
+        badge: args.groupKey === "children" ? "Child" : null,
+        summaryRows,
+        contextFactRows,
+        detailRows,
+        evidenceCollections: resolveEvidenceCollectionsForGroup(args.config, args.groupKey),
+    });
+}
+
+/** Build household identity VM from evidence groups + published config. */
+export function buildHouseholdIdentityCardVM(args: {
+    config: NestedSurfaceConfig | null;
+    groups: HouseholdEvidenceGroup[];
+    canMutate?: boolean;
+    maskedChannels?: boolean;
+}): IdentityCardVM {
+    const config = withHouseholdRoleMergedGroups(
+        reconcileIdentityNestedConfig("household_surface", args.config),
+    );
+    const surfaceKey = "household_surface";
+    const identityConfig = identitySurfaceFromNestedConfig(config);
+    const sections = identityConfig.sections.flatMap((section) => {
+        const built = args.groups.find((group) => group.key === section.key);
+        if (!built) return [];
+        const label =
+            nestedGroupLabel(config, section.key)
+            ?? built.title
+            ?? section.label;
+        const items: IdentityRecordVM[] = [];
+        for (const contact of built.contacts) {
+            items.push(
+                buildContactRecordVM({
+                    config,
+                    groupKey: section.key,
+                    contact,
+                    canMutate: args.canMutate ?? false,
+                    maskedChannels: args.maskedChannels,
+                }),
+            );
+        }
+        for (const child of built.children) {
+            items.push(
+                buildChildRecordVM({
+                    config,
+                    groupKey: section.key,
+                    child,
+                    canMutate: args.canMutate ?? false,
+                }),
+            );
+        }
+        return [{ key: section.key, label, items, emptyState: items.length === 0 ? section.emptyState : undefined }];
+    });
+    return { surfaceKey, sections };
+}
+
+/** Build shared identity field rows for household contact edit from canonical config. */
+export function buildHouseholdContactEditFieldRows(args: {
+    config: NestedSurfaceConfig | null;
+    values: PersonContactValues;
+    canMutate?: boolean;
+}): IdentityFieldRowVM[] {
+    const config = reconcileIdentityNestedConfig({
+        surfaceKey: "household_surface",
+        currentConfig: args.config,
+    });
+    const subject: IdentityComposeSubject = { kind: "contact_edit", value: args.values };
+    const summaryRows = buildRecordRows({
+        config,
+        groupKey: "contact_edit",
+        subject,
+        purpose: "summary",
+        canMutate: args.canMutate ?? true,
+        editGroupKey: "contact_edit",
+        isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
+    });
+    const detailRows = buildRecordRows({
+        config,
+        groupKey: "contact_edit",
+        subject,
+        purpose: "details",
+        canMutate: args.canMutate ?? true,
+        editGroupKey: "contact_edit",
+        isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
+    });
+    // Alias-normalize by mutation value key so contact.phone and person.phone do not double-render.
+    const seenValueKeys = new Set<string>();
+    const deduped: IdentityFieldRowVM[] = [];
+    for (const row of [...summaryRows, ...detailRows]) {
+        const cells = row.cells.filter((cell) => {
+            const valueKey = CONTACT_EDIT_FIELD_MAP[cell.fieldRef];
+            if (!valueKey) return false;
+            if (seenValueKeys.has(valueKey)) return false;
+            seenValueKeys.add(valueKey);
+            return true;
+        });
+        if (cells.length === 0) continue;
+        deduped.push({ ...row, cells });
+    }
+    return deduped;
+}
+
+/** Build children identity VM for one child record. */
+export function buildChildIdentityRecordVM(args: {
+    config: NestedSurfaceConfig | null;
+    child: ChildrenEvidenceChild;
+    groupKey?: string;
+    canMutate?: boolean;
+    isFieldSaveSupported?: (fieldRef: string) => boolean;
+}): IdentityRecordVM {
+    const config = reconcileIdentityNestedConfig("children_surface", args.config);
+    return buildChildRecordVM({
+        config,
+        groupKey: args.groupKey ?? "identity",
+        child: args.child,
+        canMutate: args.canMutate ?? false,
+        isFieldSaveSupported: args.isFieldSaveSupported,
+    });
+}
+
+/** Employee proof fixture — shared renderer without enrollment assumptions. */
+export function buildEmployeeIdentityRecordVM(args: {
+    employee: {
+        id: string;
+        name: string;
+        title?: string | null;
+        department?: string | null;
+        email?: string | null;
+        phone?: string | null;
+        badge?: string | null;
+        imageUrl?: string | null;
+    };
+    config: NestedSurfaceConfig;
+    groupKey?: string;
+    canMutate?: boolean;
+}): IdentityRecordVM {
+    const config = reconcileIdentityNestedConfig("employee_surface", args.config);
+    const groupKey = args.groupKey ?? "identity";
+    const subject: IdentityComposeSubject = { kind: "employee", value: args.employee };
+    const summaryRows = buildRecordRows({
+        config,
+        groupKey,
+        subject,
+        purpose: "summary",
+        canMutate: args.canMutate ?? false,
+    });
+    const contextFactRows = buildRecordRows({
+        config,
+        groupKey,
+        subject,
+        purpose: "context_facts",
+        canMutate: args.canMutate ?? false,
+    });
+    const detailRows = buildRecordRows({
+        config,
+        groupKey,
+        subject,
+        purpose: "details",
+        canMutate: args.canMutate ?? false,
+    });
+    return finalizeIdentityRecordVM({
+        id: args.employee.id,
+        title: args.employee.name,
+        avatar: {
+            imageUrl: args.employee.imageUrl ?? null,
+            initials: initialsFor(args.employee.name),
+            visible: true,
+            role: "contact",
+        },
+        badge: args.employee.badge ?? args.employee.title ?? "Employee",
+        summaryRows,
+        contextFactRows,
+        detailRows,
+    });
+}

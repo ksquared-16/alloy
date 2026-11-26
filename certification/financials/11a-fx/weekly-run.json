@@ -1,0 +1,42 @@
+{
+  "first": {
+    "mode": "execute",
+    "status": 400,
+    "body": {
+      "ok": false,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\".",
+        "details": {
+          "blockers": [
+            {
+              "code": "unsupported_entity_type",
+              "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\"."
+            }
+          ]
+        }
+      },
+      "correlation_id": "baec8d99-8810-4b64-b5bf-f5393fcecee8"
+    }
+  },
+  "second": {
+    "mode": "execute",
+    "status": 400,
+    "body": {
+      "ok": false,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\".",
+        "details": {
+          "blockers": [
+            {
+              "code": "unsupported_entity_type",
+              "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\"."
+            }
+          ]
+        }
+      },
+      "correlation_id": "86ca2f98-5162-4994-9a0e-83c7ac9b82f2"
+    }
+  }
+}

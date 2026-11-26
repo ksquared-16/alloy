@@ -1,0 +1,239 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+import { overlayChildMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayChildMissionOntoSettledFocusModel";
+import { resolveFocusPanelSummaryActiveDoc } from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryActiveDoc";
+import { deriveChildIdentityCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildFocusPanelCards";
+import { focusPanelDefaultCompositionForGrain } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
+import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+
+/**
+ * R-017 — a child-grain LENS subject must have a producer for the card its composition asks for.
+ *
+ * The grid composes a non-case subject from `focusPanelSummaryDefaultDocForGrain`, whose child
+ * composition asks for `child_identity`. That key was derived only on the subject-first durable
+ * path, which `subjectGrain.ts` documents as arriving "subject-first and never through a lens". So
+ * on Firefly's Waitlist the cell composed correctly, found no model, and resolved `visible: false`
+ * → `not_applicable`: an authored cell reading as inapplicable purely because nothing could fill it.
+ *
+ * Browser-measured after the bridge, both real Firefly children, writes blocked:
+ *   Wrigley  header "Wrigley Kurzman", DOB Mar 15 2026, age 5 mo    cards=1, notApplicable=[]
+ *   Lennon   header "Lennon Kurzman",  DOB Apr 2 2024,  age 2 yr 4 mo
+ *   subject switches per row, latest-click-wins holds, 0 render loops
+ */
+
+const settled = (over: Record<string, unknown> = {}) =>
+    ({
+        source: "drawer_vm",
+        phase: "settled",
+        mode: "summary",
+        subject: { id: "opp-1", type: "opportunity", label: "Kurzman Family" },
+        context: {
+            grain: "case",
+            subject: { type: "opportunity", id: "opp-1", label: "Kurzman Family" },
+            businessProcess: { key: "enrollment", label: "Enrollment", stageKey: "waitlist" },
+            signals: { work: {} },
+            truth: {
+                _inquiry_children: [
+                    { customer_member_id: "member-lennon", dob: "2024-04-02", display_name: "Lennon Kurzman" },
+                    { customer_member_id: "member-wrigley", dob: "2026-03-15", display_name: "Wrigley Kurzman" },
+                ],
+            },
+        },
+        cardModels: new Map(),
+        cardReadiness: new Map(),
+        commands: [],
+        title: "Kurzman Family",
+        statusLabel: null,
+        canMutate: true,
+        perspective: null,
+        ...over,
+    }) as never;
+
+const commitCritical = (over: Record<string, unknown> = {}) =>
+    ({
+        subjectId: "participation-1",
+        subjectGrain: { grain: "child", subjectType: "child" },
+        subjectIdentityTruth: {
+            "child.display_name": "Lennon Kurzman",
+            "child.customer_member_id": "member-lennon",
+            "child.family_name": "Kurzman household",
+        },
+        stageWorkRuntime: null,
+        publishedStageInputs: null,
+        situation: { stageKey: "waitlist", stageLabel: "Waitlist" },
+        primaryAction: null,
+        ...over,
+    }) as never;
+
+/*
+ * ONE INSTANT FOR BOTH PATHS.
+ *
+ * The comparison below is "one child card, two entry paths". The durable path is handed an explicit
+ * `now`; the lens path reads the clock. With a hard-coded `now` the two agreed only while the real
+ * date happened to fall in the same month-bucket — the test read `2 yr 4 mo` for a child born
+ * 2024-04-02 and started failing the moment the calendar rolled past 2026-09-02, which is a
+ * property of the day it is run, not of the code. Freezing the clock makes the assertion about the
+ * two producers again.
+ */
+const FROZEN_NOW = new Date("2026-08-16T00:00:00.000Z");
+beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_NOW);
+});
+afterAll(() => {
+    vi.useRealTimers();
+});
+
+describe("the lens path produces the card the child composition asks for", () => {
+    it("emits child_identity, ready, for a child-grain subject", () => {
+        const model = overlayChildMissionOntoSettledFocusModel(settled(), commitCritical());
+        expect(model.cardModels.has("child_identity")).toBe(true);
+        expect(model.cardReadiness.get("child_identity")).toBe("ready");
+    });
+
+    it("produces the SAME canonical model as the subject-first durable path", () => {
+        const now = FROZEN_NOW;
+        const subject: DurableChildSubject = {
+            memberId: "member-lennon",
+            personId: null,
+            householdId: null,
+            label: "Lennon Kurzman",
+            dateOfBirth: "2024-04-02",
+            householdName: "Kurzman household",
+            isActive: true,
+            truth: {},
+        };
+        const durable = deriveChildIdentityCard(subject, now);
+        const lens = overlayChildMissionOntoSettledFocusModel(settled(), commitCritical())
+            .cardModels.get("child_identity")!;
+        // One child card, two entry paths — not a second implementation.
+        expect(lens.key).toBe(durable.key);
+        expect(lens.archetype).toBe(durable.archetype);
+        expect(lens.title).toBe(durable.title);
+        expect(lens.insight).toBe(durable.insight);
+        expect(JSON.stringify(lens.payload)).toBe(JSON.stringify(durable.payload));
+    });
+
+    it("reads the focused child's own DOB from the settled family collection", () => {
+        const wrigley = overlayChildMissionOntoSettledFocusModel(
+            settled(),
+            commitCritical({
+                subjectIdentityTruth: {
+                    "child.display_name": "Wrigley Kurzman",
+                    "child.customer_member_id": "member-wrigley",
+                },
+            }),
+        ).cardModels.get("child_identity")!;
+        // Matched on the member id — the identity of record — not on position or name.
+        expect(JSON.stringify(wrigley.payload)).toContain("Mar 15, 2026");
+        expect(JSON.stringify(wrigley.payload)).not.toContain("Apr 2, 2024");
+    });
+
+    it("states an unknown DOB rather than omitting the card", () => {
+        const model = overlayChildMissionOntoSettledFocusModel(
+            settled(),
+            commitCritical({
+                subjectIdentityTruth: { "child.display_name": "Unknown Child", "child.customer_member_id": "member-absent" },
+            }),
+        );
+        expect(model.cardReadiness.get("child_identity")).toBe("ready");
+        expect(model.cardModels.get("child_identity")!.insight).toMatch(/not recorded/i);
+    });
+});
+
+describe("the grain guard is not weakened", () => {
+    it("leaves a non-child subject completely untouched", () => {
+        const base = settled();
+        const out = overlayChildMissionOntoSettledFocusModel(
+            base,
+            commitCritical({ subjectGrain: { grain: "case", subjectType: "opportunity" } }),
+        );
+        // Same object — a case subject must not acquire a child card by passing through here.
+        expect(out).toBe(base);
+        expect(out.cardModels.has("child_identity")).toBe(false);
+    });
+
+    const grid = readFileSync(
+        join(process.cwd(), "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"),
+        "utf8",
+    );
+
+    /*
+     * THE RULE MOVED; THE GUARD FOLLOWS IT.
+     *
+     * These two asserted the shape of an inline ternary in `OpportunityFocusPanelModeGrid` —
+     * `const isCaseGrain = ...`, `(isCaseGrain ? publishedDoc : null) ?? focusPanelSummaryDefault-
+     * DocForGrain(...)`. That logic is now `focusPanelSummaryUsesPublishedDoc` +
+     * `resolveFocusPanelSummaryActiveDoc`, so the skeleton and the settled body cannot answer
+     * "which doc composes this surface" differently. `focusPanelSurfaceParityRegression` asserts
+     * the relocation outright, requiring ModeGrid NOT to reach for a default doc itself — so these
+     * two tests were asserting the exact thing a newer, promoted test forbids.
+     *
+     * The BEHAVIOUR they guard is real and unchanged, so it is asserted here against the function
+     * that owns it rather than against source text that will move again.
+     */
+    it("still consults the publication for the CASE grain only", () => {
+        const published = { sections: [], metadata: {} } as never;
+        // A case composes from the org's published Surface.
+        expect(resolveFocusPanelSummaryActiveDoc({
+            isSummary: true, grain: "opportunity", publishedDoc: published,
+        })).toBe(published);
+        // A person or household never does — that is the leak the gate exists to prevent.
+        for (const grain of ["person", "household"] as const) {
+            expect(resolveFocusPanelSummaryActiveDoc({
+                isSummary: true, grain, publishedDoc: published,
+            }), grain).not.toBe(published);
+        }
+        // And the wiring still reads the rule from its owner rather than restating it.
+        expect(grid).toContain("focusPanelSummaryUsesPublishedDoc(subjectGrain, { familySettlement })");
+        expect(grid).toContain("usePublishedFocusPanelSummaryDoc(isSummary && usesPublishedDoc)");
+    });
+
+    it("decides family settlement from the subject's PATH, never from its grain", () => {
+        // Expressing this as a grain would re-litigate `cardAppliesToGrain` and leak family cards
+        // onto every child, including a durable standalone one.
+        expect(grid).toContain('const familySettlement = model.source !== "durable_subject"');
+        expect(grid).toContain("context: { familySettlement }");
+        // Same grain, two paths: the settled child takes the publication, the durable one does not.
+        const published = { sections: [], metadata: {} } as never;
+        expect(resolveFocusPanelSummaryActiveDoc({
+            isSummary: true, grain: "child", publishedDoc: published, context: { familySettlement: true },
+        })).toBe(published);
+        expect(resolveFocusPanelSummaryActiveDoc({
+            isSummary: true, grain: "child", publishedDoc: published, context: { familySettlement: false },
+        })).not.toBe(published);
+    });
+
+    it("keeps a non-case subject on its own code-owned composition", () => {
+        // Staff/person must not inherit the enrollment cards. The published doc is addressed by
+        // entity_type="opportunities", so applying it to a person would put household/children on
+        // a staff member — the failure the guard exists to prevent.
+        const person = focusPanelDefaultCompositionForGrain("person").map((e) => e.key);
+        const child = focusPanelDefaultCompositionForGrain("child").map((e) => e.key);
+        const family = focusPanelDefaultCompositionForGrain("opportunity").map((e) => e.key);
+        /*
+         * `billing_preview` was the third member of this set and is retired from normal
+         * composition (Financials 11B) — a card in no composition cannot demonstrate that a
+         * person does not inherit the family's. The guard is unchanged; its witnesses are the
+         * two cards that still compose.
+         */
+        for (const familyOnly of ["household", "children"]) {
+            expect(family).toContain(familyOnly);
+            expect(person).not.toContain(familyOnly);
+        }
+        /*
+         * A child's composition is the CONFIGURED child card, and a person's is not.
+         *
+         * `children` appears in both the family and the child compositions, and that is not the
+         * guard leaking: it is one card composing two truthfully different collections — a family's
+         * roster on a case, and the subject alone on a child record. The guard's job is to keep it
+         * off a PERSON, who has no such collection at all, and that is what is asserted here.
+         */
+        expect(child).toContain("children");
+        expect(person).not.toContain("children");
+        expect(person).not.toContain("child_identity");
+    });
+});

@@ -1,6 +1,6 @@
 # Process Builder — Architecture Reality Check v1
 
-**Path:** `docs/sprints/06_2026/process_builder_architecture_reality_check_v1.md`  
+**Path:** `docs/sprints/archive/06_2026/process_builder_architecture_reality_check_v1.md`  
 **Status:** Step 1 deliverable (Enrollment Process hub sprint)  
 **Doctrine:** Lifecycle = reusable process type · Enrollment Process = first lifecycle instance · Stages = lanes within the process
 

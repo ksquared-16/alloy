@@ -1,0 +1,270 @@
+/**
+ * Canonical Room provider (Phase A, A3).
+ *
+ * A Room is a typed Location node (`location_type = 'unit'`, parent = site) — NOT
+ * a separate table (RFC §7). This provider is the ONE way to enumerate rooms, so
+ * consumers stop querying `location_type === 'unit'` directly. It projects rooms
+ * from the Location hierarchy (reusing the Location provider) and keeps
+ * operational capacity/ratio values OUT of Room identity — those live in the
+ * scoped childcare_* config resolved by the Capacity/Ratio providers.
+ *
+ * Age band is surfaced as a compatibility HINT only (from `locations.metadata`),
+ * never authoritative truth; its structured promotion is open decision §21-5
+ * (Phase B). Program eligibility returns an explicit status — `unknown` when
+ * there is no age-band data — rather than inventing certainty.
+ *
+ * Phase A wraps existing reads and migrates no consumers.
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { CanonicalLocation, CanonicalRoom } from "@/lib/location/canonicalLocationModel";
+import { isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
+import {
+    resolveLocationById,
+    resolveLocationHierarchy,
+} from "@/lib/location/canonicalLocationProvider";
+
+/** Metadata keys that may carry a room's age-band hint (compatibility only). */
+const ROOM_AGE_GROUP_METADATA_KEYS = ["classroom_age_group", "childcare_program_type", "category"] as const;
+
+function roomAgeGroupCompat(metadata: Record<string, unknown>): string | null {
+    for (const key of ROOM_AGE_GROUP_METADATA_KEYS) {
+        const value = metadata[key];
+        if (typeof value === "string" && value.length > 0) return value;
+    }
+    return null;
+}
+
+/**
+ * Project a `unit` Location into a CanonicalRoom. Returns null for non-unit
+ * locations or units with no parent (orphan) — an orphan is never a valid room
+ * and must not be silently attached to a phantom site.
+ *
+ * `siteLocationId` MUST be supplied for a nested room, because a unit's parent
+ * is only the site when the room hangs directly off it. Omitting it for a nested
+ * group would attribute the group to its containing physical space, which reads
+ * as a plausible site id and would never raise — so the resolved site is passed
+ * in by the caller that did the ancestor walk, not guessed here.
+ */
+export function toCanonicalRoom(
+    location: CanonicalLocation,
+    siteLocationId?: string
+): CanonicalRoom | null {
+    if (location.type !== "unit" || !location.parentLocationId) return null;
+    const site = siteLocationId ?? location.parentLocationId;
+    return {
+        id: location.id,
+        orgId: location.orgId,
+        siteLocationId: site,
+        containingSpaceLocationId:
+            location.parentLocationId === site ? null : location.parentLocationId,
+        unitRole: location.unitRole ?? "operational_group",
+        name: location.name,
+        locationNumber: location.locationNumber,
+        statusKey: location.statusKey,
+        isActive: location.isActive,
+        ageGroupCompat: roomAgeGroupCompat(location.metadata),
+        metadata: location.metadata,
+    };
+}
+
+/**
+ * The minimal raw shape an ancestry walk needs — a `locations` row as the
+ * Settings surfaces already hold it, in snake_case.
+ */
+export type LocationAncestryRow = {
+    id: string;
+    parent_location_id?: string | null;
+    /** Needed only to answer WHICH site; `rowBelongsToSite` does not read it. */
+    location_type?: string | null;
+};
+
+/**
+ * Does `row` sit under `siteId`, at any allowed depth?
+ *
+ * Settings surfaces hold raw rows rather than `CanonicalLocation`s, and each one
+ * had grown its own `parent_location_id === site.id` test. That is correct only
+ * for a room hanging directly off the site: a group nested inside a physical
+ * space has the space as its parent, so every one of those filters silently hid
+ * the classrooms an operator was looking for. This is the one walk they share.
+ *
+ * The site row itself need not be present in `rows` — only its id is needed, so
+ * a caller holding just the room list can still resolve correctly. Depth is
+ * bounded and revisits are guarded, matching `resolveSiteIdsByLocation` and
+ * `public.location_site_id()`: an unresolvable chain answers false rather than
+ * guessing.
+ */
+export function rowBelongsToSite(
+    row: LocationAncestryRow,
+    siteId: string,
+    byId: ReadonlyMap<string, LocationAncestryRow>
+): boolean {
+    if (!siteId) return false;
+    let parentId = row.parent_location_id ?? null;
+    const seen = new Set<string>([row.id]);
+    let hops = 0;
+    while (parentId && hops < 8) {
+        if (parentId === siteId) return true;
+        if (seen.has(parentId)) return false; // cycle
+        seen.add(parentId);
+        const next = byId.get(parentId);
+        if (!next) return false;
+        parentId = next.parent_location_id ?? null;
+        hops += 1;
+    }
+    return false;
+}
+
+/**
+ * WHICH site does `row` resolve to?
+ *
+ * The sibling question to `rowBelongsToSite`, and deliberately a separate
+ * function rather than a refactor of it: that one answers "is it under THIS
+ * site" and needs only the site's id, so it works for a caller holding nothing
+ * but the room list. This one needs the site ROW present, because it recognises
+ * a site by its `location_type`. Same bound, same revisit guard, same refusal to
+ * guess — both mirror `public.location_site_id()`.
+ *
+ * Presentation asks this question: a nested classroom's parent is a physical
+ * room, so "the parent is the site" answers a plausible-looking id that is not a
+ * site at all, and every surface that believed it printed the wrong thing or
+ * nothing.
+ */
+export function resolveRowSiteId(
+    row: LocationAncestryRow,
+    byId: ReadonlyMap<string, LocationAncestryRow>
+): string | null {
+    let current: LocationAncestryRow | undefined = row;
+    const seen = new Set<string>();
+    let hops = 0;
+    while (current && hops < 8) {
+        if (seen.has(current.id)) return null; // cycle
+        seen.add(current.id);
+        if (String(current.location_type ?? "").trim() === "site") return current.id;
+        const parentId = current.parent_location_id ?? null;
+        if (!parentId) return null;
+        current = byId.get(parentId);
+        hops += 1;
+    }
+    return null;
+}
+
+/** Every row in `rows` that belongs to `siteId` by ancestry. */
+export function rowsBelongingToSite<T extends LocationAncestryRow>(
+    rows: readonly T[],
+    siteId: string
+): T[] {
+    const byId = new Map<string, LocationAncestryRow>(rows.map((r) => [r.id, r]));
+    return rows.filter((r) => rowBelongsToSite(r, siteId, byId));
+}
+
+/**
+ * The operational groups among these rooms — the classrooms/cohorts themselves.
+ *
+ * The neutral filter. A physical space is the licensed shell and a shared space
+ * is somewhere a child may BE without belonging to it, so neither is a group.
+ */
+export function operationalGroupRooms(rooms: readonly CanonicalRoom[]): CanonicalRoom[] {
+    return rooms.filter((r) => isOperationalGroupRole(r.unitRole));
+}
+
+/** Rooms a child may be PLACED into — operational groups only. */
+export function placeableRooms(rooms: readonly CanonicalRoom[]): CanonicalRoom[] {
+    return operationalGroupRooms(rooms);
+}
+
+/** The operational groups a physical space contains. */
+export function groupsInSpace(
+    rooms: readonly CanonicalRoom[],
+    spaceLocationId: string
+): CanonicalRoom[] {
+    return rooms.filter((r) => r.containingSpaceLocationId === spaceLocationId);
+}
+
+/**
+ * Rooms belonging to a site. Empty when the site id is not a `site` Location.
+ * Active-only by default. Cross-location leakage is impossible — rooms are the
+ * hierarchy's unit children of exactly this site.
+ */
+export async function resolveRoomsForLocation(
+    supabase: SupabaseClient,
+    orgId: string,
+    siteLocationId: string,
+    options: { includeInactive?: boolean } = {}
+): Promise<CanonicalRoom[]> {
+    const hierarchy = await resolveLocationHierarchy(supabase, orgId, siteLocationId, {
+        includeInactive: options.includeInactive,
+    });
+    if (!hierarchy) return [];
+    return hierarchy.rooms
+        .map((room) => toCanonicalRoom(room, hierarchy.siteByRoomId.get(room.id) ?? siteLocationId))
+        .filter((r): r is CanonicalRoom => r != null);
+}
+
+/**
+ * A single Room by id, or null when not found / not a `unit` / orphan.
+ *
+ * A nested group needs its site resolved through the containing space, so this
+ * follows the parent one hop when the parent is itself a unit. A chain that
+ * never reaches a site yields null rather than a room attached to a non-site.
+ */
+export async function resolveRoomById(
+    supabase: SupabaseClient,
+    orgId: string,
+    roomId: string
+): Promise<CanonicalRoom | null> {
+    if (!roomId) return null;
+    const location = await resolveLocationById(supabase, orgId, roomId);
+    if (!location || location.type !== "unit" || !location.parentLocationId) return null;
+
+    const parent = await resolveLocationById(supabase, orgId, location.parentLocationId);
+    if (!parent) return null;
+    if (parent.type === "site") return toCanonicalRoom(location, parent.id);
+
+    if (parent.type === "unit" && parent.parentLocationId) {
+        const grandparent = await resolveLocationById(supabase, orgId, parent.parentLocationId);
+        if (grandparent?.type === "site") return toCanonicalRoom(location, grandparent.id);
+    }
+    return null;
+}
+
+/**
+ * Program-eligibility status for a room.
+ * - `eligible`     — the room's age-band hint matches the program key.
+ * - `not_eligible` — the room has a DIFFERENT age-band hint (positive mismatch).
+ * - `unknown`      — no age-band data; eligibility cannot be asserted (compat).
+ */
+export type RoomProgramEligibility = "eligible" | "not_eligible" | "unknown";
+
+export type RoomProgramMatch = {
+    room: CanonicalRoom;
+    eligibility: RoomProgramEligibility;
+};
+
+/**
+ * Rooms at a site tagged with their eligibility for a program. Returns EVERY room
+ * with an explicit status (never silently drops `unknown` rooms as ineligible) so
+ * callers see the compatibility gap rather than false certainty. Consumers filter
+ * by `eligibility` as their surface requires.
+ */
+export async function resolveRoomsForProgram(
+    supabase: SupabaseClient,
+    orgId: string,
+    siteLocationId: string,
+    programKey: string,
+    options: { includeInactive?: boolean } = {}
+): Promise<RoomProgramMatch[]> {
+    const rooms = await resolveRoomsForLocation(supabase, orgId, siteLocationId, options);
+    const key = programKey.trim();
+    return rooms.map((room) => {
+        let eligibility: RoomProgramEligibility;
+        if (!key || room.ageGroupCompat == null) {
+            eligibility = "unknown";
+        } else if (room.ageGroupCompat === key) {
+            eligibility = "eligible";
+        } else {
+            eligibility = "not_eligible";
+        }
+        return { room, eligibility };
+    });
+}

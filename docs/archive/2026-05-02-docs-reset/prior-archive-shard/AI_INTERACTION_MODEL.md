@@ -4,7 +4,7 @@
 
 # Alloy AI Interaction Model
 
-> **Note (2026-04):** AI must operate **within** platform doctrine; see [`docs/architecture/workspace-work-unit-scope-doctrine.md`](./architecture/workspace-work-unit-scope-doctrine.md#future-ai-compatibility-not-implementation-now) and [`docs/architecture/README.md`](./architecture/README.md).
+> **Note (2026-04):** AI must operate **within** platform doctrine; see [`docs/architecture/workspace-work-unit-scope-doctrine.md`](../architecture/workspace-work-unit-scope-doctrine.md#future-ai-compatibility-not-implementation-now) and [`docs/architecture/README.md`](../architecture/README.md).
 
 ## Overview
 

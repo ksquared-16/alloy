@@ -1,0 +1,44 @@
+{
+  "dangling_before": [
+    "lead->qualification",
+    "waitlist->enrollment",
+    "enrolling->closed_withdrawn"
+  ],
+  "removals_run1": [
+    {
+      "process_key": "enrollment",
+      "source_stage": "lead",
+      "reference": "reached_move",
+      "reference_kind": "move_to_stage",
+      "invalid_target": "qualification",
+      "action": "removed_target"
+    },
+    {
+      "process_key": "enrollment",
+      "source_stage": "waitlist",
+      "reference": "offer_to_enrolling",
+      "reference_kind": "move_to_stage",
+      "invalid_target": "enrollment",
+      "action": "removed_target"
+    },
+    {
+      "process_key": "enrollment",
+      "source_stage": "enrolling",
+      "reference": "withdrew",
+      "reference_kind": "move_to_stage",
+      "invalid_target": "closed_withdrawn",
+      "action": "removed_target"
+    }
+  ],
+  "clean_after_run1": true,
+  "changed_run2": false,
+  "removals_run2": [],
+  "stage_keys_after": [
+    "lead",
+    "tour",
+    "decision",
+    "waitlist",
+    "enrolling",
+    "enrolled"
+  ]
+}

@@ -1,0 +1,136 @@
+[
+  {
+    "t": "2026-08-12T20:36:17.285Z",
+    "step": "health",
+    "status": 200
+  },
+  {
+    "t": "2026-08-12T20:36:28.704Z",
+    "step": "prepare",
+    "status": 200,
+    "ok": true,
+    "invitationId": "56a1a7dc-e484-48c9-acd2-dd86a6f13fc7",
+    "inviteUrl": "http://localhost:3015/a/3JwtFbpe"
+  },
+  {
+    "t": "2026-08-12T20:36:29.431Z",
+    "step": "short",
+    "status": 307,
+    "loc": "/tour-booking/_LRRZFW-AQvumrEOHM1LIivO_NPQzgUJaNgImXWW_6M",
+    "token": "_LRRZFW-AQvu"
+  },
+  {
+    "t": "2026-08-12T20:36:32.095Z",
+    "step": "resolve-before",
+    "state": "choose",
+    "actions": [
+      {
+        "intent": "book",
+        "label": "Confirm Tour",
+        "tone": "primary"
+      },
+      {
+        "intent": "decline",
+        "label": "Not right now",
+        "tone": "quiet"
+      }
+    ]
+  },
+  {
+    "t": "2026-08-12T20:36:34.810Z",
+    "step": "slots",
+    "count": 36,
+    "first": "2026-08-14T16:00:00.000Z"
+  },
+  {
+    "t": "2026-08-12T20:36:41.183Z",
+    "step": "ui-open",
+    "hasAccountCopy": false,
+    "hasConfirm": false,
+    "headline": "Choose a time to visit",
+    "location": "North Campus 123 Main Street, Bend, OR 97701 We'd love to show you around North Campus. Pi"
+  },
+  {
+    "t": "2026-08-12T20:36:41.247Z",
+    "step": "day-click",
+    "dayClicked": true
+  },
+  {
+    "t": "2026-08-12T20:36:41.650Z",
+    "step": "times",
+    "timeCount": 3
+  },
+  {
+    "t": "2026-08-12T20:36:42.476Z",
+    "step": "ui-after-pick",
+    "hasConfirm": true,
+    "slice": "Alloy Choose a time to visit North Campus 123 Main Street, Bend, OR 97701 We'd love to show you around North Campus. Pick whichever time suits you. August 2026 S M T W T F S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 Friday, August 14 9:00 AM 10:00 AM 11:00 AM Friday, August 14 9:00 AM North Campus Confirm Tour Not right now"
+  },
+  {
+    "t": "2026-08-12T20:36:44.855Z",
+    "step": "resolve-mid",
+    "state": "choose"
+  },
+  {
+    "t": "2026-08-12T20:37:08.697Z",
+    "step": "ui-after-confirm",
+    "headline": "Tour confirmed",
+    "slice": "Alloy Tour confirmed North Campus 123 Main Street, Bend, OR 97701 We'll see you at North Campus on Friday, August 14 · 9:00 AM. Friday, August 14 · 9:00 AM Choose a different timeCancel tour We look forward to seeing you.",
+    "hasConfirmBtn": false
+  },
+  {
+    "t": "2026-08-12T20:37:09.723Z",
+    "step": "double-confirm",
+    "status": 200,
+    "replay": true,
+    "ok": true
+  },
+  {
+    "t": "2026-08-12T20:37:10.782Z",
+    "step": "db",
+    "bookings": [
+      {
+        "id": "0f3ed75f-8102-422e-b0da-2b90cd9c9ca6",
+        "status_key": "confirmed",
+        "start_at": "2026-08-14T16:00:00+00:00",
+        "timezone": "America/Los_Angeles",
+        "source": "public_link",
+        "opportunity_id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+        "created_at": "2026-08-12T20:36:49.571057+00:00"
+      }
+    ],
+    "inv": {
+      "id": "56a1a7dc-e484-48c9-acd2-dd86a6f13fc7",
+      "status": "booked"
+    }
+  },
+  {
+    "t": "2026-08-12T20:37:23.434Z",
+    "step": "tours-view",
+    "rowCount": 0,
+    "hasFamily": false,
+    "rows": [],
+    "slice": "1 ⌘K All locations ▾ KK Enrollment Pipeline 0 Needs attention 0 Overdue work 2 Pipeline Children Actions (2) ▶ New 0 Active Pipeline 0 Registration 0 Waitlist 2 Tours 0 All 1 No records in this view Select a record to begin The record you open appears here. BOS Operational Intelligence Reset Pin Close Helping with Business Process: Enrollment Attention · No urgent issues Here are some ways I can help ▾ Summarize this queue Get a quick overview of details and history Identify missing information "
+  },
+  {
+    "t": "2026-08-12T20:37:39.326Z",
+    "step": "focus",
+    "card": "What's NextIn progressWaitlistManage waitlist candidates and spot offers.Current work · Review waitlist positionMessageSend formTour ▾View all activity",
+    "tourHits": [
+      "Tour",
+      "Tour"
+    ]
+  },
+  {
+    "t": "2026-08-12T20:37:39.327Z",
+    "step": "SUMMARY",
+    "parentConfirmed": true,
+    "accountCopyGone": true,
+    "confirmOnlyAfterPick": true,
+    "bookingId": "0f3ed75f-8102-422e-b0da-2b90cd9c9ca6",
+    "bookingStatus": "confirmed",
+    "invStatus": "booked",
+    "toursHasFamily": false,
+    "doubleConfirmOk": true
+  }
+]

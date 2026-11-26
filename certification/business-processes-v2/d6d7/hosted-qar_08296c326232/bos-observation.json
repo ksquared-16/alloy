@@ -1,0 +1,87 @@
+[
+  {
+    "name": "enrollment-record-first-entry",
+    "mounted": true,
+    "mode": "floating",
+    "visibility": "visible",
+    "visible": true,
+    "rect": [
+      522,
+      333,
+      398,
+      618
+    ],
+    "overlap_fraction_of_focus": 0.32,
+    "text_visible": true,
+    "pref": null,
+    "url": "/workspace/work-unit/all?subject_id=de17caff-d706-44e8-b9d1-07aa58caa44b"
+  },
+  {
+    "name": "enrollment-record-refresh",
+    "mounted": true,
+    "mode": "floating",
+    "visibility": "visible",
+    "visible": true,
+    "rect": [
+      522,
+      333,
+      398,
+      618
+    ],
+    "overlap_fraction_of_focus": 0.32,
+    "text_visible": true,
+    "pref": null,
+    "url": "/workspace/work-unit/all?subject_id=de17caff-d706-44e8-b9d1-07aa58caa44b"
+  },
+  {
+    "name": "enrollment-record-switch",
+    "mounted": true,
+    "mode": "floating",
+    "visibility": "visible",
+    "visible": true,
+    "rect": [
+      192,
+      333,
+      398,
+      618
+    ],
+    "overlap_fraction_of_focus": 0.09,
+    "text_visible": true,
+    "pref": null,
+    "url": "/workspace/work-unit/all?subject_id=d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+  },
+  {
+    "name": "assignments-record-first-entry-new-tab",
+    "mounted": true,
+    "mode": "floating",
+    "visibility": "hidden",
+    "visible": false,
+    "rect": [
+      852,
+      333,
+      398,
+      618
+    ],
+    "overlap_fraction_of_focus": 0,
+    "text_visible": false,
+    "pref": null,
+    "url": "/workspace/work-unit/current-assignments?subject_id=child%3A41ec45f8-5e69-4a4d-abb3-94d547fbf4d8"
+  },
+  {
+    "name": "workspace-home",
+    "mounted": true,
+    "mode": "floating",
+    "visibility": "visible",
+    "visible": true,
+    "rect": [
+      852,
+      333,
+      398,
+      618
+    ],
+    "overlap_fraction_of_focus": 0,
+    "text_visible": true,
+    "pref": null,
+    "url": "/workspace"
+  }
+]

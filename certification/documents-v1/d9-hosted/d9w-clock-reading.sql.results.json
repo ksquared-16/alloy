@@ -1,0 +1,55 @@
+{
+  "trusted_host_action_id": "tha_c31aedb82c699c",
+  "query_hash": "839e1212ee128ffd5791a1050ef1218383f9100f330a9b58081aacbe2c72ede7",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-09T05:14:22.232Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c31aedb82c699c",
+    "query_hash": "839e1212ee128ffd5791a1050ef1218383f9100f330a9b58081aacbe2c72ede7",
+    "authorization_id": "grnt_f22277e8859649a1",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-09T05:14:29.129Z",
+    "question_ids": [
+      "d9w_clock_woke_within_15m",
+      "d9w_clock"
+    ],
+    "questions": {
+      "d9w_clock_woke_within_15m": {
+        "question_id": "d9w_clock_woke_within_15m",
+        "row_count": null,
+        "rows": [
+          "scheduled_work_clock ~ last_wake_within_15m ~ true ~ true"
+        ]
+      },
+      "d9w_clock": {
+        "question_id": "d9w_clock",
+        "row_count": null,
+        "rows": [
+          {
+            "wake_count": 13940,
+            "first_wake_at": "2026-09-21T19:25:02.705591+00:00",
+            "last_wake_at": "2026-11-09T05:10:00.763623+00:00",
+            "last_wake_age_s": 268,
+            "last_worker_id": "worker-525e075e",
+            "last_summary_keys": [
+              "claimed",
+              "completed",
+              "retry_scheduled",
+              "terminally_failed",
+              "unregistered_handler"
+            ],
+            "observed_at": "2026-11-09T05:14:28.447175+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

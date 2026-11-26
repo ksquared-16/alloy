@@ -1,0 +1,102 @@
+{
+  "run": "qar_8fb0e1ffabcf",
+  "phase": "r5",
+  "summary": {
+    "passed": 7,
+    "total": 9
+  },
+  "sections": {
+    "R5": {
+      "passed": 7,
+      "total": 9
+    }
+  },
+  "results": [
+    {
+      "section": "R5",
+      "case": "before: every run submission exists",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": null,
+      "code": null,
+      "before": {
+        "s_opp1": 200,
+        "s_opp2": 200,
+        "s_k1": 200,
+        "s_k2": 200,
+        "s_unrel": 200
+      }
+    },
+    {
+      "section": "R5",
+      "case": "L1 delete-preview counts its submissions (opportunity + deleted children's own)",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": 200,
+      "code": null,
+      "form_submissions": null,
+      "expected": 3,
+      "shared_child": false
+    },
+    {
+      "section": "R5",
+      "case": "L1 lead deletion (audited product route)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "deleted": null
+    },
+    {
+      "section": "R5",
+      "case": "the deleted child's child-only submission (s_k1) is gone",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R5",
+      "case": "the deleted opportunity's submission (s_opp1) is gone",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R5",
+      "case": "the deleted child K1 is gone",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R5",
+      "case": "unrelated submissions (L2 opportunity, L2 child) are unchanged",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": null,
+      "code": null,
+      "s_opp2": 200,
+      "s_unrel": 200
+    },
+    {
+      "section": "R5",
+      "case": "shared-child precondition available (second lead on the same household)",
+      "persona": "fixture_admin",
+      "pass": false,
+      "status": null,
+      "code": null,
+      "note": "create_lead did not attach to the existing household; shared-child preservation NOT proven on hosted"
+    },
+    {
+      "section": "R5",
+      "case": "K2 (not shared) went with L1 and took its own submission",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    }
+  ]
+}

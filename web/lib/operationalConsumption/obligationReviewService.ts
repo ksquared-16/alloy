@@ -38,7 +38,7 @@ function fail(code: Code, message: string): never {
 }
 
 const OBLIGATION_COLUMNS =
-    "id, org_id, consumption_event_id, charge_template_id, service_id, amount_cents, currency_code, occurs_on, billable_on, period_start, status, obligation_kind, review_required, review_status, reviewed_at, reviewed_by, suppression_reason, explanation, draft_charge_id, resolution_key, created_at";
+    "id, org_id, consumption_event_id, charge_template_id, service_id, amount_cents, currency_code, occurs_on, billable_on, period_start, status, obligation_kind, review_required, review_status, reviewed_at, reviewed_by, suppression_reason, explanation, draft_charge_id, resolution_key, superseded_by_event_id, created_at";
 
 type EventRow = {
     id: string;
@@ -54,7 +54,9 @@ type EventRow = {
 type ChargeRow = { id: string; status: string; amount_cents: number | null; occurs_on: string | null; billable_on: string | null };
 
 function eligibleForPosting(row: ResolvedObligationReviewRow): boolean {
-    return row.review_status !== "suppressed" && row.status !== "no_charge";
+    // D12a: a superseded obligation (retired by a later correction/reversal) is
+    // never posting-eligible — read-only awareness, no new action, no event.
+    return row.review_status !== "suppressed" && row.status !== "no_charge" && row.status !== "superseded";
 }
 
 function toListItem(row: ResolvedObligationReviewRow, event: EventRow | undefined): ObligationListItem {

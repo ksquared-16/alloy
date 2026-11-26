@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Communications Handoff — Alloy</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+  <script>if(!location.search.includes('screenshot'))location.search='?screenshot=1';</script>
+</head>
+<body>
+  <nav class="nav-bar"><a href="02-current-work-focus.html">← Current Work</a></nav>
+  <div class="os-frame">
+    <aside class="sidebar"><div class="sidebar-icon active">⊞</div></aside>
+    <div class="os-main">
+      <div class="os-split">
+        <div class="queue-panel"></div>
+        <div class="fp-panel" style="position:relative">
+          <div class="focus-scrim" style="display:flex">
+            <div class="focus-card" style="max-width:560px">
+              <div class="focus-card-header">
+                <button class="focus-back" onclick="location.href='02-current-work-focus.html'">← Back</button>
+                <span class="focus-card-label">Communications</span>
+              </div>
+              <div class="focus-card-body">
+                <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Handoff from "Contact family" checklist item</p>
+                <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;background:#fafbfc">
+                  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Today · Outbound call · 4 min</div>
+                  <div style="font-size:14px">Spoke with Rob — interested in infant room for Robbie. Wants to visit next week.</div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:16px">
+                  <button class="btn-primary" style="width:auto;flex:1">Log follow-up</button>
+                  <button class="btn-secondary">Draft email</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="bos-rail"><div class="bos-rail-btn">BOS</div></aside>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

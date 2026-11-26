@@ -1,0 +1,109 @@
+[
+  {
+    "build_info": "{\"gitSha\":\"d3ca831f4026d7b72cdba3c536a52679304b8b80\",\"gitBranch\":\"staging\",\"gitMessage\":\"Payments V1 W6-B — held deposit"
+  },
+  {
+    "url_after_workspace": "https://staging.workwithalloy.com/workspace"
+  },
+  {
+    "signed_in": true
+  },
+  {
+    "queue_url": "https://staging.workwithalloy.com/workspace/work-unit/enrolled-children"
+  },
+  {
+    "name_hits": 3
+  },
+  {
+    "url_after_open": "https://staging.workwithalloy.com/workspace/work-unit/enrolled-children?subject_id=b5b62172-8b27-44ff-a852-b11b8888a6cd"
+  },
+  {
+    "count [data-financials-detail=\"true\"]": 0
+  },
+  {
+    "count [data-financials-held-deposits=\"true\"]": 0
+  },
+  {
+    "count [data-financials-held-note=\"true\"]": 0
+  },
+  {
+    "count [data-financials-command=\"deposit.hold\"]": 0
+  },
+  {
+    "count [data-financials-row-action=\"release\"]": 0
+  },
+  {
+    "count [data-financials-row-action=\"refund\"]": 0
+  },
+  {
+    "count [data-financials-row-action=\"apply\"]": 0
+  },
+  {
+    "count [data-testid=\"held-funds\"]": 0
+  },
+  {
+    "count [data-testid=\"available-prepaid\"]": 1
+  },
+  {
+    "count [data-financials-payments-ledger=\"true\"]": 0
+  },
+  {
+    "count [data-financials-manage-payments=\"open\"]": 0
+  },
+  {
+    "count [data-financials-holdable]": 0
+  },
+  {
+    "details_affordance": 1
+  },
+  {
+    "url_after_details": "https://staging.workwithalloy.com/workspace/work-unit/enrolled-children?subject_id=b5b62172-8b27-44ff-a852-b11b8888a6cd"
+  },
+  {
+    "detail count [data-financials-detail=\"true\"]": 1
+  },
+  {
+    "detail count [data-financials-held-deposits=\"true\"]": 0
+  },
+  {
+    "detail count [data-financials-command=\"deposit.hold\"]": 1
+  },
+  {
+    "detail count [data-financials-holdable]": 1
+  },
+  {
+    "detail count [data-financials-payments-ledger=\"true\"]": 0
+  },
+  {
+    "detail count [data-financials-command=\"payment.refund\"]": 5
+  },
+  {
+    "detail count [data-testid=\"available-prepaid\"]": 1
+  },
+  {
+    "detail count [data-testid=\"held-funds\"]": 0
+  },
+  {
+    "holdable_values": [
+      "12500"
+    ]
+  },
+  {
+    "manage_payments_affordance": 1
+  },
+  {
+    "overlay_found": 1
+  },
+  {
+    "overlay_text": "STAGING — NOT PRODUCTION 9+ 8 ⌘K All locations ▾ QS Enrollment Pipeline 0 Needs attention 7 Overdue work 22 Pipeline Children Actions (2) ▶ New 4 Active Pipeline 0 Registration 3 Waitlist 16 Tours 0 All 8 Enrolled children 2 Filters ▼ PRESCHOOL 1 C Certb Certhouse Enrolled Certb (4y) 1mo 1 child ▼ SCHOOL AGE 1 C Certa Certhouse Enrolled Certa (5y5m) 1mo 1 child CC Certb Certhouse Enrolled North Campus Manage ▾ Work Activity ENROLLMENT Lead Aug 26 Tour Decision Sep 18 Waitlist Enrolling Enrolled Sep 18 CC Certa CC Certb LEAD No current work configured · Post-enrollment follow-up. Recent activity 4 ▾ PAYMENTS PAYMENT METHODS Add card visa •••• 4242 Expires 12/31 Default Remove 1 removed method is kept for payment history. AUTOPAY Autopay on Payer Certt Certhouse Method visa •••• 4242 Amount due Nothing due Timing Collects on the due date Last attempt 9/29/2026 Pause Turn off Autopay Close "
+  },
+  {
+    "names_payer": true
+  },
+  {
+    "autopay_payer_select_present": 0
+  },
+  {
+    "financials_text": "PAYMENTS PAYMENT METHODS Add card visa •••• 4242 Expires 12/31 Default Remove 1 removed method is kept for payment history. AUTOPAY Autopay on Payer Certt Certhouse Method visa •••• 4242 Amount due Nothing due Timing Collects on the due date Last attempt 9/29/2026 Pause Turn off Autopay Close"
+  }
+]

@@ -1,0 +1,354 @@
+{
+  "trusted_host_action_id": "tha_fca2c5ef02ab4a",
+  "query_hash": "33f72e3db24fb0a2eb0b97abc329c5dd3cf8479f5e3c5fc6194bd3e739231b70",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T20:44:10.475Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_fca2c5ef02ab4a",
+    "query_hash": "33f72e3db24fb0a2eb0b97abc329c5dd3cf8479f5e3c5fc6194bd3e739231b70",
+    "authorization_id": "grnt_0f6c7f9b87e04ac7",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T20:44:18.384Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "column": "id",
+            "type": "uuid",
+            "nullable": "NO"
+          },
+          {
+            "column": "org_id",
+            "type": "uuid",
+            "nullable": "NO"
+          },
+          {
+            "column": "job_id",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "schedule_id",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "subscription_id",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "source_charge_id",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "charge_type",
+            "type": "text",
+            "nullable": "NO"
+          },
+          {
+            "column": "status",
+            "type": "text",
+            "nullable": "NO"
+          },
+          {
+            "column": "currency_code",
+            "type": "text",
+            "nullable": "NO"
+          },
+          {
+            "column": "amount_cents",
+            "type": "bigint",
+            "nullable": "NO"
+          },
+          {
+            "column": "service_date",
+            "type": "date",
+            "nullable": "YES"
+          },
+          {
+            "column": "due_date",
+            "type": "date",
+            "nullable": "YES"
+          },
+          {
+            "column": "posted_at",
+            "type": "timestamp with time zone",
+            "nullable": "YES"
+          },
+          {
+            "column": "voided_at",
+            "type": "timestamp with time zone",
+            "nullable": "YES"
+          },
+          {
+            "column": "description",
+            "type": "text",
+            "nullable": "YES"
+          },
+          {
+            "column": "metadata",
+            "type": "jsonb",
+            "nullable": "NO"
+          },
+          {
+            "column": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": "NO"
+          },
+          {
+            "column": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": "NO"
+          },
+          {
+            "column": "charge_category",
+            "type": "text",
+            "nullable": "YES"
+          },
+          {
+            "column": "billable_source_type",
+            "type": "text",
+            "nullable": "YES"
+          },
+          {
+            "column": "billable_source_id",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "occurs_on",
+            "type": "date",
+            "nullable": "YES"
+          },
+          {
+            "column": "billable_on",
+            "type": "date",
+            "nullable": "YES"
+          },
+          {
+            "column": "charge_template_id",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "service_id",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "created_by",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "updated_by",
+            "type": "uuid",
+            "nullable": "YES"
+          },
+          {
+            "column": "posted_by",
+            "type": "uuid",
+            "nullable": "YES"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "requested": "created_by",
+            "exists": true
+          },
+          {
+            "requested": "created_at",
+            "exists": true
+          },
+          {
+            "requested": "updated_by",
+            "exists": true
+          },
+          {
+            "requested": "updated_at",
+            "exists": true
+          },
+          {
+            "requested": "posted_by",
+            "exists": true
+          },
+          {
+            "requested": "posted_at",
+            "exists": true
+          },
+          {
+            "requested": "job_id",
+            "exists": true
+          },
+          {
+            "requested": "source_charge_id",
+            "exists": true
+          },
+          {
+            "requested": "schedule_id",
+            "exists": true
+          },
+          {
+            "requested": "subscription_id",
+            "exists": true
+          },
+          {
+            "requested": "enrollment_agreement_id",
+            "exists": false
+          },
+          {
+            "requested": "charge_template_id",
+            "exists": true
+          },
+          {
+            "requested": "template_id",
+            "exists": false
+          },
+          {
+            "requested": "due_date",
+            "exists": true
+          },
+          {
+            "requested": "occurs_on",
+            "exists": true
+          },
+          {
+            "requested": "billable_on",
+            "exists": true
+          },
+          {
+            "requested": "service_date",
+            "exists": true
+          },
+          {
+            "requested": "metadata",
+            "exists": true
+          },
+          {
+            "requested": "billable_source_type",
+            "exists": true
+          },
+          {
+            "requested": "billable_source_id",
+            "exists": true
+          },
+          {
+            "requested": "charge_category",
+            "exists": true
+          },
+          {
+            "requested": "charge_type",
+            "exists": true
+          },
+          {
+            "requested": "status",
+            "exists": true
+          },
+          {
+            "requested": "amount_cents",
+            "exists": true
+          },
+          {
+            "requested": "currency_code",
+            "exists": true
+          },
+          {
+            "requested": "org_id",
+            "exists": true
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": 125,
+            "created_by_set": 107,
+            "posted_by_set": 88,
+            "updated_by_set": 111,
+            "job_id_set": 0,
+            "source_charge_id_set": 9,
+            "due_date_set": 37,
+            "service_date_set": 125,
+            "metadata_non_empty": 125
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "created_by_null": 18,
+            "with_job_id": 0,
+            "with_source_charge_id": 0,
+            "with_neither": 18,
+            "distinct_metadata_keys": "[\"charge_template_key\", \"gl_mapping_key\", \"lifecycle_status\", \"resolution_key\", \"responsibility_key\", \"review_required\", \"source\"]"
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "financial_responsibility_arrangements",
+            "exists": true
+          },
+          {
+            "table": "financial_responsibility_allocations",
+            "exists": true
+          },
+          {
+            "table": "financial_reductions",
+            "exists": false
+          },
+          {
+            "table": "financial_reduction_applications",
+            "exists": true
+          },
+          {
+            "table": "charge_discount_applications",
+            "exists": false
+          },
+          {
+            "table": "financial_journal_entries",
+            "exists": true
+          },
+          {
+            "table": "ledger_transactions",
+            "exists": true
+          },
+          {
+            "table": "charge_templates",
+            "exists": false
+          }
+        ]
+      }
+    },
+    "row_count": 64
+  }
+}

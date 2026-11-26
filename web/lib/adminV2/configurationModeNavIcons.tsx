@@ -2,6 +2,9 @@ import type { LucideIcon } from "lucide-react";
 import {
     BarChart3,
     Banknote,
+    BookOpen,
+    Building2,
+    Boxes,
     GitBranch,
     LayoutGrid,
     Mail,
@@ -15,6 +18,7 @@ import {
 import type { ConfigurationModeNavIcon } from "@/lib/adminV2/configurationModeNav";
 
 const ICONS: Record<ConfigurationModeNavIcon, LucideIcon> = {
+    organization: Building2,
     processes: Workflow,
     layouts: LayoutGrid,
     fields: TextCursorInput,
@@ -26,6 +30,8 @@ const ICONS: Record<ConfigurationModeNavIcon, LucideIcon> = {
     locations: MapPin,
     communications: Mail,
     financials: Banknote,
+    commercial: BookOpen,
+    entities: Boxes,
 };
 
 export function configurationModeNavLucideIcon(icon: ConfigurationModeNavIcon): LucideIcon {

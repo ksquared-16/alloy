@@ -1,0 +1,27 @@
+{
+  "qa_run_id": "qar_e59e093c2b05",
+  "created": [
+    {
+      "kind": "work_unit",
+      "id": "2611a9d8-726a-45c3-bf3f-ece0937d59b6",
+      "stage": "lead",
+      "retained": "configuration"
+    },
+    {
+      "kind": "create_lead",
+      "id": "de17caff-d706-44e8-b9d1-07aa58caa44b",
+      "mode": "committed",
+      "status": 200
+    },
+    {
+      "kind": "child",
+      "id": null,
+      "via": "child.add"
+    }
+  ],
+  "quiesced": {
+    "lead_stage_work": "35c800ed-2804-4745-97eb-4b77272b3682",
+    "outcome": "not_interested",
+    "at": "2026-10-23T02:28:15.672Z"
+  }
+}

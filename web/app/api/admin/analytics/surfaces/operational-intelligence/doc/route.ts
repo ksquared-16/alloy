@@ -6,6 +6,7 @@ import {
     saveOperationalIntelligenceDoc,
 } from "@/lib/metrics/platform/operationalIntelligenceSurfacePersistence";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,17 @@ function isSurfaceDoc(value: unknown): value is SurfaceDoc {
 
 /** PUT — publish the edited SurfaceDoc back to real metric_placements; returns the reloaded doc. */
 export async function PUT(request: NextRequest) {
+    /*
+     * ANALYTICS TRUTH — persists the Operational Intelligence surface document.
+     *
+     * This was reachable through ORG CONTEXT ALONE: no capability, no role, only portal
+     * admission. `reports.write` is the established owner of this family — the promoted
+     * Operational Intelligence model already declares its sibling routes under it — so no
+     * vocabulary is invented here.
+     */
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const gate = await requireAnalyticsV2AdminMutate();
     if (!gate.ok) return gate.response;
 

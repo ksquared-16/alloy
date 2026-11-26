@@ -1,0 +1,66 @@
+{
+  "trusted_host_action_id": "tha_f5a6c82148d403",
+  "query_hash": "a46916938bbbe5af0df7d55b419c085f5b5327da5c2af6231635f6353bb2f4b8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T21:07:29.065Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_f5a6c82148d403",
+    "query_hash": "a46916938bbbe5af0df7d55b419c085f5b5327da5c2af6231635f6353bb2f4b8",
+    "authorization_id": "grnt_f07b4dcc0d6346ba",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T21:07:30.248Z",
+    "question_ids": [
+      "holders",
+      "write_holder",
+      "custom_adoption",
+      "audit_trace",
+      "nonvacuity"
+    ],
+    "questions": {
+      "holders": {
+        "question_id": "holders",
+        "row_count": null,
+        "rows": [
+          "grants_of_reports_write=4 grants_of_reports_read=6 orgs=3"
+        ]
+      },
+      "write_holder": {
+        "question_id": "write_holder",
+        "row_count": null,
+        "rows": [
+          "admin ~ system=true ~ active=true ~ orgs=3",
+          "ops ~ system=true ~ active=true ~ orgs=1"
+        ]
+      },
+      "custom_adoption": {
+        "question_id": "custom_adoption",
+        "row_count": null,
+        "rows": [
+          "custom_roles_with_reports_write=0 system_roles_with_reports_write=4"
+        ]
+      },
+      "audit_trace": {
+        "question_id": "audit_trace",
+        "row_count": null,
+        "rows": [
+          "events_mentioning_reports_write=0 events_mentioning_reports_read=0 role_events_total=0"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "grants_total=330 role_definitions=16 custom_roles=4"
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

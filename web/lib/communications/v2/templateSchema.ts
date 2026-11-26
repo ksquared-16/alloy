@@ -33,9 +33,35 @@ export function isTemplateCategory(value: string): value is TemplateCategory {
 export const TEMPLATE_CHANNELS = ["email", "sms", "in_app"] as const;
 export type TemplateChannel = (typeof TEMPLATE_CHANNELS)[number];
 
+/** Operator-facing labels for template channels (values stay snake_case for API/DB). */
+export const TEMPLATE_CHANNEL_LABELS: Record<TemplateChannel, string> = {
+    email: "Email",
+    sms: "SMS",
+    in_app: "In App",
+};
+
+export function templateChannelLabel(channel: string | null | undefined): string {
+    const key = typeof channel === "string" ? channel.trim().toLowerCase() : "";
+    if (isTemplateChannel(key)) return TEMPLATE_CHANNEL_LABELS[key];
+    return typeof channel === "string" && channel.trim() ? channel.trim() : "—";
+}
+
 /** Lifecycle status of a template (DB-CHECK constrained). */
 export const TEMPLATE_STATUSES = ["draft", "active", "archived"] as const;
 export type TemplateStatus = (typeof TEMPLATE_STATUSES)[number];
+
+/** Operator-facing labels for template statuses (values stay lowercase for API/DB). */
+export const TEMPLATE_STATUS_LABELS: Record<TemplateStatus, string> = {
+    draft: "Draft",
+    active: "Active",
+    archived: "Archived",
+};
+
+export function templateStatusLabel(status: string | null | undefined): string {
+    const key = typeof status === "string" ? status.trim().toLowerCase() : "";
+    if (isTemplateStatus(key)) return TEMPLATE_STATUS_LABELS[key];
+    return typeof status === "string" && status.trim() ? status.trim() : "—";
+}
 
 export function isTemplateChannel(value: string): value is TemplateChannel {
     return (TEMPLATE_CHANNELS as readonly string[]).includes(value);

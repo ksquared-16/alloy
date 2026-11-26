@@ -1,0 +1,45 @@
+{
+  "schema": "alloy.release-config/v1",
+  "owners": ["Kelly"],
+  "approval_max_ttl_hours": 24,
+  "environments": {
+    "staging": {
+      "branch": "staging",
+      "vercel_env": "preview",
+      "supabase_project_ref": "ikaxilmwmrmbagoidedu",
+      "build_info_url": "https://staging.workwithalloy.com/api/build-info"
+    },
+    "production": {
+      "branch": "main",
+      "vercel_env": "production",
+      "supabase_project_ref": "vslwnntzzgpnmrpjipat",
+      "build_info_url": "https://www.workwithalloy.com/api/build-info"
+    }
+  },
+  "required_checks": [
+    "Trust DB certification",
+    "Trust Adoption certification",
+    "Enrollment configuration certification",
+    "Prebuild gates (route capabilities)",
+    "Production graph",
+    "Full graph (tests + scripts)"
+  ],
+  "tenancy": {
+    "staging_school": { "id": "93667019-bd28-49b5-a688-acc9bb1e0a19", "name": "Firefly" },
+    "qa_fixture_orgs": [
+      { "id": "4acc9386-c485-486f-aa1f-05d83499d142", "name": "ZZ Alloy QA" },
+      { "id": "ad53fee2-2570-460f-9300-f0e106c473b6", "name": "ZZ Alloy QA — Cross-Org" }
+    ],
+    "staging_seed_id_prefix": "f17e0000-0000-4000-8000-",
+    "selftest_org_name_prefix": "_w17_selftest_",
+    "staging_retired_orgs": [
+      {
+        "id": "7803388d-cdee-4afb-89cf-23a137f39423",
+        "slug": "alloy-bend",
+        "name": "Alloy Bend",
+        "status": "retired",
+        "basis": "P3 LEAVE L7; ALY-14 first-promotion briefing §9 (B2). Staging only: never migrated to production."
+      }
+    ]
+  }
+}

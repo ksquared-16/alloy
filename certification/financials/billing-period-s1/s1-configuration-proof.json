@@ -1,0 +1,474 @@
+{
+  "auth_probe": {
+    "status": 200,
+    "body": {
+      "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "on_date": "2026-11-12",
+      "active_location_ids": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "calendar": {
+        "kind": "unconfigured",
+        "reason": "no_policy"
+      },
+      "periods": []
+    }
+  },
+  "multi_before_config": {
+    "status": 200,
+    "body": {
+      "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "on_date": "2026-11-12",
+      "active_location_ids": [
+        "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "calendar": {
+        "kind": "ambiguous_locations",
+        "locationIds": [
+          "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+        ]
+      },
+      "periods": []
+    }
+  },
+  "location_calendars": [
+    {
+      "location": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "cadence": "monthly",
+      "anchor": null,
+      "status": 201,
+      "body": {
+        "policy": {
+          "id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+          "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+          "scope_type": "location",
+          "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "service_id": null,
+          "rate_plan_id": null,
+          "policy_type": "billing_calendar",
+          "label": "S1 proof \u2014 Location A monthly",
+          "description": null,
+          "value": {
+            "cadence": "monthly",
+            "anchor_on": null
+          },
+          "is_active": true,
+          "effective_start": "2026-01-01",
+          "effective_end": null,
+          "source_key": "config",
+          "metadata": {},
+          "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "updated_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "created_at": "2026-10-02T17:00:01.291696+00:00",
+          "updated_at": "2026-10-02T17:00:01.291696+00:00",
+          "customer_id": null
+        }
+      }
+    },
+    {
+      "location": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "cadence": "weekly",
+      "anchor": "2026-01-05",
+      "status": 201,
+      "body": {
+        "policy": {
+          "id": "32e75049-c9b8-42be-ab44-392e9fe912c6",
+          "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+          "scope_type": "location",
+          "location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+          "service_id": null,
+          "rate_plan_id": null,
+          "policy_type": "billing_calendar",
+          "label": "S1 proof \u2014 Location B weekly from Monday",
+          "description": null,
+          "value": {
+            "cadence": "weekly",
+            "anchor_on": "2026-01-05"
+          },
+          "is_active": true,
+          "effective_start": "2026-01-01",
+          "effective_end": null,
+          "source_key": "config",
+          "metadata": {},
+          "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "updated_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "created_at": "2026-10-02T17:00:02.745667+00:00",
+          "updated_at": "2026-10-02T17:00:02.745667+00:00",
+          "customer_id": null
+        }
+      }
+    },
+    {
+      "location": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "cadence": "weekly",
+      "anchor": "2026-01-07",
+      "status": 201,
+      "body": {
+        "policy": {
+          "id": "05fd372e-7b85-4280-b8c7-e1159ba5910b",
+          "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+          "scope_type": "location",
+          "location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+          "service_id": null,
+          "rate_plan_id": null,
+          "policy_type": "billing_calendar",
+          "label": "S1 proof \u2014 Location C weekly from Wednesday",
+          "description": null,
+          "value": {
+            "cadence": "weekly",
+            "anchor_on": "2026-01-07"
+          },
+          "is_active": true,
+          "effective_start": "2026-01-01",
+          "effective_end": null,
+          "source_key": "config",
+          "metadata": {},
+          "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "updated_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "created_at": "2026-10-02T17:00:04.052236+00:00",
+          "updated_at": "2026-10-02T17:00:04.052236+00:00",
+          "customer_id": null
+        }
+      }
+    }
+  ],
+  "A_resolve": {
+    "status": 200,
+    "body": {
+      "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "on_date": "2026-11-12",
+      "active_location_ids": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "monthly",
+        "anchorOn": null,
+        "scope": "location",
+        "policyId": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "sourceLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      "periods": []
+    }
+  },
+  "A_materialize": {
+    "status": 200,
+    "body": {
+      "materialized": true,
+      "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "on_date": "2026-11-12",
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "monthly",
+        "anchorOn": null,
+        "scope": "location",
+        "policyId": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "sourceLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      "periods": [
+        {
+          "periodKey": "2026-11",
+          "startsOn": "2026-11-01",
+          "endsOn": "2026-11-30",
+          "status": "open",
+          "created": true
+        },
+        {
+          "periodKey": "2026-12",
+          "startsOn": "2026-12-01",
+          "endsOn": "2026-12-31",
+          "status": "open",
+          "created": true
+        }
+      ]
+    }
+  },
+  "B_resolve": {
+    "status": 200,
+    "body": {
+      "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "on_date": "2026-11-12",
+      "active_location_ids": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "monthly",
+        "anchorOn": null,
+        "scope": "location",
+        "policyId": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "sourceLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      "periods": []
+    }
+  },
+  "B_materialize": {
+    "status": 200,
+    "body": {
+      "materialized": true,
+      "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "on_date": "2026-11-12",
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "monthly",
+        "anchorOn": null,
+        "scope": "location",
+        "policyId": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "sourceLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      "periods": [
+        {
+          "periodKey": "2026-11",
+          "startsOn": "2026-11-01",
+          "endsOn": "2026-11-30",
+          "status": "open",
+          "created": true
+        },
+        {
+          "periodKey": "2026-12",
+          "startsOn": "2026-12-01",
+          "endsOn": "2026-12-31",
+          "status": "open",
+          "created": true
+        }
+      ]
+    }
+  },
+  "C_resolve": {
+    "status": 200,
+    "body": {
+      "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+      "on_date": "2026-11-12",
+      "active_location_ids": [
+        "ae34d822-60ef-4f82-81eb-8f3513059627"
+      ],
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "weekly",
+        "anchorOn": "2026-01-05",
+        "scope": "location",
+        "policyId": "32e75049-c9b8-42be-ab44-392e9fe912c6",
+        "sourceLocationId": "ae34d822-60ef-4f82-81eb-8f3513059627",
+        "snapshot": {
+          "cadence": "weekly",
+          "anchor_on": "2026-01-05"
+        }
+      },
+      "periods": []
+    }
+  },
+  "C_materialize": {
+    "status": 200,
+    "body": {
+      "materialized": true,
+      "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+      "on_date": "2026-11-12",
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "weekly",
+        "anchorOn": "2026-01-05",
+        "scope": "location",
+        "policyId": "32e75049-c9b8-42be-ab44-392e9fe912c6",
+        "sourceLocationId": "ae34d822-60ef-4f82-81eb-8f3513059627",
+        "snapshot": {
+          "cadence": "weekly",
+          "anchor_on": "2026-01-05"
+        }
+      },
+      "periods": [
+        {
+          "periodKey": "2026-11-09~2026-11-15",
+          "startsOn": "2026-11-09",
+          "endsOn": "2026-11-15",
+          "status": "open",
+          "created": true
+        },
+        {
+          "periodKey": "2026-11-16~2026-11-22",
+          "startsOn": "2026-11-16",
+          "endsOn": "2026-11-22",
+          "status": "open",
+          "created": true
+        }
+      ]
+    }
+  },
+  "D_resolve": {
+    "status": 200,
+    "body": {
+      "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "on_date": "2026-11-12",
+      "active_location_ids": [
+        "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "calendar": {
+        "kind": "ambiguous_locations",
+        "locationIds": [
+          "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+        ]
+      },
+      "periods": []
+    }
+  },
+  "D_materialize": {
+    "status": 409,
+    "body": {
+      "materialized": false,
+      "reason": {
+        "kind": "ambiguous_locations",
+        "locationIds": [
+          "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+        ]
+      },
+      "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "on_date": "2026-11-12"
+    }
+  },
+  "E_policy": {
+    "status": 201,
+    "body": {
+      "policy": {
+        "id": "0272bcf5-9168-4545-8672-e1caa8028afd",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "scope_type": "customer",
+        "location_id": null,
+        "service_id": null,
+        "rate_plan_id": null,
+        "policy_type": "billing_calendar",
+        "label": "S1 proof \u2014 explicit account calendar",
+        "description": null,
+        "value": {
+          "cadence": "biweekly",
+          "anchor_on": "2026-01-05"
+        },
+        "is_active": true,
+        "effective_start": "2026-01-01",
+        "effective_end": null,
+        "source_key": "config",
+        "metadata": {},
+        "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+        "updated_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+        "created_at": "2026-10-02T17:00:16.722204+00:00",
+        "updated_at": "2026-10-02T17:00:16.722204+00:00",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    }
+  },
+  "E_resolve": {
+    "status": 200,
+    "body": {
+      "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "on_date": "2026-11-12",
+      "active_location_ids": [
+        "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "biweekly",
+        "anchorOn": "2026-01-05",
+        "scope": "customer",
+        "policyId": "0272bcf5-9168-4545-8672-e1caa8028afd",
+        "sourceLocationId": null,
+        "snapshot": {
+          "cadence": "biweekly",
+          "anchor_on": "2026-01-05"
+        }
+      },
+      "periods": []
+    }
+  },
+  "E_materialize": {
+    "status": 200,
+    "body": {
+      "materialized": true,
+      "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "on_date": "2026-11-12",
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "biweekly",
+        "anchorOn": "2026-01-05",
+        "scope": "customer",
+        "policyId": "0272bcf5-9168-4545-8672-e1caa8028afd",
+        "sourceLocationId": null,
+        "snapshot": {
+          "cadence": "biweekly",
+          "anchor_on": "2026-01-05"
+        }
+      },
+      "periods": [
+        {
+          "periodKey": "2026-11-09~2026-11-22",
+          "startsOn": "2026-11-09",
+          "endsOn": "2026-11-22",
+          "status": "open",
+          "created": true
+        },
+        {
+          "periodKey": "2026-11-23~2026-12-06",
+          "startsOn": "2026-11-23",
+          "endsOn": "2026-12-06",
+          "status": "open",
+          "created": true
+        }
+      ]
+    }
+  },
+  "A_materialize_repeat": {
+    "status": 200,
+    "body": {
+      "materialized": true,
+      "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "on_date": "2026-11-12",
+      "calendar": {
+        "kind": "resolved",
+        "cadence": "monthly",
+        "anchorOn": null,
+        "scope": "location",
+        "policyId": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "sourceLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      "periods": [
+        {
+          "periodKey": "2026-11",
+          "startsOn": "2026-11-01",
+          "endsOn": "2026-11-30",
+          "status": "open",
+          "created": false
+        },
+        {
+          "periodKey": "2026-12",
+          "startsOn": "2026-12-01",
+          "endsOn": "2026-12-31",
+          "status": "open",
+          "created": false
+        }
+      ]
+    }
+  }
+}

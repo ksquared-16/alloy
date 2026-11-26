@@ -1,0 +1,129 @@
+"use client";
+
+import { useEffect } from "react";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
+import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
+import { formatCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
+import {
+    ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT,
+    type OperatorFocusSelectionDetail,
+} from "@/lib/runtime/focus/operatorFocusSelection";
+
+/**
+ * Takes an operator focus intent into the Runtime Kernel as an ATTENTION MOVEMENT.
+ *
+ * This is the one applier for every producer that cannot reach the kernel itself — Search in the top
+ * nav, contextual record opens in shell chrome, quick-message record chips. It was written for Search
+ * (`SearchAttentionListener`) and is unchanged in behaviour; only its name and its event stopped
+ * pretending Search is special.
+ *
+ * ── WHY A MOVEMENT AND NOT A NAVIGATION ──
+ *
+ * `/workspace/work-unit/:slug` is SEED-ONLY: `WorkUnitSlugRouteHost` renders `null` and the Surface
+ * Host — mounted above the route, inside `RuntimeKernelProvider` — is the one renderer of the
+ * work-unit surface, committed from focus. A URL may establish attention exactly once, on cold load
+ * (Art 2.4); after that only an adapter can move it.
+ *
+ * So `router.push` to a work-unit route does not open anything. It is not slow, and it does not
+ * error: the URL changes, the server renders the route perfectly, and the surface goes blank and
+ * stays blank. That is precisely what a Search click did, and it is the documented failure mode in
+ * `useWorkUnitEntryGesture` — "an entry point that is not wired to K1 is not merely un-migrated; it
+ * is broken."
+ *
+ * ── AND THERE IS NO PUSH, FROM ANYWHERE IN THE WORKSPACE ──
+ *
+ * This listener is a SIBLING of `SurfaceHostProvider` inside `RuntimeKernelProvider`, in the
+ * WORKSPACE layout. So wherever it can fire, the Surface Host is mounted — and the Host decides what
+ * is visible from COMMITTED FOCUS, never from the pathname (`SurfaceHostContext`: "the visible
+ * decision — committed Focus, and nothing else"). The workspace ROOT is not an exception to that; it
+ * is the ordinary case.
+ *
+ * A push was tried here, on the theory that the root renders no Surface Host. It does render one, and
+ * the browser settled it:
+ *
+ *   push from the root  → the URL changes and the surface NEVER mounts. Measured to 60s, blank. The
+ *                         page segment re-renders and re-seeds, but a soft navigation re-reads no
+ *                         address, so nothing consumes the seed and no preparation is ever begun.
+ *   move from the root  → the surface composes in ~2.0s, with the same address projected onto the
+ *                         URL by attention afterwards.
+ *
+ * Same destination, same parameters; one paints and one does not. This is the failure the doctrine
+ * already names — "an entry point that is not wired to K1 is not merely un-migrated; it is broken" —
+ * and it is invisible to any assertion that stops at the URL, which is exactly how a push survived a
+ * browser certification once already.
+ *
+ * The genuine off-kernel case is real, and it is not here: `useOperatorRecordFocus` owns it, because
+ * a caller OUTSIDE the workspace layout has no kernel to move and a cold load is the one moment a URL
+ * may establish attention (Art 2.4).
+ *
+ * ── CARD AND ITEM FOCUS RIDE THE SAME MOVEMENT ──
+ *
+ * They are carried as the ASPECT — the kernel's own scope for "finer than the Operational Subject" —
+ * not as drawer state. `openDrawer` was tried and is wrong here: on a work-unit surface it mounts the
+ * modal overlay this work removes, because `AdminEntityDrawer` suppresses itself by testing
+ * `usePathname()`, which cannot observe the address the kernel projects with `replaceState`.
+ * Measured `modal: 1` over a correctly composed inline panel.
+ */
+export default function OperatorFocusAttentionListener() {
+    const move = useWorkUnitEntryMovement();
+
+    useEffect(() => {
+        const onSelect = (ev: Event) => {
+            const detail = (ev as CustomEvent<OperatorFocusSelectionDetail>).detail;
+            // PARTICIPANT POSITION FIRST. The Work View holding this participant's own stage wins
+            // over the case's unit, which answers at family grain: siblings in one case sit in
+            // different stages, so the family answer cannot be right for both. Falls back to the
+            // case unit when the stage has no configured view — a fallback, never an override.
+            const viewSlug = (detail?.host_work_view_id ?? "").trim();
+            const hostSlug = viewSlug || (detail?.host_work_unit_key ?? "").trim();
+            const hostId = (detail?.entity_id ?? "").trim();
+            // Nothing holds this record: there is no operational surface to move to, and inventing
+            // one would commit the operator to a queue the record is not in.
+            if (!hostSlug || !hostId) return;
+
+            // THE ROW, NOT THE HOST. `entity_id` is the record whose Focus Panel composes; the Work
+            // View selects on its own evaluated row identity, which for a child-grain lens is a
+            // participation, not the case. Sending the host here is what the runtime refused as
+            // `subject_unavailable`. Falls back to the host, which is exactly right for family grain
+            // because there the case IS the evaluated row.
+            const memberId = (detail?.operational_member_id ?? "").trim() || hostId;
+
+            // ── NO COHORT HOLDS THEM, AND THAT IS STATED ────────────────────────────────────────
+            //
+            // `host_work_view_id` is the Work View that DEMONSTRABLY contains this subject: the
+            // producer resolves it from real memberships and returns null when there are none. Its
+            // absence is therefore not a gap to paper over — it is the producer saying "no cohort
+            // holds them; here is only their host."
+            //
+            // Both branches used to collapse into the slug, and the surface then resolved that host's
+            // default lens. That is why `Kelly → Household` shows `New` as selected: not a cohort she
+            // is in, just the first one configured on the unit her household's case happens to sit on.
+            // Stating the absence lands on the record with no pill lit, which is what was asked for.
+            //
+            // Destinations that DID resolve a view are untouched: All / Tours / Waitlist still address
+            // a Work View by slug, byte for byte as before.
+            const cohort = viewSlug ? null : ("none" as const);
+            // Contextual attention selects the HOST RECORD. `operational_member_id` is a Work View ROW
+            // identity — a participation, for a child-grain lens — and no Work View was selected here,
+            // so using it would name a row of a cohort nobody chose.
+            const subjectId = cohort === "none" ? hostId : memberId;
+
+            // The href is the destination's honest address; the adapter parses the attention it
+            // expresses. The selected row rides along so the surface commits the record the operator
+            // asked for rather than the lens's default subject, and the card + item ride along as
+            // the ASPECT — the kernel's own name for "finer than the subject".
+            const href = operatorWorkUnitHrefFromKey(hostSlug);
+            const aspect = formatCardFocusAspect(detail.card_focus ?? null);
+
+            // ONE MECHANISM, WHEREVER THE OPERATOR STANDS IN THE WORKSPACE. The Surface Host reads
+            // committed Focus, so the root and a live surface are the same case; the address is a
+            // projection attention writes afterwards, never the thing that causes the surface.
+            move(href, null, subjectId, aspect, { cohort });
+        };
+
+        window.addEventListener(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, onSelect);
+        return () => window.removeEventListener(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, onSelect);
+    }, [move]);
+
+    return null;
+}

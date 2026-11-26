@@ -1,0 +1,54 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[1A[2K[chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[RF] {"actions":0,"resetCount":0,"resets":[]}
+
+[1A[2K  1 passed (16.6s)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[1A[2K[chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[RF] {"actions":12,"resetCount":0,"resets":[]}
+
+[1A[2K  1 passed (49.9s)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[1A[2K[chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[RF] {"actions":12,"resetCount":0,"resets":[]}
+
+[1A[2K  1 passed (49.5s)
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[1A[2K[chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[RF] {"actions":12,"resetCount":0,"resets":[]}
+
+[1A[2K  1 passed (52.0s)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[1A[2K[chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[RF] {"actions":12,"resetCount":0,"resets":[]}
+
+[1A[2K  1 passed (49.6s)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[1A[2K[chromium] › playwright/tests/zz-reset-forensics.spec.ts:98:5 › workspace session reset forensics
+[RF] {"actions":12,"resetCount":0,"resets":[]}
+
+[1A[2K  1 passed (49.5s)

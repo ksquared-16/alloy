@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { isInternalCronAuthorized } from "@/lib/admin/cronAuth";
 import { getAdminContextCached, adminContextFailureResponse } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 import {
     runAllOrgMetricPlatformSnapshots,
     runMetricSnapshotsForOrg,
@@ -11,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/admin/analytics/snapshots/run
- * Auth: x-cron-token (all orgs) or admin session (single org).
+ * Auth: x-cron-token (all orgs, or the body's `org_id`) or a `reports.write` session (the session
+ * org only — a body `org_id` naming another org is refused 403).
  */
 export async function POST(request: NextRequest) {
     const cronOk = isInternalCronAuthorized(request);
@@ -20,9 +22,20 @@ export async function POST(request: NextRequest) {
     if (!cronOk) {
         const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
-        if (ctx.role !== "admin") {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
+        /*
+         * THE OPERATOR BRANCH ASKS FOR ANALYTICS AUTHORITY; THE CRON BRANCH IS UNTOUCHED.
+         *
+         * Running snapshots materialises analytics truth into metric_platform_snapshots, so an
+         * operator invoking it needs `reports.write` — the key the promoted Operational
+         * Intelligence model already uses for the sibling routes. The role TITLE that stood here
+         * admitted an admin whose package withholds that key and refused a custom Analytics
+         * Writer who holds it.
+         *
+         * `isInternalCronAuthorized` above is machine authentication on a separate credential and
+         * is deliberately left alone: it is not a role title standing in for a capability.
+         */
+        const analyticsAuth = await requireAnalyticsManageAccess();
+        if (!analyticsAuth.ok) return analyticsAuth.response;
         orgId = ctx.orgId;
     }
 
@@ -36,7 +49,22 @@ export async function POST(request: NextRequest) {
     const metricDefinitionIds = Array.isArray(body.metric_definition_ids)
         ? (body.metric_definition_ids as string[])
         : undefined;
-    const orgIdFilter = typeof body.org_id === "string" ? body.org_id : orgId;
+    /*
+     * SEC-1 — THE TENANT COMES FROM THE CREDENTIAL, NEVER FROM THE BODY.
+     *
+     * This read `body.org_id ?? session org` for both branches, so an operator holding
+     * `reports.write` in their own organization could name any other organization's id and have
+     * the service-role client evaluate its definitions against its tenant data and write snapshot
+     * rows into it. An operator run is pinned to the session organization; a body naming a
+     * different one is refused outright rather than silently corrected, so the caller learns the
+     * request was not honoured. Only the separately authenticated cron credential may target an
+     * organization by id (or all of them).
+     */
+    const bodyOrgId = typeof body.org_id === "string" ? body.org_id.trim() || null : null;
+    if (!cronOk && bodyOrgId && bodyOrgId !== orgId) {
+        return NextResponse.json({ error: "Organization not in session scope" }, { status: 403 });
+    }
+    const orgIdFilter = cronOk ? bodyOrgId : orgId;
 
     const supabase = createAdminClient();
 

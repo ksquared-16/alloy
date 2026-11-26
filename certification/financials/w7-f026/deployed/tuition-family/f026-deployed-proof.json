@@ -1,0 +1,139 @@
+{
+ "build": "2d7f17476b323e4f8b24a70330aac81d42ca0f30",
+ "accounts": {
+  "initial": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+   "topPayment": true,
+   "lens": {
+    "all": "1",
+    "charges": "1",
+    "credits": "0",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 25, 2026 | Tuition | Tilly Tuition | 4000 · Tuition Revenue | $1,200.00 | Upcoming | Tess Tuition | Monthly tuition"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "payments": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+   "topPayment": true,
+   "lens": {
+    "all": "1",
+    "charges": "1",
+    "credits": "0",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "charges": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+   "topPayment": true,
+   "lens": {
+    "all": "1",
+    "charges": "1",
+    "credits": "0",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 25, 2026 | Tuition | Tilly Tuition | 4000 · Tuition Revenue | $1,200.00 | Upcoming | Tess Tuition | Monthly tuition"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "tuition": "no charge-type filter",
+  "tuitionView": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+   "topPayment": true,
+   "lens": {
+    "all": "1",
+    "charges": "1",
+    "credits": "0",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 25, 2026 | Tuition | Tilly Tuition | 4000 · Tuition Revenue | $1,200.00 | Upcoming | Tess Tuition | Monthly tuition"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  },
+  "scheduled": "no status filter",
+  "scheduledView": {
+   "mounted": true,
+   "strip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+   "topPayment": true,
+   "lens": {
+    "all": "1",
+    "charges": "1",
+    "credits": "0",
+    "funding": "0",
+    "payments": "0"
+   },
+   "periods": [
+    {
+     "label": "November 2026",
+     "expanded": "true",
+     "rows": [
+      "Oct 25, 2026 | Tuition | Tilly Tuition | 4000 · Tuition Revenue | $1,200.00 | Upcoming | Tess Tuition | Monthly tuition"
+     ],
+     "paymentRows": 0
+    }
+   ],
+   "upcomingHeading": false,
+   "upcomingBlock": false,
+   "paymentBand": false,
+   "separatePaymentsTable": false,
+   "takeOrRecordInDetails": false,
+   "noMethodLine": true
+  }
+ },
+ "writes": []
+}

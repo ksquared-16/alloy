@@ -1,0 +1,257 @@
+{
+  "gitSha": "5038bef4b1d180122033526d8c53ea4669daee65",
+  "serverTiming": "auth;dur=2.4, auth_at;dur=2.4, perm;dur=0.2, perm_at;dur=2.6, households_1p_n12;dur=118.7, households_1p_n12_at;dur=121.3, members;dur=103.5, members_at;dur=224.8, pl_members;dur=0.7, pl_members_at;dur=225.5, sites_direct;dur=4.7, sites_direct_at;dur=230.2, contacts;dur=23.8, contacts_at;dur=254.0, sites_orphans_1p;dur=94.5, sites_orphans_1p_at;dur=348.5, agreement_sites;dur=0.0, agreement_sites_at;dur=348.5, pl_placements_n7;dur=0.3, pl_placements_n7_at;dur=348.9, pl_instances;dur=112.1, pl_instances_at;dur=461.0, pl_programs;dur=103.6, pl_programs_at;dur=564.6, pl_rooms;dur=112.5, pl_rooms_at;dur=677.1, placements;dur=0.2, placements_at;dur=677.3, facets;dur=0.0, facets_at;dur=677.3, assemble;dur=0.4, assemble_at;dur=677.7, serialize;dur=0.1, serialize_at;dur=677.8, total;dur=677.8",
+  "truncated": false,
+  "scanCap": 2000,
+  "scope": {
+    "siteLocationId": null,
+    "siteScope": "all"
+  },
+  "subjects": [
+    {
+      "customerId": "fd000000-0000-4000-8000-0000000c0001",
+      "householdName": "Alvarez Household (demo)",
+      "siteLocationIds": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Ana Alvarez",
+        "Rio Alvarez"
+      ],
+      "contactNames": [
+        "Corinne Vasquez",
+        "Dana Alvarez",
+        "Rosa Alvarez"
+      ],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "householdName": "Automation Family",
+      "siteLocationIds": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Pbchild Automation",
+        "Pbfive Automation",
+        "Pbfour Automation",
+        "Pbthree Automation",
+        "Pbtwo Automation"
+      ],
+      "contactNames": [
+        "PBCert Automation"
+      ],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "fd000000-0000-4000-8000-0000000c0002",
+      "householdName": "Brennan Household (demo)",
+      "siteLocationIds": [
+        "ae34d822-60ef-4f82-81eb-8f3513059627"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Ben Brennan"
+      ],
+      "contactNames": [],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "householdName": "Certfree Family",
+      "siteLocationIds": [],
+      "hasEnrollmentAgreement": false,
+      "childNames": [
+        "Patha Certfree"
+      ],
+      "contactNames": [
+        "Ada Certfree"
+      ],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "householdName": "Certhouse Family",
+      "siteLocationIds": [
+        "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Certa Certhouse",
+        "Certb Certhouse"
+      ],
+      "contactNames": [
+        "Certt Certhouse"
+      ],
+      "programs": [],
+      "rooms": [
+        {
+          "id": "4de42d04-86fc-4519-b5bd-f45eb8671429",
+          "label": "Monkeys"
+        }
+      ]
+    },
+    {
+      "customerId": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "householdName": "Certopp Family",
+      "siteLocationIds": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Pathb Certopp"
+      ],
+      "contactNames": [
+        "Bo Certopp"
+      ],
+      "programs": [
+        {
+          "id": "5e9e715a-eb8f-4534-bcfe-a8a74ed883d9",
+          "label": "School Age"
+        }
+      ],
+      "rooms": [
+        {
+          "id": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+          "label": "Infant A"
+        }
+      ]
+    },
+    {
+      "customerId": "fd000000-0000-4000-8000-0000000c0003",
+      "householdName": "Chen Household (demo)",
+      "siteLocationIds": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Cai Chen"
+      ],
+      "contactNames": [
+        "Mei Chen"
+      ],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "610a1496-7b96-4d1a-bf49-5cf193b31a6d",
+      "householdName": "Disposable0913 Family",
+      "siteLocationIds": [
+        "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Bea Disposable0913",
+        "Dax Disposable0913",
+        "Eve Disposable0913",
+        "Finn Disposable0913",
+        "Touree Disposable0913"
+      ],
+      "contactNames": [
+        "Corinne Vasquez",
+        "Farrah Nolan",
+        "Tourqa Disposable0913"
+      ],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+      "householdName": "Kurzman Family",
+      "siteLocationIds": [],
+      "hasEnrollmentAgreement": false,
+      "childNames": [
+        "Lennon Kurzman",
+        "Marisol Vega",
+        "PassA Kid",
+        "PassB Kid",
+        "Test Process",
+        "Test Process10",
+        "Test Process11",
+        "Test Process2",
+        "Test Process3",
+        "Test Process4",
+        "Test Process5",
+        "Test Process6",
+        "Test Process7",
+        "Test Process8",
+        "Test Process9",
+        "Tomas Rivera",
+        "Wrigley Kurzman"
+      ],
+      "contactNames": [
+        "Kelly Kurzman",
+        "Kristi Kurzman"
+      ],
+      "programs": [
+        {
+          "id": "80723acb-4884-4da9-a862-b4748e19a8b4",
+          "label": "Infant"
+        },
+        {
+          "id": "08e30247-4aeb-4bb8-890d-cdbb54979b6f",
+          "label": "Toddler"
+        }
+      ],
+      "rooms": []
+    },
+    {
+      "customerId": "fd000000-0000-4000-8000-0000000c0004",
+      "householdName": "Okafor Household (demo)",
+      "siteLocationIds": [
+        "ae34d822-60ef-4f82-81eb-8f3513059627"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Obi Okafor"
+      ],
+      "contactNames": [],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "50b19065-51fd-41e4-83c9-07ba787759f0",
+      "householdName": "Specq0913 Family",
+      "siteLocationIds": [
+        "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+        "1a5644a7-45c4-413b-9021-5f556118b6e2"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Specee Specq0913"
+      ],
+      "contactNames": [
+        "Specq Specq0913"
+      ],
+      "programs": [],
+      "rooms": []
+    },
+    {
+      "customerId": "84ad457f-d129-4b50-95d7-0efb194c1830",
+      "householdName": "Tourb0913 Family",
+      "siteLocationIds": [
+        "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+      ],
+      "hasEnrollmentAgreement": true,
+      "childNames": [
+        "Amira Tourb0913",
+        "Toureeb Tourb0913",
+        "Zzcert Procgov"
+      ],
+      "contactNames": [
+        "Tourb Tourb0913",
+        "Tourqa Disposable0913"
+      ],
+      "programs": [],
+      "rooms": []
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "trusted_host_action_id": "tha_5aa23010084701",
+  "query_hash": "a3a6ce252a69cfee4e26b101a34952f86e521a5cf0218b3e04bb87543a85b257",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T20:34:17.823Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5aa23010084701",
+    "query_hash": "a3a6ce252a69cfee4e26b101a34952f86e521a5cf0218b3e04bb87543a85b257",
+    "authorization_id": "grnt_0d7fa5af368441d7",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T20:34:23.967Z",
+    "question_ids": [
+      "q1",
+      "q2"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "subject_customer_id": "fd000000-0000-4000-8000-0000000c0001",
+            "subject_draft_charges": 0,
+            "subject_posted_charges": 16,
+            "subject_total_charges": 16
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "households_holding_drafts": 2,
+            "drafts_on_subject": 0,
+            "drafts_total": 35
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

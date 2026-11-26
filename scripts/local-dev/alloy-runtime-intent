@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# alloy-runtime-intent — record an immutable RUNTIME INTENT declaration for a sprint.
+#
+# This is the ONLY mutating command in Runtime Intent & Admission Contract V1, and
+# it is deliberately OUTSIDE alloy-ro (which stays strictly read-only). It writes a
+# single intent record from the sprint's manifest posture and a live, read-only
+# admission snapshot. It:
+#   - DECLARES intent; it does NOT provision, start, stop, attach, detach, lease,
+#     reclaim, or otherwise actuate any runtime;
+#   - never touches Docker or Supabase (capacity is read via the observe layer only);
+#   - reserves NO capacity — an intent is a declaration, not an allocation;
+#   - refuses to write for an invalid/undeclared posture (nothing coherent to declare);
+#   - never silently overwrites a prior intent (refuses without --supersede, and on
+#     --supersede archives the prior record with provenance).
+#
+# IDENTITY SAFETY (given the prior slot-targeting incident): this command fails
+# closed unless ALL expected identities match. It NEVER targets by slot number
+# alone — the target must be a worktree name, and the caller must pass the expected
+# mission key. Worktree metadata, manifest identity, and (optionally) branch/path
+# are all verified before a byte is written.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/manifest.sh
+source "${SCRIPT_DIR}/lib/manifest.sh"
+# shellcheck source=lib/runtime-core.sh
+source "${SCRIPT_DIR}/lib/runtime-core.sh"
+# shellcheck source=lib/admission-core.sh
+source "${SCRIPT_DIR}/lib/admission-core.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-runtime-intent <worktree-name> --mission <mission-key>
+                            [--expect-branch <branch>] [--expect-path <path>]
+                            [--coordinate --coordination-reason "<text>"]
+                            [--declared-by <who>] [--supersede]
+
+Records an immutable runtime intent for a sprint from its manifest posture and a
+read-only admission snapshot. DECLARES intent only — it never provisions, starts,
+stops, attaches, or reclaims runtimes, and never touches Docker or Supabase.
+
+Identity safety (fail closed — all must match):
+  <worktree-name>          a worktree NAME (a bare slot number is refused)
+  --mission <mission-key>  must equal the mission key derived from the manifest
+  --expect-branch <branch> if given, must match the worktree's branch
+  --expect-path <path>     if given, must match the worktree's recorded path
+
+Coordination (required to declare shared-mutable intent):
+  --coordinate             mark an explicit coordination declaration
+  --coordination-reason X  human justification (required with --coordinate)
+
+  --declared-by <who>      provenance label (default: $USER)
+  --supersede              archive an existing intent and record a new one
+
+Inspect the result read-only with:  alloy-ro runtime-intent <worktree>
+Re-evaluate admission live with:     alloy-ro runtime-admission <worktree>
+EOF
+}
+
+main() {
+  [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
+  local wt="" mission="" expect_branch="" expect_path="" declared_by=""
+  local coordinate=0 coordination_reason="" supersede=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --mission) [[ $# -ge 2 ]] || alloy_die "--mission requires a value"; mission="$2"; shift 2 ;;
+      --expect-branch) [[ $# -ge 2 ]] || alloy_die "--expect-branch requires a value"; expect_branch="$2"; shift 2 ;;
+      --expect-path) [[ $# -ge 2 ]] || alloy_die "--expect-path requires a value"; expect_path="$2"; shift 2 ;;
+      --coordinate) coordinate=1; shift ;;
+      --coordination-reason) [[ $# -ge 2 ]] || alloy_die "--coordination-reason requires a value"; coordination_reason="$2"; shift 2 ;;
+      --declared-by) [[ $# -ge 2 ]] || alloy_die "--declared-by requires a value"; declared_by="$2"; shift 2 ;;
+      --supersede) supersede=1; shift ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *) [[ -z "$wt" ]] || alloy_die "unexpected argument: $1"; wt="$1"; shift ;;
+    esac
+  done
+  [[ -n "$wt" ]] || { usage; exit 2; }
+
+  # --- Identity safety: refuse slot-only targeting outright. --------------------
+  if [[ "$wt" =~ ^[0-9]+$ ]]; then
+    alloy_die "refusing slot-only target '$wt': pass the worktree NAME (a slot number is not sufficient authority)"
+  fi
+  [[ -n "$mission" ]] || alloy_die "--mission <mission-key> is required (expected mission identity must be stated)"
+
+  alloy_load_config
+  alloy_rt_init
+  alloy_ad_init
+
+  # 1) Worktree metadata must exist and its name must match (asserted by loader).
+  alloy_load_metadata "$wt"   # dies on mismatch; sets ALLOY_WORKTREE_* / PORT / ALLOY_AGENT
+
+  # 2) Manifest must exist and its identity must match the worktree.
+  alloy_ad_manifest_exists "$wt" || alloy_die "no sprint manifest for '$wt' — cannot declare intent without a declared posture"
+  local m_wt m_slot
+  m_wt="$(alloy_ad_manifest_get "$wt" worktree_name 2>/dev/null || true)"
+  [[ "$m_wt" == "$wt" ]] || alloy_die "manifest identity mismatch: manifest worktree_name='${m_wt}' != '${wt}'"
+  m_slot="$(alloy_ad_manifest_get "$wt" slot 2>/dev/null || true)"
+  [[ -z "$m_slot" || "$m_slot" == "$ALLOY_WORKTREE_SLOT" ]] || \
+    alloy_die "manifest/metadata slot mismatch: manifest slot='${m_slot}' metadata slot='${ALLOY_WORKTREE_SLOT}'"
+
+  # 3) Mission key must match the value derived from the manifest.
+  local derived_mission; derived_mission="$(alloy_ad_mission_key "$wt")"
+  [[ "$mission" == "$derived_mission" ]] || \
+    alloy_die "mission key mismatch: --mission='${mission}' but manifest-derived mission='${derived_mission}'"
+
+  # 4) Branch identity (metadata + live), fail closed on any mismatch.
+  local live_branch="" meta_branch="$ALLOY_WORKTREE_BRANCH"
+  if [[ -n "$ALLOY_WORKTREE_PATH" && -d "$ALLOY_WORKTREE_PATH" ]] && alloy_rc_is_git_worktree "$ALLOY_WORKTREE_PATH"; then
+    live_branch="$(alloy_rc_git_branch "$ALLOY_WORKTREE_PATH" 2>/dev/null || true)"
+    [[ -z "$live_branch" || "$live_branch" == "$meta_branch" ]] || \
+      alloy_die "branch drift: live branch '${live_branch}' != metadata branch '${meta_branch}' — refusing to write"
+  fi
+  if [[ -n "$expect_branch" ]]; then
+    [[ "$expect_branch" == "$meta_branch" ]] || \
+      alloy_die "branch mismatch: --expect-branch='${expect_branch}' != '${meta_branch}'"
+    [[ -z "$live_branch" || "$expect_branch" == "$live_branch" ]] || \
+      alloy_die "branch mismatch: --expect-branch='${expect_branch}' != live '${live_branch}'"
+  fi
+
+  # 5) Path identity.
+  if [[ -n "$expect_path" ]]; then
+    [[ "$expect_path" == "$ALLOY_WORKTREE_PATH" ]] || \
+      alloy_die "path mismatch: --expect-path='${expect_path}' != '${ALLOY_WORKTREE_PATH}'"
+  fi
+
+  # --- Posture + coordination + admission snapshot (read-only). ----------------
+  alloy_ad_read_posture "$wt"
+  local iso; iso="$(alloy_ad_resolve_isolation "$_AD_MUTATION" "$_AD_TENANT")"
+  [[ "$iso" != "invalid" ]] || \
+    alloy_die "posture is invalid/undeclared (mutation='${_AD_MUTATION}' tenant_class='${_AD_TENANT}') — nothing coherent to declare"
+
+  local coordination="none"
+  if [[ "$coordinate" -eq 1 ]]; then
+    [[ -n "$coordination_reason" ]] || alloy_die "--coordinate requires --coordination-reason"
+    alloy_rc_is_safe_value "$coordination_reason" || alloy_die "--coordination-reason contains unsafe characters"
+    case "$coordination_reason" in *'"'*) alloy_die "--coordination-reason must not contain a double quote" ;; esac
+    coordination="declared"
+  fi
+
+  # Snapshot the decision at declaration time (read-only; degrades if Docker absent).
+  alloy_ad_evaluate "$_AD_MUTATION" "$_AD_TENANT" "$coordination"
+
+  # Validate the derived literals we are about to persist (parsed back by the core).
+  [[ "$derived_mission" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || alloy_die "derived mission key is not a safe literal: '${derived_mission}'"
+
+  [[ -n "$declared_by" ]] || declared_by="${USER:-unknown}"
+  alloy_rc_is_safe_value "$declared_by" || alloy_die "--declared-by contains unsafe characters"
+  case "$declared_by" in *'"'*) alloy_die "--declared-by must not contain a double quote" ;; esac
+
+  local base_sha; base_sha="$(alloy_ad_manifest_get "$wt" root.base_sha 2>/dev/null || true)"; [[ -n "$base_sha" ]] || base_sha="unknown"
+  local manifest_path; manifest_path="$(alloy_ad_manifest_path "$wt")"
+  local now; now="$(alloy_ad_iso_now)"   # honors ALLOY_AD_EVAL_NOW for reproducible records
+  local path; path="$(alloy_ad_intent_path "$wt")"
+
+  # --- Supersession: never silently overwrite; archive prior with provenance. ---
+  local supersedes_count=0
+  if [[ -f "$path" ]]; then
+    [[ "$supersede" -eq 1 ]] || alloy_die "an intent already exists for '$wt': $path (use --supersede to record a new one)"
+    local prior_count prior_declared archive_dir archive
+    prior_count="$(alloy_rc_meta_get "$path" ALLOY_INTENT_SUPERSEDES_COUNT 2>/dev/null || echo 0)"
+    [[ "$prior_count" =~ ^[0-9]+$ ]] || prior_count=0
+    supersedes_count=$(( prior_count + 1 ))
+    prior_declared="$(alloy_rc_meta_get "$path" ALLOY_INTENT_DECLARED_AT 2>/dev/null || echo unknown)"
+    archive_dir="${ALLOY_AD_INTENTS_DIR}/superseded"
+    mkdir -p "$archive_dir"
+    archive="${archive_dir}/$(basename "$path" .env).${now//[:]/-}.env"
+    cp "$path" "$archive"
+    alloy_info "archived prior intent (declared ${prior_declared}) -> ${archive}"
+  fi
+
+  # --- Write the immutable intent record (values quoted; parsed, never sourced). -
+  alloy_write_kv_file "$path" \
+    "ALLOY_INTENT_SCHEMA_VERSION=${ALLOY_AD_SCHEMA_VERSION}" \
+    "ALLOY_INTENT_MISSION_KEY=\"${derived_mission}\"" \
+    "ALLOY_INTENT_WORKTREE=\"${wt}\"" \
+    "ALLOY_INTENT_BRANCH=\"${meta_branch}\"" \
+    "ALLOY_INTENT_SLOT=\"${ALLOY_WORKTREE_SLOT}\"" \
+    "ALLOY_INTENT_POSTURE_MUTATION=\"${_AD_MUTATION}\"" \
+    "ALLOY_INTENT_POSTURE_TENANT=\"${_AD_TENANT}\"" \
+    "ALLOY_INTENT_ISOLATION_CLASS=\"${iso}\"" \
+    "ALLOY_INTENT_COORDINATION=\"${coordination}\"" \
+    "ALLOY_INTENT_COORDINATION_REASON=\"${coordination_reason}\"" \
+    "ALLOY_INTENT_DECISION_AT_DECL=\"${_AD_DECISION}\"" \
+    "ALLOY_INTENT_REASON_AT_DECL=\"${_AD_REASON_CODE}\"" \
+    "ALLOY_INTENT_DECLARED_AT=\"${now}\"" \
+    "ALLOY_INTENT_DECLARED_BY=\"${declared_by}\"" \
+    "ALLOY_INTENT_MANIFEST_PATH=\"${manifest_path}\"" \
+    "ALLOY_INTENT_BASE_SHA=\"${base_sha}\"" \
+    "ALLOY_INTENT_SUPERSEDES_COUNT=${supersedes_count}"
+
+  alloy_info "recorded runtime intent: ${wt}"
+  alloy_info "  mission:      ${derived_mission}"
+  alloy_info "  posture:      mutation=${_AD_MUTATION} tenant_class=${_AD_TENANT} -> isolation=${iso}"
+  alloy_info "  coordination: ${coordination}${coordination_reason:+ (${coordination_reason})}"
+  alloy_info "  at decl:      ${_AD_DECISION} (${_AD_REASON_CODE})"
+  alloy_info "  record:       ${path}"
+  alloy_info "  note: this is a DECLARATION, not a provisioned runtime. No Docker/Supabase was touched;"
+  alloy_info "        no capacity was reserved. Re-evaluate live: alloy-ro runtime-admission ${wt}"
+}
+
+main "$@"

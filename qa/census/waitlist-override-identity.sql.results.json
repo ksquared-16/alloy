@@ -1,0 +1,53 @@
+{
+  "trusted_host_action_id": "tha_f4af539175e3c7",
+  "query_hash": "9dd65234584c199db75ca782ef9750ab4a71775ac37d8a4b4868ca0ddb6e559e",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T16:52:28.726Z",
+    "question_ids": [
+      "489a6460-0e20-40ca-9122-87f0bc87c459::94984f6c-f269-4f86-8b1b-9a4607cac2c6",
+      "f64c8389-e828-42c6-b6f8-0e901d9dabe9::9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "d0953b15-89d6-4479-8e42-9cafffa26e0d::e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "82cbc16f-0928-4510-bec8-857172cd0427::89729749-e923-4cbc-9b11-e14b42620219",
+      "e23d6d6d-ee7b-48fc-af86-edad2567e36a::b34bbdec-fa92-4218-a3b1-e420e03d857c"
+    ],
+    "questions": {
+      "489a6460-0e20-40ca-9122-87f0bc87c459::94984f6c-f269-4f86-8b1b-9a4607cac2c6": {
+        "question_id": "489a6460-0e20-40ca-9122-87f0bc87c459::94984f6c-f269-4f86-8b1b-9a4607cac2c6",
+        "row_count": null,
+        "rows": [
+          "3|2026-08-21 16:26:10|2026-09-11 16:24:18|b2562c99-24dd-404b-b692-a0c4676d5bdf|Manual waitlist position adjustment"
+        ]
+      },
+      "f64c8389-e828-42c6-b6f8-0e901d9dabe9::9e230cf8-d444-4d0c-8f8b-54be3162a6ad": {
+        "question_id": "f64c8389-e828-42c6-b6f8-0e901d9dabe9::9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+        "row_count": null,
+        "rows": [
+          "7|2026-08-26 14:58:39|2026-09-11 16:24:18|b2562c99-24dd-404b-b692-a0c4676d5bdf|Manual waitlist position adjustment"
+        ]
+      },
+      "d0953b15-89d6-4479-8e42-9cafffa26e0d::e392cb90-29a7-4327-b91e-b063b06fa4b6": {
+        "question_id": "d0953b15-89d6-4479-8e42-9cafffa26e0d::e392cb90-29a7-4327-b91e-b063b06fa4b6",
+        "row_count": null,
+        "rows": [
+          "4|2026-09-11 14:55:01|2026-09-11 16:24:18|b2562c99-24dd-404b-b692-a0c4676d5bdf|Manual waitlist position adjustment"
+        ]
+      },
+      "82cbc16f-0928-4510-bec8-857172cd0427::89729749-e923-4cbc-9b11-e14b42620219": {
+        "question_id": "82cbc16f-0928-4510-bec8-857172cd0427::89729749-e923-4cbc-9b11-e14b42620219",
+        "row_count": null,
+        "rows": [
+          "3|2026-09-11 14:55:11|2026-09-11 16:25:57|b2562c99-24dd-404b-b692-a0c4676d5bdf|Manual waitlist position adjustment"
+        ]
+      },
+      "e23d6d6d-ee7b-48fc-af86-edad2567e36a::b34bbdec-fa92-4218-a3b1-e420e03d857c": {
+        "question_id": "e23d6d6d-ee7b-48fc-af86-edad2567e36a::b34bbdec-fa92-4218-a3b1-e420e03d857c",
+        "row_count": null,
+        "rows": [
+          "8|2026-09-11 16:25:47|2026-09-11 16:25:47|b2562c99-24dd-404b-b692-a0c4676d5bdf|Manual waitlist position adjustment"
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

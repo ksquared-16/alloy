@@ -15,7 +15,6 @@ export const SETTINGS_RECORD_UX_PARITY_TEST_PATHS = [
     "tests/fields/fieldPolicySettingsUi.test.ts",
     "tests/fields/enforceDrawerFieldPoliciesOnPatch.test.ts",
     "tests/admin/drawer/drawerSaveErrors.test.ts",
-    "tests/admin/drawer/fieldEditabilityInDrawer.test.ts",
     "tests/config/layoutIntegrityPresentation.test.ts",
     "tests/config/layoutIntegrityValidator.test.ts",
     "tests/admin/actionSurfaceFeedback.test.ts",

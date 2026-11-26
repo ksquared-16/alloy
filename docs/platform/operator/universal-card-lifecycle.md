@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Universal Card Lifecycle (V1)
 
 **Status:** Canonical (June 2026). The model **every** Alloy card follows. Locks the

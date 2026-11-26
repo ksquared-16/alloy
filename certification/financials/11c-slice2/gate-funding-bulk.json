@@ -1,0 +1,19 @@
+{
+  "sections": [
+    "overview",
+    "accounts",
+    "charges",
+    "payments",
+    "subsidy",
+    "activity"
+  ],
+  "commands": [],
+  "fundingAffordance": 1,
+  "funding": {
+    "typeControl": 0,
+    "agencyControl": 0,
+    "nativeSelects": 0,
+    "bodyMentionsFunding": true
+  },
+  "bulkAffordance": 0
+}

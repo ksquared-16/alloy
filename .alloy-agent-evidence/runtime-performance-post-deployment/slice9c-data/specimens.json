@@ -1,0 +1,31 @@
+{
+ "specimen_C": {
+  "keys": [
+   "children",
+   "household"
+  ],
+  "text": [
+   "Resolving children…",
+   "Resolving household…"
+  ],
+  "reserved": 2,
+  "at_ms": 9000
+ },
+ "specimen_D": {
+  "bp_card_H": 232,
+  "fin_card_H": 299,
+  "bp_cell_H": 299,
+  "fin_cell_H": 299
+ },
+ "specimen_B": {
+  "rows": 16,
+  "busy": 2,
+  "rows0": 16,
+  "at_ms": 0,
+  "target": "new_leads"
+ },
+ "specimen_A": {
+  "rowA": "ebe6cb44",
+  "rowB": "8a0d0fb4"
+ }
+}

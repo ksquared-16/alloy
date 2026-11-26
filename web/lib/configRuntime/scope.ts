@@ -12,6 +12,23 @@ export type ConfigScope =
 
 /** Who manages a given configuration value. */
 export type ConfigOwner = "org" | "location";
+export type ConfigAuthority = "platform" | "org" | "location";
+
+export type ConfigValueLayer<T> = {
+    authority: ConfigAuthority;
+    /**
+     * Presence is explicit so false, null, zero, and an empty string remain
+     * valid authored values rather than being mistaken for no layer.
+     */
+    present: boolean;
+    value: T;
+};
+
+export type ResolvedConfigLayer<T> = {
+    value: T | undefined;
+    authority: ConfigAuthority | null;
+    isOverride: boolean;
+};
 
 /**
  * A resolved configuration value — either an org default or a location override.
@@ -26,21 +43,49 @@ export type ResolvedConfigValue<T> = {
     orgDefault?: T;
 };
 
+const AUTHORITY_RANK: Record<ConfigAuthority, number> = {
+    platform: 0,
+    org: 1,
+    location: 2,
+};
+
+/**
+ * Resolve platform → organization → location configuration using the nearest
+ * explicitly present layer. Domains remain responsible for deciding whether
+ * the setting is value inheritance or availability.
+ */
+export function resolveConfigLayers<T>(
+    layers: readonly ConfigValueLayer<T>[],
+): ResolvedConfigLayer<T> {
+    const resolved = [...layers]
+        .filter((layer) => layer.present)
+        .sort((a, b) => AUTHORITY_RANK[b.authority] - AUTHORITY_RANK[a.authority])[0];
+    return {
+        value: resolved?.value,
+        authority: resolved?.authority ?? null,
+        isOverride: resolved?.authority === "location",
+    };
+}
+
 /** Resolve an inherited config value: location row wins over org default. */
 export function resolveInherited<T>(
     orgDefault: T | undefined,
     locationOverride: T | undefined,
 ): ResolvedConfigValue<T | undefined> {
-    if (locationOverride !== undefined) {
+    const resolved = resolveConfigLayers<T | undefined>([
+        { authority: "org", present: orgDefault !== undefined, value: orgDefault },
+        { authority: "location", present: locationOverride !== undefined, value: locationOverride },
+    ]);
+    if (resolved.authority === "location") {
         return {
-            value: locationOverride,
+            value: resolved.value,
             owner: "location",
             isOverride: true,
             orgDefault,
         };
     }
     return {
-        value: orgDefault,
+        value: resolved.value,
         owner: "org",
         isOverride: false,
     };

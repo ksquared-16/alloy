@@ -1,0 +1,94 @@
+{
+  "trusted_host_action_id": "tha_83a56d6018f17c",
+  "query_hash": "deb4c06adb02f993b304943982045b98d5a41037e2bcb32ead375da53abb9933",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T21:06:19.766Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_83a56d6018f17c",
+    "query_hash": "deb4c06adb02f993b304943982045b98d5a41037e2bcb32ead375da53abb9933",
+    "authorization_id": "grnt_297f6fba0d2e4367",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T21:06:28.612Z",
+    "question_ids": [
+      "c00_ledger",
+      "c01_vocabulary",
+      "c02_capabilities",
+      "c03_documents"
+    ],
+    "questions": {
+      "c00_ledger": {
+        "question_id": "c00_ledger",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T21:06:27.778977+00:00",
+            "ledger": [
+              "20261209090000",
+              "20261209090100"
+            ],
+            "tables": 3,
+            "client_privilege_on_d3": 0
+          }
+        ]
+      },
+      "c01_vocabulary": {
+        "question_id": "c01_vocabulary",
+        "row_count": null,
+        "rows": [
+          {
+            "orgs": 5,
+            "orgs_with_full_starter": 5,
+            "categories": 50,
+            "types": 65,
+            "versions_by_status": {
+              "published": 65
+            },
+            "types_without_valid_published": 0,
+            "medical_types_not_medical": 0
+          }
+        ]
+      },
+      "c02_capabilities": {
+        "question_id": "c02_capabilities",
+        "row_count": null,
+        "rows": [
+          {
+            "catalogued": 2,
+            "admin_roles": 5,
+            "admin_grants": 10,
+            "non_admin_grants": 0,
+            "seed_admin_region_has_keys": true,
+            "seed_ops_region_has_keys": false,
+            "new_org_triggers": 2
+          }
+        ]
+      },
+      "c03_documents": {
+        "question_id": "c03_documents",
+        "row_count": null,
+        "rows": [
+          {
+            "documents": 378,
+            "by_sensitivity": {
+              "standard": 132,
+              "medical": 246
+            },
+            "medical_type_declared_standard": 0,
+            "doc_types_registered": 4,
+            "doc_types_unregistered": [
+              "<null>"
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

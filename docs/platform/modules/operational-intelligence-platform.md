@@ -1,6 +1,17 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-28
+supersedes: []
+---
+
 # Operational Intelligence Platform
 
-**Status:** Canonical platform module doc (Phase 0 MVP + Phase 1 expansion).
+**Status:** Canonical platform module doc. **V1 FROZEN** — see [`../milestones/Operational-Intelligence-Platform-V1-Certified.md`](../milestones/Operational-Intelligence-Platform-V1-Certified.md).
+
+**Amended 2026-07-27:** measurements remain downstream consumers of **published** Operational Calculation results (platform Definitions and Organization Calculations). OI owns targets, health, snapshots, and trends — not calculation math. See [`../core/operational-calculations.md`](../core/operational-calculations.md) §3.1.
+
+**Amended 2026-07-28 (V1 closeout):** Product operator spine is **Questions → Measurements → Definitions → Answers**. External products consume **Answers** (Operational Answer Contract) — not Measurements as a presentation object. Phase 2 = consumer presentation; no speculative primitives.
 
 Alloy's measurement layer: **Events → Metrics → KPIs → Insights → Dashboards → Reports**.
 
@@ -28,8 +39,12 @@ Reports are a byproduct of the measurement system — not the foundation.
 |---|--------|-----|
 | **What** | Computed measurement | Metric + accountability |
 | **Example** | Median time to schedule tour = 36h | Target < 48h |
-| **Defined in** | TypeScript registry | KPI registry + target config |
-| **Config** | None (code-owned math) | Targets, thresholds, pack enablement |
+| **Defined in** | TypeScript registry **or** published Organization Calculation result binding | KPI registry + target config |
+| **Config** | None for code-owned metric math; org may bind a published calculation as a measurement source | Targets, thresholds, pack enablement |
+
+> **Path B (2026-07-27).** Organization Calculations author **read-only derived truth** via a typed AST over approved platform functions ([`../core/operational-calculations.md`](../core/operational-calculations.md) §3.1). Operational Intelligence does **not** author those calculations. When a measurement is bound to a published calculation, OI still owns only accountability overlays (targets/health/history).
+
+> **Future Room Capacity proving slice (2026-07-27).** Organization-owned measurements may bind an **exact published Organization Calculation version** (`org_settings.metadata.oi_org_calc_measurements`). Publishing calculation v2 does not move the binding; administrators rebind explicitly. Observations evaluate on demand via the existing room evaluator and append capped history in metadata — they never invent zeros for missing capacity.
 
 ---
 
@@ -114,6 +129,52 @@ Writer: `web/lib/metrics/snapshots/writeOrgMetricSnapshots.ts` — resolves **li
 **Limitations:** Trends require ≥2 snapshots for the same metric/window/scope. Single snapshot → “No trend yet”. Sparkline is indicative only — not a report chart.
 
 Reads on resolve API: `mode=snapshot` uses `readLatestMetricSnapshot()` (24h max age); falls back to live.
+
+### Live-only metrics (`snapshotPolicy`)
+
+A metric definition may declare `snapshotPolicy: "live_only"`, meaning **a stored
+value must never stand in for its current one**. Default is `"eligible"` — the
+behaviour every metric had before this existed.
+
+| Path | Behaviour for a live-only metric |
+|------|----------------------------------|
+| `resolveSingleMetric` | does not consult `metric_snapshots` even under `mode=snapshot`; `resolveMode` stays `live`, so source metadata is truthful |
+| `writeOrgMetricSnapshots` | does not persist it, and the exclusion applies to an explicitly supplied `metricKeys` list, not only the default |
+
+**Why a policy and not a shorter max age.** The 24h bound above is correct for a
+rolling 7- or 30-day metric, whose value moves slowly. It is meaningless for a
+current-state metric: attendance goes from zero to full and back inside one day,
+so a snapshot 23 hours old is inside the bound and still a wrong answer to "how
+many children are here now". No age is short enough, and any chosen value would
+be a guess about how fast the underlying state turns over.
+
+**Why not `snapshotSemantics`.** That flag means "bounded point-in-time or capped
+scan rather than exhaustive org truth" — a claim about COMPLETENESS. Metrics
+carry it today while being snapshotted quite correctly (`enrollment.active_leads`
+is both). Reusing one flag for two questions would make every later reader guess
+which meaning applied.
+
+**Why the writer must refuse too.** A persisted current-state row is
+indistinguishable afterwards from a legitimate historical one — same table, same
+shape, same `computed_at` — so anything reading `metric_snapshots` directly, or
+any later relaxation of the read guard, would serve it as a real point in a
+series. The row must not exist rather than merely go unread.
+
+Introduced by Attendance (Thread 9); the contract is platform-generic and belongs
+to any current-state metric.
+
+### Packs are not necessarily business processes
+
+`PACK_TO_BUSINESS_PROCESS` is a **partial** map, read through
+`businessProcessForMetricPack(pack)`, and `OperationalCalculation.businessProcess`
+is nullable. A metric pack may be a first-class measurement domain with no owning
+Business Process — Attendance is the first: it measures operational fact
+authoring on a roster, which no process owns. Surface Builder groups such a
+calculation under its **pack** label rather than under "Other".
+
+An exhaustive mapping previously forced the opposite conclusion, and the only
+ways to satisfy it were to invent a Business Process or to file the domain under
+an unrelated one. Both are ownership errors, so the coupling was relaxed instead.
 
 Indexes: `(org_id, metric_key, computed_at)`, `(org_id, metric_key, scope_type, scope_id)`, `(org_id, computed_at)`.
 
@@ -256,7 +317,7 @@ Legacy `/admin/settings/kpis` redirects to `?tab=visibility`.
 | Command layout | Queue \| Conversation \| Composer columns | Health bar + summary row + playbook sections |
 | Health signals | Status pills in queue/conversation headers | Health command chips + per-indicator status |
 
-POS workspace is not yet implemented in-repo; O.I. follows the shared **platform workspace modal** pattern (`AdminV2WorkspaceBosModalShell`) used by Communications and Inbox.
+The POS (Digital Mailroom) workspace now exists in-repo (`web/app/adminV2/pos/`, ~60 files — `DigitalMailroomShell`, `PosProcessingWorkspace`, `ProcessingKpiStrip`); O.I. follows the shared **platform workspace modal** pattern (`AdminV2WorkspaceBosModalShell`) used by Communications and Inbox.
 
 ### Phase 3E — premium workspace convergence
 
@@ -295,7 +356,7 @@ V1 settings expose active playbooks with **Edit targets** and **Experience place
 
 ## Analytics workspace (Phase 3 — deferred)
 
-Design plan: `docs/sprints/06_2026/analytics_workspace_shell_plan.md` — dedicated route nav (beyond modal). Modal + admin config delivered in Phase 3A.
+Design plan: `docs/sprints/archive/06_2026/analytics_workspace_shell_plan.md` — dedicated route nav (beyond modal). Modal + admin config delivered in Phase 3A.
 
 ---
 

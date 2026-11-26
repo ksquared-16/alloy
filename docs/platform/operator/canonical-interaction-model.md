@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Canonical Interaction Model
 
 **Status:** Canonical doctrine (June 2026). Defines the single interaction spine every operational domain inherits — Enrollment, Billing, Attendance, Scheduling, Staffing, Subsidy, Compliance, POS, Transportation, Meals, Health.
@@ -14,7 +21,7 @@ Alloy is moving from *"Enrollment CRM + configured drawers"* toward a **universa
 
 Alloy rejects that. There is **one interaction model**. Domains differ in *what they are about*, not in *how the operator moves through them*. Enrollment is the reference implementation; Billing is the validation case; Attendance and Scheduling should fit naturally without a new paradigm.
 
-This complements [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md):
+This complements [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md):
 
 | Doctrine | Answers |
 |----------|---------|
@@ -46,6 +53,59 @@ Workspace
 The operator learns this **once**. Adding Billing or Attendance feels like the same workspace gaining new abilities, not learning a new tool.
 
 ---
+
+## Record attention resolves the subject first
+
+**Durable record attention resolves the SUBJECT first. Operational host/context is optional
+enrichment. Operational intent may legitimately have no destination; durable-record intent remains
+openable whenever the canonical record exists and access permits.**
+
+An active Work Unit says where a subject is **worked**. It never said whether the subject **exists** —
+but until August 2026 the contract made it the existence authority anyway, and the consequences were
+invisible for exactly as long as they lasted: a canonical staff member (Person + Employment, no
+household) had no representable destination at all, and an enrolled child whose case had left the
+active queue became unopenable while remaining fully enrolled. Both answered `null`, callers
+correctly withdrew the affordance, and nothing ever errored.
+
+### The subjects
+
+| Subject | Identity of record | Has an operational home of its own? |
+|---|---|---|
+| `opportunity` | `opportunities.id` | **Yes** — a case IS the operational home. It is not a durable-record subject; routing it to one would route around the queue it belongs to. |
+| `person` | `persons.id` | No. A staff member has no household and no case, and must still open. |
+| `child` | `customer_members.id` | No. ⚠ `customer_members.person_id` is NULLABLE — keying a child on its person loses every person-less child. |
+
+### The two intents — declared, never inferred
+
+| Intent | Question | Answer when no queue holds the record |
+|---|---|---|
+| `operational` (default) | "Where do I **work** this?" | `null` / `false` — **a valid answer**, not a failure |
+| `durable_record` | "**Open** this record." | Opens |
+
+The caller declares which. The same record has different right answers under the two, and because
+`null` is *legitimate* on the operational side, an inferred intent would fail silently — which is the
+defect class this whole model exists to remove. Callers state only intent; the adapter owns household
+resolution, Work Unit keys, addresses and composition.
+
+### Optional host semantics
+
+`operational_host` is the case a durable subject is ALSO being worked in, when one exists. It is
+typed `opportunities` because a *host* genuinely is always a case — what changed is that a host is no
+longer required for a subject to exist. It may add an affordance. It may never decide that a subject
+exists, change its identity, or supply its `businessProcess`, and it never participates in card
+selection — otherwise the same record would show different cards depending on someone else's
+workflow state.
+
+A host with no active Work Unit key is a case that exists but is not a destination
+(`hasOperationalDestination`).
+
+### One runtime, composition varies by subject
+
+There is one Focus Panel runtime, one grid and one card catalog. What varies is composition: a card
+**declares** the subject grains it can truthfully compose for, and a composer selects. An undeclared
+card is case-only — silence never widens applicability.
+
+@see `docs/runtime/DURABLE-RECORD-ATTENTION.md` for the implementation and its certification.
 
 ## Primitive definitions
 
@@ -107,7 +167,7 @@ The **primary lens within a drawer** — how the operator is currently relating 
 | **Work** | Active operational work surfaces for the record | Cards for the domains in play (Billing, Attendance, Schedule, …) |
 | **Activity** | History / timeline of what has happened | Append-only record of facts |
 
-Modes organize the drawer's lenses. Per-domain operational surfaces (Billing, Attendance, Schedule, Placement) appear as **cards inside Work**, gated by the progressive-drawer rules (Hidden / Startable / Active) from `../operational-ux-doctrine.md` — not as separate drawer products. The Context Frame decides which mode and cards lead on open.
+Modes organize the drawer's lenses. Per-domain operational surfaces (Billing, Attendance, Schedule, Placement) appear as **cards inside Work**, gated by the progressive-drawer rules (Hidden / Startable / Active) from `../core/operational-ux-doctrine.md` — not as separate drawer products. The Context Frame decides which mode and cards lead on open.
 
 ### Card
 
@@ -224,14 +284,14 @@ This doc is the **intended model**. Current implementation is partially aligned.
 | Workspace → Stage → Record spine | Canonical | **Shipped** — `/workspace` → work-unit queues → drawer | None at spine level |
 | Perspective | First-class named lens | **Partial** — perspectives expressed as queue lanes / attention buckets / client filters | Promote "perspective" to an explicit named concept |
 | Queue / Row preview boundary | Locked | **Shipped & enforced** | None |
-| Universal drawer shell | One shell, many entry intents | **Partial** — Opportunity drawer canonical (VM); Person/Child drawer VM transitional (flag OFF) | Complete VM cutover; converge on one shell |
+| Universal drawer shell | One shell, many entry intents | **Complete** — VM hard cutover; legacy drawer deleted; Focus Panel canonical | Card editing substrate; no legacy restoration |
 | Context Frame | Explicit entry-intent concept | **Implicit** — drawers open from rows but entry intent is not a modeled concept | Model Context Frame so the same record leads differently per perspective |
 | Mode (Summary / Work / Activity) | Three primary lenses; domains are cards in Work | **Tab-style** composition today (Placement, Schedule, Billing tabs) | Reframe progressive tabs into Modes + Cards |
 | Card as reusable business primitive | Compose everywhere from record truth | **Partial** — Experience Builder composes sections/related-lists/widgets; some surfaces still field-grid | Build the card primitive; reuse across drawer/queue/analytics/BOS |
 | Relationship-scoped authority | Child/relationship scoped | **Doctrine + partial runtime** — scoped relationship contacts shipped (`layoutRuntimeScopedRelationshipContacts`) | Extend scope to billing/visibility/communication consistently |
 | Location-scoped operational context | Active location explicit | **Partial** — child site authority on OCM; operational enrollment (agreements/placements/schedules) flag-gated | Make active location/context a first-class drawer affordance |
 
-For per-domain maturity see `../foundation/platform-capabilities.md`. For sequencing see `../foundation/product-roadmap.md`.
+For per-domain maturity see `../../foundation/platform-capabilities.md`. For sequencing see `../foundation/product-roadmap.md`.
 
 ---
 
@@ -269,7 +329,7 @@ Alloy is standardizing around **Workspace → Perspective → Queue → Row → 
 | Lived operator experience | [`./operator-story.md`](./operator-story.md) |
 | Visual doctrine (look/feel; mockup bridge) | [`./alloy-visual-language.md`](./alloy-visual-language.md) |
 | Runtime Specification (synthesis; implementation bridge) | [`./alloy-runtime-specification.md`](./alloy-runtime-specification.md) |
-| Five planes / domains-share-one-architecture | [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md) |
+| Five planes / domains-share-one-architecture | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Drawer architecture & VM ownership | [`./drawer-system.md`](./drawer-system.md) |
 | Queue preview boundary | [`./queue-system.md`](./queue-system.md) |
 | Experience Builder (card/section/field authoring) | [`./experience-builder-doctrine.md`](./experience-builder-doctrine.md) |

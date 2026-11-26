@@ -1,0 +1,184 @@
+{
+  "householdScope": {
+    "status": 200,
+    "reconciliation": {
+      "grossCents": 219700,
+      "discountsCents": -24484,
+      "fundingCents": 0,
+      "adjustmentsCents": 14671,
+      "responsibilityCents": 209887,
+      "paymentsCents": 7500,
+      "balanceCents": 202387,
+      "scheduledCents": 18500,
+      "draftCents": 42226
+    },
+    "pastDue": {
+      "amountCents": 152500,
+      "oldestDueDate": "2026-09-11",
+      "agingDays": 13
+    },
+    "reconciliationBySubject": {
+      "e408fa51-7261-43c4-8e60-555d17fc9888": {
+        "grossCents": 56100,
+        "discountsCents": -2500,
+        "fundingCents": 0,
+        "adjustmentsCents": 0,
+        "responsibilityCents": 53600,
+        "paymentsCents": 0,
+        "balanceCents": 53600,
+        "scheduledCents": 18500,
+        "draftCents": 60748
+      },
+      "46105cd4-6030-417d-a7cb-faf409071c0d": {
+        "grossCents": 156100,
+        "discountsCents": -21984,
+        "fundingCents": 0,
+        "adjustmentsCents": 14671,
+        "responsibilityCents": 148787,
+        "paymentsCents": 7500,
+        "balanceCents": 141287,
+        "scheduledCents": 0,
+        "draftCents": -18522
+      }
+    },
+    "pastDueBySubject": {
+      "e408fa51-7261-43c4-8e60-555d17fc9888": {
+        "amountCents": 7500,
+        "oldestDueDate": "2026-09-18",
+        "agingDays": 6
+      },
+      "46105cd4-6030-417d-a7cb-faf409071c0d": {
+        "amountCents": 145000,
+        "oldestDueDate": "2026-09-11",
+        "agingDays": 13
+      }
+    },
+    "subjects": [
+      {
+        "id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "name": "Certa Certhouse"
+      },
+      {
+        "id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "name": "Certb Certhouse"
+      }
+    ],
+    "rowCount": 79,
+    "rowsBySubject": {
+      "46105cd4-6030-417d-a7cb-faf409071c0d": 55,
+      "e408fa51-7261-43c4-8e60-555d17fc9888": 23,
+      "HOUSEHOLD": 1
+    },
+    "netBySubject": {
+      "46105cd4-6030-417d-a7cb-faf409071c0d": 285765,
+      "e408fa51-7261-43c4-8e60-555d17fc9888": 146848,
+      "HOUSEHOLD": 7500
+    },
+    "collectible": {
+      "outstandingCents": 191200,
+      "expectedSubsidyCents": 0,
+      "submittedClaimSuppressionCents": 0,
+      "actualSubsidyReceivedCents": 0,
+      "unresolvedVarianceCents": 0,
+      "currentlyCollectibleCents": 191200
+    },
+    "prepaid": {
+      "availableCents": 12500,
+      "pendingCents": 0,
+      "heldCents": 0,
+      "heldSupported": true,
+      "positions": [
+        {
+          "paymentId": "7ca91075-1b80-4584-a722-c769d5241ff8",
+          "availability": "available",
+          "unappliedCents": 12500,
+          "heldCents": 0,
+          "payerCustomerId": null,
+          "payerLabel": null,
+          "receivedAt": "2026-09-18T15:53:51.405+00:00"
+        }
+      ],
+      "currency": "USD"
+    }
+  },
+  "memberScope": {
+    "status": 200,
+    "reconciliation": {
+      "grossCents": 163600,
+      "discountsCents": -21984,
+      "fundingCents": 0,
+      "adjustmentsCents": 14671,
+      "responsibilityCents": 156287,
+      "paymentsCents": 7500,
+      "balanceCents": 148787,
+      "scheduledCents": 0,
+      "draftCents": -18522
+    },
+    "pastDue": {
+      "amountCents": 145000,
+      "oldestDueDate": "2026-09-11",
+      "agingDays": 13
+    },
+    "reconciliationBySubject": {
+      "46105cd4-6030-417d-a7cb-faf409071c0d": {
+        "grossCents": 156100,
+        "discountsCents": -21984,
+        "fundingCents": 0,
+        "adjustmentsCents": 14671,
+        "responsibilityCents": 148787,
+        "paymentsCents": 7500,
+        "balanceCents": 141287,
+        "scheduledCents": 0,
+        "draftCents": -18522
+      }
+    },
+    "pastDueBySubject": {
+      "46105cd4-6030-417d-a7cb-faf409071c0d": {
+        "amountCents": 145000,
+        "oldestDueDate": "2026-09-11",
+        "agingDays": 13
+      }
+    },
+    "subjects": [
+      {
+        "id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "name": "Certb Certhouse"
+      }
+    ],
+    "rowCount": 56,
+    "rowsBySubject": {
+      "46105cd4-6030-417d-a7cb-faf409071c0d": 55,
+      "HOUSEHOLD": 1
+    },
+    "netBySubject": {
+      "46105cd4-6030-417d-a7cb-faf409071c0d": 285765,
+      "HOUSEHOLD": 7500
+    },
+    "collectible": {
+      "outstandingCents": 141600,
+      "expectedSubsidyCents": 0,
+      "submittedClaimSuppressionCents": 0,
+      "actualSubsidyReceivedCents": 0,
+      "unresolvedVarianceCents": 0,
+      "currentlyCollectibleCents": 141600
+    },
+    "prepaid": {
+      "availableCents": 12500,
+      "pendingCents": 0,
+      "heldCents": 0,
+      "heldSupported": true,
+      "positions": [
+        {
+          "paymentId": "7ca91075-1b80-4584-a722-c769d5241ff8",
+          "availability": "available",
+          "unappliedCents": 12500,
+          "heldCents": 0,
+          "payerCustomerId": null,
+          "payerLabel": null,
+          "receivedAt": "2026-09-18T15:53:51.405+00:00"
+        }
+      ],
+      "currency": "USD"
+    }
+  }
+}

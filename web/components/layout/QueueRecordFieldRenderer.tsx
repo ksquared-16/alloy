@@ -7,6 +7,7 @@ import QueueRecordAttentionWidget from "@/components/layout/queueRecord/QueueRec
 import QueueRecordTasksWidget from "@/components/layout/queueRecord/QueueRecordTasksWidget";
 import QueueRowOpenZone from "@/components/layout/QueueRowOpenZone";
 import { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { QueueRecordBlockConfig } from "@/lib/layout/queueRecordLayoutV3";
 import {
     queueRecordFieldShowsLabel,
@@ -278,7 +279,14 @@ export default function QueueRecordFieldRenderer({
                 data-queue-status-key={statusKey || undefined}
                 data-queue-status-tone={statusTone}
             >
-                <span className="queue-record-field__pill-label">{showEmpty ? "—" : text}</span>
+                <span className="queue-record-field__pill-label">
+                    {showEmpty
+                        ? "—"
+                        : (formatLayoutRuntimeStatusLabel(text, {
+                              refKey: "opportunity.status_key",
+                              renderHint: "status",
+                          }) ?? text)}
+                </span>
             </QueueRowOpenZone>
         );
     }

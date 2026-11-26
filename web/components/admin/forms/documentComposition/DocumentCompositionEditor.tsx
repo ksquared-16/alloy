@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { useMemo } from "react";
 import { FormFieldAuthoringCard } from "@/components/admin/forms/FormFieldAuthoringCard";
+import { FormGroupAuthoringCard } from "@/components/admin/forms/FormGroupAuthoringCard";
 import { DocumentCompositionBlockCard } from "@/components/admin/forms/documentComposition/DocumentCompositionBlockCard";
 import type { DocumentBlock, DocumentComposition } from "@/lib/forms/documentComposition";
 import { sortDocumentBlocks } from "@/lib/forms/documentComposition";
@@ -21,9 +22,14 @@ import {
     updateCompositionBlock,
 } from "@/lib/forms/documentCompositionAuthoring";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { COLLECTION_AUTHORING_COPY } from "@/lib/forms/formFieldAuthoringPresentation";
+import { FormSchemaRuntimePreview } from "@/components/admin/forms/FormSchemaRuntimePreview";
+import type { FormAuthoringPreviewLaunchContext } from "@/lib/forms/preview/formPreviewOrchestration";
 import { useFormSchemaFieldAuthoring } from "@/lib/forms/useFormSchemaFieldAuthoring";
-import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";
+import { useFormSystemFieldPicker } from "@/lib/fields/useFormSystemFieldPicker";
 import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
+import { buildFormsAuthorableCollectionBindingSeeds } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
+import { collectionBindingFromProvider } from "@/lib/fields/formsCollectionRepeatBinding";
 import {
     opGroupedSurface,
     opMetadata,
@@ -43,6 +49,9 @@ type Props = {
     onSelectField?: (fieldId: string) => void;
     onMoveFieldInRegion?: (regionId: string, fieldId: string, dir: -1 | 1) => void;
     onMoveFieldToRegion?: (fieldId: string, toRegionId: string) => void;
+    /** When set, enables context-backed runtime preview when launch context is available. */
+    formDefinitionId?: string;
+    previewLaunchContext?: FormAuthoringPreviewLaunchContext | null;
 };
 
 /** Document composition workspace — fields + blocks (FD-8 / FD-13). */
@@ -54,11 +63,14 @@ export function DocumentCompositionEditor({
     onSelectField,
     onMoveFieldInRegion,
     onMoveFieldToRegion,
+    formDefinitionId,
+    previewLaunchContext,
 }: Props) {
     const composition = resolveDocumentComposition(schema);
     const sortedBlocks = sortDocumentBlocks(composition.blocks);
     const fieldRegions = listFieldRegionBlocks(composition);
-    const fieldAuthoring = useFormSchemaFieldAuthoring(schema, onChange);
+    const { systemFields, relationshipFields, loading: pickerLoading, error: pickerError } = useFormSystemFieldPicker();
+    const fieldAuthoring = useFormSchemaFieldAuthoring(schema, onChange, { systemFields, relationshipFields });
 
     const applyComposition = (next: DocumentComposition) => {
         onChange(patchSchemaComposition(schema, next));
@@ -121,7 +133,7 @@ export function DocumentCompositionEditor({
 
     const addFieldToRegion = (regionId: string) => {
         const used = new Set(schema.fields.map((f) => f.id));
-        const nextSys = OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => !used.has(e.field_key));
+        const nextSys = systemFields.find((e) => !used.has(e.field_key));
         const f = nextSys ? formFieldFromRegistryEntry(nextSys, {}) : customUnmappedTextField();
         const sec0 = schema.sections[0] ?? { id: "main", title: "Questions", field_ids: [] as string[] };
         const nextComp = addFieldIdToRegion(composition, regionId, f.id);
@@ -136,6 +148,34 @@ export function DocumentCompositionEditor({
             )
         );
         onSelectField?.(f.id);
+    };
+
+    const addRepeatableSectionToRegion = (regionId: string) => {
+        const provider = buildFormsAuthorableCollectionBindingSeeds()[0];
+        if (!provider) return;
+        const id = `group_${provider.refKey.replace(/[^a-z0-9]+/gi, "_")}_${Math.random().toString(36).slice(2, 7)}`;
+        const groupField = {
+            id,
+            type: "group" as const,
+            label: provider.label,
+            required: false,
+            repeat: { min: 0, max: 10 },
+            collection_binding: collectionBindingFromProvider(provider),
+            fields: [] as FormSchemaV1["fields"],
+        };
+        const sec0 = schema.sections[0] ?? { id: "main", title: "Questions", field_ids: [] as string[] };
+        const nextComp = addFieldIdToRegion(composition, regionId, id);
+        onChange(
+            patchSchemaComposition(
+                {
+                    ...schema,
+                    fields: [...schema.fields, groupField],
+                    sections: [{ ...sec0, field_ids: [...sec0.field_ids, id] }, ...schema.sections.slice(1)],
+                },
+                nextComp,
+            ),
+        );
+        onSelectField?.(id);
     };
 
     const removeField = (fieldId: string) => {
@@ -163,6 +203,11 @@ export function DocumentCompositionEditor({
     return (
         <div className="space-y-2" data-testid="document-composition-editor">
             <p className={opMetadata}>{COMPOSITION_BLOCK_COPY.workspaceLead}</p>
+            {pickerError ?
+                <p className="text-xs text-amber-800" data-testid="form-field-picker-load-error" role="status">
+                    {pickerError}
+                </p>
+            :   null}
 
             <div className="space-y-2">
                 {sortedBlocks.map((block) => {
@@ -197,6 +242,20 @@ export function DocumentCompositionEditor({
                                             {block.field_ids.map((fid, fi) => {
                                                 const field = fieldById(schema, fid);
                                                 if (!field) return null;
+                                                if (field.type === "group") {
+                                                    return (
+                                                        <FormGroupAuthoringCard
+                                                            key={field.id}
+                                                            field={field}
+                                                            systemFields={systemFields}
+                                                            disabled={disabled}
+                                                            highlighted={selectedFieldId === field.id}
+                                                            onFieldChange={(next) => fieldAuthoring.updateGroupField(field.id, next)}
+                                                            onRemove={() => removeField(fid)}
+                                                            onFocus={() => onSelectField?.(field.id)}
+                                                        />
+                                                    );
+                                                }
                                                 const idx = fieldAuthoring.fieldIndexById(fid);
                                                 if (idx < 0) return null;
                                                 const entry = fieldAuthoring.registryEntryForField(field);
@@ -213,7 +272,10 @@ export function DocumentCompositionEditor({
                                                         locked={fieldAuthoring.isTypeLocked(entry, custom)}
                                                         kind={fieldAuthoring.uiKindForField(field)}
                                                         pickerValue={fieldAuthoring.pickerValueForField(field)}
-                                                        systemFields={OPERATIONAL_FORM_SYSTEM_FIELDS}
+                                                        systemFields={systemFields}
+                                                        relationshipFields={relationshipFields}
+                                                        pickerLoading={pickerLoading}
+                                                        pickerError={pickerError}
                                                         takenFieldIds={fieldAuthoring.takenIdsForIndex(idx)}
                                                         onPickerChange={fieldAuthoring.handlePickerChange}
                                                         onFieldChange={fieldAuthoring.setFieldAt}
@@ -243,6 +305,15 @@ export function DocumentCompositionEditor({
                                         data-testid={`document-add-question-${block.id}`}
                                     >
                                         {COMPOSITION_BLOCK_COPY.addQuestionToSection}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="rounded-md border border-alloy-midnight/10 bg-white px-2 py-1 text-xs font-medium text-alloy-midnight shadow-sm hover:bg-alloy-stone/20 disabled:opacity-40"
+                                        disabled={disabled}
+                                        onClick={() => addRepeatableSectionToRegion(block.id)}
+                                        data-testid={`document-add-repeatable-section-${block.id}`}
+                                    >
+                                        {COLLECTION_AUTHORING_COPY.addRepeatableSection}
                                     </button>
                                     {otherRegions.length > 0 ?
                                         <label className="flex items-center gap-1 text-xs text-alloy-midnight/70">
@@ -362,6 +433,12 @@ export function DocumentCompositionEditor({
                     </p>
                 :   null}
             </details>
+
+            <FormSchemaRuntimePreview
+                schema={schema}
+                formDefinitionId={formDefinitionId}
+                previewLaunchContext={previewLaunchContext}
+            />
         </div>
     );
 }

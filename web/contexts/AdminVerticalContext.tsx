@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -62,9 +62,12 @@ export function AdminVerticalProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    return (
-        <AdminVerticalContext.Provider value={{ verticals, selectedVerticalId, setSelectedVerticalId, loading }}>
-            {children}
-        </AdminVerticalContext.Provider>
+    // Stable value identity — `setSelectedVerticalId` is memoized and the rest are state, so consumers
+    // re-render only on a real vertical/selection/loading change, not every parent render.
+    const value = useMemo(
+        () => ({ verticals, selectedVerticalId, setSelectedVerticalId, loading }),
+        [verticals, selectedVerticalId, setSelectedVerticalId, loading],
     );
+
+    return <AdminVerticalContext.Provider value={value}>{children}</AdminVerticalContext.Provider>;
 }

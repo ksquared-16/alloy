@@ -131,7 +131,7 @@ export const COMPLETION_BOOTSTRAP_RULES_CATALOG: CompletionBootstrapRuleCatalogE
     },
     {
         group: "opportunity",
-        rule_key: "desired_program_type",
+        rule_key: "program_category_id",
         label: "Program / category",
         requirement_type: "required_before_status_transition",
         blocking_level: "hard_block",
@@ -149,7 +149,7 @@ export const COMPLETION_BOOTSTRAP_RULES_CATALOG: CompletionBootstrapRuleCatalogE
     },
     {
         group: "opportunity",
-        rule_key: "desired_start_date",
+        rule_key: "start_date",
         label: "Desired start date (each inquiry child)",
         requirement_type: "required_before_status_transition",
         blocking_level: "hard_block",

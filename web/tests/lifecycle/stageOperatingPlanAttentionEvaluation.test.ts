@@ -69,8 +69,8 @@ describe("evaluateStageOperatingPlanAttention", () => {
         const plan = leadPlan();
         const tasks: StageAttentionTaskSnapshot[] = [
             {
-                template_key: "review_lead",
-                work_intent_key: "gather_enrollment_information",
+                template_key: "contact_family",
+                work_intent_key: "contact_family",
                 due_at: new Date(NOW - 2 * MS_PER_DAY).toISOString(),
                 status: "open",
                 attempt_count: 0,
@@ -86,7 +86,7 @@ describe("evaluateStageOperatingPlanAttention", () => {
             tasks,
         });
 
-        expect(fired.some((r) => r.kind === "work_overdue" && r.rule_key === "review_lead_overdue")).toBe(true);
+        expect(fired.some((r) => r.kind === "work_overdue" && r.rule_key === "first_contact_overdue")).toBe(true);
     });
 
     it("fires stage_age_exceeded when record exceeds threshold days in stage", () => {
@@ -145,7 +145,35 @@ describe("evaluateStageOperatingPlanAttention", () => {
     });
 
     it("fires attempts_incomplete when window elapsed with fewer attempts than threshold", () => {
-        const plan = leadPlan();
+        const plan: StageOperatingPlanV1 = {
+            ...leadPlan(),
+            work_templates: leadPlan().work_templates.map((row) =>
+                row.template_key === "contact_family"
+                    ? {
+                          ...row,
+                          completion_policy: {
+                              min_attempts: 3,
+                              max_attempts: 3,
+                              window_days: 7,
+                              repeat_until_outcome: true,
+                              repeat_due_days: 2,
+                          },
+                      }
+                    : row,
+            ),
+            attention_rules: [
+                ...leadPlan().attention_rules,
+                {
+                    rule_key: "contact_attempts_window",
+                    kind: "no_contact_attempt",
+                    label: "Contact Family fewer than 3 attempts after 7 days",
+                    severity: "high",
+                    threshold: 3,
+                    template_key: "contact_family",
+                    targets: [],
+                },
+            ],
+        };
         const tasks: StageAttentionTaskSnapshot[] = [
             {
                 template_key: "contact_family",
@@ -180,11 +208,11 @@ describe("resolveOpportunityAttention stage_plan merge", () => {
     it("merges stage attention additively with org-wide attention", () => {
         const stageProjected = projectStagePlanToAttentionReasons([
             {
-                rule_key: "review_lead_overdue",
+                rule_key: "first_contact_overdue",
                 kind: "work_overdue",
-                label: "Review Lead overdue after 1 day",
+                label: "First contact overdue after 1 day",
                 severity: "medium",
-                provenance: "stage_operating_plan_v1:lead:review_lead_overdue",
+                provenance: "stage_operating_plan_v1:lead:first_contact_overdue",
             },
         ]);
 
@@ -209,7 +237,7 @@ describe("resolveOpportunityAttention stage_plan merge", () => {
         expect(resolved.reasons.some((r) => r.code === "stage_work_overdue")).toBe(true);
         const stageReason = resolved.reasons.find((r) => r.code === "stage_work_overdue");
         expect(stageReason?.attention_source).toBe("stage_plan");
-        expect(stageReason?.stage_attention_rule_key).toBe("review_lead_overdue");
+        expect(stageReason?.stage_attention_rule_key).toBe("first_contact_overdue");
         expect(stageReason?.stage_attention_provenance).toContain("stage_operating_plan_v1:lead:");
     });
 

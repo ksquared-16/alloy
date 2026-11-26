@@ -28,4 +28,28 @@ export type MyTasksTaskRow = {
     lifecycle_stage_key?: string | null;
     work_definition_key?: string | null;
     lifecycle_provenance?: string | null;
+    /** Processing convergence — projected or linked processing case. */
+    processing_case_id?: string | null;
+    processing_lane?: string | null;
+    processing_source_label?: string | null;
+    is_processing_projection?: boolean;
+    /** Communications convergence — projected or linked communication thread. */
+    communication_thread_id?: string | null;
+    communication_lane?: string | null;
+    communication_channel?: string | null;
+    communication_family_label?: string | null;
+    communication_topic_label?: string | null;
+    communication_last_preview?: string | null;
+    communication_last_activity_at?: string | null;
+    is_communications_projection?: boolean;
+    /** Documents convergence (D6) — a derived, unmet document requirement for one record. */
+    document_requirement_id?: string | null;
+    document_requirement_state?: "missing" | "pending_review" | "blocked" | "expired" | "expiring_soon" | null;
+    /** D7: a derived document-attention row (its own validity or review), when this item is one. */
+    document_attention_kind?: "expired" | "expiring_soon" | "review_due" | "date_missing" | null;
+    document_attention_document_id?: string | null;
+    document_requirement_label?: string | null;
+    document_requirement_subject_type?: string | null;
+    document_requirement_subject_label?: string | null;
+    is_document_requirement_projection?: boolean;
 };

@@ -12,6 +12,7 @@ import { detectBuilderStageTransition } from "@/lib/lifecycle/detectBuilderStage
 import { isBusinessProcessStageWorkTaskRow } from "@/lib/lifecycle/isBusinessProcessStageWorkTaskRow";
 import { parseEnrollmentOperationalFromMetadata } from "@/lib/opportunities/enrollmentOperationalMetadata";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
+import { evaluateTransitionRequirementPreflight } from "@/lib/lifecycle/evaluateTransitionRequirementPreflight";
 import type { StageTransitionReconciliationPreflight } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
 
 function trimOrNull(v: unknown): string | null {
@@ -73,6 +74,10 @@ export async function preflightStageTransitionReconciliation(params: {
         has_attention: false,
         attention_reason: null,
         wait_bucket: null,
+        missingRequirements: [],
+        blockingRequirements: [],
+        openWorkConflicts: [],
+        canProceed: true,
     };
 
     if (!orgId || !opportunityId || !nextStatusKey) return empty;
@@ -85,17 +90,62 @@ export async function preflightStageTransitionReconciliation(params: {
     });
     if (!departmentId) return empty;
 
-    const [{ data: dept }, { data: opp }, previousStatusMetadata, nextStatusMetadata] = await Promise.all([
-        params.supabase.from("departments").select("metadata").eq("id", departmentId).eq("org_id", orgId).maybeSingle(),
-        params.supabase.from("opportunities").select("metadata").eq("id", opportunityId).eq("org_id", orgId).maybeSingle(),
-        loadStatusMetadata(params.supabase, orgId, previousStatusKey),
-        loadStatusMetadata(params.supabase, orgId, nextStatusKey),
-    ]);
+    const [{ data: dept }, { data: opp }, previousStatusMetadata, nextStatusMetadata, openRowsResult] =
+        await Promise.all([
+            params.supabase.from("departments").select("metadata").eq("id", departmentId).eq("org_id", orgId).maybeSingle(),
+            params.supabase.from("opportunities").select("metadata").eq("id", opportunityId).eq("org_id", orgId).maybeSingle(),
+            loadStatusMetadata(params.supabase, orgId, previousStatusKey),
+            loadStatusMetadata(params.supabase, orgId, nextStatusKey),
+            // Hoisted: this was already loaded further down to LIST conflicting work. It also names
+            // the stage the record is departing, which has to be known before the transition is
+            // detected — otherwise the departure stage is inferred from a status key that need not
+            // name a stage at all.
+            params.supabase
+                .from("operational_tasks")
+                .select("id, title, due_at, status, source, metadata")
+                .eq("org_id", orgId)
+                .eq("entity_type", "opportunities")
+                .eq("entity_id", opportunityId)
+                .eq("status", "open")
+                .order("due_at", { ascending: true })
+                .limit(48),
+        ]);
 
     const departmentMetadata =
         dept?.metadata != null && typeof dept.metadata === "object" && !Array.isArray(dept.metadata)
             ? (dept.metadata as Record<string, unknown>)
             : {};
+
+    /*
+     * THE STAGE THE RECORD IS ACTUALLY IN, FROM ITS OWN STAGE WORK.
+     *
+     * Stage work carries `lifecycle_stage_key` — it is the same durable stage the Process Card, the
+     * queue projection and the work's own subject fingerprint read. The opportunity's `status_key`
+     * is a rollup and need not name a stage: measured on staging, a case sat at `tour` with
+     * `status_key: "open"`, its metadata held only tour_date/tour_time, and the org had no
+     * status_definitions rows — so the departure stage resolved to null, no Tour requirement was
+     * ever loaded, and a BLOCKING work requirement scoped to `tour_transition_2` let the exit
+     * through. The requirement runtime was correct; it was being asked about the wrong stage.
+     *
+     * Only OPEN stage work is consulted, and only to name the stage — never to decide the outcome.
+     * This stage WINS over the status-derived one — the status is the weaker signal, and preferring
+     * it is what produced the wrong departure stage in the first place. (An earlier revision of this
+     * comment said the opposite of what the code does; the code was right.)
+     *
+     * A record should hold open work at one stage, but it can briefly hold work at two, and picking
+     * the first row would then be an accident of `due_at` ordering. The destination is excluded
+     * instead: whatever the record is departing, it is not the stage it is entering. That is enough
+     * to be deterministic here, because the remaining candidate is the stage actually being left.
+     */
+    const openStageWorkRows = (openRowsResult.data ?? []).filter((row) =>
+        isBusinessProcessStageWorkTaskRow(row as { metadata?: Record<string, unknown>; source?: string }),
+    );
+    const stageKeysFromOpenWork = openStageWorkRows
+        .map((row) => {
+            const md = ((row as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
+            return trimOrNull(md.lifecycle_stage_key);
+        })
+        .filter((key): key is string => key != null && key !== nextStatusKey);
 
     const transition = detectBuilderStageTransition({
         previousStatusKey,
@@ -103,9 +153,22 @@ export async function preflightStageTransitionReconciliation(params: {
         departmentMetadata,
         previousStatusMetadata,
         nextStatusMetadata,
+        currentBuilderStageKey: stageKeysFromOpenWork[0] ?? null,
     });
 
     const nextStageLabel = stageLabelForKey(departmentMetadata, transition.nextBuilderStageKey);
+
+    const requirementPreflight = await evaluateTransitionRequirementPreflight({
+        supabase: params.supabase,
+        orgId,
+        opportunityId,
+        departmentMetadata,
+        fromBuilderStageKey: transition.previousBuilderStageKey,
+        toBuilderStageKey: transition.nextBuilderStageKey,
+        previousStatusKey,
+        nextStatusKey,
+        nextStageLabel,
+    });
 
     const oppMetadata =
         opp?.metadata != null && typeof opp.metadata === "object" && !Array.isArray(opp.metadata)
@@ -115,27 +178,25 @@ export async function preflightStageTransitionReconciliation(params: {
     const hasAttention = enrollmentOp.wait_bucket !== "none";
 
     if (!transition.stageChanged || !transition.nextBuilderStageKey) {
+        const workRequired = hasAttention;
         return {
             ...empty,
             next_stage_label: nextStageLabel,
             has_attention: hasAttention,
             attention_reason: enrollmentOp.wait_reason,
             wait_bucket: enrollmentOp.wait_bucket !== "none" ? enrollmentOp.wait_bucket : null,
-            required: hasAttention,
+            missingRequirements: requirementPreflight.missingRequirements,
+            blockingRequirements: requirementPreflight.blockingRequirements,
+            required: workRequired || requirementPreflight.blockingRequirements.length > 0,
+            canProceed:
+                requirementPreflight.blockingRequirements.length === 0 && !workRequired,
         };
     }
 
-    const { data: openRows, error } = await params.supabase
-        .from("operational_tasks")
-        .select("id, title, due_at, status, source, metadata")
-        .eq("org_id", orgId)
-        .eq("entity_type", "opportunities")
-        .eq("entity_id", opportunityId)
-        .eq("status", "open")
-        .order("due_at", { ascending: true })
-        .limit(48);
+    const { data: openRows, error } = openRowsResult;
 
     if (error) {
+        const blocking = requirementPreflight.blockingRequirements;
         return {
             ...empty,
             previous_builder_stage_key: transition.previousBuilderStageKey,
@@ -144,6 +205,10 @@ export async function preflightStageTransitionReconciliation(params: {
             has_attention: hasAttention,
             attention_reason: enrollmentOp.wait_reason,
             wait_bucket: enrollmentOp.wait_bucket !== "none" ? enrollmentOp.wait_bucket : null,
+            missingRequirements: requirementPreflight.missingRequirements,
+            blockingRequirements: blocking,
+            required: blocking.length > 0 || hasAttention,
+            canProceed: blocking.length === 0 && !hasAttention,
         };
     }
 
@@ -166,18 +231,23 @@ export async function preflightStageTransitionReconciliation(params: {
             due_at: trimOrNull((row as { due_at?: string }).due_at),
         }));
 
-    const required = openWork.length > 0 || hasAttention;
+    const workRequired = openWork.length > 0 || hasAttention;
+    const blocking = requirementPreflight.blockingRequirements;
 
     return {
-        required,
+        required: workRequired || blocking.length > 0,
         previous_builder_stage_key: transition.previousBuilderStageKey,
         next_builder_stage_key: transition.nextBuilderStageKey,
         previous_status_key: previousStatusKey,
         next_status_key: nextStatusKey,
         next_stage_label: nextStageLabel,
         open_work: openWork,
+        openWorkConflicts: openWork,
         has_attention: hasAttention,
         attention_reason: enrollmentOp.wait_reason,
         wait_bucket: enrollmentOp.wait_bucket !== "none" ? enrollmentOp.wait_bucket : null,
+        missingRequirements: requirementPreflight.missingRequirements,
+        blockingRequirements: blocking,
+        canProceed: blocking.length === 0 && !workRequired,
     };
 }

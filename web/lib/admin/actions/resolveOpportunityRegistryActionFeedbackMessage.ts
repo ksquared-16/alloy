@@ -5,7 +5,8 @@ const SUCCESS_BY_KEY: Record<string, string> = {
     reschedule_tour: "Tour rescheduled.",
     record_tour_outcome: "Tour outcome recorded.",
     add_note: "Note added.",
-    create_task: "Task created.",
+    create_task: "Work Item created.",
+    create_work_item: "Work Item created.",
     send_form: "Form link ready — share it with the family.",
     send_enrollment_packet: "Enrollment packet sent.",
 };

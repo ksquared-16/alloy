@@ -1,0 +1,40 @@
+{
+  "specimenRow": {
+    "chargeId": "18e860f9-8ce5-4645-9283-ca3ebcb9a4a9",
+    "text": "Certhouse Family · $1,450.00 · Tuition · Certb Certhouse · September 2026 · North Campus"
+  },
+  "before": {
+    "billingPeriod": null,
+    "invoiceDate": null,
+    "dueDate": null,
+    "accountingPeriod": null,
+    "deferredFrom": null,
+    "serviceDate": "Charge is for · Sep 1, 2026 · COLLECTION · Outstanding · $0.00 · FINANCIALS · CURRENT PERIOD · Septe",
+    "responsibilityBlock": "RESPONSIBILITY ARRANGEMENT · Cert Certhouse · $18.00 · Expected funding — none. · Manage expect",
+    "statusText": "Draft follow-up · Create a personalized follow-up message · / commands · ↵ to send · ⇧↵ new li",
+    "payments": "Payments · Subsidy · Activity · CHARGES · 21Awaiting posting · — · 1Households · — · Generate a peri",
+    "detailText": ""
+  },
+  "postRequests": [
+    "{\"action_key\":\"charge.post\",\"entity_type\":\"child\",\"entity_id\":\"46105cd4-6030-417d-a7cb-faf409071c0d\",\"mode\":\"execute\",\"confirmation\":{\"confirmed\":true},\"payload\":{\"charge_id\":\"18e860f9-8ce5-4645-9283-ca3ebcb9a4a9\",\"charg"
+  ],
+  "after": {
+    "billingPeriod": null,
+    "invoiceDate": null,
+    "dueDate": null,
+    "accountingPeriod": null,
+    "deferredFrom": null,
+    "serviceDate": "Charge is for · Sep 1, 2026 · Posted · Sep 20, 2026 · COLLECTION · Outstanding · $1,305.00 · FINANCIAL",
+    "responsibilityBlock": "RESPONSIBILITY ARRANGEMENT · Cert Certhouse · $18.00 · Expected funding — none. · Manage expect",
+    "statusText": "Draft follow-up · Create a personalized follow-up message · / commands · ↵ to send · ⇧↵ new li",
+    "payments": "Payments · Subsidy · Activity · CHARGES · 20Awaiting posting · — · 1Households · — · Generate a peri",
+    "detailText": ""
+  },
+  "nonMutation": {
+    "billingPeriodUnchanged": true,
+    "invoiceDateUnchanged": true,
+    "dueDateUnchanged": true,
+    "serviceDateUnchanged": false,
+    "responsibilityUnchanged": true
+  }
+}

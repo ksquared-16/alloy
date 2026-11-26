@@ -6,7 +6,8 @@ import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
 import type { QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import InboxThreadMessageHistory from "@/components/adminV2/messaging/InboxThreadMessageHistory";
 import InboxThreadReplyBox from "@/components/adminV2/messaging/InboxThreadReplyBox";
-import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { dispatchInboxUnreadRefresh } from "@/lib/adminV2/inboxNavUnreadCache";
 import {
     getInboxWarmCacheSnapshot,
@@ -42,6 +43,7 @@ import type {
     InboxThreadsListResponse,
 } from "@/lib/communications/inboxThreadTypes";
 import { INBOX_FOLDERS } from "@/lib/communications/inboxThreadTypes";
+import { WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 
 const FOLDER_LABELS: Record<InboxFolder, string> = {
     inbox: "Inbox",
@@ -102,7 +104,7 @@ export default function InboxPanel({
     composeOpen: composeOpenProp,
     onComposeOpenChange,
 }: InboxPanelProps) {
-    const adminDrawer = useAdminDrawerOptional();
+    const focusRecord = useOperatorRecordFocus();
     const isModal = layout === "modal";
 
     const [folder, setFolder] = useState<InboxFolder>(initialFolder);
@@ -344,15 +346,23 @@ export default function InboxPanel({
         });
     }, []);
 
+    // "Open record" moves the operator to where the conversation's subject is actually worked —
+    // the Work Unit holding it — rather than stacking a record overlay on top of the inbox. A
+    // person subject lands on the Household card with that person's row selected, which is the
+    // same destination Search gives for a person.
     const onOpenRecord = useCallback(() => {
-        if (!selectedDrawerTarget || !adminDrawer) return;
-        adminDrawer.openDrawer({
-            type: selectedDrawerTarget.drawerType,
-            id: selectedDrawerTarget.entityId,
-            opportunityWorkspaceContext: null,
+        if (!selectedDrawerTarget) return;
+        const isPerson = selectedDrawerTarget.drawerType === "persons";
+        void focusRecord({
+            entity_type: selectedDrawerTarget.drawerType,
+            entity_id: selectedDrawerTarget.entityId,
+            card_focus: isPerson
+                ? { card_key: OPERATOR_FOCUS_CARDS.household, item_id: selectedDrawerTarget.entityId }
+                : null,
+        }).then((moved) => {
+            if (moved) onClose?.();
         });
-        onClose?.();
-    }, [adminDrawer, onClose, selectedDrawerTarget]);
+    }, [focusRecord, onClose, selectedDrawerTarget]);
 
     const onArchiveToggle = async (thread: InboxThreadListItem, archived: boolean) => {
         setArchiving(true);
@@ -517,7 +527,7 @@ export default function InboxPanel({
                         })()}
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
-                        {selectedDrawerTarget && adminDrawer ? (
+                        {selectedDrawerTarget ? (
                             <button
                                 type="button"
                                 onClick={onOpenRecord}
@@ -607,7 +617,7 @@ export default function InboxPanel({
     const listColumn = (
         <section
             className={`flex min-h-0 flex-col bg-white/90 ${
-                isModal ? "w-[min(18rem,52%)] shrink-0 border-r border-alloy-stone/12" : "w-[min(22rem,34vw)] shrink-0 border-r border-alloy-stone/12"
+                isModal ? `w-[min(18rem,52%)] shrink-0 ${WS_QUEUE_RAIL}` : `w-[min(22rem,34vw)] shrink-0 ${WS_QUEUE_RAIL}`
             }`}
         >
             {!isModal ? (

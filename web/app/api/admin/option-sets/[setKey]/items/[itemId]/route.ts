@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { OPTION_SETS_DELETE, OPTION_SETS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { logAdminAudit } from "@/lib/adminAuth";
 
 function decodeSetKeyParam(raw: string): string {
@@ -23,9 +24,8 @@ export async function PATCH(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, OPTION_SETS_MANAGE);
+    if (denied) return denied;
 
     const { setKey: rawKey, itemId } = await context.params;
     const set_key = decodeSetKeyParam(rawKey ?? "").trim();
@@ -122,9 +122,8 @@ export async function DELETE(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, OPTION_SETS_DELETE);
+    if (denied) return denied;
 
     const { setKey: rawKey, itemId } = await context.params;
     const set_key = decodeSetKeyParam(rawKey ?? "").trim();

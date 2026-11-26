@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { applyAssignmentAction, type AssignmentFields } from "@/lib/communications/v2/assignmentSla";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_ASSIGN,
+} from "@/lib/communications/communicationsAuthority";
 import {
     CONVERSATION_ASSIGNMENT_ACTIONS,
     type ConversationAssignmentAction,
@@ -14,13 +17,33 @@ import {
  *
  * DARK: gated behind comms_v2_assignment (404 when off). Writes communication_threads assignment
  * fields + an immutable conversation_assignment_events audit row. No send, no message mutation. (PKG-10)
+ *
+ * AUTHORITY: `communications.assign`, and it is separate from `communications.send` for a reason
+ * the source states rather than a reason of symmetry.
+ *
+ * `decideCommunicationsSendScope` checks assignment BEFORE site scope: when
+ * `assigned_user_id === actorUserId` it returns `allowed: true` with reason `assigned_to_actor`,
+ * deliberately, so a site-restricted operator can be handed one organization conversation by name
+ * without being handed the whole inbox. `CONVERSATION_ASSIGNMENT_ACTIONS` includes `claim`, which
+ * assigns a thread to the ACTOR. Gate this on `communications.send` and any site-restricted sender
+ * could claim any conversation in the organization and answer it — escaping their own site scope,
+ * one conversation at a time, with nobody granting them anything.
+ *
+ * It is NOT an Access delegation. Assignment cannot confer the ability to send: that same function
+ * returns `no_send_permission` before it ever looks at assignment. It widens SCOPE for a principal
+ * who already holds the capability and never grants the capability, so the W-18 assignment ceiling
+ * is not engaged — the word "assignment" alone is not a reason to invoke it.
+ *
+ * THE FLAG BELOW IS NOT THE BOUNDARY ANY MORE. It was, and that was the defect: a feature flag
+ * controls availability, not authorization. It stays because rollout is a product decision, but the
+ * route is now refused on authority whether the flag is on or off.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     if (!isCommsV2FlagEnabled("comms_v2_assignment")) {
         return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_ASSIGN);
+    if (!auth.ok) return auth.response;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 

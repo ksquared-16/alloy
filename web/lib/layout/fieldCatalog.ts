@@ -6,7 +6,7 @@
  * Person/Contact, Child, Enrollment participation). Layout entity_type stays
  * `opportunities`; fields reference related entities via NAMESPACED refKeys
  * (e.g. `opportunity.status_key`, `person.phone`, `child.first_name`,
- * `inquiry_child.desired_start_date`).
+ * `inquiry_child.start_date`).
  *
  * Canonical namespaces (FC-1): child.*, inquiry_child.*, person.*, opportunity.*
  * Deprecated: child_inquiry.* (alias-on-read via layoutRefKeyAliases).
@@ -85,7 +85,7 @@ export const INQUIRY_CHILD_PICKER_PRESENTATION = {
 
 /** Picker-only field label overrides (registry labels unchanged). */
 const INQUIRY_CHILD_PICKER_FIELD_LABELS: Partial<Record<string, string>> = {
-    desired_start_date: "Desired start date",
+    start_date: "Desired start date",
     outcome_status_key: "Enrollment status",
 };
 
@@ -361,7 +361,7 @@ export const WAITLIST_CANDIDATE_CATALOG_GROUPS: LayoutCatalogGroup[] = [
             wlField("placement_candidate", "Candidate", "candidateId", "Candidate ID", "text"),
             wlField("placement_candidate", "Candidate", "waitlist.status", "Candidate status", "status"),
             wlField("placement_candidate", "Candidate", "waitlist.waitSince", "Waitlisted since", "text"),
-            wlField("placement_candidate", "Candidate", "waitlist.desiredStartDate", "Desired start", "date"),
+            wlField("placement_candidate", "Candidate", "waitlist.startDate", "Desired start", "date"),
         ],
     },
     {
@@ -371,7 +371,7 @@ export const WAITLIST_CANDIDATE_CATALOG_GROUPS: LayoutCatalogGroup[] = [
             wlField("wl_child", "Child", "child.name", "Child name", "text"),
             wlField("wl_child", "Child", "child.ageLabel", "Age", "text"),
             wlField("wl_child", "Child", "child.birthdate", "Birthdate", "date"),
-            wlField("wl_child", "Child", "child.desiredStartDate", "Desired start", "date"),
+            wlField("wl_child", "Child", "child.startDate", "Desired start", "date"),
             wlField("wl_child", "Child", "child.schedulePreference", "Schedule preference", "text"),
         ],
     },

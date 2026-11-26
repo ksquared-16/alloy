@@ -1,0 +1,248 @@
+/**
+ * HOW A PAYMENT READS TO AN OPERATOR — received, applied, and what is left doing nothing.
+ *
+ * ── WHY THIS IS A MODULE AND NOT JSX ──
+ *
+ * The same reason `offersReverseTransition` is: a rule written inside a component exists twice, once
+ * in the component and once in every test that restates it, and a test that restates a rule proves
+ * only that it can restate it. Everything here is decided once and asserted directly.
+ *
+ * ── THE DISTINCTION THIS EXISTS TO PROTECT ──
+ *
+ * Money RECEIVED and money APPLIED are different facts with different dates, and the difference
+ * between them is money sitting on the account doing nothing. The card had no way to say this at all:
+ * `vm.payments` was composed by the read model, carried `appliedCents`, and was never rendered — so a
+ * family could send $500, have $300 applied, and the surface showed neither number.
+ *
+ * The unapplied part is called UNAPPLIED. It is not called account credit, and that is not pedantry:
+ * a credit is a charge-side concept in this platform (`charge_category = 'credit'`, a reduction line
+ * on the ledger written through the correction path). Labelling unapplied cash as credit would merge
+ * two things the schema keeps apart, and an operator reading "credit" would look for a ledger row
+ * that does not exist.
+ */
+
+import type { FinancialsPaymentRow } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+
+export type PaymentPresentation = {
+    paymentId: string;
+    /**
+     * A receipt is money in. Money going back out is one of two different events wearing the same
+     * shape: a REFUND the operator asked for, or a RETURN the provider took. Collapsing them was
+     * safe while every reversal was a refund and stopped being safe the moment a bank could reverse
+     * a debit — an operator shown "Refunded" for a returned ACH would believe somebody here decided
+     * it, and would look for the person who did.
+     */
+    kind: "receipt" | "refund" | "return";
+    /** Human-facing, never the raw status key. */
+    statusLabel: string;
+    /** True only for `posted` — the one status that is money. */
+    isMoney: boolean;
+    receivedCents: number;
+    appliedCents: number;
+    /** Received − applied. Zero for a fully applied payment; never negative. */
+    unappliedCents: number;
+    currencyCode: string;
+    /** `Cash`, `Check`, … — the operator's word for how it arrived. */
+    methodLabel: string;
+    /** The receipt this refund reverses, for lineage. Null on a receipt. */
+    refundsPaymentId: string | null;
+    /** Who caused it. `provider` is a return; `operator` is a refund. Null on a receipt. */
+    reversalOrigin: "operator" | "provider" | null;
+    /**
+     * Whether the card offers `payment.refund` on this row.
+     *
+     * Posted inbound money that is not itself a refund, with something still refundable. The service
+     * holds the real bounds — it refuses refunding more than was received and refuses refunding a
+     * refund — so this anticipates the obvious cases and lets the domain answer the rest. It never
+     * pre-empts a refusal the service would not make.
+     */
+    offersRefund: boolean;
+    /**
+     * What has already gone back out against this receipt, and what is still refundable.
+     *
+     * ── WHY THIS IS THREAD 8 AND NOT STRIPE ──
+     *
+     * A refund is an outbound payment naming the receipt it reverses, so both numbers are a sum over
+     * canonical payments and nothing else. Asking the provider for its refund list would answer a
+     * DIFFERENT question — what Stripe has executed — which is evidence for execution, not the
+     * financial truth, and would be wrong for a manual rail that Stripe has never heard of.
+     *
+     * Zero and "all of it" on a row presented alone: a single payment cannot see its own refunds, so
+     * `presentPayments` is what fills these in for a real account.
+     */
+    refundedCents: number;
+    refundableCents: number;
+    /**
+     * How much of this receipt may still be RESTRICTED: unapplied money not already held.
+     *
+     * `unapplied − held`, which is precisely the bound the database's hold invariant enforces. It is
+     * differenced here, beside the other money figures, so no surface subtracts it for itself and
+     * disagrees with the trigger that refuses the write.
+     */
+    holdableCents: number;
+    /**
+     * What of this receipt a hold restricts.
+     *
+     * Stated rather than left implicit inside `unappliedCents`, because a row that says only
+     * "unapplied" overstates what can answer an obligation by exactly this amount. The receipt is
+     * the only place an operator can see the difference between money that is merely unallocated
+     * and money that is deliberately restricted.
+     */
+    heldCents: number;
+    /**
+     * What of this receipt can still answer an obligation: received, less what went back, less what
+     * is applied, less what is held. The APPLY ceiling — `holdableCents` is the hold ceiling, and
+     * the two differ by the refunds.
+     */
+    applicableCents: number;
+    /**
+     * Whether the card offers `deposit.hold` on this row.
+     *
+     * Posted inbound money with something left to restrict. Holding a refund is meaningless — the
+     * money is leaving — and holding a pending receipt would restrict money that has not arrived.
+     * The invariant trigger still owns the real bound; this anticipates the obvious cases and lets
+     * the domain answer the rest, exactly as `offersRefund` does.
+     */
+    offersHold: boolean;
+};
+
+/** `pending | posted | failed | voided` → the operator's word for it. */
+const STATUS_LABELS: Record<string, string> = {
+    posted: "Received",
+    pending: "Pending",
+    failed: "Failed",
+    voided: "Voided",
+};
+
+const METHOD_LABELS: Record<string, string> = {
+    cash: "Cash",
+    check: "Check",
+    ach: "Bank transfer",
+    card: "Card",
+    money_order: "Money order",
+    manual: "External payment",
+    subsidy: "Subsidy",
+    other: "Other",
+};
+
+/** Title-case fallback, so an unmapped key still reads as words rather than as a key. */
+function humanize(value: string): string {
+    const s = value.trim().replace(/[_-]+/g, " ");
+    return s ? s[0].toUpperCase() + s.slice(1) : "";
+}
+
+export function presentPayment(
+    payment: FinancialsPaymentRow,
+    refundedCents = 0,
+    /*
+     * ⚠ A THIRD POSITIONAL PARAMETER, and the note on `unappliedTotalCents` says why that is
+     * dangerous: `.map(presentPayment)` would pass the array as this argument. Every call site is an
+     * explicit arrow for that reason, and `presentPayments` below is the only supported entry point.
+     */
+    heldCents = 0,
+): PaymentPresentation {
+    const received = Math.abs(Number(payment.amountCents) || 0);
+    const applied = Math.abs(Number(payment.appliedCents) || 0);
+    const isRefund = payment.direction === "outbound";
+    const isPosted = payment.status === "posted";
+    const refunded = Math.max(0, Math.min(received, Math.abs(Number(refundedCents) || 0)));
+    const refundable = isRefund ? 0 : Math.max(0, received - refunded);
+    /*
+     * Clamped, and bounded by the unapplied remainder rather than by the receipt: money already
+     * answering an obligation is not available to restrict, and the invariant enforces exactly that.
+     */
+    const held = Math.max(0, Math.abs(Number(heldCents) || 0));
+    const holdable = isRefund ? 0 : Math.max(0, Math.max(0, received - applied) - held);
+    /*
+     * ── WHAT CAN STILL ANSWER AN OBLIGATION ─────────────────────────────────────────────────────
+     *
+     * NOT `holdable`, and the difference is the refunds. `unappliedCents` here is measured against
+     * what was RECEIVED, so on a partly refunded receipt it counts money that has already left; the
+     * canonical apply ceiling nets refunds as well as holds.
+     *
+     * Measured on deployed staging with the terminology repair in place: the row offered
+     * "$472.00 available to apply" — 562 unapplied minus 90 held — beside an account Available
+     * prepaid of $332.00 and an Apply control quoting $332.00. Two figures for one quantity, which
+     * is the very thing the repair exists to stop, reintroduced one line lower.
+     *
+     * `holdable` is left alone on purpose: it is the HOLD ceiling, and the database's own invariant
+     * is the authority on that. This is the APPLY ceiling and it is stated separately.
+     */
+    const applicable = isRefund ? 0 : Math.max(0, received - refunded - applied - held);
+    return {
+        paymentId: payment.paymentId,
+        kind: isRefund ? (payment.reversalOrigin === "provider" ? "return" : "refund") : "receipt",
+        statusLabel:
+            isRefund && isPosted
+                ? (payment.reversalOrigin === "provider" ? "Returned" : "Refunded")
+                : STATUS_LABELS[payment.status] ?? humanize(payment.status),
+        isMoney: isPosted,
+        receivedCents: received,
+        appliedCents: applied,
+        // Clamped at zero: an over-applied payment is refused by the allocation bounds trigger, so a
+        // negative remainder here would be reporting a state the database does not allow.
+        unappliedCents: Math.max(0, received - applied),
+        currencyCode: payment.currencyCode,
+        methodLabel: METHOD_LABELS[payment.method] ?? humanize(payment.method),
+        refundsPaymentId: payment.refundsPaymentId,
+        reversalOrigin: payment.reversalOrigin ?? null,
+        offersRefund: isPosted && !isRefund && !payment.refundsPaymentId && refundable > 0,
+        refundedCents: isRefund ? 0 : refunded,
+        refundableCents: refundable,
+        holdableCents: holdable,
+        heldCents: held,
+        applicableCents: applicable,
+        offersHold: isPosted && !isRefund && !payment.refundsPaymentId && holdable > 0,
+    };
+}
+
+/**
+ * The whole account's payments, each receipt knowing what has been refunded against it.
+ *
+ * A refund names its receipt (`refundsPaymentId`), so the remaining refundable amount is a sum over
+ * POSTED outbound rows — pending or failed reversals have taken nothing back. Presenting a receipt
+ * on its own cannot know this, which is why the list is the unit rather than the row.
+ */
+export function presentPayments(
+    payments: readonly FinancialsPaymentRow[],
+    /*
+     * What is currently restricted, per receipt, from the hold reader. Omitted, every receipt reads
+     * as unrestricted — which is right for the callers that only need unapplied totals, and is why
+     * `unappliedTotalCents` does not pass it.
+     */
+    heldByPayment: Readonly<Record<string, number>> = {},
+): PaymentPresentation[] {
+    const refundedByReceipt = new Map<string, number>();
+    for (const row of payments) {
+        if (row.direction !== "outbound" || row.status !== "posted") continue;
+        const target = row.refundsPaymentId;
+        if (!target) continue;
+        const cents = Math.abs(Number(row.amountCents) || 0);
+        refundedByReceipt.set(target, (refundedByReceipt.get(target) ?? 0) + cents);
+    }
+    return payments.map((row) =>
+        presentPayment(row, refundedByReceipt.get(row.paymentId) ?? 0, heldByPayment[row.paymentId] ?? 0));
+}
+
+/**
+ * Money on the account that is not doing anything yet.
+ *
+ * Summed over POSTED receipts only, because a pending attempt has not arrived and a failed one never
+ * will. This is a statement about cash, NOT a balance: it is deliberately not subtracted from what is
+ * owed anywhere, because applying money to an obligation is a separate act with its own record. The
+ * balance stays `responsibility − payments applied`, decided by the read model.
+ */
+export function unappliedTotalCents(payments: readonly FinancialsPaymentRow[]): number {
+    /*
+     * ⚠ `presentPayments`, never `.map(presentPayment)`.
+     *
+     * `presentPayment` grew a second parameter for what has been refunded, and `Array.map` passes
+     * (element, INDEX, array) — so the point-free form silently handed the array index in as a
+     * refunded amount: the second payment read as 1 cent refunded, the third as 2, and every
+     * refundable figure below them was wrong. Caught by the live card suite, which reads these
+     * numbers against real rows.
+     */
+    return presentPayments(payments)
+        .filter((p) => p.isMoney && p.kind === "receipt")
+        .reduce((sum, p) => sum + p.unappliedCents, 0);
+}

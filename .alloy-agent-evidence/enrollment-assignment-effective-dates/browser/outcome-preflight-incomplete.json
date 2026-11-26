@@ -1,0 +1,281 @@
+{
+  "status": 200,
+  "preflightJson": {
+    "ok": false,
+    "target_status_key": "enrolled",
+    "requires_bypass_reason": true,
+    "completion_requirements": {
+      "ok": false,
+      "blocking": [
+        {
+          "entity_type": "inquiry_child",
+          "entity_id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810",
+          "field_key": "program_room_cohort_key",
+          "label": "Child · Room",
+          "requirement_type": "required_before_action",
+          "blocking_level": "hard_block",
+          "missing_reason": "Room is required for each child.",
+          "context": {
+            "surface": "opportunity_drawer",
+            "action_key": "approve_enrollment",
+            "status_to": "enrolled",
+            "requirement_level": "enforced",
+            "rule_id": "child:classroom"
+          }
+        },
+        {
+          "entity_type": "inquiry_child",
+          "entity_id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810",
+          "field_key": "schedule_type",
+          "label": "Child · Proposed schedule",
+          "requirement_type": "required_before_action",
+          "blocking_level": "hard_block",
+          "missing_reason": "Proposed schedule is required for each child.",
+          "context": {
+            "surface": "opportunity_drawer",
+            "action_key": "approve_enrollment",
+            "status_to": "enrolled",
+            "requirement_level": "enforced",
+            "rule_id": "child:desired_schedule"
+          }
+        },
+        {
+          "entity_type": "inquiry_child",
+          "entity_id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810",
+          "field_key": "start_date",
+          "label": "Child · Requested Start",
+          "requirement_type": "required_before_action",
+          "blocking_level": "hard_block",
+          "missing_reason": "Requested Start is required for each child.",
+          "context": {
+            "surface": "opportunity_drawer",
+            "action_key": "approve_enrollment",
+            "status_to": "enrolled",
+            "requirement_level": "enforced",
+            "rule_id": "child:start_date"
+          }
+        },
+        {
+          "entity_type": "opportunity",
+          "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+          "field_key": "bypass_reason",
+          "label": "Reason for skipping requirements",
+          "requirement_type": "required_before_action",
+          "blocking_level": "hard_block",
+          "missing_reason": "A reason is required when skipping: Tour, Decision, Waitlist, Enrolling.",
+          "context": {
+            "requirement_level": "required"
+          }
+        }
+      ],
+      "warnings": [],
+      "recommendations": [
+        {
+          "entity_type": "opportunity",
+          "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+          "field_key": "lifecycle_field_rule",
+          "label": "Opportunity · opportunity:enrollment_packet",
+          "requirement_type": "recommended_non_blocking",
+          "blocking_level": "recommendation",
+          "missing_reason": "Required opportunity information is missing.",
+          "context": {
+            "surface": "opportunity_drawer",
+            "action_key": "approve_enrollment",
+            "status_to": "enrolled",
+            "requirement_level": "recommended",
+            "rule_id": "opportunity:enrollment_packet"
+          }
+        },
+        {
+          "entity_type": "opportunity",
+          "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+          "field_key": "skipped_stage_tour",
+          "label": "Skipped stage",
+          "requirement_type": "recommended_non_blocking",
+          "blocking_level": "recommendation",
+          "missing_reason": "Tour",
+          "context": {}
+        },
+        {
+          "entity_type": "opportunity",
+          "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+          "field_key": "skipped_stage_decision",
+          "label": "Skipped stage",
+          "requirement_type": "recommended_non_blocking",
+          "blocking_level": "recommendation",
+          "missing_reason": "Decision",
+          "context": {}
+        },
+        {
+          "entity_type": "opportunity",
+          "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+          "field_key": "skipped_stage_waitlist",
+          "label": "Skipped stage",
+          "requirement_type": "recommended_non_blocking",
+          "blocking_level": "recommendation",
+          "missing_reason": "Waitlist",
+          "context": {}
+        },
+        {
+          "entity_type": "opportunity",
+          "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+          "field_key": "skipped_stage_enrolling",
+          "label": "Skipped stage",
+          "requirement_type": "recommended_non_blocking",
+          "blocking_level": "recommendation",
+          "missing_reason": "Enrolling",
+          "context": {}
+        }
+      ]
+    },
+    "summary": "Missing: Child · Room, Child · Proposed schedule, Child · Requested Start, Reason for skipping requirements.",
+    "bos_preflight": {
+      "ok": false,
+      "summary": "Missing: Child · Room, Child · Proposed schedule, Child · Requested Start, Reason for skipping requirements.",
+      "blocking_labels": [
+        "Child · Room",
+        "Child · Proposed schedule",
+        "Child · Requested Start",
+        "Reason for skipping requirements"
+      ],
+      "warnings_labels": [],
+      "recommendations_labels": [
+        "Opportunity · opportunity:enrollment_packet",
+        "Skipped stage",
+        "Skipped stage",
+        "Skipped stage",
+        "Skipped stage"
+      ],
+      "result": {
+        "ok": false,
+        "blocking": [
+          {
+            "entity_type": "inquiry_child",
+            "entity_id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810",
+            "field_key": "program_room_cohort_key",
+            "label": "Child · Room",
+            "requirement_type": "required_before_action",
+            "blocking_level": "hard_block",
+            "missing_reason": "Room is required for each child.",
+            "context": {
+              "surface": "opportunity_drawer",
+              "action_key": "approve_enrollment",
+              "status_to": "enrolled",
+              "requirement_level": "enforced",
+              "rule_id": "child:classroom"
+            }
+          },
+          {
+            "entity_type": "inquiry_child",
+            "entity_id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810",
+            "field_key": "schedule_type",
+            "label": "Child · Proposed schedule",
+            "requirement_type": "required_before_action",
+            "blocking_level": "hard_block",
+            "missing_reason": "Proposed schedule is required for each child.",
+            "context": {
+              "surface": "opportunity_drawer",
+              "action_key": "approve_enrollment",
+              "status_to": "enrolled",
+              "requirement_level": "enforced",
+              "rule_id": "child:desired_schedule"
+            }
+          },
+          {
+            "entity_type": "inquiry_child",
+            "entity_id": "3185d9c1-ff0c-4bbf-bea2-a20840b1b810",
+            "field_key": "start_date",
+            "label": "Child · Requested Start",
+            "requirement_type": "required_before_action",
+            "blocking_level": "hard_block",
+            "missing_reason": "Requested Start is required for each child.",
+            "context": {
+              "surface": "opportunity_drawer",
+              "action_key": "approve_enrollment",
+              "status_to": "enrolled",
+              "requirement_level": "enforced",
+              "rule_id": "child:start_date"
+            }
+          },
+          {
+            "entity_type": "opportunity",
+            "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+            "field_key": "bypass_reason",
+            "label": "Reason for skipping requirements",
+            "requirement_type": "required_before_action",
+            "blocking_level": "hard_block",
+            "missing_reason": "A reason is required when skipping: Tour, Decision, Waitlist, Enrolling.",
+            "context": {
+              "requirement_level": "required"
+            }
+          }
+        ],
+        "warnings": [],
+        "recommendations": [
+          {
+            "entity_type": "opportunity",
+            "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+            "field_key": "lifecycle_field_rule",
+            "label": "Opportunity · opportunity:enrollment_packet",
+            "requirement_type": "recommended_non_blocking",
+            "blocking_level": "recommendation",
+            "missing_reason": "Required opportunity information is missing.",
+            "context": {
+              "surface": "opportunity_drawer",
+              "action_key": "approve_enrollment",
+              "status_to": "enrolled",
+              "requirement_level": "recommended",
+              "rule_id": "opportunity:enrollment_packet"
+            }
+          },
+          {
+            "entity_type": "opportunity",
+            "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+            "field_key": "skipped_stage_tour",
+            "label": "Skipped stage",
+            "requirement_type": "recommended_non_blocking",
+            "blocking_level": "recommendation",
+            "missing_reason": "Tour",
+            "context": {}
+          },
+          {
+            "entity_type": "opportunity",
+            "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+            "field_key": "skipped_stage_decision",
+            "label": "Skipped stage",
+            "requirement_type": "recommended_non_blocking",
+            "blocking_level": "recommendation",
+            "missing_reason": "Decision",
+            "context": {}
+          },
+          {
+            "entity_type": "opportunity",
+            "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+            "field_key": "skipped_stage_waitlist",
+            "label": "Skipped stage",
+            "requirement_type": "recommended_non_blocking",
+            "blocking_level": "recommendation",
+            "missing_reason": "Waitlist",
+            "context": {}
+          },
+          {
+            "entity_type": "opportunity",
+            "entity_id": "df771481-841f-4329-b7bb-c0a03d9fb621",
+            "field_key": "skipped_stage_enrolling",
+            "label": "Skipped stage",
+            "requirement_type": "recommended_non_blocking",
+            "blocking_level": "recommendation",
+            "missing_reason": "Enrolling",
+            "context": {}
+          }
+        ]
+      }
+    },
+    "skipped_stage_labels": [
+      "Tour",
+      "Decision",
+      "Waitlist",
+      "Enrolling"
+    ]
+  }
+}

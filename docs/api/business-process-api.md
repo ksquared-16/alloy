@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Business Process / Status / Lifecycle API
 
 **Domain size:** ~45 route handlers. Full list: [`api-index.md` → Business Process / Status / Lifecycle](api-index.md#business-process--status--lifecycle).

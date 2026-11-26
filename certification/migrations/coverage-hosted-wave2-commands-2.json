@@ -1,0 +1,218 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "date": "2027-04-02",
+  "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+  "phase": "2",
+  "transcript": [
+    {
+      "step": "D_revise",
+      "action_key": "staff_coverage.change",
+      "request": {
+        "service_date": "2027-04-02",
+        "coverage_id": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+        "start_time": "09:00",
+        "end_time": "10:00",
+        "room_location_id": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+        "reason_key": "qa_revision"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "f745b56d-d56f-4658-86f9-3f1f8947022f",
+      "detail": null,
+      "at": "2026-09-22T01:34:51.545Z"
+    },
+    {
+      "step": "E_correct",
+      "action_key": "staff_coverage.correct",
+      "request": {
+        "service_date": "2027-04-02",
+        "coverage_id": "f745b56d-d56f-4658-86f9-3f1f8947022f",
+        "room_location_id": "",
+        "reason_key": "qa_correction"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "956c7a37-fff7-430e-b6fe-f9b502729cf9",
+      "detail": null,
+      "at": "2026-09-22T01:34:52.293Z"
+    },
+    {
+      "step": "F_shared_room",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "0c58d0d2-d756-4b56-9008-32649389d323",
+        "start_time": "10:00",
+        "end_time": "12:00",
+        "reason_key": "wave2_shared_room"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "ad0a7129-e7c1-49ab-9c26-b102923d5dcc",
+      "detail": null,
+      "at": "2026-09-22T01:34:52.877Z"
+    },
+    {
+      "step": "G_site_as_room_refused",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "start_time": "13:00",
+        "end_time": "14:00",
+        "reason_key": "wave2_site_as_room"
+      },
+      "http_status": 422,
+      "ok": false,
+      "error_code": "ACTION_BLOCKED",
+      "error_message": "Site-level Coverage leaves the room empty rather than naming the site.",
+      "blockers": [
+        {
+          "code": "coverage_rejected",
+          "message": "Site-level Coverage leaves the room empty rather than naming the site.",
+          "field": null
+        }
+      ],
+      "affected_id": null,
+      "detail": null,
+      "at": "2026-09-22T01:34:53.611Z"
+    },
+    {
+      "step": "H_cross_site_refused",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "17cf540d-6c64-4ba4-926b-f2b9644b3391",
+        "start_time": "13:00",
+        "end_time": "14:00",
+        "reason_key": "wave2_cross_site"
+      },
+      "http_status": 422,
+      "ok": false,
+      "error_code": "ACTION_BLOCKED",
+      "error_message": "That room is not part of the selected site.",
+      "blockers": [
+        {
+          "code": "coverage_rejected",
+          "message": "That room is not part of the selected site.",
+          "field": null
+        }
+      ],
+      "affected_id": null,
+      "detail": null,
+      "at": "2026-09-22T01:34:54.234Z"
+    },
+    {
+      "step": "I_outside_employment_refused",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "978e5cda-25a2-42db-a3e9-19f3afca2c5f",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+        "start_time": "13:00",
+        "end_time": "14:00",
+        "reason_key": "wave2_outside_employment"
+      },
+      "http_status": 422,
+      "ok": false,
+      "error_code": "ACTION_BLOCKED",
+      "error_message": "That date is outside this person's employment.",
+      "blockers": [
+        {
+          "code": "coverage_rejected",
+          "message": "That date is outside this person's employment.",
+          "field": null
+        }
+      ],
+      "affected_id": null,
+      "detail": null,
+      "at": "2026-09-22T01:34:54.752Z"
+    },
+    {
+      "step": "J_overnight_refused",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+        "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "room_location_id": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+        "start_time": "22:00",
+        "end_time": "02:00",
+        "reason_key": "wave2_overnight"
+      },
+      "http_status": 400,
+      "ok": false,
+      "error_code": "ACTION_BLOCKED",
+      "error_message": "Coverage must end after it starts. Overnight coverage is not supported yet.",
+      "blockers": [
+        {
+          "code": "invalid_interval",
+          "message": "Coverage must end after it starts. Overnight coverage is not supported yet.",
+          "field": "end_time"
+        }
+      ],
+      "affected_id": null,
+      "detail": null,
+      "at": "2026-09-22T01:34:55.177Z"
+    },
+    {
+      "step": "K_cross_org_refused",
+      "action_key": "staff_coverage.cancel",
+      "request": {
+        "service_date": "2027-04-02",
+        "coverage_id": "00000000-0000-4000-8000-0000000000ff",
+        "reason_key": "wave2_cross_org"
+      },
+      "http_status": 404,
+      "ok": false,
+      "error_code": "ACTION_BLOCKED",
+      "error_message": "That coverage allocation was not found.",
+      "blockers": [
+        {
+          "code": "coverage_not_found",
+          "message": "That coverage allocation was not found.",
+          "field": "coverage_id"
+        }
+      ],
+      "affected_id": null,
+      "detail": null,
+      "at": "2026-09-22T01:34:55.744Z"
+    },
+    {
+      "step": "L_out_of_scope_site",
+      "action_key": "staff_coverage.plan",
+      "request": {
+        "service_date": "2027-04-02",
+        "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+        "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+        "start_time": "13:00",
+        "end_time": "14:00",
+        "reason_key": "wave2_out_of_scope"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "54cf129f-aa9f-41d6-a90f-9cc093955b40",
+      "detail": null,
+      "at": "2026-09-22T01:34:56.280Z"
+    }
+  ]
+}

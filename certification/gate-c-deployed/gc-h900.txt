@@ -1,0 +1,9 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 5ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateC-cert.spec.ts:19:5 › gate C deployed certification
+[1A[2K[chromium] › playwright/tests/zz-gateC-cert.spec.ts:19:5 › gate C deployed certification
+[GC] {"viewportH":900,"accountsTested":3,"results":[{"id":"29944d3e-8267-45b7-8dcb-7405060e2573","viewportH":900,"clientH":317,"scrollH":3245,"overflowY":"auto","OVERFLOWS":true,"rowGroups":0,"visibleAtStart":0,"scrollTop0":0,"afterOneWheel":800,"WHEEL_MOVED":true,"finalScrollTop":2928,"BOTTOM_REACHED":true,"accountStable":true},{"id":"fd000000-0000-4000-8000-0000000c0001","viewportH":900,"clientH":324,"scrollH":1126,"overflowY":"auto","OVERFLOWS":true,"rowGroups":0,"visibleAtStart":0,"scrollTop0":0,"afterOneWheel":800,"WHEEL_MOVED":true,"finalScrollTop":802,"BOTTOM_REACHED":true,"accountStable":true},{"id":"0658832a-48d6-4b80-beae-0b12d573fdf2","viewportH":900,"clientH":373,"scrollH":373,"overflowY":"auto","OVERFLOWS":false,"rowGroups":0,"visibleAtStart":0,"scrollTop0":0,"afterOneWheel":0,"WHEEL_MOVED":false,"finalScrollTop":0,"BOTTOM_REACHED":true,"accountStable":true}],"switchAfterScroll":{"scrolledAccount":"0658832a-48d6-4b80-beae-0b12d573fdf2","switchedTo":"fd000000-0000-4000-8000-0000000c0001","switchedCorrect":true,"returnedTo":"29944d3e-8267-45b7-8dcb-7405060e2573","returnCorrect":true,"returnScrollTop":0}}
+
+[1A[2K  1 passed (1.3m)

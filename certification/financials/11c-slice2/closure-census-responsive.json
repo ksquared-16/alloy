@@ -1,0 +1,29 @@
+{
+  "w1280": {
+    "nativeSelects": 0,
+    "alloySelects": 5,
+    "alloyMultiSelects": 0,
+    "panelOpen": true,
+    "panelWithinViewport": true,
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  },
+  "w1440": {
+    "nativeSelects": 0,
+    "alloySelects": 5,
+    "alloyMultiSelects": 0,
+    "panelOpen": true,
+    "panelWithinViewport": true,
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  },
+  "w1680": {
+    "nativeSelects": 0,
+    "alloySelects": 5,
+    "alloyMultiSelects": 0,
+    "panelOpen": true,
+    "panelWithinViewport": true,
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  }
+}

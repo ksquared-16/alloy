@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { LAYOUTS_MANAGE, requireAgentApplyDomainAuthority } from "@/lib/access/agentApplyAuthority";
 import { agentV1CommitRecordOverviewLayoutApply } from "@/lib/agent/v1/agentV1RecordOverviewLayoutAtomicCommit";
 import { prepareRecordOverviewLayoutPut } from "@/lib/agent/v1/applyRecordOverviewLayoutUpdate";
 import { getOverviewLayoutConfigStoredVersion } from "@/lib/rrs/overview/overviewLayoutConfigStrict";
@@ -64,9 +66,18 @@ function isStructuredOverride(x: unknown): x is StructuredOverride {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return jsonErr(403, "POLICY_DENIED", "Forbidden");
-    }
+    /*
+     * Agent record-overview-layout apply writes `record_overview_layouts`, so layouts owns it.
+     *
+     * The role TITLE used to decide this, which made the declared capability
+     * decorative: an organization could withhold it from its own admin role and
+     * change nothing, while a custom role holding it was refused. Authority is the
+     * grant now, and the feature flag below stays a separate question.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireAgentApplyDomainAuthority(access, LAYOUTS_MANAGE);
+    if (capDenied) return capDenied;
     if (!agentV1RecordLayoutEnabled()) {
         return jsonErr(403, "FEATURE_DISABLED", "Agent v1 record layout is disabled");
     }

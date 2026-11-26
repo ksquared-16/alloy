@@ -282,7 +282,7 @@ Not in scope for Runtime Test 1 — track separately:
 
 ## Related
 
-- [forms-intake-runtime-phase.md](../system/forms-intake-runtime-phase.md) — **phase operating model + Tests 2–5 plan**
-- [forms-intake-runtime-validation.md](../system/forms-intake-runtime-validation.md)
-- [forms-intake-prefill-doctrine.md](../system/forms-intake-prefill-doctrine.md)
-- [forms-intake-embed-doctrine.md](../system/forms-intake-embed-doctrine.md)
+- [forms-intake-runtime-phase.md](../../../../sprints/archive/05_2026/completed/forms-intake-runtime-phase.md) — **phase operating model + Tests 2–5 plan**
+- `../system/forms-intake-runtime-validation.md`
+- [forms-intake-prefill-doctrine.md](../../../../sprints/archive/05_2026/completed/forms-intake-prefill-doctrine.md)
+- [forms-intake-embed-doctrine.md](../../../../sprints/archive/05_2026/completed/forms-intake-embed-doctrine.md)

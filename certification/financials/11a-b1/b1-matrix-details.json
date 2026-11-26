@@ -1,0 +1,32 @@
+{
+  "overlay": "detail",
+  "rows": 103,
+  "lenses": [
+    "all",
+    "charges",
+    "credits",
+    "funding",
+    "payments"
+  ],
+  "filters": [
+    "financials-filter-subject",
+    "financials-filter-period",
+    "financials-filter-responsible-party"
+  ],
+  "actions": [
+    "reverse",
+    "adjust",
+    "resolveResponsibility",
+    "reallocateResponsibility",
+    "post"
+  ],
+  "states": [
+    "not-allocated",
+    "partial",
+    "unassigned",
+    "not-applicable"
+  ],
+  "orphanBand": 1,
+  "hasGL": true,
+  "hasPeriods": true
+}

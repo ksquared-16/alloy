@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 
 const mockupDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/assets/operational-intake-workstation",
+    "../../../docs/sprints/archive/06_2026/assets/operational-intake-workstation",
 );
 
 const shots: { id: string; filename: string }[] = [

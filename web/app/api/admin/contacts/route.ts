@@ -4,6 +4,11 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 const CREATE_ALLOWED: readonly string[] = [
     "first_name",
@@ -24,6 +29,8 @@ const CREATE_ALLOWED: readonly string[] = [
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
     const { orgId } = ctx;
 
     const { searchParams } = new URL(request.url);
@@ -122,6 +129,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
     const { orgId } = ctx;
 
     try {

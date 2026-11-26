@@ -1,0 +1,628 @@
+{
+  "schema": "alloy.bp_v2.hosted_qa_run.v1",
+  "toolkit": "23626b9e6b87",
+  "deployed_staging": "8bb731eadbf306d269f8249da127ed09289b7076",
+  "supabase_project": "ikaxilmwmrmbagoidedu",
+  "recovered_run": {
+    "run": {
+      "run_id": "qar_17c26a706ca7",
+      "plan_key": "bp_v2",
+      "target": {
+        "kind": "hosted",
+        "key": "alloy_staging_web"
+      },
+      "lane_id": "lane_581d120e4e41",
+      "run_ref": "erun2_713d9e8eaf1fd40d",
+      "open_request_id": "gar_260e6ab8aed8e5",
+      "state": "CLOSED",
+      "opened_at": "2026-10-22T19:19:12.188Z",
+      "lease_expires_at": "2026-10-23T01:19:12.188Z",
+      "personas": [
+        {
+          "persona_key": "admin",
+          "identity_key": "qa_pool_01",
+          "email": "qa-pool-01@example.com",
+          "org_key": "qa_shared",
+          "roles": [
+            "admin"
+          ],
+          "scope": {
+            "department": "all",
+            "site": "all"
+          },
+          "session": true
+        },
+        {
+          "persona_key": "director",
+          "identity_key": "qa_pool_02",
+          "email": "qa-pool-02@example.com",
+          "org_key": "qa_shared",
+          "roles": [
+            "ops",
+            "school_director"
+          ],
+          "scope": {
+            "department": "all",
+            "site": "all"
+          },
+          "session": true
+        },
+        {
+          "persona_key": "restricted_operator",
+          "identity_key": "qa_pool_03",
+          "email": "qa-pool-03@example.com",
+          "org_key": "qa_shared",
+          "roles": [
+            "ops",
+            "school_director"
+          ],
+          "scope": {
+            "department": "all",
+            "site": "restricted"
+          },
+          "session": true
+        },
+        {
+          "persona_key": "no_finance_operator",
+          "identity_key": "qa_pool_04",
+          "email": "qa-pool-04@example.com",
+          "org_key": "qa_shared",
+          "roles": [
+            "ops"
+          ],
+          "scope": {
+            "department": "all",
+            "site": "all"
+          },
+          "session": true
+        }
+      ],
+      "fixture_namespace": {
+        "qa_run_id": "qar_17c26a706ca7"
+      },
+      "sessions": [
+        {
+          "persona_key": "admin",
+          "verified": false,
+          "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_17c26a706ca7/admin/storage-state.json",
+          "failure": "verification_failed"
+        }
+      ],
+      "failure": null,
+      "close": {
+        "request_id": "gar_91685f8fc8e135",
+        "started_at": "2026-10-22T21:24:01.317Z",
+        "recovery": true,
+        "closed_at": "2026-10-22T21:24:01.317Z",
+        "verdict": "QUIESCED_RETAINED",
+        "access_clean": true,
+        "sessions_removed": true,
+        "revoked": [
+          {
+            "identity_key": "qa_pool_01",
+            "removed": 0,
+            "swept_access_rows": 1,
+            "clean": true,
+            "remaining_roles": 0,
+            "remaining_profiles": 0
+          },
+          {
+            "identity_key": "qa_pool_02",
+            "removed": 0,
+            "swept_access_rows": 1,
+            "clean": true,
+            "remaining_roles": 0,
+            "remaining_profiles": 0
+          },
+          {
+            "identity_key": "qa_pool_03",
+            "removed": 0,
+            "swept_access_rows": 2,
+            "clean": true,
+            "remaining_roles": 0,
+            "remaining_profiles": 0
+          },
+          {
+            "identity_key": "qa_pool_04",
+            "removed": 0,
+            "swept_access_rows": 1,
+            "clean": true,
+            "remaining_roles": 0,
+            "remaining_profiles": 0
+          }
+        ],
+        "custom_roles": [],
+        "sessions_signed_out": [
+          {
+            "identity_key": "qa_pool_01",
+            "signed_out": true
+          },
+          {
+            "identity_key": "qa_pool_02",
+            "signed_out": true
+          },
+          {
+            "identity_key": "qa_pool_03",
+            "signed_out": true
+          },
+          {
+            "identity_key": "qa_pool_04",
+            "signed_out": true
+          }
+        ],
+        "residue_census": {
+          "ok": true,
+          "request_id": "gar_afd84a85847332",
+          "executed_at": "2026-10-22T21:25:07.797Z",
+          "checks": [
+            "bp_qr_pool_access",
+            "bp_qr_zero_sent",
+            "bp_qr_org_exists",
+            "bp_qr_fin_no_merchant",
+            "bp_qr_fin_no_usable_method",
+            "bp_qr_fin_no_autopay",
+            "bp_qr_fin_no_provider_activity",
+            "bp_qr_fin_no_active_schedule",
+            "bp_qr_fin_no_draft",
+            "bp_qr_fin_no_open_balance",
+            "bp_qr_fin_no_open_variance",
+            "bp_qr_fin_no_unapplied_money",
+            "bp_qr_fin_attributed"
+          ]
+        },
+        "retained_by_design": [
+          "posted financial records (immutable), neutralized and attributed by run",
+          "published process configuration",
+          "access audit history (mutation_events)"
+        ]
+      },
+      "updated_at": "2026-10-22T21:26:20.164Z",
+      "history": [
+        {
+          "at": "2026-10-22T19:19:12.188Z",
+          "event": "opening"
+        },
+        {
+          "at": "2026-10-22T19:19:12.188Z",
+          "event": "open_failed",
+          "detail": "qa_run_session_failed"
+        },
+        {
+          "at": "2026-10-22T19:21:10.071Z",
+          "event": "closing",
+          "detail": "abandoned"
+        },
+        {
+          "at": "2026-10-22T19:21:10.071Z",
+          "event": "close_incomplete",
+          "detail": "NOT_CLEAN"
+        },
+        {
+          "at": "2026-10-22T19:22:42.551Z",
+          "event": "closing",
+          "detail": "abandoned"
+        },
+        {
+          "at": "2026-10-22T19:22:42.551Z",
+          "event": "close_incomplete",
+          "detail": "NOT_CLEAN"
+        },
+        {
+          "at": "2026-10-22T20:00:18.176Z",
+          "event": "closing",
+          "detail": "abandoned"
+        },
+        {
+          "at": "2026-10-22T20:00:18.176Z",
+          "event": "close_incomplete",
+          "detail": "NOT_CLEAN"
+        },
+        {
+          "at": "2026-10-22T21:24:01.317Z",
+          "event": "closing",
+          "detail": "abandoned"
+        },
+        {
+          "at": "2026-10-22T21:24:01.317Z",
+          "event": "closed",
+          "detail": "ACCESS_CLEAN_RETAINED_ARTIFACTS_UNVERIFIED"
+        },
+        {
+          "at": "2026-10-22T21:26:20.164Z",
+          "event": "census_attached",
+          "detail": "gar_afd84a85847332"
+        }
+      ]
+    },
+    "close": {
+      "request_id": "gar_91685f8fc8e135",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_60b0b2f5ca47a0",
+      "execution_ended_at": "2026-10-22T21:24:01.317Z"
+    },
+    "census": {
+      "request_id": "gar_afd84a85847332",
+      "action_key": "database.read_census",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_9576f35b5263f4",
+      "execution_ended_at": "2026-10-22T21:25:07.797Z"
+    },
+    "bind": {
+      "request_id": "gar_621aa80f36736d",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_091bdfae5acf82",
+      "execution_ended_at": "2026-10-22T21:26:20.164Z"
+    }
+  },
+  "run": {
+    "run_id": "qar_2765465b1e2b",
+    "plan_key": "bp_v2",
+    "target": {
+      "kind": "hosted",
+      "key": "alloy_staging_web"
+    },
+    "lane_id": "lane_581d120e4e41",
+    "run_ref": "erun2_49c7d21bf9b08e09",
+    "open_request_id": "gar_01416471c73ee5",
+    "state": "CLOSED",
+    "opened_at": "2026-10-22T21:27:14.919Z",
+    "lease_expires_at": "2026-10-23T03:27:14.919Z",
+    "personas": [
+      {
+        "persona_key": "admin",
+        "identity_key": "qa_pool_01",
+        "email": "qa-pool-01@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "admin"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "director",
+        "identity_key": "qa_pool_02",
+        "email": "qa-pool-02@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "restricted_operator",
+        "identity_key": "qa_pool_03",
+        "email": "qa-pool-03@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "restricted"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "identity_key": "qa_pool_04",
+        "email": "qa-pool-04@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      }
+    ],
+    "fixture_namespace": {
+      "qa_run_id": "qar_2765465b1e2b"
+    },
+    "sessions": [
+      {
+        "persona_key": "admin",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_2765465b1e2b/admin/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "director",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_2765465b1e2b/director/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "restricted_operator",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_2765465b1e2b/restricted_operator/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_2765465b1e2b/no_finance_operator/storage-state.json",
+        "failure": null
+      }
+    ],
+    "failure": null,
+    "close": {
+      "request_id": "gar_3f0e59b2923e2d",
+      "started_at": "2026-10-22T21:47:10.080Z",
+      "recovery": false,
+      "closed_at": "2026-10-22T21:47:10.080Z",
+      "verdict": "ACCESS_CLEAN_RETAINED_ARTIFACTS_UNVERIFIED",
+      "access_clean": true,
+      "sessions_removed": true,
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ],
+      "custom_roles": [],
+      "sessions_signed_out": [
+        {
+          "identity_key": "qa_pool_01",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "signed_out": true
+        }
+      ],
+      "residue_census": null,
+      "retained_by_design": [
+        "posted financial records (immutable), neutralized and attributed by run",
+        "published process configuration",
+        "access audit history (mutation_events)"
+      ]
+    },
+    "updated_at": "2026-10-22T21:47:10.080Z",
+    "history": [
+      {
+        "at": "2026-10-22T21:27:14.919Z",
+        "event": "opening"
+      },
+      {
+        "at": "2026-10-22T21:27:14.919Z",
+        "event": "open"
+      },
+      {
+        "at": "2026-10-22T21:47:10.080Z",
+        "event": "closing",
+        "detail": "live"
+      },
+      {
+        "at": "2026-10-22T21:47:10.080Z",
+        "event": "closed",
+        "detail": "ACCESS_CLEAN_RETAINED_ARTIFACTS_UNVERIFIED"
+      }
+    ],
+    "sessions_minted": true
+  },
+  "requests": {
+    "open": {
+      "request_id": "gar_01416471c73ee5",
+      "action_key": "environment.qa_run_open",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_2bd074413912ce",
+      "execution_ended_at": "2026-10-22T21:27:14.919Z"
+    },
+    "close": {
+      "request_id": "gar_3f0e59b2923e2d",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_577a7ee473011c",
+      "execution_ended_at": "2026-10-22T21:47:10.080Z"
+    },
+    "census_after_close_reused": {
+      "request_id": "gar_21ca02efe89432",
+      "action_key": "database.read_census",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_9576f35b5263f4",
+      "execution_ended_at": "2026-10-22T21:48:32.487Z"
+    }
+  },
+  "session_verification": {
+    "tool": "toolkit lib/agent-verify.mjs authenticated-home (read-only)",
+    "results": {
+      "admin": "qa-pool-01@example.com PASS",
+      "director": "qa-pool-02@example.com PASS",
+      "restricted_operator": "qa-pool-03@example.com PASS",
+      "no_finance_operator": "qa-pool-04@example.com PASS"
+    }
+  },
+  "role_finance_grants_qa_shared": {
+    "admin": "fin.adjust,fin.provider,fin.read,fin.responsibility,fin.subsidy,fin.write",
+    "ops": "fin.read,fin.write",
+    "school_director": "fin.read"
+  },
+  "enrollment_template_refusal": {
+    "at": "2026-10-22T21:30:33.651Z",
+    "persona": "admin",
+    "method": "PATCH",
+    "path": "/api/admin/departments/7c1ac953-1124-493a-b204-fdb754335c8f/lifecycle-builder",
+    "request": {
+      "action": "apply_enrollment_v2_template",
+      "process_id": "2b324043-8bc0-46ae-a45b-f4b462e1a104"
+    },
+    "status": 422,
+    "response": {
+      "error": "Business Process contains stage references that are not in its own stage inventory. Fix or remove them before saving.",
+      "code": "dangling_stage_reference",
+      "violations": [
+        {
+          "process_key": "enrollment",
+          "source_stage": "lead",
+          "reference": "lead_to_closed_lost",
+          "reference_kind": "transition",
+          "defect": "missing_destination_stage",
+          "invalid_target": "closed_lost",
+          "configured_stages": [
+            "lead",
+            "tour",
+            "decision",
+            "closed",
+            "waitlist",
+            "enrolling",
+            "enrolled",
+            "closed_withdrawn"
+          ],
+          "message": "Transition \"lead_to_closed_lost\" points to stage \"closed_lost\", but that stage is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_withdrawn."
+        },
+        {
+          "process_key": "enrollment",
+          "source_stage": "lead",
+          "reference": "not_interested_close",
+          "reference_kind": "move_to_stage",
+          "defect": "missing_destination_stage",
+          "invalid_target": "closed_lost",
+          "configured_stages": [
+            "lead",
+            "tour",
+            "decision",
+            "closed",
+            "waitlist",
+            "enrolling",
+            "enrolled",
+            "closed_withdrawn"
+          ],
+          "message": "Transition \"not_interested_close\" points to stage \"closed_lost\", but that stage is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_withdrawn."
+        },
+        {
+          "process_key": "enrollment",
+          "source_stage": "tour",
+          "reference": "tour_to_closed_lost",
+          "reference_kind": "transition",
+          "defect": "missing_destination_stage",
+          "invalid_target": "closed_lost",
+          "configured_stages": [
+            "lead",
+            "tour",
+            "decision",
+            "closed",
+            "waitlist",
+            "enrolling",
+            "enrolled",
+            "closed_withdrawn"
+          ],
+          "message": "Transition \"tour_to_closed_lost\" points to stage \"closed_lost\", but that stage is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_withdrawn."
+        },
+        {
+          "process_key": "enrollment",
+          "source_stage": "tour",
+          "reference": "family_declined_close",
+          "reference_kind": "move_to_stage",
+          "defect": "missing_destination_stage",
+          "invalid_target": "closed_lost",
+          "configured_stages": [
+            "lead",
+            "tour",
+            "decision",
+            "closed",
+            "waitlist",
+            "enrolling",
+            "enrolled",
+            "closed_withdrawn"
+          ],
+          "message": "Transition \"family_declined_close\" points to stage \"closed_lost\", but that stage is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_withdrawn."
+        },
+        {
+          "process_key": "enrollment",
+          "source_stage": "decision",
+          "reference": "decision_to_closed_lost",
+          "reference_kind": "transition",
+          "defect": "missing_destination_stage",
+          "invalid_target": "closed_lost",
+          "configured_stages": [
+            "lead",
+            "tour",
+            "decision",
+            "closed",
+            "waitlist",
+            "enrolling",
+            "enrolled",
+            "closed_withdrawn"
+          ],
+          "message": "Transition \"decision_to_closed_lost\" points to stage \"closed_lost\", but that stage is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_withdrawn."
+        },
+        {
+          "process_key": "enrollment",
+          "source_stage": "decision",
+          "reference": "declined_close",
+          "reference_kind": "move_to_stage",
+          "defect": "missing_destination_stage",
+          "invalid_target": "closed_lost",
+          "configured_stages": [
+            "lead",
+            "tour",
+            "decision",
+            "closed",
+            "waitlist",
+            "enrolling",
+            "enrolled",
+            "closed_withdrawn"
+          ],
+          "message": "Transition \"declined_close\" points to stage \"closed_lost\", but that stage is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_withdrawn."
+        }
+      ]
+    }
+  },
+  "census_binding_note": "the census filed after this close (gar_21ca02efe89432) was deduplicated onto the same-hash census already executed in this lane run (tha_9576f35b5263f4, 21:25Z, before the 21:47Z close); binding requires a census executed after close, so it is filed in the next lane run"
+}

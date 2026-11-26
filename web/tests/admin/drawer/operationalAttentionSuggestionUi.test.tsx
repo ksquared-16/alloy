@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
 import OperationalAttentionDrawerPanel from "@/components/admin/drawer/OperationalAttentionDrawerPanel";
 import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
 import type { CrmCompactRowSemanticSlots } from "@/lib/ui-v2/workspace-types";
@@ -226,72 +225,5 @@ describe("OperationalAttentionDrawerPanel (panel variant retained)", () => {
         );
         expect(html).toContain("Primary ·");
         expect(html).toContain("Suggested next step");
-    });
-});
-
-describe("CrmCompactQueuePreview operational read L0", () => {
-    it("renders one operational read line (preview-only)", () => {
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                slots={baseSlots({
-                    attentionReason: null,
-                    operationalReadPreview: {
-                        operationalRead: "Respond to new request — New inquiry is stale.",
-                        whyNow: "New inquiry is stale.",
-                        urgencyChipLabel: "Today",
-                        urgencyBand: "p1_today",
-                        typeCue: null,
-                        staleCue: null,
-                        previewBoundary: "Preview",
-                        source: "canonical_queue_preview",
-                        priorityExplanation: null,
-                    },
-                    operationalNextHint: null,
-                })}
-            />,
-        );
-        expect(html).toContain('data-queue-preview-slot="operational_read"');
-        expect(html).toContain("Operational read:");
-        expect(html).toContain("Respond to new request");
-        expect(html).toContain("New inquiry is stale.");
-        expect(html).toContain("Preview");
-        expect(html).not.toContain("Alloy suggestion");
-        expect(html).not.toContain("Suggested next step");
-        expect(html).not.toContain('data-queue-preview-slot="attention_suggestion"');
-    });
-});
-
-describe("CrmCompactQueuePreview queue priority explanation", () => {
-    it("renders deterministic priority line when present", () => {
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                slots={baseSlots({
-                    attentionReason: "Needs attention: Follow-up overdue",
-                    queuePriorityExplanation: "Overdue follow-up",
-                })}
-            />,
-        );
-        expect(html).toContain('data-queue-preview-slot="queue_priority_explanation"');
-        expect(html).toContain("Overdue follow-up");
-    });
-});
-
-describe("CrmCompactQueuePreview operational summary preview", () => {
-    it("renders compact read strip when headline is present", () => {
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                slots={baseSlots({
-                    operationalSummaryPreview: {
-                        headline: "Stale inquiry — draft ready for review.",
-                        risk_urgency_hint: "medium",
-                    },
-                })}
-            />,
-        );
-        expect(html).toContain('data-queue-preview-slot="operational_summary"');
-        expect(html).toContain("Stale inquiry");
     });
 });

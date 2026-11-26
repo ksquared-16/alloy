@@ -1,0 +1,294 @@
+{
+  "summary": {
+    "passed": 40,
+    "total": 40,
+    "qa_run_id": "qar_c6e20cc02979",
+    "at": "2026-10-26T23:01:38Z"
+  },
+  "results": [
+    {
+      "case": "deployed build",
+      "persona": null,
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "sha": "81556597838bb4cff9f5c1233dd56970efe44a2f",
+      "project": "ikaxilmwmrmbagoidedu"
+    },
+    {
+      "case": "fixture A uploaded (OPP1)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "fixture B uploaded (OPP2)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "version 1 created by the insert, listed without a location",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "version list refused",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE"
+    },
+    {
+      "case": "version list refused",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "version list refused",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE"
+    },
+    {
+      "case": "replacement refused without documents.write",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "replacement refused without a reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "case": "unsafe replacement refused, nothing stored",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 415,
+      "code": "SCREENING_REFUSED"
+    },
+    {
+      "case": "replacement invisible to another organization",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "clean replacement becomes version 2 superseding version 1",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "two versions; version 2 current; version 1 kept",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "historical version 1 retrievable",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "current version retrievable",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "historical version refused to another organization",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "another document's version is never signed through this one",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "primary owner is the legacy parent",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "in-scope reader reads A (primary OPP1)",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "out-of-scope reader refused B (primary OPP2)",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "B linked to OPP1 as context",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "B linked to OPP1 again (idempotent)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a link to a readable record grants nothing",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "B lists its primary owner and the context link",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "associations": 2
+    },
+    {
+      "case": "the primary owner cannot be unlinked",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "PRIMARY_REQUIRED"
+    },
+    {
+      "case": "another organization's subject is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": "SUBJECT_NOT_IN_ORG"
+    },
+    {
+      "case": "re-filing refused without documents.write",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "re-filing A under OPP2",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "re-filing moved access: in-scope reader now refused A",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "re-filing A back under OPP1",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "access restored with the primary owner",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "raise refused without documents.write",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "raise to restricted by a cleared actor (or refused for lack of clearance)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "raised": true
+    },
+    {
+      "case": "restricted document refused to a reader without clearance",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "case": "restricted document refused to a reader without clearance",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "case": "restricted document refused to a reader without clearance",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "case": "restricted document's versions refused too",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "case": "cleared actor still reads every version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "lowering refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "SENSITIVITY_LOWERING"
+    },
+    {
+      "case": "lifecycle status cannot be set through the status PATCH",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "LIFECYCLE_STATUS"
+    }
+  ]
+}

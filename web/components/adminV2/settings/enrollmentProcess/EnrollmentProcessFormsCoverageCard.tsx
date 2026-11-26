@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type {
     EnrollmentProcessFormCoverageRow,
@@ -265,9 +265,13 @@ export default function EnrollmentProcessFormsCoverageCard({
         return (
             <div className="space-y-2" data-testid="enrollment-process-forms-coverage">
                 <p className="text-xs text-alloy-midnight/55">No connected forms for this stage yet.</p>
-                <Link href="/admin/forms" className="text-xs font-medium text-alloy-pine hover:underline">
+                <button
+                    type="button"
+                    onClick={() => dispatchAdminV2OpenProcessingModal({ mode: "studio", studioTab: "forms" })}
+                    className="text-xs font-medium text-alloy-pine hover:underline"
+                >
                     Open Forms &amp; Packets
-                </Link>
+                </button>
             </div>
         );
     }
@@ -318,9 +322,20 @@ export default function EnrollmentProcessFormsCoverageCard({
                     data-testid={`enrollment-process-form-row-${form.form_id}`}
                 >
                     <div className="flex items-start justify-between gap-2">
-                        <Link href={form.href} className="text-xs font-semibold text-alloy-pine hover:underline">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                dispatchAdminV2OpenProcessingModal({
+                                    mode: "studio",
+                                    studioTab: "forms",
+                                    formId: form.form_id,
+                                    formName: form.form_name,
+                                })
+                            }
+                            className="text-left text-xs font-semibold text-alloy-pine hover:underline"
+                        >
                             {form.form_name}
-                        </Link>
+                        </button>
                         <div className="flex flex-col items-end gap-1">
                             <span className="text-[10px] text-alloy-midnight/45">{form.intake_type_label}</span>
                             {linkFormsEnabled ? (
@@ -372,9 +387,13 @@ export default function EnrollmentProcessFormsCoverageCard({
                     ) : null}
                 </div>
             ))}
-            <Link href="/admin/forms" className="inline-block text-xs font-medium text-alloy-pine hover:underline">
+            <button
+                type="button"
+                onClick={() => dispatchAdminV2OpenProcessingModal({ mode: "studio", studioTab: "forms" })}
+                className="inline-block text-xs font-medium text-alloy-pine hover:underline"
+            >
                 Open Forms &amp; Packets
-            </Link>
+            </button>
         </div>
     );
 }

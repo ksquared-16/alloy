@@ -26,12 +26,22 @@ __pycache__/
 # Node
 node_modules/
 **/node_modules/
+# Slash-less too: the patterns above match DIRECTORIES only, so a *symlink* named
+# node_modules was not ignored and `git add -A` committed one pointing into another
+# worktree (staging 52e2d0947). These catch that shape.
+node_modules
+**/node_modules
 
 # Vercel
 .vercel/
 **/.vercel/
 
 web/.next/
+
+# Next.js regenerates this during build/dev (routes import flips between
+# `.next/types` and `.next/dev/types`). Tracking it dirties exact-source
+# certification; `web/scripts/ensureNextEnvDts.mjs` restores a stub when absent.
+web/next-env.d.ts
 
 # Generated / cache
 *.tsbuildinfo
@@ -56,3 +66,16 @@ web/test-results/
 
 # Local scoped typecheck helper (not product code)
 web/tsconfig.poscheck.json
+certification-tour/
+web/.metadata_never_index
+
+# Playwright run artifacts at the repo root (machine state, not source).
+test-results/
+web/scripts/.h2-fixture-state.json
+
+# Generated partner/export artifacts — never committed.
+/dist/
+
+# Vacilando provider-seat session artifacts (one per seat, created inside the lane worktree; never source)
+/psess_*/
+/.claude-seat.json

@@ -1,0 +1,99 @@
+{
+  "generated_at": "2026-07-30T14:33:10.595Z",
+  "base": "http://127.0.0.1:3021",
+  "missionId": "msn_d34d658b3d39c91781",
+  "openDecisionId": "dec_c31ddbee5dc819",
+  "screenshots": [
+    {
+      "filename": "01-missions.png",
+      "route": "/#/missions",
+      "url": "http://127.0.0.1:3021/?mc=1#/missions",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 3383,
+      "interactive_click_dispatched": true,
+      "demonstrates": "Missions list from live /api/v2/missions"
+    },
+    {
+      "filename": "02-mission-detail.png",
+      "route": "/#/missions/msn_d34d658b3d39c91781",
+      "url": "http://127.0.0.1:3021/?mc=1#/missions/msn_d34d658b3d39c91781",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1588,
+      "interactive_click_dispatched": true,
+      "demonstrates": "Mission detail + Director summary payload"
+    },
+    {
+      "filename": "03-worker-detail.png",
+      "route": "/#/workers/claude-6",
+      "url": "http://127.0.0.1:3021/?mc=1#/workers/claude-6",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1361,
+      "interactive_click_dispatched": true,
+      "demonstrates": "Worker telemetry / assignment binding"
+    },
+    {
+      "filename": "04-decision-desktop.png",
+      "route": "/#/decisions/dec_c31ddbee5dc819",
+      "url": "http://127.0.0.1:3021/?mc=1#/decisions/dec_c31ddbee5dc819",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1443,
+      "interactive_click_dispatched": true,
+      "demonstrates": "Open material decision on desktop viewport"
+    },
+    {
+      "filename": "05-decision-mobile.png",
+      "route": "/#/decisions/dec_c31ddbee5dc819",
+      "url": "http://127.0.0.1:3021/?mc=1#/decisions/dec_c31ddbee5dc819",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "load_ms": 1406,
+      "interactive_click_dispatched": true,
+      "demonstrates": "Open material decision at mobile width"
+    },
+    {
+      "filename": "06-evidence-gallery.png",
+      "route": "/#/evidence/msn_d34d658b3d39c91781",
+      "url": "http://127.0.0.1:3021/?mc=1#/evidence/msn_d34d658b3d39c91781",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 1349,
+      "interactive_click_dispatched": true,
+      "demonstrates": "Evidence gallery for cert mission"
+    },
+    {
+      "filename": "07-kickoff-readiness.png",
+      "route": "/#/kickoff/msn_d34d658b3d39c91781",
+      "url": "http://127.0.0.1:3021/?mc=1#/kickoff/msn_d34d658b3d39c91781",
+      "missionId": "msn_d34d658b3d39c91781",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "load_ms": 4651,
+      "interactive_click_dispatched": true,
+      "demonstrates": "Mission Brief kickoff / readiness findings"
+    }
+  ]
+}

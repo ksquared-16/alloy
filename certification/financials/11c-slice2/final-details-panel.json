@@ -1,0 +1,14 @@
+{
+  "panel": {
+    "open": true,
+    "scopeTrigger": "Household — the whole account",
+    "copy": "Manage responsibility Who contractually owes this account, from a date. Changing it does not change who has already paid. Applies to Household — the whole account ▾ Household responsibility. Cert Certhouse $18.00 · from Sep 18, 2026 · saving supersedes it Effective from Cert CerthousePrimary contact Preview Confirm Cancel"
+  },
+  "after": {
+    "panel": false,
+    "rows": 116,
+    "detailsOpen": 1,
+    "focus": "BUTTON(\"Manage responsibility\")"
+  },
+  "rowsWhileOpen": 116
+}

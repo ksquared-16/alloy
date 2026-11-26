@@ -9,6 +9,7 @@ export const CHILD_ENROLLMENT_AGREEMENT_STATUSES = [
     "ending",
     "ended",
     "canceled",
+    "voided",
 ] as const;
 
 export type ChildEnrollmentAgreementStatus = (typeof CHILD_ENROLLMENT_AGREEMENT_STATUSES)[number];
@@ -20,9 +21,17 @@ export const CHILD_ENROLLMENT_AGREEMENT_OPERATIONAL_STATUSES = [
     "ending",
 ] as const satisfies readonly ChildEnrollmentAgreementStatus[];
 
+/**
+ * Terminal, and for three different reasons. `ended` says service happened and concluded;
+ * `canceled` says a commitment was withdrawn before it began; `voided` says the record was created
+ * or activated in error and never represented service at all. Collapsing them would lose exactly the
+ * distinction a later reviewer needs, and the external visibility law reads two of the three as
+ * "never a participant".
+ */
 export const CHILD_ENROLLMENT_AGREEMENT_TERMINAL_STATUSES = [
     "ended",
     "canceled",
+    "voided",
 ] as const satisfies readonly ChildEnrollmentAgreementStatus[];
 
 export const CHILD_PLACEMENT_STATUSES = [
@@ -61,10 +70,6 @@ const AGREEMENT_TERMINAL_SET = new Set<string>(CHILD_ENROLLMENT_AGREEMENT_TERMIN
 const PLACEMENT_OPERATIONAL_SET = new Set<string>(CHILD_PLACEMENT_OPERATIONAL_STATUSES);
 const PLACEMENT_TERMINAL_SET = new Set<string>(CHILD_PLACEMENT_TERMINAL_STATUSES);
 
-export function isChildEnrollmentAgreementStatus(value: string): value is ChildEnrollmentAgreementStatus {
-    return (CHILD_ENROLLMENT_AGREEMENT_STATUSES as readonly string[]).includes(value);
-}
-
 export function isAgreementOperationalStatus(status: string): boolean {
     return AGREEMENT_OPERATIONAL_SET.has(status);
 }
@@ -77,20 +82,12 @@ export function isAgreementNonTerminalStatus(status: string): boolean {
     return isAgreementOperationalStatus(status);
 }
 
-export function isChildPlacementStatus(value: string): value is ChildPlacementStatus {
-    return (CHILD_PLACEMENT_STATUSES as readonly string[]).includes(value);
-}
-
 export function isPlacementOperationalStatus(status: string): boolean {
     return PLACEMENT_OPERATIONAL_SET.has(status);
 }
 
 export function isPlacementTerminalStatus(status: string): boolean {
     return PLACEMENT_TERMINAL_SET.has(status);
-}
-
-export function isScheduleAssignmentOperationalStatus(status: string): boolean {
-    return PLACEMENT_OPERATIONAL_SET.has(status);
 }
 
 export function isScheduleAssignmentTerminalStatus(status: string): boolean {

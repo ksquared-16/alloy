@@ -1,0 +1,20 @@
+{
+  "card": {
+    "height": 365,
+    "saysScheduled": false,
+    "pastDue": null,
+    "detailsBelowPayment": true,
+    "detailsOwnRow": true
+  },
+  "tuition": {
+    "present": true,
+    "label": "Tuition — Certa Certhouse",
+    "pricedChild": "e408fa51-7261-43c4-8e60-555d17fc9888",
+    "options": [
+      "Select a plan to lock in…",
+      "Recommended — $185.00/weekly"
+    ],
+    "help": "The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity."
+  },
+  "foreign": []
+}

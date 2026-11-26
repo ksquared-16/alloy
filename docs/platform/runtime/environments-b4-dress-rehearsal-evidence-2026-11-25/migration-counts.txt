@@ -1,0 +1,30 @@
+# refs
+origin/staging 8321949771f7fb6b2f04de6feb1fdd6ccb8e1484
+origin/main bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2
+e33220afe7112124629b60645b0532a7f4bc9b9b e33220afe7112124629b60645b0532a7f4bc9b9b
+merge-base 6ac8d3a85b129e6f78ccf7cae936657afea10c39
+# files and distinct versions per ref
+origin/staging files=557 distinct_versions=557 head=20261222090000
+origin/main files=229 distinct_versions=225 head=20260709120000
+6ac8d3a85b129e6f78ccf7cae936657afea10c39 files=229 distinct_versions=225 head=20260709120000
+e33220afe7112124629b60645b0532a7f4bc9b9b files=558 distinct_versions=558 head=20261223090000
+# duplicate versions on origin/main (a ledger keys on version, so these cannot all be recorded)
+20260630120000 x3
+20260630130000 x2
+20260707120000 x2
+# by file name
+in both=225 staging-only=332 main-only=4
+# by content (git diff -M origin/main origin/staging)
+ 328 A
+   2 M
+   4 R
+R058	supabase/migrations/20260630120000_commercial_tuition_rates.sql	supabase/migrations/20260630120100_commercial_tuition_rates.sql
+R100	supabase/migrations/20260630120000_mutation_events_outbox.sql	supabase/migrations/20260630121000_mutation_events_outbox.sql
+R100	supabase/migrations/20260630130000_update_lead_status_action_seed.sql	supabase/migrations/20260630131000_update_lead_status_action_seed.sql
+M	supabase/migrations/20260630150000_update_child_enrollment_status_action_seed.sql
+M	supabase/migrations/20260701200000_bpep_action_catalog_seeds.sql
+R100	supabase/migrations/20260707120000_header_metric_definitions_activation.sql	supabase/migrations/20260707120100_header_metric_definitions_activation.sql
+# staging files at or below the hosted-staging ledger head of 2026-10-20 (P3 S7)
+le_20261129090000=533
+# candidate vs staging under supabase/migrations/
+differing_paths=1

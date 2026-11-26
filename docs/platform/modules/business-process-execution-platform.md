@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-09-29
+supersedes: []
+---
+
 # Business Process Execution Platform
 
 **Status:** Canonical doctrine — Business Process Execution Platform (July 2026).
@@ -77,7 +84,8 @@ A Business Process defines:
 | `label` | Operator-facing name (e.g. "Enrollment Process") |
 | `entity_types` | Which entity types are subjects |
 | `stages` | Ordered list of stage configs |
-| `candidate_actions` | Process-wide action set (each stage refines) |
+| `command_set_v1` | **Sole target process-wide Command selection** (P6.S1). Typed Capability keys + enabled/variant/policy metadata. Legacy stage catalogs remain compatibility inputs until migrated. |
+| `candidate_actions` | **Legacy / doctrinal alias** for process-wide selection — prefer `command_set_v1` in code |
 | `surface_refs` | Default surface references |
 
 A Business Process does **not** own status values. It does not define allowed statuses. Status is an entity field; the process is an operational context.
@@ -95,9 +103,13 @@ A Stage defines:
 | `key` | Machine identifier |
 | `label` | Operator-facing name (e.g. "Waitlist") |
 | `grain` | `family \| child \| household \| case` |
-| `entry_conditions` | Conditions that place a subject in this stage |
-| `exit_conditions` | Conditions that move a subject out |
-| `candidate_actions` | Ordered list of actions with recommendation levels |
+| `entry_conditions` | **Proposed, not implemented** — no TypeScript or migration presence (measured 2026-09-29). Membership is the persisted `stage_key`; initial position comes from intake/Processing. |
+| `exit_conditions` | **Proposed, not implemented** — no TypeScript or migration presence (measured 2026-09-29). Subjects leave a stage through outcome execution. |
+| `candidate_actions` | Ordered list of actions with recommendation levels (**recommendation/evaluation only** once `command_set_v1` is present — cannot create process selection) |
+
+**Runtime (P6.S2):** Operators and BOS process-aware discovery consume Commands via
+`projectProcessRuntimeCommands` / `resolveEffectiveBusinessProcessCommands`. Stage evaluation
+wrappers diagnose unselected references. Editors still author legacy-compatible catalogs until P6.S3.
 | `surface_refs` | `queue_surface_key`, `focus_surface_key`, `header_surface_key` |
 | `readiness_expectations` | What must be true for subjects at this stage |
 | `operating_plan` | Purpose, expected work, success criteria |
@@ -384,12 +396,17 @@ Outbox contract:
 
 ### Domain Registry
 
-There is no generic "Update Status." Every domain is explicitly typed with its own handler.
+There is no generic "Update Status" — not in the runtime, and not on operator surfaces. Every
+domain is explicitly typed with its own handler, and operators reach it only through domain
+verbs bound to stage outcomes (`waitlist_child`, `enroll_child`, `close_lead`, …). The
+Enrollment Alignment sprint removed the operator-facing `update_status` / `update_enrollment_status`
+actions; the typed domains below remain the internal mutation mechanism invoked by outcome execution.
 
 | Domain key | Subject | Canonical field |
 |---|---|---|
-| `lead_status` | `opportunity` | `opportunities.status_key` |
-| `enrollment_status` | `opportunity_customer_member` | `opportunity_customer_members.outcome_status_key` |
+| `lead_status` | `opportunity` | `opportunities.status_key` (`open`\|`closed`) + `close_reason_key` |
+| `enrollment_status` | `opportunity_customer_member` | `opportunity_customer_members.outcome_status_key` + `close_reason_key` |
+| `stage` | `opportunity` / `opportunity_customer_member` | `stage_key` (moved by `move_to_stage` outcome targets only) |
 | `person_status` | `person` | `persons.status_key` |
 | `account_status` | `customer` | `customers.status_key` |
 
@@ -410,6 +427,10 @@ Every action uses the same seven-section surface:
 5. **Side effects** — tasks, communications, automations that will fire
 6. **Projection preview** — what UI changes
 7. **Confirmation** — a generated natural-language statement; submit button says the action
+
+Destructive delete via Command Runtime (`delete_lead`, P4.S3) additionally requires an authoritative
+impact preview, server-derived typed confirmation, and a correlated preview token before commit.
+Domain deletion semantics are unchanged (hard-delete opportunity graph; work units retained).
 
 **Placement rules:**
 - Subject is the Focus Panel subject → command renders inline in Focus Panel (no modal)

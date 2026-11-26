@@ -1,0 +1,94 @@
+{
+  "trusted_host_action_id": "tha_86dad91d58af86",
+  "query_hash": "6f42ef13eb9a7a3bbc969508774fd99e50009182c7b6f5383eb2930aaa7fdbb3",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T18:50:31.542Z",
+    "question_ids": [
+      "fixture_journey_revisions",
+      "fixture_journeys",
+      "revision_stage_requirements"
+    ],
+    "questions": {
+      "fixture_journey_revisions": {
+        "question_id": "fixture_journey_revisions",
+        "row_count": null,
+        "rows": [
+          {
+            "stage_key": "enrollment",
+            "has_pinned_revision": true,
+            "journeys": 1
+          },
+          {
+            "stage_key": null,
+            "has_pinned_revision": true,
+            "journeys": 1
+          }
+        ]
+      },
+      "fixture_journeys": {
+        "question_id": "fixture_journeys",
+        "row_count": null,
+        "rows": [
+          {
+            "stage_key": "enrollment",
+            "context_type": "enrollment_participation",
+            "state": null,
+            "intent": "family_enrollment_decision",
+            "journeys": 1
+          },
+          {
+            "stage_key": null,
+            "context_type": "enrollment_participation",
+            "state": null,
+            "intent": "enrollment_start",
+            "journeys": 1
+          }
+        ]
+      },
+      "revision_stage_requirements": {
+        "question_id": "revision_stage_requirements",
+        "row_count": null,
+        "rows": [
+          {
+            "stage_key": "decision",
+            "requirements": 0,
+            "form_requirements": 0,
+            "revisions": 22
+          },
+          {
+            "stage_key": "enrolled",
+            "requirements": 10,
+            "form_requirements": 0,
+            "revisions": 22
+          },
+          {
+            "stage_key": "enrolling",
+            "requirements": 10,
+            "form_requirements": 0,
+            "revisions": 22
+          },
+          {
+            "stage_key": "lead",
+            "requirements": 100,
+            "form_requirements": 0,
+            "revisions": 22
+          },
+          {
+            "stage_key": "tour",
+            "requirements": 20,
+            "form_requirements": 0,
+            "revisions": 22
+          },
+          {
+            "stage_key": "waitlist",
+            "requirements": 40,
+            "form_requirements": 0,
+            "revisions": 22
+          }
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}

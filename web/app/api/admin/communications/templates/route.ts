@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+    COMMUNICATIONS_TEMPLATES_MANAGE,
+} from "@/lib/communications/communicationsAuthority";
 import {
     buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
@@ -13,18 +17,18 @@ import {
 
 /**
  * Communications V2 — template list + create (Phase 1 / B2).
- * Pattern: requireAdminOrOps -> getAdminContextCached -> createAdminClient.
+ * Pattern: `communications.read` / `communications.templates.manage` -> getAdminContextCached -> createAdminClient.
  * service_role writes; org_id enforced on every query. No UI/announcements/provider.
  */
 
 const TEMPLATE_COLS =
-    "id, org_id, name, description, category, channel, status, current_version_id, created_by, updated_by, created_at, updated_at";
+    "id, org_id, name, description, category, channel, status, current_version_id, system_key, created_by, updated_by, created_at, updated_at";
 const VERSION_COLS = "id, template_id, version_number, subject, body, token_paths, created_at";
 
 /** GET /api/admin/communications/templates — list org templates (optional category/channel/status filters). */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
@@ -40,6 +44,18 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 100, 1), 200);
     const supabase = createAdminClient();
     const orgId = ctx.orgId;
+
+    // Ensure Tour system templates exist before listing (idempotent seed).
+    try {
+        const { ensureOrgTourCommunicationTemplates } = await import("@/lib/tours/comms/tourSystemTemplates");
+        await ensureOrgTourCommunicationTemplates({
+            supabase,
+            orgId,
+            actorUserId: ctx.userId,
+        });
+    } catch (e) {
+        console.warn("[templates] tour system provision skipped", e instanceof Error ? e.message : e);
+    }
 
     let query = supabase
         .from("communication_templates")
@@ -86,8 +102,8 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/admin/communications/templates — create a template + its initial version. */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_TEMPLATES_MANAGE);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

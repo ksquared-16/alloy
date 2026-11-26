@@ -98,7 +98,7 @@ export function personRecordHasParentLevelPlacementFields(record: Record<string,
         "assigned_location_id",
         "program_label",
         "category_label",
-        "desired_program_type",
+        "program_category_id",
     ];
     return blockedKeys.some((key) => trimOrNull(record[key]) != null);
 }

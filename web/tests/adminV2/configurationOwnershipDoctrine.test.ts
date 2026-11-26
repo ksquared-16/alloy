@@ -67,11 +67,15 @@ describe("configuration ownership doctrine — drift prevention", () => {
 
     it("visible UI avoids lifecycle product naming in operator copy", () => {
         const matrix = read("components/adminV2/settings/lifecycle/LifecycleActionsMatrix.tsx");
-        expect(matrix).toContain("Process Actions");
+        expect(matrix).toContain("Process Commands");
         expect(matrix).not.toContain("Lifecycle Actions");
+        const strip = read(
+            "components/adminV2/settings/businessProcess/BusinessProcessProcessSelectorStrip.tsx",
+        );
+        expect(strip).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
+        expect(strip).not.toContain(">Lifecycle<");
         const page = read("app/adminV2/settings/processes/page.tsx");
-        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
-        expect(page).not.toContain('>Lifecycle<');
+        expect(page).not.toContain(">Lifecycle<");
     });
 
     it("ownership doctrine doc exists and defines canonical owners", () => {

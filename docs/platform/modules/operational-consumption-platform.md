@@ -1,8 +1,17 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Consumption platform
 
 **Status:** Canonical module doctrine (June 2026). **Operational Consumption V1 COMPLETE — Slices 1–4 shipped** (registration · agreement + schedule recurring tuition · the Consumption Pipeline + attendance · Draft Obligation Review). Defines the **runtime layer** between Operational Execution and Commercial / Financial Resolution — the layer that interprets an operational fact into the commercial meaning it should carry. **Posting is the first authoritative financial write; Posting, Payments, Statements, Subsidies, Claims, Settlement, and the General Ledger are downstream consumers of this runtime and are not part of it.**
 
-> **Companion docs.** Truth-flow layering: [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md). Financial domain (frozen): [`./financial-platform-domain.md`](./financial-platform-domain.md). Posting / draft Charge Resolution: [`./billing-financials-platform.md`](./billing-financials-platform.md).
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze — RFC D12).** The pipeline above is complete **as a library**, but the **fact→consumption trigger edge is a named, still-pending seam**: today the pipeline is invoked only by the `/consumption/simulate` path — no attendance/schedule/agreement fact write auto-invokes it. Closing that edge **safely** (correction/reversal-aware, so a corrected or reversed fact supersedes rather than duplicates its obligation) is **Implementation Wave 1 — D12a**, specified in `../../sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md` (historical: `../../sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md`); wiring the reactor to real facts (preview-first) is the later **D12b**. See the frozen [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) D12.
+
+> **Companion docs.** Truth-flow layering: [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md). Financial domain (frozen): [`./financial-platform-domain.md`](./financial-platform-domain.md). Posting / draft Charge Resolution: [`./billing-financials-platform.md`](./billing-financials-platform.md).
 >
 > **The full platform flow.** Operational Truth → Operational Execution → **Operational Consumption** (Operational Fact → Consumption Candidate → Consumption Event → Resolved Obligation) → Commercial Model → Financial Resolution → Resolved Obligations → **Draft Charge Review** (pre-posting; Slice 4) → **Posting** (the first authoritative financial write) → Payments → Settlement. Everything left of Posting is recomputable and non-authoritative; Posting and everything right of it are downstream and out of scope for this runtime.
 >
@@ -317,6 +326,52 @@ A new review-required obligation starts in `review_required` (set on insert; the
 ## Review-only actions
 
 `mark_reviewed`, `flag`, `suppress` (+reason), `restore`, `recompute`. **Not** allowed (and not present): post, invoice, collect/allocate payment, create statement, write ledger. `recompute` replays the **existing pipeline in PREVIEW mode** (no charge writes) from the event's stored `fact_snapshot`, reports drift, and — when applied — updates the obligation amount and marks it `stale`. Consumption is recomputable by design.
+
+# Slice 5 — an accepted price is a fact input (September 2026)
+
+Consumption consumes pricing, it does not decide it — and until now the only pricing it consumed was
+the commercial catalog's. Tuition generation adds a second, higher authority for one directive kind,
+without adding a second pipeline.
+
+## Accepted pricing overrides Commercial Resolution, structurally
+
+`OperationalFactDto.acceptedPricing` (`AcceptedTuitionPricing`) carries the amount, currency,
+cadence and the accepted term's own lineage — source entity, source id, config version, resolution
+key. When it is present, `resolveDirective` takes the amount and currency FROM IT and pushes an
+`accepted_pricing_term` `CommercialObjectRef`; the `getCommercialTuitionValuation` branch is the
+`else`, not a fallback consulted afterwards. This is deliberate: a family accepted a price, and the
+catalog it was resolved from is free to change. A term accepted in March is what March costs.
+
+Step 1 of *Commercial Resolution* above therefore reads: Rate Resolution applies **when no accepted
+term governs the directive.** Steps 2 and 3 — Charge Template resolution and Financial Policy
+resolution — are unchanged and still run: an accepted price says what the month costs, not when it
+is billable, which category it lands in, or whether a partial month prorates.
+
+The schedule-basis gate relaxes for the same reason. A recurring directive with no resolvable basis
+is normally refused because nothing could price it; with an accepted term the price is already
+known, so the basis falls back to `full_day` rather than blocking a month whose cost is settled.
+
+## The occurrence key is the assignment and the period
+
+`cev:tuition:<assignmentId>:<periodKey>` — never the term id. A successor or retroactive term for a
+month already generated must RECONCILE the existing occurrence, and keying on the term would open a
+second one instead, leaving two live obligations for one month of care. The term is lineage on the
+event's context; it is not identity.
+
+## A posted consequence's history is closed
+
+`upsertConsumptionEvent` updates an event's context in place, and the obligation re-resolves from
+it. That is correct while money is still a draft and wrong once it is posted: the charge cannot
+move, so rewriting the event underneath it leaves the money saying one thing and its own provenance
+saying another. Tuition generation therefore checks for a posted charge BEFORE calling
+`draftConsumption` — a settled period never enters the pipeline at all. An unposted draft still
+reconciles to the successor through the existing correction/reconciliation model.
+
+**The general rule:** re-running a pipeline over a period whose consequence is posted must be
+refused at the boundary, not absorbed by the writer. `skipped_posted` protects the charge; nothing
+protected the event.
+
+---
 
 ## Explanation engine (reusable)
 

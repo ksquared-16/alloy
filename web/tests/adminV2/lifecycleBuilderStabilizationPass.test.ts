@@ -33,15 +33,21 @@ describe("Lifecycle builder stabilization pass", () => {
         expect(card).toContain("lifecycle-actions-empty");
     });
 
-    it("base actions are curated not full catalog", () => {
+    it("base actions are curated domain verbs, not a generic Change Status", () => {
         expect(LIFECYCLE_BASE_ACTIONS.map((b) => b.key)).toEqual([
             "add_person",
             "add_child",
             "send_form",
             "schedule_tour",
-            "change_status",
+            "send_tour_invitation",
+            "waitlist_child",
+            "enroll_child",
+            "close_lead",
             "create_task",
+            "quick_message",
         ]);
+        expect(LIFECYCLE_BASE_ACTIONS.map((b) => b.key)).not.toContain("change_status");
+        expect(LIFECYCLE_BASE_ACTIONS.some((b) => b.definition_key === "send_tour_invitation")).toBe(true);
     });
 
     it("queue view has no sync button and uses stabilization copy", () => {

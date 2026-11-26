@@ -1,0 +1,45 @@
+# git objects only; no fetch. Run 2026-11-25 in worktree objective/environments-and-promotion.
+$ git rev-parse HEAD origin/staging origin/main
+08a95e24d3638e1a191dd505bd31550849d6e70e
+8321949771f7fb6b2f04de6feb1fdd6ccb8e1484
+bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2
+$ git rev-list --count HEAD..origin/staging
+8
+$ git merge-tree --write-tree --name-only origin/staging HEAD ; echo exit=$?
+a2b52099627367430f328a84c0c7e5fa8e57dde3
+exit=0
+$ git diff --name-only origin/staging HEAD -- supabase/migrations   # HEAD predates this staging file; a merge keeps it
+supabase/migrations/20261222090000_documents_w_c1_audit_linkage.sql
+$ git log --format='%h %s' origin/staging..HEAD --grep='ALY-14'
+4972595ae test(qa): pin ZZ Alloy QA as the only tenant of the existing cross-org and permission fixtures (ALY-14 E4)
+9d194f40c docs(staging): lead_management mapping, owner census invocation, expected output and gaps (ALY-14 E3)
+2ac3bccd3 fix(staging): bind Firefly seed and tenant census to lead_management; read-only census mode (ALY-14 E3)
+077bee5bb docs(staging): record hosted step 1 census and owner decisions; read-only department census and provisioning recommendation (ALY-14 E3)
+3376e5618 feat(qa): Firefly fence decision (a) — managed slot identities' staging org only; ZZ plans keep the fence (ALY-14 E3)
+b8d376832 docs(staging): E3 fourth review round — preconditions re-checked, still held at step 0 (ALY-14 E3)
+6fd2c28ae docs(staging): E3 third review round — preconditions re-checked, still held at step 0 (ALY-14 E3)
+a597d5454 docs(staging): E3 review status per finding; hosted runbook held at step 0; fence decision spelled out (ALY-14 E3)
+f4d0b3a50 feat(staging): mark every seeded household, case and child name [Staging seed] (ALY-14 E3)
+6e23ecac2 docs(staging): Firefly QA profile, three managed identities, runtime settings and hosted runbook (ALY-14 E3)
+a31cc8294 feat(staging): read-only census of Firefly's real sites, program keys, queues and QA members (ALY-14 E3)
+00075af5b docs(staging): Firefly seed writes into the existing Firefly org; gates, fence, measured proofs (ALY-14 E2)
+456fcafff fix(staging): seed into the existing Firefly org; create no tenant (ALY-14 E2)
+3fe298c5c docs(staging): Firefly seed proof command, scratch-database lifecycle, measured results (ALY-14 E2)
+583156942 test(staging): in-database proof of the Firefly staging seed on a throwaway database (ALY-14 E2)
+b4f11527e docs(staging): Firefly staging seed prerequisites, commands, verification, gaps (ALY-14 E2)
+a092757a1 feat(staging): repeatable Firefly staging seed, fenced to its own org (ALY-14 E2)
+d0bccd81d fix(communications): ALY-14 staging guard fails closed unless ALLOY_ENVIRONMENT is explicit
+2e2f0acf8 feat(communications): staging email/SMS reach only test recipients or the owner allowlist (ALY-14)
+$ for each: git merge-base --is-ancestor <c> origin/staging
+2e2f0acf8 not-on-staging
+d0bccd81d not-on-staging
+a092757a1 not-on-staging
+4972595ae not-on-staging
+
+# re-run 2026-11-25 at HEAD 2fb165afcb4f (git objects only; no fetch; refs unchanged)
+$ git rev-list --count HEAD..origin/staging
+8
+$ git merge-tree --write-tree --name-only origin/staging HEAD >/dev/null; echo exit=$?
+exit=0
+$ git log --format=%h origin/staging..HEAD --grep='ALY-14' | wc -l
+19

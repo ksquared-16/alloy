@@ -1,0 +1,200 @@
+# Enrollment configuration certification.
+#
+# The canonical business-process requirement contract (Enrollment Phase 1, D-88..D-92)
+# had no CI job that EXECUTED it. `Trust Adoption certification` globs
+# tests/trust|metrics|ai|scripts|processing|pos/commit, and `P1 certification gates`
+# runs tests/operationalExpectations/ — neither covers tests/lifecycle. The TypeScript
+# graphs compile these files but never run them, so a green pull request proved the
+# contract typechecked and nothing about whether it behaved.
+#
+# Deliberately NARROW: named suites, not `tests/lifecycle/`. That directory carries 89
+# long-standing failures unrelated to this contract, so gating on the whole directory
+# would be red on arrival and would train reviewers to ignore it. Suites are added here
+# as they are made green, not swept in wholesale.
+#
+# D-96/D-97 added two: `publishedStageRequirementsSelfContainment` (the five publication
+# proofs — a published revision answers its own requirements with no department metadata)
+# and `processInstanceRevisionPin` (the pin rides the creating insert; one owner of the
+# pinned-vs-live branch; Class A is governed while Class B still shows current config).
+# Their storage-layer counterparts — immutability, tenant and process identity, FK
+# semantics — are trigger-made claims and live in `Trust DB certification` instead, under
+# `certification/process-instance-revision-pin/`, because only a real database can refuse
+# a write.
+#
+# Slice 2.3 added `enrollmentParticipantProgress` — the eighteen required proofs that a
+# participant's outstanding Enrollment requirements are deterministic: requirements from the
+# pinned revision, satisfaction from Forms-owned submission evidence only, and a requirement
+# the packet fails to realize kept in the denominator rather than silently dropped.
+#
+# Slice 2.4 added `enrollmentInformationNeeds` — the ask-once invariant. One canonical fact
+# appearing on fifteen required Form controls is ONE participant need, deduped by scope +
+# subject + `packetFieldPlan`'s canonical key, with D-99 session confirmation bound to the
+# value it was made about.
+#
+# Phase 3 added `participantEnrollmentRuntime` — the conversational loop. It carries the
+# primary acceptance proof (one complete conversation, provider-free) and the AI-boundary
+# controls: a structured candidate cannot name a field, command or requirement; an
+# unreadable candidate fails closed to `unresolved`; an invalid value is refused and
+# mutates nothing.
+#
+# B2 added `participantProviderAuthorization` — the org-level provider gate. It asserts the
+# canonical AI-policy owner (`org_settings.metadata.ai_policy`) is the table actually queried,
+# not merely that a denial happened: the gate fails closed, so reading the WRONG table and
+# "the feature was never granted" produced identical behaviour and the defect stayed invisible
+# for a whole slice. Outcome-only controls would not have caught it.
+#
+# B1 added `startEnrollmentParticipantLaunch` — the reachability proof that was missing. It runs
+# the whole chain unstubbed against an in-memory database double that enforces the three
+# constraints the invariants rest on (packet-definition key uniqueness, the 1:1 link binding, and
+# the one-current-session partial index): operator Start Enrollment → pinned revision → declared
+# entry stage → `requirements_v1` Form requirements → derived packet → minted link → anchored
+# session → token resolves that session → the Participant Runtime objective the conversation card
+# mounts on. It also carries the authority controls: a stage requiring no Forms realizes nothing,
+# and a packet edited by hand refuses instead of becoming an Enrollment requirement.
+#
+# The Experience Convergence slice added three. `startEnrollmentIdempotentReuse` pins that a
+# repeat Start Enrollment reports reuse rather than a null id every caller renders as failure.
+# `participantSurfaceHookOrder` pins that every hook precedes the participant surface's early
+# returns — the V1.2 objective effect sat below six of them and crashed the page the first time a
+# parent opened their link. `participantExperienceConvergence` carries the experience itself:
+# canonical facts confirmed rather than asked for, participant language instead of column
+# headings, semantic controls instead of one text box, the packet Form deferred while shared facts
+# remain, and signature/acknowledgment reached only at artifact review.
+#
+# The artifact-handoff slice added `participantArtifactHandoff` — the five phases as one runtime.
+# It pins the two owners that made a confirmed value vanish before review: a confirm turn wrote D-99
+# evidence and never wrote the value into `shared_values`, and nothing applied `shared_values` to
+# the artifact being RENDERED. It also holds requiredness with the Form, proves an authored date
+# cannot degrade into a text box, and proves one theme owner brands both phases.
+#
+# `participantDeterministicJourney` certifies the experience Director QA rejected: typed controls
+# including the CORRECTION path (a confirm turn now carries the authored control, so "Change" is a
+# date picker rather than a text box), settled sections that stay on screen, immediate
+# acknowledgement with rollback, and the review invariant. That last one is the sharp edge — phase
+# used to be derived independently of the turn, so an OPTIONAL missing need left the card offering
+# "review below" while the host suppressed the artifact. Phase now comes from the turn.
+#
+# `compiledParticipantArtifact` pins the artifact model the review is built on. The gap it closes:
+# `FormEngineRenderer` takes `mode: "edit" | "readonly"` and that mode is per-FORM, so the only
+# thing the runtime could hand a parent after the conversation was the whole form as inputs —
+# including the facts they had just settled. The missing piece was a CLASSIFICATION, not a document
+# model, and the controls hold the invariant it exists for: nothing the conversation resolved may
+# reappear as unresolved work.
+#
+# NOTE: this job is not a REQUIRED check until it is added to branch protection, which
+# is a repository setting rather than something this file can assert.
+
+name: Enrollment configuration certification
+
+# UNFILTERED on purpose. A required check that is path-filtered simply does not
+# report on a PR that misses its paths, and a required check with no status blocks
+# that PR forever — so a filtered required check deadlocks every unrelated change.
+# This job is one narrow suite and finishes in well under a minute, so running it on
+# every pull request costs far less than the deadlock it prevents.
+on:
+  pull_request:
+  push:
+    branches: [staging, main]
+
+concurrency:
+  group: enrollment-config-cert-${{ github.ref }}
+  cancel-in-progress: true
+
+# Track adoption added three: `processTrackAdoption` (the generic evaluator and writer — an
+# existing builder-owned process may adopt the canonical track model without losing its stage
+# inventory, validated before it is written and all-or-nothing), `adoptedTracksActivateRouting`
+# (the claim that matters — the REAL resolver routes family stages by case and child stages by
+# child only after adoption, asserted against a before/after pair) and
+# `trackAdoptionSettingsAuthoring` (the operator path exists in Settings, and previewing writes
+# no draft revision). They gate here because adoption flips lane routing for a whole process at
+# once: a regression would not show up as one wrong lane, it would show up as every lane being
+# decided by something else.
+
+# Work-backed stage-exit requirements added two: `workRequirementEvaluation` (required work
+# blocks an exit only where configuration says that work is required for THAT transition — the
+# Lead -> Waitlist case is asserted by name, because it is the one a blanket "required work always
+# blocks" rule would break) and `workRequirementAuthoring` (the reference gate, and the reason
+# both requirement editors carry the kinds they do not edit: `set_stage_requirements` replaces the
+# whole section, so a kind-specific editor submitting only its own rows silently deletes the
+# others).
+
+# Candidate-grain pagination added one: `candidateGrainWaitlistPagination` — a page of two is two
+# rows even when it lands on a family with three waitlisted children. Pagination was already
+# candidate-first where the page is sliced; the expansion that rebuilds rows from each page
+# candidate's opportunity was filtered against every MATCHED candidate instead, so `limit` stopped
+# bounding the rows and a sibling rendered twice. The suite walks all three pages and checks
+# duplicates and gaps together, because trimming the surplus would have turned one into the other.
+
+# Configured-action arguments added one: `configuredActionWorkTemplate` — a configured action may
+# name the stage work it operates on. `stage_work.start` takes the template as an INPUT so it needs
+# no per-template action, which left it requiring a `template_key` that no configuration could
+# carry: not the candidate action, not the plan's action ref, not the action view model, and the
+# invoke path hardcoded `payload: {}`. Each hop is asserted separately because the argument was lost
+# at a different hop than the one anybody suspected.
+
+jobs:
+  run:
+    name: Enrollment configuration certification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Run enrollment configuration certification suites
+        working-directory: web
+        run: |
+          npx vitest run \
+            tests/lifecycle/stageRequirementsV1.test.ts \
+            tests/lifecycle/enrollmentObjectiveSession.test.ts \
+            tests/lifecycle/publishedStageRequirementsSelfContainment.test.ts \
+            tests/lifecycle/processInstanceRevisionPin.test.ts \
+            tests/lifecycle/enrollmentParticipantProgress.test.ts \
+            tests/lifecycle/enrollmentInformationNeeds.test.ts \
+            tests/lifecycle/participantEnrollmentRuntime.test.ts \
+            tests/lifecycle/participantConversationAdmission.test.ts \
+            tests/lifecycle/participantGovernedInterpretation.test.ts \
+            tests/lifecycle/participantConversationSurface.test.ts \
+            tests/lifecycle/participantProviderAuthorization.test.ts \
+            tests/lifecycle/startEnrollmentParticipantLaunch.test.ts \
+            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/offerSpotIsAnOperatorAct.test.ts \
+            tests/queues/childGrainQueueFollowsChildTruth.test.ts \
+            tests/queues/candidateGrainWaitlistQueue.test.ts \
+            tests/queues/candidateGrainWaitlistSiteScope.test.ts \
+            tests/platform/commands/capabilityRegistry.test.ts \
+            tests/lifecycle/participantSurfaceHookOrder.test.ts \
+            tests/lifecycle/participantExperienceConvergence.test.ts \
+            tests/lifecycle/participantArtifactHandoff.test.ts \
+            tests/lifecycle/participantDeterministicJourney.test.ts \
+            tests/lifecycle/compiledParticipantArtifact.test.ts \
+            tests/lifecycle/participantConversationProductization.test.ts \
+            tests/lifecycle/participantTypedValidation.test.ts \
+            tests/forms/loadPublishedFormEnvelope.test.ts \
+            tests/forms/resolveActiveStepEnvelope.test.ts \
+            tests/forms/pdf/documentDestinationDateFormat.test.ts \
+            tests/forms/pdf/fidelityEngine.test.ts \
+            tests/forms/pdf/fidelityMappingVertical.test.ts \
+            tests/lifecycle/outcomeBehaviorRoundTrip.test.ts \
+            tests/lifecycle/childGrainOutcomeAuthoring.test.ts \
+            tests/lifecycle/stageEntryWorkForWaitlist.test.ts \
+            tests/admin/enrollmentStatus/placementWaitlistingConvergesOnProcessMembership.test.ts \
+            tests/admin/enrollmentStatus/enrollmentStatusTransitionOutcomeEffects.test.ts \
+            tests/adminV2/runtime/childStageAuthorityIsTheProcessInstance.test.ts \
+            tests/adminV2/runtime/processStageAuthority.test.ts \
+            tests/adminV2/viewModel/lifecycleRailStageIsNotTheLens.test.ts \
+            tests/runtime/childGrainSurfaceComposition.test.ts \
+            tests/lifecycle/childTrackBeginsAtGrainCrossing.test.ts \
+            tests/lifecycle/stageOutcomeChildProcessInstanceWrite.test.ts \
+            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/processTrackAdoption.test.ts \
+            tests/lifecycle/trackAdoptionSettingsAuthoring.test.ts \
+            tests/queues/adoptedTracksActivateRouting.test.ts \
+            tests/lifecycle/workRequirementEvaluation.test.ts \
+            tests/lifecycle/workRequirementAuthoring.test.ts \
+            tests/queues/candidateGrainWaitlistPagination.test.ts \
+            tests/lifecycle/configuredActionWorkTemplate.test.ts

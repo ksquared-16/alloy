@@ -1,0 +1,51 @@
+{
+ "reserved": {
+  "first_reserved_ms": 18253,
+  "first_resolving_ms": 18253,
+  "resolving_keys": [
+   "children",
+   "household"
+  ],
+  "resolving_text": [
+   "Resolving children…",
+   "Resolving household…"
+  ],
+  "last_resolving_ms": 24894,
+  "final_cards": 6
+ },
+ "height": {
+  "final_bp": {
+   "card": 232,
+   "wrapper": 325
+  },
+  "final_fin": {
+   "card": 325,
+   "wrapper": 325
+  }
+ },
+ "heldRows": {
+  "target": "new_leads",
+  "target_rows": 3,
+  "rows_before": 16,
+  "t_busy_appears": 281,
+  "t_rows_changed": 2920,
+  "busy_frames": 91,
+  "old_rows_frames": 99,
+  "busy_while_old_rows": 91,
+  "t_busy_clears": 2920
+ },
+ "identity": {
+  "rowA": "ebe6cb44",
+  "rowB": "8a0d0fb4",
+  "A_avatars": [],
+  "A_initials": [],
+  "A_header": "Certopp Family New Lead Work: 1",
+  "t_activeRow_B": 113,
+  "t_subject_B": 3678,
+  "t_avatar_changed": "A had no avatar image",
+  "stale_avatar_frames": 0,
+  "total_frames": 489,
+  "final_avatars": [],
+  "final_header": "Certfree Family New Lead Work: 1"
+ }
+}

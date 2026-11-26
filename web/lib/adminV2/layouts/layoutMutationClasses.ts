@@ -1,6 +1,6 @@
 /**
  * Layout composition mutation classes — Settings control plane only.
- * @see docs/sprints/05_2026/record_experience_builder_phase_1.md §7
+ * @see docs/sprints/archive/05_2026/record_experience_builder_phase_1.md §7
  */
 
 export const LAYOUT_MUTATION_CLASS = {

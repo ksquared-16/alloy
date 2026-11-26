@@ -1,19 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
+import { replaceMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
+import {
+    replacementRemovalRefusal,
+    replacementRemovalRefusalMessage,
+} from "@/lib/access/memberRoleAssignment";
+import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /**
  * PATCH: replace **all** role rows for this user in this org with a single role_key.
  * Multi-role personas (e.g. ops + regional_lead) must be re-added via seed or a future additive API.
+ *
+ * **W-54 / `I-34`ᴬ.** The replacement is refused when it would delete a role the request did not
+ * carry. Callers that can render the whole membership send `expected_role_keys`; callers that cannot
+ * — the two legacy editors, which collapse the set to one value — are refused rather than allowed to
+ * destroy a row they never showed. Single-role memberships are unaffected: replacing the only role
+ * removes nothing but itself. See {@link replacementRemovalRefusal} for why the client-side
+ * acknowledgement `IA-7` added was not sufficient on its own.
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
     const { userId } = await context.params;
     if (!userId) {
         return NextResponse.json({ error: "userId required" }, { status: 400 });
+    }
+
+    // Self-elevation ban — denied before the body is read, so no write can be reached.
+    if (isSelfAuthorityMutation({ callerUserId: access.userId, targetUserId: userId })) {
+        return selfAuthorityMutationResponse();
     }
 
     const body = await request.json().catch(() => ({}));
@@ -29,23 +49,70 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         return NextResponse.json({ error: "Invalid or inactive role for this org" }, { status: 400 });
     }
 
-    const { data: existing, error: exErr } = await supabase.from("user_roles").select("user_id").eq("user_id", userId).eq("org_id", access.orgId).limit(1);
-    if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 });
-    if (!existing?.length) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // W-54/I-34ᴬ: refuse a destructive replacement submitted from a partial view. The read is
+    // error-checked rather than defaulted — an unreadable membership must not be treated as an
+    // empty one, because `removed` would then be empty and the guard would wave the write through.
+    // That is W-43's read-failure lesson applied to a guard instead of to a resolver.
+    const { data: heldRows, error: heldErr } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("org_id", access.orgId);
+    if (heldErr) {
+        return NextResponse.json(
+            { error: "Could not read the member's current roles; the change was not applied." },
+            { status: 500 },
+        );
     }
 
-    const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("org_id", access.orgId);
-    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+    const refusal = replacementRemovalRefusal({
+        currentRoleKeys: (heldRows ?? []).map((r) => (r as { role: string }).role),
+        nextRoleKey: role,
+        acknowledgedRoleKeys: Array.isArray(body.expected_role_keys) ? body.expected_role_keys : null,
+    });
+    if (refusal) {
+        return NextResponse.json(
+            {
+                error: replacementRemovalRefusalMessage(refusal),
+                removed_roles: refusal.removed,
+                unacknowledged_roles: refusal.unacknowledged,
+            },
+            { status: 409 },
+        );
+    }
 
-    const { data: inserted, error: insErr } = await supabase.from("user_roles").insert({ user_id: userId, org_id: access.orgId, role }).select().single();
+    // W-5/G4: the replacement and the access profile are one transaction. This was
+    // delete-then-insert as two statements, so a failed insert left the user with
+    // no membership at all; the RPC either lands the replacement or moves nothing.
+    // D2 — W-17 is audited, not fixed: the transaction owner records the whole old role set and the
+    // whole new one, so a submit that discards other roles is legible as exactly that.
+    const audit = accessMutationAudit(access);
+    const membership = await replaceMembershipWithAccessProfile(supabase, {
+        userId,
+        orgId: access.orgId,
+        role,
+        audit,
+    });
+    if (!membership.ok) {
+        // The replacement path raises authority too, so its refusal is an authorization answer.
+        if (membership.kind === "forbidden") {
+            return NextResponse.json({ error: membership.error }, { status: 403 });
+        }
+        if (membership.kind === "not_found") {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        return NextResponse.json({ error: membership.error }, { status: 500 });
+    }
 
-    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
-    if (!inserted) return NextResponse.json({ error: "Failed to assign role" }, { status: 500 });
+    /*
+     * W-13 — this member's roles just changed, so the bundle cached against their user id is stale,
+     * and since W-13 that bundle carries ADMISSION. Per-user here, unlike the role-grant routes: a
+     * membership change has exactly one subject and the cache is keyed by exactly that.
+     */
+    invalidateAdminShellContextCache(userId);
 
-    const row = inserted as { user_id: string; org_id: string; role: string; created_at?: string };
     return NextResponse.json({
-        ...row,
+        ...membership.row,
         role_keys: [role],
     });
 }

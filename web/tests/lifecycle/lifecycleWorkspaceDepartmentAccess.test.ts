@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import {
@@ -8,7 +8,19 @@ import {
     ensureLifecycleDepartmentWorkspaceAccess,
     resolveLifecycleDepartmentWorkspaceAccess,
     refreshDepartmentScopeDimensions,
+    SELF_DEPARTMENT_PROVISIONING_MESSAGE,
 } from "@/lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess";
+
+/**
+ * W-8: every `user_department_access` insert attempted through this module is recorded here so a
+ * test can assert on the *absence* of the write, not merely on the returned shape. A future change
+ * that re-adds self-provisioning fails these tests even if it keeps the same result type.
+ */
+let insertCalls: unknown[] = [];
+
+beforeEach(() => {
+    insertCalls = [];
+});
 
 const root = resolve(__dirname, "../..");
 
@@ -62,10 +74,12 @@ function createAccessProvisionMock(config: {
                 select: () => ({
                     eq: () => chain,
                 }),
-                insert: () =>
-                    Promise.resolve({
+                insert: (row: unknown) => {
+                    insertCalls.push(row);
+                    return Promise.resolve({
                         error: config.insertError ? { message: config.insertError } : null,
-                    }),
+                    });
+                },
             };
         }
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
@@ -74,7 +88,13 @@ function createAccessProvisionMock(config: {
 }
 
 describe("ensureLifecycleDepartmentWorkspaceAccess", () => {
-    it("creates user_department_access when department_scope is restricted", async () => {
+    /**
+     * W-8 (I-20) — this suite previously asserted that a restricted principal got a
+     * `user_department_access` row created for itself. That write was the self-authority path the
+     * deleted `portalAdminBypassesDepartmentScope` gate kept latent; the assertion is inverted, and
+     * the mock's `insert` is now asserted never to be reached.
+     */
+    it("refuses, and never inserts, when the caller is restricted and lacks the department", async () => {
         const supabase = createAccessProvisionMock({
             profile: { department_scope: "restricted" },
             existingAccess: null,
@@ -85,11 +105,30 @@ describe("ensureLifecycleDepartmentWorkspaceAccess", () => {
             departmentId: "dept-new",
             currentUserId: "user-1",
         });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.error).toBe(SELF_DEPARTMENT_PROVISIONING_MESSAGE);
+        }
+        expect(insertCalls).toEqual([]);
+    });
+
+    it("reports existing access without writing when the caller already holds the department", async () => {
+        const supabase = createAccessProvisionMock({
+            profile: { department_scope: "restricted" },
+            existingAccess: { id: "uda-1" },
+        });
+        const result = await ensureLifecycleDepartmentWorkspaceAccess({
+            supabase,
+            orgId: "org-1",
+            departmentId: "dept-new",
+            currentUserId: "user-1",
+        });
         expect(result.ok).toBe(true);
         if (result.ok) {
-            expect(result.inserted).toBe(true);
             expect(result.department_scope).toBe("restricted");
+            expect(result.already_had_access).toBe(true);
         }
+        expect(insertCalls).toEqual([]);
     });
 
     it("does not insert when department_scope is all", async () => {
@@ -104,9 +143,9 @@ describe("ensureLifecycleDepartmentWorkspaceAccess", () => {
         });
         expect(result.ok).toBe(true);
         if (result.ok) {
-            expect(result.inserted).toBe(false);
             expect(result.department_scope).toBe("all");
         }
+        expect(insertCalls).toEqual([]);
     });
 
     it("resolve marks membership missing when restricted and no row", async () => {
@@ -125,7 +164,7 @@ describe("ensureLifecycleDepartmentWorkspaceAccess", () => {
         expect(state.visible_in_departments_api).toBe(false);
     });
 
-    it("resolve passes membership after provision (validation workspace_access truth)", async () => {
+    it("resolve passes membership when the row exists (validation workspace_access truth)", async () => {
         const supabase = createAccessProvisionMock({
             profile: { department_scope: "restricted" },
             existingAccess: { id: "uda-1" },
@@ -164,7 +203,7 @@ describe("ensureLifecycleDepartmentWorkspaceAccess", () => {
         expect(visible).toBe(true);
     });
 
-    it("refreshDepartmentScopeDimensions reloads allow list after insert", async () => {
+    it("refreshDepartmentScopeDimensions reloads the allow list from user_department_access", async () => {
         const supabase = {
             from: vi.fn((table: string) => {
                 if (table === "user_department_access") {
@@ -195,17 +234,27 @@ describe("ensureLifecycleDepartmentWorkspaceAccess", () => {
 });
 
 describe("lifecycle workspace department access wiring", () => {
-    it("POST departments provisions access for activation-owned metadata", () => {
+    it("POST departments checks — but never grants — access for activation-owned metadata", () => {
         const route = read("app/api/admin/departments/route.ts");
         expect(route).toContain("ensureLifecycleDepartmentWorkspaceAccess");
         expect(route).toContain("isLifecycleBuilderOwnedDepartmentMetadata");
+        // W-8: a restricted creator is refused, not silently widened.
+        expect(route).toContain("status: 403");
     });
 
-    it("repair provisions user_department_access", () => {
-        expect(read("lib/lifecycle/repairLifecycleWorkspaceVisibility.ts")).toContain(
-            "provisioned_user_department_access"
-        );
+    it("W-8 — neither product path can provision user_department_access for its caller", () => {
+        const repair = read("lib/lifecycle/repairLifecycleWorkspaceVisibility.ts");
+        expect(repair).not.toContain("provisioned_user_department_access");
         expect(read("app/api/admin/lifecycle-catalog/repair/route.ts")).toContain("access.userId");
+        // The insert lived only here; no caller may reintroduce one of its own.
+        for (const rel of [
+            "lib/lifecycle/repairLifecycleWorkspaceVisibility.ts",
+            "app/api/admin/departments/route.ts",
+            "app/api/admin/lifecycle-catalog/repair/route.ts",
+            "lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts",
+        ]) {
+            expect(read(rel)).not.toMatch(/from\(\s*["']user_department_access["']\s*\)\s*\.insert/);
+        }
     });
 
     it("validation includes workspace_access check", () => {

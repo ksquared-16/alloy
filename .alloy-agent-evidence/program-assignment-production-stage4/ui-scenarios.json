@@ -1,0 +1,29 @@
+{
+  "startedAt": "2026-07-22T15:55:42.474Z",
+  "scenarios": {
+    "draft": {
+      "pass": false,
+      "url": "http://127.0.0.1:3014/organization/programs?programId=64adf957-537f-4ce9-b2b4-9f6def7ebf6a&section=assignment"
+    },
+    "orgPublishedFlow": {
+      "pass": false,
+      "flow": false,
+      "unpub": false
+    },
+    "useExisting": {
+      "pass": false,
+      "enabled": 0,
+      "disabled": 0
+    },
+    "ownership": {
+      "pass": true,
+      "editLoc": 1,
+      "editOrg": 0
+    },
+    "continuity": {
+      "pass": true,
+      "url": "http://127.0.0.1:3014/organization/programs"
+    }
+  },
+  "finishedAt": "2026-07-22T15:56:19.032Z"
+}

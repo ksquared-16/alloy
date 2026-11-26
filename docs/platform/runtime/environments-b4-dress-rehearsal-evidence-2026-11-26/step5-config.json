@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "out": "/Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-26/release/release-config.json",
+  "config_sha256": "88cebc7a0921bead329b333babf249ee413641b0ca99403a2207e5163bb85b92",
+  "production": {
+    "branch": "main",
+    "vercel_env": "production",
+    "supabase_project_ref": "rehearsalnewprojectr",
+    "build_info_url": "https://www.workwithalloy.com/api/build-info",
+    "previous_supabase_project_ref": "vslwnntzzgpnmrpjipat"
+  }
+}

@@ -10,7 +10,7 @@ import { brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { CANONICAL_ADMIN_CONFIG_LANDING } from "@/lib/admin/canonicalAdminRoutes";
 
-const SETTINGS_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
+const ORGANIZATION_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
 
 function displayInitial(email: string): string {
     const local = email.split("@")[0]?.trim() ?? "";
@@ -160,12 +160,12 @@ export default function AdminV2ProfileMenu() {
                         Profile
                     </button>
                     <AdminV2NavLink
-                        href={SETTINGS_HREF}
+                        href={ORGANIZATION_HREF}
                         className="block px-3 py-2.5 text-sm font-medium hover:bg-alloy-stone/10 no-underline"
                         style={{ color: brand.primary }}
                         onClick={() => setOpen(false)}
                     >
-                        Settings
+                        Organization
                     </AdminV2NavLink>
                     <button
                         type="button"

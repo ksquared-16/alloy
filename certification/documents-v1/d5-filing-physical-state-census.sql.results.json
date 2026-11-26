@@ -1,0 +1,43 @@
+{
+  "trusted_host_action_id": "tha_2ec522e7ab91cc",
+  "query_hash": "130e9ce9371fe2b5e90ef88f3d3ed19efe43a491a8a23e345b8c5be8e1e98bbf",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-26T22:29:01.405Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_2ec522e7ab91cc",
+    "query_hash": "130e9ce9371fe2b5e90ef88f3d3ed19efe43a491a8a23e345b8c5be8e1e98bbf",
+    "authorization_id": "grnt_6a38d244d5cb4358",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-26T22:29:13.454Z",
+    "question_ids": [
+      "m093500"
+    ],
+    "questions": {
+      "m093500": {
+        "question_id": "m093500",
+        "row_count": null,
+        "rows": [
+          "schema_migrations ~ ledger_row ~ 20261210093500 ~ true",
+          "document_file ~ exists ~ true",
+          "document_file_as_version ~ exists ~ true",
+          "document_filing_type ~ exists ~ true",
+          "document_filing_subject_in_household ~ exists ~ true",
+          "document_filing_related ~ exists ~ true",
+          "document_filing_existing_of_type ~ exists ~ true",
+          "document_format_for_mime ~ exists ~ true",
+          "document_version_require_review ~ exists ~ true",
+          "document_file ~ service_role_only ~ true",
+          "document_file_as_version ~ service_role_only ~ true"
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

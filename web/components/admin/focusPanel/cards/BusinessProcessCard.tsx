@@ -1,0 +1,564 @@
+"use client";
+
+import { useCallback, useEffect, useMemo } from "react";
+
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
+import {
+    adaptBusinessProcessEvidenceToProcessCard,
+    type ProcessCardActionInput,
+} from "@/lib/adminV2/runtime/focusPanel/businessProcess/adaptBusinessProcessEvidenceToProcessCard";
+import {
+    EMPTY_COMMAND_PROJECTION,
+    type ProcessCardCommand,
+} from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
+import { resolveTourCommandPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveTourCommandPresentation";
+import {
+    logProcessCardCommandDrift,
+    logProcessCardCommandWithheld,
+    logProcessCardCommandProjection,
+} from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
+import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { executeCommandSurfaceAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCommandSurfaceAction";
+import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { warmCurrentWorkCapabilityOnIntent } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
+import ProcessCard from "@/components/operationalCards/ProcessCard";
+import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
+import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
+import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
+import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { runCurrentWorkPlanInline } from "@/lib/adminV2/runtime/focusPanel/currentWork/runCurrentWorkPlanInline";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
+import { useAlloyConfirm } from "@/components/ui/AlloyConfirmDialog";
+
+type Props = {
+    model: FocusPanelCardModel;
+    context: OperationalContext;
+    receded?: boolean;
+    coordination?: FocusPanelCoordination;
+    mutation?: FocusPanelMutation;
+};
+
+/** Two identities per stage, then a count. A busy family must not destroy the rail. */
+const MAX_MARKERS_PER_STAGE = 2;
+
+/**
+ * THE BUSINESS PROCESS CARD — where this record has been, where it is, and what to do about it.
+ *
+ * ── IT COMPOSES; IT DOES NOT OWN ──
+ *
+ * Every fact arrives decided. Stages and their order come from the department lifecycle;
+ * the case's stage from the operational context; participants and their stages from the
+ * participation rows; work from Current Work; activity from the canonical activity projection.
+ * `buildBusinessProcessCardEvidence` does that composition — this file only phrases it.
+ *
+ * ── THE CASE MARKER IS THE CASE'S ──
+ *
+ * Participant markers sit UNDER a stage; they never decide which stage is `current`. A case at Tour
+ * with a child at Waitlist shows exactly that: the case marker at Tour, the child's marker at
+ * Waitlist. Any other behaviour would let one child's state rewrite the family's position.
+ *
+ * ── PLACEMENT IS BY KEY ──
+ *
+ * The evidence places participants by `stageKey`. A participant it could not place is not dropped —
+ * it is reported, so a missing marker looks like the gap it is instead of a smaller family.
+ */
+export default function BusinessProcessCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    mutation,
+}: Props) {
+    /*
+     * THE SHARED COMMAND WORKSPACE, HOSTED WHERE THE CARD NOW LIVES.
+     *
+     * A configured command that opens a capability asks the platform for its command workspace.
+     * That workspace is a presentation of the Current Work card — and this card SUPERSEDES it, so
+     * a published layout composes no `current_work` cell and the request had nowhere to land:
+     * "Reschedule Tour" opened nothing at all. Rendering the shared component here is what makes
+     * the existing chrome reachable again. It is emphatically not a Process-specific panel — it is
+     * the same component, with the same capability hosts and the same dismiss behaviour.
+     */
+    if (coordination?.currentWorkWorkspace?.open) {
+        return (
+            <CurrentWorkCard
+                model={model}
+                context={context}
+                coordination={coordination}
+                mutation={mutation}
+                presentation="workspace"
+            />
+        );
+    }
+    return (
+        <BusinessProcessSummary
+            model={model}
+            context={context}
+            receded={receded}
+            coordination={coordination}
+            mutation={mutation}
+        />
+    );
+}
+
+function BusinessProcessSummary({ model, context, receded = false, coordination, mutation }: Props) {
+    /*
+     * THE SERVER DECIDED THIS. The card reads it.
+     *
+     * `buildBusinessProcessCardEvidence` used to run here, which is why ~78KB of published
+     * configuration had to reach the browser at all. It now runs once in the server projection
+     * chokepoint, in both transport frames, and this file no longer resolves stage or work.
+     *
+     * Participant emphasis is re-applied below because it is EPHEMERAL BROWSER STATE — which child
+     * the operator is currently concerned with. The server projects with none, and marking one is
+     * presentation over an already-projected list, not a decision about what is true.
+     */
+    const [confirmDialog, askConfirm] = useAlloyConfirm();
+    const projected = context.operationalProjection ?? null;
+    const selectedParticipantId = context.participantScope?.participationId ?? null;
+    const evidence = useMemo(() => {
+        /*
+         * ── MEANINGFUL AT COMMIT, ENRICHED AT SETTLEMENT (P0-2) ─────────────────────────────────
+         *
+         * The fallback used to be EMPTY_BUSINESS_PROCESS_EVIDENCE — evidence derived over an EMPTY
+         * context, which renders as nothing. Measured on deployed staging: this card was absent from
+         * the DOM until 20.7s from cold entry, 5.9s after every sibling card was already meaningful,
+         * because `projected` is the settlement-only projection filled by the drawer VM. The most
+         * important operational card was the last thing to exist.
+         *
+         * The committed context already answers the question the card is for: which stage this
+         * subject is in, from the provisioning answer's own `situation`. So the fallback runs the
+         * SAME canonical builder over the context we actually have instead of over an empty one.
+         *
+         * This is not a second owner and not a cache: `buildBusinessProcessCardEvidence` is the one
+         * projection from OperationalContext to card evidence, and EMPTY_BUSINESS_PROCESS_EVIDENCE
+         * was already just this builder run over `{}`. It reads `context.businessProcess.stages`, a
+         * normalised array already on the context — NOT the ~78KB of published configuration the old
+         * client-side composition needed — so nothing is fetched and no payload returns to the
+         * browser. The commit frame carries no configured rail, so `stages` is honestly empty and the
+         * rail arrives with settlement like everything else the drawer VM owns.
+         */
+        const base =
+            projected?.businessProcess.evidence
+            ?? buildBusinessProcessCardEvidence(context, { selectedParticipantId });
+        if (!selectedParticipantId) return base;
+        return {
+            ...base,
+            participants: base.participants.map((p) => ({
+                ...p,
+                scoped:
+                    p.id === selectedParticipantId || (p.customerMemberId ?? null) === selectedParticipantId,
+            })),
+        };
+    }, [projected, selectedParticipantId]);
+
+    const viewerTimeZone = useAdminViewerTimezone();
+    // The SAME canonical projection the Focus Panel activity mode reads. No Process-local activity
+    // store and no separate fetch.
+    const activity = useMemo(
+        () =>
+            buildCurrentWorkActivityPreviewItemsFromContext(context, {
+                timeZone: viewerTimeZone,
+                limit: 25,
+            }),
+        [context, viewerTimeZone],
+    );
+
+    /*
+     * THE COMMANDS THE PUBLISHED PROCESS CONFIGURED — and emphatically not the record-header list.
+     *
+     * This card read `context.recordHeaderActions`: the registry's generic record-header slots,
+     * resolved from what is executable for the record. Nothing in that list is aware of the
+     * published Business Process, so the card offered commands the configuration never selected,
+     * in the registry's order, with emphasis this file invented (`i === 0`). The two
+     * responsibilities were reversed — the platform was choosing the set, and the configuration was
+     * not consulted at all.
+     *
+     * `projectProcessCardCommands` restores the boundary: the published revision decides WHICH
+     * commands and in WHAT ORDER, and the action/capability platform decides whether each one can
+     * run right now. Both verdicts arrive decided; this file adds neither.
+     */
+    const projection = useMemo(
+        () => projected?.businessProcess.commands ?? EMPTY_COMMAND_PROJECTION,
+        [projected],
+    );
+
+    /*
+     * EXECUTION IS THE SHARED HOST'S. The card plans through the platform's own planner and hands
+     * the result to the existing chrome — the Current Work command workspace for capability
+     * surfaces, the record command host for registry-resolved actions. There is no Process-specific
+     * command panel, and no key-switching here: `planCurrentWorkActionExecution` owns that.
+     */
+    const invoke = useCallback(
+        (command: ProcessCardCommand) => {
+            const plan = planCurrentWorkActionExecution(command.action);
+            // A plan that is one canonical mutation on something this card names (cancelling the
+            // scheduled tour) runs here, behind its confirmation; it used to open a workspace that
+            // never ran it.
+            if (
+                runCurrentWorkPlanInline(plan, {
+                    mutation,
+                    confirm: (message) =>
+                        askConfirm({
+                            title: "Cancel this tour?",
+                            body: message,
+                            confirmLabel: "Cancel tour",
+                            cancelLabel: "Keep tour",
+                            tone: "danger",
+                            testId: "cancel-tour-confirm",
+                        }),
+                    report: (message) =>
+                        void askConfirm({ title: "The tour was not cancelled", body: message, confirmLabel: "OK", cancelLabel: null }),
+                })
+            )
+                return;
+            switch (plan.kind) {
+                case "blocked":
+                case "unsupported":
+                    // Already rendered as unavailable with this reason. Never substitute another command.
+                    return;
+                case "record_outcome":
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "record_outcome" });
+                    return;
+                case "communications_composer":
+                    /*
+                     * LAUNCHER SELECTION MAY CHANGE HOW A COMMAND IS PRESENTED. IT MUST NEVER
+                     * CHANGE WHICH COMMAND IS INVOKED.
+                     *
+                     * This branch used to drop the configured command and call
+                     * `resolveCommunicationsComposerAction()`, which returns the FIRST
+                     * record-header action whose key, label or description matches a broad
+                     * outreach regex. So a configured `send_tour_invitation` was executed as
+                     * whatever generic outreach action happened to match first — normally
+                     * `quick_message` — and the operator landed in a blank Compose New with the
+                     * tour, the invitation and the prepared draft all thrown away.
+                     *
+                     * Nothing was missing underneath. Carrying the identity into the shared
+                     * command workspace reaches the canonical path Current Work already uses:
+                     * the workspace matches the action by `key` / `actionRef` / `handlerKey`,
+                     * `CurrentWorkActionPanel` hosts the composer for THAT action, and
+                     * `applyRegistryResolvedActionClient` runs it with `mode: "prepare"` —
+                     * minting and rendering the invitation without sending — before opening the
+                     * contextual composer with opportunity, recipient, subject, body and
+                     * invitation id.
+                     *
+                     * This is deliberately the same call the `default` branch makes. Every other
+                     * branch already carried `command.key` or `plan.action`; this was the one
+                     * that did not, and identifying an executable action by its label is exactly
+                     * what `resolveCurrentWorkActionSurface` and `projectProcessCardCommands`
+                     * both say must never happen.
+                     */
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+                    return;
+                case "header_delegate": {
+                    const resolved = plan.action.resolved;
+                    if (resolved) {
+                        coordination?.invokeHeaderAction?.(resolved);
+                        return;
+                    }
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+                    return;
+                }
+                case "command_surface": {
+                    /*
+                     * Nothing left to collect: the card already shows the subject and configuration
+                     * bound the inputs, so the command runs here rather than being carried to a
+                     * workspace that would only ask again — or, as it did, report that the action
+                     * "cannot be run from What's Next" for a command no other host carries.
+                     *
+                     * The subject is the one THIS card is about. Falling back to the enclosing
+                     * opportunity would run the command against the wrong record, which is worse
+                     * than not running it, so an unresolved subject refuses inside the host.
+                     */
+                    /*
+                     * THE CHILD, FROM THE ONE CARRIER THAT NAMES IT.
+                     *
+                     * `participantScope.customerMemberId` is the durable child the operator is
+                     * currently concerned with, and it is the identity `stage_work.start` resolves
+                     * a track from. Read from that carrier rather than re-derived here, because
+                     * every card that re-resolves a child from whatever it can reach drifts from
+                     * the others.
+                     *
+                     * ABSENT MEANS ABSENT. The carrier's own rule is that a wrong child is worse
+                     * than no child, since the operator cannot see that the command acted on
+                     * someone else — so there is deliberately no fallback, and the host refuses.
+                     */
+                    const childId = context.participantScope?.customerMemberId?.trim() ?? "";
+
+                    /*
+                     * A DECLARED BODY MEANS REVIEW FIRST.
+                     *
+                     * Running immediately is right for a command whose inputs configuration bound
+                     * and whose effect is local. Sending a family their paperwork is neither: they
+                     * receive it, so the operator sees the child, the recipient and the requirement
+                     * set before it happens. Absent a declared body this falls through to the
+                     * existing immediate path, so no other command's behaviour changes.
+                     */
+                    const declaredBody = canonicalActionDefinition(
+                        plan.action.handlerKey ?? plan.action.key,
+                    )?.commandSurfaceBody;
+                    if (declaredBody) {
+                        /*
+                         * The panel hosts the review, not this file. This card supplies canonical
+                         * evidence to a locked presentation and deliberately draws nothing, so the
+                         * preview opens where every other action's interaction already opens.
+                         */
+                        coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+                        return;
+                    }
+
+                    void executeCommandSurfaceAction({
+                        actionKey: plan.action.handlerKey ?? plan.action.key,
+                        entityType: "child",
+                        entityId: childId,
+                        ...(plan.action.workTemplateKey
+                            ? { payload: { template_key: plan.action.workTemplateKey } }
+                            : {}),
+                        surface: "focus_panel",
+                    }).then((result) => {
+                        /*
+                         * One canonical operational refresh — the same scoped update every other
+                         * command dispatches, keyed on the opportunity the drawer is open on even
+                         * though the command ran against the child, because that is the scope the
+                         * Focus Panel and queue listen on.
+                         *
+                         * A refusal deliberately triggers nothing: the command did not run, so
+                         * refreshing would only redraw the same state and imply something happened.
+                         */
+                        // The case this panel is open on — the scope the Focus Panel and queue
+                        // listen on, even though the command ran against the child.
+                        const drawerOpportunityId = context.subject?.id?.trim();
+                        if (result.ok && drawerOpportunityId) {
+                            dispatchOpportunityDrawerScopedUpdate(drawerOpportunityId, command.key, [
+                                "activity",
+                                "header_actions",
+                            ]);
+                        }
+                    });
+                    return;
+                }
+                default:
+                    // The shared command workspace resolves the SAME configured command by identity.
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+            }
+        },
+        [coordination, mutation, context, askConfirm],
+    );
+
+    /*
+     * ONE TOUR CONCEPT INSTEAD OF FOUR LOOSE COMMANDS.
+     *
+     * The configured Tour capabilities were rendered as unrelated buttons, so a scheduled tour
+     * still offered "Schedule Tour" next to "Cancel Tour" and the operator had to infer the state
+     * from which buttons happened to be present. Current Work already grouped them through
+     * `partitionTourGroupedActions`; the Process card simply never asked.
+     *
+     * It asks now, through the SAME partition — no second notion of which commands are Tour
+     * commands — and `resolveTourCommandPresentation` supplies the one thing neither surface had:
+     * a label carrying the current state, branched on the canonical `statusKey` rather than on
+     * any rendered string.
+     *
+     * Grouping is presentation only. Nothing here adds, removes, reorders or enables a command:
+     * the set and its order are still exactly what `projectProcessCardCommands` returned, and the
+     * primary command keeps its emphasis whether or not it sits inside the group.
+     */
+    const tourPresentation = useMemo(
+        () =>
+            resolveTourCommandPresentation(projection.commands, context.signals.tour, {
+                timeZone: viewerTimeZone,
+                /*
+                 * Whether THIS stage can resolve the tour, taken from the row the card already has.
+                 * `record_outcome` is projected only when the stage's own work is outcome-led with
+                 * open outcomes, so its presence is the same ownership fact the completion
+                 * affordance is gated on — not a second opinion about it, and not a stage name.
+                 */
+                outcomeWorkAvailable: projection.commands.some((command) => command.key === "record_outcome"),
+            }),
+        [projection.commands, context.signals.tour, viewerTimeZone],
+    );
+
+    /*
+     * WARM ON INTENT, SO THE CLICK LANDS ON SOMETHING ALREADY THERE.
+     *
+     * Send Tour Invitation opens through a prepare step that mints the invitation and renders the
+     * template before the composer has anything to show — seconds of "Preparing tour invitation…"
+     * if it starts at the click. Current Work has always warmed its capabilities on intent through
+     * `warmCurrentWorkCapabilityOnIntent`; the Process card, which is where an operator actually
+     * clicks, never reported the gesture, so every command it launched started cold.
+     *
+     * This is the SAME dispatcher, keyed on the resolved interaction host — no Tour-specific
+     * preloading here, and nothing this card knows about what any command needs. Intent is hover
+     * or keyboard focus, never render: prepare mints a real invitation, so it must follow a gesture
+     * the operator actually made.
+     */
+    const warmCommand = useCallback(
+        (command: ProcessCardCommand) => warmCurrentWorkCapabilityOnIntent(command.action, context),
+        [context],
+    );
+
+    const actions = useMemo<ProcessCardActionInput[]>(() => {
+        const toInput = (command: ProcessCardCommand): ProcessCardActionInput => ({
+            key: command.key,
+            label: command.label,
+            primary: command.prominence === "primary",
+            disabled: command.status !== "executable",
+            disabledReason: command.unavailableReason,
+            onInvoke: () => invoke(command),
+            onIntent: () => warmCommand(command),
+        });
+
+        if (!tourPresentation.grouped) return projection.commands.map(toInput);
+
+        /*
+         * WHILE A TOUR STANDS, RECORDING ITS OUTCOME IS A TOUR OPERATION.
+         *
+         * The outcome affordance sat apart from the Tour control, so the operator met the Tour in
+         * two places: "Tour ▾" for arranging it and a loose "Record outcome" for concluding it. While
+         * a booking is standing (scheduled, or awaiting its outcome) the same command joins the
+         * Tour menu — the same command object, so execution is unchanged. With no standing tour it
+         * stays where it was.
+         */
+        const tourStanding = tourPresentation.statusKey === "confirmed" || tourPresentation.statusKey === "rescheduled";
+        const outcomeCommand = tourStanding ? projection.commands.find((c) => c.key === "record_outcome") ?? null : null;
+        const members = outcomeCommand ? [...tourPresentation.tour, outcomeCommand] : tourPresentation.tour;
+
+        // The group takes the position of the first Tour command, so configuration's ordering
+        // survives collapsing: a Tour concept configured second stays second.
+        const firstTourIndex = projection.commands.findIndex((c) => tourPresentation.tour.includes(c));
+        const grouped: ProcessCardActionInput = {
+            key: "tour",
+            label: tourPresentation.label ?? "Tour",
+            // The control leads only if configuration gave one of its members the lead.
+            primary: tourPresentation.tour.some((c) => c.prominence === "primary"),
+            // Executable when any member is; the members carry their own verdicts.
+            disabled: tourPresentation.tour.every((c) => c.status !== "executable"),
+            disabledReason: null,
+            // Reaching the group IS intent toward its members — the menu item is one hover away,
+            // and the member commands are the ones carrying a prepare step.
+            onIntent: () => tourPresentation.tour.forEach(warmCommand),
+            menu: members.map(toInput),
+        };
+
+        const out: ProcessCardActionInput[] = [];
+        projection.commands.forEach((command, index) => {
+            if (members.includes(command)) {
+                if (index === firstTourIndex) out.push(grouped);
+                return;
+            }
+            out.push(toInput(command));
+        });
+        return out;
+    }, [projection.commands, invoke, tourPresentation, warmCommand]);
+
+    /*
+     * DRIFT IS REPORTED, NEVER RENDERED. A configured command whose action is no longer registered
+     * would otherwise vanish silently and read as "the process configures nothing" — a different
+     * and false statement. It stays off the card face (an operator must never read a platform
+     * limitation as a command) and becomes an observable configuration fault instead.
+     */
+    useEffect(() => {
+        const processKey = context.businessProcess.key ?? null;
+        const stageKey = context.businessProcess.stageKey ?? null;
+        for (const row of projection.drift) {
+            logProcessCardCommandDrift({ processKey, stageKey, ...row });
+        }
+        // Not a fault: an executable command configuration did not select. Recorded so "the row is
+        // exactly what was configured" stays checkable rather than merely asserted.
+        for (const row of projection.withheld) {
+            logProcessCardCommandWithheld({ processKey, stageKey, ...row });
+        }
+        /*
+         * WHAT CONFIGURATION NAMED, AND WHAT THE ROW BECAME — both halves, from the projection.
+         *
+         * This used to read `context.publishedStageInputs` to echo the raw operating plan and the
+         * process's own command selection beside the result. That echo was the LAST browser reader
+         * of ~78KB of configuration, and it was redundant: `configuredRefs` already states what
+         * configuration named, `commandKeys` what the row became, and `drift`/`withheld` the
+         * difference — all decided by the same server projection the card renders.
+         *
+         * Diagnostics follow authority. The comparison is unchanged and the dedupe identity is
+         * untouched, so `window.__ALLOY_PROCESS_COMMAND_PROJECTION` reads exactly as before.
+         */
+        logProcessCardCommandProjection({
+            processKey,
+            stageKey,
+            configuredRefs: projection.configuredRefs,
+            commandKeys: projection.commands.map((c) => c.key),
+        });
+    }, [
+        projection.drift,
+        projection.withheld,
+        projection.configuredRefs,
+        projection.commands,
+        context.businessProcess.key,
+        context.businessProcess.stageKey,
+    ]);
+
+    // A child's panel (participant scope): every id that names this child — its participation, the
+    // durable child, and the participation the evidence places it on — so Last action is the child's own.
+    const scopeParticipationId = context.participantScope?.participationId ?? null;
+    const scopeChildId = context.participantScope?.customerMemberId ?? null;
+    const scopeChildName = context.participantScope?.displayName ?? null;
+    const lastActionChildScope = useMemo(() => {
+        if (!scopeParticipationId && !scopeChildId) return null;
+        const placed = scopeChildId
+            ? evidence.participants.filter((p) => p.customerMemberId === scopeChildId).map((p) => p.id)
+            : [];
+        return {
+            ids: [scopeParticipationId, scopeChildId, ...placed].filter((v): v is string => Boolean(v)),
+            name: scopeChildName,
+        };
+    }, [scopeParticipationId, scopeChildId, scopeChildName, evidence.participants]);
+
+    const processEvidence = useMemo(
+        () =>
+            adaptBusinessProcessEvidenceToProcessCard({
+                evidence,
+                subjectLabel: context.subject?.label ?? null,
+                // `occurredAt` is already the formatted, viewer-timezone string the previous card
+                // rendered; the locked component calls that field `when`.
+                activity: activity.map((a) => ({
+                    id: a.id ?? null,
+                    label: a.label,
+                    when: a.occurredAt ?? "",
+                    kind: a.kind ?? null,
+                    detail: a.detail ?? null,
+                    ...(a.notAnAction ? { notAnAction: true } : {}),
+                    ...(a.subject !== undefined ? { subject: a.subject } : {}),
+                })),
+                actions,
+                childScope: lastActionChildScope,
+            }),
+        [evidence, context.subject?.label, activity, actions, lastActionChildScope],
+    );
+
+    /*
+     * ONE PRESENTATION. This file no longer draws a card — it supplies canonical evidence to the
+     * locked component the design lab renders from fixtures. Maintaining a production approximation
+     * beside the approved specimen is what QA failed, and the only way that cannot recur is for
+     * there to be nothing here to drift.
+     */
+    return (
+        <>
+            {confirmDialog}
+            <ProcessCard
+                evidence={processEvidence}
+                receded={receded}
+                fallbackTitle={model.title}
+                onViewAllActivity={() => coordination?.openFocusPanelMode?.("activity")}
+            />
+        </>
+    );
+}

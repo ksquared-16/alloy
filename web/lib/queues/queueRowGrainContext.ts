@@ -10,6 +10,8 @@ export type QueueRowGrainContext = {
     rowGrain?: QueueGrain;
     opportunityId?: string;
     placementCandidateId?: string;
+    /** Child subject = customer_members.id. Threaded so movement targets the process instance directly. */
+    customerMemberId?: string;
     opportunityCustomerMemberId?: string;
     childLifecycleStatus?: string | null;
 };
@@ -45,6 +47,17 @@ export function parseQueueRowGrainContext(raw: Record<string, unknown>): QueueRo
         );
     }
 
+    // Child subject id (process_instances.subject_id) — the identity movement targets directly.
+    let customerMemberId = readString(raw.customer_member_id);
+    if (
+        !customerMemberId &&
+        childGrainProj != null &&
+        typeof childGrainProj === "object" &&
+        !Array.isArray(childGrainProj)
+    ) {
+        customerMemberId = readString((childGrainProj as Record<string, unknown>).customer_member_id);
+    }
+
     const childLifecycleStatus =
         readString(raw.child_lifecycle_status) ??
         (childGrainProj != null && typeof childGrainProj === "object" && !Array.isArray(childGrainProj)
@@ -55,6 +68,7 @@ export function parseQueueRowGrainContext(raw: Record<string, unknown>): QueueRo
         rowGrain,
         opportunityId: readOpportunityIdFromQueueRow(raw) || undefined,
         placementCandidateId: placementCandidateId ?? undefined,
+        customerMemberId: customerMemberId ?? undefined,
         opportunityCustomerMemberId: opportunityCustomerMemberId ?? undefined,
         childLifecycleStatus,
     };
@@ -73,6 +87,7 @@ export function queueRowGrainContextFromPreviewItem(item: QueuePreviewItemVm): Q
         rowGrain,
         opportunityId: item.opportunityId?.trim() || undefined,
         placementCandidateId: waitlist?.placementCandidateId ?? item.placementCandidateId,
+        customerMemberId: item.customerMemberId ?? undefined,
         opportunityCustomerMemberId: item.opportunityCustomerMemberId,
         childLifecycleStatus: item.childLifecycleStatus ?? null,
     };
@@ -83,6 +98,7 @@ export function queueRowGrainActionPayload(ctx: QueueRowGrainContext): Record<st
     if (ctx.rowGrain) out.row_grain = ctx.rowGrain;
     if (ctx.opportunityId) out.opportunity_id = ctx.opportunityId;
     if (ctx.placementCandidateId) out.placement_candidate_id = ctx.placementCandidateId;
+    if (ctx.customerMemberId) out.customer_member_id = ctx.customerMemberId;
     if (ctx.opportunityCustomerMemberId) out.opportunity_customer_member_id = ctx.opportunityCustomerMemberId;
     if (ctx.childLifecycleStatus) out.child_lifecycle_status = ctx.childLifecycleStatus;
     return out;

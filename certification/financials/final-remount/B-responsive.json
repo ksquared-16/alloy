@@ -1,0 +1,38 @@
+[
+  {
+    "viewport": 1280,
+    "floor": {
+      "left": 478,
+      "width": 717,
+      "right": 1195
+    },
+    "backdrop": "none",
+    "rows": 12,
+    "horizontalOverflow": false,
+    "clippedNodes": 116
+  },
+  {
+    "viewport": 1440,
+    "floor": {
+      "left": 513,
+      "width": 838,
+      "right": 1351
+    },
+    "backdrop": "none",
+    "rows": 12,
+    "horizontalOverflow": false,
+    "clippedNodes": 116
+  },
+  {
+    "viewport": 1680,
+    "floor": {
+      "left": 519,
+      "width": 1066,
+      "right": 1585
+    },
+    "backdrop": "none",
+    "rows": 12,
+    "horizontalOverflow": false,
+    "clippedNodes": 104
+  }
+]

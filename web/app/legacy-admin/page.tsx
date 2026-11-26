@@ -1,19 +1,9 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabaseServer";
+import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Redirect to dashboard
-  redirect("/legacy-admin/dashboard");
+/** Archived legacy admin landing — operator workspace is canonical. */
+export default function LegacyAdminArchivedPage() {
+    redirect(CANONICAL_OPERATOR_BASE);
 }
-

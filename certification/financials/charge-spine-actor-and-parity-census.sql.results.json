@@ -1,0 +1,31 @@
+{
+  "trusted_host_action_id": "tha_ec0d85cd51fbd2",
+  "query_hash": "3004febef3a7742c68df0ecd0162bc77a1f38ca3c0561166f2d9d51a29dc79a0",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T19:20:03.656Z",
+    "question_ids": [
+      "charge_immutability_trigger",
+      "childcare_write_rolegate"
+    ],
+    "questions": {
+      "charge_immutability_trigger": {
+        "question_id": "charge_immutability_trigger",
+        "row_count": null,
+        "rows": [
+          "enrollment_agreement_only"
+        ]
+      },
+      "childcare_write_rolegate": {
+        "question_id": "childcare_write_rolegate",
+        "row_count": null,
+        "rows": [
+          "enrollment_agreement_only",
+          "enrollment_agreement_only",
+          "enrollment_agreement_only"
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

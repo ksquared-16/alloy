@@ -16,13 +16,4 @@ describe("OpportunityDrawerHeaderActionButton", () => {
         expect(cls).toContain("border-alloy-blue/30");
     });
 
-    it("BOS and drawer header share button primitive and actions panel", () => {
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const bos = readFileSync(join(webRoot, "components/admin/drawer/BosDrawerAssistCta.tsx"), "utf8");
-        expect(drawer).toContain("OpportunityDrawerHeaderActionButton");
-        expect(drawer).toContain("OpportunityDrawerHeaderActionsPanel");
-        expect(bos).toContain("OpportunityDrawerHeaderActionButton");
-        expect(bos).toContain("OpportunityDrawerHeaderActionsPanel");
-        expect(bos).toContain("inquiryWorkflow");
-    });
 });

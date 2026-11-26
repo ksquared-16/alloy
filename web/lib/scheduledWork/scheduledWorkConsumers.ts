@@ -1,0 +1,154 @@
+import { evaluateAutopayOccurrence } from "@/lib/financials/payments/autopayHandler";
+import { evaluateCollectionReconciliationOccurrence } from "@/lib/financials/payments/collectionReconciliation";
+import { evaluateBillingPeriodCloseOccurrence } from "@/lib/financials/billingPeriods/billingPeriodCloseHandler";
+import { evaluateFuturePeriodActivationOccurrence } from "@/lib/financials/posting/futurePeriodActivation";
+import { evaluatePeriodicBillingOccurrence } from "@/lib/financials/periodicBilling/periodicBillingHandler";
+import { registerScheduledWorkHandler } from "@/lib/scheduledWork/scheduledWorkRegistry";
+import type { ScheduledWorkContext, ScheduledWorkOutcome } from "@/lib/scheduledWork/scheduledWorkTypes";
+import {
+    AUTOPAY_HANDLER_KEY,
+    BILLING_PERIOD_CLOSE_HANDLER_KEY,
+    BILLING_PERIODIC_HANDLER_KEY,
+    CHARGE_AGING_HANDLER_KEY,
+    FUTURE_PERIOD_ACTIVATION_HANDLER_KEY,
+    PAYMENT_RECONCILIATION_HANDLER_KEY,
+} from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+
+/**
+ * THE V1 CONSUMERS, registered at the same boundary.
+ *
+ * The point of certifying several is that ONE runtime serves them all. Everything above
+ * this file is generic; everything a domain means begins inside its handler.
+ *
+ * ── WHAT THESE HANDLERS DO AND DO NOT DO IN V1 ──
+ *
+ * CHARGE AGING economics are NOT productized here, and inventing them to
+ * demonstrate scheduling would be worse than a stated limitation — it would put
+ * fabricated financial behaviour behind a real clock.
+ *
+ * AUTOPAY was the first exception and the first proof: Payments V1 W5 replaced its
+ * body with the real implementation and nothing above this file changed. PERIODIC
+ * BILLING is the second, and it proves the same thing twice — which is what makes
+ * it a boundary rather than a coincidence.
+ *
+ * So ONE remaining stub crosses the exact registered-handler boundary its real
+ * implementation will, receives the same context, returns the same structured
+ * outcome, and performs a NON-MUTATING evaluation. What was certified is the
+ * boundary and the runtime, not billing arithmetic. When Financials productizes
+ * that last mutation it replaces the body, and nothing above this file changes —
+ * which is no longer a prediction, because two handlers have now done exactly that.
+ *
+ * Each returns COMPLETED for a no-op, which is the contract's most easily
+ * mistaken rule: "evaluated, nothing was due" is a successful run, not a failure.
+ */
+
+/* Declared in a leaf module so a domain can name its key without importing this one. */
+export {
+    BILLING_PERIODIC_HANDLER_KEY,
+    BILLING_PERIOD_CLOSE_HANDLER_KEY,
+    CHARGE_AGING_HANDLER_KEY,
+    AUTOPAY_HANDLER_KEY,
+    FUTURE_PERIOD_ACTIVATION_HANDLER_KEY,
+    PAYMENT_RECONCILIATION_HANDLER_KEY,
+} from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
+
+/** Shared shape so the remaining stub reads like the real ones. */
+function evaluated(domain: string, ctx: ScheduledWorkContext): ScheduledWorkOutcome {
+    return {
+        kind: "completed",
+        reason: `${domain} evaluated; no mutation in V1`,
+        diagnostic: {
+            domain,
+            evaluated_for: ctx.dueAt,
+            org_id: ctx.orgId,
+            attempt: ctx.attemptNumber,
+            // Proves the opaque reference survived the round trip untouched.
+            domain_ref_keys: Object.keys(ctx.domainRef ?? {}).sort(),
+            mutation: "not_productized_v1",
+        },
+    };
+}
+
+export function registerScheduledWorkConsumers(): void {
+    /*
+     * PERIODIC BILLING IS PRODUCTIZED. It is no longer an evaluation stub.
+     *
+     * The seam is unchanged and that is again the point: the same key, the same context, the same
+     * structured outcome. What changed is only the body — exactly as this file predicted when
+     * Autopay did it first, and for the second time nothing above this line moved.
+     *
+     * The client is built HERE rather than inside the handler so the handler stays injectable: its
+     * tests drive it with a fake client and a fixed clock, and nothing about it needs the
+     * service-role environment to be readable.
+     */
+    registerScheduledWorkHandler(BILLING_PERIODIC_HANDLER_KEY, async (ctx) =>
+        evaluatePeriodicBillingOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+
+    registerScheduledWorkHandler(CHARGE_AGING_HANDLER_KEY, async (ctx) =>
+        // Real implementation ages open charges and applies late-fee policy.
+        evaluated("charge_aging", ctx),
+    );
+
+    /*
+     * AUTOPAY IS PRODUCTIZED (Payments V1 W5). It is no longer an evaluation stub.
+     *
+     * The seam is unchanged and that is the point: the same key, the same context, the same
+     * structured outcome. What changed is only the body, exactly as this file predicted.
+     *
+     * The client is built HERE rather than inside the handler so the handler stays injectable —
+     * its tests drive it with a fake client and a fixed clock, and nothing about it needs the
+     * service-role environment to be readable.
+     */
+    registerScheduledWorkHandler(AUTOPAY_HANDLER_KEY, async (ctx) =>
+        evaluateAutopayOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+
+    /*
+     * COMMERCIAL CLOSE IS PRODUCTIZED, and it is the third domain to cross this boundary with a
+     * real body — which is the point of the boundary rather than a coincidence twice over.
+     *
+     * It calls the SAME `closeBillingPeriod` service an operator action calls. The only difference
+     * is `close_actor: "system"`, and that difference is a parameter rather than a second
+     * implementation, so finality cannot acquire two sets of rules.
+     *
+     * The client is built HERE so the handler stays injectable: its tests drive it with a fake
+     * client and a fixed operating day, and nothing about it needs the service-role environment to
+     * be readable.
+     */
+    registerScheduledWorkHandler(BILLING_PERIOD_CLOSE_HANDLER_KEY, async (ctx) =>
+        evaluateBillingPeriodCloseOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+
+    /*
+     * FUTURE-PERIOD ACTIVATION (W7-F001). The fourth productized domain across this boundary, and
+     * the counterpart to the one above: close finalizes periods that have ended, this posts the
+     * charges of periods that have begun.
+     *
+     * It calls `autoPostGeneratedCharge`, which calls `postChildcareCharge` — so the clock posts a
+     * charge through exactly the authority an operator's Post button uses, and the `posting_review`
+     * boundary is resolved again at activation time rather than frozen at creation time. No second
+     * posting implementation, and no way for the calendar to bypass a business control.
+     */
+    registerScheduledWorkHandler(FUTURE_PERIOD_ACTIVATION_HANDLER_KEY, async (ctx) =>
+        evaluateFuturePeriodActivationOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+
+    /*
+     * PAYMENT RECONCILIATION. Money a provider collected whose webhook never arrived and whose
+     * payer's browser never asked. It re-reads the provider and posts through the one posting
+     * authority (`recognizeCollectionAttempt`), so a concurrent webhook or a second wake is harmless.
+     */
+    registerScheduledWorkHandler(PAYMENT_RECONCILIATION_HANDLER_KEY, async (ctx) =>
+        evaluateCollectionReconciliationOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+}
+
+/** Registration is idempotent at module scope, and the registry refuses doubles. */
+let registered = false;
+export function ensureScheduledWorkConsumersRegistered(): void {
+    if (registered) return;
+    registerScheduledWorkConsumers();
+    registered = true;
+}

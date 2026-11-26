@@ -1,0 +1,29 @@
+[
+  {
+    "tab": "overview",
+    "periodic": null,
+    "recurring": null,
+    "automatic": null,
+    "billingRun": null,
+    "tuitionSchedule": null,
+    "nextBilling": null
+  },
+  {
+    "tab": "charges",
+    "periodic": null,
+    "recurring": null,
+    "automatic": null,
+    "billingRun": null,
+    "tuitionSchedule": null,
+    "nextBilling": null
+  },
+  {
+    "tab": "payments",
+    "periodic": null,
+    "recurring": null,
+    "automatic": null,
+    "billingRun": null,
+    "tuitionSchedule": null,
+    "nextBilling": null
+  }
+]

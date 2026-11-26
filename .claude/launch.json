@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "/Users/Kelly/.nvm/versions/node/v22.21.1/bin/npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "web",
+      "env": {
+        "PATH": "/Users/Kelly/.nvm/versions/node/v22.21.1/bin:/usr/local/bin:/usr/bin:/bin"
+      },
+      "port": 3000
+    }
+  ]
+}

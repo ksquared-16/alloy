@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formSubmissionReadableById, formsReadScope, formsSubjectInActorScope } from "@/lib/forms/formSubmissionScope";
+import { accessScopeRestrictsData } from "@/lib/admin/accessScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
 import { dbGetSubmission, dbPatchSubmission } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 import {
     submissionHasDocumentAttachTarget,
     type SubmissionAttachRow,
@@ -34,7 +37,8 @@ function readOptionalFk(
 export async function POST(request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+    if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");
@@ -54,6 +58,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: sub, error: sErr } = await dbGetSubmission(supabase, ctx.orgId, submissionId);
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
     if (!sub) return jsonError("Not found", 404);
+    // R2: the same 404 for a submission outside the caller's department/site scope as for one that does not exist.
+    if (!(await formSubmissionReadableById(supabase, ctx.orgId, submissionId))) return jsonError("Not found", 404);
 
     const row = sub as {
         status: string;
@@ -81,6 +87,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return jsonError("Provide at least one FK field to update", 400);
     }
 
+    // R2: the TARGET is scoped like the current subject. A restricted actor may only re-point a submission at a subject
+    // it could itself create the submission about, and learns nothing about a target it may not hold: every target
+    // refusal (out of scope, not in the organization, not consistent with the household) is the same 404 a missing
+    // submission gets. Unrestricted actors keep the descriptive 400s.
+    const scope = await formsReadScope();
+    const restricted = !scope || accessScopeRestrictsData(scope);
+    const refuseTarget = (message: string) => (restricted ? jsonError("Not found", 404) : jsonError(message, 400));
+    if (restricted && o.touched && o.value && !(await formsSubjectInActorScope(supabase, ctx.orgId, scope, { opportunity_id: o.value }))) {
+        return jsonError("Not found", 404);
+    }
+
     let nextPerson = p.value;
     let nextCustomer = c.value;
     let nextMember = cm.value;
@@ -92,16 +109,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     };
 
     if (nextPerson && !(await validate("person", nextPerson))) {
-        return jsonError("person_id not found in this organization", 400);
+        return refuseTarget("person_id not found in this organization");
     }
     if (nextCustomer && !(await validate("customer", nextCustomer))) {
-        return jsonError("customer_id not found in this organization", 400);
+        return refuseTarget("customer_id not found in this organization");
     }
     if (nextMember && !(await validate("customer_member", nextMember))) {
-        return jsonError("customer_member_id not found in this organization", 400);
+        return refuseTarget("customer_member_id not found in this organization");
     }
     if (nextOpp && !(await validate("opportunity", nextOpp))) {
-        return jsonError("opportunity_id not found in this organization", 400);
+        return refuseTarget("opportunity_id not found in this organization");
     }
 
     if (nextMember) {
@@ -117,7 +134,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (!nextCustomer) {
                 nextCustomer = mc;
             } else if (nextCustomer !== mc) {
-                return jsonError("customer_id does not match the selected customer_member", 400);
+                return refuseTarget("customer_id does not match the selected customer_member");
             }
         }
     }
@@ -135,7 +152,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (!nextCustomer) {
                 nextCustomer = oc;
             } else if (nextCustomer !== oc) {
-                return jsonError("customer_id does not match the selected opportunity", 400);
+                return refuseTarget("customer_id does not match the selected opportunity");
             }
         }
     }
@@ -152,6 +169,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             400
         );
     }
+
+    // The resulting subject must be one the actor may read (the canonical rule): checked before the only write.
+    if (!(await formsSubjectInActorScope(supabase, ctx.orgId, scope, attachProbe))) return jsonError("Not found", 404);
 
     const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload) ? row.payload : {};
     const prevMeta =

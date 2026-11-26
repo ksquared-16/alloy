@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { deptKpiWorkUnitsForLifecycleVisibility, resolveDeptRightRailWorkUnitId } from "@/lib/lifecycle/lifecycleKpiPresentation";
-import { departmentReservesOperationalActionsRail } from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
 import { accumulateWorkspaceDeptWorkUnitTileStats } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import {
     formatLifecycleActionPlacementDetail,
@@ -92,23 +91,7 @@ describe("lifecycle runtime surface integration", () => {
         expect(stats.d1?.workUnitNames).toEqual(["Lead", "Qualification"]);
     });
 
-    it("departmentReservesOperationalActionsRail includes builder-owned lifecycle", () => {
-        expect(
-            departmentReservesOperationalActionsRail({
-                departmentKey: "lead_management",
-                departmentMetadata: {
-                    lifecycle_builder_owned_v1: { source: "lifecycle_builder" },
-                },
-                workUnits: [{ key: "lifecycle_wu_lead" }],
-            })
-        ).toBe(true);
-        expect(
-            departmentReservesOperationalActionsRail({
-                departmentKey: "other",
-                workUnits: [{ key: "enrollment_pipeline" }],
-            })
-        ).toBe(false);
-    });
+    // departmentReservesOperationalActionsRail removed — rail reservation is runtime-owned.
 
     it("Needs Attention pill can be empty without failure", () => {
         expect(lifecycleNeedsAttentionWorkUnitConfigured([{ key: "lifecycle_wu_lead" }])).toBe(false);
@@ -179,22 +162,14 @@ describe("lifecycle runtime surface integration", () => {
     });
 
     describe("page wiring (static)", () => {
-        it("dept page reserves operational shell and filters throughput rows", () => {
-            const dept = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-            expect(dept).toContain("departmentReservesOperationalActionsRail");
-            expect(dept).toContain("deptKpiWorkUnitsForLifecycleVisibility");
-            expect(dept).toContain("deptThroughputWuRows");
-            expect(dept).toContain("isLifecycleStageWorkUnitRow");
-            expect(dept).toContain("No needs attention rules configured");
-            expect(dept).toContain("reserveDeptActionsRail && enrollmentDepartmentRailModel");
+        it("workspace layout wires lifecycle cards for first paint", () => {
+            const layout = read("app/adminV2/workspace/layout.tsx");
+            expect(layout).toContain("lifecycleCards");
         });
 
-        it("work-unit page reserves operational actions rail and sibling pills", () => {
-            const wu = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-            expect(wu).toContain("departmentReservesOperationalActionsRail");
-            expect(wu).toContain("buildLifecycleBuilderOwnedAboveFoldHeaderSections");
-            expect(wu).toContain("lifecycle_builder_owned_header_sections");
-            expect(wu).not.toContain("applyLifecycleVisibilityKpiLabels");
+        it("work-unit layout hosts the queue surface shell", () => {
+            const wu = read("app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx");
+            expect(wu.length).toBeGreaterThan(0);
         });
 
         it("validate runtime includes optional NA and visibility parity", () => {

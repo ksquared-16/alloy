@@ -1,11 +1,26 @@
 /**
  * Server-only AI provider contracts (Phase 1 — Cards 1 & 4).
  * No vendor SDKs; execution paths remain stub/disabled until Card 5+.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 /** Declarative provider identity — reserved keys must not perform network I/O until explicitly wired. */
-export type AiProviderKey = "disabled" | "stub" | "openai" | "anthropic" | "azure_openai";
+export const AI_PROVIDER_KEYS = ["disabled", "stub", "openai", "anthropic", "azure_openai"] as const;
+
+export type AiProviderKey = (typeof AI_PROVIDER_KEYS)[number];
+
+/**
+ * Narrows an observed provider identity onto the operator-facing vocabulary.
+ *
+ * The governed provider port reports identity as a free string, because an
+ * adapter may reach a deployment this closed list never anticipated. Telemetry's
+ * vocabulary is closed on purpose, so an unrecognised identity has to be
+ * refused here rather than widened or coerced — the caller then reports
+ * something it can defend, instead of this function inventing a name.
+ */
+export function asAiProviderKey(value: string): AiProviderKey | null {
+    return (AI_PROVIDER_KEYS as readonly string[]).includes(value) ? (value as AiProviderKey) : null;
+}
 
 export type AiProviderExecutionMode = "disabled" | "stub" | "live";
 

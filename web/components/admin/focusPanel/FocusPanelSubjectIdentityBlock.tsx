@@ -2,11 +2,28 @@
 
 import { Users } from "lucide-react";
 
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import type { FocusPanelContextChip } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 
 export type FocusPanelSubjectIdentityBlockProps = {
     subjectTitle: string;
     contextChips: FocusPanelContextChip[];
+    /** Optional identity summary line (header surface composer). */
+    identitySummaryLine?: string | null;
+    /**
+     * Subject identity avatar. Generic on purpose: the shell knows the subject's name and, when
+     * the subject is a PERSON, may know a profile image. It does not know or care whether that
+     * person is a child, a contact or an employee.
+     *
+     * - `personSubjectName` present → render the identity avatar (image, else initials).
+     * - absent → the household/case tile, which is what a family subject should show.
+     *
+     * There is ONE avatar model. This reuses `CardAvatar`, the same primitive the cards use, so a
+     * second identity presentation cannot drift from the first.
+     */
+    personSubjectName?: string | null;
+    personSubjectImageUrl?: string | null;
+    personSubjectRecordId?: string | null;
 };
 
 /**
@@ -18,23 +35,49 @@ export type FocusPanelSubjectIdentityBlockProps = {
 export default function FocusPanelSubjectIdentityBlock({
     subjectTitle,
     contextChips,
+    identitySummaryLine,
+    personSubjectName,
+    personSubjectImageUrl,
+    personSubjectRecordId,
 }: FocusPanelSubjectIdentityBlockProps) {
+    const personName = personSubjectName?.trim();
     return (
         <div
             className="alloy-os-fp-header-compact__subject-block"
             data-focus-panel-subject-identity="true"
         >
-            <div
-                className="alloy-os-fp-header-compact__subject-tile"
-                data-focus-panel-subject-tile="true"
-                aria-hidden
-            >
-                <Users className="alloy-os-fp-header-compact__subject-tile-icon" strokeWidth={1.75} />
-            </div>
+            {personName ?
+                <div
+                    className="alloy-os-fp-header-compact__subject-tile alloy-os-fp-header-compact__subject-tile--avatar"
+                    data-focus-panel-subject-tile="avatar"
+                >
+                    <CardAvatar
+                        name={personName}
+                        imageUrl={personSubjectImageUrl ?? null}
+                        size={34}
+                        recordId={personSubjectRecordId ?? undefined}
+                    />
+                </div>
+            :   <div
+                    className="alloy-os-fp-header-compact__subject-tile"
+                    data-focus-panel-subject-tile="true"
+                    aria-hidden
+                >
+                    <Users
+                        className="alloy-os-fp-header-compact__subject-tile-icon"
+                        strokeWidth={1.75}
+                    />
+                </div>
+            }
             <div className="alloy-os-fp-header-compact__identity min-w-0">
                 <h2 id="admin-focus-panel-title" className="alloy-os-fp-header-compact__title">
                     {subjectTitle}
                 </h2>
+                {identitySummaryLine ?
+                    <p className="alloy-os-fp-header-compact__summary-line text-sm text-alloy-midnight/65">
+                        {identitySummaryLine}
+                    </p>
+                :   null}
                 {contextChips.length > 0 ?
                     <div
                         className="alloy-os-fp-header-compact__context-row"
@@ -42,24 +85,33 @@ export default function FocusPanelSubjectIdentityBlock({
                     >
                         {contextChips.map((chip) => (
                             <span
-                                key={`${chip.kind}-${chip.label}`}
+                                key={`${chip.kind}-${chip.reserved ? "reserved" : chip.label}`}
                                 className={[
                                     "alloy-os-fp-header-compact__context-chip",
                                     `alloy-os-fp-header-compact__context-chip--${chip.kind}`,
-                                    chip.kind === "status" && chip.tone ?
+                                    chip.reserved ?
+                                        "alloy-os-fp-header-compact__context-chip--reserved"
+                                    :   null,
+                                    (chip.kind === "status" || chip.kind === "attention") && chip.tone ?
                                         `alloy-os-fp-header-compact__context-chip--tone-${chip.tone}`
                                     :   null,
                                 ]
                                     .filter(Boolean)
                                     .join(" ")}
                                 data-focus-panel-chip-kind={chip.kind}
+                                data-focus-panel-chip-count={chip.count ?? undefined}
                                 data-focus-panel-chip-tone={chip.tone ?? undefined}
+                                data-focus-panel-chip-reserved={chip.reserved ? "true" : undefined}
                                 data-focus-panel-status-readonly={
                                     chip.kind === "status" ? "true" : undefined
                                 }
-                                role={chip.kind === "status" ? "status" : undefined}
+                                // A reserved chip has no value to announce. Giving it role="status"
+                                // would announce an empty live region on every cold open.
+                                role={chip.kind === "status" && !chip.reserved ? "status" : undefined}
+                                aria-hidden={chip.reserved ? true : undefined}
                             >
-                                {chip.label}
+                                {/* UNKNOWN renders as nothing — never as a placeholder value. */}
+                                {chip.reserved ? null : chip.label}
                             </span>
                         ))}
                     </div>

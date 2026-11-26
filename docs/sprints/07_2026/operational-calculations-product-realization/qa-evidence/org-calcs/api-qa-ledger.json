@@ -1,0 +1,153 @@
+[
+  {
+    "m": "locations",
+    "d": {
+      "status": 200,
+      "count": 21
+    }
+  },
+  {
+    "m": "rooms",
+    "d": {
+      "room1": "75f44c2c-21b4-4ef0-817f-5978624abc31",
+      "room2": "96411dc0-7370-4072-81f6-921cce5b4d7b",
+      "n": 17,
+      "labels": [
+        "Bears",
+        "Giraffe"
+      ]
+    }
+  },
+  {
+    "m": "create",
+    "d": {
+      "status": 201,
+      "id": "e9d58fcd-5a64-401c-a901-9190e1231984"
+    }
+  },
+  {
+    "m": "evaluate_r1",
+    "d": {
+      "status": 200,
+      "value": null,
+      "statusEval": "not_configured",
+      "steps": 3,
+      "warnings": [
+        {
+          "code": "input_unknown",
+          "message": "Physical capacity is not available"
+        },
+        {
+          "code": "input_unknown",
+          "message": "Licensed capacity is not available"
+        },
+        {
+          "code": "min_unknown",
+          "message": "All arguments to min are unknown"
+        }
+      ],
+      "lines": [
+        "Physical capacity → ∅ — Physical capacity unknown from capacity.room_binding",
+        "Licensed capacity → ∅ — Licensed capacity unknown from capacity.room_binding",
+        "Minimum (arg1=∅, arg2=∅) → ∅"
+      ]
+    }
+  },
+  {
+    "m": "evaluate_r2",
+    "d": {
+      "status": 200,
+      "value": null,
+      "statusEval": "not_configured",
+      "steps": 3,
+      "warnings": [
+        {
+          "code": "input_unknown",
+          "message": "Physical capacity is not available"
+        },
+        {
+          "code": "input_unknown",
+          "message": "Licensed capacity is not available"
+        },
+        {
+          "code": "min_unknown",
+          "message": "All arguments to min are unknown"
+        }
+      ],
+      "lines": [
+        "Physical capacity → ∅ — Physical capacity unknown from capacity.room_binding",
+        "Licensed capacity → ∅ — Licensed capacity unknown from capacity.room_binding",
+        "Minimum (arg1=∅, arg2=∅) → ∅"
+      ]
+    }
+  },
+  {
+    "m": "cross_org_reject",
+    "d": {
+      "status": 404,
+      "error": "Room not found in organization (inaccessible or cross-org)"
+    }
+  },
+  {
+    "m": "publish_v1",
+    "d": {
+      "status": 200,
+      "v": 1,
+      "immutable": true
+    }
+  },
+  {
+    "m": "bind_v1",
+    "d": {
+      "status": 200,
+      "bound": {
+        "runtime_surface": true
+      }
+    }
+  },
+  {
+    "m": "fork_draft",
+    "d": {
+      "status": 200,
+      "draftImmutable": false
+    }
+  },
+  {
+    "m": "publish_v2",
+    "d": {
+      "status": 200,
+      "v": 2
+    }
+  },
+  {
+    "m": "runtime_after_v2",
+    "d": {
+      "status": 200,
+      "n": 1,
+      "version": 1,
+      "value": null,
+      "name": "Effective physical–licensed seats 1785174871173"
+    }
+  },
+  {
+    "m": "v1_immutable_flag",
+    "d": {
+      "immutable": true,
+      "runtime": true
+    }
+  },
+  {
+    "m": "archive",
+    "d": {
+      "status": 200,
+      "lifecycle": "archived"
+    }
+  },
+  {
+    "m": "runtime_after_archive",
+    "d": {
+      "n": 0,
+      "total": 0
+    }
+  }
+]

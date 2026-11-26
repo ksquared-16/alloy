@@ -1,0 +1,65 @@
+{
+  "subjects": [
+    {
+      "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "agreementId": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+      "displayName": "Certa Certhouse",
+      "agreementStatus": "active"
+    },
+    {
+      "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "agreementId": "6f409c2d-2227-48e7-a365-f2c12fc2d929",
+      "displayName": "Certb Certhouse",
+      "agreementStatus": "active"
+    }
+  ],
+  "period": "2026-09",
+  "existingPolicies": {
+    "status": 200,
+    "count": 0
+  },
+  "createPolicy": {
+    "status": 201,
+    "id": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0"
+  },
+  "applied": [
+    {
+      "child": "Certa Certhouse",
+      "status": 200,
+      "ok": true,
+      "result": {
+        "period_key": "2026-09",
+        "service_period": {
+          "start": "2026-09-01",
+          "end": "2026-09-30"
+        },
+        "applied": 0,
+        "unchanged": 0,
+        "alreadyPosted": 0,
+        "notEligible": 0,
+        "refused": 0,
+        "refused_outcomes": []
+      }
+    },
+    {
+      "child": "Certb Certhouse",
+      "status": 200,
+      "ok": true,
+      "result": {
+        "period_key": "2026-09",
+        "service_period": {
+          "start": "2026-09-01",
+          "end": "2026-09-30"
+        },
+        "applied": 0,
+        "unchanged": 0,
+        "alreadyPosted": 0,
+        "notEligible": 0,
+        "refused": 0,
+        "refused_outcomes": []
+      }
+    }
+  ],
+  "rowsWithProvenance": 44,
+  "discountRows": []
+}

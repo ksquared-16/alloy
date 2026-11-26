@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Vision & Roadmap | Alloy",
-  description: "Alloy's direction from enrollment operations toward the operating system for childcare.",
+  title: "Vision & Roadmap",
+  description:
+    "What Alloy has shipped, what we're building now, and where the operating system for work is headed next.",
 };
 
 export default function VisionLayout({ children }: { children: React.ReactNode }) {

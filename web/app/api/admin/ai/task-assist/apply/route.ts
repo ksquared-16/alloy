@@ -8,7 +8,7 @@ import {
     COMMUNICATIONS_SEND_PERMISSION_KEY,
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -66,36 +66,61 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const exec = await executeCommunicationsSend({
+
+    // Phase 1 Slice 1: the canonical send command owns recipient resolution,
+    // classification, rendering, eligibility and enqueue.
+    //
+    // THE BOS BOUNDARY, preserved: the assistant PROPOSES; the operator
+    // confirms (validated upstream by parseTaskAssistApply); the SERVER
+    // re-resolves. `sel.person_id` is a proposal, not authority — the resolver
+    // verifies the person exists in this org and owns a usable identity. An
+    // AI-supplied raw address cannot enter here at all: the typed recipient has
+    // no field for one.
+    const send = await canonicalSend({
         supabase,
         orgId: ctx.orgId,
-        quickMessage: false,
+        authorizingUserId: ctx.userId ?? null,
+        sourceCapability: "ai.task_assist",
+        recipient: { kind: "person", personId: sel.person_id.trim() },
+        audience: "external",
+        category: "operational",
+        purpose: "assisted_operator_message",
+        channel: merged.channel === "email" ? "email" : "sms",
         primaryEntityType: merged.entity_type,
         primaryEntityId: merged.entity_id,
-        channel: merged.channel,
-        textRaw: merged.draft_body.trim(),
-        subjectRawEmail: merged.channel === "email" ? merged.draft_subject ?? "" : undefined,
-        bindingIdOpt: binding_id,
-        recipientPersonIdRaw: sel.person_id.trim(),
-        toRawInput: "",
-        sendMetadataAugment: {
+        bodyRaw: merged.draft_body.trim(),
+        subjectRaw: merged.channel === "email" ? (merged.draft_subject ?? "") : null,
+        userAuthored: true,
+        communicationProviderBindingId: binding_id || null,
+        // Stable per suggestion+recipient: an operator double-click, or a retry
+        // after a network blip, must not send twice.
+        idempotencyKey: `task_assist:${merged.suggestion_id}:${sel.person_id.trim()}`,
+        metadata: {
             source: "task_assist_apply_v1",
-            task_assist_suggestion_id: merged.suggestion_id,
-            task_assist_agent_key: TASK_ASSIST_AGENT_KEY,
+            assist_proposal_id: merged.suggestion_id,
+            author_user_id: ctx.userId ?? null,
         },
     });
 
-    if (!exec.ok) {
+    if (send.outcome !== "sent_to_queue" && send.outcome !== "duplicate") {
         return NextResponse.json(
             {
                 ok: false,
-                error: exec.error,
-                code: exec.code ?? null,
-                thread_id: exec.thread_id ?? null,
+                error: send.message,
+                code: send.reason,
+                outcome: send.outcome,
+                available_channels: send.availableChannels ?? null,
+                thread_id: send.threadId ?? null,
             },
-            { status: exec.status }
+            { status: send.outcome === "blocked" ? 409 : send.outcome === "failed" ? 500 : 400 }
         );
     }
+    const exec = {
+        ok: true as const,
+        communication_message_id: send.messageId ?? null,
+        thread_id: send.threadId ?? null,
+        channel: merged.channel,
+    };
 
     return NextResponse.json({
         ok: true,
@@ -103,7 +128,9 @@ export async function POST(request: NextRequest) {
             communication_message_id: exec.communication_message_id,
             thread_id: exec.thread_id,
             channel: exec.channel,
-            process_trigger_attempted_note: exec.process_trigger_attempted_note,
+            // `duplicate` is reported as success: the message IS queued, it was
+            // simply not queued a second time.
+            outcome: send.outcome,
             permission_note: COMMUNICATIONS_SEND_PERMISSION_KEY,
         },
         task_assist: {

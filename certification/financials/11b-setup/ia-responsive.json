@@ -1,0 +1,56 @@
+{
+  "policies": {
+    "heading": true,
+    "exec": true,
+    "saysDiscounts": true,
+    "section": "Discounts & commercial policies / Discounts, sibling and employee rules and waivers — what reduces a family's price, who qualifies, and from when. These modify commercial pricing; the execution policies below decide how billing runs. / Policies / 1 policies / Sibling discount (QA specimen) / Pricing · Discount / Active · from 2026-01-01 / Select a policy / Discount, deposit, and billing rules configured for your organization. / ",
+    "siblingPolicyVisible": true,
+    "statesType": true,
+    "statesEffective": true
+  },
+  "policyDetail": {
+    "rate": false,
+    "eligibility": true,
+    "scope": true,
+    "status": true
+  },
+  "responsive": [
+    {
+      "width": 1280,
+      "tuition": {
+        "text": "Billing period September 2026 · next October 2026",
+        "widthPx": 374,
+        "lines": 1,
+        "overflow": false
+      }
+    },
+    {
+      "width": 1440,
+      "tuition": {
+        "text": "Billing period September 2026 · next October 2026",
+        "widthPx": 406,
+        "lines": 1,
+        "overflow": false
+      }
+    },
+    {
+      "width": 1680,
+      "tuition": {
+        "text": "Billing period September 2026 · next October 2026",
+        "widthPx": 526,
+        "lines": 1,
+        "overflow": false
+      }
+    }
+  ],
+  "accounts1280": {
+    "stats": [
+      "CURRENT BALANCE $573.87",
+      "DUE $607.00",
+      "PAST DUE $75.00",
+      "AVAILABLE $125.00"
+    ],
+    "prepaid": "AVAILABLE $125.00",
+    "overflowsViewport": false
+  }
+}

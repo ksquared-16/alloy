@@ -19,7 +19,15 @@ export type CrmSearchResultRow = { id: string; label: string; subtitle: string |
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
+    /*
+     * A CRM READ, NOT A FORMS AUTHORITY.
+     *
+     * This searches `persons`, `customers` and `customer_members`. It lives under Forms because the
+     * form builder's entity picker calls it, but the data it returns is the CRM's, and the authority
+     * that owns reading a family is `crm.customers.read`. Giving it a Forms capability would mean an
+     * organization could hand out customer search by granting form design.
+     */
+    if (!ctx.permissionKeys.includes("crm.customers.read")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

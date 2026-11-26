@@ -85,11 +85,20 @@ async function loadActiveAssignmentPattern(
     agreementId: string,
     onDate: string
 ): Promise<{ pattern: { id: string; weekdays: number[]; schedule_type_key: string; metadata?: Record<string, unknown> } } | null> {
+    /*
+     * THE ENROLLMENT'S PRIMARY, as `getOperationalScheduleAssignmentForAgreement` defines it — never
+     * "the first operational row". A committed secondary (Before Care …) carries the agreement too, and
+     * unordered it can come back first: a five-day child was then billed on the secondary's three-day
+     * basis, and a child with no primary was priced from a secondary instead of being unresolved.
+     * Proven live: `tests/financials/live/draftChargePrimarySchedule.live.test.ts`.
+     */
     const { data: assignmentData, error: assignmentError } = await supabase
         .from("schedule_assignments")
         .select("schedule_pattern_id, start_date, end_date, status")
         .eq("org_id", orgId)
-        .eq("enrollment_agreement_id", agreementId);
+        .eq("subject_type", "child")
+        .eq("enrollment_agreement_id", agreementId)
+        .eq("is_primary", true);
     if (assignmentError) throw new OperationalEnrollmentServiceError("db_error", assignmentError.message);
     const assignment = operationalRow(
         (assignmentData ?? []) as { schedule_pattern_id: string; start_date: string; end_date: string | null; status: string }[],

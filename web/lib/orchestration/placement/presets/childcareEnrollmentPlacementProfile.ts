@@ -70,7 +70,7 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
     fallback_bucket_key: TIER_GENERAL_WAITLIST_BUCKET,
     tie_breakers: [
         { kind: "fact", field: "wait_since", direction: "asc" },
-        { kind: "fact", field: "desired_start_date", direction: "asc" },
+        { kind: "fact", field: "start_date", direction: "asc" },
     ],
     primary_group_fact_key: "program_room_group",
     cohort_filter: {

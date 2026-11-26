@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-initiative-status <key>
+  alloy-initiative-status --all
+
+Compact operator view of initiative progress.
+EOF
+}
+
+print_status() {
+  local key="$1"
+  local base state title approved_hash staging tasks_complete=0 tasks_active=0 tasks_blocked=0
+  base="$(alloy_initiative_dir "$key")"
+  state="$(alloy_initiative_current_state "$key")"
+  title="$(node -e "console.log(require('${base}/state.json').title||'${key}')")"
+  approved_hash="$(node -e "const d=require('${base}/state.json'); console.log(d.approved_spec_hash?d.approved_spec_hash.slice(0,12)+'...':'(none)')")"
+  staging="$(node -e "console.log(require('${base}/state.json').staging_baseline_sha.slice(0,12)+'...')")"
+
+  local tid st
+  for tid in $(alloy_engineering_list_tasks "$key"); do
+    st="$(alloy_engineering_task_status "$(alloy_engineering_task_path "$key" "$tid")")"
+    case "$st" in
+      complete) tasks_complete=$((tasks_complete + 1)) ;;
+      blocked|remediation) tasks_blocked=$((tasks_blocked + 1)) ;;
+      *) tasks_active=$((tasks_active + 1)) ;;
+    esac
+  done
+
+  printf 'Initiative:     %s (%s)\n' "$key" "$title"
+  printf 'State:          %s\n' "$state"
+  printf 'Approved spec:  %s\n' "$approved_hash"
+  printf 'Staging SHA:    %s\n' "$staging"
+  printf 'Workers:        %s assigned\n' "$(node -e "console.log(Object.keys(require('${base}/state.json').workers||{}).length)")"
+  printf 'Tasks:          %s complete / %s active / %s blocked\n' "$tasks_complete" "$tasks_active" "$tasks_blocked"
+  printf 'Human decisions required: %s\n' "$(alloy_engineering_human_decisions_count "$key")"
+  printf 'Remediation round: %s\n' "$(node -e "console.log(require('${base}/state.json').remediation_round||0)")"
+  printf 'Promotion:      %s\n' "$(node -e "const p=require('${base}/state.json').promotion; console.log(p?p.classification:'(not packaged)')")"
+  local procs
+  procs="$(node -e "
+    const r = require('${base}/reports/task-001-result.json');
+    console.log((r.processes_left_running||[]).length);
+  " 2>/dev/null || echo 0)"
+  printf 'Processes left running: %s\n' "$procs"
+  echo
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_engineering_require_node
+
+  if [[ "$1" == "--all" ]]; then
+    local k found=0
+    while IFS= read -r k; do
+      [[ -n "$k" ]] || continue
+      print_status "$k"
+      found=1
+    done < <(alloy_engineering_list_initiatives)
+    [[ "$found" -eq 1 ]] || alloy_info "No initiatives found."
+    exit 0
+  fi
+
+  local key="$1"
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+  print_status "$key"
+}
+
+main "$@"

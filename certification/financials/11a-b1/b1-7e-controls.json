@@ -1,0 +1,63 @@
+{
+  "selects": [
+    {
+      "testid": "create-policy-type",
+      "value": "due_date",
+      "options": [
+        "Proration",
+        "Billing cadence",
+        "Grace period",
+        "Posting review",
+        "Vacation credit",
+        "Due date"
+      ]
+    },
+    {
+      "testid": "create-policy-scope",
+      "value": "org",
+      "options": [
+        "Org default",
+        "Location",
+        "Service",
+        "Rate Plan"
+      ]
+    },
+    {
+      "testid": "policy-value-strategy",
+      "value": "on_invoice",
+      "options": [
+        "On the invoice date",
+        "Days after the invoice date",
+        "On the first day of the billing period",
+        "Days after the billing period starts"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "type": "search",
+      "name": null,
+      "value": ""
+    },
+    {
+      "type": "text",
+      "name": "policies-search",
+      "value": ""
+    },
+    {
+      "type": "number",
+      "name": "policy-value-offset_days",
+      "value": ""
+    },
+    {
+      "type": "text",
+      "name": "create-policy-label",
+      "value": ""
+    },
+    {
+      "type": "date",
+      "name": "create-policy-effective_start",
+      "value": ""
+    }
+  ]
+}

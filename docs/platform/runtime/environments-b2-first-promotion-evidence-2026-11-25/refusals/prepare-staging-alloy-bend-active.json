@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "step": "staging.verify",
+  "failures": [
+    "staging tenancy: org Alloy Bend (7803388d-cdee-4afb-89cf-23a137f39423) is on the reviewed retired list but is active"
+  ]
+}

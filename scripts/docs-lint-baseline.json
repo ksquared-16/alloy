@@ -1,0 +1,5 @@
+{
+  "generatedAt": "2026-09-30T12:54:49.045Z",
+  "summary": {},
+  "note": "Documentation debt ceiling. Emptied 2026-09-30 when every class reached zero, so any violation in any class now reads as a debt increase. It is a FLOOR, not an allowance: refresh it downward as debt falls, never upward to accommodate new violations."
+}

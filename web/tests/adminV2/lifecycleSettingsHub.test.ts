@@ -78,7 +78,7 @@ describe("lifecycle Settings IA", () => {
         const banner = read("components/adminV2/settings/LifecycleSettingsCrossLinkBanner.tsx");
         expect(banner).toContain("ADMIN_V2_SETTINGS_LIFECYCLE_PATH");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain('variant="actions"');
-        expect(read("app/adminV2/settings/statuses/page.tsx")).toContain('variant="statuses"');
+        expect(read("app/adminV2/settings/statuses/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/attention-sla-rules/page.tsx")).toContain('variant="attention"');
     });
 });

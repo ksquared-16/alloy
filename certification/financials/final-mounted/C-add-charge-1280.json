@@ -1,0 +1,35 @@
+{
+  "menu": [],
+  "present": true,
+  "box": {
+    "top": 146,
+    "left": 336,
+    "width": 608,
+    "height": 607,
+    "bottom": 754
+  },
+  "contentHeight": 605,
+  "viewport": {
+    "w": 1280,
+    "h": 900
+  },
+  "internalScroll": 0,
+  "cardTopToPrimary": 564,
+  "primaryInViewport": true,
+  "text": "ADD Charge Adjustment CHARGE TYPEREQUIRED Field trip ▾ 5 configured types CHARGE APPLIES TOREQUIRED Household ▾ Household · one charge for the account AMOUNT $40.00 NOTE DATES SERVICE DATEREQUIRED BILLING PERIOD September 2026 DUE Configured policy CHARGE TO Certt Certhouse $18.00 · household responsibilityChange → PREVIEW Field trip +$40.00 Current balance $2,023.87 AFTER POSTING $2,023.87 Add charge Cancel",
+  "chargeToOccurrences": 1,
+  "dividedBy": false,
+  "responsibilityDuplicated": 1,
+  "nativeControls": 1,
+  "buttons": [
+    "Charge",
+    "Adjustment",
+    "Field trip▾",
+    "Household▾",
+    "Change →",
+    "Add charge",
+    "Cancel"
+  ],
+  "horizontalOverflow": false,
+  "insideViewport": true
+}

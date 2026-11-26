@@ -11,6 +11,7 @@ import {
     describePrefillMode,
     describePrefillSource,
     groupSystemFieldsForPicker,
+    groupRelationshipFieldsForPicker,
     type UiScalarKind,
 } from "@/lib/forms/formFieldAuthoringPresentation";
 import { linesToStaticOptions, type SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
@@ -33,6 +34,10 @@ export type FormFieldAuthoringCardProps = {
     kind: UiScalarKind;
     pickerValue: string;
     systemFields: readonly SystemFieldRegistryEntry[];
+    relationshipFields?: readonly SystemFieldRegistryEntry[];
+    /** Tenant field_definitions still loading — platform fields remain listed. */
+    pickerLoading?: boolean;
+    pickerError?: string | null;
     takenFieldIds: Set<string>;
     onPickerChange: (index: number, value: string) => void;
     onFieldChange: (index: number, next: FormField) => void;
@@ -62,6 +67,9 @@ export function FormFieldAuthoringCard({
     kind,
     pickerValue,
     systemFields,
+    relationshipFields = [],
+    pickerLoading = false,
+    pickerError = null,
     takenFieldIds,
     onPickerChange,
     onFieldChange,
@@ -79,6 +87,7 @@ export function FormFieldAuthoringCard({
     const pos = regionPosition ?? index;
     const posTotal = regionTotal ?? total;
     const systemFieldGroups = groupSystemFieldsForPicker(systemFields);
+    const relationshipFieldGroups = groupRelationshipFieldsForPicker(relationshipFields);
 
     if (compact) {
         return (
@@ -162,6 +171,8 @@ export function FormFieldAuthoringCard({
                                 value={pickerValue}
                                 onChange={(e) => onPickerChange(index, e.target.value)}
                                 data-testid={`form-field-prefill-${field.id}`}
+                                aria-busy={pickerLoading || undefined}
+                                title={pickerLoading ? "Loading organization fields…" : undefined}
                             >
                                 {systemFieldGroups.map((group) => (
                                     <optgroup key={group.id} label={group.label}>
@@ -180,10 +191,24 @@ export function FormFieldAuthoringCard({
                                         })}
                                     </optgroup>
                                 ))}
+                                {relationshipFieldGroups.map((group) => (
+                                    <optgroup key={`rel-${group.id}`} label={group.label}>
+                                        {group.fields.map((e) => (
+                                            <option key={e.id} value={`sys:${e.id}`}>
+                                                {e.default_label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ))}
                                 <optgroup label="Advanced / Custom">
                                     <option value="__custom">{FIELD_AUTHORING_COPY.customField}</option>
                                 </optgroup>
                             </select>
+                            {pickerError ?
+                                <p className="text-[11px] text-amber-800" data-testid={`form-field-picker-error-${field.id}`}>
+                                    {pickerError}
+                                </p>
+                            :   null}
                         </label>
                         {field.type === "select" ?
                             <label className="block space-y-0.5 sm:col-span-2">

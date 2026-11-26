@@ -11,7 +11,12 @@ import {
     listOperationalCalculations,
     findOperationalCalculation,
 } from "@/lib/analytics/calculations/registry";
-import type { OperationalCalculation } from "@/lib/analytics/calculations/types";
+import type {
+    OperationalCalculation,
+    OperationalCalculationBusinessProcess,
+} from "@/lib/analytics/calculations/types";
+import { getMetricDefinition } from "@/lib/metrics/registry";
+import { getMetricPack } from "@/lib/metrics/packs";
 import type {
     SurfaceDefinition,
     SurfacePersistenceAdapter,
@@ -24,7 +29,7 @@ import type {
     SurfaceDoc,
 } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 
-const BUSINESS_PROCESS_LABEL: Record<OperationalCalculation["businessProcess"], string> = {
+const BUSINESS_PROCESS_LABEL: Record<OperationalCalculationBusinessProcess, string> = {
     enrollment: "Enrollment",
     communications: "Communications",
     forms: "Forms",
@@ -33,13 +38,27 @@ const BUSINESS_PROCESS_LABEL: Record<OperationalCalculation["businessProcess"], 
     financial: "Financial",
 };
 
+/**
+ * How a calculation is grouped for the operator.
+ *
+ * Most calculations belong to a Business Process and group under its name. A
+ * measurement domain that is NOT a business process — Attendance is the first —
+ * groups under its own pack label instead of being swept into "Other", which
+ * would hide a first-class domain behind a word meaning "unclassified".
+ */
+function groupLabelForCalculation(calc: OperationalCalculation): string {
+    if (calc.businessProcess) return BUSINESS_PROCESS_LABEL[calc.businessProcess] ?? "Other";
+    const pack = getMetricPack(getMetricDefinition(calc.key).pack);
+    return pack?.label ?? "Other";
+}
+
 /** Content = the Operational Calculations registry. The operator never sees "metric definition". */
 export function operationalIntelligenceContentSource(): ContentSourceProvider {
     const items: ContentDefinition[] = listOperationalCalculations().map((calc) => ({
         id: calc.key,
         label: calc.label,
         question: calc.questionAnswered,
-        group: BUSINESS_PROCESS_LABEL[calc.businessProcess] ?? "Other",
+        group: groupLabelForCalculation(calc),
         availability: calc.status === "active" ? "live" : "available",
     }));
     const byId = new Map(items.map((i) => [i.id, i]));

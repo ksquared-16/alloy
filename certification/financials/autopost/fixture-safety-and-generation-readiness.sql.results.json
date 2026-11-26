@@ -1,0 +1,162 @@
+{
+  "trusted_host_action_id": "tha_ec822c66a233e3",
+  "query_hash": "876f09cf6bdc3a417c5e42b836e3be5a435d53f3c11ace1c11fdc3702a27f581",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T23:33:22.338Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ec822c66a233e3",
+    "query_hash": "876f09cf6bdc3a417c5e42b836e3be5a435d53f3c11ace1c11fdc3702a27f581",
+    "authorization_id": "grnt_7b0bf9396d5a4c59",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T23:33:27.872Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "qa_acceptance_rows_mentioning_id": 0,
+            "payments": 0,
+            "charges_any": 0,
+            "reductions_any": 0,
+            "obligations_any": 0
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "qa_acceptance_rows_mentioning_id": 0,
+            "payments": 0,
+            "charges_any": 0,
+            "reductions_any": 0,
+            "obligations_any": 0
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "qa_acceptance_rows_mentioning_id": 0,
+            "payments": 0,
+            "charges_any": 0,
+            "reductions_any": 0,
+            "obligations_any": 0
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "agreement_id": "fd000000-0000-4000-8000-0000000a0002",
+            "agreement_status": "active",
+            "start_date": "2026-05-17",
+            "end_date": null,
+            "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "person_id": null,
+            "customer_calendar_cadence": null,
+            "location_calendar_cadence": "weekly",
+            "accepted_pricing_terms": [],
+            "all_pricing_term_states": [],
+            "canonical_periods": [
+              {
+                "period_key": "2026-11-09~2026-11-15",
+                "status": "open",
+                "cadence": "weekly"
+              },
+              {
+                "period_key": "2026-11-16~2026-11-22",
+                "status": "open",
+                "cadence": "weekly"
+              },
+              {
+                "period_key": "2026-11-30~2026-12-06",
+                "status": "open",
+                "cadence": "weekly"
+              },
+              {
+                "period_key": "2026-12-07~2026-12-13",
+                "status": "open",
+                "cadence": "weekly"
+              }
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "agreement_id": "fd000000-0000-4000-8000-0000000a0003",
+            "agreement_status": "active",
+            "start_date": "2026-05-17",
+            "end_date": null,
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "person_id": null,
+            "customer_calendar_cadence": "daily",
+            "location_calendar_cadence": "monthly",
+            "accepted_pricing_terms": [],
+            "all_pricing_term_states": [],
+            "canonical_periods": [
+              {
+                "period_key": "2026-11-12~2026-11-12",
+                "status": "open",
+                "cadence": "daily"
+              },
+              {
+                "period_key": "2026-11-13~2026-11-13",
+                "status": "open",
+                "cadence": "daily"
+              }
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "agreement_id": "fd000000-0000-4000-8000-0000000a0004",
+            "agreement_status": "active",
+            "start_date": "2026-05-17",
+            "end_date": null,
+            "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "person_id": null,
+            "customer_calendar_cadence": "annual",
+            "location_calendar_cadence": "weekly",
+            "accepted_pricing_terms": [],
+            "all_pricing_term_states": [],
+            "canonical_periods": [
+              {
+                "period_key": "2026-01-05~2027-01-04",
+                "status": "open",
+                "cadence": "annual"
+              },
+              {
+                "period_key": "2027-01-05~2028-01-04",
+                "status": "open",
+                "cadence": "annual"
+              }
+            ]
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "policy_types_active": [
+              "billing_calendar",
+              "due_date"
+            ],
+            "posting_review_like": 0
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "startedAt": "2026-07-22T15:20:41.768Z",
+  "steps": [
+    {
+      "name": "01-programs-landing",
+      "url": "http://localhost:3014/login"
+    },
+    {
+      "name": "add-to-locations-count",
+      "count": 0
+    },
+    {
+      "name": "03-locations-landing",
+      "url": "http://localhost:3014/login"
+    },
+    {
+      "name": "04-location-programs",
+      "url": "http://localhost:3014/login"
+    },
+    {
+      "name": "add-program-count",
+      "count": 0
+    }
+  ],
+  "networkSummary": [],
+  "networkResponses": [],
+  "previewCount": 0,
+  "commitCount": 0,
+  "consoleErrors": [],
+  "finishedAt": "2026-07-22T15:20:56.198Z"
+}

@@ -1,0 +1,3800 @@
+/**
+ * Trusted Host Actions — privileged host-side execution runtime.
+ *
+ * Workers may request; workers never receive credentials.
+ * Director authorizes; this runtime executes outside the managed sandbox.
+ */
+import { createHash, randomBytes } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  chmodSync,
+  readdirSync,
+} from "node:fs";
+import { join, dirname } from "node:path";
+import { spawnSync } from "node:child_process";
+
+import { assertGatewayHostMutationAllowed } from "./gateway-host-mutation.mjs";
+import { runRegisteredReconciliation } from "./trusted-host-reconciliation.mjs";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
+import {
+  ACTION_TYPES,
+  DEFAULT_TARGET,
+  getActionDefinition,
+  listRegisteredActions,
+  directorRegistryFreshness,
+  resolveCanonicalRepoRoot,
+  resolveTrustedServerEnvSource,
+  findRepoRoot,
+  hashSql,
+  resolveArtifactRoot,
+  sqlFromCensusArtifact,
+} from "./trusted-host-action-registry.mjs";
+import {
+  resolveActionAuthorizationIdentity,
+} from "./action-authorization-identity.mjs";
+import {
+  findAuthorization,
+  AUTHORIZATION_CLASSES,
+  exactAuthorizationCovers,
+  markAuthorizationUsed,
+  recognizePriorCensusAuthorization,
+  listAuthorizations,
+  databaseTargetFingerprint,
+} from "./trusted-host-authz.mjs";
+import {
+  mergePullRequest,
+  publicMergeResult,
+} from "./trusted-host-merge.mjs";
+import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
+import { executeRestoreDeployedQaSessionSync } from "./deployed-qa-session-restore-action.mjs";
+import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
+import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
+import { pushBranch, publicPushResult, defaultGit } from "./trusted-host-push.mjs";
+import { promoteRepositoryMetadata } from "./trusted-host-metadata-promote.mjs";
+import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
+import { executeToolkitInstall } from "./toolkit-convergence.mjs";
+import { executeLaneDispatch } from "./lane-dispatch.mjs";
+import { createQueuedRun } from "./execution-run.mjs";
+import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
+import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
+import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
+import { executeWorktreeRetirement } from "./trusted-host-worktree-retirement.mjs";
+import { gatherObservation } from "./reconciliation-observe.mjs";
+import { executeTransfer } from "./repository-transfer.mjs";
+import {
+  applyMigrationBatch,
+  publicMigrationResult,
+  APPLY_MIGRATION_SH,
+  readMigrationContent,
+  ledgerLookupSql,
+  migrationPostconditionSql,
+  migrationPostconditionDescription,
+  listMigrationsAtSha,
+} from "./trusted-host-migrate.mjs";
+import { buildRegistrationSql } from "./trusted-host-register-application.mjs";
+import {
+  productionApplyTargets,
+  validateProductionMigrationInputs,
+} from "./trusted-host-production-migrate.mjs";
+import {
+  executeProductionMigrationApply,
+  publicProductionApplyResult,
+  containsCredentialMaterial,
+  PRODUCTION_APPLY_FAILURES,
+} from "./trusted-host-production-apply.mjs";
+import { requiredVersionsFromFilenames } from "./migration-parity.mjs";
+import {
+  assertLedgerRepairPreconditions,
+  buildLedgerRepairSql,
+  ledgerRepairEvidenceFromCensus,
+  PHYSICAL_STATE_ARTIFACT,
+  physicalStateArtifactFor,
+  assertCensusCoversVersions,
+} from "./trusted-host-ledger-repair.mjs";
+
+import { appendTimelineEvent } from "./timeline.mjs";
+import { attachEvidence } from "./evidence.mjs";
+import { completedReuseDecision } from "./action-repeatability.mjs";
+import { ALLOY_REPOSITORY_ID as ALLOY_REPO_ID, executionProfileFor } from "./repository-registry.mjs";
+
+/** Alloy's database target, from Alloy's profile rather than from a literal. */
+const alloyDatabaseTarget = () =>
+  executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPO_ID }).database_target;
+
+const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
+  || join(os.homedir(), ".local", "state", "alloy-dev");
+
+/*
+ * Resolved per call, not frozen at import.
+ *
+ * A diagnostic reproduction wrote a placeholder-owned action into the SHARED store because the path
+ * was captured when the module loaded, so pointing `ALLOY_RUNTIME_ROOT` at a temp directory
+ * afterwards had no effect. Resolving on each access makes isolation actually work: a test sets the
+ * variable and its writes land in its own directory, and can never contaminate the production store.
+ */
+function storeDir() {
+  return join(runtimeRoot(), "vacilando", "trusted-host-actions");
+}
+/**
+ * The runtime state root.
+ *
+ * Two executors already called runtimeRoot() as a fallback and NOTHING DEFINED
+ * IT. The reconciliation path never noticed because its CLI always sends
+ * inputs.runtimeRoot, so `inputs.runtimeRoot || runtimeRoot()` short-circuited
+ * and the right-hand side was never evaluated. A latent ReferenceError sitting
+ * behind an `||`, waiting for the first caller whose inputs omitted the key.
+ */
+function runtimeRoot() {
+  return process.env.ALLOY_RUNTIME_ROOT?.trim() || RUNTIME_ROOT;
+}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const RUN_SQL_SH = join(HERE, "trusted-host-run-sql.sh");
+const PRODUCTION_IDENTITY_SH = join(HERE, "trusted-host-production-identity.sh");
+const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
+
+function ensureDir(p = storeDir()) {
+  mkdirSync(p, { recursive: true });
+}
+
+function newActionId() {
+  return `tha_${randomBytes(7).toString("hex")}`;
+}
+
+/**
+ * Trusted-host SQL stdout → census object.
+ * Accepts a single JSON document (wave0) or Q15 labeled rows:
+ *   BEGIN
+ *   Q15-A1|row_count|{"row_count": 0}
+ *   Q15-A1|row|{...}
+ *   COMMIT
+ */
+export function parseTrustedHostSqlOutput(outText) {
+  const stripped = String(outText || "").trim();
+  if (!stripped) return null;
+  try {
+    return JSON.parse(stripped);
+  } catch { /* fall through */ }
+  const blob = stripped.match(/\{[\s\S]*\}/);
+  if (blob && !/^[A-Za-z0-9_.-]+\|/.test(stripped.split(/\r?\n/).find((l) => l.includes("|")) || "")) {
+    try {
+      return JSON.parse(blob[0]);
+    } catch { /* labeled rows below */ }
+  }
+  const rows = [];
+  for (const line of stripped.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t === "BEGIN" || t === "COMMIT" || t === "ROLLBACK") continue;
+    const i1 = t.indexOf("|");
+    const i2 = i1 >= 0 ? t.indexOf("|", i1 + 1) : -1;
+    if (i2 < 0) continue;
+    const questionId = t.slice(0, i1).trim();
+    const kind = t.slice(i1 + 1, i2).trim();
+    const payloadRaw = t.slice(i2 + 1);
+    let payload = payloadRaw;
+    try { payload = JSON.parse(payloadRaw); } catch { /* keep string */ }
+    if (!questionId) continue;
+    rows.push({ question_id: questionId, kind, payload });
+  }
+  if (!rows.length) return null;
+  const questions = {};
+  for (const r of rows) {
+    const q = questions[r.question_id] || { question_id: r.question_id, row_count: null, rows: [] };
+    if (r.kind === "row_count") {
+      q.row_count = r.payload && typeof r.payload === "object" && "row_count" in r.payload
+        ? r.payload.row_count
+        : r.payload;
+    } else {
+      q.rows.push(r.payload);
+    }
+    questions[r.question_id] = q;
+  }
+  return {
+    format: "q15_labeled_rows",
+    census_run_at: new Date().toISOString(),
+    question_ids: Object.keys(questions),
+    questions,
+    row_count: rows.length,
+  };
+}
+
+function storePath(actionId) {
+  return join(storeDir(), `${actionId}.json`);
+}
+
+function indexPath(missionId) {
+  return join(storeDir(), `index_${missionId}.json`);
+}
+
+function readAction(actionId) {
+  const p = storePath(actionId);
+  if (!existsSync(p)) return null;
+  return JSON.parse(readFileSync(p, "utf8"));
+}
+
+function writeAction(action) {
+  ensureDir();
+  writeFileSync(storePath(action.id), JSON.stringify(action, null, 2));
+  const idxP = indexPath(action.missionId);
+  let idx = { missionId: action.missionId, ids: [] };
+  if (existsSync(idxP)) {
+    try { idx = JSON.parse(readFileSync(idxP, "utf8")); } catch { /* */ }
+  }
+  if (!idx.ids.includes(action.id)) idx.ids.push(action.id);
+  writeFileSync(idxP, JSON.stringify(idx, null, 2));
+  return action;
+}
+
+export function listTrustedHostActions(missionId = null) {
+  ensureDir();
+  if (!missionId) return [];
+  const idxP = indexPath(missionId);
+  if (!existsSync(idxP)) return [];
+  const idx = JSON.parse(readFileSync(idxP, "utf8"));
+  return (idx.ids || []).map(readAction).filter(Boolean);
+}
+
+export function getTrustedHostAction(actionId) {
+  return readAction(actionId);
+}
+
+function redactSecrets(text) {
+  return String(text || "")
+    .replace(/postgresql:\/\/[^\s]+/gi, "postgresql://[redacted]")
+    .replace(/postgres:\/\/[^\s]+/gi, "postgres://[redacted]")
+    .replace(/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted_jwt]");
+}
+
+function buildAudit(action, extra = {}) {
+  return {
+    actionId: action.id,
+    missionId: action.missionId,
+    assignmentId: action.assignmentId,
+    executionSessionId: action.executionSessionId,
+    actionType: action.actionType,
+    authorizationId: action.authorizationId,
+    authorizingOperator: extra.authorizingOperator || null,
+    databaseTarget: action.inputs?.databaseTarget,
+    databaseTargetFingerprint: databaseTargetFingerprint(action.inputs?.databaseTarget),
+    queryArtifactPath: action.inputs?.queryArtifactPath,
+    queryHash: action.inputs?.queryHash,
+    validationResult: action.inputs?.validation || null,
+    started_at: action.started_at,
+    completed_at: action.completed_at,
+    rowCount: extra.rowCount ?? null,
+    outputArtifactPath: extra.outputArtifactPath || null,
+    success: extra.success === true,
+    failureCode: extra.failureCode || null,
+    retryHistory: action.retryState || null,
+  };
+}
+
+/**
+ * May an existing action be reused for THIS request?
+ *
+ * Reuse is an identity claim: it says the stored action is the same piece of work, so a grant issued
+ * for the new request may drive it. That is only true when the ownership dimensions agree.
+ *
+ * They did not have to. A record owned by `run_x` — written by a diagnostic reproduction — was
+ * adopted for `erun_89f9cbad389cc851` because both carried an undefined `queryHash`, so
+ * `undefined === undefined` matched. `grantAuthorizesAction` then refused it with
+ * `grant_run_mismatch`, correctly, and the request bounced back to `awaiting_operator` on every
+ * approval. The operator approved twice and nothing could ever execute.
+ *
+ * The refusal was right; the adoption was wrong. This is the missing half: a candidate must match on
+ * run, assignment and lane before its identity may be claimed. Comparison is null-tolerant, so an
+ * action that genuinely carries no run is still reusable by another that carries none — that is the
+ * pre-existing census behaviour and it is not widened here.
+ */
+export function sameActionOwnership(candidate, { executionSessionId = null, assignmentId = null, inputs = {} } = {}) {
+  const same = (a, b) => (a ?? null) === (b ?? null);
+  if (!same(candidate?.executionSessionId, executionSessionId)) return false;
+  if (!same(candidate?.assignmentId, assignmentId)) return false;
+  // The lane is carried in the action's own inputs for lane-scoped actions; for actions that have
+  // no lane both sides are null and this is a no-op.
+  const candidateLane = candidate?.inputs?.laneId ?? candidate?.inputs?.lane_id ?? null;
+  const requestLane = inputs?.laneId ?? inputs?.lane_id ?? null;
+  if (!same(candidateLane, requestLane)) return false;
+  return true;
+}
+
+/** Order-independent structural equality over one action's normalised inputs. */
+export function sameNormalizedInputs(a = {}, b = {}) {
+  const canon = (v) => {
+    if (v === null || typeof v !== "object") return v === undefined ? null : v;
+    if (Array.isArray(v)) return v.map(canon);
+    return Object.keys(v).sort().reduce((acc, k) => { acc[k] = canon(v[k]); return acc; }, {});
+  };
+  try { return JSON.stringify(canon(a)) === JSON.stringify(canon(b)); } catch { return false; }
+}
+
+/**
+ * DOES THIS ACTION DESCRIBE THE THING THE CALLER ASKED ABOUT?
+ *
+ * Compared on the fields that name a target rather than on the whole payload: a
+ * reused action may legitimately differ in incidental context, but never in
+ * WHAT it acts on. Fields absent from both sides are not evidence and are
+ * skipped, so this can only ever refuse a real, visible disagreement.
+ */
+export const ACTION_IDENTITY_FIELDS = Object.freeze([
+  "worktree", "path", "branch", "safetyFingerprint", "repository",
+  "expectedHeadSha", "pullRequestNumber", "deployed_target", "laneId",
+]);
+
+export function resultOwnershipMatches(existingInputs = {}, requestedInputs = {}) {
+  for (const field of ACTION_IDENTITY_FIELDS) {
+    const had = existingInputs?.[field];
+    const want = requestedInputs?.[field];
+    if (had === undefined && want === undefined) continue;
+    if (String(had ?? "") !== String(want ?? "")) {
+      return {
+        ok: false,
+        detail: `a completed action for ${field}="${had ?? "—"}" cannot answer a request for ${field}="${want ?? "—"}"`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+export function requestTrustedHostAction({
+  missionId,
+  assignmentId = null,
+  executionSessionId = null,
+  requestedBy = "director",
+  actionType,
+  inputs = {},
+  // CARRIED, NOT INVENTED. Only the two facts that cannot be derived from the
+  // action's own inputs travel from the governed owner: which request this is,
+  // and the fingerprint of the content that request was decided on. Scope,
+  // environment, repository, ref and SHA are resolved HERE from the normalized
+  // inputs, so a caller cannot describe an action as something milder than it
+  // is by supplying its own identity fields.
+  authorizationContext = null,
+  nowMs,
+} = {}) {
+  if (!missionId || !actionType) return { ok: false, error: "missing_fields" };
+  const def = getActionDefinition(actionType);
+  if (!def) return { ok: false, error: "unknown_action_type", actionType };
+
+  const validated = def.validateInputs(inputs);
+  if (!validated.ok) {
+    return { ok: false, error: "input_validation_failed", validation: validated };
+  }
+
+  const dedupeKey = validated.normalized.dedupeKey
+    || validated.normalized.queryHash
+    || null;
+  /*
+   * A COMPLETED ACTION IS NOT ALWAYS A REUSABLE ANSWER.
+   *
+   * Dedupe was written for censuses, where reuse is sound: a pinned query hash names the same
+   * question and the stored result IS the answer. Some actions are the opposite — their whole
+   * purpose is to produce a fresh artifact, and the stored result describes an artifact that has
+   * since expired.
+   *
+   * Measured: three `restore_deployed_qa_session` requests in one run all adopted the same
+   * completed action. Its `dedupeKey` is `restore_deployed_qa_session:<target>`, constant per
+   * target, so after the first mint every later request replayed that stored result — reporting
+   * `verified: true` with the ORIGINAL `verified_at`, while the browser's storage-state file was
+   * never rewritten and the session had long since expired. Each request recorded its own
+   * `execution_started_at`, so from the outside it looked like it ran.
+   *
+   * In-flight reuse is kept for every action: two concurrent requests must not both mint. Only the
+   * COMPLETED state is withheld, and only from definitions that say their result does not keep.
+   */
+  const REUSABLE_IN_FLIGHT_STATES = ["requested", "policy_review", "authorized", "executing", "retrying"];
+  /*
+   * A COMPLETED RESULT MAY ONLY BE REPLAYED BY SOMETHING THAT SAYS WHICH
+   * QUESTION IT ANSWERED.
+   *
+   * `dedupeKey` and `queryHash` are both OPTIONAL. Most actions declare one in
+   * their own module — push, open_pr, merge, close_pr, delete_branch,
+   * install_toolkit, the reconciliations — and `retire_worktree` did not. For an
+   * action that declares neither, the predicate below reduced to
+   * `undefined === undefined`, and `sameActionOwnership` compares only session,
+   * assignment and lane — so ANY completed action of that type satisfied ANY
+   * later request of that type in the same scope. Measured still true today for
+   * `platform.register_developer_application`.
+   *
+   * That is how eleven worktree retirements returned a twelfth worktree's
+   * result. The hazard is general: `resultKeeps: false` was the per-action fix
+   * for one instance of it, and it cannot be the fix for an action nobody
+   * noticed.
+   *
+   * SCOPED TO WHAT IT IS ABOUT. Withholding completed reuse from EVERY keyless
+   * action would also move `restore_qa_session`, whose ownership contract is
+   * locked by its own test and is not this mission's to change. The narrowing
+   * applies to actions that DECLARE themselves destructive: replaying a finished
+   * deletion is categorically different from replaying a finished answer, and a
+   * destructive action that cannot say what it acted on may not replay at all.
+   * In-flight reuse is kept for everything — two concurrent requests must still
+   * never both execute.
+   */
+  const hasSemanticIdentity = Boolean(dedupeKey);
+  const mayNotReplayFinished = def.resultKeeps === false
+    || (def.destructive === true && !hasSemanticIdentity);
+  const reusableStates = mayNotReplayFinished
+    ? REUSABLE_IN_FLIGHT_STATES
+    : [...REUSABLE_IN_FLIGHT_STATES, "completed"];
+  let dedupeDisposition = null;
+  let dedupeWhy = null;
+  let existing = listTrustedHostActions(missionId).find((a) =>
+    a.actionType === actionType
+    && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
+    && (dedupeKey
+      ? (a.inputs?.dedupeKey === dedupeKey || a.inputs?.queryHash === dedupeKey)
+      /*
+       * NO KEY IS NOT A WILDCARD — for something that deletes. With nothing
+       * declared, the only honest statement of "the same request" is the same
+       * normalised inputs, compared whole, so two distinct retirements can no
+       * longer share an action merely by both being keyless. Everything else
+       * keeps the existing predicate.
+       */
+      : (def.destructive === true
+        ? sameNormalizedInputs(a.inputs, validated.normalized)
+        : a.inputs?.queryHash === validated.normalized.queryHash))
+    && reusableStates.includes(a.state));
+  if (existing && existing.state === "completed") {
+    /*
+     * A COMPLETED ACTION IS ADOPTED ONLY IF A REPEAT MEANS "THE SAME ANSWER".
+     *
+     * It used to be adopted whenever the naive match found it, so a second
+     * intentional request in one Execution Run was answered from the first
+     * execution. Measured: two reconciliation requests in erun_dc7857293e0e0502
+     * shared `result_ref tha_5975676b98005f`; the runner's diagnostic opened
+     * `DELETE 0` both times, where a genuine second execution opens `DELETE 4`.
+     *
+     * The occurrence boundary is the governed request id, which is carried
+     * rather than invented — a retry of the SAME request still reuses, which is
+     * checked before the classification so repeatability never costs retry
+     * safety. No caller-supplied dedupeKey participates.
+     */
+    const decision = completedReuseDecision({
+      actionType,
+      existing,
+      requestId: authorizationContext?.requestId || null,
+      reuseAuthorized: typeof def.reuseAuthorized === "function"
+        ? def.reuseAuthorized(validated.normalized)
+        : null,
+    });
+    if (!decision.reuse) {
+      // Fall through to minting a new action. The disposition is recorded on it
+      // below, so why a second execution happened is answerable afterwards.
+      dedupeDisposition = decision.disposition;
+      dedupeWhy = decision.why;
+      existing = null;
+    } else {
+      dedupeDisposition = decision.disposition;
+      dedupeWhy = decision.why;
+    }
+  }
+  if (existing) {
+    /*
+     * DEFENCE IN DEPTH: the reused action must be about the same thing.
+     *
+     * Reached only if a future dedupe rule is wrong. A destructive action that
+     * replays someone else's success is the failure this refuses to make
+     * possible twice, so the mismatch is a named integrity error rather than a
+     * silently adopted result.
+     */
+    const owned = resultOwnershipMatches(existing.inputs, validated.normalized);
+    if (!owned.ok) {
+      return { ok: false, error: "action_identity_mismatch", detail: owned.detail, actionType };
+    }
+    return { ok: true, action: existing, deduped: true };
+  }
+
+  const identity = resolveActionAuthorizationIdentity({
+    actionType,
+    scope: missionId,
+    inputs: validated.normalized,
+    requestId: authorizationContext?.requestId || null,
+    contentFingerprint: authorizationContext?.contentFingerprint || null,
+  });
+
+  const action = {
+    schema_version: "vacilando.trusted_host_action.v1",
+    id: newActionId(),
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy,
+    actionType,
+    actionVersion: def.version,
+    requestedInputs: { ...validated.normalized },
+    inputs: { ...validated.normalized },
+    // The resolved identity travels WITH the action, so the executor never has
+    // to rediscover it from inputs that may not carry it. It is still
+    // re-derived and compared at the boundary — carrying it is what removes the
+    // second derivation, not the check.
+    authorizationIdentity: {
+      scope: identity.scope,
+      actionType: identity.actionType,
+      repository: identity.repository,
+      environment: identity.environment,
+      targetRef: identity.targetRef,
+      sourceSha: identity.sourceSha,
+      subjectKey: identity.subjectKey,
+      requestId: identity.requestId,
+      contentFingerprint: identity.contentFingerprint,
+      resolved: identity.ok,
+      reason: identity.reason || null,
+    },
+    policyClassification: def.riskClass,
+    /*
+     * WHY THIS ACTION EXISTS RATHER THAN REUSING ONE. Internal provenance, not
+     * operator-facing noise: it is how "a second execution happened" is
+     * answerable without re-deriving the dedupe decision months later.
+     */
+    dedupeDisposition: dedupeDisposition || "first_occurrence",
+    dedupeWhy,
+    authorizationState: "pending",
+    authorizationId: null,
+    executionState: "not_started",
+    state: "requested",
+    hostProcess: null,
+    started_at: null,
+    completed_at: null,
+    result: null,
+    evidence: [],
+    audit: null,
+    failureReason: null,
+    retryState: { attempts: 0, maxAttempts: def.retry?.maxAttempts ?? 1 },
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+  };
+  writeAction(action);
+  try {
+    appendTimelineEvent(missionId, {
+      type: "progress",
+      headline: "Director prepared a Trusted Host Action",
+      summary: `${def.title} requested — credentials stay on the trusted host.`,
+      visibility: "summary",
+      actor: "director",
+      detail: { trustedHostActionId: action.id, actionType },
+      nowMs,
+    });
+  } catch { /* optional */ }
+  return { ok: true, action, normalized: validated.normalized };
+}
+
+/**
+ * Does this single-use grant authorize THIS action?
+ *
+ * Re-derived from the action's own normalized inputs, never from the governed
+ * request that produced it — a check that reads the same record twice proves
+ * nothing. Each field is compared on its own so the refusal can say what
+ * changed; `grant_head_sha_mismatch` is the one that carries the weight, because
+ * it is what happens when the branch moves after a Director approves.
+ */
+export function grantAuthorizesAction(grant, action, { nowMs = Date.now() } = {}) {
+  if (!grant) return { ok: false, error: "grant_missing" };
+  if (grant.status === "CONSUMED") return { ok: false, error: "grant_already_used" };
+  if (grant.status === "REVOKED") return { ok: false, error: "grant_revoked" };
+  if (!(Date.parse(grant.expires_at) > nowMs)) return { ok: false, error: "grant_expired" };
+  if (grant.action_key !== action.actionType) return { ok: false, error: "grant_action_mismatch" };
+  if (grant.repository_id && action.missionId && grant.repository_id !== action.missionId) {
+    return { ok: false, error: "grant_scope_mismatch" };
+  }
+  if (grant.run_id && action.executionSessionId && grant.run_id !== action.executionSessionId) {
+    return { ok: false, error: "grant_run_mismatch" };
+  }
+  const i = action.inputs || {};
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH
+    || action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    // The commit is the decision. A branch that moved is a different question.
+    if (String(grant.expected_head_sha || "").toLowerCase() !== String(i.expectedHeadSha || "").toLowerCase()) {
+      return { ok: false, error: "grant_head_sha_mismatch" };
+    }
+    const branch = i.branch || i.headBranch || null;
+    if (String(grant.branch || "") !== String(branch || "")) {
+      return { ok: false, error: "grant_branch_mismatch" };
+    }
+    if (action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR
+      && String(grant.target_branch || "") !== String(i.base || "")) {
+      return { ok: false, error: "grant_target_branch_mismatch" };
+    }
+    return { ok: true };
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    if (Number(grant.pull_request_number) !== Number(i.pullRequestNumber)) {
+      return { ok: false, error: "grant_pull_request_mismatch" };
+    }
+    if (String(grant.expected_head_sha || "").toLowerCase() !== String(i.expectedHeadSha || "").toLowerCase()) {
+      return { ok: false, error: "grant_head_sha_mismatch" };
+    }
+    if (String(grant.target_branch || "") !== String(i.targetBranch || "")) {
+      return { ok: false, error: "grant_target_branch_mismatch" };
+    }
+    if (String(grant.merge_method || "") !== String(i.mergeMethod || "")) {
+      return { ok: false, error: "grant_merge_method_mismatch" };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * THE AUTHORIZATION IDENTITY OF A TRUSTED HOST ACTION — THE ONLY DERIVATION.
+ *
+ * Re-derived from the action's own normalized inputs through the canonical
+ * resolver, with the two carried facts (request id, content fingerprint) taken
+ * from the identity the governed owner stamped on the action. Nothing here
+ * infers an environment, a scope, a ref or a SHA on its own; that independent
+ * inference is the defect this whole change removes.
+ */
+export function trustedHostActionIdentity(action, { requestId = null, contentFingerprint = null } = {}) {
+  const carried = action?.authorizationIdentity || {};
+  return resolveActionAuthorizationIdentity({
+    actionType: action?.actionType,
+    scope: action?.missionId,
+    inputs: action?.inputs || {},
+    requestId: requestId ?? carried.requestId ?? null,
+    contentFingerprint: contentFingerprint ?? carried.contentFingerprint ?? null,
+  });
+}
+
+/**
+ * Resolve the authorization that covers this action, exactly as execution will.
+ *
+ * THE PRE-CONSUMPTION PROOF CALLS THIS SAME FUNCTION. The previous proof called
+ * findAuthorization with a policy-side `environment` argument that the real
+ * boundary never passed, so it verified a different question than the one that
+ * gates execution: it passed, the delegation was consumed, and the boundary
+ * then refused. One path, not a simulated equivalent.
+ */
+export function resolveActionAuthorization(action, {
+  nowMs = Date.now(),
+  requestId = null,
+  contentFingerprint = null,
+} = {}) {
+  const identity = trustedHostActionIdentity(action, { requestId, contentFingerprint });
+  const authorization = findAuthorization({
+    ...identity.lookup,
+    actionRequestId: action?.id || null,
+    nowMs,
+  });
+  return { identity, authorization };
+}
+
+/**
+ * ONE OBSERVATION, ONE GENERATION.
+ *
+ * A census artifact says "these results came from this action". The merge that
+ * refreshed an existing artifact was an object spread with an explicit list of
+ * fields to update:
+ *
+ *   { ...prior, status, query_hash, execution: {...}, results }
+ *
+ * `...prior` carried the OLD top-level `trusted_host_action_id`, and the
+ * refresh list did not include it. Fresh results were written beside stale
+ * provenance - and because the nested `execution.trusted_host_action_id` WAS
+ * refreshed, the artifact ended up carrying two action ids that disagreed: the
+ * documented top-level one wrong, the nested one right.
+ *
+ * MEASURED in certification/migrations/hosted-migration-identity-census.sql.results.json:
+ *   top    trusted_host_action_id  tha_62a0bc1ab313f7   (four days stale)
+ *   nested trusted_host_action_id  tha_02c7feeb72f587   (produced these results)
+ *   results.census_run_at          2026-09-12T16:21:08.115Z
+ *   execution.executed_at          2026-09-12T16:21:07.148Z
+ *
+ * `query_hash` matched in both places only because the query had not changed,
+ * which is exactly how a two-field disagreement stays invisible.
+ *
+ * The action id IS the generation id; no new identity system is needed. This
+ * constructor derives EVERY provenance field from the one action, so results and
+ * provenance cannot come from different generations. Unrelated keys a prior
+ * artifact carried are preserved; no provenance field survives a previous
+ * observation.
+ */
+export function censusEvidenceEnvelope(action, resultObj, { prior = null, nowMs = Date.now() } = {}) {
+  const carried = prior && typeof prior === "object" ? { ...prior } : {};
+
+  /*
+   * THE ORDERING IS THE MECHANISM, and it is the whole fix.
+   *
+   * `...carried` FIRST, every owned field after. The original defect was not a
+   * missing guard - it was that the top-level `trusted_host_action_id` appeared
+   * nowhere after the spread, so `...prior` was its last writer. Any field this
+   * constructor does not restate below is inherited from the previous
+   * observation, silently.
+   *
+   * A first draft of this function also deleted the owned keys off `carried`
+   * before spreading. That read as protective and did nothing: the later spread
+   * overwrites them anyway, and a planted regression proved the test could not
+   * tell the two versions apart. Dead defensive code is worse than none - it
+   * invites the reader to believe a guard is holding something up.
+   */
+  const provenance = {
+    trusted_host_action_id: action.id,
+    query_hash: action.inputs.queryHash,
+  };
+  return {
+    ...carried,
+    ...provenance,
+    status: "executed",
+    execution: {
+      executed: true,
+      executed_at: iso(nowMs),
+      executed_by: "trusted_host_action",
+      ...provenance,
+      authorization_id: action.authorizationId,
+      database_target: action.inputs.databaseTarget,
+      database_target_fingerprint: databaseTargetFingerprint(action.inputs.databaseTarget),
+      blocker: null,
+    },
+    results: resultObj,
+  };
+}
+
+/**
+ * Can a reader prove this metadata describes THESE results?
+ *
+ * Returns both action ids and both query hashes so a caller sees a
+ * mixed-generation artifact instead of trusting whichever field it read first.
+ */
+export function censusEvidenceGeneration(artifact = {}) {
+  const top = artifact?.trusted_host_action_id ?? null;
+  const nested = artifact?.execution?.trusted_host_action_id ?? null;
+  const topHash = artifact?.query_hash ?? null;
+  const nestedHash = artifact?.execution?.query_hash ?? null;
+  // An artifact with no `execution` block was written whole and has one
+  // generation by construction; only a merged artifact can disagree.
+  const hasNested = artifact?.execution != null;
+  const coherent = !hasNested || (top === nested && topHash === nestedHash);
+  return {
+    coherent,
+    generation: coherent ? top : null,
+    trusted_host_action_id: top,
+    execution_trusted_host_action_id: nested,
+    query_hash: topHash,
+    execution_query_hash: nestedHash,
+    mismatch: coherent ? null : { action_id: top !== nested, query_hash: topHash !== nestedHash },
+  };
+}
+
+/**
+ * Would a governed request's action be authorized at the boundary?
+ *
+ * Normalizes the inputs through the SAME registry validator the action is built
+ * from, then asks `resolveActionAuthorization` — the function execution itself
+ * calls. Used before a delegation is consumed, so authority is only ever spent
+ * on an authorization that is provably usable.
+ */
+export function previewTrustedHostAuthorization({
+  missionId,
+  actionType,
+  inputs = {},
+  normalizedInputs = null,
+  requestId = null,
+  contentFingerprint = null,
+  nowMs = Date.now(),
+} = {}) {
+  const def = getActionDefinition(actionType);
+  if (!def) return { ok: false, error: "unknown_action_type", actionType };
+  let normalized = normalizedInputs;
+  if (!normalized) {
+    const validated = def.validateInputs(inputs);
+    if (!validated.ok) return { ok: false, error: "input_validation_failed", validation: validated };
+    normalized = validated.normalized;
+  }
+  const shape = { id: null, missionId, actionType, inputs: normalized, authorizationIdentity: null };
+  const { identity, authorization } = resolveActionAuthorization(shape, {
+    nowMs, requestId, contentFingerprint,
+  });
+  return { ok: Boolean(authorization), identity, authorization: authorization || null };
+}
+
+export function authorizeTrustedHostAction(actionId, {
+  actor = "operator",
+  authorizationId = null,
+  nowMs,
+  grant = null,
+  exactContext = null,
+} = {}) {
+  const action = readAction(actionId);
+  if (!action) return { ok: false, error: "not_found" };
+
+  // AN ACTION AUTHORISED A MOMENT AGO IS STILL AUTHORISED.
+  //
+  // This is where Director authority was being lost. The fulfil path authorises
+  // WITH the Director's exact-request context and the action becomes
+  // "authorized"; it then calls executeTrustedHostAction, whose per-action
+  // executor authorises AGAIN with no context at all. The second call fell
+  // through to findAuthorization, found no standing grant for a fresh SHA, and
+  // escalated to the operator — discarding an authorization that had already
+  // passed every check seconds earlier.
+  //
+  // Honouring the pinned authorization is not a weakening: the ONLY way an
+  // action reaches this state is by passing the checks below, and the pinned
+  // authorization is re-validated here rather than assumed.
+  if (action.authorizationState === "authorized" && action.authorizationId) {
+    const pinned = listAuthorizations(action.missionId)
+      .find((x) => x.authorizationId === action.authorizationId) || null;
+    const stillValid = pinned
+      && pinned.status === "active"
+      && !(pinned.expires_at && Date.parse(pinned.expires_at) < (nowMs ?? Date.now()));
+    // A repository grant is not in this store; it authorised the action on its
+    // own terms and is equally not re-derived here.
+    if (stillValid || (!pinned && grant)) return { ok: true, action, already: true };
+  }
+
+  let auth = null;
+  if (authorizationId) {
+    auth = listAuthorizations(action.missionId).find((a) => a.authorizationId === authorizationId) || null;
+    // PRESENTING AN ID IS NOT AUTHORISATION. This lookup used to accept any
+    // id it could resolve, with no check that the authorization actually
+    // covered THIS action — so a caller holding one id could have executed a
+    // different action with it. An exact-request authorization is now verified
+    // against the action's own parameters before it counts.
+    if (auth && auth.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST) {
+      const ctx = exactContext || {};
+      // ONE DERIVATION. This block used to spell out environment, repository
+      // and sourceSha itself — a fifth independent reconstruction, and the one
+      // that read `ctx.environment ?? null` while the mint had recorded a
+      // resolved environment. Only the two carried facts come from the caller.
+      const identity = trustedHostActionIdentity(action, {
+        requestId: ctx.requestId ?? null,
+        contentFingerprint: ctx.contentFingerprint ?? null,
+      });
+      const covers = exactAuthorizationCovers(auth, {
+        requestId: identity.requestId,
+        contentFingerprint: identity.contentFingerprint,
+        actionType: identity.actionType,
+        environment: identity.environment,
+        repository: identity.repository,
+        sourceSha: identity.sourceSha,
+        targetRef: identity.targetRef,
+      });
+      const expired = auth.expires_at && Date.parse(auth.expires_at) < (nowMs ?? Date.now());
+      if (!covers || auth.status !== "active" || expired || auth.used_at) auth = null;
+    }
+  } else {
+    // THE FOURTH INSTANCE OF THE DEFECT FAMILY WAS HERE. This block derived the
+    // lookup's target as `... || DEFAULT_TARGET`. A repository.push carries no
+    // databaseTarget, environment or targetBranch, so it fell through to
+    // `alloy_deployed_primary` — an operator-only environment that
+    // exactAuthorizationCovers refuses on its first line — while the mint had
+    // recorded the real one. No exact-request authorization for a push could
+    // ever resolve, for the delegated path or the Director path alike.
+    ({ authorization: auth } = resolveActionAuthorization(action, { nowMs: nowMs ?? Date.now() }));
+  }
+  if (!auth && grant) {
+    // A repository-authorized action carries a single-use grant instead of a
+    // mission authorization. It still has to CLEAR: the grant is verified
+    // against this action's own parameters, not merely presented. A grant that
+    // is expired, already spent, revoked, or pinned to a different head SHA is
+    // no authorization at all, and the action falls through to policy_review
+    // below exactly as an unauthorized one does.
+    const check = grantAuthorizesAction(grant, action, { nowMs: nowMs ?? Date.now() });
+    if (check.ok) {
+      auth = {
+        authorizationId: grant.grant_id,
+        kind: "repository_grant",
+        actor: grant.approved_by,
+        grantedAt: grant.approved_at,
+        expiresAt: grant.expires_at,
+        singleUse: true,
+      };
+    } else {
+      action.grantRefusal = check.error;
+    }
+  }
+  if (!auth) {
+    action.state = "policy_review";
+    action.authorizationState = "required";
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: "authorization_required", action };
+  }
+  action.state = "authorized";
+  action.authorizationState = "authorized";
+  action.authorizationId = auth.authorizationId;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action, authorization: auth };
+}
+
+export function executeTrustedHostAction(actionId, { actor = "director", nowMs, grant = null } = {}) {
+  let action = readAction(actionId);
+  if (!action) return { ok: false, error: "not_found" };
+  if (action.state === "completed") return { ok: true, action, already: true };
+
+  if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return executeMergeTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    return executeMigrationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
+    return executePromotedMigrationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return executeLedgerRepairTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) {
+    return executeRepositoryMetadataPromotionTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH) {
+    return executePushTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return executeOpenPrTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    return executeRestoreQaSessionTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    return executeRestoreDeployedQaSessionTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    return executeProvisionQaIdentityTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    return executeAssignQaAccessTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    return executeClosePullRequestTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    return executeApplyReconciliationPlanTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) {
+    return executeTransferFilesTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    return executeDeleteRemoteBranchTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
+    return executeRetireWorktreeTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return executeSetProviderCeilingTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    /*
+     * THE HOLD THAT ALREADY EXISTED AND WAS NOT CONSULTED HERE.
+     *
+     * `gateway_host_mutation` is a capacity-1 exclusive resource on the ordinary
+     * governor, and `install-vacilando-gateway.sh` has honoured it since two
+     * lanes silently undid each other's Gateway installs. The GOVERNED action
+     * did not: `host.install_toolkit` relinks `toolkit/current` and converges
+     * the Gateway onto it without ever asking who holds the host.
+     *
+     * MEASURED. On 2026-09-12 at 03:42Z the Surfaces lane completed
+     * gar_338624523cda6d, moved `toolkit/current` from 14b0e01dcd06 to
+     * 5c7b100bcd64 and restarted the Gateway — invalidating an authoritative
+     * 24-hour Host Lifecycle soak another lane was in the middle of. No rule was
+     * broken, because nothing asked.
+     *
+     * This is not a new lock. It is the existing one, consulted by the path that
+     * most needs it. The holder's own run passes; every other run is refused
+     * with the holder named, which is what makes a convergence window
+     * expressible at all — and an unheld host installs exactly as before.
+     */
+    const allowed = assertGatewayHostMutationAllowed({ runId: action.runId || action.run_id || null });
+    if (!allowed.ok) {
+      action.state = "failed";
+      action.failureReason = allowed.error;
+      action.completed_at = iso(nowMs);
+      action.audit = buildAudit(action, { success: false, failureCode: allowed.error });
+      writeAction(action);
+      return { ok: false, error: allowed.error, detail: allowed.detail, holder: allowed.holder, action };
+    }
+    return executeInstallToolkitTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    return executeLaneDispatchTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
+    return executeRegisteredReconciliationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) {
+    return executeRegisterDeveloperApplicationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return { ok: false, error: "unknown_action_type", actionType: action.actionType };
+  }
+
+  const authz = authorizeTrustedHostAction(actionId, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const absSqlArtifact = action.inputs.queryArtifactAbsolute
+    || join(action.inputs.artifactRoot || resolveArtifactRoot(action.inputs), action.inputs.queryArtifactPath);
+  let sql = null;
+  const rawSql = readFileSync(absSqlArtifact, "utf8");
+  sql = sqlFromCensusArtifact(rawSql, absSqlArtifact);
+  if (hashSql(sql) !== action.inputs.queryHash) {
+    action.state = "failed";
+    action.failureReason = "query_hash_mismatch";
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, { success: false, failureCode: "query_hash_mismatch" });
+    writeAction(action);
+    return { ok: false, error: "query_hash_mismatch", action };
+  }
+
+  const tmpDir = join(storeDir(), "tmp");
+  ensureDir(tmpDir);
+  const sqlFile = join(tmpDir, `${action.id}.sql`);
+  const outFile = join(tmpDir, `${action.id}.out`);
+  const errFile = join(tmpDir, `${action.id}.err`);
+  writeFileSync(sqlFile, sql.endsWith(";") ? sql : `${sql};`);
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = iso(nowMs);
+  action.hostProcess = { kind: "trusted-host-run-sql" };
+  action.retryState.attempts = (action.retryState.attempts || 0) + 1;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  try {
+    appendTimelineEvent(action.missionId, {
+      type: "progress",
+      headline: "Director is running an approved database census",
+      summary: "Trusted Host Action executing on the control-plane host — worker still has no credentials.",
+      visibility: "summary",
+      actor: "director",
+      detail: { trustedHostActionId: action.id },
+      nowMs,
+    });
+  } catch { /* */ }
+
+  if (!existsSync(RUN_SQL_SH)) {
+    action.state = "failed";
+    action.failureReason = "host_runtime_missing";
+    action.completed_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: "host_runtime_missing", action };
+  }
+  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
+
+  const originatingRoot = action.inputs.artifactRoot
+    || action.inputs.worktreePath
+    || resolveArtifactRoot(action.inputs);
+  const hostCheckout = findRepoRoot();
+  // S3: nullable now. A census with no canonical root cannot run, and saying so
+  // here beats spawning a child with an undefined repository path.
+  const canonical = resolveCanonicalRepoRoot();
+  const envSource = resolveTrustedServerEnvSource();
+  // A census names its database too. It used to inherit whichever credential the
+  // host held; now it declares one, and an unrecognised target refuses instead of
+  // silently reading deployed.
+  const censusEnvironment = action.inputs.databaseTarget
+    || action.inputs.database_target
+    || action.inputs.environment
+    || action.target
+    /*
+     * THE LAST RESORT NAMES ITS OWNER.
+     *
+     * This read `|| "alloy_deployed_primary"` — a literal, so any project whose
+     * request omitted a target silently acquired ALLOY'S DATABASE. The fallback
+     * still exists, because a census with no environment cannot run at all; what
+     * changes is that it is now Alloy's profile answering for Alloy, and a future
+     * project supplies its own rather than inheriting this one.
+     */
+    || alloyDatabaseTarget();
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile, String(censusEnvironment)], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: canonical,
+      ALLOY_REPO: canonical,
+      ALLOY_SERVER_ENV_SOURCE: envSource,
+      // Toolkit + credentials stay on the Director/canonical host.
+      // Do not point these at the originating lane — Identity has no DATABASE_URL.
+      VACILANDO_CHECKOUT: hostCheckout,
+      ALLOY_WORKTREE: hostCheckout,
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: action.inputs.timeoutMs || 180_000,
+    encoding: "utf8",
+  });
+
+  const errText = redactSecrets(
+    (existsSync(errFile) ? readFileSync(errFile, "utf8") : "") || child.stderr || "",
+  );
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8").trim() : "";
+  try { unlinkSync(sqlFile); } catch { /* */ }
+
+  if (child.status !== 0) {
+    const code = classifySqlChildFailure(
+      errText,
+      child.error?.code === "ETIMEDOUT" ? "timeout" : "execution_failed",
+    );
+    const transient = code === "timeout" || /could not connect|timeout|Connection refused/i.test(errText);
+    action.failureReason = code;
+    action.executionState = "failed";
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, {
+      success: false,
+      failureCode: code,
+      authorizingOperator: authz.authorization?.granted_by || null,
+    });
+    action.state = (transient && action.retryState.attempts < (action.retryState.maxAttempts || 1))
+      ? "retrying"
+      : "failed";
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    try {
+      appendTimelineEvent(action.missionId, {
+        type: "progress",
+        headline: code === "trusted_credential_unavailable"
+          ? "Trusted credential unavailable on the host"
+          : "Database census failed",
+        summary: redactSecrets(errText).slice(0, 240) || "Host execution failed.",
+        visibility: "summary",
+        actor: "director",
+        detail: { trustedHostActionId: action.id, code },
+        nowMs,
+      });
+    } catch { /* */ }
+    return { ok: false, error: code, detail: redactSecrets(errText).slice(0, 500), action };
+  }
+
+  const resultObj = parseTrustedHostSqlOutput(outText);
+  if (!resultObj) {
+    action.state = "failed";
+    action.failureReason = "result_parse_failed";
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, { success: false, failureCode: "result_parse_failed" });
+    writeAction(action);
+    return { ok: false, error: "result_parse_failed", action };
+  }
+
+  const queryRel = action.inputs.queryArtifactPath
+    || "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json";
+  const evidenceRel = String(queryRel).replace(/\.json$/i, "") + ".results.json";
+  const storeEvidenceAbs = join(storeDir(), `${action.id}.results.json`);
+  try {
+    writeFileSync(storeEvidenceAbs, JSON.stringify(
+      censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
+  } catch { /* action.result still holds the census */ }
+  const evidenceAbs = join(originatingRoot, evidenceRel);
+  try {
+    mkdirSync(dirname(evidenceAbs), { recursive: true });
+    if (existsSync(evidenceAbs) && evidenceAbs.endsWith(".json")) {
+      try {
+        const prior = JSON.parse(readFileSync(evidenceAbs, "utf8"));
+        writeFileSync(evidenceAbs, JSON.stringify(
+          censusEvidenceEnvelope(action, resultObj, { prior, nowMs }), null, 2));
+      } catch {
+        writeFileSync(evidenceAbs, JSON.stringify(
+          censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
+      }
+    } else {
+      writeFileSync(evidenceAbs, JSON.stringify(
+        censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
+    }
+  } catch {
+    /* originating worktree write is best-effort; Director store holds the result */
+  }
+
+  const auditPath = join(storeDir(), `${action.id}.audit.json`);
+  const audit = buildAudit(action, {
+    success: true,
+    rowCount: 1,
+    outputArtifactPath: evidenceRel,
+    authorizingOperator: authz.authorization?.granted_by || null,
+  });
+  writeFileSync(auditPath, JSON.stringify(audit, null, 2));
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.completed_at = iso(nowMs);
+  action.result = {
+    databaseTarget: action.inputs.databaseTarget,
+    queryHash: action.inputs.queryHash,
+    rowCount: 1,
+    census: resultObj,
+    evidencePath: evidenceRel,
+  };
+  action.evidence = [
+    { type: "query_artifact", path: action.inputs.queryArtifactPath },
+    { type: "query_hash", value: action.inputs.queryHash },
+    { type: "validation_report", value: action.inputs.validation },
+    { type: "result_json", path: evidenceRel },
+    { type: "execution_audit", path: auditPath },
+  ];
+  action.audit = audit;
+  action.failureReason = null;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  markAuthorizationUsed(action.missionId, action.authorizationId, { nowMs });
+
+  try {
+    attachEvidence({
+      missionId: action.missionId,
+      assignmentId: action.assignmentId,
+      type: "database",
+      title: "Wave 0 authority census results (Trusted Host Action)",
+      description: "Read-only deployed-database census completed on the trusted host. No credentials entered the worker.",
+      fileUri: evidenceRel,
+      acceptanceCriteriaIds: ["AC_W0"],
+      createdBy: "director",
+      nowMs,
+    });
+  } catch { /* */ }
+
+  try {
+    appendTimelineEvent(action.missionId, {
+      type: "evidence_added",
+      headline: "Database census completed",
+      summary: "Results returned to Claude. Paused work can resume.",
+      visibility: "summary",
+      actor: "director",
+      detail: { trustedHostActionId: action.id, evidencePath: evidenceRel },
+      nowMs,
+    });
+  } catch { /* */ }
+
+  return { ok: true, action, result: action.result, audit };
+}
+
+/**
+ * Director path: request → recognize prior auth → authorize → execute.
+ */
+export function fulfillDatabaseCensusForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  queryArtifactPath = "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json",
+  worktreePath = null,
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  recognizePriorCensusAuthorization(missionId, { nowMs });
+
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+    inputs: {
+      queryArtifactPath,
+      databaseTarget: DEFAULT_TARGET,
+      worktreePath,
+    },
+    nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) {
+    return { ok: true, action: req.action, already: true };
+  }
+
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "authorization_required",
+      action: auth.action,
+      decisionNeeded: {
+        title: "Authorize read-only database census for this mission",
+        recommendation: "Authorize read-only database census for this mission.",
+        whatDirectorWillDo: [
+          "validate the committed query",
+          "run it through the trusted host",
+          "store the result as evidence",
+          "resume Claude",
+        ],
+      },
+    };
+  }
+
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function trustedHostDiagnostics() {
+  const envSource = resolveTrustedServerEnvSource();
+  const credentialFilePresent = existsSync(envSource);
+  ensureDir();
+  const recentFailures = [];
+  let lastSuccess = null;
+  const activeActions = [];
+  try {
+    for (const f of fsReaddirSafe()) {
+      try {
+        const a = JSON.parse(readFileSync(join(storeDir(), f), "utf8"));
+        if (["requested", "policy_review", "authorized", "executing", "retrying"].includes(a.state)) {
+          activeActions.push({ id: a.id, state: a.state, actionType: a.actionType });
+        }
+        if (a.state === "failed") {
+          recentFailures.push({ id: a.id, reason: a.failureReason, at: a.completed_at });
+        }
+        if (a.state === "completed") {
+          if (!lastSuccess || Date.parse(a.completed_at || 0) > Date.parse(lastSuccess.at || 0)) {
+            lastSuccess = { id: a.id, at: a.completed_at, actionType: a.actionType };
+          }
+        }
+      } catch { /* */ }
+    }
+  } catch { /* */ }
+
+  return {
+    kind: "trusted_host_diagnostics",
+    hostRuntimeAvailable: existsSync(RUN_SQL_SH),
+    databaseCredentialAvailable: credentialFilePresent,
+    approvedDatabaseTarget: DEFAULT_TARGET,
+    registeredActions: listRegisteredActions(),
+    activeActions,
+    recentFailures: recentFailures.slice(-10),
+    lastSuccessfulAction: lastSuccess,
+    note: "Secret values are never displayed.",
+    directorCapabilities: (() => {
+      try {
+        const live = directorRegistryFreshness();
+        return {
+          stale: live.stale,
+          loaded_fingerprint: live.loaded.fingerprint,
+          current_fingerprint: live.disk.fingerprint,
+          loaded_action_keys: live.loaded.actionKeys,
+          current_action_keys: live.disk.actionKeys,
+        };
+      } catch {
+        return null;
+      }
+    })(),
+  };
+}
+
+function fsReaddirSafe() {
+  return readdirSync(storeDir()).filter((f) => f.startsWith("tha_") && f.endsWith(".json"));
+}
+
+/**
+ * After control-plane restart: stuck "executing" actions cannot be trusted mid-flight.
+ * Mark them failed for safe retry (dedupe excludes failed). Never re-expose credentials.
+ */
+export function reconcileTrustedHostActionsOnBoot({ nowMs } = {}) {
+  ensureDir();
+  const interrupted = [];
+  for (const f of fsReaddirSafe()) {
+    try {
+      const a = JSON.parse(readFileSync(join(storeDir(), f), "utf8"));
+      if (a.state === "executing" || a.state === "retrying") {
+        a.state = "failed";
+        a.executionState = "interrupted_by_restart";
+        a.failureReason = {
+          code: "host_restart",
+          detail: "Control plane restarted while Trusted Host Action was in flight. Safe to retry.",
+        };
+        a.completed_at = iso(nowMs);
+        a.updated_at = iso(nowMs);
+        writeAction(a);
+        interrupted.push(a.id);
+        try {
+          appendTimelineEvent(a.missionId, {
+            type: "progress",
+            headline: "Trusted Host Action interrupted by restart",
+            summary: "Director will not ask for Terminal workarounds. Retry the registered action.",
+            visibility: "summary",
+            actor: "director",
+            detail: { trustedHostActionId: a.id },
+            nowMs,
+          });
+        } catch { /* */ }
+      }
+    } catch { /* */ }
+  }
+  return { interrupted };
+}
+
+let mergeGhForTests = null;
+// Injection seams for the two remote actions added alongside merge. The guard
+// in trusted-host-remote-guard treats an injected client as simulated, so a
+// test that forgets one is refused rather than reaching the real remote.
+let pushGitForTests = null;
+let openPrGhForTests = null;
+/*
+ * The housekeeping verbs had no seam at all: the dispatch wrapper called them
+ * with `{}`, so `gh` always resolved to the real client and there was no way to
+ * drive close-PR or branch-deletion through the real dispatcher without
+ * reaching GitHub. That is why both sat in the uncovered pin.
+ */
+let housekeepingGhForTests = null;
+/*
+ * The reconciliation dispatch wrapper spawns a repository runner. Without a seam
+ * here the only way to exercise the wrapper is to run the real npm script
+ * against a real database, which is precisely what must never happen in CI - so
+ * the action sat in the uncovered pin for want of four lines.
+ */
+let reconciliationSpawnForTests = null;
+
+export function setPushGitForTests(fn) {
+  pushGitForTests = typeof fn === "function" ? fn : null;
+}
+export function setOpenPrGhForTests(fn) {
+  openPrGhForTests = typeof fn === "function" ? fn : null;
+}
+export function setRepositoryHousekeepingGhForTests(fn) {
+  housekeepingGhForTests = typeof fn === "function" ? fn : null;
+}
+export function setReconciliationSpawnForTests(fn) {
+  reconciliationSpawnForTests = typeof fn === "function" ? fn : null;
+}
+
+let migrationRunnersForTests = null;
+let productionRunnersForTests = null;
+
+export function setTrustedHostMergeGhForTests(fn) {
+  mergeGhForTests = typeof fn === "function" ? fn : null;
+}
+
+export function setTrustedHostMigrationRunnersForTests(runners = null) {
+  migrationRunnersForTests = runners;
+}
+
+/**
+ * Replace the SECRET SOURCE and the hosted reading, and nothing else.
+ *
+ * ── AN IGNORED SUBSTITUTION IS HOW A TEST WRITES TO PRODUCTION ──
+ *
+ * MEASURED, NOT HYPOTHETICAL. An integration harness passed `inspectLedger` and
+ * `applyFile` in THIS bag, believing it had isolated the database. The executor
+ * read those two from `migrationRunnersForTests`, so the keys were silently
+ * dropped and the DEFAULT runners ran: psql opened the deployed primary and
+ * applied two migrations that had no operator approval behind them. The harness
+ * reported success, because every assertion it made was against the mocks that
+ * WERE honoured.
+ *
+ * A seam that accepts a key it does not use is not a seam, it is a trapdoor.
+ */
+const PRODUCTION_RUNNER_KEYS = Object.freeze([
+  "revalidate", "resolveExecutorIdentity", "readHostedVersions", "readRequiredVersions",
+  "applyBatch", "inspectLedger", "applyFile", "readContent",
+]);
+
+export function setTrustedHostProductionRunnersForTests(runners = null) {
+  if (runners) {
+    const unknown = Object.keys(runners).filter((k) => !PRODUCTION_RUNNER_KEYS.includes(k));
+    if (unknown.length) {
+      throw new Error(
+        `setTrustedHostProductionRunnersForTests: unknown runner(s) ${unknown.join(", ")}. `
+        + `A substitution this executor ignores would silently fall through to the REAL production `
+        + `database. Known runners: ${PRODUCTION_RUNNER_KEYS.join(", ")}.`,
+      );
+    }
+  }
+  productionRunnersForTests = runners;
+}
+
+function payloadHasSecrets(value) {
+  const text = typeof value === "string" ? value : (() => {
+    try { return JSON.stringify(value); } catch { return ""; }
+  })();
+  return /postgresql:\/\/|postgres:\/\/|DATABASE_URL|ghp_[A-Za-z0-9]|github_pat_/i.test(text);
+}
+
+function failTrustedAction(action, code, detail, { nowMs, extra = null } = {}) {
+  action.state = "failed";
+  action.executionState = "failed";
+  action.failureReason = code;
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  action.result = { ok: false, code, detail: redactSecrets(detail || code).slice(0, 400) };
+  /*
+   * A FAILURE IS A RESULT TOO.
+   *
+   * The detail is clamped to 400 characters and everything else was dropped, so a
+   * failed trusted-host action told an operator what went wrong and nothing about
+   * where. Structured extras (provenance, exit code) survive here; they go through
+   * the same redaction as the detail, and a bag that still contains a secret after
+   * that is discarded rather than recorded.
+   */
+  if (extra && typeof extra === "object") {
+    try {
+      const cleaned = JSON.parse(redactSecrets(JSON.stringify(extra)));
+      if (!payloadHasSecrets(cleaned)) Object.assign(action.result, cleaned);
+    } catch { /* a bag that will not serialise is simply not recorded */ }
+  }
+  writeAction(action);
+  return { ok: false, error: code, detail: action.result.detail, action };
+}
+
+function completeTrustedAction(action, result, { nowMs } = {}) {
+  action.state = "completed";
+  action.executionState = "completed";
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  action.result = result;
+  action.failureReason = null;
+  writeAction(action);
+  return { ok: true, action, result };
+}
+
+export function executeMergeTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  // Re-authorized here on purpose: execution must never trust that an earlier
+  // call in this same flow already checked. The grant is threaded through so
+  // this second check re-derives from the action's own inputs rather than being
+  // skipped — the defence stays, it just has the evidence it needs.
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = mergePullRequest(action.inputs, mergeGhForTests ? { gh: mergeGhForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Merge result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "merge_failed", out?.detail || "Merge failed", { nowMs });
+  }
+  return completeTrustedAction(action, publicMergeResult(out), { nowMs });
+}
+
+/**
+ * Classify a trusted-host SQL child's stderr into a NAMED code.
+ *
+ * A missing executable used to reach the caller as a generic `preflight_failed` / `execution_failed`
+ * / `apply_failed`, so the one line that actually mattered -- "psql: command not found" -- never
+ * reached anyone who could act on it. That cost several certification runs across a product lane,
+ * which spent them re-requesting a capability that could never succeed.
+ *
+ * `fallback` is the caller's own operation-shaped code and still applies to genuine SQL failures.
+ */
+/*
+ * Run the read-only SQL child against ONE named environment.
+ *
+ * `environment` is passed explicitly rather than inherited, and the child writes
+ * back the target it actually resolved. The caller compares that against the
+ * target the request asked for, so "all three reads and the write hit the same
+ * database" is something the run PROVES rather than something it assumes by
+ * having passed the same string more than once.
+ */
+function runTrustedSqlChild({ sqlFile, outFile, errFile, environment, timeoutMs = 60_000 }) {
+  const reportFile = `${outFile}.target`;
+  try { unlinkSync(reportFile); } catch { /* */ }
+  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile, String(environment ?? "")], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+      ALLOY_TARGET_REPORT_FILE: reportFile,
+    },
+    timeout: timeoutMs,
+    encoding: "utf8",
+  });
+  let targetId = null;
+  try { targetId = existsSync(reportFile) ? readFileSync(reportFile, "utf8").trim() || null : null; } catch { /* */ }
+  try { unlinkSync(reportFile); } catch { /* */ }
+  return {
+    status: child.status,
+    outText: existsSync(outFile) ? readFileSync(outFile, "utf8") : "",
+    errText: redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || "")),
+    targetId,
+  };
+}
+
+function classifySqlChildFailure(errText, fallback) {
+  if (/trusted_credential_unavailable/.test(errText)) return "trusted_credential_unavailable";
+  if (/trusted_host_dependency_missing/.test(errText)) return "trusted_host_dependency_missing";
+  // Defence in depth: the child resolves psql itself now, but an older child or a different missing
+  // binary must still surface as a dependency problem rather than as a failed query.
+  if (/command not found|No such file or directory/.test(errText)) return "trusted_host_dependency_missing";
+  // Target selection and the pre-execution guard. These happen BEFORE any
+  // statement reaches a database, so they must never be reported as a failed
+  // query — a caller told "the apply failed" reasonably wonders what ran.
+  if (/target_environment_mismatch/.test(errText)) return "target_environment_mismatch";
+  if (/target_resolution_failed/.test(errText)) return "target_resolution_failed";
+  return fallback;
+}
+
+function defaultInspectLedger({ version, environment }) {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, `ledger-${version}.sql`);
+  const outFile = join(tmpDir, `ledger-${version}.out`);
+  const errFile = join(tmpDir, `ledger-${version}.err`);
+  writeFileSync(sqlFile, ledgerLookupSql(version));
+  // The ledger is read from the SAME database the migration will be written to.
+  // Reading it from deployed while writing to certification is how a version
+  // absent from alloy-cert got classified as already applied.
+  const child = runTrustedSqlChild({ sqlFile, outFile, errFile, environment });
+  const outText = child.outText;
+  const errText = child.errText;
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  if (child.status !== 0) {
+    return {
+      ok: false,
+      applied: false,
+      targetId: child.targetId,
+      code: classifySqlChildFailure(errText, "preflight_failed"),
+      detail: errText.slice(0, 400) || "Ledger inspect failed",
+    };
+  }
+  const applied = String(outText).includes(String(version));
+  if (!applied) return { applied: false, targetId: child.targetId };
+
+  /*
+   * RECORDED IS NOT THE SAME AS APPLIED.
+   *
+   * A certification database was found recording five Enrollment migrations while three of their
+   * effects were absent -- indexes missing, a backfill with no trace. Because the executor trusted
+   * the version string, every apply reported ok:true and did nothing. Silent and confidently wrong.
+   *
+   * So a recorded version is verified against evidence only a successful run could have produced.
+   * A migration that declares no postcondition keeps the old behaviour rather than blocking every
+   * migration the platform has ever applied, and a verifier that cannot RUN is not treated as a
+   * failed verifier -- an unreadable probe must not manufacture a mismatch.
+   */
+  const probe = migrationPostconditionSql(version);
+  if (!probe) return { applied: true, verification: "unverifiable", targetId: child.targetId };
+
+  // The postcondition is evidence about the SAME database the ledger was read
+  // from, so it travels on the same environment.
+  const verified = runLedgerProbe(probe, `verify-${version}`, environment);
+  if (!verified.ok) {
+    return { applied: true, verification: "unverifiable", detail: verified.detail, targetId: child.targetId, probeTargetId: verified.targetId };
+  }
+  if (verified.satisfied) return { applied: true, verification: "verified", targetId: child.targetId, probeTargetId: verified.targetId };
+
+  const expected = migrationPostconditionDescription(version) || "declared postcondition";
+  return {
+    applied: true,
+    inconsistent: true,
+    targetId: child.targetId,
+    probeTargetId: verified.targetId,
+    detail:
+      `Ledger records ${version} as applied, but its durable postcondition is absent. `
+      + `Expected: ${expected}. Observed: the probe returned false. `
+      + `The migration was recorded without taking effect; repair the ledger entry and re-apply `
+      + `through the governed executor rather than trusting the record.`,
+  };
+}
+
+/** Run a single-boolean probe through the trusted SQL child. Never throws. */
+function runLedgerProbe(sql, label, environment) {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, `${label}.sql`);
+  const outFile = join(tmpDir, `${label}.out`);
+  const errFile = join(tmpDir, `${label}.err`);
+  writeFileSync(sqlFile, sql);
+  const child = runTrustedSqlChild({ sqlFile, outFile, errFile, environment });
+  const outText = child.outText;
+  const errText = child.errText;
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  if (child.status !== 0) return { ok: false, targetId: child.targetId, detail: errText.slice(0, 300) || "postcondition probe failed" };
+  // psql -A -t prints a bare `t` or `f`; anything else is not an answer this may act on.
+  const answer = String(outText).replace(/BEGIN|COMMIT/g, "").trim().split(/\s+/).filter(Boolean).pop();
+  if (answer !== "t" && answer !== "f") return { ok: false, targetId: child.targetId, detail: "postcondition probe returned no boolean" };
+  return { ok: true, satisfied: answer === "t", targetId: child.targetId };
+}
+
+function defaultApplyMigrationFile({ entry, text, environment }) {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const file = join(tmpDir, `${entry.version}.sql`);
+  const outFile = join(tmpDir, `${entry.version}.out`);
+  const errFile = join(tmpDir, `${entry.version}.err`);
+  writeFileSync(file, text);
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  // The environment is an ARGUMENT, not an ambient default. The child selects
+  // its database from it; omitting it is a hard refusal there rather than a
+  // fallback to whichever credential the host happens to hold.
+  // The write reports the target it resolved, exactly as the reads do, so the
+  // batch can prove all four landed on one database.
+  const reportFile = `${outFile}.target`;
+  try { unlinkSync(reportFile); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, String(environment ?? "")], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+      ALLOY_TARGET_REPORT_FILE: reportFile,
+    },
+    timeout: 180_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  let targetId = null;
+  try { targetId = existsSync(reportFile) ? readFileSync(reportFile, "utf8").trim() || null : null; } catch { /* */ }
+  try { unlinkSync(reportFile); } catch { /* */ }
+  try { unlinkSync(file); } catch { /* */ }
+  if (child.status !== 0) {
+    return { ok: false, targetId, code: classifySqlChildFailure(errText, "apply_failed"), detail: errText.slice(0, 400) };
+  }
+  return { ok: true, ledger: "applied", targetId };
+}
+
+/*
+ * Exported for the ledger-routing lock only.
+ *
+ * The defect lived HERE, not in the batch: `applyMigrationBatch` already passed
+ * `environment` down, and this function silently dropped it and spawned a child
+ * with no target. A test that drives the batch with its own stub therefore
+ * passes with the defect fully present -- measured. The lock has to reach the
+ * real default runner.
+ */
+export const __defaultInspectLedgerForTests = defaultInspectLedger;
+
+export function executeMigrationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const runners = migrationRunnersForTests || {};
+  const out = applyMigrationBatch(action.inputs, {
+    inspectLedger: runners.inspectLedger || defaultInspectLedger,
+    applyFile: runners.applyFile || defaultApplyMigrationFile,
+    readContent: runners.readContent || readMigrationContent,
+    nowMs,
+  });
+  /*
+   * A VALUE CHECK, NOT A WORD CHECK.
+   *
+   * `payloadHasSecrets` matches the bare token DATABASE_URL, and `redactSecrets`
+   * rewrites a connection string to `postgresql://[redacted]` — which that
+   * pattern then matches too. So a migration result was reported as
+   * `result_contained_secrets` for naming an environment variable, and the real
+   * code was discarded: measured on gar_75e7df3ac3fac6, where a clean
+   * `trusted_credential_unavailable` surfaced as a credential leak and cost
+   * several runs to re-derive. The production-apply path already draws this
+   * distinction; the migration path now draws it too. A connection string, a key
+   * and an assignment are still refused.
+   */
+  if (containsCredentialMaterial(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Migration result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    const failed = out?.results?.find((r) => !r.ok);
+    const publicResult = publicMigrationResult(out);
+    /*
+     * A batch can fail WITHOUT reaching any migration — target resolution, an
+     * empty or unusable plan, a composition error. Those carry their code on the
+     * batch itself, and reading only `results` discarded it: the caller received
+     * a bare `apply_failed` for a path where nothing was ever attempted, and
+     * then reasonably spent runs looking for a SQL error that did not exist.
+     *
+     * So the batch's own code is preferred when no migration produced one, and a
+     * failure that reached no migration says so rather than borrowing the
+     * vocabulary of one that did.
+     */
+    const reachedAMigration = Array.isArray(out?.results) && out.results.length > 0;
+    const code = failed?.code || out?.code || (reachedAMigration ? "apply_failed" : "dispatch_failed");
+    const detail = failed?.detail
+      || out?.detail
+      || (reachedAMigration
+        ? "Migration batch stopped on failure."
+        : "Migration batch failed before any migration was attempted.");
+    const failedAction = failTrustedAction(action, code, detail, { nowMs });
+    if (failedAction.action) {
+      failedAction.action.result = {
+        ...publicResult,
+        ok: false,
+        code,
+        detail,
+        // Execution-stage evidence, so a result artifact exists and says how far
+        // the attempt got even when no child was ever spawned.
+        child_spawned: reachedAMigration,
+        stage_reached: reachedAMigration ? "migration_apply" : "dispatch",
+        requested_environment: action?.inputs?.environment ?? null,
+      };
+      writeAction(failedAction.action);
+    }
+    return failedAction;
+  }
+  const result = { ...publicMigrationResult(out), ok: true };
+  action.result = result;
+  return completeTrustedAction(action, result, { nowMs });
+}
+
+/**
+ * Apply promoted migrations to the PRODUCTION deployed primary.
+ *
+ * ── WHY IT IS A SEPARATE EXECUTOR AND NOT A FLAG ──
+ *
+ * The batch machinery is shared with the staging path deliberately — artifact
+ * resolution out of the git object store, per-file hash verification, ordered
+ * execution, stop-on-first-failure and ledger inspection are the properties
+ * that matter most, and a second implementation of them would drift. What is
+ * NOT shared is the decision about which database may be touched.
+ *
+ * ── THE TARGET IS ASSERTED HERE, NOT ASSUMED ──
+ *
+ * `trusted-host-apply-migration.sh` takes no target argument: it applies to the
+ * single DATABASE_URL the trusted server env carries. So "which database did
+ * that write to" is answered by host configuration, not by the request — and
+ * that is exactly the kind of coincidence that is true until it is not. The
+ * request already pinned the target to a registered production target; this
+ * asserts it again at the moment of execution, so a normalized input that
+ * somehow reached here naming anything else refuses instead of writing to
+ * whatever happens to be configured.
+ */
+// ── PRODUCTION MIGRATION: THE TRUSTED-HOST ADAPTERS ──────────────────────────
+//
+// The production orchestrator holds no credential and spawns nothing. These
+// three functions are where that path touches the world, and they live HERE
+// because this file already owns the trusted-host child boundary: the same
+// store, the same redaction, the same distinct exit code for an absent
+// credential.
+
+/**
+ * Prove the deployed-primary credential resolves, and name the project publicly.
+ *
+ * Proof 6 of `assertProductionApplyPreconditions` requires the executor to be
+ * running with sanctioned credentials that resolve to the requested target.
+ * Nothing could satisfy that by inspection — the credential is deliberately
+ * unreachable from any lane — so the trusted host asks the credential about
+ * itself, in its own child process, and only two public refs come back.
+ */
+function defaultResolveProductionExecutorIdentity() {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const outFile = join(tmpDir, "production-identity.out");
+  const errFile = join(tmpDir, "production-identity.err");
+  try { chmodSync(PRODUCTION_IDENTITY_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [PRODUCTION_IDENTITY_SH, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 60_000,
+    encoding: "utf8",
+  });
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(outFile); } catch { /* */ }
+  if (child.status !== 0) {
+    const code = classifySqlChildFailure(errText, PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE);
+    return {
+      ok: false,
+      code: code === "trusted_credential_unavailable" ? PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE : code,
+      detail: errText.slice(0, 300) || "The trusted host could not resolve the deployed-primary credential.",
+    };
+  }
+  const read = (key) => {
+    const line = String(outText).split("\n").find((l) => l.startsWith(`${key}=`));
+    return line ? line.slice(key.length + 1).trim() : "";
+  };
+  return {
+    ok: true,
+    dbHostKind: read("DB_HOST_KIND"),
+    dbProjectRef: read("DB_PROJECT_REF"),
+    apiProjectRef: read("API_PROJECT_REF"),
+  };
+}
+
+/** The LIVE hosted migration ledger. Read-only, through the same trusted child as a census. */
+function defaultReadHostedMigrationVersions() {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, "hosted-migration-versions.sql");
+  const outFile = join(tmpDir, "hosted-migration-versions.out");
+  const errFile = join(tmpDir, "hosted-migration-versions.err");
+  writeFileSync(sqlFile, "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version");
+  // "Hosted" IS the deployed ledger — that is what this function is for — so it
+  // says so rather than inheriting it.
+  const child = runTrustedSqlChild({ sqlFile, outFile, errFile, environment: "staging", timeoutMs: 120_000 });
+  const outText = child.outText;
+  const errText = child.errText;
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  if (child.status !== 0) {
+    const code = classifySqlChildFailure(errText, PRODUCTION_APPLY_FAILURES.HOSTED_READ_FAILED);
+    return {
+      ok: false,
+      code: code === "trusted_credential_unavailable"
+        ? PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE
+        : PRODUCTION_APPLY_FAILURES.HOSTED_READ_FAILED,
+      detail: errText.slice(0, 300) || "Hosted migration ledger could not be read.",
+    };
+  }
+  const versions = String(outText)
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /^\d{14}$/.test(l));
+  // A ledger read that returns NOTHING is unreadable, not empty. The deployed
+  // primary has carried migrations for as long as it has existed, so treating
+  // silence as "no migrations" would report every identity missing and invite
+  // an apply over a database nobody actually measured.
+  if (!versions.length) {
+    return {
+      ok: false,
+      code: PRODUCTION_APPLY_FAILURES.HOSTED_READ_FAILED,
+      detail: "The hosted ledger returned no identities. UNKNOWN refuses.",
+    };
+  }
+  return { ok: true, versions, head: versions[versions.length - 1] };
+}
+
+/**
+ * ── PRODUCTION DATABASE RUNNERS ARE COMPOSED, NEVER DEFAULTED ──
+ *
+ * THE INCIDENT THIS EXISTS TO MAKE IMPOSSIBLE. An integration harness supplied
+ * isolating runners in the wrong bag. From this executor's point of view that is
+ * indistinguishable from supplying none, and "none" fell through to the real
+ * psql runners: the deployed primary was migrated four times with no approved
+ * production mutation behind it. Every assertion the harness made passed,
+ * because they were all against the mocks that were honoured.
+ *
+ * The defect was not the typo. It was that the DEFAULT was production. A missing
+ * runner should be the least capable outcome available, not the most.
+ *
+ * So the dependency is inverted. Nothing defaults to psql. Callers that isolate
+ * the database are honoured; callers that isolate nothing are REFUSED; and the
+ * real runners exist only for a process that has explicitly declared itself a
+ * production-capable trusted host. The Gateway host declares it at startup and
+ * is the only thing that does. A harness, a CLI, a test or a scratch script
+ * never does, so for all of them the production database is not merely
+ * discouraged — it is unreachable.
+ */
+let productionExecutionArmed = null;
+
+/**
+ * Declare THIS PROCESS a production-capable trusted host.
+ *
+ * Called by the Gateway host at startup and by nothing else. It is deliberately
+ * an explicit act with a recorded reason rather than an inferred property: a
+ * capability that turns itself on when the conditions look right is a capability
+ * that will eventually be on when they only looked right.
+ */
+export function armProductionDatabaseExecution({ reason = null, nowMs = Date.now() } = {}) {
+  if (process.env.NODE_TEST_CONTEXT) {
+    // Defence in depth, and not redundant: this refuses even if some future
+    // caller decides arming is harmless in a test.
+    return { ok: false, code: "production_runners_refused_in_test_context" };
+  }
+  productionExecutionArmed = { reason: reason || "trusted host startup", at: iso(nowMs) };
+  return { ok: true, armed: productionExecutionArmed };
+}
+
+/** Testing hook: return to the unarmed default. Never widens anything. */
+export function disarmProductionDatabaseExecution() {
+  productionExecutionArmed = null;
+}
+
+export function productionDatabaseExecutionArmed() {
+  return productionExecutionArmed ? { ...productionExecutionArmed } : null;
+}
+
+/**
+ * Resolve the two runners that open a database connection.
+ *
+ * The ONLY reference to the real psql runners in this file. Everything else
+ * reaches them through here, so "can this path touch production" is one
+ * function's answer rather than a property of every call site.
+ */
+function composeProductionDatabaseRunners(explicit = {}) {
+  const hasLedger = typeof explicit.inspectLedger === "function";
+  const hasApply = typeof explicit.applyFile === "function";
+
+  if (hasLedger && hasApply) {
+    return {
+      ok: true,
+      source: "injected",
+      runners: {
+        inspectLedger: explicit.inspectLedger,
+        applyFile: explicit.applyFile,
+        readContent: explicit.readContent || readMigrationContent,
+      },
+    };
+  }
+  // HALF AN ISOLATION IS NOT AN ISOLATION. A caller that stubbed one and forgot
+  // the other is making the incident's mistake at a smaller scale; completing it
+  // from the real runners would put psql behind a call site that reads as mocked.
+  if (hasLedger || hasApply) {
+    return {
+      ok: false,
+      code: "production_runners_partially_injected",
+      detail: `Both inspectLedger and applyFile must be supplied together; got only ${hasLedger ? "inspectLedger" : "applyFile"}.`,
+    };
+  }
+  if (process.env.NODE_TEST_CONTEXT) {
+    return {
+      ok: false,
+      code: "production_runners_refused_in_test_context",
+      detail: "A test process may not reach the production database runners. Inject inspectLedger and applyFile.",
+    };
+  }
+  if (!productionExecutionArmed) {
+    return {
+      ok: false,
+      code: "production_runners_not_composed",
+      detail:
+        "This process has not declared itself a production-capable trusted host, so the production database runners do not exist for it. "
+        + "A governed execution arms them through armProductionDatabaseExecution at Gateway startup; a harness must inject inspectLedger and applyFile instead.",
+    };
+  }
+  return {
+    ok: true,
+    source: "trusted_host",
+    armed_reason: productionExecutionArmed.reason,
+    runners: {
+      inspectLedger: defaultInspectLedger,
+      applyFile: defaultApplyMigrationFile,
+      readContent: explicit.readContent || readMigrationContent,
+    },
+  };
+}
+
+/** The identities the candidate revision requires, from the git object store. */
+function defaultReadRequiredVersions({ sha, worktreePath = null, gitCwd = null } = {}) {
+  const root = worktreePath || findRepoRoot();
+  return requiredVersionsFromFilenames(listMigrationsAtSha({ root, sha, gitCwd }));
+}
+
+/**
+ * EXECUTE A PRODUCTION DATABASE MIGRATION.
+ *
+ * The dispatch that reaches this function closed the `action_unavailable`
+ * defect. It did not close the one underneath it: `assertProductionApplyPre-
+ * conditions` — the seven proofs that stand between a governed approval and a
+ * production schema mutation — still had no caller outside its own tests, and
+ * this executor applied migrations without ever consulting them. A control that
+ * nothing calls is not a weak control; it is an absent one wearing the name of
+ * a present one.
+ *
+ * So the cheap structural guards below stay exactly where they were — they
+ * refuse before anything is written and their refusal codes are already in the
+ * failure taxonomy — and everything after them now runs through the production
+ * orchestrator: revalidate, resolve the credential, re-measure hosted state,
+ * run the seven proofs, apply, re-measure again, and return an audit.
+ *
+ * TIME OF CHECK IS NOT TIME OF USE. Nothing measured when the action was filed
+ * is execution authority here. The whole reason a production apply exists is
+ * that hosted is behind, and "behind" is a measurement with an age.
+ */
+export function executePromotedMigrationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const inputs = action.inputs || {};
+  const target = String(inputs.target || inputs.environment || "").trim().toLowerCase();
+  if (!productionApplyTargets().includes(target)) {
+    return failTrustedAction(
+      action,
+      "target_not_registered_production",
+      `Refusing to apply: ${target || "(no target)"} is not a registered production target.`,
+      { nowMs },
+    );
+  }
+  const migrations = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+  if (!migrations.length) {
+    return failTrustedAction(action, "no_migrations_requested",
+      "A production apply must name the migrations it applies.", { nowMs });
+  }
+  // Ordered, and PROVEN ordered rather than assumed: applying out of order is a
+  // schema corruption that reports success.
+  const versions = migrations.map((m) => String(m.version || ""));
+  if (versions.join(",") !== [...versions].sort().join(",")) {
+    return failTrustedAction(action, "nondeterministic_migration_order",
+      "Migrations must be applied in ascending version order.", { nowMs });
+  }
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const runners = productionRunnersForTests || {};
+  const migrationRunners = migrationRunnersForTests || {};
+  const repoRoot = inputs.worktreePath || inputs.worktree_path || findRepoRoot();
+
+  const out = executeProductionMigrationApply({
+    // REVALIDATED AT EXECUTION, against the world as it is now — not the
+    // normalized snapshot the request was filed with. The requested inputs are
+    // re-put through the action's own validator, so the candidate SHA, the
+    // governed promotion authority, the delta bound and every migration
+    // artefact are re-established rather than inherited.
+    revalidate: runners.revalidate
+      || (() => validateProductionMigrationInputs(action.requestedInputs || inputs, { repoRoot, nowMs })),
+    resolveExecutorIdentity: runners.resolveExecutorIdentity || defaultResolveProductionExecutorIdentity,
+    readHostedVersions: runners.readHostedVersions || defaultReadHostedMigrationVersions,
+    readRequiredVersions: runners.readRequiredVersions
+      || (({ sha }) => defaultReadRequiredVersions({ sha, worktreePath: repoRoot, gitCwd: inputs.gitCwd || null })),
+    // Composed, never defaulted. `composeProductionDatabaseRunners` is the only
+    // thing in this file that can hand back the real psql runners, and it does
+    // so only for a process that declared itself a production-capable trusted
+    // host. An un-isolated harness gets a refusal here rather than a connection.
+    applyBatch: runners.applyBatch || ((normalized) => {
+      const composed = composeProductionDatabaseRunners({
+        inspectLedger: runners.inspectLedger || migrationRunners.inspectLedger,
+        applyFile: runners.applyFile || migrationRunners.applyFile,
+        readContent: runners.readContent || migrationRunners.readContent,
+      });
+      if (!composed.ok) {
+        return {
+          ok: false,
+          stopped: true,
+          environment: normalized.environment,
+          expectedSha: normalized.expectedSha,
+          // Shaped as a batch result so the orchestrator classifies it through
+          // the same path as any other pre-execution refusal: no effect, and
+          // therefore never reported as an ambiguous partial apply.
+          results: [{
+            ok: false,
+            version: normalized.migrations?.[0]?.version || null,
+            path: normalized.migrations?.[0]?.path || null,
+            code: composed.code,
+            detail: composed.detail,
+          }],
+        };
+      }
+      return applyMigrationBatch(normalized, { ...composed.runners, nowMs });
+    }),
+    approval: action.productionApproval || null,
+    approvedHostedHead: action.productionApproval?.hosted_head_at_approval || null,
+    nowMs,
+  });
+
+  const publicResult = publicProductionApplyResult(out);
+  /*
+   * A VALUE CHECK, NOT A WORD CHECK — and the one place in this file where the
+   * difference matters. `payloadHasSecrets` flags the bare token DATABASE_URL,
+   * which is right for a migration payload that should never mention it and
+   * wrong for a production audit whose job is to NAME the credential reference
+   * it used. Both still refuse a connection string, a key or an assignment.
+   */
+  if (containsCredentialMaterial(publicResult)) {
+    return failTrustedAction(action, "result_contained_secrets",
+      "Production migration result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    const failed = failTrustedAction(action, out?.code || "apply_failed",
+      out?.detail || "Production migration refused.", { nowMs });
+    // The partial record and the audit both survive the failure. A production
+    // apply that refuses, or that fails halfway, is exactly the case where
+    // "what did it check, what did it see, and what actually ran" must be on
+    // the record — a bare failure code answers none of the three.
+    if (failed.action) {
+      failed.action.result = { ...publicResult, ok: false, target };
+      failed.action.audit = buildAudit(failed.action, { success: false, failureCode: out?.code || "apply_failed" });
+      writeAction(failed.action);
+    }
+    return failed;
+  }
+  // A SUCCESSFUL EXIT IS STILL NOT A PROMOTION. The orchestrator re-read the
+  // hosted ledger and verified the identities landed, which is strictly more
+  // than "the executor exited zero" — but the promotion is released by the
+  // governed census, and `recensus_required` says so unless parity already
+  // re-measured PASS.
+  const result = { ...publicResult, ok: true, target };
+  action.result = result;
+  action.audit = buildAudit(action, { success: true });
+  return completeTrustedAction(action, result, { nowMs });
+}
+
+/**
+ * Push a reviewed branch. Re-authorized here on purpose: execution must never
+ * trust that an earlier call in this same flow already checked.
+ */
+/**
+ * PROMOTE REPOSITORY-OPERATIONAL METADATA TO main.
+ *
+ * The whole decision lives in promoteRepositoryMetadata, which revalidates the
+ * candidate and compare-and-swaps against the approved main immediately before
+ * mutating. This wrapper does what every other trusted-host action does -
+ * authorize, execute, shape the result - and nothing else. In particular it
+ * builds no git command of its own: there is no generic `git push main` path
+ * reachable from outside the governed action.
+ */
+/**
+ * The git the main-write promotion runs on.
+ *
+ * NAMED AND EXPORTED SO SOMETHING CAN ACTUALLY CALL IT.
+ *
+ * This was an inline arrow closing over `defaultGit`, which this module never
+ * imported. Nothing failed at import time - a ReferenceError on a free variable
+ * fires when the closure RUNS, and the only thing that runs it is a real
+ * dispatch of an operator-approved action. So the whole path stayed green
+ * locally and threw `metadata_promote_threw: defaultGit is not defined` on the
+ * live write, after an operator had approved it.
+ *
+ * Every test called `promoteRepositoryMetadata` directly, so no test ever
+ * constructed this closure. Pulling it out of the wrapper gives the lock
+ * something to hold that does not require authorizing an action to reach.
+ *
+ * `wd || cwd` so an inner call that names its own directory keeps it, and the
+ * opts - carrying GIT_INDEX_FILE - are forwarded rather than dropped.
+ */
+export function metadataPromotionGit(cwd) {
+  return (args, wd, opts) => defaultGit(args, wd || cwd, opts);
+}
+
+export function executeRepositoryMetadataPromotionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const inputs = action.inputs || {};
+  const cwd = inputs.worktreePath || inputs.worktree_path;
+  if (!cwd) {
+    return failTrustedAction(action, "worktree_path_missing",
+      "a metadata promotion needs the worktree holding the certified candidate", { nowMs });
+  }
+
+  let out;
+  try {
+    out = promoteRepositoryMetadata(inputs, { git: metadataPromotionGit(cwd), cwd, nowMs });
+  } catch (e) {
+    out = { ok: false, code: "metadata_promote_threw", detail: String(e?.message || e).slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    return failTrustedAction(action, out.code || "metadata_promote_failed", out.detail || out.code, {
+      nowMs,
+      extra: {
+        // Both heads survive a refusal, so nobody has to guess whether main moved.
+        main_before: out.main_before ?? null,
+        main_after: out.main_after ?? null,
+        approved_before: out.approved_before ?? null,
+        built_commit: out.built_commit ?? null,
+        offending: out.offending ?? null,
+        product_files_changed: false,
+      },
+    });
+  }
+
+  return completeTrustedAction(action, {
+    destination: out.destination ?? "main",
+    main_before: out.main_before,
+    main_after: out.main_after,
+    commit: out.commit,
+    already_present: out.already_present === true,
+    candidate: out.candidate ?? null,
+    expected_commits: out.expected_commits ?? null,
+    expected_files: out.expected_files ?? null,
+    actual_files: out.actual_files ?? null,
+    files: out.files ?? null,
+    promotion_class: out.promotion_class ?? "repository_metadata",
+    // Stated explicitly rather than implied by the file list, because this is
+    // the single question an auditor of a main commit actually asks.
+    product_files_changed: false,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function executePushTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = pushBranch(action.inputs, pushGitForTests ? { git: pushGitForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Push result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "push_failed", out?.detail || "Push failed", { nowMs });
+  }
+  return completeTrustedAction(action, publicPushResult(out), { nowMs });
+}
+
+/**
+ * Restore a managed slot's QA browser session.
+ *
+ * Mirrors the push and open-PR executors exactly, because `applyExecuteResult` requires the
+ * `{ ok, action }` shape with `action.state === "completed"` — returning a bare restore result
+ * reads to the caller as a failed execution. `executeRestoreQaSessionSync` is used because this
+ * path is synchronous: `processGovernedAction` does not await its executor.
+ */
+export function executeRestoreQaSessionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeRestoreQaSessionSync({
+    action,
+    grant,
+    grantCheck: grantAuthorizesAction,
+    nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Restore result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "restore_failed", out?.failure_detail || "QA session restore failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/**
+ * Restore a managed session on a DEPLOYED target.
+ *
+ * Same guarantees as the local restore and one more: `payloadHasSecrets` still guards the way out,
+ * but the result shape here is allow-listed at the source, so there is no field for a cookie to
+ * occupy even if that guard were removed. Synchronous, because `processGovernedAction` does not
+ * await its executor and scores a returned Promise as a failure.
+ */
+export function executeRestoreDeployedQaSessionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeRestoreDeployedQaSessionSync({
+    action,
+    grant,
+    grantCheck: grantAuthorizesAction,
+    nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Deployed restore result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "deployed_restore_failed", out?.failure_detail || "Deployed QA session restore failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Provision the managed QA identity, in the `{ ok, action }` shape applyExecuteResult requires. */
+export function executeProvisionQaIdentityTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeProvisionQaIdentitySync({
+    action, grant, grantCheck: grantAuthorizesAction, nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Provisioning result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "provision_failed", out?.failure_detail || "QA identity provisioning failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Assign application access, in the `{ ok, action }` shape applyExecuteResult requires. */
+export function executeAssignQaAccessTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeAssignQaAccessSync({ action, grant, grantCheck: grantAuthorizesAction, nowMs: nowMs || Date.now() });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Assignment result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "assign_failed", out?.failure_detail || "QA access assignment failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Mission-scoped entry point for access assignment; `defaultExecute` dispatches here. */
+export function fulfillAssignQaAccessForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/** Mission-scoped entry point for provisioning; `defaultExecute` dispatches here. */
+export function fulfillProvisionQaIdentityForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * The mission-scoped entry point the governed processor calls.
+ *
+ * `defaultExecute` in governed-action-request.mjs dispatches to a `fulfill*ForMission` helper per
+ * action and falls through to `action_unavailable` for anything without one. The restore was
+ * registered and mode-mapped but had no helper, so it fell through and failed after the operator
+ * had already approved it. Modelled on `fulfillRepositoryPushForMission`.
+ */
+export function fulfillRestoreQaSessionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillRestoreDeployedQaSessionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/** Open the promotion pull request, or report the one that already exists. */
+export function executeOpenPrTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = openPullRequest(action.inputs, openPrGhForTests ? { gh: openPrGhForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Pull request result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "open_pr_failed", out?.detail || "Opening the pull request failed", { nowMs });
+  }
+  return completeTrustedAction(action, publicOpenPrResult(out), { nowMs });
+}
+
+
+export function executeClosePullRequestTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = closePullRequest(action.inputs, housekeepingGhForTests ? { gh: housekeepingGhForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) return failTrustedAction(action, out?.code || "close_pr_failed", out?.detail || "Closing the pull request failed", { nowMs });
+  return completeTrustedAction(action, {
+    repository: out.repository, pullRequestNumber: out.pullRequestNumber,
+    state: out.state, merged: out.merged,
+    state_before: out.state_before, state_after: out.state_after, credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function executeDeleteRemoteBranchTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = deleteRemoteBranch(action.inputs, housekeepingGhForTests ? { gh: housekeepingGhForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) return failTrustedAction(action, out?.code || "delete_branch_failed", out?.detail || "Deleting the remote branch failed", { nowMs });
+  return completeTrustedAction(action, {
+    repository: out.repository, branch: out.branch, deleted: out.deleted,
+    deleted_head_sha: out.deleted_head_sha, dependents_at_deletion: out.dependents_at_deletion,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+
+/**
+ * Execute a REGISTERED reconciliation against a permitted environment.
+ *
+ * Distinct from `executeApplyReconciliationPlanTrustedHostAction` in every way that matters: that
+ * one applies Vacilando metadata from a plan it recomputes, this one runs a product data repair
+ * through the script that owns it. Sharing either would put product lifecycle writes inside a
+ * governance capability, or governance corrections inside a QA runner.
+ *
+ * The request cannot describe a command. The key, the environment and the boolean are all this
+ * accepts; the runner and its environment come from the frozen registry, re-resolved here so an
+ * edited action record cannot change what runs.
+ */
+export function executeRegisteredReconciliationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const out = runRegisteredReconciliation(action.inputs ?? {}, {
+    ...(reconciliationSpawnForTests ? { spawn: reconciliationSpawnForTests } : {}),
+    /*
+     * THE CANONICAL ROOT, not findRepoRoot().
+     *
+     * findRepoRoot() walks up from process.cwd(), which for the Gateway is
+     * wherever it happened to be started. A trusted-host action that executes
+     * REPOSITORY CONTENT must run from the checkout the platform calls canonical,
+     * not from a directory discovered by accident — and when that walk finds no
+     * repository it returns cwd/../.., so the spawn lands on a path with no web/
+     * and fails with no output at all. That is indistinguishable, in the result,
+     * from the script running and printing nothing.
+     */
+    repoRoot: resolveCanonicalRepoRoot(),
+    /*
+     * The file the control plane designates as the trusted environment. The runner
+     * reads the registry's declared context names out of it — `DEV_QUEUE_ORG_ID`
+     * lives there and not in this process's env, which is why resolving from
+     * process.env alone refused on the very host the platform ships.
+     */
+    trustedEnvSource: resolveTrustedServerEnvSource(),
+    trustedEnv: {
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+    },
+  });
+  /*
+   * THE SCREEN ITS SIBLINGS HAVE HAD ALL ALONG.
+   *
+   * push, open_pr and close_pr each call payloadHasSecrets before completing.
+   * This wrapper did not, and it is the one that needs it most: its runner
+   * resolves a database URL server-side, so a careless diagnostic line is the
+   * likeliest place a credential would ever surface. Measured while building the
+   * wrapper contract — a planted
+   * `postgres://user:SPECIMEN_PASSWORD@host/db` reached the operator result
+   * intact.
+   *
+   * BOTH PATHS, because a failure diagnostic is if anything more likely to quote
+   * a connection string than a success result is. Canonical semantics: the
+   * unsafe payload is DISCARDED rather than masked, so nothing partially
+   * redacted is published in its place.
+   */
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets",
+      "Reconciliation result contained credential-shaped material and was discarded.", { nowMs });
+  }
+  if (!out.ok) {
+    // Provenance rides the FAILURE, which is the case that needs it most.
+    return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", {
+      nowMs,
+      extra: { provenance: out.provenance ?? null, exit_code: out.exit_code ?? null, dry_run: out.dry_run ?? null },
+    });
+  }
+  return completeTrustedAction(action, {
+    reconciliation_key: out.reconciliation_key,
+    target_environment: out.target_environment,
+    dry_run: out.dry_run,
+    exit_code: out.exit_code,
+    counts: out.counts,
+    // The executor computed this and the result threw it away.
+    provenance: out.provenance ?? null,
+    /*
+     * AND THE SAME THING ONE BOUNDARY ALONG.
+     *
+     * This is an explicit allowlist, so a field the runner computes exists only
+     * if it is named here. The hosted fixture's audit - which bytes ran, against
+     * which database, for which organization, and where that organization came
+     * from - is exactly what an operator needs and exactly what an allowlist
+     * drops by saying nothing.
+     */
+    fixture_audit: out.fixture_audit ?? null,
+    stdout_tail: out.stdout_tail,
+  }, { nowMs });
+}
+
+export function executeApplyReconciliationPlanTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  // THE EXECUTOR RECOMPUTES. It never trusts the correction list it was handed:
+  // an ad hoc list supplied by a caller must not be executable, so the plan is
+  // rebuilt from live observation and compared by fingerprint.
+  const root = action.inputs?.runtimeRoot || runtimeRoot();
+  let fresh;
+  try {
+    // Gathers reality itself. Accepting it from inputs meant the executor
+    // observed whatever the caller described, which is not re-observation.
+    fresh = gatherObservation({ root, worktreeParent: action.inputs?.worktreeParent || null });
+  } catch (e) {
+    return failTrustedAction(action, "observation_failed", String(e?.message || e), { nowMs });
+  }
+  const rebuilt = buildReconciliationPlan(fresh, { nowMs, planId: action.inputs?.planId });
+  if (rebuilt.fingerprint !== action.inputs?.planFingerprint) {
+    return failTrustedAction(action, "stale_plan",
+      `plan fingerprint ${action.inputs?.planFingerprint} no longer describes observed state (now ${rebuilt.fingerprint})`, { nowMs });
+  }
+  const out = applyReconciliationPlan(rebuilt, { root, freshObservation: fresh, nowMs });
+  if (!out.ok) return failTrustedAction(action, out.error || "apply_failed", out.reason || "reconciliation apply refused", { nowMs });
+  return completeTrustedAction(action, {
+    plan_id: out.plan_id, plan_fingerprint: out.fingerprint,
+    requested: out.requested, applied: out.applied, skipped: out.skipped,
+    withheld: out.withheld, unsupported: out.unsupported, credentialsExposed: false,
+  }, { nowMs });
+}
+
+/**
+ * Copy an approved manifest from one project repository into another.
+ *
+ * THE EXECUTOR RE-DERIVES, like every other apply here. It recomputes the plan
+ * fingerprint from the entries it was handed and refuses when it does not match
+ * the approved one, so a caller cannot widen a plan after approval by adding a
+ * path to the list. It then recomputes the preview against the live filesystem,
+ * so a source that changed since approval is caught even when the manifest did
+ * not change at all.
+ *
+ * BOTH PROJECTS RESOLVE THROUGH THE REGISTRY, inside `repository-transfer`.
+ * Nothing here knows where any project lives, which is what lets the same
+ * action serve any pair and keeps Alloy out of the destination's resolution.
+ */
+export function executeTransferFilesTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  const plan = {
+    source_repository_id: i.sourceRepositoryId,
+    destination_repository_id: i.destinationRepositoryId,
+    mode: "copy",
+    entries: i.entries || [],
+  };
+  let out;
+  try {
+    out = executeTransfer(plan, { approvedFingerprint: i.planFingerprint });
+  } catch (e) {
+    return failTrustedAction(action, "transfer_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    const detail = out.code === "transfer_refused"
+      ? (out.refusals || []).map((r) => `${r.source}: ${r.refusal}`).slice(0, 12).join("; ")
+      : `expected ${out.expected || "?"}, plan is ${out.actual || "?"}`;
+    return failTrustedAction(action, out.code, detail, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    plan_id: i.planId,
+    plan_fingerprint: out.plan_fingerprint,
+    source_project: out.source.project_id,
+    destination_project: out.destination.project_id,
+    summary: out.summary,
+    applied: out.applied.map((a) => ({ destination: a.destination, disposition: a.disposition, written: a.written })),
+    git_effect: out.git_effect,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+/**
+ * The leg that makes the action reachable from a mission.
+ *
+ * A registered action with an executor and no caller is not a capability -- it
+ * is a definition nobody can invoke, which this file has been bitten by before.
+ */
+export function fulfillTransferFilesForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_TRANSFER_FILES, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function executeRetireWorktreeTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  // The executor re-measures every safety gate itself. What the request carries
+  // is a claim about a moment that has already passed.
+  const root = action.inputs?.runtimeRoot || runtimeRoot();
+  let out;
+  try {
+    out = executeWorktreeRetirement({
+      root,
+      worktree: action.inputs?.worktree,
+      repository: action.inputs?.repository,
+      expectedFingerprint: action.inputs?.safetyFingerprint,
+      expectedHeadSha: action.inputs?.headSha,
+      expectedBranch: action.inputs?.branch,
+      worktreeParent: action.inputs?.worktreeParent || null,
+      canonicalRoot: action.inputs?.canonicalRoot || null,
+      requestingWorktree: action.inputs?.requestingWorktree || null,
+      s7State: action.inputs?.s7State || null,
+      nowMs,
+    });
+  } catch (e) {
+    return failTrustedAction(action, "retirement_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    return failTrustedAction(action, out.error || "retirement_refused",
+      out.reason || out.detail || `retirement refused: ${out.error}`, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    worktree: out.worktree, path: out.path, branch: out.branch, head_sha: out.head_sha,
+    safety_fingerprint: out.fingerprint, applied: out.applied,
+    postconditions: out.postconditions, removal_method: out.removal_method,
+    branch_deleted: out.branch_deleted, credentialsExposed: false,
+  }, { nowMs });
+}
+
+/**
+ * Execute the ceiling move by invoking the canonical command.
+ *
+ * This function adds authority and an audit trail. It adds NO behaviour: the
+ * constant key, the range, compare-and-set, readback verification and the
+ * change log all belong to `vac capacity set-provider-ceiling`. Re-implementing
+ * any of them here would create a second path to the same file that the tests
+ * for the first path do not cover, and the more permissive of two such paths is
+ * the one that eventually gets used.
+ */
+export function executeSetProviderCeilingTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    // THE NORMALIZED NAMES COME FIRST, because they are what is actually
+    // stored. validateProviderCeilingInputs rewrites the request into
+    // {key, expected, requested, rollbackTo, ...} and THAT is what lands in
+    // action.inputs — so reading only expected_ceiling/expectedCeiling yielded
+    // undefined, Number(undefined) is NaN, and every ceiling move invoked
+    // `--expected NaN --to NaN`, hit the CLI's usage() and died with no stdout.
+    // The caller saw `command_failed` and no number ever moved. The raw names
+    // are kept as fallbacks so a request that skipped normalization still works.
+    out = executeProviderCeiling({
+      expected: Number(i.expected ?? i.expected_ceiling ?? i.expectedCeiling),
+      requested: Number(i.requested ?? i.requested_ceiling ?? i.requestedCeiling),
+      rollbackTo: Number(i.rollbackTo ?? i.rollback_ceiling ?? i.rollbackCeiling),
+      reason: i.reason,
+      experimentId: i.experiment_id ?? i.experimentId ?? null,
+    }, { vacPath: i.vacPath || null });
+  } catch (e) {
+    return failTrustedAction(action, "ceiling_change_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    return failTrustedAction(action, out.error || "ceiling_change_refused",
+      out.detail || `provider ceiling change refused: ${out.error}`, { nowMs });
+  }
+  // A write reported without a readback is exactly the uncertainty this whole
+  // capability exists to remove, so it fails rather than reporting success.
+  if (out.readback_verified !== true) {
+    return failTrustedAction(action, "readback_not_verified",
+      `config did not read back as ${i.requested_ceiling}`, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    key: out.key,
+    previous_value: out.previous_value,
+    new_value: out.new_value,
+    rollback_value: out.rollback_value,
+    readback_verified: true,
+    reason: out.reason,
+    experiment_id: out.experiment_id,
+    audited_at: out.audited_at,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+/**
+ * Register ONE developer application in a named database.
+ *
+ * The statement is built here from validated values — see
+ * `trusted-host-register-application.mjs` for why a registration takes no query
+ * artifact where a census does. The invariants (ownership mode, duplicate
+ * behaviour, audit row) belong to `public.register_developer_application`; this
+ * function's job is to reach the right database, run one statement, and record
+ * what came back without interpreting it.
+ *
+ * A REFUSAL BY THE FUNCTION IS NOT AN EXECUTION FAILURE. `ok: false` from the
+ * platform function means the platform declined — an unsupported ownership mode,
+ * a conflicting slug — and it arrives as a completed action carrying that code.
+ * Collapsing it into `execution_failed` would tell a lane to retry a decision.
+ */
+export function executeRegisterDeveloperApplicationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const i = action.inputs || {};
+  const sql = buildRegistrationSql({
+    slug: i.slug,
+    name: i.name,
+    publisher: i.publisher,
+    ownershipMode: i.ownershipMode,
+    applicationEnvironment: i.applicationEnvironment,
+    distributionMode: i.distributionMode,
+    status: i.status,
+    registeredBy: i.registeredBy || action.id,
+  });
+
+  const tmpDir = join(storeDir(), "tmp");
+  ensureDir(tmpDir);
+  const sqlFile = join(tmpDir, `${action.id}.register.sql`);
+  const outFile = join(tmpDir, `${action.id}.register.out`);
+  const errFile = join(tmpDir, `${action.id}.register.err`);
+  writeFileSync(sqlFile, `${sql};\n`);
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.hostProcess = { kind: "trusted-host-register-application" };
+  action.retryState.attempts = (action.retryState.attempts || 0) + 1;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, sqlFile, outFile, errFile, String(i.databaseTarget || "")], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: action.inputs.timeoutMs || 120_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets((existsSync(errFile) ? readFileSync(errFile, "utf8") : "") || child.stderr || "");
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8").trim() : "";
+  try { unlinkSync(sqlFile); } catch { /* */ }
+
+  const fail = (code, detail) => {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = code;
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, { success: false, failureCode: code });
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: code, detail: detail ? String(detail).slice(0, 400) : null, action };
+  };
+
+  if (child.status !== 0) {
+    return fail(classifySqlChildFailure(errText, "execution_failed"), errText);
+  }
+
+  let payload = null;
+  for (const line of outText.split("\n").map((l) => l.trim()).filter(Boolean).reverse()) {
+    if (!line.startsWith("{")) continue;
+    try { payload = JSON.parse(line); break; } catch { /* keep looking */ }
+  }
+  if (!payload) return fail("result_parse_failed", outText.slice(0, 200));
+
+  const app = payload.application || {};
+  action.result = {
+    ok: Boolean(payload.ok),
+    code: payload.ok ? null : String(payload.code || "registration_refused"),
+    detail: payload.detail ?? null,
+    duplicate: Boolean(payload.duplicate),
+    application_id: app.id ?? null,
+    application_key: app.slug ?? null,
+    application_status: app.status ?? null,
+    ownership_mode: app.ownership_mode ?? null,
+    application_environment: app.environment ?? null,
+    distribution_mode: app.distribution_mode ?? null,
+    audit_id: payload.audit_id ?? null,
+    database_target: i.databaseTarget ?? null,
+    // Named so a reader never has to infer it from the absence of a field: this
+    // action creates an identity and nothing else.
+    installation_created: false,
+    credential_created: false,
+  };
+  action.state = "completed";
+  action.executionState = "completed";
+  action.completed_at = iso(nowMs);
+  action.audit = buildAudit(action, { success: true, authorizingOperator: authz.authorization?.granted_by || null });
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action, result: action.result };
+}
+
+export function fulfillRegisterDeveloperApplicationForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillSetProviderCeilingForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Converge the installed toolkit onto promoted staging.
+ *
+ * The restart is NOT done here. The Gateway is the process executing this
+ * action; restarting it from inside itself kills the write that records what
+ * just happened, and the completion line for an install is the one piece of
+ * audit nobody can reconstruct afterwards. The result therefore reports
+ * `gateway_restart_required` and leaves reconciliation to a separate bounded
+ * step, keeping installed and running as the two distinct facts they are.
+ */
+export function executeInstallToolkitTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    // Normalized name first: action.inputs holds validateInputs' `normalized`
+    // object, exactly as it does for the provider ceiling. Raw names are kept
+    // as fallbacks for a request that skipped normalization.
+    out = executeToolkitInstall({
+      /*
+       * THE FOURTH LEG. A governed action has four: the registry definition, the
+       * mode, the dispatch branch, and THIS — the executor's call site. The S6
+       * bootstrap wired three, and a LIVE generation-2 cutover executed as a
+       * generation-1 no-op that reported success: the validator normalized the
+       * artifact identity, the dispatcher branched on it, and this line forwarded
+       * one field, so `artifact` arrived null.
+       */
+      artifact: i.artifact ?? null,
+      expectedCurrent: i.expectedCurrent ?? i.expected_current_identity ?? null,
+      expectedStagingSha: i.expectedStagingSha ?? i.expected_staging_sha ?? null,
+    });
+  } catch (e) {
+    out = { ok: false, error: "install_threw", detail: String(e?.message || "").slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = out.error;
+    action.completed_at = iso(nowMs);
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: out.error, detail: out.detail || null, action };
+  }
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.result = {
+    installed_sha: out.installed_sha,
+    previous_sha: out.previous_sha,
+    already_converged: out.already_converged,
+    readback_verified: out.readback_verified,
+    rollback_target: out.rollback_target,
+    gateway_restart_required: out.gateway_restart_required,
+    /*
+     * WHICH TOOLKIT THE GATEWAY IS ACTUALLY RUNNING.
+     *
+     * Found by the audit rather than by an incident: the producer has returned
+     * this all along and the list dropped it, so `gateway_restart_required`
+     * arrived without the one fact that makes it interpretable - restart
+     * required FROM what, TO what. It is a git sha and carries nothing secret.
+     */
+    gateway_executing_sha: out.gateway_executing_sha ?? null,
+    /*
+     * THE PRODUCER COMPUTED IT AND THIS LIST DROPPED IT.
+     *
+     * `installPromotedToolkit` returns a `convergence` block saying which of
+     * CONVERGENCE_SCHEDULED / CONVERGED applies and that no operator action is
+     * required - added precisely because `gateway_restart_required: true` reads
+     * as "required of you" when the TOOLKIT_DRIFT episode already owns it.
+     *
+     * It never reached a single result, because this is an explicit field list
+     * and nobody added it. I predicted twice that the next install would carry
+     * it and was wrong twice: the cause was never a generation lag, it was an
+     * allowlist one layer up. Third time this exact shape has cost something -
+     * the executor's provenance and the wait envelope were the other two.
+     */
+    convergence: out.convergence ?? null,
+    credentialsExposed: false,
+  };
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action };
+}
+
+/**
+ * Mission-scoped fulfilment for a repository-metadata promotion. Same shape as
+ * every other trusted-host fulfil wrapper: request, authorize, execute. The
+ * decision and the compare-and-swap live in the executor, not here.
+ */
+export function fulfillRepositoryMetadataPromotionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_PROMOTE_METADATA,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillInstallToolkitForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.HOST_INSTALL_TOOLKIT, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Deliver one bounded certification task into one idle lane.
+ *
+ * The delivery primitive is createQueuedRun, injected here rather than
+ * reimplemented: it already refuses to displace an active run, which is the
+ * property that keeps a measurement from destroying the work it is measuring.
+ */
+export function executeLaneDispatchTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    out = executeLaneDispatch({
+      targetLaneId: i.targetLaneId ?? i.target_lane_id,
+      instruction: i.instruction,
+      measurementId: i.measurementId ?? i.measurement_id,
+      purpose: i.purpose,
+      sourceMission: i.sourceMission ?? i.source_mission_id,
+      sourceLane: i.sourceLane ?? i.source_lane_id ?? null,
+    }, { createRun: createQueuedRun, nowMs });
+  } catch (e) {
+    out = { ok: false, error: "dispatch_threw", detail: String(e?.message || "").slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = out.error;
+    action.completed_at = iso(nowMs);
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: out.error, detail: out.detail || null, action };
+  }
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.result = { ...out, credentialsExposed: false };
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action };
+}
+
+export function fulfillLaneDispatchForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillRetireWorktreeForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) {
+    /*
+     * THE RESULT ITSELF MUST NAME THIS WORKTREE.
+     *
+     * The framework already refuses to reuse an action about something else,
+     * and this checks the other end: the stored RESULT, which is what a caller
+     * reads and what an operator is shown. Eleven callers were handed a result
+     * whose `worktree` was not the one they asked to retire, and whose
+     * `filesystem_path_absent: true` was true of a different directory.
+     *
+     * A deletion is not a fact you may infer from someone else's receipt.
+     */
+    const out = req.action.result || {};
+    const wantWorktree = String(inputs.worktree ?? "").trim();
+    const wantFingerprint = String(inputs.safetyFingerprint ?? "").trim();
+    const mismatch = (out.worktree && wantWorktree && String(out.worktree) !== wantWorktree)
+      || (out.safety_fingerprint && wantFingerprint && String(out.safety_fingerprint) !== wantFingerprint);
+    if (mismatch) {
+      return {
+        ok: false,
+        error: "destructive_result_ownership_mismatch",
+        detail: `a completed retirement of "${out.worktree}" (fingerprint ${String(out.safety_fingerprint).slice(0, 12)}) cannot report the retirement of "${wantWorktree}" (fingerprint ${wantFingerprint.slice(0, 12)})`,
+        action: req.action,
+      };
+    }
+    return { ok: true, action: req.action, already: true };
+  }
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillApplyReconciliationPlanForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Execute a REGISTERED reconciliation.
+ *
+ * Same shape as every other fulfil, deliberately: the whole point of this
+ * capability is that it adds no new execution mechanism. Which script runs,
+ * which environments it may touch and what a dry run means are resolved by
+ * `reconciliation-registry.mjs` inside `validateInputs`, so there is nothing
+ * here to parameterise and nowhere for a caller-supplied command to enter.
+ *
+ * This function is the leg that was missing. The action was registered, had an
+ * executor branch, was discoverable and approvable — and had no way to be
+ * reached, because `requestGovernedAction` had no branch that named it.
+ */
+export function fulfillExecuteRegisteredReconciliationForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillClosePullRequestForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillDeleteRemoteBranchForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillRepositoryPushForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_PUSH, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillPromotionOpenPrForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.PROMOTION_OPEN_PR, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillRepositoryMergeForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "authorization_required",
+      action: auth.action,
+    };
+  }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillDatabaseMigrationForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "authorization_required",
+      action: auth.action,
+    };
+  }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * RECONCILE THE LEDGER WITH SCHEMA THAT IS ALREADY THERE.
+ *
+ * The evidence is re-gathered HERE, at execution, and not trusted from the
+ * request. A request is a claim made minutes ago; the ledger and the hosted
+ * parity can both have moved since, and this action's entire safety rests on
+ * them not having. So the parity gap, the ledger head/count and the physical
+ * proof are read again immediately before the write, and the generated
+ * transaction re-checks the pre-state a third time inside the database — where
+ * a concurrent writer's row aborts the repair rather than being papered over.
+ *
+ * The migration text is read from the git object store, so the ledger row's
+ * `statements` are the approved artifact's own bytes and not anything a caller
+ * supplied.
+ */
+export function executeLedgerRepairTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const inputs = action.inputs || {};
+  const expected = inputs.expectedLedger || {};
+  const evidence = ledgerRepairEvidenceForTests || {};
+
+  // Read the migration bodies from the approved object, exactly as the apply
+  // path does — same environment rule, same source of truth.
+  const migrations = [];
+  for (const entry of (inputs.migrations || [])) {
+    const read = (evidence.readContent || readMigrationContent)({
+      environment: inputs.environment,
+      root: inputs.worktreePath,
+      sha: inputs.expectedSha,
+      relative: entry.path,
+      gitCwd: inputs.gitCwd,
+      currentStagingSha: inputs.stagingSha,
+      preMergeCandidate: inputs.preMergeCandidate === true,
+    });
+    if (!read.ok) {
+      return failTrustedAction(action, read.code || "artifact_unreadable",
+        read.detail || `Could not read ${entry.path} at ${inputs.expectedSha}.`, { nowMs });
+    }
+    // HASHED HERE, because this module has no sha256 of its own: the migration
+    // executor never needed one, since applyMigrationBatch hashes inside
+    // trusted-host-migrate. Calling a helper that does not exist in this scope
+    // threw at execution and cost an operator decision — the first ledger repair
+    // failed `execution_threw` after being approved.
+    if (createHash("sha256").update(read.text).digest("hex") !== entry.fileSha) {
+      return failTrustedAction(action, "artifact_hash_mismatch",
+        "Committed migration blob does not match the approved artifact hash.", { nowMs });
+    }
+    migrations.push({ ...entry, text: read.text });
+  }
+
+  // Re-measure, then refuse unless every precondition still holds.
+  const measured = (evidence.measure || defaultLedgerRepairEvidence)({ inputs, nowMs });
+  if (!measured.ok) {
+    return failTrustedAction(action, measured.code || "evidence_unavailable",
+      measured.detail || "Could not re-establish the evidence this repair depends on.", { nowMs });
+  }
+  const pre = assertLedgerRepairPreconditions({
+    normalized: { ...inputs, migrations },
+    parity: measured.parity,
+    physical: measured.physical,
+    ledgerHead: measured.ledgerHead,
+    ledgerCount: measured.ledgerCount,
+    expectedHead: expected.head,
+    expectedCount: expected.count,
+    expectedPostHead: expected.postHead,
+    expectedPostCount: expected.postCount,
+  });
+  if (!pre.ok) return failTrustedAction(action, pre.code, pre.detail, { nowMs });
+
+  const built = buildLedgerRepairSql({
+    migrations,
+    expectedHead: expected.head,
+    expectedCount: expected.count,
+    expectedPostHead: expected.postHead,
+    expectedPostCount: expected.postCount,
+  });
+  if (!built.ok) return failTrustedAction(action, built.code, built.detail, { nowMs });
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql, target: inputs.target });
+  if (!run?.ok) {
+    return failTrustedAction(action, run?.code || "ledger_repair_failed",
+      run?.detail || "The ledger repair transaction did not commit.", { nowMs });
+  }
+
+  const result = {
+    target: pre.target,
+    requested: pre.versions,
+    inserted: pre.versions,
+    pre_state: { head: measured.ledgerHead, count: measured.ledgerCount },
+    post_state: { head: expected.postHead, count: expected.postCount, source: "transaction_assertion" },
+    sql_sha256: built.sqlHash,
+    // THE TRANSACTION COMMITTING IS NOT THE DATABASE BEING RECONCILED. The
+    // post-state above is what the transaction asserted before committing, not
+    // an independent observation, and only a governed census is that.
+    recensus_required: true,
+  };
+  if (payloadHasSecrets(result)) {
+    return failTrustedAction(action, "result_contained_secrets",
+      "Ledger repair result contained secrets and was discarded.", { nowMs });
+  }
+  action.result = result;
+  return completeTrustedAction(action, result, { nowMs });
+}
+
+/** Injection seam, for the same reason the migration runners have one. */
+let ledgerRepairEvidenceForTests = null;
+export function setLedgerRepairEvidenceForTests(impl) { ledgerRepairEvidenceForTests = impl || null; }
+
+/**
+ * The most recent COMPLETED physical-state census for this target.
+ *
+ * Read straight from the governed store rather than through
+ * governed-action-request, which imports this file — the same cycle the merge
+ * gate had to avoid. A stale proof is refused by age: evidence gathered long
+ * before the write is evidence about a different database.
+ */
+const LEDGER_EVIDENCE_MAX_AGE_MS = 60 * 60 * 1000;
+
+function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
+  const root = process.env.ALLOY_RUNTIME_ROOT?.trim()
+    || join(os.homedir(), ".local", "state", "alloy-dev");
+  const storePath = join(root, "vacilando", "governed-actions", "requests.json");
+  let records = [];
+  try {
+    const parsed = JSON.parse(readFileSync(storePath, "utf8"));
+    records = Array.isArray(parsed) ? parsed : (parsed?.requests || []);
+  } catch {
+    return { ok: false, code: "evidence_store_unreadable", detail: "The governed action store could not be read." };
+  }
+  const target = String(inputs.target || inputs.environment || "");
+  // WHICH proof this request offers. Defaulted, not hardcoded: a filename fixed
+  // to one promotion made this capability unusable by any other, which is how
+  // Thread 5's reconciliation ended up with no way to present evidence about its
+  // own migrations.
+  const named = physicalStateArtifactFor(inputs);
+  if (!named.ok) return named;
+  const candidates = records.filter((r) => r.action_key === "database.read_census"
+    && r.status === "complete"
+    && String(r.inputs?.databaseTarget || "") === target
+    && String(r.inputs?.queryArtifactPath || "").endsWith(named.artifact)
+    && r.result?.census);
+  const latest = candidates[candidates.length - 1] || null;
+  if (!latest) {
+    return {
+      ok: false,
+      code: "physical_state_census_missing",
+      detail: `No completed ${named.artifact} census against ${target}; this repair may not proceed on inference.`,
+    };
+  }
+  /*
+   * AGE THE READING, NOT THE REQUEST.
+   *
+   * MEASURED. `requestTrustedHostAction` dedupes an identical census onto the
+   * trusted-host action that already ran and hands back its stored result, so
+   * re-filing the same artifact produces a NEW governed request, with a new
+   * `execution_ended_at`, carrying an OLD reading. Three requests for the Thread
+   * 5 physical-state census all resolved to one execution at 16:17:49; the third
+   * "ended" at 16:35 and still described the database as it was eighteen minutes
+   * earlier.
+   *
+   * Reading the request's clock therefore made the one-hour window on production
+   * ledger evidence defeatable indefinitely: keep re-filing and the proof never
+   * ages. `census_run_at` is stamped when the census actually ran and is right
+   * there in the result, so that is the clock. The request's own timestamps stay
+   * as a fallback for a result shape that carries no run time — an unknown age
+   * still refuses, as it did before.
+   */
+  const ranAt = Date.parse(latest.result?.census?.census_run_at || "");
+  const at = Number.isFinite(ranAt)
+    ? ranAt
+    : Date.parse(latest.execution_ended_at || latest.updated_at || 0);
+  if (!Number.isFinite(at) || (nowMs - at) > LEDGER_EVIDENCE_MAX_AGE_MS) {
+    return {
+      ok: false,
+      code: "physical_state_census_stale",
+      detail: Number.isFinite(ranAt)
+        ? `The physical-state proof was measured at ${latest.result.census.census_run_at}, more than an hour ago; re-measure before registering history.`
+        : "The physical-state proof is older than an hour; re-measure before registering history.",
+    };
+  }
+  const versions = (inputs.migrations || []).map((m) => String(m.version));
+  // A census that never looked at a version is not a census that found it
+  // absent. Refusing here names the real problem instead of reporting the schema
+  // as missing when it is the measurement that is missing.
+  const covers = assertCensusCoversVersions(latest.result.census, versions);
+  if (!covers.ok) return covers;
+  const derived = ledgerRepairEvidenceFromCensus(latest.result.census, { versions });
+  return derived.ok
+    ? { ...derived, census_request_id: latest.request_id, physical_state_artifact: named.artifact }
+    : derived;
+}
+
+function defaultRunLedgerRepairSql({ sql, target }) {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const file = join(tmpDir, `ledger-repair-${Date.now()}.sql`);
+  const outFile = `${file}.out`;
+  const errFile = `${file}.err`;
+  writeFileSync(file, sql);
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  /*
+   * THE REPAIR OWES THE CHILD A TARGET LIKE EVERY OTHER CALLER.
+   *
+   * This path ran the same child with three arguments and no environment, from
+   * before the child had one to take. Now that the child resolves its database
+   * from that argument, an absent one is a hard refusal — so every ledger
+   * repair would have exited 45 without touching anything, silently, at exactly
+   * the moment a ledger disagreeing with its schema needed fixing. The apply
+   * path found this the loud way, after three failed production attempts; this
+   * one would have found it on the day it mattered most.
+   */
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, String(target ?? "")], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 180_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(file); } catch { /* */ }
+  if (child.status !== 0) {
+    return { ok: false, code: classifySqlChildFailure(errText, "ledger_repair_failed"), detail: errText.slice(0, 400) };
+  }
+  return { ok: true };
+}
+
+/**
+ * The ledger-repair sibling of the migration fulfillers. Same
+ * request -> authorize -> execute shape, its own action type, so an approval
+ * minted for a migration apply can never be spent reconciling history.
+ */
+export function fulfillLedgerRepairForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * The production sibling of fulfillDatabaseMigrationForMission. Same
+ * request -> authorize -> execute shape, different action type, so an approval
+ * minted for a staging apply can never be spent here.
+ */
+export function fulfillPromotedMigrationForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+  /**
+   * The governed record's own approval, carried rather than reconstructed.
+   *
+   * It is the one fact the trusted host cannot re-derive from inputs, and
+   * proof 5 refuses without it. A delegated or policy decision is carried
+   * through as what it IS rather than dropped, because the proof has to be able
+   * to refuse it — silently omitting one would make the request look unapproved
+   * instead of improperly approved, and those are different faults.
+   */
+  approval = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  if (approval) {
+    // Written BEFORE authorization, so a refusal cannot leave behind an action
+    // that executes later with no recorded approver.
+    req.action.productionApproval = {
+      decision: approval.decision || null,
+      actor: approval.actor || approval.decision_actor || null,
+      decision_actor: approval.decision_actor || approval.actor || null,
+      at: approval.at || null,
+      delegated: approval.delegated === true,
+      authorization_id: authorizationId || approval.authorization_id || null,
+      content_fingerprint: approval.content_fingerprint || exactContext?.contentFingerprint || null,
+      approved_versions: Array.isArray(approval.approved_versions) ? approval.approved_versions.map(String) : [],
+      hosted_head_at_approval: approval.hosted_head_at_approval || null,
+    };
+    req.action.updated_at = iso(nowMs);
+    writeAction(req.action);
+  }
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) {
+    return { ok: false, error: "authorization_required", action: auth.action };
+  }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export { ACTION_TYPES, listRegisteredActions };

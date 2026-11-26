@@ -1,0 +1,76 @@
+{
+  "trusted_host_action_id": "tha_356ae896166dae",
+  "query_hash": "890c8ae8c2e1cc817bfdc6c89f86f723b095c1f6aeaed92570f66935b4304baa",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-09T04:39:15.034Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_356ae896166dae",
+    "query_hash": "890c8ae8c2e1cc817bfdc6c89f86f723b095c1f6aeaed92570f66935b4304baa",
+    "authorization_id": "grnt_77c4df12ecd54fa6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-09T04:39:20.495Z",
+    "question_ids": [
+      "d9w_p4_document_archive_fn",
+      "d9w_p4_document_unarchive_fn",
+      "d9w_p4_ledger_20261217090000",
+      "d9w_p5_open_case_atomic_fn",
+      "d9w_p5_ledger_20261215093000",
+      "d9w_ledger_head"
+    ],
+    "questions": {
+      "d9w_p4_document_archive_fn": {
+        "question_id": "d9w_p4_document_archive_fn",
+        "row_count": null,
+        "rows": [
+          "pg_proc ~ document_archive_6arg ~ present ~ true"
+        ]
+      },
+      "d9w_p4_document_unarchive_fn": {
+        "question_id": "d9w_p4_document_unarchive_fn",
+        "row_count": null,
+        "rows": [
+          "pg_proc ~ document_unarchive_5arg ~ present ~ true"
+        ]
+      },
+      "d9w_p4_ledger_20261217090000": {
+        "question_id": "d9w_p4_ledger_20261217090000",
+        "row_count": null,
+        "rows": [
+          "schema_migrations ~ 20261217090000 ~ present ~ true"
+        ]
+      },
+      "d9w_p5_open_case_atomic_fn": {
+        "question_id": "d9w_p5_open_case_atomic_fn",
+        "row_count": null,
+        "rows": [
+          "pg_proc ~ open_processing_case_with_primary_source_4arg ~ present ~ true"
+        ]
+      },
+      "d9w_p5_ledger_20261215093000": {
+        "question_id": "d9w_p5_ledger_20261215093000",
+        "row_count": null,
+        "rows": [
+          "schema_migrations ~ 20261215093000 ~ present ~ true"
+        ]
+      },
+      "d9w_ledger_head": {
+        "question_id": "d9w_ledger_head",
+        "row_count": null,
+        "rows": [
+          {
+            "head": "20261221100000",
+            "rows": 556
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

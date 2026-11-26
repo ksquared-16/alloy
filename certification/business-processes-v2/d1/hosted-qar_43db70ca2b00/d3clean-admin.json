@@ -1,0 +1,26 @@
+{
+  "persona": "admin",
+  "vm": [
+    {
+      "status": 200,
+      "id": "de17caff-d706-44e8-b9d1-07aa58caa44b"
+    },
+    {
+      "status": 200,
+      "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+    }
+  ],
+  "blocked": [],
+  "closed": {
+    "state": "record",
+    "dialogs": 0,
+    "classic": false,
+    "text": "Readiness e59e093c2b05 Family · Readiness e59e093c2b05 Family Closed QA North Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitlist Enrolling Enrolled Closed / Withdrawn CLOSED No current work configured · Family enrollment case is closed. LAST ACTIONNot Interested · Today • 2:28 AM 1 CHILD all at Closed Recent activity 3 ▾ HOUSEHOLD Needs contact e59e093c2b05 household Updated Oct 23, 2026 QE QA Parent Readiness e59e093c2b05 Primary First name QA Last name Parent "
+  },
+  "decision": {
+    "state": "record",
+    "dialogs": 0,
+    "classic": false,
+    "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 "
+  }
+}

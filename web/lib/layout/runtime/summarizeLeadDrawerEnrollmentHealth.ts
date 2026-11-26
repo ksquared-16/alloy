@@ -38,8 +38,8 @@ function statusMatchesActive(status: string): boolean {
 }
 
 function rowMissingEnrollmentInfo(row: ProofRuntimeRecord): boolean {
-    const program = readTrimmed(row, "child.program", "inquiry_child.desired_program_type", "desired_program_type");
-    const start = readTrimmed(row, "child.desired_start_date", "inquiry_child.desired_start_date", "desired_start_date");
+    const program = readTrimmed(row, "child.program", "inquiry_child.program_category_id", "program_category_id");
+    const start = readTrimmed(row, "child.start_date", "inquiry_child.start_date", "start_date");
     const status = readRowStatus(row);
     return !program || !start || !status;
 }
@@ -87,7 +87,7 @@ export function summarizeLeadDrawerEnrollmentHealth(record: ProofRuntimeRecord):
         else if (statusMatchesActive(status)) activeCount += 1;
         if (rowMissingEnrollmentInfo(row)) missingInfoCount += 1;
 
-        const startRaw = readTrimmed(row, "child.desired_start_date", "inquiry_child.desired_start_date", "desired_start_date");
+        const startRaw = readTrimmed(row, "child.start_date", "inquiry_child.start_date", "start_date");
         if (startRaw) {
             const ts = parseSortableDate(startRaw);
             if (ts != null && ts >= latestDesiredStartTs) {

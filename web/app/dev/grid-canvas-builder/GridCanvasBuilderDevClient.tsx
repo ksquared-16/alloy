@@ -95,7 +95,7 @@ export default function GridCanvasBuilderDevClient() {
     const renderCard = (key: FocusPanelCardKey) => {
         const model = cards.get(key);
         if (!model) return null;
-        return <FocusPanelCardRenderer model={model} context={context} focusPanelMode="summary" compat={{ subjectVm: vm, onSelectTab: () => {} }} />;
+        return <FocusPanelCardRenderer model={model} context={context} focusPanelMode="summary" compat={{ onSelectTab: () => {} }} />;
     };
 
     const [selected, setSelected] = useState<FocusPanelCardKey | null>(null);

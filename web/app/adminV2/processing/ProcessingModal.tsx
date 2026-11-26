@@ -1,117 +1,202 @@
 "use client";
 
 /**
- * Processing — the product area for information entering Alloy.
- *
- * Mounts inside `AdminV2WorkspaceBosModalShell` (same shell as Inbox / My Tasks),
- * which owns modal geometry, placement, sizing and the fixed BOS right rail. This
- * component only sets the workspace *content*; it does not touch the shell.
- *
- * `PosWorkspaceLayout` provides the left nav with a [Work][Studio] mode control.
- *
- * Section map (Work = runtime processing · Studio = design-time setup):
- *   • Processing → PosProcessingWorkspace (Work — Incoming: queue · work · decision)
- *   • Documents  → PosDocumentsPanel      (Studio)
- *   • Forms      → PosFormsWorkspace      (Studio)
- *   • Packets    → PosPacketsPanel        (Studio)
- *   • Settings   → PosSettingsPanel       (Studio)
- *
- * Work lands directly on Incoming (no Home dashboard). `home` (former Work landing),
- * `review` (duplicated Incoming) and `linkage` (placeholder) are intentionally not
- * navigable; their components remain in the tree but are unreachable from nav.
+ * Digital Mailroom — Work | Studio modes with Overview + operational Work inside Work mode.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Layers } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
-import OperationalModalHeader from "@/app/adminV2/components/OperationalModalHeader";
-import PosWorkspaceLayout from "@/app/adminV2/pos/PosWorkspaceLayout";
+import { warmProcessingFormsCache } from "@/lib/pos/processingFormsWarmCache";
+import DigitalMailroomShell, {
+    type DigitalMailroomMode,
+    type DigitalMailroomWorkView,
+} from "@/app/adminV2/pos/DigitalMailroomShell";
+import ProcessingOverviewLanding from "@/app/adminV2/pos/ProcessingOverviewLanding";
 import PosProcessingWorkspace from "@/app/adminV2/pos/PosProcessingWorkspace";
-import PosFormsWorkspace from "@/app/adminV2/pos/PosFormsWorkspace";
-import PosPacketsPanel from "@/app/adminV2/pos/PosPacketsPanel";
-import PosDocumentsPanel from "@/app/adminV2/pos/PosDocumentsPanel";
-import PosSettingsPanel from "@/app/adminV2/pos/PosSettingsPanel";
-import type { PosSection } from "@/app/adminV2/pos/posSections";
+import ProcessingDocumentsWork from "@/app/adminV2/pos/ProcessingDocumentsWork";
+import ProcessingFormsStudio from "@/app/adminV2/pos/ProcessingFormsStudio";
+import type { ProcessingStudioTab } from "@/app/adminV2/pos/ProcessingStudioShell";
+import { ADMIN_V2_OPEN_PROCESSING_CASE, type OpenProcessingCaseDetail } from "@/lib/workItems/workItemsNavigation";
+import type { ProcessingModalIntent } from "@/lib/adminV2/workspaceModalEvents";
+import {
+    PROCESSING_DEFAULT_POSITION,
+    PROCESSING_WORKSPACE_KEY,
+    isValidProcessingPosition,
+} from "@/app/adminV2/processing/processingResume";
+import {
+    resolveWorkspaceOpenPosition,
+    writeWorkspaceResume,
+} from "@/lib/runtime/workspaceResume";
+import { clearProcessingRequestedCase, setProcessingRequestedCase } from "@/lib/pos/processingRequestedCase";
 
-export default function ProcessingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function ProcessingModal({
+    open,
+    onClose,
+    intent,
+}: {
+    open: boolean;
+    onClose: () => void;
+    intent?: ProcessingModalIntent | null;
+}) {
+    // Stable navigation resumes; the case selection and the form being edited do not.
+    const opened = useState(() =>
+        resolveWorkspaceOpenPosition(
+            PROCESSING_WORKSPACE_KEY,
+            PROCESSING_DEFAULT_POSITION,
+            isValidProcessingPosition,
+        ),
+    )[0];
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-    const [section, setSection] = useState<PosSection>("processing");
-    const [focusFormId, setFocusFormId] = useState<string | null>(null);
+    const [mode, setMode] = useState<DigitalMailroomMode>(opened.mode as DigitalMailroomMode);
+    const [workView, setWorkView] = useState<DigitalMailroomWorkView>(
+        opened.workView as DigitalMailroomWorkView,
+    );
+    const [studioTab, setStudioTab] = useState<ProcessingStudioTab>(
+        opened.studioTab as ProcessingStudioTab,
+    );
+    const [studioFormId, setStudioFormId] = useState<string | null>(null);
+    const [studioFormName, setStudioFormName] = useState<string | null>(null);
 
-    // Warm the shared Incoming queue cache the moment the modal opens (mirrors Inbox-on-open), so
-    // the queue + KPI strip paint from cache instead of each firing the heavy endpoint on mount.
     useEffect(() => {
-        if (open) void warmProcessingQueueCache();
+        if (open) {
+            void warmProcessingQueueCache();
+            void warmProcessingFormsCache();
+        }
     }, [open]);
-
+    /**
+     * Closing clears TRANSIENT state only. The stable position (mode, Studio tab) is deliberately
+     * left standing so the next open resumes it — this used to reset everything to the default,
+     * which is exactly the behaviour the resume decision replaces.
+     */
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);
-        setSection("processing");
-        setFocusFormId(null);
+        setWorkView("overview");
+        setStudioFormId(null);
+        setStudioFormName(null);
+        clearProcessingRequestedCase();
         onClose();
     }, [onClose]);
 
-    // Stay INSIDE Processing: jump to Studio → Forms with the just-created form selected
-    // (never route away to /admin/forms, never close the modal).
-    const openForm = useCallback((formId: string) => {
-        setFocusFormId(formId);
-        setSection("forms");
+    /*
+     * Publish the case Processing is showing, so the queue rail can guarantee it is actually ON the
+     * rail — resolved by id when it falls outside the loaded page, never collapsed away as a
+     * duplicate, and inside an opened folder.
+     *
+     * This is driven off `selectedCaseId` rather than off the deep-link intent so that EVERY way in
+     * gets the same guarantee: the open intent, the `adminv2:open-processing-case` event for an
+     * already-open modal, an Overview card, a fresh import, and a plain click in the rail. Wiring it
+     * to intent alone would have fixed the deep link and left the other four to drift.
+     */
+    useEffect(() => {
+        if (!open) return;
+        setProcessingRequestedCase(selectedCaseId);
+    }, [open, selectedCaseId]);
+
+    useEffect(() => {
+        writeWorkspaceResume(PROCESSING_WORKSPACE_KEY, { mode, workView, studioTab });
+    }, [mode, workView, studioTab]);
+
+    const openCase = useCallback((caseId: string) => {
+        setSelectedCaseId(caseId);
+        setMode("work");
+        setWorkView("work");
     }, []);
 
-    let body: ReactNode;
-    switch (section) {
-        case "processing":
-            body = (
-                <PosProcessingWorkspace
-                    selectedCaseId={selectedCaseId}
-                    onSelectCase={setSelectedCaseId}
-                    onGoToSources={() => setSection("documents")}
-                    onOpenForm={openForm}
-                />
-            );
-            break;
-        case "forms":
-            body = <PosFormsWorkspace focusFormId={focusFormId} />;
-            break;
-        case "packets":
-            body = <PosPacketsPanel />;
-            break;
-        case "documents":
-            body = <PosDocumentsPanel onNavigate={setSection} />;
-            break;
-        case "settings":
-        default:
-            body = <PosSettingsPanel />;
-            break;
-    }
+    const openFormInStudio = useCallback((formId: string, formName?: string) => {
+        setStudioFormId(formId);
+        setStudioFormName(formName?.trim() || null);
+        setMode("studio");
+        setStudioTab("forms");
+    }, []);
+
+    useEffect(() => {
+        if (!open) return;
+        const onOpenCase = (event: Event) => {
+            const detail = (event as CustomEvent<OpenProcessingCaseDetail>).detail;
+            const caseId = detail?.case_id?.trim();
+            if (!caseId) return;
+            openCase(caseId);
+        };
+        window.addEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, onOpenCase as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, onOpenCase as EventListener);
+    }, [open, openCase]);
+
+    // Deep-link intent (Studio→Forms/Packets at a resource, or Work at the queue/a case) is applied
+    // once when the modal opens. Former `/admin/forms…` links now route through this so a link that
+    // identified a specific form/packet/case opens the Mailroom AT that resource.
+    useEffect(() => {
+        if (!open || !intent) return;
+        if (intent.mode === "studio") {
+            setMode("studio");
+            setStudioTab(intent.studioTab ?? "forms");
+            setStudioFormId(intent.formId ?? null);
+            setStudioFormName(intent.formName ?? null);
+        } else {
+            setMode("work");
+            const caseId = intent.caseId?.trim() || null;
+            if (caseId) {
+                setSelectedCaseId(caseId);
+                setWorkView("work");
+            } else {
+                setWorkView(intent.workView ?? "overview");
+            }
+        }
+    }, [open, intent]);
+
 
     return (
         <AdminV2WorkspaceBosModalShell
             open={open}
             onClose={handleClose}
             dataModalAttr="adminv2-processing-modal"
-            ariaLabelledBy="adminv2-processing-modal-title"
-            panelClassName="max-h-[min(88vh,46rem)]"
+            ariaLabelledBy="digital-mailroom-title"
+            panelClassName="max-h-[min(94vh,56rem)]"
         >
-            <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white"
-                data-adminv2-processing-modal="true"
-            >
-                <OperationalModalHeader
-                    icon={<Layers className="h-4 w-4" aria-hidden strokeWidth={2} />}
-                    title="Processing"
-                    titleId="adminv2-processing-modal-title"
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-adminv2-processing-modal="true">
+                <DigitalMailroomShell
+                    mode={mode}
+                    workView={workView}
+                    studioTab={studioTab}
+                    onModeChange={(next) => {
+                        setMode(next);
+                        if (next === "work") setWorkView("overview");
+                    }}
+                    onWorkViewChange={setWorkView}
+                    onStudioTabChange={setStudioTab}
                     onClose={handleClose}
-                    closeLabel="Close Processing"
-                />
-
-                {/* Left-nav workspace shell → active section workspace. */}
-                <div className="flex min-h-[min(26rem,68vh)] min-w-0 flex-1 overflow-hidden">
-                    <PosWorkspaceLayout active={section} onNavigate={setSection}>
-                        {body}
-                    </PosWorkspaceLayout>
-                </div>
+                    hideChrome={!!studioFormId}
+                >
+                    {mode === "work" ? (
+                        workView === "overview" ? (
+                            <ProcessingOverviewLanding
+                                onOpenWork={() => setWorkView("work")}
+                                onOpenStudio={() => setMode("studio")}
+                                onOpenCase={openCase}
+                            />
+                        ) : workView === "documents" ? (
+                            <ProcessingDocumentsWork onLeaveProcessing={handleClose} />
+                        ) : (
+                            <PosProcessingWorkspace
+                                selectedCaseId={selectedCaseId}
+                                onSelectCase={setSelectedCaseId}
+                                onOpenForm={openFormInStudio}
+                                onLeaveProcessing={handleClose}
+                            />
+                        )
+                    ) : (
+                        <ProcessingFormsStudio
+                            selectedFormId={studioFormId}
+                            initialFormName={studioFormName}
+                            onSelectedFormIdChange={(formId) => {
+                                setStudioFormId(formId);
+                                if (!formId) setStudioFormName(null);
+                            }}
+                            initialTab={studioTab}
+                            onTabChange={setStudioTab}
+                        />
+                    )}
+                </DigitalMailroomShell>
             </div>
         </AdminV2WorkspaceBosModalShell>
     );

@@ -28,8 +28,9 @@ function selectOptionsForRefKey(
     if (control.option_source === "rooms_for_location_program") {
         const locationId =
             String(record?.["inquiry_child.location_id"] ?? record?.location_id ?? "").trim();
-        const programKey =
-            String(record?.["inquiry_child.desired_program_type"] ?? record?.desired_program_type ?? "").trim();
+        const programCategoryId =
+            String(record?.["inquiry_child.program_category_id"] ?? record?.program_category_id ?? "").trim();
+        const programKey = placementData?.resolveRoomProgramFilterKey(programCategoryId) ?? "";
         return placementData?.roomOptionsForSiteAndProgram(locationId, programKey) ?? [];
     }
     if (control.option_source === "enrollment_child_status") {
@@ -92,9 +93,9 @@ export function useLayoutRuntimeResolvedDisplayLabel(input: {
 export function layoutRuntimeCompanionDisplayRefKey(editableRefKey: string): string | null {
     const map: Record<string, string> = {
         "inquiry_child.location_id": "child.location",
-        "inquiry_child.desired_program_type": "child.program",
+        "inquiry_child.program_category_id": "child.program",
         "inquiry_child.program_room_cohort_key": "child.room",
-        "inquiry_child.desired_schedule_type": "child.schedule",
+        "inquiry_child.schedule_type": "child.schedule",
         "inquiry_child.outcome_status_key": "child.status",
         "opportunity.location_id": "opportunity.location",
     };

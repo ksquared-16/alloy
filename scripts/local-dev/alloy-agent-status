@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Status of managed Alloy agents: slots, ports, git, servers.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-agent-status [slot|worktree-name]
+
+Shows managed agents with permanent slot roles, ports, git state, and server state.
+With no args, lists all managed agents plus free slots.
+EOF
+}
+
+alloy_print_agent_row() {
+  local name="$1"
+  alloy_load_metadata "$name"
+  local slot="$ALLOY_WORKTREE_SLOT"
+  local role="${ALLOY_AGENT_ROLE:-$(alloy_slot_role "$slot")}"
+  local agent_status="${ALLOY_AGENT_STATUS:-active}"
+  local server git_summary env_ok auth browser qa
+
+  server="$(alloy_server_state_for "$name")"
+  git_summary="$(alloy_git_state_summary "$ALLOY_WORKTREE_PATH")"
+  env_ok="no"
+  alloy_agent_env_ready "$ALLOY_WORKTREE_PATH" && env_ok="yes"
+  auth="$(alloy_auth_state_status "$slot" "$PORT" "$(alloy_web_dir_for "$ALLOY_WORKTREE_PATH")")"
+  browser="$(alloy_browser_state_for "$slot")"
+  qa="$(alloy_slot_qa_identity "$slot")"
+
+  printf 'slot %-2s  %-28s\n' "$slot" "$name"
+  printf '  role:    %s\n' "$role"
+  printf '  agent:   %s\n' "$ALLOY_AGENT"
+  printf '  port:    %s\n' "$PORT"
+  printf '  status:  %s\n' "$agent_status"
+  printf '  server:  %s\n' "$server"
+  printf '  git:     %s\n' "$git_summary"
+  printf '  env:     %s\n' "$env_ok"
+  printf '  QA:      %s\n' "${qa:-"(not configured)"}"
+  printf '  auth:    %s\n' "$auth"
+  printf '  browser: %s\n' "$browser"
+  printf '  path:    %s\n' "$ALLOY_WORKTREE_PATH"
+  printf '  branch:  %s\n' "$ALLOY_WORKTREE_BRANCH"
+  echo
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  alloy_load_config
+  alloy_ensure_agent_runtime_dirs
+  # shellcheck source=lib/verify.sh
+  source "${SCRIPT_DIR}/lib/verify.sh"
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+  export ALLOY_SKIP_AUTH_LIVE_CHECK=1
+
+  if [[ $# -gt 1 ]]; then
+    usage >&2
+    exit 2
+  fi
+
+  if [[ $# -eq 1 ]]; then
+    local name
+    name="$(alloy_resolve_worktree_name "$1")"
+    echo "Managed agent"
+    alloy_print_agent_row "$name"
+    exit 0
+  fi
+
+  local count=0
+  local name
+  echo "Managed agents"
+  echo "--------------"
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    alloy_print_agent_row "$name"
+    count=$((count + 1))
+  done < <(alloy_list_metadata_names | sort)
+
+  if [[ "$count" -eq 0 ]]; then
+    echo "(none)"
+    echo
+  fi
+
+  echo "Permanent slot map"
+  echo "------------------"
+  local i role default_agent port occupied found
+  for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
+    role="$(alloy_slot_role "$i")"
+    default_agent="$(alloy_slot_default_agent "$i")"
+    port="$(alloy_slot_to_port "$i")"
+    if found="$(alloy_find_metadata_by_slot "$i" 2>/dev/null)"; then
+      occupied="assigned ($found)"
+    else
+      occupied="free"
+    fi
+    printf '  slot %s  port %-4s  %-28s  default=%-6s  %s\n' \
+      "$i" "$port" "$occupied" "$default_agent" "$role"
+  done
+}
+
+main "$@"

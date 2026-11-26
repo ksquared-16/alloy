@@ -1,0 +1,48 @@
+{
+  "trusted_host_action_id": "tha_2b9de7db23ea2f",
+  "query_hash": "5839c9b8e976394ee49f1c5d784f750fcb89172941231c05332e4b998fcb85b6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T13:49:42.892Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_2b9de7db23ea2f",
+    "query_hash": "5839c9b8e976394ee49f1c5d784f750fcb89172941231c05332e4b998fcb85b6",
+    "authorization_id": "grnt_f3a54c62e8e74626",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T13:49:43.920Z",
+    "question_ids": [
+      "w4_post_deploy"
+    ],
+    "questions": {
+      "w4_post_deploy": {
+        "question_id": "w4_post_deploy",
+        "row_count": null,
+        "rows": [
+          {
+            "payment_holds_exists": true,
+            "dispositions_exists": true,
+            "invariant_triggers": 4,
+            "holds_rls": true,
+            "dispositions_rls": true,
+            "payments_intact": true,
+            "allocations_intact": true,
+            "payment_methods_intact_w2": true,
+            "attempts_intact_w3": true,
+            "attempt_method_col_w3": 1,
+            "payments_row_count": 4,
+            "allocations_row_count": 42,
+            "holds_row_count": 0,
+            "ledger_has_w4": 1
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

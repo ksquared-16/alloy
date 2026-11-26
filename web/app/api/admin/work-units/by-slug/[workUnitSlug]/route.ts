@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import { fetchWorkUnitsForSlugResolution } from "@/lib/admin/fetchWorkUnitsForSlugResolution";
+import {
+    fetchDepartmentsForSlugResolution,
+    fetchWorkUnitsForSlugResolution,
+} from "@/lib/admin/fetchWorkUnitsForSlugResolution";
 import { resolveWorkUnitByRouteSlug } from "@/lib/admin/resolveWorkUnitByRouteSlug";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 
@@ -42,22 +45,18 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 
-    const deptIds = [...new Set(workUnits.map((row) => row.department_id).filter(Boolean))];
-    let departments: { id: string; key: string | null; name: string | null }[] = [];
-    if (deptIds.length) {
-        const { data: deptRows, error: deptErr } = await supabase
-            .from("departments")
-            .select("id, key, name")
-            .eq("org_id", gate.orgId)
-            .in("id", deptIds);
-        if (deptErr) {
-            return NextResponse.json({ error: deptErr.message }, { status: 500 });
-        }
-        departments = (deptRows ?? []).map((d) => ({
-            id: d.id,
-            key: d.key ?? null,
-            name: d.name ?? null,
-        }));
+    // Department metadata carries the configured Work Views (`work_views_v1`) that the
+    // resolver's `work_view` slug kind matches against (candidate departments only).
+    let departments: Awaited<ReturnType<typeof fetchDepartmentsForSlugResolution>> = [];
+    try {
+        departments = await fetchDepartmentsForSlugResolution({
+            supabase,
+            orgId: gate.orgId,
+            departmentIds: workUnits.map((row) => row.department_id),
+        });
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not load departments.";
+        return NextResponse.json({ error: msg }, { status: 500 });
     }
 
     const result = resolveWorkUnitByRouteSlug({
@@ -96,5 +95,6 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         work_unit_key: match.workUnitKey,
         work_unit_name: match.workUnitName,
         initial_queue_key: match.initialQueueKey,
+        initial_work_view_id: match.initialWorkViewId,
     });
 }

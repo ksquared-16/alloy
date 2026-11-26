@@ -23,6 +23,7 @@ import {
     classifyAbsenceReason,
     type AbsenceReasonClassification,
 } from "@/lib/childcareOperational/attendance/attendanceAbsenceReasons";
+import { whereaboutsAt } from "@/lib/childcareOperational/attendance/attendanceWhereabouts";
 
 export type CurrentPresenceStateKind = "present" | "checked_out" | "absent" | "no_record";
 
@@ -94,42 +95,63 @@ function byAtThenId(a: { at: string; eventId: string }, b: { at: string; eventId
     return a.at.localeCompare(b.at) || a.eventId.localeCompare(b.eventId);
 }
 
+/**
+ * Current presence for one service day — a PRESENTATION ADAPTER, not a second
+ * algorithm.
+ *
+ * This used to reconstruct presence itself, by counting check-ins against
+ * check-outs across the day. That made it the second owner of point-in-time
+ * Attendance truth, and the laxer of the two: counting has no opinion about
+ * ORDER, so a day whose last effective fact was an absence still read as
+ * `present` because a check-in had been counted earlier, and an out-of-order
+ * check-out/check-in pair read as `checked_out` while the child was in a room.
+ * The Workspace, which goes through `resolveCurrentWhereabouts` -> `whereaboutsAt`,
+ * said the opposite on exactly those days.
+ *
+ * Now there is ONE implementation. The day's effective facts are handed to the
+ * certified fold and the answer is translated into the shape this read model has
+ * always published. The fold is correction-aware, so a reversal rewrites the
+ * past here for free, and "the last effective fact wins" is now true on both
+ * surfaces rather than on one.
+ *
+ * Day scope is preserved deliberately: this answers "how did this service day
+ * end", not "where is the child right now". Facts from other dates are filtered
+ * out BEFORE the fold, so yesterday's un-closed check-in cannot leak into today.
+ */
 function deriveCurrentPresence(
     effective: readonly ChildAttendanceEventRow[],
     serviceDate: string | null
 ): CurrentPresenceState {
     if (!serviceDate) return { state: "no_record", serviceDate: null, roomLocationId: null };
 
-    const dayEvents = effective
-        .filter((e) => e.service_date === serviceDate)
-        .sort((a, b) => a.event_at.localeCompare(b.event_at) || a.id.localeCompare(b.id));
-
+    const dayEvents = effective.filter((e) => e.service_date === serviceDate);
     if (dayEvents.length === 0) return { state: "no_record", serviceDate, roomLocationId: null };
 
-    let checkIns = 0;
-    let checkOuts = 0;
-    let hasAbsence = false;
-    let currentRoom: string | null = null;
-    for (const e of dayEvents) {
-        if (e.event_kind === "check_in") {
-            checkIns += 1;
-            currentRoom = e.room_location_id;
-        } else if (e.event_kind === "check_out") {
-            checkOuts += 1;
-        } else if (e.event_kind === "room_transfer") {
-            currentRoom = e.to_room_location_id;
-        } else if (e.event_kind === "present") {
-            currentRoom = e.room_location_id;
-        } else if (e.event_kind === "absence") {
-            hasAbsence = true;
-        }
-    }
+    // The instant the day's facts end. Derived from the facts rather than from a
+    // midnight boundary, so no timezone assumption is introduced: every event on
+    // the day is at or before this, which is all the fold needs.
+    let asOf = dayEvents[0].event_at;
+    for (const e of dayEvents) if (e.event_at > asOf) asOf = e.event_at;
 
-    const present = checkIns > checkOuts || (checkIns === 0 && currentRoom != null);
-    if (present) return { state: "present", serviceDate, roomLocationId: currentRoom };
-    if (checkIns > 0) return { state: "checked_out", serviceDate, roomLocationId: null };
-    if (hasAbsence) return { state: "absent", serviceDate, roomLocationId: null };
-    return { state: "no_record", serviceDate, roomLocationId: null };
+    const w = whereaboutsAt(dayEvents, asOf);
+    if (!w) return { state: "no_record", serviceDate, roomLocationId: null };
+
+    switch (w.state) {
+        case "present":
+            return { state: "present", serviceDate, roomLocationId: w.locationId };
+        case "departed":
+            // The fold calls departure `departed`; this read model has always
+            // published `checked_out`. Translating here keeps the published
+            // contract stable without renaming a certified fact-layer state.
+            return { state: "checked_out", serviceDate, roomLocationId: null };
+        case "absent":
+            return { state: "absent", serviceDate, roomLocationId: null };
+        default:
+            // `not_arrived` from the fold means the day held facts but none that
+            // place the child anywhere (a schedule_override alone, say). This
+            // read model has always called that `no_record`.
+            return { state: "no_record", serviceDate, roomLocationId: null };
+    }
 }
 
 export function buildChildAttendanceReadModel(

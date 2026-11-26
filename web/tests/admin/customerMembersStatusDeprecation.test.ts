@@ -29,16 +29,6 @@ describe("customer_members status deprecation — Phase 2", () => {
         expect(src).not.toContain("status_key");
     });
 
-    it("legacy drawer no longer renders customer_members status control", () => {
-        const src = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(src).not.toMatch(
-            /drawer\.type === "customer_members"[\s\S]{0,2000}formData\.status_key/
-        );
-        const statusEntityMatch = src.match(/const STATUS_ENTITY_TYPES = \[([\s\S]*?)\];/);
-        expect(statusEntityMatch).not.toBeNull();
-        expect(statusEntityMatch![1]).not.toContain("customer_members");
-    });
-
     it("unified drawer status excludes customer_members", () => {
         const src = read("lib/admin/unifiedDrawerStatus.ts");
         expect(src).not.toContain("customer_members");
@@ -56,10 +46,16 @@ describe("customer_members status deprecation — Phase 2", () => {
         expect(block).not.toContain('"status_key"');
     });
 
-    it("global search does not fetch customer_members status definitions", () => {
-        const src = read("lib/admin/globalSearch/globalRecordSearchService.ts");
-        expect(src).not.toMatch(/fetchEffectiveStatusDefinitions\([^)]*["']customer_members["']/);
-        expect(src).toContain("resolveChildPersonStatusKeyByPersonId");
-        expect(src).not.toContain("memberStatusLabels");
+    it("search does not fetch customer_members status definitions", () => {
+        // Re-pointed when the V1 service was retired. The invariant is about
+        // SEARCH, not about a particular file existing: a child's status must
+        // never be read from a customer_members status vocabulary. Asserting it
+        // against the live Search V2 modules keeps the guard meaningful instead
+        // of tying it to a deleted implementation.
+        for (const file of ["lib/search/searchEnrichment.ts", "lib/search/searchRetrieval.ts", "lib/search/runSearch.ts"]) {
+            const src = read(file);
+            expect(src).not.toMatch(/fetchEffectiveStatusDefinitions\([^)]*["']customer_members["']/);
+            expect(src).not.toContain("memberStatusLabels");
+        }
     });
 });

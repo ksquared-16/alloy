@@ -51,6 +51,27 @@ const PACKS: readonly MetricPackDefinition[] = [
         domainStatus: "available",
     },
     {
+        key: "trust",
+        label: "Trust",
+        description:
+            "Governed reasoning: decision volume, outcome mix, deterministic resolution, latency and cost. " +
+            "Organization-wide only \u2014 Trust records carry no site linkage.",
+        metricKeys: [
+            "trust.governed_decisions_created",
+            "trust.governed_decisions_completed",
+            "trust.recommendation_rate",
+            "trust.governed_refusal_rate",
+            "trust.reasoning_failure_rate",
+            "trust.deterministic_resolution_rate",
+            "trust.escalated_decision_count",
+            "trust.reasoning_latency_p50",
+            "trust.provider_cost_units",
+            "trust.executions_committed_count",
+        ],
+        defaultSurfaceOrder: 45,
+        domainStatus: "available",
+    },
+    {
         key: "capacity",
         label: "Capacity",
         description: "Room and program capacity utilization.",
@@ -61,10 +82,23 @@ const PACKS: readonly MetricPackDefinition[] = [
     {
         key: "attendance",
         label: "Attendance",
-        description: "Check-in patterns and attendance compliance.",
-        metricKeys: [],
+        description:
+            "Who is expected, who is here, and who is unaccounted for \u2014 read from the same " +
+            "service-day interpretation the Attendance workspace uses.",
+        metricKeys: [
+            "attendance.expected_count",
+            "attendance.occupancy_count",
+            "attendance.correction_rate",
+            "attendance.unmapped_event_count",
+            "attendance.consequence_review_count",
+            "attendance.here_now_count",
+            "attendance.not_arrived_count",
+            "attendance.checked_out_count",
+            "attendance.known_away_count",
+            "attendance.unknown_state_count",
+        ],
         defaultSurfaceOrder: 60,
-        domainStatus: "coming_soon",
+        domainStatus: "available",
     },
     {
         key: "staffing",
@@ -75,12 +109,28 @@ const PACKS: readonly MetricPackDefinition[] = [
         domainStatus: "coming_soon",
     },
     {
-        key: "billing",
-        label: "Billing",
-        description: "Collections, receivables, and billing cycle health.",
-        metricKeys: [],
+        /*
+         * This entry was `billing`, empty, and promising "receivables" — a placeholder that
+         * named a concept the platform did not own. It is now the Financials pack, and the
+         * description says only what the seven metrics actually answer.
+         */
+        key: "financials",
+        label: "Financials",
+        description:
+            "Money owed, collectible now, billed, received, unapplied, and subsidy variance \u2014 each "
+            + "quoted from the Financials thread that owns it. Not receivables accounting and not "
+            + "recognised revenue: neither model exists in the platform.",
+        metricKeys: [
+            "financials.outstanding_amount",
+            "financials.currently_collectible_amount",
+            "financials.gross_charges_posted_amount",
+            "financials.payments_received_amount",
+            "financials.unapplied_payments_amount",
+            "financials.unresolved_subsidy_variance_amount",
+            "financials.charges_awaiting_post_count",
+        ],
         defaultSurfaceOrder: 80,
-        domainStatus: "coming_soon",
+        domainStatus: "available",
     },
 ] as const;
 

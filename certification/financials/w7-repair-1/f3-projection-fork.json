@@ -1,0 +1,130 @@
+[
+  {
+    "pass": 1,
+    "stuck": true,
+    "cardRequests": 0,
+    "dom": {
+      "mounted": true,
+      "skeleton": true,
+      "empty": "loading",
+      "nav": false
+    },
+    "projection": {
+      "status": 200,
+      "topKeys": [
+        "generation",
+        "structureSettled",
+        "compose_version",
+        "entity",
+        "workspace",
+        "first_paint",
+        "header",
+        "actions",
+        "layout",
+        "activity"
+      ],
+      "cardsFound": false,
+      "cardKeys": null,
+      "financialsPresent": false,
+      "financialsState": null,
+      "financialsKeys": null,
+      "financialsSample": null
+    }
+  },
+  {
+    "pass": 2,
+    "stuck": true,
+    "cardRequests": 0,
+    "dom": {
+      "mounted": true,
+      "skeleton": true,
+      "empty": "loading",
+      "nav": false
+    },
+    "projection": {
+      "status": 200,
+      "topKeys": [
+        "generation",
+        "structureSettled",
+        "compose_version",
+        "entity",
+        "workspace",
+        "first_paint",
+        "header",
+        "actions",
+        "layout",
+        "activity"
+      ],
+      "cardsFound": false,
+      "cardKeys": null,
+      "financialsPresent": false,
+      "financialsState": null,
+      "financialsKeys": null,
+      "financialsSample": null
+    }
+  },
+  {
+    "pass": 3,
+    "stuck": true,
+    "cardRequests": 0,
+    "dom": {
+      "mounted": true,
+      "skeleton": true,
+      "empty": "loading",
+      "nav": false
+    },
+    "projection": {
+      "status": 200,
+      "topKeys": [
+        "generation",
+        "structureSettled",
+        "compose_version",
+        "entity",
+        "workspace",
+        "first_paint",
+        "header",
+        "actions",
+        "layout",
+        "activity"
+      ],
+      "cardsFound": false,
+      "cardKeys": null,
+      "financialsPresent": false,
+      "financialsState": null,
+      "financialsKeys": null,
+      "financialsSample": null
+    }
+  },
+  {
+    "pass": 4,
+    "stuck": true,
+    "cardRequests": 0,
+    "dom": {
+      "mounted": true,
+      "skeleton": true,
+      "empty": "loading",
+      "nav": false
+    },
+    "projection": {
+      "status": 200,
+      "topKeys": [
+        "generation",
+        "structureSettled",
+        "compose_version",
+        "entity",
+        "workspace",
+        "first_paint",
+        "header",
+        "actions",
+        "layout",
+        "activity"
+      ],
+      "cardsFound": false,
+      "cardKeys": null,
+      "financialsPresent": false,
+      "financialsState": null,
+      "financialsKeys": null,
+      "financialsSample": null
+    }
+  }
+]

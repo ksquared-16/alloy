@@ -89,7 +89,7 @@ describe("Inbox foundation UI contracts", () => {
         expect(read("components/adminV2/messaging/ComposerChannelToggle.tsx")).toContain("(unavailable)");
         expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("Send now");
         expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("Send later");
-        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("BOS Assist");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain('label="BOS"');
     });
 
     it("inbox panel avoids Family inquiry boilerplate and dark message bubbles", () => {

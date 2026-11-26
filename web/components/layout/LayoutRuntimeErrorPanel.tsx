@@ -35,7 +35,7 @@ export default function LayoutRuntimeErrorPanel({
         >
             <div className="font-semibold">Layout couldn’t render</div>
             <p className="mt-1 text-[13px] leading-snug">
-                This view is configured in <span className="font-medium">Settings → Surfaces</span>, but the published
+                This view is configured in <span className="font-medium">Configuration → Surfaces</span>, but the published
                 surface could not be displayed for this record. The legacy view is intentionally not shown.
                 {reason ? <span className="mt-1 block text-[12px] text-amber-900">Reason: <code className="font-mono">{reason}</code></span> : null}
             </p>

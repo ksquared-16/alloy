@@ -1,0 +1,269 @@
+{
+  "A": {
+    "subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "reserved": null,
+    "emptyState": null,
+    "skeletons": 0,
+    "detailsNav": 1,
+    "netObligation": "$1,487.87",
+    "due": "$1,416.00",
+    "balance": "$1,412.87",
+    "paid": "$75.00",
+    "prepaid": "$125.00",
+    "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $1,450.00 Fee $150.00 Consumable fee $36.00 DISCOUNTS & CREDITS Credit -$260.06 Adjustment $146.71 Discount -$145.00 NET OBLIGATION $1,487.87 A",
+    "bodySubject": "b5b62172-8b27-44ff-a852-b11b8888a6cd",
+    "settlement": [
+      {
+        "outcome": "applied",
+        "addressed": "[\"enrolled-children\",null,null,null,null]",
+        "t": 4802
+      }
+    ]
+  },
+  "B": {
+    "label": "A Automation Family Lead 2d",
+    "subject": "all",
+    "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "reserved": null,
+    "emptyState": null,
+    "skeletons": 0,
+    "detailsNav": 1,
+    "netObligation": "$0.00",
+    "due": "$0.00",
+    "balance": "$0.00",
+    "paid": "$0.00",
+    "prepaid": null,
+    "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+    "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+    "settlement": [
+      {
+        "outcome": "applied",
+        "addressed": "[\"enrolled-children\",null,null,null,null]",
+        "t": 4802
+      }
+    ]
+  },
+  "duringFrames": [
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    },
+    {
+      "subject": "all",
+      "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "reserved": null,
+      "emptyState": null,
+      "skeletons": 0,
+      "detailsNav": 1,
+      "netObligation": "$0.00",
+      "due": "$0.00",
+      "balance": "$0.00",
+      "paid": "$0.00",
+      "prepaid": null,
+      "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $2,340.00 NET OBLIGATION $0.00 Add DUE $0.00 Nothing past due Balance $0.00 Paid $0.00 Details →",
+      "bodySubject": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "settlement": [
+        {
+          "outcome": "applied",
+          "addressed": "[\"enrolled-children\",null,null,null,null]",
+          "t": 4802
+        }
+      ]
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import {
     resolveCommandCenterWarmSelection,
     warmCommandCenterModal,
 } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { resetDrawerFamilyWorkspacePrefetchCacheForTests } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import type { ConversationSummary } from "@/lib/communications/v2/commandCenterViewModel";
 
 const sampleConversations: ConversationSummary[] = [
@@ -32,6 +33,7 @@ const sampleConversations: ConversationSummary[] = [
 describe("commandCenterPrefetchCache", () => {
     beforeEach(() => {
         resetCommandCenterPrefetchCacheForTests();
+        resetDrawerFamilyWorkspacePrefetchCacheForTests();
         fetchMock.mockReset();
         fetchMock.mockImplementation(async (url: string) => {
             if (url.includes("/communications/conversations")) {
@@ -57,6 +59,7 @@ describe("commandCenterPrefetchCache", () => {
 
     afterEach(() => {
         resetCommandCenterPrefetchCacheForTests();
+        resetDrawerFamilyWorkspacePrefetchCacheForTests();
     });
 
     it("resolveCommandCenterWarmSelection picks first visible conversation", () => {

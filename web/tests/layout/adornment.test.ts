@@ -75,9 +75,11 @@ describe("adornment schema", () => {
 describe("default Lead layouts include adornment examples", () => {
     it("drawer: primary contact opens person, tour date is calendar icon, child opens child", () => {
         const items = allItems(buildLeadDrawerDefaultDoc());
+        // The ICON stays; the `open_drawer` action does not. The platform defaults are ours, and
+        // they stop teaching a value no runtime executes. Tenant layouts are not rewritten.
         const contact = items.find((i) => i.refKey === "person.primary_contact_name");
         expect(contact?.adornment?.icon).toBe("person");
-        expect(contact?.adornment?.action?.entity).toBe("person");
+        expect(contact?.adornment?.action).toBeUndefined();
 
         const secondary = items.find((i) => i.refKey === "person.secondary_contact_name");
         expect(secondary?.adornment?.icon).toBe("person");
@@ -87,7 +89,9 @@ describe("default Lead layouts include adornment examples", () => {
         expect(tour?.adornment?.action).toBeUndefined(); // icon only
 
         const childTable = items.find((i) => i.kind === "related_list" && i.displayMode === "table");
-        expect(childTable?.columns?.find((c) => c.refKey === "child.name")?.adornment?.action?.entity).toBe("child");
+        const childColumn = childTable?.columns?.find((c) => c.refKey === "child.name");
+        expect(childColumn?.adornment?.icon).toBe("child");
+        expect(childColumn?.adornment?.action).toBeUndefined();
     });
 
     it("queue card: contact opens person, child opens child; still validates", () => {
@@ -95,9 +99,11 @@ describe("default Lead layouts include adornment examples", () => {
         expect(parseLayoutDoc(doc).ok).toBe(true);
         const items = allItems(doc);
         expect(items.find((i) => i.refKey === "person.primary_contact_name")?.adornment?.icon).toBe("person");
-        // children now live in a related_list (each child = one row); child link is a column adornment
+        // children now live in a related_list (each child = one row); the column keeps its icon
         const childList = items.find((i) => i.kind === "related_list" && i.refKey === "children");
-        expect(childList?.columns?.find((c) => c.refKey === "child.name")?.adornment?.action?.entity).toBe("child");
+        const childColumn = childList?.columns?.find((c) => c.refKey === "child.name");
+        expect(childColumn?.adornment?.icon).toBe("child");
+        expect(childColumn?.adornment?.action).toBeUndefined();
         // household title is a computed display-text item with a house icon
         const title = items.find((i) => typeof i.template === "string" && i.template.includes("Household"));
         expect(title?.adornment?.icon).toBe("home");

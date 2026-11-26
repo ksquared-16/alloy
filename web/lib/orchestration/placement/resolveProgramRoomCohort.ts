@@ -15,7 +15,8 @@ export type ResolveProgramRoomCohortInput = {
     /** Flat overrides (OCM row, opportunity metadata, etc.). */
     program_room_group?: string | null;
     program_label?: string | null;
-    desired_program_type?: string | null;
+    /** Canonical program key derived from OCM `program_category_id` → location_program_categories.key. */
+    program_key?: string | null;
 };
 
 export type ResolveProgramRoomCohortResult = {
@@ -108,9 +109,9 @@ export function resolveProgramRoomCohort(input: ResolveProgramRoomCohortInput): 
     push(md.program_room_group, "metadata.program_room_group", "metadata.program_room_group");
     push(input.program_label, "program_label", "program_label");
     push(md.program_label, "metadata.program_label", "metadata.program_label");
-    push(input.desired_program_type, "desired_program_type", "desired_program_type");
-    push(inputs?.desired_program_type, "metadata.placement_fact_inputs_v1.desired_program_type", "metadata.placement_fact_inputs_v1.desired_program_type");
-    push(md.desired_program_type, "metadata.desired_program_type", "metadata.desired_program_type");
+    push(input.program_key, "program_key", "program_key");
+    push(inputs?.program_key, "metadata.placement_fact_inputs_v1.program_key", "metadata.placement_fact_inputs_v1.program_key");
+    push(md.program_key, "metadata.program_key", "metadata.program_key");
 
     const memMeta = md;
     push(memMeta.demo_program_label, "metadata.demo_program_label", "metadata.demo_program_label");

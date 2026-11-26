@@ -1,0 +1,124 @@
+/**
+ * Shared identity field row layout — one resolver for Household, Children, Person, etc.
+ */
+
+import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import {
+    chunkNestedSurfaceFieldsForHalfRowLayout,
+    isNestedSurfaceFieldHalfWidth,
+    isNestedSurfaceFieldThirdWidth,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import type { IdentityFieldCellVM, IdentityFieldRowVM, IdentityFieldPlacement } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { isCompactIconValueIdentityField } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
+import { normalizeIdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+
+export type IdentityFieldRowInput = {
+    placement: IdentityFieldPlacement;
+    label: string;
+    value: string | null;
+    icon?: string;
+    policy: IdentityFieldCellVM["policy"];
+    editable: boolean;
+    linked?: boolean;
+    linkLabel?: string | null;
+    linkDestination?: IdentityFieldCellVM["linkDestination"];
+    linkTarget?: IdentityFieldCellVM["linkTarget"];
+    derivedSourceLabel?: string | null;
+    editControl?: IdentityFieldCellVM["editControl"];
+};
+
+/** Build row VMs from ordered placements (summary or expanded tier). */
+/**
+ * Legacy consent checkboxes stored in `field_values`. NO send path reads them — consent lives in
+ * `communication_preferences` and is shown and edited as the person's "Communication preferences" —
+ * so a row reading "Sms Opt In —" told the operator about a setting that changes nothing.
+ */
+export const UNENFORCED_LEGACY_CONSENT_FIELD_KEYS: ReadonlySet<string> = new Set([
+    "sms_opt_in",
+    "email_opt_in",
+    "communication_opt_out",
+    "sms_consent",
+    "email_consent",
+]);
+
+function isUnenforcedLegacyConsentField(fieldRef: string): boolean {
+    const last = fieldRef.split(/[:.]/).pop() ?? fieldRef;
+    return UNENFORCED_LEGACY_CONSENT_FIELD_KEYS.has(last.trim());
+}
+
+export function resolveIdentityFieldRows(
+    inputs: readonly IdentityFieldRowInput[],
+): IdentityFieldRowVM[] {
+    const visible = inputs.filter((input) => {
+        if (input.policy === "hidden") return false;
+        if (isUnenforcedLegacyConsentField(input.placement.fieldRef)) return false;
+        const empty = !input.value?.trim();
+        // Explicit hideWhenEmpty drops the cell. Hidden label/icon alone must keep
+        // placement — runtime renders "—" so the next field does not shift up.
+        if (empty && input.placement.hideWhenEmpty) return false;
+        return true;
+    });
+    if (visible.length === 0) return [];
+
+    const ordered = [...visible].sort((a, b) => {
+        if (a.placement.row !== b.placement.row) return a.placement.row - b.placement.row;
+        return a.placement.column - b.placement.column;
+    });
+
+    const keys = ordered.map((input) => input.placement.fieldRef);
+    // Summary reachability lines must stack even when a stale placement still says half
+    // (Builder can look "full row" after force-full width reads while VM placements lag).
+    const packingSummaryTier = ordered.every(
+        (input) => normalizeIdentityStorageTier(input.placement.tier) === "summary",
+    );
+    const layoutFor = (fieldRef: string): NestedSurfaceFieldLayoutWidth => {
+        if (packingSummaryTier && isCompactIconValueIdentityField(fieldRef)) return "full";
+        const input = ordered.find((row) => row.placement.fieldRef === fieldRef);
+        return input?.placement.width ?? "full";
+    };
+    const chunks = chunkNestedSurfaceFieldsForHalfRowLayout(keys, layoutFor);
+
+    return chunks.map((chunk, rowIndex) => ({
+        row: ordered.find((input) => input.placement.fieldRef === chunk[0])?.placement.row ?? rowIndex + 1,
+        cells: chunk.map((fieldRef, columnIndex) => {
+            const input = ordered.find((row) => row.placement.fieldRef === fieldRef)!;
+            const width = layoutFor(fieldRef);
+            return {
+                fieldRef,
+                label: input.label,
+                value: input.value,
+                icon: input.icon,
+                labelMode: input.placement.labelMode ?? "visible",
+                policy: input.policy,
+                editable: input.editable,
+                linked: input.linked ?? false,
+                linkLabel: input.linkLabel ?? null,
+                linkDestination: input.linkDestination ?? null,
+                linkTarget: input.linkTarget ?? null,
+                derivedSourceLabel: input.derivedSourceLabel ?? null,
+                hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
+                width,
+                editControl: input.editControl,
+                column: (columnIndex + 1) as 1 | 2 | 3,
+            } satisfies IdentityFieldCellVM & { column?: 1 | 2 | 3 };
+        }),
+    }));
+}
+
+/** Infer default width from consecutive half pairing when placements lack explicit width. */
+export function defaultWidthForPlacement(
+    fieldRef: string,
+    layoutWidths: Record<string, NestedSurfaceFieldLayoutWidth> | undefined,
+): NestedSurfaceFieldLayoutWidth {
+    const stored = layoutWidths?.[fieldRef];
+    if (stored) return stored;
+    return "full";
+}
+
+/** Whether two fields share a row under half-width pairing rules. */
+export function identityFieldsShareRow(
+    left: IdentityFieldPlacement,
+    right: IdentityFieldPlacement,
+): boolean {
+    return left.row === right.row && left.row === right.row && left.width !== "full" && right.width !== "full";
+}

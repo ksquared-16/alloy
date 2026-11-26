@@ -2,7 +2,7 @@
  * Universal Card presentation model — business question first, not layout sections.
  * @see docs/platform/operator/operational-surface-design-system.md (System 5)
  * @see docs/platform/operator/universal-card-archetypes.md (System 5A)
- * @see docs/sprints/06_2026/alloy_os_system_4_universal_card_system.md
+ * @see docs/sprints/archive/06_2026/alloy_os_system_4_universal_card_system.md
  */
 
 import type { FocusPanelCardDensity, FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
@@ -44,6 +44,20 @@ export type FocusPanelCardArchetype = (typeof FOCUS_PANEL_CARD_ARCHETYPES)[numbe
 export type FocusPanelProfileField = {
     label: string;
     value: string | null;
+    /**
+     * Another RECORD this field names, when it names one — which makes the row an operator gesture
+     * instead of a printed string.
+     *
+     * "Household — Kurzman Family" on a child's identity card is a reference to a record that
+     * exists, and an operator reading it wants to go there. Without this the only route to the
+     * family is to search for it by name, retyping something the surface is already showing.
+     *
+     * `subject_type` is deliberately a plain string, matching `OperationalSubjectRef.type`: the
+     * platform contract stays open so a producer can name a grain without a platform-layer edit, and
+     * the renderer narrows it through `durableSubjectTypeFor` — an unrecognised grain renders as
+     * plain text rather than as a control that goes nowhere.
+     */
+    record?: { subject_type: string; subject_id: string } | null;
 };
 
 export type FocusPanelCollectionItem = {
@@ -75,15 +89,28 @@ export type FocusPanelCardPayload = {
 /**
  * Platform-owned card blueprint keys (not layout section keys).
  *
- * All keys in this registry are `@grain case` — the Focus Panel is always
- * case-grain (subject is an Opportunity). Child-grain and candidate-grain cards
- * are defined separately and never rendered in the case-grain Focus Panel.
+ * ONE vocabulary for every surface. Which subject a card can compose for is a DECLARATION on the
+ * registry (`CardGrainApplicability`), not a property of this list and no longer a property of the
+ * `@grain` comments below — those record each key's origin, and the registry is the authority a
+ * composer actually reads. An undeclared card is case-only.
  *
+ * @see lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern.ts
  * @see docs/platform/operator/operational-grain-doctrine.md §5
  */
 export const FOCUS_PANEL_CARD_KEYS = [
     /** @grain case — family attention flags */
     "attention",
+    /**
+     * @grain case — the combined Business Process card: configured stage rail + participant
+     * projection + Current Work + case actions + bounded Activity.
+     *
+     * THE CANONICAL SUCCESSOR TO `current_work` AS A CARD PRESENTATION. `current_work` remains a
+     * canonical DATA owner that this card consumes — the supersession is of card identity and
+     * composition, never of the Current Work platform concept. Stored tenant configuration naming
+     * `current_work` normalizes here (the SUPERSESSION concern on the registry), and the two must
+     * never render together.
+     */
+    "business_process",
     /** @grain case — current lifecycle mission label */
     "current_mission",
     /** @grain case — open work items for this family */
@@ -100,10 +127,95 @@ export const FOCUS_PANEL_CARD_KEYS = [
     "household",
     /** @grain case — children roster (read-only; child facts are case-grain display) */
     "children",
+    /**
+     * @grain case — employment held by the case's linked contacts (read-only).
+     *
+     * Person-owned truth displayed at case grain for the same reason `children` is: a person
+     * has no host Work Unit of its own, so the case panel is the only surface that composes
+     * for them. Employment facts are never authored here.
+     */
+    /**
+     * @grain case — the child's operating day: expected window, arrival, room movements, current
+     * location, departure, and the commands that change them.
+     *
+     * Case grain with a PARTICIPANT SCOPE: the panel subject stays the family, and the card answers
+     * about the scoped child. With several children and none scoped it renders no controls rather
+     * than picking one.
+     */
+    "attendance",
+    "financials",
+    "health_safety",
+    /**
+     * @grain person — the employee-centric Staff card.
+     *
+     * Successor to the person-grain `employment` presentation, reading the SAME
+     * `PersonEmploymentComposition`. Not a second owner of employment truth — a fuller presentation
+     * of the one owner. `scheduling` stays a separate card answering a separate question.
+     */
+    "staff",
+    /**
+     * @grain person — the qualifications and certifications this employee holds, what needs
+     * attention, and which configured requirements apply to their work.
+     *
+     * A SEPARATE card from `staff`, not a section inside it, because it answers a separate
+     * question and its answer changes on a different clock: employment facts change when
+     * someone is hired, moved or ended; qualification standing changes by the passage of a
+     * date. Folding it in would have put an expiring credential behind an expander whose
+     * headline says "Active".
+     *
+     * It deliberately does NOT publish a global Staff Ready / Blocked verdict. That verdict
+     * spans more than qualifications and belongs to Staff Readiness; asserting it here would
+     * make this card the owner of a truth it can only see part of.
+     */
+    "staff_qualifications",
+    /**
+     * @grain person — when this employee CAN work: the recurring weekly pattern,
+     * its effective dates, and the dated exceptions that replace it.
+     *
+     * A THIRD person-grain card, and deliberately not folded into `staff` or
+     * `staff_qualifications`. Employment says who works here; qualifications say
+     * what they are cleared to do; availability says when they can be asked. Three
+     * questions, three clocks — a pattern changes when someone renegotiates their
+     * week, a credential lapses by a date, employment changes when someone is hired.
+     *
+     * It shows availability, never the SCHEDULE. What the organization decided
+     * someone will work is `scheduling`'s answer, and this card creates none of it.
+     */
+    "staff_availability",
+    /**
+     * @grain person — is this employee operationally ready, and what needs attention?
+     *
+     * A PROJECTION card. It owns no facts: employment, qualifications and their
+     * requirements are all canonical elsewhere, and this reads the platform's own
+     * readiness result over them. Nothing is stored, so there is no state here that
+     * can go stale.
+     *
+     * It is not the case-grain `readiness_kpi`, which asks whether a FAMILY can
+     * advance. Same word, different subject and different inputs.
+     */
+    "staff_readiness",
+    "staff_compensation",
+    "employment",
+    /** @grain case — meaningful completed/committed outcomes (not Activity history) */
+    "milestones",
+    /** @grain case — per-child scheduling state (room · weekly pattern · dates); Create/Change via configured command */
+    "scheduling",
     /** @grain case — outreach / scheduled sends status (action-only) */
     "communications",
     /** @grain case — uploaded documents */
     "documents",
+    /**
+     * @grain child — the durable child's own identity (name · date of birth · age · household).
+     *
+     * The FIRST child-grain card. Deliberately NOT the `children` card, which is a case-grain
+     * ROSTER of a family's children and answers a different question. Everything here comes from
+     * the `customer_members` row, which is the canonical child identity — `person_id` on it is
+     * NULLABLE, so a child can exist with no `persons` row at all and must still be identifiable.
+     *
+     * Enrollment-scoped facts (program, room, schedule, start date) are deliberately absent: they
+     * require an enrollment, and a durable child record must open without one.
+     */
+    "child_identity",
     /** @grain case — available workflow actions launcher */
     "work_launcher",
     /** @grain case — lifecycle workflow steps rail */

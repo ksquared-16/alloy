@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Testing and quality
 
 **Status:** Canonical quality bar (June 2026 rebaseline).
@@ -7,10 +14,24 @@
 ## Required checks (TypeScript changes)
 
 ```bash
-cd web && npx tsc --noEmit
+cd web && npm run typecheck
 ```
 
-Required before merge on any `web/` TypeScript change.
+Platform CI gate (production/build graph — app, API routes, components, `lib/`; excludes tests and scripts). Required before merge on any `web/` TypeScript change. Same graph `next build` uses.
+
+Full strict graph (tests + scripts + Playwright):
+
+```bash
+cd web && npm run typecheck:tests
+```
+
+Required when changing test files, scripts, Playwright specs, or shared types that tests import. CI runs both jobs on every `web/**` PR. See `docs/platform/governance/typescript-performance.md`.
+
+Build-only alias (identical to `typecheck`):
+
+```bash
+cd web && npm run typecheck:build
+```
 
 ---
 
@@ -58,7 +79,8 @@ cd web && npm run test -- \
   tests/lib/workspace/routeSessionCacheAndReveal.test.ts
 ```
 
-Locked baseline: `../../system/adminv2-runtime-performance-doctrine.md`
+Locked baseline: `../../system/adminv2-runtime-performance-doctrine.md`  
+Ownership map: `./runtime-ownership-migration-map.md`
 
 ---
 

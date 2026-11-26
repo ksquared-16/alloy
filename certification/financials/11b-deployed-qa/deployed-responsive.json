@@ -1,0 +1,44 @@
+{
+  "w1280": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuition": false,
+    "prepaidNamed": true,
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  },
+  "w1440": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuition": false,
+    "prepaidNamed": true,
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  },
+  "w1680": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuition": false,
+    "prepaidNamed": true,
+    "horizontalOverflow": false,
+    "overflowBy": 0
+  }
+}

@@ -74,7 +74,7 @@ describe("modal-local filter query", () => {
 });
 
 describe("Surfaces runtime link opens the modal, not the dev mock", () => {
-    const oi = SURFACE_OBJECTS.dashboards.find((d) => d.id === "operational-intelligence");
+    const oi = SURFACE_OBJECTS["operational-intelligence"].find((d) => d.id === "operational-intelligence");
 
     it("runtime link is the workspace modal-intent deep-link (not /dev, not the removed route)", () => {
         expect(oi).toBeDefined();

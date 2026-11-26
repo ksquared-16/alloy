@@ -1,0 +1,330 @@
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+    PERMISSION_KEY_GRAMMAR,
+    REPO_ROOT,
+    discoverCatalog,
+    scanEnforcement,
+} from "./permissionCatalogDiscovery";
+
+/**
+ * **W-11 — one vocabulary (C4).** Plan:
+ * `docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md` §7.
+ *
+ * This suite is **not a registered regression lock**, and that is deliberate. `03…§33.1`/`DR-12` of the
+ * product-source copy settles who may mint one: *"by the Director rather than by a worker appending to
+ * §25 — which is how `X-1` happened."* No `RL-` number in either register belongs to W-11 — `RL-35`
+ * ("every catalog key resolves to ≥1 enforcement site") is `W-50`'s and cannot be green until W-11's
+ * deletions apply. So this file is the **instrument** for W-11's exit artifact and for `RL-35` later:
+ * it holds the measurement steady so the enumerated deletion list cannot drift away from the tree it
+ * was derived from, and it fails if either side of the reconciliation moves.
+ *
+ * Three things are asserted, in descending strength:
+ *
+ *   1. **The catalog is discovered completely** — the width matches the count the Phase 0 migration
+ *      independently measured against the shared database, and every seeding syntax in the tree is
+ *      reached. This is the clause that would have caught the defect described in
+ *      `permissionCatalogDiscovery.ts`: a parser pinned to one `INSERT` shape saw 35 of 57 keys.
+ *   2. **The reconciliation is exactly the artifact** — the enforced and unenforced sets equal the ones
+ *      enumerated in `w11-catalog-reconciliation.json`, in both directions. A key that gains or loses
+ *      its last enforcement site fails here, so the operator's review list stays true to the tree.
+ *   3. **The one uncatalogued permission key is still the only one.** `communications.send.emergency`
+ *      is declared as a permission key in code, written into the enqueue record as the permission the
+ *      send was made under, and held by nobody — it has no catalog row and nothing binds it to the
+ *      resolved permission set.
+ */
+
+const ARTIFACT_PATH = path.join(
+    REPO_ROOT,
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/w11-catalog-reconciliation.json",
+);
+
+type Artifact = {
+    catalog_width: number;
+    enforced: Array<{ key: string; sites: string[] }>;
+    deletion_candidates: string[];
+    addition_candidates: Array<{ key: string; sites: string[] }>;
+    discovery: { keys_missed_by_pinned_parser: string[] };
+};
+
+const artifact: Artifact = JSON.parse(fs.readFileSync(ARTIFACT_PATH, "utf8"));
+const artifactEnforced = artifact.enforced.map((e) => e.key);
+
+/**
+ * Keys added by an APPROVED decision after the W-11 artifact was recorded.
+ *
+ * The lock's purpose is that nothing widens the catalog SILENTLY, not that the catalog can never
+ * widen. Each entry names the decision that authorized it, so an unapproved addition still fails —
+ * it simply will not be in this list.
+ */
+const APPROVED_ADDITIONS: Record<string, string> = {
+    "staff.compensation.read":
+        "20260928120000 — Staff & Workforce V2 Slice 9: seeing an employment's pay. The first Staff read in this estate that is NOT open to anyone who can open a staff record; qualifications and availability are read to run a day, and a salary is not. Deliberately not filed under `financials`, which answers what the organization earns and owes rather than what it pays one person",
+    "staff.compensation.write":
+        "20260928120000 — Staff & Workforce V2 Slice 9: recording an effective-dated compensation term. Separated from the read because a principal who may see a rate is not thereby a principal who may give a raise",
+    "health.view": "D-H6 — structured health visibility boundary",
+    "health.manage": "D-H6 — structured health mutation boundary",
+    "enrollment.requirement_exception.manage":
+        "20260901120000 — excepting an Enrollment requirement is not working the Enrollment queue",
+    "enrollment.pricing.override": "20260906130000 — overriding recommended tuition, admin only",
+    "enrollment.record.manage":
+        "20260916050000 — D1, keeping the enrollment record: the inquiry, the children on it, and their requested program, room, site, start date and quote. Replaced portal admission on six mutations, one of which (lead-location) had no gate at all",
+    "enrollment.decide":
+        "20260916050000 — D1, changing the enrollment outcome: status, the agreement that binds it, placement, and waitlist position. Separated from record.manage because correcting a requested start date is not being trusted to mark a family Enrolled",
+    "fin.adjust": "20260907150000 — deciding by hand that a family owes less is not billing them",
+    "fin.responsibility": "20260908130000 — who contractually bears a family's obligations",
+    "fin.subsidy": "20260909130000 — administering agency funding",
+    "attendance.read": "20260909230000 — viewing child attendance",
+    "attendance.record": "20260909230000 — recording child attendance",
+    "portal.access":
+        "20260911140000 — W-13, entering the operator portal at all; the capability that replaced the PORTAL_ROLES role literal",
+    "forms.author": "20260912020000 — designing forms, the authority that replaced the literal `admin` gate on 16 Forms writes",
+    "forms.submissions":
+        "20260912020000 — handling submissions that change records or reach people: sending, submitting on behalf, linking by hand, generating a document",
+    "forms.submissions.confirm":
+        "20260912020000 — confirming a linkage the system proposed, metadata only; kept separate because `ops` could already do exactly this and nothing broader",
+    "processing.operate":
+        "20260912113000 — working a Processing case: classifying it, resolving identity, recording decisions, committing proposed records. Replaced the shared `ctx.role === admin || ops` in operatorRouteContext, AND gave authority to six mutations that previously required only portal admission",
+    "processing.archive":
+        "20260912113000 — taking a case out of the queue; its own key so that granting `ops` processing.operate does not also hand it an archive it never had",
+    "processing.documents.manage":
+        "20260912113000 — renaming a source document, and deleting one with the case it opened and the stored file; deliberately NOT `documents.write`, which `ops` holds in every organization",
+    "tours.configure":
+        "20260916020000 — defining what a tour IS: availability, capacity, the windows families may book into. Director model Tours/Bookings V1; deliberately NOT scheduling.write, which would have hidden tour definition inside a key ops already holds",
+    "tours.book":
+        "20260916020000 — placing a family into a tour slot. Separate from tours.configure because booking is routine front-desk work and defining the offer is not",
+    "work.configure":
+        "20260916030000 — defining what operational work EXISTS: the queue definition and the work units it yields. Director model Work Authority V1; admin only",
+    "work.operate":
+        "20260916030000 — performing work inside a process already running: completing stage work, closing a family, recording participant decisions, executing a workflow run. Seeded to ops; deliberately NOT a work.manage spanning define-and-do, and NOT work.assign, which stays per product surface under Assignments Authority Model V1",
+    "option_sets.delete":
+        "20260914183000 — deleting an option set or one of its items; its own key because Config Layout Assist has no delete operation of any kind, so folding deletion into option_sets.manage would have handed ops an authority it has never held",
+    "layouts.lifecycle":
+        "20260914183000 — creating, duplicating, publishing and rolling back layout versions; a version state machine is not editing inside a layout, and hiding it in layouts.manage would let an operator publish by being granted edit",
+    "fields.delete":
+        "20260914183000 — deleting a field definition; separated from fields.manage for the same reason as option_sets.delete",
+    "fin.post":
+        "20260914113000 — posting a financial consequence that arises from operational work: a customer receipt, a vendor payout, a completion journal entry, a manual receivable charge. Financials-owned though enforced from under schedules/ and jobs/, because authority follows the business consequence rather than the URL folder",
+    "processing.dev_cleanup":
+        "20260912113000 — the Processing test-data reset; necessary and not sufficient, because the route and the planner both refuse in production whoever holds it",
+    /*
+     * The three Communications authorities. `communications.read` and `communications.send` are NOT
+     * here: both predate the artifact, and `communications.read` is recorded as a RECOVERY in
+     * `enforced` — catalogued, granted and consulted by nothing until this slice, the same story the
+     * artifact already tells about `fin.read` and `crm.customers.read`.
+     */
+    "communications.templates.manage":
+        "20260915180000 — authoring and lifecycle of organization templates; its own key because folding it into communications.send would mean anyone who may answer a family may also rewrite every template the organization sends",
+    "communications.provider.configure":
+        "20260915180000 — the delivery services and channel bindings messages travel over; selects credential REFERENCES and is never authority to read secret material",
+    "configuration.vocabulary.manage":
+        "20260915200000 — defining the organization's reusable labels, types and relationship vocabulary. Its own key because no existing Configuration authority truthfully meant it: fields.manage, option_sets.manage, layouts.manage and sections.manage each have established narrower meanings, and the Director declined to stretch one. Status definitions are deliberately NOT under it — editing one can rebind a process stage, so they take business_process.configure",
+    "communications.bulk.send":
+        "20260915180000 — organization-wide, announcement and campaign sends, separated from communications.send because the blast radius is materially different and no product statement ever said one implied the other",
+    /*
+     * Documents D3 (Director authorization, 2026-10-23). D2 cleared these two classes by role and recorded the keys
+     * as a Director decision (W-11); the D3 authorization makes it. Admin only, the D-H6 precedent: no administrator
+     * loses the clearance the role gave, and no other role gains it. Enforced in documentSensitivity.ts.
+     */
+    "documents.identity.read":
+        "20261209090000 — Director D3 authorization: reading documents declared personal_identity, beyond documents.read",
+    "documents.restricted.read":
+        "20261209090000 — Director D3 authorization: reading documents declared restricted, beyond documents.read",
+};
+
+describe("W-11 — the catalog is discovered completely", () => {
+    const catalog = discoverCatalog();
+
+    it("finds the full catalog, not the subset a tuple-shaped parser reaches", () => {
+        // 57 is not a number chosen here. The Phase 0 migration measured the shared database on
+        // 2026-07-29 and recorded it in its own comment before writing the literal that reproduces it;
+        // this derivation from the migration tree arrives at the same width independently.
+        //
+        // Every key beyond it is in APPROVED_ADDITIONS with the migration that authorized it. That
+        // list grew from two to nine on 2026-09-10, and the growth is the finding rather than an
+        // inconvenience: each of the seven was catalogued, granted to the orgs that existed that day,
+        // and never added to `seed_default_rbac`. Which capabilities an organization's administrator
+        // held therefore depended on the date its `orgs` row was created.
+        //
+        // The tenth, `portal.access`, is the one addition that did not repeat that pattern: W-13
+        // catalogued it, granted it, and enumerated it in the seed in a single migration, because
+        // an organization created without it would have had no administrator who could open the
+        // portal at all.
+        const added = Object.keys(APPROVED_ADDITIONS).filter((k) => catalog.has(k));
+        expect(catalog.size).toBe(artifact.catalog_width + added.length);
+        expect(catalog.size).toBe(57 + added.length);
+    });
+
+    it("every key beyond the W-11 artifact is one an approved decision added", () => {
+        // The discovery lock still bites: a key seeded without a recorded decision fails here.
+        const artifactKeys = new Set([
+            ...artifactEnforced,
+            ...artifact.deletion_candidates,
+            ...artifact.addition_candidates.map((a) => a.key),
+        ]);
+        const unexplained = [...catalog.keys()].filter(
+            (k) => !artifactKeys.has(k) && !(k in APPROVED_ADDITIONS),
+        );
+        expect(unexplained).toEqual([]);
+    });
+
+    it("reaches every seeding syntax in the tree, including the two the pinned parser could not", () => {
+        // Transposed columns — `seed_default_rbac` writes (key, label, group_key, description).
+        expect(catalog.get("fin.read")?.seededBy).toContain(
+            "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql",
+        );
+        // Variable-driven — the wave-C loop's INSERT carries `k`, not a literal.
+        expect(catalog.get("operational_expectations.authority.assign")?.seededBy).toContain(
+            "20260722000000_operational_expectations_authority_model_p1_wave_c.sql",
+        );
+        // Canonical literal tuples still resolve, with their seeding migration named.
+        expect(catalog.get("settings.users_roles")?.seededBy).toContain(
+            "20260505120100_settings_users_roles_permission.sql",
+        );
+        // Approved post-artifact additions are excluded on the DISCOVERED side, so the artifact
+        // comparison still detects anything else that appeared.
+        expect([...catalog.keys()].filter((k) => !(k in APPROVED_ADDITIONS)).sort()).toEqual(
+            [...artifactEnforced, ...artifact.deletion_candidates].sort(),
+        );
+    });
+
+    it("records exactly the keys the pinned parser missed, so the correction cannot be forgotten", () => {
+        const missed = new Set(artifact.discovery.keys_missed_by_pinned_parser);
+        expect(missed.size).toBe(22);
+        for (const key of missed) expect(catalog.has(key)).toBe(true);
+    });
+
+    it("admits only key-shaped literals — labels and group names are not keys", () => {
+        for (const key of catalog.keys()) expect(key).toMatch(PERMISSION_KEY_GRAMMAR);
+        expect(catalog.has("operations")).toBe(false);
+        expect(catalog.has("Manage operational authorities")).toBe(false);
+    });
+});
+
+describe("W-11 — catalog against enforcement, both directions", () => {
+    const catalog = discoverCatalog();
+    const scan = scanEnforcement(catalog.keys());
+
+    it("scans a real product tree", () => {
+        // Non-vacuity. RL-1 was defeated twice by a pinned subject and RL-4 once; an enforcement scan
+        // that silently walked nothing would report every key as unenforced and read as a finding.
+        expect(scan.fileCount).toBeGreaterThan(1000);
+        expect(scan.sitesByKey.size).toBeGreaterThan(10);
+    });
+
+    it("the enforced set is exactly the artifact's, plus the approved additions", () => {
+        const enforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length > 0);
+        const added = Object.keys(APPROVED_ADDITIONS).filter((k) => enforced.includes(k));
+        expect(enforced.filter((k) => !(k in APPROVED_ADDITIONS)).sort()).toEqual(
+            [...artifactEnforced].sort(),
+        );
+        // 21 until W-13/AD-22 gave `settings.users_roles.read` an enforcement site; 22 until the
+        // Financials workspace and the financial action package gave `fin.read` and `fin.write`
+        // theirs, which the artifact records as `financials_restatement`; 24 until the Forms
+        // authority cleanup gave `crm.customers.read` its first enforcement site anywhere — the CRM
+        // entity search under Forms, which had been gated on the literal `admin` role; 25 until the
+        // Communications authority model recovered `communications.read`, whose 22 read handlers had
+        // been asking for portal admission and calling it authority.
+        expect(enforced.length).toBe(28 + added.length);
+        /*
+         * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
+         * would advertise a boundary the product does not apply. Both keys must have call sites.
+         */
+        expect(added.sort()).toEqual(Object.keys(APPROVED_ADDITIONS).sort());
+    });
+
+    it("the deletion list is exactly the catalog keys no product source names", () => {
+        const unenforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length === 0);
+        expect(unenforced.sort()).toEqual([...artifact.deletion_candidates].sort());
+        // 36 until W-13/AD-22 recovered `settings.users_roles.read`; 35 until `fin.read` and
+        // `fin.write` were recovered the same way; 33 until the Forms authority cleanup recovered
+        // `crm.customers.read`, which the catalog had held and nothing had ever enforced — the CRM
+        // entity search under Forms was gated on the literal `admin` role instead; 32 until the
+        // Schedules + Jobs authority cleanup recovered `scheduling.write` and `ops.jobs.write`, the
+        // same story twice over — catalogued in 20260505164000, granted to admin and ops for months,
+        // and consulted by nothing, while fourteen handlers asked `ctx.role !== "admin"` instead.
+        // Every movement this initiative has recorded has been OUT of the deletion list, which is the
+        // direction that means the product grew a real gate rather than lost one.
+        //
+        // The Access Administration Split moved four at once — `admin.users.read/write` and
+        // `admin.roles.read/write` had been catalogued since the permission grid and consulted by
+        // nothing, and are now the keys twelve handlers enforce. It is also the first entry ever
+        // recorded IN: `settings.users_roles.read` is retired, so nothing consults it any more. That
+        // is not a gate the product lost — it is a gate the product replaced with four narrower ones,
+        // and the honest record of a retirement is a key that no longer has a site.
+        //
+        // 27 until the Communications authority model recovered `communications.read` — the same
+        // story once more: catalogued since Phase 0, granted to `admin` and `ops` in every
+        // organization, offered in the role editor, and consulted by nothing, while 22 read handlers
+        // asked `requireAdminOrOps()` and admitted any principal who could enter the portal. Its
+        // three companion keys are additions rather than recoveries, so they never appeared here.
+        // 26 until the CRM/People record model recovered `crm.customers.write` and
+        // `documents.write` — two more keys catalogued, granted everywhere, and consulted by
+        // nothing, whose routes were decided by portal admission and a role title instead.
+        // 23 since AI + Agent Authority V2 activated `ops.workflows.write`: Workflow Assist
+        // apply now gates on it before writing `workflows` and `workflow_actions`, so it is no
+        // longer a control that changes nothing.
+        // 23 -> 24 (Payments V1 · W6-A2): fin.post. Its four enforcement sites are deleted, so the
+        // catalog declares a key nothing consults. The delta is exactly one and it moves IN, which
+        // is the second such entry this initiative has recorded — every other movement has been OUT,
+        // the direction that means the product grew a real gate. Here the gate did not weaken: the
+        // four money handlers are gone and canonical Payments writes money through the action
+        // registry, so there is no route left to enforce anything on.
+        expect(unenforced.length).toBe(24);
+    });
+
+    it("C13 resolves the other way for the WRITE key, because the measurement moved", () => {
+        /*
+         * `01…§2.3`'s C13 — Phase 0 grants `ops.workflows.*` to every org's admin; W-3 removed the
+         * grid row; W-10's projection returned it. The plan's M2 amendment binds the outcome to a
+         * MEASUREMENT rather than to a preference: the row returns iff something enforces a
+         * workflows key.
+         *
+         * For three sprints nothing did, so both keys sat on the deletion list. AI + Agent
+         * Authority V2 changed the measured fact: `ai/workflow-assist/apply` writes `workflows`
+         * and `workflow_actions`, and now requires `ops.workflows.write` to do it. The decision is
+         * not being overridden — its own condition has resolved, and this asserts the resolution
+         * rather than the stale half of it.
+         *
+         * READ IS UNCHANGED. This slice enforced the write key only; claiming the read key had
+         * also come alive would be the same theatre in the other direction.
+         */
+        expect(scan.sitesByKey.get("ops.workflows.read") ?? []).toEqual([]);
+        expect(artifact.deletion_candidates).toContain("ops.workflows.read");
+
+        expect(scan.sitesByKey.get("ops.workflows.write") ?? []).not.toEqual([]);
+        expect(artifact.deletion_candidates).not.toContain("ops.workflows.write");
+    });
+
+    it("the one enforced key with no catalog row is still the only one", () => {
+        const declared = [...scan.uncatalogued.entries()]
+            .filter(([, sites]) => sites.some((s) => /communications|admin\/rbac|access/.test(s)))
+            .map(([key]) => key)
+            .filter((key) => key !== "communications.family_send"); // a `sourceCapability` label, not a key
+        expect(declared).toEqual(["communications.send.emergency"]);
+        expect(new Set(artifact.addition_candidates.map((a) => a.key))).toEqual(
+            new Set(["communications.send.emergency"]),
+        );
+        // Its neighbour in the same helper resolves the other way, and only once the catalog is
+        // discovered completely: `ops.messaging.write` is enforced as the legacy alias for
+        // `communications.send`, and it *is* catalogued — but only by the seed literal the pinned
+        // parser could not read. Under that parser it looked like a second uncatalogued key.
+        expect(catalog.has("ops.messaging.write")).toBe(true);
+        expect(scan.sitesByKey.get("ops.messaging.write")).toEqual([
+            "web/lib/communications/communicationPermissions.ts",
+        ]);
+    });
+
+    it("the uncatalogued emergency-send key is unreachable, not merely ungrantable", () => {
+        // Adding a catalog row would not make it work: no production caller binds it. The key gates
+        // `emergencyPermitted`, and every production path passes that flag as `false`. Wiring it to the
+        // resolved permission set is W-15's, not W-11's — W-11 records that adding the row alone is
+        // insufficient, so the addition is not read as a fix.
+        const sources = ["web/lib/communications/send/canonicalSend.ts", "web/lib/communications/canonicalOutboundEnqueue.ts"];
+        for (const rel of sources) {
+            const source = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
+            expect(source).not.toMatch(/emergencyPermitted:\s*true/);
+        }
+    });
+});

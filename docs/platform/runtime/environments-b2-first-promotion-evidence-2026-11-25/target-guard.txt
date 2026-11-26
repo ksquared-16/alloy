@@ -1,0 +1,5 @@
+fp_target rc=0 postgresql://postgres:***@db.rehearsalnewprojectr.supabase.co:5432/postgres 
+fp_target rc=0 postgresql://postgres.rehearsalnewprojectr:***@aws-0-us-west-2.pooler.supabase.com:5432/postgres 
+fp_target rc=1 postgresql://postgres.rehearsalnewprojectr:***@aws-0-us-west-2.pooler.supabase.com:6543/postgres refused: transaction pooler (6543)
+fp_target rc=1 postgresql://postgres:***@db.vslwnntzzgpnmrpjipat.supabase.co:5432/postgres refused: names the previous project
+fp_target rc=1 postgresql://postgres:***@db.ikaxilmwmrmbagoidedu.supabase.co:5432/postgres refused: does not name the new project rehearsalnewprojectr

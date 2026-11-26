@@ -9,7 +9,7 @@ describe("migrateStoredLayoutRefKeys", () => {
             sections: [
                 {
                     items: [
-                        { id: "1", kind: "field", refKey: "child_inquiry.desired_start_date", label: "Start" },
+                        { id: "1", kind: "field", refKey: "child_inquiry.start_date", label: "Start" },
                         { id: "2", kind: "field", refKey: "child.first_name", label: "Name" },
                     ],
                 },
@@ -17,16 +17,16 @@ describe("migrateStoredLayoutRefKeys", () => {
         };
         const result = migrateLayoutConfigRefKeys(config);
         expect(result.changed).toBe(true);
-        expect(config.sections[0].items[0].refKey).toBe("inquiry_child.desired_start_date");
+        expect(config.sections[0].items[0].refKey).toBe("inquiry_child.start_date");
         expect(config.sections[0].items[1].refKey).toBe("child.first_name");
     });
 
     it("rewrites child enrollment aliases to inquiry_child namespace", () => {
         const config = {
-            items: [{ refKey: "child.desired_start_date" }, { refKey: "child.status" }],
+            items: [{ refKey: "child.start_date" }, { refKey: "child.status" }],
         };
         migrateLayoutConfigRefKeys(config);
-        expect(config.items[0].refKey).toBe("inquiry_child.desired_start_date");
+        expect(config.items[0].refKey).toBe("inquiry_child.start_date");
         expect(config.items[1].refKey).toBe("inquiry_child.outcome_status_key");
     });
 });

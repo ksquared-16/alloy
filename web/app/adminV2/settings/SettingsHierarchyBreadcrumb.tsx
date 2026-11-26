@@ -7,11 +7,14 @@ import { ChevronRight } from "lucide-react";
 import { derived, neutral } from "@/styles/tokens/colors";
 
 import {
+    DOCUMENTATION_LABEL,
+    documentationTitle,
+} from "@/lib/developerDocs/documentationRoutes";
+import {
     ADMIN_SETTINGS_SUBPATH_PREFIX,
     CANONICAL_ADMIN_CONFIG_LANDING,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
-import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 
 const SETTINGS_ROOT = ADMIN_SETTINGS_SUBPATH_PREFIX;
 
@@ -23,20 +26,23 @@ function normalizedPathname(pathname: string): string {
 type Crumb = { label: string; href: string | null };
 
 function crumbsForPath(path: string): Crumb[] {
+    if (path === CANONICAL_ADMIN_CONFIG_LANDING) {
+        return [{ label: "Organization", href: null }];
+    }
     const settingsPath =
         path === CANONICAL_ADMIN_CONFIG_LANDING || path.startsWith(`${CANONICAL_ADMIN_CONFIG_LANDING}/`)
             ? path.replace(CANONICAL_ADMIN_CONFIG_LANDING, SETTINGS_ROOT)
             : path;
     if (!settingsPath.startsWith(SETTINGS_ROOT)) {
-        return [{ label: "Settings", href: null }];
+        return [{ label: "Organization", href: null }];
     }
 
     const tail = settingsPath.slice(SETTINGS_ROOT.length);
     if (tail === "" || tail === "/") {
-        return [{ label: "Settings", href: null }];
+        return [{ label: "Organization", href: null }];
     }
 
-    const base: Crumb[] = [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }];
+    const base: Crumb[] = [{ label: "Organization", href: CANONICAL_ADMIN_CONFIG_LANDING }];
 
     if (tail.startsWith("/documents/document-fields")) {
         base.push({ label: "Document field definitions", href: null });
@@ -71,17 +77,31 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
-    if (tail === "/departments" || tail.startsWith("/departments/")) {
-        base.push({ label: "Departments", href: null });
-        return base;
-    }
-
     if (tail === "/kpis" || tail.startsWith("/kpis/")) {
         base.push({ label: "Operational Intelligence", href: `${SETTINGS_ROOT}/analytics?tab=visibility` });
         return base;
     }
 
-    if (tail === "/analytics" || tail.startsWith("/analytics/")) {
+    if (
+        path === `${CANONICAL_ADMIN_CONFIG_LANDING}/calculations`
+        || path.startsWith(`${CANONICAL_ADMIN_CONFIG_LANDING}/calculations/`)
+        || tail === "/calculations"
+        || tail.startsWith("/calculations/")
+    ) {
+        base.push({
+            label: "Operational Intelligence",
+            href: "/organization/operational-intelligence",
+        });
+        base.push({ label: "Calculation Library", href: null });
+        return base;
+    }
+
+    if (
+        tail === "/analytics"
+        || tail.startsWith("/analytics/")
+        || tail === "/operational-intelligence"
+        || tail.startsWith("/operational-intelligence/")
+    ) {
         base.push({ label: "Operational Intelligence", href: null });
         return base;
     }
@@ -93,6 +113,36 @@ function crumbsForPath(path: string): Crumb[] {
 
     if (tail === "/placement-priority" || tail.startsWith("/placement-priority")) {
         base.push({ label: "Waitlist Ranking Policy", href: null });
+        return base;
+    }
+
+    /*
+     * Integrations, and Developer Documentation beneath it.
+     *
+     * Without this the fallback at the bottom printed the raw path tail, so an operator reading a
+     * guide saw "Organization › integrations/documentation/getting-started" — a route, not a place.
+     * Documentation also opens in its own tab, where the breadcrumb is the only thing on screen
+     * that says where the reader is and how to get back.
+     */
+    if (tail === "/integrations" || tail.startsWith("/integrations/")) {
+        const integrations = `${CANONICAL_ADMIN_CONFIG_LANDING}/integrations`;
+        const rest = tail.slice("/integrations".length).replace(/^\//, "").replace(/\/$/, "");
+        if (rest === "") {
+            base.push({ label: "Integrations", href: null });
+            return base;
+        }
+        base.push({ label: "Integrations", href: integrations });
+        const [first, second] = rest.split("/");
+        if (first !== "documentation") {
+            base.push({ label: documentationTitle(first), href: null });
+            return base;
+        }
+        if (!second) {
+            base.push({ label: DOCUMENTATION_LABEL, href: null });
+            return base;
+        }
+        base.push({ label: DOCUMENTATION_LABEL, href: `${integrations}/documentation` });
+        base.push({ label: documentationTitle(second), href: null });
         return base;
     }
 
@@ -122,7 +172,17 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     if (tail === "/entity-labels" || tail.startsWith("/entity-labels")) {
-        base.push({ label: "Entity labels", href: null });
+        base.push({ label: "Entities", href: `${SETTINGS_ROOT}/entities` });
+        return base;
+    }
+
+    if (tail === "/entities" || tail.startsWith("/entities")) {
+        base.push({ label: "Entities", href: null });
+        return base;
+    }
+
+    if (tail === "/label-entities" || tail.startsWith("/label-entities")) {
+        base.push({ label: "Entities", href: `${SETTINGS_ROOT}/entities` });
         return base;
     }
 
@@ -146,7 +206,7 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     const remainder = tail.replace(/^\//, "").replace(/\/$/, "") || "Page";
-    return [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }, { label: remainder, href: null }];
+    return [{ label: "Organization", href: CANONICAL_ADMIN_CONFIG_LANDING }, { label: remainder, href: null }];
 }
 
 function crumbActive(href: string, path: string): boolean {
@@ -162,7 +222,7 @@ export default function SettingsHierarchyBreadcrumb() {
 
     return (
         <nav
-            aria-label="Settings hierarchy"
+            aria-label="Organization configuration hierarchy"
             className="flex flex-wrap items-center gap-1 text-[13px] leading-snug"
             style={{ color: derived.textSecondary }}
         >

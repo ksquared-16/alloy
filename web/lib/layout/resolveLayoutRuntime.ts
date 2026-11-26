@@ -10,6 +10,7 @@ import { listDefaultLayouts, listOrgLayouts } from "./entityLayoutsRepo";
 import { isLayoutRuntimeReadPathEnabled } from "./featureFlag";
 import { resolveLayout, type ExtendedLayoutResolution, type ResolveLayoutInput } from "./layoutResolver";
 import type { LayoutSurface } from "./layoutV2";
+import { asRecordLayoutSurface } from "./layoutV2";
 import type { QueueLayoutContextRequest } from "./queueLayoutContext";
 import type { LayoutAssignmentContext } from "./businessProcessLayoutAssignmentTypes";
 import {
@@ -70,7 +71,7 @@ export async function resolveLayoutForOrg(input: ResolveLayoutForOrgInput): Prom
     if (!assignmentRecord && input.assignmentContext && shouldFetch) {
         const surfaceKey = layoutAssignmentSurfaceKeyForRuntime({
             entityType: input.entityType,
-            surface: input.surface,
+            surface: asRecordLayoutSurface(input.surface),
             isWaitlist: input.isWaitlist,
         });
         if (surfaceKey) {

@@ -1,0 +1,646 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "dateStart": "2026-09-21",
+  "dateEnd": "2026-09-25",
+  "out": [
+    {
+      "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "status": 200,
+      "ms": 6092,
+      "error": null,
+      "todayYmd": "2026-09-21",
+      "days": [
+        {
+          "date": "2026-09-21",
+          "boundaries": [
+            "07:30",
+            "08:30",
+            "16:00",
+            "16:30"
+          ],
+          "segmentCount": 4,
+          "actualsObserved": true,
+          "unknownCodes": [
+            "child_hours_unknown"
+          ]
+        },
+        {
+          "date": "2026-09-22",
+          "boundaries": [
+            "07:30",
+            "08:30",
+            "16:00",
+            "16:30"
+          ],
+          "segmentCount": 4,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-23",
+          "boundaries": [
+            "08:30",
+            "16:00"
+          ],
+          "segmentCount": 2,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-24",
+          "boundaries": [
+            "07:00",
+            "08:30",
+            "11:00",
+            "14:00",
+            "16:00",
+            "18:00"
+          ],
+          "segmentCount": 8,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-25",
+          "boundaries": [
+            "08:30",
+            "16:00"
+          ],
+          "segmentCount": 2,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        }
+      ],
+      "parity": [
+        {
+          "date": "2026-09-21",
+          "matchingRooms": [
+            "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+            "__site__"
+          ],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-22",
+          "matchingRooms": [
+            "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+            "__site__"
+          ],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-23",
+          "matchingRooms": [
+            "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+            "__site__"
+          ],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-24",
+          "matchingRooms": [
+            "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+            "__site__"
+          ],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-25",
+          "matchingRooms": [
+            "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+            "__site__"
+          ],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        }
+      ],
+      "sample": [
+        {
+          "date": "2026-09-21",
+          "siteLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "roomLocationId": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+          "roomName": "Infant A",
+          "start": "07:30",
+          "end": "08:30",
+          "expectedChildren": [],
+          "expectedChildCount": 0,
+          "expectedChildrenUnknownHours": [
+            {
+              "customerMemberId": "7ebf342f-b43d-4547-9c8a-43c0a96391ae",
+              "agreementId": "9134bf85-e00f-4bc6-8917-a02cda58395f"
+            }
+          ],
+          "actualChildCount": 0,
+          "baselineStaff": [],
+          "availableStaff": [
+            {
+              "employmentId": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+              "personId": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+              "displayName": "Certified Active-Located"
+            }
+          ],
+          "plannedStaff": [],
+          "actualStaff": [],
+          "requiredStaff": 0,
+          "requiredStaffActual": 0,
+          "plannedState": "idle",
+          "actualState": "idle",
+          "shortfall": 0,
+          "explanation": {
+            "facts": [
+              {
+                "code": "expected_children",
+                "count": 0
+              },
+              {
+                "code": "expected_children_unknown_hours",
+                "count": 1
+              },
+              {
+                "code": "actual_children",
+                "count": 0
+              },
+              {
+                "code": "required_staff",
+                "count": 0
+              },
+              {
+                "code": "planned_staff",
+                "names": []
+              },
+              {
+                "code": "no_demand"
+              }
+            ],
+            "lines": [
+              "Expected children: 0",
+              "1 expected child has no recorded hours and are counted in no segment",
+              "Actual children: 0",
+              "Required staff: 0",
+              "Planned staff: none",
+              "No children expected in this interval"
+            ]
+          }
+        },
+        {
+          "date": "2026-09-21",
+          "siteLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "roomLocationId": null,
+          "roomName": null,
+          "start": "08:30",
+          "end": "16:00",
+          "expectedChildren": [],
+          "expectedChildCount": 0,
+          "expectedChildrenUnknownHours": [],
+          "actualChildCount": 0,
+          "baselineStaff": [
+            {
+              "employmentId": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+              "personId": "51d1b1fd-5d08-48a6-a93f-511d08bbbea4",
+              "displayName": "Certified Active-Bare"
+            },
+            {
+              "employmentId": "092ccb30-7348-4fbb-a862-1e4c546a708c",
+              "personId": "66ca494c-9df4-464b-b47f-a98a12bb1c6e",
+              "displayName": "Certified Starting-Soon"
+            }
+          ],
+          "availableStaff": [
+            {
+              "employmentId": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+              "personId": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+              "displayName": "Certified Active-Located"
+            }
+          ],
+          "plannedStaff": [
+            {
+              "employmentId": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+              "personId": "51d1b1fd-5d08-48a6-a93f-511d08bbbea4",
+              "displayName": "Certified Active-Bare",
+              "source": "assignment"
+            },
+            {
+              "employmentId": "092ccb30-7348-4fbb-a862-1e4c546a708c",
+              "personId": "66ca494c-9df4-464b-b47f-a98a12bb1c6e",
+              "displayName": "Certified Starting-Soon",
+              "source": "assignment"
+            }
+          ],
+          "actualStaff": [],
+          "requiredStaff": 0,
+          "requiredStaffActual": 0,
+          "plannedState": "sufficient",
+          "actualState": "idle",
+          "shortfall": 0,
+          "explanation": {
+            "facts": [
+              {
+                "code": "expected_children",
+                "count": 0
+              },
+              {
+                "code": "actual_children",
+                "count": 0
+              },
+              {
+                "code": "required_staff",
+                "count": 0
+              },
+              {
+                "code": "baseline_staff",
+                "names": [
+                  "Certified Active-Bare",
+                  "Certified Starting-Soon"
+                ]
+              },
+              {
+                "code": "planned_staff",
+                "names": [
+                  "Certified Active-Bare",
+                  "Certified Starting-Soon"
+                ]
+              },
+              {
+                "code": "no_demand"
+              },
+              {
+                "code": "planned_not_present",
+                "names": [
+                  "Certified Active-Bare",
+                  "Certified Starting-Soon"
+                ]
+              }
+            ],
+            "lines": [
+              "Expected children: 0",
+              "Actual children: 0",
+              "Required staff: 0",
+              "Baseline staff: Certified Active-Bare and Certified Starting-Soon",
+              "Planned staff: Certified Active-Bare and Certified Starting-Soon",
+              "No children expected in this interval",
+              "Certified Active-Bare and Certified Starting-Soon are planned here but not observed present"
+            ]
+          }
+        },
+        {
+          "date": "2026-09-21",
+          "siteLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "roomLocationId": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+          "roomName": "Infant A",
+          "start": "08:30",
+          "end": "16:00",
+          "expectedChildren": [],
+          "expectedChildCount": 0,
+          "expectedChildrenUnknownHours": [
+            {
+              "customerMemberId": "7ebf342f-b43d-4547-9c8a-43c0a96391ae",
+              "agreementId": "9134bf85-e00f-4bc6-8917-a02cda58395f"
+            }
+          ],
+          "actualChildCount": 0,
+          "baselineStaff": [
+            {
+              "employmentId": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+              "personId": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+              "displayName": "Certified Active-Located"
+            }
+          ],
+          "availableStaff": [
+            {
+              "employmentId": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+              "personId": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+              "displayName": "Certified Active-Located"
+            }
+          ],
+          "plannedStaff": [
+            {
+              "employmentId": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+              "personId": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+              "displayName": "Certified Active-Located",
+              "source": "assignment"
+            }
+          ],
+          "actualStaff": [],
+          "requiredStaff": 0,
+          "requiredStaffActual": 0,
+          "plannedState": "sufficient",
+          "actualState": "idle",
+          "shortfall": 0,
+          "explanation": {
+            "facts": [
+              {
+                "code": "expected_children",
+                "count": 0
+              },
+              {
+                "code": "expected_children_unknown_hours",
+                "count": 1
+              },
+              {
+                "code": "actual_children",
+                "count": 0
+              },
+              {
+                "code": "required_staff",
+                "count": 0
+              },
+              {
+                "code": "baseline_staff",
+                "names": [
+                  "Certified Active-Located"
+                ]
+              },
+              {
+                "code": "planned_staff",
+                "names": [
+                  "Certified Active-Located"
+                ]
+              },
+              {
+                "code": "no_demand"
+              },
+              {
+                "code": "planned_not_present",
+                "names": [
+                  "Certified Active-Located"
+                ]
+              }
+            ],
+            "lines": [
+              "Expected children: 0",
+              "1 expected child has no recorded hours and are counted in no segment",
+              "Actual children: 0",
+              "Required staff: 0",
+              "Baseline staff: Certified Active-Located",
+              "Planned staff: Certified Active-Located",
+              "No children expected in this interval",
+              "Certified Active-Located is planned here but not observed present"
+            ]
+          }
+        },
+        {
+          "date": "2026-09-21",
+          "siteLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+          "roomLocationId": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+          "roomName": "Infant A",
+          "start": "16:00",
+          "end": "16:30",
+          "expectedChildren": [],
+          "expectedChildCount": 0,
+          "expectedChildrenUnknownHours": [
+            {
+              "customerMemberId": "7ebf342f-b43d-4547-9c8a-43c0a96391ae",
+              "agreementId": "9134bf85-e00f-4bc6-8917-a02cda58395f"
+            }
+          ],
+          "actualChildCount": 0,
+          "baselineStaff": [],
+          "availableStaff": [
+            {
+              "employmentId": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+              "personId": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+              "displayName": "Certified Active-Located"
+            }
+          ],
+          "plannedStaff": [],
+          "actualStaff": [],
+          "requiredStaff": 0,
+          "requiredStaffActual": 0,
+          "plannedState": "idle",
+          "actualState": "idle",
+          "shortfall": 0,
+          "explanation": {
+            "facts": [
+              {
+                "code": "expected_children",
+                "count": 0
+              },
+              {
+                "code": "expected_children_unknown_hours",
+                "count": 1
+              },
+              {
+                "code": "actual_children",
+                "count": 0
+              },
+              {
+                "code": "required_staff",
+                "count": 0
+              },
+              {
+                "code": "planned_staff",
+                "names": []
+              },
+              {
+                "code": "no_demand"
+              }
+            ],
+            "lines": [
+              "Expected children: 0",
+              "1 expected child has no recorded hours and are counted in no segment",
+              "Actual children: 0",
+              "Required staff: 0",
+              "Planned staff: none",
+              "No children expected in this interval"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "site": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "status": 200,
+      "ms": 2714,
+      "error": null,
+      "todayYmd": "2026-09-21",
+      "days": [
+        {
+          "date": "2026-09-21",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-22",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-23",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-24",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-25",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "actuals_not_observed"
+          ]
+        }
+      ],
+      "parity": [
+        {
+          "date": "2026-09-21",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-22",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-23",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-24",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-25",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        }
+      ],
+      "sample": []
+    },
+    {
+      "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "status": 200,
+      "ms": 2767,
+      "error": null,
+      "todayYmd": "2026-09-21",
+      "days": [
+        {
+          "date": "2026-09-21",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-22",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-23",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-24",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        },
+        {
+          "date": "2026-09-25",
+          "boundaries": [],
+          "segmentCount": 0,
+          "actualsObserved": false,
+          "unknownCodes": [
+            "child_hours_unknown",
+            "actuals_not_observed"
+          ]
+        }
+      ],
+      "parity": [
+        {
+          "date": "2026-09-21",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-22",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-23",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-24",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        },
+        {
+          "date": "2026-09-25",
+          "matchingRooms": [],
+          "onlyInWholeDay": [],
+          "onlyInProjection": []
+        }
+      ],
+      "sample": []
+    }
+  ]
+}

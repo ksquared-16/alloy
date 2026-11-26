@@ -72,6 +72,6 @@ export {
     bosCapabilityUsesEnrichmentPortalProposeGate,
     computeOpenAiLiveInvocationPermitted,
     getBosCapabilityAccessHints,
-    isAiEnrichmentUsePermissionRequired,
+    isOpenAiLiveInvocationFeatureEnabled,
     resolveAiEnrichmentPortalAccess,
 } from "@/lib/bos/auth";

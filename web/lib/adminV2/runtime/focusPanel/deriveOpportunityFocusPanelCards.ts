@@ -2,7 +2,10 @@
  * Derive Focus Panel Universal Card models from opportunity VM — not from layout sections.
  */
 
+import { FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
+import { FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveLeadDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -17,12 +20,16 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import {
-    footprintToGridSpan,
     system5DefaultActionForCard,
-    system5FootprintForCard,
     system5IconForCard,
 } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
+import { deriveFocusPanelGridFromLayoutDoc } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
+import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { system5ArchetypeForCard } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
+import {
+    buildReadinessCardEvidence,
+    type ReadinessEvidenceContext,
+} from "@/lib/adminV2/runtime/focusPanel/readiness/buildReadinessCardEvidence";
 import {
     formatFocusPanelChipLabel,
     formatFocusPanelDisplayLabel,
@@ -77,14 +84,43 @@ function card(
     };
 }
 
-function stageWorkInsight(displayVm: OpportunityDrawerViewModel): string {
-    const runtime = displayVm.workspace.stage_work_runtime;
+type StageWorkRuntime = OpportunityDrawerViewModel["workspace"]["stage_work_runtime"];
+
+function stageWorkInsight(runtime: StageWorkRuntime): string {
     const primary = runtime?.primary;
     if (!primary) return "No active work for this stage.";
     const label = primary.label?.trim() || primary.template_key || "Work";
     if (primary.state === "open") return label;
     if (primary.state === "completed") return `${label} · completed`;
     return `${label} · planned`;
+}
+
+/**
+ * The canonical `current_work` card model — the SINGLE source both Focus Panel Work-mode producers
+ * use (drawer VM AND provisioning answer), so the Current Work cell is byte-identical pending →
+ * enriched (no change on Settlement). Depends only on the stage-work runtime + the next-action label,
+ * both carried by the commit-critical answer.
+ */
+export function buildCurrentWorkCardModel(input: {
+    stageWorkRuntime: StageWorkRuntime;
+    nextActionLabel: string | null;
+}): FocusPanelCardModel {
+    const primaryOpen = input.stageWorkRuntime?.primary?.state === "open";
+    return card({
+        key: "current_work",
+        title: "What's Next",
+        insight: stageWorkInsight(input.stageWorkRuntime),
+        secondaryInsight: primaryOpen
+            ? "Due today · continue stage steps"
+            : input.nextActionLabel
+              ? `Next: ${input.nextActionLabel}`
+              : "No open work item right now",
+        tier: "work",
+        span: 1,
+        density: "compact",
+        statusChip: primaryOpen ? chip("due") : null,
+        statusTone: primaryOpen ? "due" : "neutral",
+    });
 }
 
 function blockerInsight(displayVm: OpportunityDrawerViewModel): { insight: string; count: number } {
@@ -128,7 +164,10 @@ function childStatusPhrase(row: { display_name?: string | null; outcome_status_k
 }
 
 function childrenInsight(record: Record<string, unknown>): { insight: string; detail: string | null } {
-    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    // Through the canonical normalizer, not the raw key: a durable child record supplies its one
+    // member under `_durable_child_rows`, and reading `_inquiry_children` directly would report
+    // "No children linked" about the child the card is FOR.
+    const { rows } = normalizeFocusPanelChildrenRowsFromTruth(record);
     if (rows.length === 0) return { insight: "No children linked", detail: "Link children to track enrollment progress" };
     const active = rows.filter((r) => r.outcome_status_key !== "declined");
     const insight =
@@ -217,8 +256,9 @@ function childrenCollectionItems(record: Record<string, unknown>): {
     items: FocusPanelCollectionItem[];
     overflowCount: number;
 } {
-    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
-    const visible = rows.slice(0, 3).map((row) => {
+    // See {@link childrenInsight} — the collection source is decided by the normalizer, once.
+    const { rows } = normalizeFocusPanelChildrenRowsFromTruth(record);
+    const visible = rows.slice(0, FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY).map((row) => {
         const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
         const status =
             formatFocusPanelDisplayLabel(row.outcome_status_label) ??
@@ -226,7 +266,7 @@ function childrenCollectionItems(record: Record<string, unknown>): {
             "In progress";
         return { label: firstName, status };
     });
-    return { items: visible, overflowCount: Math.max(0, rows.length - 3) };
+    return { items: visible, overflowCount: Math.max(0, rows.length - FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY) };
 }
 
 function statusIssuesFromVm(displayVm: OpportunityDrawerViewModel): string[] {
@@ -254,21 +294,6 @@ function statusIssuesFromVm(displayVm: OpportunityDrawerViewModel): string[] {
     return issues.slice(0, 4);
 }
 
-function readinessIssues(displayVm: OpportunityDrawerViewModel): string[] {
-    const issues: string[] = [];
-    const attention = displayVm.summaries.attention;
-    if (attention?.primary_reason?.trim()) {
-        issues.push(attention.primary_reason.trim());
-    }
-    const blockers = blockerInsight(displayVm);
-    if (blockers.count > 1 && attention?.primary_reason) {
-        issues.push(`${blockers.count - 1} more required item${blockers.count - 1 === 1 ? "" : "s"}`);
-    } else if (blockers.count > 0 && !attention?.primary_reason) {
-        issues.push(blockers.insight);
-    }
-    return issues.slice(0, 4);
-}
-
 function timelineEventsFromRecord(record: Record<string, unknown>, statusLabel: string | null): {
     when: string;
     label: string;
@@ -290,34 +315,47 @@ function timelineEventsFromRecord(record: Record<string, unknown>, statusLabel: 
     return events.slice(0, 5);
 }
 
-function readinessKpiInsight(displayVm: OpportunityDrawerViewModel): {
-    insight: string;
-    supporting: string | null;
-    tone: FocusPanelCardModel["statusTone"];
-    chip: string | null;
-} {
+/**
+ * Canonical Readiness card model — SHARED by both Focus Panel Work-mode producers (see
+ * {@link buildHouseholdCardModel}). Derived from the SAME evidence the ReadinessCard body renders
+ * (`buildReadinessCardEvidence`), so model and card never disagree. Requires only observed truth
+ * (primary contact + `_inquiry_children`) plus the attention signal — all of which the
+ * commit-critical answer context carries, so Readiness is READY at commit; the attention blockers
+ * that arrive with Settlement enrich the same cell in place.
+ */
+export function buildReadinessCardModel(context: ReadinessEvidenceContext): FocusPanelCardModel {
+    const evidence = buildReadinessCardEvidence(context);
+    return card({
+        key: "readiness_kpi",
+        title: "Readiness",
+        insight: evidence.answerLine,
+        secondaryInsight: evidence.supportingLine,
+        tier: "metric",
+        span: 1,
+        density: "compact",
+        statusChip: evidence.statusChip,
+        statusTone: evidence.statusTone,
+        primaryAction: evidence.statusTone === "blocked" ? { label: "Resolve →", variant: "primary" } : null,
+        payload: evidence.blockers.length > 0 ? { statusIssues: evidence.blockers } : undefined,
+    });
+}
+
+/** The enriched path's readiness slice of the context — truth + the settlement attention signal. */
+function readinessContextFromVm(
+    displayVm: OpportunityDrawerViewModel,
+    record: Record<string, unknown>,
+): ReadinessEvidenceContext {
     const attention = displayVm.summaries.attention;
-    const blockers = blockerInsight(displayVm);
-    if (attention?.primary_reason?.trim() && blockers.count > 0) {
-        return {
-            insight: attention.primary_reason.trim(),
-            supporting:
-                blockers.count > 1
-                    ? `${blockers.count} required items before advancing`
-                    : "1 required item before advancing",
-            tone: "blocked",
-            chip: chip("blocked"),
-        };
-    }
-    if (blockers.count > 0) {
-        return {
-            insight: blockers.insight,
-            supporting: `${blockers.count} required item${blockers.count === 1 ? "" : "s"} before advancing`,
-            tone: "blocked",
-            chip: chip("blocked"),
-        };
-    }
-    return { insight: "Ready to advance", supporting: "No blockers detected", tone: "ready", chip: chip("ready") };
+    return {
+        truth: record,
+        signals: {
+            attention: {
+                needsAttention: Boolean(attention?.needs_attention),
+                primaryReason: attention?.primary_reason ?? null,
+                reasonCount: attention?.reason_count ?? 0,
+            },
+        },
+    };
 }
 
 function healthSupportingInsight(displayVm: OpportunityDrawerViewModel): string | null {
@@ -382,6 +420,245 @@ function healthInsight(displayVm: OpportunityDrawerViewModel): {
     return { insight: "On track", tone: "ready", chip: chip("ready") };
 }
 
+/**
+ * Canonical Household card model — SHARED by both Focus Panel Work-mode producers (drawer VM AND
+ * provisioning answer), so the card is identical pending → enriched (A). Reads only the paint record;
+ * the commit-critical producer supplies the same household keys the answer carries, so this is READY
+ * at commit — never a blank reserved rectangle.
+ */
+/**
+ * The shell of a card that fetches its own content.
+ *
+ * Attendance and Health & Safety already build with `insight: ""` below — the case record knows
+ * nothing about a scoped child's day or their critical facts, so the card fills that in from its own
+ * read. Their commit model is therefore content-free by construction, which is precisely why it can
+ * exist before any enrichment: there is no truth to wait for, only an identity to address the read.
+ *
+ * Built through the same `card()` construction as the enriched shape, so a shell built here and the
+ * card Settlement builds are the same object — it does not change shape when the data lands.
+ */
+/**
+ * THE BUSINESS PROCESS CARD'S FRAME — one builder, both producers.
+ *
+ * The card takes only `title` from its model (`fallbackTitle`); the stage rail, participant markers,
+ * current work and actions are all composed by `buildBusinessProcessCardEvidence` from the
+ * `OperationalContext`. So the frame carries no content and needs no context to build — which is
+ * exactly why the commit-critical producer can emit the identical one.
+ *
+ * It is shared rather than duplicated because the registry's law is that a card must be
+ * byte-identical pending → enriched. Two literals would be two chances to drift, and this card has
+ * already been bitten once by exactly that: it used to be `{ ...currentWorkModel }`, so the canonical
+ * successor inherited its PREDECESSOR's title and insight and QA correctly failed the result.
+ */
+export function buildBusinessProcessCardModel(): FocusPanelCardModel {
+    return card({
+        key: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+        // The process's own identity. The card overrides this with the tenant's configured
+        // process label when the runtime carries one; see the note in BusinessProcessCard.
+        title: "Business Process",
+        insight: "",
+        tier: "work",
+        span: 1,
+        density: "compact",
+    });
+}
+
+export function buildSelfFetchingCardShell(
+    key: FocusPanelCardKey,
+    title: string,
+): FocusPanelCardModel {
+    return card({ key, title, insight: "", tier: "work", span: 2, density: "compact" });
+}
+
+export function buildHouseholdCardModel(record: Record<string, unknown>, title: string): FocusPanelCardModel {
+    return card({
+        key: "household",
+        title: "Household",
+        insight: householdInsight(record, title),
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        payload: { profileFields: householdProfileFields(record) },
+    });
+}
+
+/** Canonical Children card model — SHARED by both producers (see {@link buildHouseholdCardModel}). */
+export function buildChildrenCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const children = childrenInsight(record);
+    const childCollection = childrenCollectionItems(record);
+    return card({
+        key: "children",
+        title: "Children",
+        insight: children.insight,
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: childCollection.items.length > 0 ? { label: "View all →", variant: "secondary" } : null,
+        payload:
+            childCollection.items.length > 0
+                ? { collectionItems: childCollection.items, overflowCount: childCollection.overflowCount }
+                : undefined,
+        secondaryInsight: childCollection.items.length === 0 ? children.detail : null,
+    });
+}
+
+/**
+ * Canonical Employment card model.
+ *
+ * MEANING FIRST, and the meaning is PERSON-OWNED: every word of the insight comes from the
+ * `PersonEmploymentComposition` that `lib/employment` built. This function only chooses WHICH
+ * composition to lead with (the case's primary contact, else the first employed contact). It
+ * derives no employment state of its own.
+ *
+ * `visible: false` when no linked contact holds employment. Per the readiness contract that
+ * makes the card `not_applicable`: the configured cell is KEPT and renders its muted treatment,
+ * which is the honest answer for a family with no staff — never an empty "Employment" shell
+ * asserting a relationship that does not exist.
+ */
+export function buildEmploymentCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const projection = record._case_employment as
+        | {
+              primary?: { person_id?: unknown } | null;
+              people?: Array<{
+                  person_id?: unknown;
+                  person_label?: unknown;
+                  employment?: {
+                      is_staff?: boolean;
+                      current?: {
+                          state_label?: string | null;
+                          position_label?: string | null;
+                          primary_location_label?: string | null;
+                          employment_type_label?: string | null;
+                      } | null;
+                      periods?: Array<{ position_label?: string | null }>;
+                  } | null;
+              }>;
+          }
+        | null
+        | undefined;
+
+    const people = Array.isArray(projection?.people) ? projection.people : [];
+    if (people.length === 0) {
+        return card({
+            key: "employment",
+            title: "Employment",
+            insight: "No one on this family works here",
+            tier: "reference",
+            span: 2,
+            density: "compact",
+            primaryAction: null,
+            visible: false,
+        });
+    }
+
+    const primaryId = trimOrNull(projection?.primary?.person_id);
+    const lead =
+        (primaryId ? people.find((p) => trimOrNull(p.person_id) === primaryId) : null) ?? people[0]!;
+    const employment = lead.employment ?? null;
+    const current = employment?.current ?? null;
+    const name = trimOrNull(lead.person_label);
+
+    // The one sentence the operator needs: who, in what capacity, where.
+    let insight: string;
+    if (current) {
+        const role = trimOrNull(current.position_label) ?? "Staff";
+        const where = trimOrNull(current.primary_location_label);
+        insight = `${name ? `${name} — ` : ""}${role}${where ? ` at ${where}` : ""}`;
+    } else {
+        const role = trimOrNull(employment?.periods?.[0]?.position_label);
+        insight = `${name ? `${name} ` : ""}worked here${role ? ` as ${role}` : ""}`;
+    }
+
+    const others = people.length - 1;
+    const secondaryInsight =
+        others > 0
+            ? `${others} other contact${others === 1 ? "" : "s"} with employment here`
+            : trimOrNull(current?.employment_type_label);
+
+    return card({
+        key: "employment",
+        title: "Employment",
+        insight,
+        secondaryInsight,
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        statusChip: chip(trimOrNull(current?.state_label)),
+        statusTone: current && employment?.is_staff ? "ready" : "neutral",
+        // Read-only on this surface. Add / Edit / End employment are operator capabilities at
+        // /organization/staff; offering them here would be a second execution path for one
+        // capability — the exact mistake the tour lifecycle bar made.
+        primaryAction: null,
+    });
+}
+
+function schedulingCollectionItems(record: Record<string, unknown>): {
+    items: FocusPanelCollectionItem[];
+    overflowCount: number;
+} {
+    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    const visible = rows.slice(0, FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY).map((row) => {
+        const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
+        // Operational schedule assignments do not exist until enrollment/Registration;
+        // at the case-grain lead stage each child reads "Needs a room" (honest state,
+        // never a fabricated schedule). Room · pattern display arrives with the
+        // scheduling projection once the child is enrolled.
+        return { label: firstName, status: "Needs a room" };
+    });
+    return { items: visible, overflowCount: Math.max(0, rows.length - FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY) };
+}
+
+/**
+ * Canonical Scheduling card model — case-grain, per the Children pattern. Shows the
+ * family's children and their scheduling state; the Create-schedule command
+ * (configured) is launched from the card action. Room · weekly pattern · dates are
+ * set at Registration once enrollment creates the operational agreement.
+ */
+/** Canonical Milestones card model — composer + runtime share this producer. */
+export function buildMilestonesCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const raw = record["milestones"];
+    const count = Array.isArray(raw) ? raw.length : 0;
+    return card({
+        key: "milestones",
+        title: "Milestones",
+        insight: count > 0 ? `${count} milestone${count === 1 ? "" : "s"}` : "No milestones yet",
+        secondaryInsight: count > 0 ? "Completed · committed · upcoming outcomes" : null,
+        tier: "context",
+        span: 1,
+        density: "compact",
+        statusChip: count > 0 ? String(count) : null,
+        statusTone: count > 0 ? "ready" : "neutral",
+        primaryAction: null,
+    });
+}
+
+export function buildSchedulingCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    const count = rows.length;
+    const collection = schedulingCollectionItems(record);
+    const insight =
+        count === 0
+            ? "No children to assign"
+            : count === 1
+              ? "1 child · no assignments yet"
+              : `${count} children · assignments vary`;
+    void collection;
+    return card({
+        key: "scheduling",
+        title: "Assignments",
+        insight,
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        statusChip: null,
+        statusTone: "neutral",
+        // The card component renders per-child status + opens the work surface on
+        // click; no card-level primary action or collection payload.
+        primaryAction: null,
+        secondaryInsight: count > 0 ? "Open a child to view or add assignments" : null,
+    });
+}
+
 function buildCardModels(input: {
     displayVm: OpportunityDrawerViewModel;
     record: Record<string, unknown>;
@@ -400,7 +677,6 @@ function buildCardModels(input: {
 
     const map = new Map<FocusPanelCardKey, FocusPanelCardModel>();
     const healthIssues = statusIssuesFromVm(displayVm);
-    const readinessIssueList = readinessIssues(displayVm);
     const childCollection = childrenCollectionItems(record);
     const householdFields = householdProfileFields(record);
 
@@ -443,48 +719,33 @@ function buildCardModels(input: {
         }),
     );
 
-    map.set(
-        "current_work",
-        card({
-            key: "current_work",
-            title: "Current Work",
-            insight: stageWorkInsight(displayVm),
-            secondaryInsight:
-                stageRuntime?.primary?.state === "open"
-                    ? "Due today · continue stage steps"
-                    : headerPrimaryAction
-                      ? `Next: ${headerPrimaryAction.label}`
-                      : "No open work item right now",
-            tier: "work",
-            span: 1,
-            density: "compact",
-            statusChip: stageRuntime?.primary?.state === "open" ? chip("due") : null,
-            statusTone: stageRuntime?.primary?.state === "open" ? "due" : "neutral",
-        }),
-    );
+    const currentWorkModel = buildCurrentWorkCardModel({
+        stageWorkRuntime: stageRuntime,
+        nextActionLabel: headerPrimaryAction?.label ?? null,
+    });
+    map.set("current_work", currentWorkModel);
+    /*
+     * THE SUCCESSOR HAS ITS OWN MODEL. It used to be `{ ...currentWorkModel }`.
+     *
+     * That shim was written as a temporary measure — "until Slice 2 deepens the presentation" — and
+     * was never replaced, so the canonical Business Process card inherited the PREDECESSOR's
+     * presentation wholesale: the title "What's Next", Current Work's insight, its secondary line
+     * and its due chip. QA saw the locked composition rendering under the old visual grammar and
+     * correctly failed it. The anatomy was right all along; the identity was borrowed.
+     *
+     * What the card needs from the MODEL is only its frame. Everything else — the stage rail, the
+     * participant markers, the annotations, the current work line and the actions — is composed by
+     * `buildBusinessProcessCardEvidence` from canonical truth, which is why the insight is empty
+     * here rather than duplicated: two sources for one line is how they drift.
+     */
+    map.set(FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY, buildBusinessProcessCardModel());
 
-    const readiness = readinessKpiInsight(displayVm);
     const health = healthInsight(displayVm);
     const documentsOutstanding =
         displayVm.summaries.attention?.needs_attention && displayVm.summaries.attention.primary_reason
             ? 1
             : 0;
-    map.set(
-        "readiness_kpi",
-        card({
-            key: "readiness_kpi",
-            title: "Readiness",
-            insight: readiness.insight,
-            secondaryInsight: readiness.supporting,
-            tier: "metric",
-            span: 1,
-            density: "compact",
-            statusChip: readiness.chip,
-            statusTone: readiness.tone,
-            primaryAction: readiness.tone === "blocked" ? { label: "Resolve →", variant: "primary" } : null,
-            payload: readinessIssueList.length > 0 ? { statusIssues: readinessIssueList } : undefined,
-        }),
-    );
+    map.set("readiness_kpi", buildReadinessCardModel(readinessContextFromVm(displayVm, record)));
 
     map.set(
         "health",
@@ -533,40 +794,11 @@ function buildCardModels(input: {
         }),
     );
 
-    map.set(
-        "household",
-        card({
-            key: "household",
-            title: "Household",
-            insight: householdInsight(record, title),
-            tier: "reference",
-            span: 2,
-            density: "compact",
-            payload: { profileFields: householdFields },
-        }),
-    );
-
-    map.set(
-        "children",
-        card({
-            key: "children",
-            title: "Children",
-            insight: children.insight,
-            tier: "reference",
-            span: 2,
-            density: "compact",
-            primaryAction: childCollection.items.length > 0 ? { label: "View all →", variant: "secondary" } : null,
-            payload:
-                childCollection.items.length > 0
-                    ? {
-                          collectionItems: childCollection.items,
-                          overflowCount: childCollection.overflowCount,
-                      }
-                    : undefined,
-            secondaryInsight:
-                childCollection.items.length === 0 ? children.detail : null,
-        }),
-    );
+    map.set("household", buildHouseholdCardModel(record, title));
+    map.set("children", buildChildrenCardModel(record));
+    map.set("employment", buildEmploymentCardModel(record));
+    map.set("scheduling", buildSchedulingCardModel(record));
+    map.set("milestones", buildMilestonesCardModel(record));
 
     map.set(
         "communications",
@@ -733,13 +965,63 @@ function buildCardModels(input: {
     );
 
     map.set(
+        "attendance",
+        card({
+            key: "attendance",
+            title: "Attendance",
+            // The day itself is the insight, and only the scoped child has one — the card fills this
+            // in from its own VM rather than the case record, which knows nothing about who is scoped.
+            insight: "",
+            tier: "work",
+            span: 2,
+            density: "compact",
+        }),
+    );
+
+    map.set(
+        "health_safety",
+        card({
+            key: "health_safety",
+            title: "Health & Safety",
+            // The critical fact IS the insight, and only the composed read model knows it. The case
+            // record knows nothing about allergies, so the card fills this in from its own VM.
+            insight: "",
+            tier: "work",
+            span: 2,
+            density: "compact",
+        }),
+    );
+
+    map.set(
+        "financials",
+        card({
+            key: "financials",
+            title: "Financials",
+            // The balance is the insight, and only the composed read model knows it — the card fills
+            // this in from its own VM rather than from the case record, which knows no charges.
+            insight: "",
+            tier: "work",
+            span: 2,
+            // The V5 summary is this card's canonical presentation. A placement that wants supporting
+            // context declares `compact` and the card states the balance without the breakdown.
+            density: "standard",
+        }),
+    );
+
+    map.set(
         "billing_preview",
         card({
             key: "billing_preview",
             title: "Billing Preview",
+            // DEFERRED SOURCE — no verdict from unwired plumbing. `billing_configured` and
+            // `tuition_rate_label` are read here but written NOWHERE in the platform, so the old
+            // `?? "Billing not configured"` asserted a business conclusion on every record from
+            // fields nothing populates. The authoritative source is the financial-config API,
+            // resolved by `buildBillingPreviewCardEvidence` (which the assignment Tuition card renders);
+            // this base model only holds the cell until then. See CARD-READINESS-LIFECYCLE.md.
             insight: record["billing_configured"]
                 ? "Billing configured"
-                : trimOrNull(record["tuition_rate_label"]) ?? "Billing not configured",
+                : trimOrNull(record["tuition_rate_label"]) ?? "",
             tier: "context",
             span: 1,
             density: "compact",
@@ -752,80 +1034,32 @@ function buildCardModels(input: {
 }
 
 /**
- * Overview (Summary) composition — Core Four validation pass.
+ * THE Work composition. This one IS the render: `OpportunityFocusPanelModeGrid` hands it to
+ * `FocusPanelCardGrid` as `rows` with no `publishedLayout` and no `composeCards`, so the legacy
+ * responsive grid paints it. Only `key`, cell ORDER and `span` reach the DOM (`legacyGridRows`
+ * drops `tier`/`density`; `resolveFocusPanelCellGridSpan` maps `span` to `gridColumn`).
  *
- * Scoped intentionally to the four production operational cards so the operating
- * model can be evaluated cleanly:
- *   Household (wide) · Children (wide) · Current Work (narrow) · Readiness (medium)
+ * Browser-measured on the Work surface (prod build, :3013, 1440px): strategy `legacy-grid`,
+ * 3 columns, cells attention(row, 875px) · workflow_steps(1, 285px) · required_information(1) ·
+ * work_launcher(1) · tasks(1) · automations(1) · primary_next_action(row) — this order and
+ * emphasis exactly. At 520px the grid collapses to 1 column and every cell goes full width.
  *
- * Why Now, Current Mission, Enrollment Health, Tour, Communications and Documents
- * are NOT deleted — their card models are still built (and used by Work / Activity
- * and the Experience Builder catalog). They are temporarily suppressed from the
- * Overview grid while we converge the Core Four visual rhythm.
+ * ONE composition, not two: the former WORK_GRID_ACTIVE was byte-identical to this except
+ * `workflow_steps.density: "standard"`, a field the legacy grid path discards — so the
+ * `workflowActive` branch selected between two grids that rendered identically. `workflowActive`
+ * remains a real runtime state (it drives `data-focus-panel-work-state`), it just does not change
+ * composition. `focusPanelWorkCompositionParity.test.ts` locks the rendered shape.
  *
- * Cell widths come from the archetype footprint system (`system5FootprintForCard`),
- * not a flat `span: 1`. Each row pairs a wide identity/collection card with its
- * adjacent assessment/work card so the Overview holds a calm two-row rhythm at the
- * verified three-column width.
- *
- * Exported as the single source of truth for the config-driven slice:
- * `buildFocusPanelSummaryDefaultDoc()` re-encodes this grid into a `LayoutDoc`,
- * and the parity test asserts the round-trip is identical.
+ * NOTE: `work` is not currently offered in the mode switch (`FOCUS_PANEL_SWITCH_MODES` is
+ * `["summary","activity"]`), but it stays reachable via a persisted session mode, so this is live
+ * compatibility surface — not dead code.
  */
-const summaryCell = (
-    key: FocusPanelCardKey,
-    density: FocusPanelCardGridSpec["rows"][number]["cells"][number]["density"],
-    tier: FocusPanelCardGridSpec["rows"][number]["cells"][number]["tier"],
-) => ({
-    key,
-    span: footprintToGridSpan(system5FootprintForCard(key)),
-    density,
-    tier,
-});
-
-export const SUMMARY_GRID: FocusPanelCardGridSpec = {
-    rows: [
-        {
-            cells: [
-                summaryCell("household", "standard", "reference"),
-                summaryCell("readiness_kpi", "compact", "metric"),
-            ],
-        },
-        {
-            cells: [
-                summaryCell("children", "standard", "reference"),
-                summaryCell("current_work", "compact", "work"),
-            ],
-        },
-    ],
-};
-
-const WORK_GRID_SPLIT: FocusPanelCardGridSpec = {
+const WORK_GRID: FocusPanelCardGridSpec = {
     rows: [
         { cells: [{ key: "attention", span: "row", density: "compact", tier: "attention" }] },
         {
             cells: [
                 { key: "workflow_steps", span: 1, density: "compact", tier: "work" },
-                { key: "required_information", span: 1, density: "compact", tier: "work" },
-            ],
-        },
-        { cells: [{ key: "work_launcher", span: 1, density: "compact", tier: "work" }] },
-        {
-            cells: [
-                { key: "tasks", span: 1, density: "compact", tier: "work" },
-                { key: "automations", span: 1, density: "compact", tier: "context" },
-            ],
-        },
-        { cells: [{ key: "primary_next_action", span: "row", density: "compact", tier: "work" }] },
-    ],
-};
-
-const WORK_GRID_ACTIVE: FocusPanelCardGridSpec = {
-    rows: [
-        { cells: [{ key: "attention", span: "row", density: "compact", tier: "attention" }] },
-        {
-            cells: [
-                { key: "workflow_steps", span: 1, density: "standard", tier: "work" },
                 { key: "required_information", span: 1, density: "compact", tier: "work" },
             ],
         },
@@ -856,12 +1090,24 @@ export function deriveOpportunityFocusPanelPresentation(input: {
         input.displayVm.workspace.work_intent_runtime?.state === "open" ||
             input.displayVm.workspace.stage_work_runtime?.primary?.state === "open",
     );
+    return { grid: resolveFocusPanelModeGrid(input.mode, workflowActive), cards };
+}
 
-    if (input.mode === "work") {
-        return { grid: workflowActive ? WORK_GRID_ACTIVE : WORK_GRID_SPLIT, cards };
-    }
-    if (input.mode === "activity") {
-        return { grid: ACTIVITY_GRID, cards };
-    }
-    return { grid: SUMMARY_GRID, cards };
+/**
+ * The code default grid-spec for a mode — the source-agnostic composition selector the grid uses when
+ * it consumes a `FocusPanelWorkModeModel`.
+ *
+ * Work owns its composition here (this IS the Work render path). Summary does NOT: it resolves from
+ * the active `LayoutDoc` — the org's published doc, else the code-owned default composition — so this
+ * branch derives from that same authority rather than declaring a second, independently-authored one.
+ * (`OpportunityFocusPanelModeGrid` takes Summary's cells and cell resolution from
+ * `deriveFocusPanelSummaryCompositionInputs`, so the Summary value here is not a render fallback.)
+ */
+export function resolveFocusPanelModeGrid(mode: FocusPanelMode, workflowActive: boolean): FocusPanelCardGridSpec {
+    // `workflowActive` no longer selects a composition — see WORK_GRID. Kept in the signature
+    // because it is a real runtime state and callers pass it.
+    void workflowActive;
+    if (mode === "work") return WORK_GRID;
+    if (mode === "activity") return ACTIVITY_GRID;
+    return deriveFocusPanelGridFromLayoutDoc(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
 }

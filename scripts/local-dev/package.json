@@ -1,0 +1,8 @@
+{
+  "name": "vacilando-local-dev",
+  "private": true,
+  "description": "Isolated Gateway runtime dependencies (Web Push). Not the Alloy web app.",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

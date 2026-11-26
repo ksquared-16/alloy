@@ -9,11 +9,23 @@ import {
     validateCommunicationScheduledSendCreateBody,
     validateCommunicationScheduledSendUpdateBody,
 } from "@/lib/communications/communicationScheduledSendsService";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
 
-vi.mock("@/lib/communications/executeCommunicationsSend", () => ({
-    executeCommunicationsSend: vi.fn(),
+vi.mock("@/lib/communications/executeLegacyCommunicationsSendAdapter", () => ({
+    executeLegacyCommunicationsSendAdapter: vi.fn(),
 }));
+
+// The tour revalidation is certified on its own (tests/tours/tourReminderDispatchRevalidation.test.ts);
+// here it is a seam, so the dispatcher's handling of each verdict can be pinned.
+const revalidateMock = vi.fn();
+vi.mock("@/lib/tours/comms/tourSchedulingScheduledSends", () => ({
+    revalidateTourReminderForDispatch: (...a: unknown[]) => revalidateMock(...a),
+}));
+
+beforeEach(() => {
+    revalidateMock.mockReset();
+    revalidateMock.mockResolvedValue({ kind: "dispatch" });
+});
 
 const orgId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
@@ -192,12 +204,12 @@ describe("cancelCommunicationScheduledSend", () => {
 
 describe("processDueCommunicationScheduledSends", () => {
     beforeEach(() => {
-        vi.mocked(executeCommunicationsSend).mockReset();
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockReset();
     });
 
-    it("calls executeCommunicationsSend once for a claimed row", async () => {
+    it("calls executeLegacyCommunicationsSendAdapter once for a claimed row", async () => {
         const row = baseRow();
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: true,
             communication_message_id: "msg-11111111-1111-4111-8111-111111111111",
             thread_id: null,
@@ -248,8 +260,8 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.succeeded).toBe(1);
             expect(res.result.failed).toBe(0);
         }
-        expect(executeCommunicationsSend).toHaveBeenCalledOnce();
-        expect(executeCommunicationsSend).toHaveBeenCalledWith(
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledOnce();
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledWith(
             expect.objectContaining({
                 textRaw: "hi",
                 sendMetadataAugment: {
@@ -275,7 +287,7 @@ describe("processDueCommunicationScheduledSends", () => {
                 location_id: "loc-1",
             },
         });
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: true,
             communication_message_id: "msg-11111111-1111-4111-8111-111111111111",
             thread_id: null,
@@ -321,7 +333,7 @@ describe("processDueCommunicationScheduledSends", () => {
         });
 
         expect(res.ok).toBe(true);
-        expect(executeCommunicationsSend).toHaveBeenCalledWith(
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledWith(
             expect.objectContaining({
                 textRaw: "Rendered reminder body from Batch 5",
                 subjectRawEmail: "Reminder subject",
@@ -335,16 +347,101 @@ describe("processDueCommunicationScheduledSends", () => {
                 }),
             })
         );
-        const augment = vi.mocked(executeCommunicationsSend).mock.calls[0]?.[0]?.sendMetadataAugment as Record<
+        const augment = vi.mocked(executeLegacyCommunicationsSendAdapter).mock.calls[0]?.[0]?.sendMetadataAugment as Record<
             string,
             unknown
         >;
         expect(augment?.task_assist_scheduled_send).toBeUndefined();
     });
 
+    function tourDueRowHarness() {
+        const row = baseRow({
+            source: "tour_scheduling",
+            channel: "email",
+            metadata: { tour_booking_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", event_key: "tour_reminder" },
+        });
+        const updates: Array<Record<string, unknown>> = [];
+        const supabase = {
+            rpc: vi.fn().mockResolvedValue({ data: [row], error: null }),
+            from: vi.fn(() => ({
+                select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }) })) })),
+                update: vi.fn((patch: Record<string, unknown>) => {
+                    updates.push(patch);
+                    const chain: Record<string, unknown> = {};
+                    chain.eq = vi.fn(() => chain);
+                    chain.is = vi.fn(() => Promise.resolve({ data: null, error: null }));
+                    return chain;
+                }),
+            })),
+        } as never;
+        return { row, supabase, updates };
+    }
+
+    it("a due tour reminder whose booking is no longer eligible is WITHDRAWN, never sent", async () => {
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockClear();
+        revalidateMock.mockResolvedValue({ kind: "suppress", reason: "booking_canceled" });
+        const { supabase, updates } = tourDueRowHarness();
+        const res = await processDueCommunicationScheduledSends({
+            supabase,
+            limit: 5,
+            now: new Date("2026-12-02T00:00:00.000Z"),
+            orgIdFilter: null,
+        });
+        expect(res.ok && res.result).toMatchObject({ claimed: 1, skipped: 1, succeeded: 0, failed: 0 });
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
+        expect(updates).toHaveLength(1);
+        expect(updates[0].status).toBe("canceled");
+        expect((updates[0].metadata as Record<string, unknown>).dispatch_revalidation).toMatchObject({
+            outcome: "suppressed",
+            reason: "booking_canceled",
+        });
+    });
+
+    it("a due tour reminder whose booking cannot be read FAILS visibly instead of sending blind", async () => {
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockClear();
+        revalidateMock.mockResolvedValue({ kind: "error", message: "db down" });
+        const { supabase, updates } = tourDueRowHarness();
+        const res = await processDueCommunicationScheduledSends({
+            supabase,
+            limit: 5,
+            now: new Date("2026-12-02T00:00:00.000Z"),
+            orgIdFilter: null,
+        });
+        expect(res.ok && res.result).toMatchObject({ failed: 1, succeeded: 0 });
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
+        expect(updates[0].status).toBe("failed");
+    });
+
+    it("non-tour scheduled sends are not revalidated against any booking", async () => {
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
+            ok: false,
+            status: 500,
+            error: "x",
+        });
+        const { supabase } = (() => {
+            const row = baseRow({ source: "task_assist" });
+            return {
+                supabase: {
+                    rpc: vi.fn().mockResolvedValue({ data: [row], error: null }),
+                    from: vi.fn(() => ({
+                        select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }) })) })),
+                        update: vi.fn(() => {
+                            const chain: Record<string, unknown> = {};
+                            chain.eq = vi.fn(() => chain);
+                            chain.is = vi.fn(() => Promise.resolve({ data: null, error: null }));
+                            return chain;
+                        }),
+                    })),
+                } as never,
+            };
+        })();
+        await processDueCommunicationScheduledSends({ supabase, limit: 5, now: new Date(), orgIdFilter: null });
+        expect(revalidateMock).not.toHaveBeenCalled();
+    });
+
     it("skips enqueue when communication_message_id already set", async () => {
         const row = baseRow({ communication_message_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" });
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: true,
             communication_message_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
             thread_id: null,
@@ -382,12 +479,12 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.skipped).toBe(1);
             expect(res.result.succeeded).toBe(0);
         }
-        expect(executeCommunicationsSend).not.toHaveBeenCalled();
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
     });
 
-    it("marks failed when executeCommunicationsSend fails", async () => {
+    it("marks failed when executeLegacyCommunicationsSendAdapter fails", async () => {
         const row = baseRow();
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: false,
             status: 422,
             error: "channel_unavailable",
@@ -428,7 +525,7 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.failed).toBe(1);
             expect(res.result.succeeded).toBe(0);
         }
-        expect(executeCommunicationsSend).toHaveBeenCalledOnce();
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledOnce();
     });
 
     it("does nothing when RPC returns no rows", async () => {
@@ -450,7 +547,7 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.claimed).toBe(0);
             expect(res.result.processed).toBe(0);
         }
-        expect(executeCommunicationsSend).not.toHaveBeenCalled();
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
         expect(fromSpy).not.toHaveBeenCalled();
     });
 });

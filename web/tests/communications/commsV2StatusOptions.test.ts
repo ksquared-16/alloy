@@ -10,6 +10,14 @@ import {
 
 /** Comms V2 Phase 1 / B8C — status option endpoint (read-only, config-driven). */
 
+/*
+ * THE GATE THIS PINNED HAS BEEN REPLACED, AND THE PIN IS NOW TIGHTER.
+ *
+ * This asserted `await requireAdminOrOps()` as the admin pattern. That helper resolves portal
+ * admission and nothing else, so what the assertion really locked in was that the route asked for
+ * no functional authority. Naming the capability instead means this contract now fails if the route
+ * is gated on the WRONG authority, which the old form could not detect.
+ */
 describe("grainToEntityType", () => {
     it("maps family grain to opportunities", () => {
         expect(grainToEntityType("family")).toBe("opportunities");
@@ -69,8 +77,8 @@ describe("status-options route — source contract", () => {
     }
     const SRC = read("app/api/admin/communications/status-options/route.ts");
 
-    it("uses requireAdminOrOps -> getAdminContextCached -> createAdminClient", () => {
-        expect(SRC).toMatch(/await requireAdminOrOps\(\)/);
+    it("names a Communications capability -> getAdminContextCached -> createAdminClient", () => {
+        expect(SRC).toMatch(/await requireCommunicationsAuthority\(COMMUNICATIONS_READ\)/);
         expect(SRC).toMatch(/getAdminContextCached\(\)/);
         expect(SRC).toMatch(/if \(!ctx\.ok\) return adminContextFailureResponse\(ctx\)/);
         expect(SRC).toMatch(/createAdminClient\(\)/);

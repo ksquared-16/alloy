@@ -1,6 +1,6 @@
 # Lifecycle visibility vs ownership — long-term architecture
 
-**Path:** `docs/sprints/06_2026/lifecycle_visibility_vs_ownership_architecture.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_visibility_vs_ownership_architecture.md`  
 **Status:** **Approved direction** (architecture only — no implementation in this document)  
 **Date:** 2026-06-02  
 

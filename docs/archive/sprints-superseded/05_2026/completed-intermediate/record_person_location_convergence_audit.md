@@ -4,7 +4,7 @@
 **Status:** Card 0 audit complete · **Card 1 shipped (2026-05-29)** · **Card 2 shipped (2026-05-29)** · **Card 3 audit complete (2026-05-29)** · **Card 4 shipped (2026-05-29)** · **Card 5 shipped (2026-05-29)** · **Card 6 shipped (2026-05-29)** — sprint closeout (terminology, enrollment nav, Phase 2 governance)  
 **Goal:** Architectural baseline for converging location, room, child inquiry, person drawer, relationships, record lifecycle, household terminology, and enrollment navigation into a coherent operator model.
 
-**Canonical references:** `docs/core/glossary.md`, `docs/system/entity-model.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`, `docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`, `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`
+**Canonical references:** `docs/platform/governance/glossary.md`, `docs/archive/2026-06-superseded-system/entity-model.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/sprints/archive/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`, `docs/sprints/archive/05_2026/waitlist_priority_fact_truth_child_scope.md`, `docs/sprints/archive/05_2026/completed/settings_control_plane_closeout.md`
 
 ---
 
@@ -669,7 +669,7 @@ Department: Enrollment (key: enrollment)
 
 **Nav / terminology:** `web/lib/adminV2/navigation/buildWorkspaceNavDeptChildren.ts`, `web/lib/config/enrollmentPipelineQueueDefinitionV2.ts`, `web/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx`
 
-**Docs:** `docs/core/glossary.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`
+**Docs:** `docs/platform/governance/glossary.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/sprints/archive/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`
 
 ---
 
@@ -678,7 +678,7 @@ Department: Enrollment (key: enrollment)
 ### What changed
 
 **Part A — Documentation**
-- Added **Location semantics** section to `docs/system/entity-model.md` (canonical path; sprint brief referenced `docs/product/entity-model.md` which does not exist).
+- Added **Location semantics** section to `docs/archive/2026-06-superseded-system/entity-model.md` (canonical path; sprint brief referenced `docs/product/entity-model.md` which does not exist).
 - Documents hierarchical `locations` taxonomy (`address` / `site` / `unit`), no separate rooms table, child OCM authority vs opportunity `location_id` fallback, and multi-site display rule.
 
 **Part B — Child inquiry UI**
@@ -698,7 +698,7 @@ Department: Enrollment (key: enrollment)
 
 | File | Change |
 |------|--------|
-| `docs/system/entity-model.md` | Location semantics section |
+| `docs/archive/2026-06-superseded-system/entity-model.md` | Location semantics section |
 | `web/lib/fields/inquiryChildFieldRegistry.ts` | Labels + sort order |
 | `web/components/admin/entity/OpportunityInquiryChildrenSection.tsx` | Header/row order + labels |
 | `web/lib/admin/drawer/inquiryChildPlacementScope.ts` | Operator copy |
@@ -1183,7 +1183,7 @@ AdminEntityDrawer (shared shell)
 | `web/lib/recordChrome/effectiveDrawerLayoutPreview.ts` | `persons` presentation skeleton preview |
 | `web/tests/admin/personDrawerControlPlane.test.ts` | **New** — control-plane path, fields, relationships, compact retired |
 | `web/tests/admin/personDrawerCompactOverview.test.ts` | **Removed** — superseded |
-| `docs/sprints/05_2026/record_person_location_convergence_audit.md` | Card 4 shipped section |
+| `docs/sprints/archive/05_2026/record_person_location_convergence_audit.md` | Card 4 shipped section |
 
 ### Intentionally deferred
 
@@ -1255,7 +1255,7 @@ AdminEntityDrawer (shared shell)
 | `web/app/api/admin/entity/[type]/[id]/route.ts` | Person GET calls visibility attach |
 | `web/components/admin/AdminEntityDrawer.tsx` | Badges, sections, overview custom content |
 | `web/tests/admin/personDrawerVisibility.test.ts` | **New** — resolver + relationship groups |
-| `docs/sprints/05_2026/record_person_location_convergence_audit.md` | Card 5 section |
+| `docs/sprints/archive/05_2026/record_person_location_convergence_audit.md` | Card 5 section |
 
 ### Intentionally deferred (Card 6+)
 
@@ -1300,7 +1300,7 @@ AdminEntityDrawer (shared shell)
 - **Result:** Sidebar shows New Leads, Tours, Follow Up, Waitlist, Enrolling, Enrolled (from config) with existing `?queue=` routing preserved.
 
 **Part C — Phase 2 governance doc**
-- Added `docs/sprints/05_2026/person_location_convergence_phase2.md` — archive/delete, person, location, and navigation enhancements explicitly marked **not implemented**.
+- Added `docs/sprints/archive/05_2026/person_location_convergence_phase2.md` — archive/delete, person, location, and navigation enhancements explicitly marked **not implemented**.
 
 ### Files changed
 
@@ -1327,7 +1327,7 @@ AdminEntityDrawer (shared shell)
 
 ### Deferred to Phase 2
 
-See `docs/sprints/05_2026/person_location_convergence_phase2.md`:
+See `docs/sprints/archive/05_2026/person_location_convergence_phase2.md`:
 
 - Archive / deactivate / delete governance
 - Person profile mutation (relationship CRUD, medical, photos, etc.)

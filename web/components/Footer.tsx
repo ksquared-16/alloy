@@ -5,7 +5,6 @@ export default function Footer() {
   const footerLinks = {
     services: [
       { href: "/services", label: "Services" },
-      { href: "/services/cleaning", label: "Home Cleaning" },
     ],
     company: [
       { href: "/about", label: "About" },

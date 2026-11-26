@@ -1,18 +1,30 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatInTimeZone } from "date-fns-tz";
-import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
-import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY } from "@/lib/admin/actions/lifecycleActionMetadataKeys";
 import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
-import { emitDomainLifecycleStatusChangedEvent } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { emitDomainLifecycleSignalEvent } from "@/lib/lifecycle/emitDomainLifecycleSignalEvent";
 
-/** V1: opportunity CRM status aligned to authoritative `tour_bookings` (scheduling SoT). */
+/**
+ * Legacy opportunity CRM status vocabulary for the tour position. RETIRED as durable
+ * `opportunities.status_key` values by the enrollment status-collapse migration
+ * (`20260711000100_enrollment_status_collapse_and_stage_key.sql`): `opportunities.status_key` is now
+ * `{open, closed}` and the tour position lives on `stage_key` / Business Process. Kept only as the
+ * canonical domain-SIGNAL names below (`scheduled`/`completed`/`no_show`) — NEVER written to
+ * `status_key` (doing so is what produced "status_key is not defined for this entity in
+ * status_definitions"). Retained export for back-compat readers.
+ */
 export const TOUR_BOOKING_OPPORTUNITY_STATUS = {
     scheduled: "tour_scheduled",
     completed: "tour_completed",
     noShow: "tour_no_show",
+} as const;
+
+/** Canonical domain-signal names the tour booking emits; configured stage automation acts on these. */
+const TOUR_BOOKING_SIGNAL = {
+    scheduled: "scheduled",
+    completed: "completed",
+    noShow: "no_show",
 } as const;
 
 export type TourBookingOpportunityIntegrationKind =
@@ -26,6 +38,23 @@ export type TourBookingOpportunityIntegrationKind =
     | "canceled";
 
 const TOUR_BOOKING_DOMAIN = "tour_booking" as const;
+
+/**
+ * Result of the integration. `undo` is the inverse of the durable write, for the Platform
+ * Transaction Contract's compensation pass; absent when nothing durable was written.
+ */
+export type TourBookingOpportunityIntegrationResult = {
+    undo?: () => Promise<void>;
+    /**
+     * Set when the durable mirror applied but the CONFIGURED stage signal did not —
+     * typically because the tenant has no transition authored for this signal.
+     *
+     * This is a downstream consequence, not a booking failure. The caller records it
+     * as operator-visible follow-up and keeps the booking. A genuine write failure
+     * still throws; only an unapplied stage rule lands here.
+     */
+    stageSyncFailure?: { domain: string; signal: string; message: string };
+};
 
 function resolveTourIntegrationActorUserId(
     booking: Pick<TourBookingRow, "requested_by_user_id">,
@@ -86,51 +115,6 @@ async function loadOpportunityForTourSync(
     return (data as OpportunitySyncRow | null) ?? null;
 }
 
-async function resolveDepartmentIdForWorkUnit(
-    supabase: SupabaseClient,
-    orgId: string,
-    workUnitId: string | null | undefined
-): Promise<string | null> {
-    const wu = workUnitId != null ? String(workUnitId).trim() : "";
-    if (!wu) return null;
-    const { data, error } = await supabase.from("work_units").select("department_id").eq("id", wu).eq("org_id", orgId).maybeSingle();
-    if (error) throw new Error(`work_units (tour sync): ${error.message}`);
-    return (data as { department_id?: string | null } | null)?.department_id != null
-        ? String((data as { department_id: string | null }).department_id).trim() || null
-        : null;
-}
-
-async function assertTransition(
-    supabase: SupabaseClient,
-    orgId: string,
-    opportunityId: string,
-    fromStatusKey: string | null,
-    toStatusKey: string,
-    mergedMetadata: Record<string, unknown>,
-    workUnitId: string | null,
-    bookingId: string,
-    /** Enrollment rules (e.g. `tour_scheduled`) may require `tour_date` / `tour_time` on `required_payload_fields`. */
-    payloadExtras?: Record<string, unknown>
-): Promise<void> {
-    const departmentId = await resolveDepartmentIdForWorkUnit(supabase, orgId, workUnitId);
-    const t = await validateStatusTransition({
-        supabase,
-        orgId,
-        entityType: "opportunities",
-        entityId: opportunityId,
-        departmentId,
-        workUnitId,
-        actionKey: null,
-        fromStatusKey,
-        toStatusKey,
-        currentMetadata: mergedMetadata,
-        payload: { source: TOUR_BOOKING_DOMAIN, booking_id: bookingId, ...(payloadExtras ?? {}) },
-    });
-    if (!t.ok) {
-        throw new Error(`tour_booking: opportunity transition blocked — ${t.message}`);
-    }
-}
-
 function tourBookingEventMetadata(
     booking: TourBookingRow,
     opportunityId: string,
@@ -149,94 +133,153 @@ function tourBookingEventMetadata(
     };
 }
 
-async function patchOpportunityTourMirrorAndScheduledStatus(input: {
+/**
+ * Persist the compatibility METADATA mirror (`tour_date` / `tour_time`) on the opportunity and emit a
+ * configured tour domain signal. It NEVER writes `opportunities.status_key`: post enrollment
+ * status-collapse the durable status is `{open, closed}` and the tour position lives on `stage_key` /
+ * Business Process, advanced by configured stage-automation rules that act on the domain signal.
+ */
+async function mirrorTourMetadataAndSignal(input: {
     supabase: SupabaseClient;
     orgId: string;
     opportunityId: string;
     booking: TourBookingRow;
+    signal: string;
+    /** Record the tour-completed date in metadata (completion only). */
+    recordCompletedDate?: boolean;
     actorUserId?: string | null;
     correlationId?: string | null;
-}): Promise<void> {
-    const { supabase, orgId, opportunityId, booking, actorUserId, correlationId } = input;
-    const target = TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled;
-    const allowed = await assertAllowedStatusKey(supabase, orgId, "opportunities", target);
-    if (!allowed.ok) {
-        throw new Error(`tour_booking: ${allowed.message}`);
-    }
+}): Promise<TourBookingOpportunityIntegrationResult> {
+    const { supabase, orgId, opportunityId, booking, signal, recordCompletedDate, actorUserId, correlationId } = input;
 
     const opp = await loadOpportunityForTourSync(supabase, orgId, opportunityId);
     if (!opp) throw new Error("tour_booking: opportunity not found for integration");
 
+    // Captured before the write so the surrounding transaction has an exact inverse.
+    const priorMetadata = opp.metadata;
     const md = asMetadataRecord(opp.metadata);
-    const mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
-    const nextMd: Record<string, unknown> = { ...md, ...mirror };
-
-    await assertTransition(supabase, orgId, opportunityId, opp.status_key ?? null, target, nextMd, opp.work_unit_id, booking.id, {
-        tour_date: mirror.tour_date,
-        tour_time: mirror.tour_time,
-    });
-
-    const { error } = await emitDomainLifecycleStatusChangedEvent({
-        supabase,
-        orgId,
-        entityType: "opportunities",
-        entityId: opportunityId,
-        nextStatusKey: target,
-        additionalPatch: { metadata: nextMd },
-        actorUserId: resolveTourIntegrationActorUserId(booking, actorUserId),
-        domain: TOUR_BOOKING_DOMAIN,
-        domainEntityId: booking.id,
-        eventMetadata: tourBookingEventMetadata(booking, opportunityId, correlationId),
-        normalizeContext: "tour_booking:confirmed_mirror",
-    });
-    if (error) {
-        throw new Error(`tour_booking: opportunity update failed — ${error.message}`);
+    // Scheduling signals mirror the wall date/time; completion records the completed date.
+    if (signal === TOUR_BOOKING_SIGNAL.scheduled) {
+        Object.assign(md, deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone));
     }
-}
-
-async function patchOpportunityTerminalFromTour(input: {
-    supabase: SupabaseClient;
-    orgId: string;
-    opportunityId: string;
-    booking: TourBookingRow;
-    newOppStatus: string;
-    actorUserId?: string | null;
-    correlationId?: string | null;
-}): Promise<void> {
-    const { supabase, orgId, opportunityId, booking, newOppStatus, actorUserId, correlationId } = input;
-    const allowed = await assertAllowedStatusKey(supabase, orgId, "opportunities", newOppStatus);
-    if (!allowed.ok) {
-        throw new Error(`tour_booking: ${allowed.message}`);
-    }
-
-    const opp = await loadOpportunityForTourSync(supabase, orgId, opportunityId);
-    if (!opp) throw new Error("tour_booking: opportunity not found for integration");
-
-    const md = asMetadataRecord(opp.metadata);
-    if (newOppStatus === TOUR_BOOKING_OPPORTUNITY_STATUS.completed) {
+    if (recordCompletedDate) {
         const existing = md[OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY];
         if (existing == null || String(existing).trim() === "") {
             md[OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY] = new Date().toISOString().slice(0, 10);
         }
     }
-    await assertTransition(supabase, orgId, opportunityId, opp.status_key ?? null, newOppStatus, md, opp.work_unit_id, booking.id);
 
-    const { error } = await emitDomainLifecycleStatusChangedEvent({
+    const { error: updErr } = await supabase
+        .from("opportunities")
+        .update({ metadata: md })
+        .eq("id", opportunityId)
+        .eq("org_id", orgId);
+    if (updErr) throw new Error(`tour_booking: opportunity metadata mirror failed — ${updErr.message}`);
+
+    // Scheduled, rescheduled, completed and no-show all pass through here, so all four maintain the
+    // active-tour fact the evaluated page now reads instead of the bookings table.
+    await maintainOpportunityTourFacts(supabase, orgId, opportunityId);
+
+    const undo = async () => {
+        const { error } = await supabase
+            .from("opportunities")
+            .update({ metadata: priorMetadata })
+            .eq("id", opportunityId)
+            .eq("org_id", orgId);
+        if (error) throw new Error(`tour_booking: restore opportunity mirror failed — ${error.message}`);
+    };
+
+    // How the opportunity advances for this tour event is CONFIGURED (generic domain-signal → stage
+    // automation), never a hardcoded status/stage target — the same seam the "canceled" signal uses.
+    const { error: sigErr } = await emitDomainLifecycleSignalEvent({
         supabase,
         orgId,
-        entityType: "opportunities",
-        entityId: opportunityId,
-        nextStatusKey: newOppStatus,
-        additionalPatch: { metadata: md },
-        actorUserId: resolveTourIntegrationActorUserId(booking, actorUserId),
+        opportunityId,
         domain: TOUR_BOOKING_DOMAIN,
-        domainEntityId: booking.id,
-        eventMetadata: tourBookingEventMetadata(booking, opportunityId, correlationId),
-        normalizeContext: `tour_booking:${newOppStatus}`,
+        signal,
+        actorUserId: resolveTourIntegrationActorUserId(booking, actorUserId),
+        metadata: tourBookingEventMetadata(booking, opportunityId, correlationId),
     });
-    if (error) {
-        throw new Error(`tour_booking: opportunity update failed — ${error.message}`);
+    if (sigErr) {
+        // DIRECTOR BOUNDARY: the booking is domain truth; stage movement is a downstream
+        // consequence. An unapplied stage rule (typically none configured for this signal
+        // on this tenant) must not revoke a tour the parent successfully booked.
+        //
+        // The mirror is KEPT rather than undone — it is truthful, the tour really exists —
+        // and the caller turns this into operator-visible, retryable follow-up. Reporting
+        // it beats silently pretending the process synchronized.
+        return { undo, stageSyncFailure: { domain: TOUR_BOOKING_DOMAIN, signal, message: sigErr.message } };
     }
+
+    return { undo };
+}
+
+/**
+ * Refresh the opportunity's maintained active-tour facts from the bookings table.
+ *
+ * Called on EVERY transition that can change whether a tour is active, because the evaluated Work
+ * Unit page no longer reads `tour_bookings` — it reads this. A transition that forgets to call it
+ * leaves a stale booking rendering as operational truth, and no functional test would notice,
+ * because the row would still be correctly shaped.
+ *
+ * It recomputes rather than patches: the answer is "the soonest active booking", which a single
+ * booking's new status cannot determine on its own.
+ */
+async function maintainOpportunityTourFacts(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+): Promise<void> {
+    const { error } = await supabase.rpc("maintain_opportunity_tour_facts", {
+        p_org_id: orgId,
+        p_opportunity_id: opportunityId,
+    });
+    if (error) throw new Error(`tour_booking: maintained tour facts refresh failed — ${error.message}`);
+}
+
+/**
+ * A CANCELLED TOUR TAKES ITS DATE WITH IT.
+ *
+ * Scheduling mirrors the booking's wall date/time onto `metadata.tour_date` / `tour_time`, and the
+ * Work View row stamps booking truth over that mirror only while a booking is ACTIVE. The cancel
+ * branch never touched the mirror, so a cancelled future tour kept its date: the family stayed in
+ * "Tours in the next 7 days" and on every reader of `tour_date`, at Decision, with no tour (measured
+ * on staging, the Fifteen Family and the 1467 QA family).
+ *
+ * Only the mirror of THIS booking is removed — the keys are cleared when they still hold exactly the
+ * date and time this booking wrote — so a date that came from anywhere else is left alone.
+ */
+async function clearCanceledTourMirror(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+    booking: TourBookingRow,
+): Promise<TourBookingOpportunityIntegrationResult> {
+    let mirror: { tour_date: string; tour_time: string };
+    try {
+        mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
+    } catch {
+        return {};
+    }
+    const opp = await loadOpportunityForTourSync(supabase, orgId, opportunityId);
+    if (!opp) return {};
+    const md = asMetadataRecord(opp.metadata);
+    if (md.tour_date !== mirror.tour_date) return {};
+    const priorMetadata = opp.metadata;
+    delete md.tour_date;
+    if (md.tour_time === mirror.tour_time) delete md.tour_time;
+    const { error } = await supabase.from("opportunities").update({ metadata: md }).eq("id", opportunityId).eq("org_id", orgId);
+    if (error) throw new Error(`tour_booking: clear cancelled tour mirror failed — ${error.message}`);
+    return {
+        undo: async () => {
+            const { error: undoErr } = await supabase
+                .from("opportunities")
+                .update({ metadata: priorMetadata })
+                .eq("id", opportunityId)
+                .eq("org_id", orgId);
+            if (undoErr) throw new Error(`tour_booking: restore opportunity mirror failed — ${undoErr.message}`);
+        },
+    };
 }
 
 /**
@@ -251,11 +294,11 @@ export async function applyTourBookingOpportunityIntegration(
         actorUserId?: string | null;
         correlationId?: string | null;
     }
-): Promise<void> {
+): Promise<TourBookingOpportunityIntegrationResult> {
     const { booking, kind, actorUserId, correlationId } = args;
     const orgId = String(booking.org_id).trim();
     const opportunityId = String(booking.opportunity_id).trim();
-    if (!orgId || !opportunityId) return;
+    if (!orgId || !opportunityId) return {};
 
     if (kind === "canceled") {
         const { error } = await emitDomainLifecycleSignalEvent({
@@ -270,46 +313,55 @@ export async function applyTourBookingOpportunityIntegration(
         if (error) {
             throw new Error(`tour_booking: cancel signal failed — ${error.message}`);
         }
-        return;
+        /*
+         * THE CANCEL BRANCH RETURNS EARLY, before the metadata mirror. Every other transition picks up
+         * maintenance on its way through `mirrorTourMetadataAndSignal`; this one never goes there, so a
+         * cancelled tour would have gone on rendering as an active one forever. It is maintained here,
+         * explicitly, for exactly that reason.
+         */
+        await maintainOpportunityTourFacts(supabase, orgId, opportunityId);
+        return clearCanceledTourMirror(supabase, orgId, opportunityId, booking);
     }
 
     if (kind === "confirmed_mirror" || kind === "reschedule_mirror") {
         if (booking.status_key !== "confirmed" && booking.status_key !== "rescheduled") {
-            return;
+            return {};
         }
-        await patchOpportunityTourMirrorAndScheduledStatus({
+        return mirrorTourMetadataAndSignal({
             supabase,
             orgId,
             opportunityId,
             booking,
+            signal: TOUR_BOOKING_SIGNAL.scheduled,
             actorUserId,
             correlationId,
         });
-        return;
     }
 
     if (kind === "completed") {
-        await patchOpportunityTerminalFromTour({
+        return mirrorTourMetadataAndSignal({
             supabase,
             orgId,
             opportunityId,
             booking,
-            newOppStatus: TOUR_BOOKING_OPPORTUNITY_STATUS.completed,
+            signal: TOUR_BOOKING_SIGNAL.completed,
+            recordCompletedDate: true,
             actorUserId,
             correlationId,
         });
-        return;
     }
 
     if (kind === "no_show") {
-        await patchOpportunityTerminalFromTour({
+        return mirrorTourMetadataAndSignal({
             supabase,
             orgId,
             opportunityId,
             booking,
-            newOppStatus: TOUR_BOOKING_OPPORTUNITY_STATUS.noShow,
+            signal: TOUR_BOOKING_SIGNAL.noShow,
             actorUserId,
             correlationId,
         });
     }
+
+    return {};
 }

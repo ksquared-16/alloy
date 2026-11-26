@@ -1,0 +1,7 @@
+{
+  "lane_id": "lane_2cea84351d90",
+  "action_key": "environment.restore_preview_qa_session",
+  "purpose": "Browser-verify the Human QA V2 candidate on its isolated preview (Forms Studio Marketing consent authoring, public submit, Processing consent evidence, Approve) as the isolated tenant's QA operator.",
+  "reason_worker_cannot_execute": "Minting a QA browser session for a candidate preview is a trusted-host credential action and requires governed authorization.",
+  "inputs": { "target": "alloy.candidate.enrollment", "candidateSha": "b84a37a3d7e392f483d035dbc460a5ca3db4e2bd" }
+}

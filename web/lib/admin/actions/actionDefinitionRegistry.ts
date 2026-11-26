@@ -2,6 +2,8 @@
  * Executable action registry for Settings library, catalog filtering, and documentation.
  */
 
+import { getPlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+
 export type ActionDefinitionCategory =
     | "record"
     | "communication"
@@ -18,7 +20,53 @@ export type ActionRegistryEntry = {
     /** Suggested default surface when adding from library. */
     defaultSurface?: "queue_row" | "record_header" | "record_section";
     defaultSlot?: string;
+    /**
+     * Capability-declared interaction host — where the operator interacts when this capability runs
+     * inside a work surface. Generic and metadata-driven: the runtime resolves the host from THIS,
+     * never from the action name/label. Omit to derive the host from `category`.
+     */
+    interactionHost?: CapabilityInteractionHost;
+    /**
+     * Which body the COMMAND SURFACE renders before running, when this capability needs the operator
+     * to review a resolved plan first.
+     *
+     * Omit and the command surface runs immediately, which is correct for a capability whose inputs
+     * configuration already bound and whose effect is local (`stage_work.start` starts one piece of
+     * work). Declare one and the same host shows that body, collects a confirmation, and only then
+     * runs the SAME registered-action path — it is a preview step, never a second execution runtime.
+     *
+     * Needed because "nothing left to collect" and "safe to do without looking" are different
+     * claims. Sending a family their enrolment paperwork is irreversible from the family's point of
+     * view: they receive it. An operator has to be able to see which child, which guardian and which
+     * requirements before that happens.
+     */
+    commandSurfaceBody?: CommandSurfaceBody;
+    /** Optional Lucide icon name for operator action buttons (What's Next, etc.). */
+    icon?: string;
 };
+
+/** Generic interaction hosts a capability may declare. Not business- or action-name specific. */
+export type CapabilityInteractionHost =
+    | "inline_form"
+    | "communications_composer"
+    | "header_delegate"
+    | "form_delivery"
+    /**
+     * Run the command here, against the subject already resolved.
+     *
+     * The other four each name a place the operator goes to SUPPLY something. This one is for the
+     * command that needs nothing more: the surface knows the subject and configuration bound the
+     * inputs, so the only remaining act is to run it through the registered-action runtime.
+     */
+    | "command_surface";
+
+/**
+ * Bodies the command surface can render for review before running.
+ *
+ * Named by the DOMAIN the review is about, not by the action, so a second enrolment command that
+ * needs the same review reuses this one rather than adding a host.
+ */
+export type CommandSurfaceBody = "enrollment_packet";
 
 export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = {
     record: "Record",
@@ -31,6 +79,41 @@ export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = 
 /** Operator-facing action library (Settings cards). Keys must exist in action_definitions after seed. */
 export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
     {
+        /**
+         * Begin a piece of work the subject's CURRENT stage already configures.
+         *
+         * Registered here because this is the registry canonical action definitions are DERIVED
+         * from, and without an entry `canonicalActionDefinition` returns null — at which point
+         * `resolveCurrentWorkActionSurface` classifies the action `unsupported` and the surface
+         * drops it as a configuration error. That is what happened: `stage_work.start` was a
+         * production capability, a registered action, process-selected and configured against a
+         * stage, and it still could not render, because nothing had told this registry it exists.
+         *
+         * `header_delegate` is the interaction host because the operator supplies NOTHING: the work
+         * template comes from configuration and travels in the invocation payload. Declared as
+         * metadata here rather than inferred from the key, exactly as this field is meant to be
+         * used.
+         *
+         * Not settings-configurable: it is authored per stage, against that stage's own work, in
+         * the stage editor — not placed as a button from the layout library, where it would have no
+         * template to start.
+         */
+        key: "stage_work.start",
+        label: "Start stage work",
+        category: "record",
+        settingsConfigurable: false,
+        description:
+            "Start a piece of work this subject's current stage already configures. Starts the work only — it records no outcome and moves no stage.",
+        /*
+         * `command_surface`, not `header_delegate`. This is a CHILD-subject command, and the drawer
+         * header is opportunity-scoped: delegating there reached a host with no such command, and
+         * told the operator to "use drawer header actions" for an action the header does not carry.
+         * The Focus Panel already holds the child and configuration already bound the template, so
+         * there is nothing left to collect and nowhere else to go.
+         */
+        interactionHost: "command_surface",
+    },
+    {
         key: "quick_message",
         label: "Message",
         category: "communication",
@@ -39,6 +122,7 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
             "Open a message composer for the selected record. The user reviews and sends manually.",
         defaultSurface: "queue_row",
         defaultSlot: "row_inline",
+        icon: "MessageSquare",
     },
     {
         key: "ask_bos",
@@ -79,6 +163,18 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
             "Change the lead status through the Mutation Runtime. Domain-specific: operates on Lead Status only.",
         defaultSurface: "record_header",
         defaultSlot: "primary",
+    },
+    {
+        key: "change_lead_location",
+        label: "Change lead location",
+        category: "workflow",
+        settingsConfigurable: true,
+        description:
+            "Set the family default site (opportunities.location_id). Children keep their own sites; optional update for children still inheriting the lead default.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+        interactionHost: "inline_form",
+        icon: "MapPin",
     },
     {
         key: "close_lead",
@@ -130,15 +226,44 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         description: "Set a tour date and time for this family. Tour details are required before saving.",
         defaultSurface: "record_header",
         defaultSlot: "primary",
+        interactionHost: "inline_form",
+        icon: "Calendar",
     },
     {
         key: "reschedule_tour",
-        label: "Reschedule tour",
+        label: "Reschedule Tour",
         category: "workflow",
         settingsConfigurable: true,
         description: "Pick a new tour date and time. You can add a short reason when helpful.",
         defaultSurface: "record_header",
         defaultSlot: "secondary",
+        interactionHost: "inline_form",
+        icon: "Calendar",
+    },
+    {
+        key: "cancel_tour",
+        label: "Cancel Tour",
+        category: "workflow",
+        settingsConfigurable: true,
+        description: "Cancel the family's scheduled tour.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+        interactionHost: "header_delegate",
+        icon: "Calendar",
+    },
+    {
+        key: "send_tour_invitation",
+        label: "Send Tour Invitation",
+        category: "communication",
+        settingsConfigurable: true,
+        description:
+            "Open compose to review and send a tour invitation for this family. Appears on What's Next only when configured on the work template.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+        // Centered Current Work communications composer — prepare draft, operator edits, confirm send.
+        // Do not use header_delegate: that fabricated a registry execute and silently sent.
+        interactionHost: "communications_composer",
+        icon: "Send",
     },
     {
         key: "send_form",
@@ -148,6 +273,10 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         description: "Open the send-form composer to share an intake or update form with this family.",
         defaultSurface: "record_header",
         defaultSlot: "secondary",
+        // Declared interaction host: the generic form-delivery surface (which form → who receives
+        // it → what it relates to → how delivered), rendered inline in the centered What's Next card.
+        interactionHost: "form_delivery",
+        icon: "Send",
     },
     {
         key: "send_enrollment_packet",
@@ -157,6 +286,20 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         description: "Start the enrollment packet workflow for this family when your org has one configured.",
         defaultSurface: "record_header",
         defaultSlot: "secondary",
+        /*
+         * `command_surface`, not the header default. This is a CHILD-subject command and the drawer
+         * header is opportunity-scoped: with no host declared it fell through to `header_delegate`,
+         * reached a header that carries no such command, and told the operator to "use drawer header
+         * actions" for an action the header does not have. Measured on deployed staging against the
+         * real configured packet — the Process Card offered the action and nothing could run it, so
+         * there was no way in the product to send a family their paperwork.
+         *
+         * Same defect and same repair as `stage_work.start`. The difference is the body below: this
+         * one is reviewed before it runs.
+         */
+        interactionHost: "command_surface",
+        commandSurfaceBody: "enrollment_packet",
+        icon: "Send",
     },
     {
         key: "mark_lost",
@@ -220,6 +363,24 @@ export function filterSettingsActionCatalogDefinitions(definitions: ActionCatalo
         const key = d.key.trim();
         if (isInternalOrPlaceholderActionKey(key)) return false;
         if (d.action_type === "ui_intent" && key.includes("placeholder")) return false;
+
+        // P0.S1 honesty: a DB definition never implies a runnable organization Command.
+        // Unknown-to-registry keys keep prior behavior (library / org_id gates below).
+        const capability = getPlatformCapability(key);
+        if (capability) {
+            if (
+                capability.maturity === "placeholder" ||
+                capability.maturity === "unavailable" ||
+                capability.maturity === "processing_only" ||
+                capability.maturity === "workflow_only" ||
+                capability.maturity === "configuration_maintenance"
+            ) {
+                return false;
+            }
+            if (capability.catalogVisibility === "hidden" || capability.catalogVisibility === "internal_only") {
+                return false;
+            }
+        }
 
         const entry = actionRegistryEntryForKey(key);
         if (entry) return entry.settingsConfigurable;

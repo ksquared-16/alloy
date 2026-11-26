@@ -8,6 +8,7 @@
 
 import type { AdminAccessBundle } from "@/lib/admin/getAdminAccessContext";
 import { logAdminContextCache } from "@/lib/adminV2/adminContextCacheInstrumentation";
+import { processMap } from "@/lib/perf/processCache";
 
 export const ADMIN_SHELL_CONTEXT_CACHE_TTL_MS = 120_000;
 
@@ -17,7 +18,16 @@ type CacheEntry = {
     scopeKey: string;
 };
 
-const cache = new Map<string, CacheEntry>();
+/**
+ * Process-wide, not module-scope. This cache exists to span requests (120s TTL), and a module-level
+ * Map in a Next production build is per-route-bundle — so each server route kept its own copy and
+ * missed the first time it ran. Measured over one session: 15 misses against 103 hits, each miss
+ * paying `resolveAdminAccessCore` at ~1.1s, which is the dominant term inside route_meta.
+ *
+ * Same pattern already corrected for the JWKS, timezone, status-definition and queue-definition
+ * caches; see `lib/perf/processCache.ts`.
+ */
+const cache = processMap<string, CacheEntry>("admin_shell_context");
 
 function userCacheKey(userId: string): string {
     return `shell:${userId}`;

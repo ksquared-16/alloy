@@ -1,0 +1,14 @@
+import { open, OUT, openCase, caseText } from "./lib.mjs";
+const { browser, page, errors } = await open();
+const net = [];
+page.on("response", (r) => { if (r.request().method() !== "GET" && /\/api\//.test(r.url())) net.push(`${r.status()} ${r.request().method()} ${r.url().replace(/^https?:\/\/[^/]+/, "").replace(/[0-9a-f-]{36}/g, "<id>")}`); });
+const dlg = await openCase(page, /qa\+enrtour2@/);
+await dlg.getByRole("button", { name: /^Approve — / }).click(); await page.waitForTimeout(2000);
+const c = page.getByRole("button", { name: /^(Approve|Confirm|Yes, approve)/ }).last();
+if (await page.locator('[role="alertdialog"]').count()) await c.click();
+await page.waitForTimeout(8000);
+console.log("NET", JSON.stringify(net));
+console.log("AFTER:", (await caseText(dlg)).slice(0, 2500));
+await page.screenshot({ path: `${OUT}g3-approved.png`, fullPage: true });
+console.log("errors", JSON.stringify(errors.slice(0, 5)));
+await browser.close();

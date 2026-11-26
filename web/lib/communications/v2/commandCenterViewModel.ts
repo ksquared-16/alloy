@@ -10,6 +10,15 @@ import {
     isNeedsReviewConversation,
     isResolvedConversation,
 } from "@/lib/communications/v2/conversationTriage";
+import { formatQueueRowPhoneDisplay } from "@/lib/presentation/runtime/formatQueueRowContactDisplay";
+import type { CommunicationQueueScopeReason, QueueScopeStatus } from "@/lib/communications/v2/communicationQueueScopeResolution";
+import {
+    NEEDS_RESOLUTION_QUEUE,
+    NEEDS_RESOLUTION_QUEUE_KEY,
+    prepareCommandCenterQueue,
+} from "@/lib/communications/v2/commandCenterQueueProjection";
+
+export { NEEDS_RESOLUTION_QUEUE, NEEDS_RESOLUTION_QUEUE_KEY, prepareCommandCenterQueue };
 
 export const OPERATIONAL_QUEUES = [
     { key: "awaiting_parent_reply", label: "Awaiting Parent Reply" },
@@ -48,6 +57,12 @@ export type ConversationSummary = {
     primary_contact_person_id?: string | null;
     /** Resolved household id for live Family Communication Workspace (when thread anchors a family). */
     customer_id?: string | null;
+    /** Conversation topic label (business context), distinct from family name. */
+    topic_label?: string | null;
+    /** Canonical queue scope resolution for runtime handoff. */
+    scope_status?: QueueScopeStatus | null;
+    scope_reason?: CommunicationQueueScopeReason | string | null;
+    scope_unresolved_reason?: string | null;
 };
 
 export const OTHER_QUEUE_KEY = "other" as const;
@@ -71,13 +86,20 @@ export type CommandCenterFilters = {
     search?: string | null;
 };
 
-/** Group conversations into the operational queues (unknown/null attention_state → "other"). */
+/** Group conversations into operational queues; unresolved rows route to review bucket. */
 export function groupConversationsByQueue(
     conversations: ConversationSummary[]
 ): Record<string, ConversationSummary[]> {
-    const out: Record<string, ConversationSummary[]> = { [OTHER_QUEUE_KEY]: [] };
+    const out: Record<string, ConversationSummary[]> = {
+        [OTHER_QUEUE_KEY]: [],
+        [NEEDS_RESOLUTION_QUEUE_KEY]: [],
+    };
     for (const q of OPERATIONAL_QUEUES) out[q.key] = [];
     for (const c of conversations) {
+        if (c.scope_status && c.scope_status !== "resolved") {
+            out[NEEDS_RESOLUTION_QUEUE_KEY].push(c);
+            continue;
+        }
         const key =
             typeof c.attention_state === "string" && c.attention_state.length > 0 && out[c.attention_state]
                 ? c.attention_state
@@ -100,12 +122,51 @@ export function visibleCommandCenterQueues(
     if (otherItems.length > 0) {
         sections.push({ key: FALLBACK_QUEUE.key, label: FALLBACK_QUEUE.label, items: otherItems });
     }
+    const reviewItems = grouped[NEEDS_RESOLUTION_QUEUE_KEY] ?? [];
+    if (reviewItems.length > 0) {
+        sections.push({
+            key: NEEDS_RESOLUTION_QUEUE.key,
+            label: NEEDS_RESOLUTION_QUEUE.label,
+            items: reviewItems,
+        });
+    }
     return sections.filter((s) => s.items.length > 0);
 }
 
 /** Flatten visible queue row ids in render order (for auto-selection). */
 export function flattenVisibleConversationIds(sections: CommandCenterQueueSection[]): string[] {
     return sections.flatMap((s) => s.items.map((c) => c.id));
+}
+
+export function isQueueRowLoadable(c: ConversationSummary | null | undefined): boolean {
+    return Boolean(c && c.scope_status === "resolved" && c.customer_id);
+}
+
+/**
+ * Which conversation the workspace should show.
+ *
+ * "Loadable" means the family workspace can build a household view for the row,
+ * and that is a good reason to prefer one when picking a DEFAULT. It is not a
+ * reason to override the operator. Treating it as one meant a click on an
+ * unidentified conversation — never loadable, because it has no household —
+ * silently bounced the operator back to the first resolved row, so a parent Alloy
+ * could not identify could not be opened at all.
+ *
+ * An explicit selection survives for as long as it is still visible; loadable
+ * only decides where to start.
+ */
+export function resolveCommandCenterSelectionPreferringLoadable(
+    selectedId: string | null,
+    visibleIds: string[],
+    loadableIds: string[]
+): string | null {
+    if (selectedId && visibleIds.includes(selectedId)) return selectedId;
+    return resolveCommandCenterSelection(null, loadableIds.length > 0 ? loadableIds : visibleIds);
+}
+
+/** Prefer loadable canonical rows for initial selection. */
+export function flattenLoadableConversationIds(sections: CommandCenterQueueSection[]): string[] {
+    return sections.flatMap((s) => s.items.filter(isQueueRowLoadable).map((c) => c.id));
 }
 
 /** Keep current selection when still visible; otherwise pick the first visible row. */
@@ -119,18 +180,109 @@ export function resolveCommandCenterSelection(
 }
 
 export function conversationDisplayTitle(c: ConversationSummary): string {
+    if (c.scope_status === "ambiguous") return "Needs identity review";
+    if (c.scope_status === "unresolved") return "Unresolved conversation";
     const label = (c.family_label ?? "").trim();
-    if (label && !label.includes("@")) return label;
+    if (label && !label.includes("@") && label.toLowerCase() !== "family") return label;
     const contact = (c.primary_contact_name ?? "").trim();
     if (contact) return contact;
-    return "Family";
+    if (c.customer_id) return "Household";
+    return "Unresolved conversation";
+}
+
+export type QueueWorkspaceErrorDisplay = {
+    title: string;
+    message: string;
+    canRetry: boolean;
+};
+
+export function resolveQueueWorkspaceError(
+    selected: ConversationSummary | null,
+    runtimeError: string | null
+): QueueWorkspaceErrorDisplay | null {
+    if (!selected) return null;
+    if (selected.scope_status === "ambiguous") {
+        return {
+            title: "Needs identity review",
+            message: "This conversation links to more than one household. Review the connection before replying.",
+            canRetry: false,
+        };
+    }
+    if (selected.scope_status === "unresolved" || !selected.customer_id) {
+        const reason = (selected.scope_unresolved_reason ?? "").trim();
+        if (reason === "inactive_or_missing_customer") {
+            return {
+                title: "Record no longer active",
+                message: "This conversation references a household that is no longer active.",
+                canRetry: false,
+            };
+        }
+        if (reason === "person_without_household") {
+            return {
+                title: "Not linked to a family yet",
+                message: "This conversation is anchored to a person without a household link.",
+                canRetry: false,
+            };
+        }
+        return {
+            title: "Not linked to a family yet",
+            message: "This conversation is not linked to a household yet. Review the connection before replying.",
+            canRetry: false,
+        };
+    }
+    if (runtimeError) {
+        return {
+            title: "Could not load this conversation",
+            message: "Try again or select another conversation from the queue.",
+            canRetry: true,
+        };
+    }
+    return null;
+}
+
+/** Business topic for queue rows — never duplicates the family name. */
+export function conversationDisplayTopic(c: ConversationSummary): string {
+    const topic = (c.topic_label ?? "").trim();
+    if (topic) return topic;
+    return "General";
+}
+
+export function conversationDisplayChildren(c: ConversationSummary): string | null {
+    if (!c.child_names?.length) return null;
+    return c.child_names.join(", ");
+}
+
+export function formatConversationContactDisplay(recipientKey: string | null | undefined): string | null {
+    const recipient = (recipientKey ?? "").trim();
+    if (!recipient) return null;
+    const phone = formatQueueRowPhoneDisplay(recipient);
+    if (phone) {
+        const digits = recipient.replace(/\D/g, "");
+        if (digits.length === 11 && digits.startsWith("1")) return `+1 ${phone}`;
+        return phone;
+    }
+    return recipient;
 }
 
 export function conversationDisplayRecipient(c: ConversationSummary): string | null {
-    const recipient = (c.recipient_key ?? "").trim();
+    const formatted = formatConversationContactDisplay(c.recipient_key);
+    if (!formatted) return null;
     const title = conversationDisplayTitle(c);
-    if (!recipient || recipient.toLowerCase() === title.toLowerCase()) return null;
-    return recipient;
+    if (formatted.toLowerCase() === title.toLowerCase()) return null;
+    return formatted;
+}
+
+/** Distinct household count for queue headers (one family may have multiple topic rows). */
+export function countDistinctQueueFamilies(conversations: ConversationSummary[]): number {
+    const keys = new Set<string>();
+    for (const c of conversations) {
+        if (c.scope_status && c.scope_status !== "resolved") continue;
+        const customerId = (c.customer_id ?? "").trim();
+        if (customerId) {
+            keys.add(`customer:${customerId}`);
+        }
+    }
+    return keys.size;
 }
 
 export function conversationChannelLabel(channel: string | null | undefined): string {
@@ -265,6 +417,7 @@ export function applyQueueFilters(
         if (search) {
             const haystack = [
                 c.family_label,
+                c.topic_label,
                 c.recipient_key,
                 c.primary_contact_name,
                 c.last_message_preview,

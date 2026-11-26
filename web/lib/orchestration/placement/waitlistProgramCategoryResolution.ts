@@ -20,8 +20,9 @@ export type WaitlistProgramCategoryContext = {
 
 export type WaitlistProgramCategoryScope = {
     siteId?: string | null;
-    desiredProgramType?: string | null;
-    desiredProgramCategoryId?: string | null;
+    /** Canonical program key (location_program_categories.key) derived from OCM program_category_id. */
+    programKey?: string | null;
+    programCategoryId?: string | null;
     cohortKey?: string | null;
     cohortLabel?: string | null;
 };
@@ -33,12 +34,12 @@ export function resolveWaitlistProgramCategorySection(
     const categories = context?.categories ?? [];
     const siteId = (scope.siteId ?? context?.activeSiteId ?? "").trim() || null;
 
-    if (categories.length && (siteId || scope.desiredProgramCategoryId?.trim())) {
+    if (categories.length && (siteId || scope.programCategoryId?.trim())) {
         const locRow = findLocationProgramCategory({
             categories,
             locationId: siteId,
-            categoryId: scope.desiredProgramCategoryId,
-            key: scope.desiredProgramType,
+            categoryId: scope.programCategoryId,
+            key: scope.programKey,
             includeInactive: true,
         });
         if (locRow) {
@@ -50,7 +51,7 @@ export function resolveWaitlistProgramCategorySection(
     }
 
     const orgCategory = resolveOrgProgramCategoryForWaitlist({
-        cohortKey: scope.desiredProgramType ?? scope.cohortKey,
+        cohortKey: scope.programKey ?? scope.cohortKey,
         cohortLabel: scope.cohortLabel,
     });
     return {
@@ -95,11 +96,10 @@ export function readWaitlistRowProgramCategoryScope(row: Record<string, unknown>
                       : typeof row.location_id === "string"
                         ? row.location_id.trim()
                         : null,
-            desiredProgramType:
-                typeof o.desired_program_type === "string" ? o.desired_program_type.trim() : null,
-            desiredProgramCategoryId:
-                typeof o.desired_program_category_id === "string"
-                    ? o.desired_program_category_id.trim()
+            programKey: typeof o.program_key === "string" ? o.program_key.trim() : null,
+            programCategoryId:
+                typeof o.program_category_id === "string"
+                    ? o.program_category_id.trim()
                     : null,
             cohortKey:
                 typeof o.program_room_cohort_key === "string" ? o.program_room_cohort_key.trim() : null,

@@ -3,35 +3,44 @@
 /**
  * Processing → Work → Incoming warm cache.
  *
- * Processing previously paid a full cold network cost on every modal open: the KPI strip and
- * the queue list each fetched `GET /api/admin/processing/queue` independently on mount, running
- * the (heavy) server pipeline twice. This module gives Processing the same treatment Inbox and
- * Communications already have:
+ * Processing previously paid a full cold network cost on every modal open: the KPI strip and the queue
+ * list each fetched `GET /api/admin/processing/queue` independently on mount. This gives Processing one
+ * shared client cache + single in-flight request (KPI strip and queue list dedupe), warmed on nav
+ * intent / open so the surface paints instantly from cache.
  *
- *   • one shared client cache + single in-flight request (KPI strip and queue list dedupe),
- *   • an idle warm pass scheduled from the AdminV2 shell (`coreSurfacePreloadRegistry`),
- *   • a warm-on-open / warm-on-hover hook so the surface paints instantly from cache.
- *
- * No new API, no new payload — it reuses the existing queue endpoint and its existing response
- * shape. Stale entries refresh quietly in place.
+ * Built on the shared `createWarmCache` Runtime primitive (`lib/runtime/warmCache.ts`) — a singleton
+ * scope (one global queue). The named exports below are a thin, back-compatible facade so existing
+ * consumers are unchanged.
  */
 
-import type {
-    ProcessingCaseQueueRow,
-} from "@/lib/pos/processingCase/readModel/types";
+import type { ProcessingCaseQueueRow } from "@/lib/pos/processingCase/readModel/types";
 import type { QueueRecommendationSummary } from "@/lib/pos/processingCase/recommendation/recommendationSummary";
+import { createWarmCache, type WarmCacheEntryState } from "@/lib/runtime/warmCache";
+import { processingActionableQueryStrings } from "@/lib/pos/processingActionableWork";
+
+/**
+ * The two questions this cache answers, which used to be one entry and should never have been.
+ *
+ * `browse`     — what the Work rail shows: a recency page across ALL statuses, completed and
+ *                archived included, because the rail renders those lanes.
+ * `actionable` — what Processing publishes as cross-record work awaiting an operator, defined by
+ *                `PROCESSING_ACTIONABLE_STATUSES`.
+ *
+ * Collapsing these into one unparameterized read is what made Work Items project "the newest 25
+ * cases" while believing it was projecting "the work". They are different questions with different
+ * right answers, so they are different cache scopes.
+ */
+export type ProcessingQueueScope = "browse" | "actionable";
 
 export interface ProcessingQueueWarmData {
     rows: ProcessingCaseQueueRow[];
     counts: Record<string, number>;
     recommendations: Record<string, QueueRecommendationSummary>;
+    /** NEW / UNWORKED rows (processingCaseAttention) — actionable, no operator decision yet. */
+    unworked: Record<string, true>;
 }
 
-export interface ProcessingQueueWarmState {
-    data: ProcessingQueueWarmData | null;
-    fetchedAt: number | null;
-    error: string | null;
-}
+export type ProcessingQueueWarmState = WarmCacheEntryState<ProcessingQueueWarmData>;
 
 interface QueueResponse {
     data: {
@@ -39,90 +48,80 @@ interface QueueResponse {
         next_cursor?: unknown;
         counts: Record<string, number>;
         recommendations?: Record<string, QueueRecommendationSummary>;
+        unworked?: Record<string, true>;
     };
 }
 
-const STALE_MS = 20_000;
-const WARM_LOAD_DELAY_MS = 1_800;
-
-let warmState: ProcessingQueueWarmState = { data: null, fetchedAt: null, error: null };
-let warmInflight: Promise<void> | null = null;
-let warmScheduled = false;
-const listeners = new Set<() => void>();
-
-function notify(): void {
-    listeners.forEach((listener) => listener());
-}
-
-export function getProcessingQueueWarmSnapshot(): ProcessingQueueWarmState {
-    return warmState;
-}
-
-export function subscribeProcessingQueueWarm(listener: () => void): () => void {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-}
-
-function isWarmStale(state: ProcessingQueueWarmState): boolean {
-    if (state.fetchedAt == null) return true;
-    return Date.now() - state.fetchedAt > STALE_MS;
+async function readQueue(queryString: string): Promise<ProcessingQueueWarmData> {
+    const url = queryString ? `/api/admin/processing/queue?${queryString}` : "/api/admin/processing/queue";
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const body = (await res.json()) as QueueResponse;
+    return {
+        rows: Array.isArray(body.data?.rows) ? body.data.rows : [],
+        counts: body.data?.counts ?? {},
+        recommendations: body.data?.recommendations ?? {},
+        unworked: body.data?.unworked ?? {},
+    };
 }
 
 /**
- * Fetch the processing queue once and publish to the shared cache. Concurrent callers share the
- * same in-flight promise; a fresh cache is reused unless `force` is set.
+ * The actionable cohort, read as BANDS and merged.
+ *
+ * One status-filtered page was not enough: on the certification tenant 139 `received` cases filled
+ * a 100-row page and all six `needs_resolution` cases fell off the end, exactly as they had under
+ * the unfiltered 25-row page. Reading each band on its own budget is what stops a large band from
+ * starving an urgent one. `counts` are org-wide (the count query ignores the status filter), so the
+ * first band's counts describe the whole tenant.
  */
-export async function warmProcessingQueueCache(opts?: { force?: boolean }): Promise<void> {
-    if (typeof window === "undefined") return;
-    if (warmInflight) return warmInflight;
-    if (!opts?.force && warmState.data != null && !isWarmStale(warmState)) return;
-
-    warmInflight = (async () => {
-        try {
-            const res = await fetch("/api/admin/processing/queue", { credentials: "same-origin" });
-            if (!res.ok) throw new Error(`Request failed (${res.status})`);
-            const body = (await res.json()) as QueueResponse;
-            warmState = {
-                data: {
-                    rows: Array.isArray(body.data?.rows) ? body.data.rows : [],
-                    counts: body.data?.counts ?? {},
-                    recommendations: body.data?.recommendations ?? {},
-                },
-                fetchedAt: Date.now(),
-                error: null,
-            };
-            notify();
-        } catch (e) {
-            const message = e instanceof Error ? e.message : "Failed to load processing queue";
-            // Preserve any previously cached data so a transient refresh failure does not blank
-            // an already-populated surface; only surface the error when there is nothing to show.
-            warmState = {
-                data: warmState.data,
-                fetchedAt: warmState.fetchedAt,
-                error: warmState.data == null ? message : null,
-            };
-            notify();
-        }
-    })().finally(() => {
-        warmInflight = null;
-    });
-
-    return warmInflight;
+async function readActionableCohort(): Promise<ProcessingQueueWarmData> {
+    const bands = await Promise.all(processingActionableQueryStrings().map(readQueue));
+    const byId = new Map<string, ProcessingCaseQueueRow>();
+    const recommendations: Record<string, QueueRecommendationSummary> = {};
+    const unworked: Record<string, true> = {};
+    for (const band of bands) {
+        for (const row of band.rows) if (!byId.has(row.id)) byId.set(row.id, row);
+        Object.assign(recommendations, band.recommendations);
+        Object.assign(unworked, band.unworked);
+    }
+    return { rows: [...byId.values()], counts: bands[0]?.counts ?? {}, recommendations, unworked };
 }
 
-/** Schedule a single deferred warm pass — safe to call from the AdminV2 shell on idle. */
-export function scheduleProcessingQueueWarm(): void {
-    if (typeof window === "undefined" || warmScheduled) return;
-    warmScheduled = true;
-    window.setTimeout(() => {
-        void warmProcessingQueueCache();
-    }, WARM_LOAD_DELAY_MS);
+const warmCache = createWarmCache<ProcessingQueueScope, ProcessingQueueWarmData>({
+    keyOf: (scope) => `queue:${scope}`,
+    staleMs: 20_000,
+    errorMessage: "Failed to load processing queue",
+    fetcher: async (scope) => (scope === "actionable" ? readActionableCohort() : readQueue("")),
+});
+
+export function getProcessingQueueWarmSnapshot(scope: ProcessingQueueScope = "browse"): ProcessingQueueWarmState {
+    return warmCache.getState(scope);
+}
+
+export function subscribeProcessingQueueWarm(listener: () => void): () => void {
+    return warmCache.subscribe(listener);
+}
+
+/**
+ * Fetch the processing queue once and publish to the shared cache. Concurrent callers share the same
+ * in-flight promise; a fresh cache is reused unless `force`.
+ */
+export async function warmProcessingQueueCache(opts?: {
+    force?: boolean;
+    scope?: ProcessingQueueScope;
+}): Promise<void> {
+    await warmCache.warm(opts?.scope ?? "browse", { force: opts?.force });
+}
+
+/** Warm BOTH scopes — for a refresh that must reach the rail and the projected cohort together. */
+export async function warmAllProcessingQueueScopes(opts?: { force?: boolean }): Promise<void> {
+    await Promise.all([
+        warmCache.warm("browse", { force: opts?.force }),
+        warmCache.warm("actionable", { force: opts?.force }),
+    ]);
 }
 
 /** Test-only reset of module cache state. */
 export function resetProcessingQueueWarmForTests(): void {
-    warmState = { data: null, fetchedAt: null, error: null };
-    warmInflight = null;
-    warmScheduled = false;
-    listeners.clear();
+    warmCache.reset();
 }

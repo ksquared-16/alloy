@@ -1,23 +1,62 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import {
     dispatchOpportunityDrawerOperationalTasksRefresh,
 } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
-import { completeStageWorkWithSelectedOutcome } from "@/lib/lifecycle/stageWorkOutcomePickerClient";
+import {
+    completeStageWorkWithSelectedOutcome,
+    type StageWorkOutcomeCompletion,
+} from "@/lib/lifecycle/stageWorkOutcomePickerClient";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
-import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
+import { fetchFreshOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/fetchFreshOpportunityDrawerViewModel";
+import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
+import { putDrawerViewModelCacheEntry } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
+import { pinFocusRecordOutOfView } from "@/lib/presentation/runtime/focusRecordOutOfViewPin";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 
 export function useWorkIntentOutcomeCompletion(opportunityId: string) {
-    const { reloadOpportunityDisplayVm } = useOpportunityDrawerVmPayload();
+    const drawerCtx = useAdminDrawerOptional();
+    const { orgId } = useWorkspaceOrg();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const reloadOpportunityDisplayVm = useCallback(async () => {
+        if (!drawerCtx) return;
+        const vm = await fetchFreshOpportunityDrawerViewModel(drawerCtx.drawer);
+        if (!vm) return;
+        putDrawerViewModelCacheEntry(
+            {
+                entityType: "opportunities",
+                entityId: vm.entity.id,
+                surface: "opportunity",
+                preload: buildOpportunityDrawerOpenPreloadFromViewModel(vm),
+                generation: vm.generation,
+                cachedAt: Date.now(),
+            },
+            {
+                departmentId: drawerCtx.drawer.opportunityWorkspaceContext?.department_id ?? null,
+                workUnitId: drawerCtx.drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+            },
+        );
+        drawerCtx.completeDrawerRuntimeTransition();
+    }, [drawerCtx]);
+
     const completeOutcome = useCallback(
-        async (projection: WorkIntentRuntimeProjection, outcomeKey: string) => {
-            if (projection.state !== "open" || !projection.work_id) return;
-            if (!projection.outcomes.length) return;
+        /**
+         * Resolves to what the outcome did, or `null` when it failed (the error is on `error`). It used
+         * to resolve the same way either way, so a refused outcome was followed by the "completed"
+         * screen. `confirmation_required` is neither: nothing was written, and the caller asks.
+         */
+        async (
+            projection: WorkIntentRuntimeProjection,
+            outcomeKey: string,
+            opts?: { confirmCloseScheduledTour?: boolean },
+        ): Promise<StageWorkOutcomeCompletion | null> => {
+            if (projection.state !== "open" || !projection.work_id) return null;
+            if (!projection.outcomes.length) return null;
             const { execution, stage_key: stageKey, work_id: workId } = projection;
 
             setBusy(true);
@@ -29,23 +68,37 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
                     workId,
                     outcomeKey,
                     subject: execution.subject,
+                    confirmCloseScheduledTour: opts?.confirmCloseScheduledTour === true,
                 });
+                if (result.confirmation_required) return result;
                 if (!result.ok) {
                     throw new Error(result.error ?? "Failed to complete work");
                 }
 
+                // Keep Focus Panel on this record after membership refresh (no auto-nav to destination view).
+                pinFocusRecordOutOfView({
+                    orgId,
+                    workUnitId: drawerCtx?.drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+                    recordId: opportunityId,
+                });
+
                 dispatchOpportunityDrawerOperationalTasksRefresh(opportunityId);
-                if (result.queue_refresh_opportunity_id) {
-                    dispatchOpportunityQueueUpdated(result.queue_refresh_opportunity_id, "stage_work_outcome");
-                }
+                // Always: a child subject's outcome can carry no refresh id, and then nothing told the
+                // Work View list that membership moved. The family being worked on is the scope.
+                dispatchOpportunityQueueUpdated(
+                    result.queue_refresh_opportunity_id ?? opportunityId,
+                    "stage_work_outcome",
+                );
                 await reloadOpportunityDisplayVm();
+                return result;
             } catch (e: unknown) {
                 setError((e as Error).message || "Failed to complete work");
+                return null;
             } finally {
                 setBusy(false);
             }
         },
-        [opportunityId, reloadOpportunityDisplayVm],
+        [opportunityId, reloadOpportunityDisplayVm, orgId, drawerCtx],
     );
 
     return { completeOutcome, busy, error, clearError: () => setError(null) };

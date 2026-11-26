@@ -17,9 +17,18 @@ function read(rel: string): string {
 const ROUTE = read("app/api/admin/communications/announcements/[id]/recipient-preview/route.ts");
 const LOADER = read("lib/communications/v2/resolveAnnouncementAudience.ts");
 
+/*
+ * THE GATE THIS PINNED HAS BEEN REPLACED, AND THE PIN IS NOW TIGHTER.
+ *
+ * This asserted `await requireAdminOrOps()` as the admin pattern. That helper resolves portal
+ * admission and nothing else, so what the assertion really locked in was that the route asked for
+ * no functional authority. Naming the capability instead means this contract now fails if the route
+ * is gated on the WRONG authority, which the old form could not detect.
+ */
 describe("recipient-preview route", () => {
     it("uses the admin pattern and is org-scoped", () => {
-        expect(ROUTE).toMatch(/await requireAdminOrOps\(\)/);
+        // Resolving who a campaign would reach is campaign authoring, so it takes the campaign key.
+        expect(ROUTE).toMatch(/await requireCommunicationsAuthority\(COMMUNICATIONS_BULK_SEND\)/);
         expect(ROUTE).toMatch(/getAdminContextCached\(\)/);
         expect(ROUTE).toMatch(/if \(!ctx\.ok\) return adminContextFailureResponse\(ctx\)/);
         expect(ROUTE).toMatch(/\.eq\("org_id", orgId\)/);

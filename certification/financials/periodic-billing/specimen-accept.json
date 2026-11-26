@@ -1,0 +1,29 @@
+[
+  {
+    "step": "room",
+    "id": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+    "label": "Infant A"
+  },
+  {
+    "step": "placement",
+    "status": 201,
+    "body": "{\"placement\":{\"id\":\"a24a882e-7372-4576-8dbb-4a06020b9224\",\"org_id\":\"93667019-bd28-49b5-a688-acc9bb1e0a19\",\"enrollment_agreement_id\":\"9134bf85-e00f-4bc6-8917-a02cda58395f\",\"customer_member_id\":\"7ebf342f-b43d-4547-9c8a-43c0a96391ae\",\"site_location_id\":\"1a5644a7-45c4-413b-9021-5f556118b6e2\",\"program_category_id\":\"5e9e715a-eb8f-4534-bcfe-a8a74ed883d9\",\"room_location_id\":\"16b9ec76-d1e6-41b2-b76c-448535"
+  },
+  {
+    "step": "resolve",
+    "state": "no_match",
+    "resolutionKey": "33c217ff",
+    "recommended": "null",
+    "applicable": "[]",
+    "noMatchReason": "missing_required_input"
+  },
+  {
+    "step": "accept",
+    "weeklyOption": "null",
+    "result": "null"
+  },
+  {
+    "step": "accepted_term",
+    "accepted": "null"
+  }
+]

@@ -17,6 +17,11 @@ import {
 } from "@/lib/admin/operationalWork";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
+import { WORKSPACE_SITE_QUERY_PARAM } from "@/lib/admin/resolveQueueRecordScopeConstraints";
+import { resolveTaskSummaryScope, summarizeOperationalTaskCountsByDepartment } from "@/lib/admin/operationalTasksService";
 
 /**
  * GET `/api/admin/operational-tasks?entity_type=opportunities&entity_id=<uuid>`
@@ -33,6 +38,40 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
 
     if (scope === "workspace") {
+        /*
+         * BP V2 S7 — OPEN / OVERDUE WORK ITEMS PER DEPARTMENT, for the /workspace process tiles.
+         *
+         * The client names the departments its tiles show; the SERVER decides which of them this actor may
+         * see (department access) and which sites count (actor sites ∩ the workspace selection). A
+         * department outside the actor's access is not answered at all, so changing the parameter cannot
+         * reveal another department's counts.
+         */
+        if (url.searchParams.get("summary") === "by_department") {
+            const access = await getAdminAccessContextCached();
+            if (!access.ok) return adminContextFailureResponse(access);
+            const dims = scopeDimensionsFromAccess(access);
+            const { departmentIds: visibleDepartments, siteIds } = resolveTaskSummaryScope(
+                dims,
+                (url.searchParams.get("department_ids") ?? "").split(","),
+                url.searchParams.get(WORKSPACE_SITE_QUERY_PARAM),
+            );
+            const counts = await summarizeOperationalTaskCountsByDepartment({
+                supabase,
+                orgId: ctx.orgId,
+                departmentIds: visibleDepartments,
+                siteIds,
+            });
+            if (!counts.ok) {
+                return NextResponse.json({ ok: false, error: counts.error, message: counts.message }, { status: 500 });
+            }
+            return NextResponse.json({
+                ok: true,
+                rule: { open: "status=open", overdue: "open and due_at < now", attribution: "metadata.department_id" },
+                by_department: counts.byDepartment,
+                unattributed: counts.unattributed,
+                site_scoped: siteIds !== null,
+            });
+        }
         if (summaryOnly) {
             const counts = await summarizeWorkCounts({ supabase, orgId: ctx.orgId });
             if (!counts.ok) {

@@ -1,0 +1,1552 @@
+{
+  "run": "qar_8fb0e1ffabcf",
+  "organization_date": "2026-10-28",
+  "summary": {
+    "passed": 158,
+    "total": 158
+  },
+  "sections": {
+    "setup": {
+      "passed": 1,
+      "total": 1
+    },
+    "D7.2-review": {
+      "passed": 22,
+      "total": 22
+    },
+    "D7.1-validity": {
+      "passed": 19,
+      "total": 19
+    },
+    "D7.3-renewal": {
+      "passed": 13,
+      "total": 13
+    },
+    "D7.3b-rejected-renewal": {
+      "passed": 2,
+      "total": 2
+    },
+    "D7.B2-event-dates": {
+      "passed": 15,
+      "total": 15
+    },
+    "D7.4-attention": {
+      "passed": 14,
+      "total": 14
+    },
+    "EN-FI-09": {
+      "passed": 30,
+      "total": 30
+    },
+    "R1-rejected-renewal": {
+      "passed": 34,
+      "total": 34
+    },
+    "R1B-subsequent-acceptance": {
+      "passed": 8,
+      "total": 8
+    }
+  },
+  "results": [
+    {
+      "section": "setup",
+      "case": "no pre-existing live child requirement for the run's types",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "clash": []
+    },
+    {
+      "section": "D7.2-review",
+      "case": "immunization requirement published",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "D7.2-review",
+      "case": "immunization record uploaded for Kid One",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "review required \u2192 pending review (not satisfied)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "pending_review"
+    },
+    {
+      "section": "D7.2-review",
+      "case": "a rejection without a reason is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reviewing needs documents.write and the document's clearance",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reviewing needs documents.write and the document's clearance",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reviewing needs documents.write and the document's clearance",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reviewing needs documents.write and the document's clearance",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reviewing needs documents.write and the document's clearance",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "another organization: review not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "section": "D7.2-review",
+      "case": "first decision: rejected with a reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "rejected evidence does not satisfy",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "blocked",
+      "blocked_reason": "evidence_rejected"
+    },
+    {
+      "section": "D7.2-review",
+      "case": "changing a decided review without a reason is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "section": "D7.2-review",
+      "case": "re-review (rejected \u2192 accepted) with reason by Documents administration",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "accepted evidence satisfies",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reopening without a reason is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reopen (accepted \u2192 pending) with reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reopened evidence is pending review again",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "accepted again after reopen",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.2-review",
+      "case": "append-only history keeps every decision with what it replaced",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "review_entries": [
+        "Review accepted",
+        "Review reopened",
+        "Review accepted (was rejected)",
+        "Review rejected"
+      ]
+    },
+    {
+      "section": "D7.2-review",
+      "case": "another organization: history not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "section": "D7.2-review",
+      "case": "reader without health.view: a medical document's history is not disclosed",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "periodic reconfirmation (12 months): derived from the review date, valid",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "status_": "valid",
+      "expires_on": "2027-10-27",
+      "expected": "2027-10-27"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "readiness reports valid-through from the same evaluator",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "valid_until": "2027-10-27"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "recording dates needs documents.write and clearance",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "recording dates needs documents.write and clearance",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "another organization: validity not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "an inverted range is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "VALIDITY_RANGE_INVERTED"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "an impossible date is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "BAD_DATE"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "a recorded expiration inside the warning window: expiring soon",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "validity": {
+        "status": "expiring_soon",
+        "expires_on": "2026-11-02",
+        "expires_source": "recorded",
+        "effective_on": null,
+        "warn_from": "2026-10-03",
+        "days_remaining": 5
+      }
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "readiness: still satisfied, expiring soon, valid through the recorded day",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "valid_until": "2026-11-02"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "work: an expiring-soon renewal row due on the last valid day, never overdue, never blocking",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "rows": [
+        {
+          "state": "expiring_soon",
+          "due_on": "2026-11-02",
+          "overdue": false,
+          "valid_until": "2026-11-02"
+        }
+      ]
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "attention de-duplication: a document a requirement row names is not repeated",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "recording dates leaves the review untouched",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "review_statuses": [
+        "accepted"
+      ]
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "the date change is in the append-only history",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "actions": [
+        "Validity recorded: expires 2026-11-02",
+        "Review accepted",
+        "Review reopened",
+        "Review accepted (was rejected)",
+        "Review rejected",
+        "Uploaded",
+        "Associated (primary owner: child)"
+      ]
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "a recorded past expiration: expired",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "readiness: expired evidence no longer satisfies; blocking",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "expired"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "work: an expired row naming the document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "rows": [
+        "expired"
+      ]
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "a future effective date: not yet effective",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "readiness: a not-yet-effective document does not satisfy",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "expired"
+    },
+    {
+      "section": "D7.1-validity",
+      "case": "dates restored to expiring soon (renewal setup)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "a renewal needs a reason (\u226510 characters)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "a replacement screening would quarantine is refused before storage",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 415,
+      "code": "SCREENING_REFUSED",
+      "versions": 1
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "renewal needs documents.write and clearance",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "another organization: renewal not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "renewal stores a replacement version of the same document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "version_number": 2,
+      "validity_recorded": true
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "the earlier accepted, in-force version keeps satisfying while the renewal awaits review",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "renewal_pending": true,
+      "valid_until": "2026-11-02"
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "only the current version is reviewed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_CURRENT_VERSION"
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "the renewal's first decision: accepted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "accepted renewal moves valid-through to the new date; no renewal pending",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "valid_until": "2027-10-28"
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "earlier versions are kept",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "versions": 2
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "work: the renewal row is gone once the renewal is accepted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "a renewal can be rejected with a reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.3-renewal",
+      "case": "a rejected renewal does not unseat the accepted, in-force version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied"
+    },
+    {
+      "section": "D7.3b-rejected-renewal",
+      "case": "the current version is the rejected renewal",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "current_review_status": "rejected"
+    },
+    {
+      "section": "D7.3b-rejected-renewal",
+      "case": "a REJECTED renewal is not reported as 'renewal awaiting review' (renewal_pending)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "renewal_pending": false,
+      "valid_until": "2027-10-28"
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "event-renewal type (birthday) validates",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "event-renewal type (birthday) authored and published through Studio",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "event-renewal type (enrollment_start) validates",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "event-renewal type (enrollment_start) authored and published through Studio",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "event-renewal type (program_year_start) validates",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "event-renewal type (program_year_start) authored and published through Studio",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "birthday renewal: expires the day before the first birthday after the anchor",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "expires_on": "2026-11-16",
+      "expected": "2026-11-16",
+      "status_": "expiring_soon"
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "birthday renewal inside the warning window is expiring soon",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "status_": "expiring_soon"
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "birthday renewal without a recorded birth date: date missing, never guessed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "validity": {
+        "status": "date_missing",
+        "expires_on": null,
+        "expires_source": null,
+        "effective_on": null,
+        "warn_from": null,
+        "days_remaining": null,
+        "event_unavailable": "birthday_not_recorded"
+      }
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "enrollment-start renewal with no enrollment on record: date missing with its reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "validity": {
+        "status": "date_missing",
+        "expires_on": null,
+        "expires_source": null,
+        "effective_on": null,
+        "warn_from": null,
+        "days_remaining": null,
+        "event_unavailable": "no_enrollment"
+      }
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "program-year renewal: explicitly unresolved (event_source_unavailable), never guessed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "validity": {
+        "status": "date_missing",
+        "expires_on": null,
+        "expires_source": null,
+        "effective_on": null,
+        "warn_from": null,
+        "days_remaining": null,
+        "event_unavailable": "event_source_unavailable"
+      }
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "unresolved event dates surface as date-missing attention",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "kinds": {
+        "py": "date_missing",
+        "bday_no_dob": "date_missing",
+        "bday": "expiring_soon"
+      }
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "a birthday renewal inside its window is expiring-soon attention",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "a recorded date resolves an unresolved program year",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "validity": {
+        "status": "valid",
+        "expires_on": "2027-05-16",
+        "expires_source": "recorded",
+        "effective_on": null,
+        "warn_from": "2027-04-16",
+        "days_remaining": 200
+      }
+    },
+    {
+      "section": "D7.B2-event-dates",
+      "case": "recording the date removes the attention row",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "explicit-date type accepted without a date: date missing",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "kind": "date_missing"
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "a review-required document awaiting review: review due",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "kind": "review_due"
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "attention rows carry what the Work Items projection maps (type, subject, kind, due)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "keyset pagination (1 row per page) reaches documents_complete with no duplicate and nothing lost",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "pages": 5,
+      "rows": 5,
+      "single_request_rows": 5,
+      "single_request_complete": true
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "pagination is stable across page sizes",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "pages": 2
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "a forged cursor is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "INVALID_CURSOR"
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "a page never exceeds 500 rows",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "organization attention population measured (scale context for the removed 1,000 cap)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "org_attention_documents": 5,
+      "beyond_1000_exercised": false
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "reader without health.view: no medical attention row or requirement row",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "reader without health.view: standard-sensitivity attention still disclosed",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "department-restricted actor: none of the run's household in work or attention",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "another organization: none of the run's work or attention",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "work needs documents.read",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "D7.4-attention",
+      "case": "work needs documents.read",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: child requirement published through the canonical requirement interface",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: a household requirement is refused by database validation",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": [
+        "subject_type_not_accepted_by_type"
+      ]
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: child requirement published through the canonical requirement interface",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: a household requirement is refused by database validation",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": [
+        "subject_type_not_accepted_by_type"
+      ]
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: child requirement published through the canonical requirement interface",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: a household requirement is refused by database validation",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": [
+        "subject_type_not_accepted_by_type"
+      ]
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: missing for Kid Three",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "missing"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: medical requirement invisible to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: an uploaded document is pending review, never satisfied by upload",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "pending_review"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: accepted \u2192 satisfied with the seeded 12-month validity",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "valid_until": "2027-10-27",
+      "expected": "2027-10-27"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: lapsed \u2192 expired and blocking",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "expired"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "physical: the medical document itself is refused to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: missing for Kid Three",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "missing"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: medical requirement invisible to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: an uploaded document is pending review, never satisfied by upload",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "pending_review"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: accepted \u2192 satisfied with the seeded 12-month validity",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "valid_until": "2027-10-27",
+      "expected": "2027-10-27"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: lapsed \u2192 expired and blocking",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "expired"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "health_care_plan: the medical document itself is refused to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: missing for Kid Three",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "missing"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: medical requirement invisible to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: an uploaded document is pending review, never satisfied by upload",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "pending_review"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: accepted \u2192 satisfied with the seeded 12-month validity",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "valid_until": "2027-10-27",
+      "expected": "2027-10-27"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: lapsed \u2192 expired and blocking",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "expired"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "medication_authorization: the medical document itself is refused to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "immunization_record: missing for Kid Three",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "missing"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "immunization_record: medical requirement invisible to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "immunization_record: an uploaded document is pending review, never satisfied by upload",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "pending_review"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "immunization_record: accepted \u2192 satisfied with the seeded 12-month validity",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "valid_until": "2027-10-27",
+      "expected": "2027-10-27"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "immunization_record: lapsed \u2192 expired and blocking",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "expired"
+    },
+    {
+      "section": "EN-FI-09",
+      "case": "immunization_record: the medical document itself is refused to a reader without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: immunization v1 uploaded",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: v1 dated to expire inside the warning window",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: v1 accepted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: renewal v2 stored",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: while v2 awaits review: satisfied, renewal_pending, not rejected",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "renewal_pending": true,
+      "renewal_rejected": false
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: pending renewal is REVIEW work (row renewal=pending; Processing 'Review on the record'; Work Items 'Review:')",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "rows": [
+        {
+          "state": "expiring_soon",
+          "renewal": "pending",
+          "valid_until": "2026-11-02"
+        }
+      ]
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: renewal v2 rejected with a reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: a REJECTED renewal is not pending: renewal_pending=false, renewal_rejected=true",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "renewal_pending": false,
+      "renewal_rejected": true
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: v1 still satisfies until its own date and is still expiring soon (new evidence needed)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "valid_until": "2026-11-02",
+      "expiring_soon": true
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: rejected renewal stays RENEW work (row renewal=rejected; Processing 'Renew on the record'; Work Items 'Renew:')",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "rows": [
+        {
+          "state": "expiring_soon",
+          "renewal": "rejected",
+          "valid_until": "2026-11-02"
+        }
+      ]
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: the superseded v1 cannot be re-decided to clear the renewal (current version only)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_CURRENT_VERSION"
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: immunization v1 uploaded",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: v1 dated to expire inside the warning window",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: v1 accepted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: renewal v2 stored",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: while v2 awaits review: satisfied, renewal_pending, not rejected",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "renewal_pending": true,
+      "renewal_rejected": false
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: pending renewal is REVIEW work (row renewal=pending; Processing 'Review on the record'; Work Items 'Review:')",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "rows": [
+        {
+          "state": "expiring_soon",
+          "renewal": "pending",
+          "valid_until": "2026-11-02"
+        }
+      ]
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: renewal v2 rejected with a reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: a REJECTED renewal is not pending: renewal_pending=false, renewal_rejected=true",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "renewal_pending": false,
+      "renewal_rejected": true
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: v1 still satisfies until its own date and is still expiring soon (new evidence needed)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied",
+      "valid_until": "2026-11-02",
+      "expiring_soon": true
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: rejected renewal stays RENEW work (row renewal=rejected; Processing 'Renew on the record'; Work Items 'Renew:')",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "rows": [
+        {
+          "state": "expiring_soon",
+          "renewal": "rejected",
+          "valid_until": "2026-11-02"
+        }
+      ]
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c3: the superseded v1 cannot be re-decided to clear the renewal (current version only)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_CURRENT_VERSION"
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "re-reviewing the rejected renewal needs documents.write and clearance",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "re-reviewing the rejected renewal needs documents.write and clearance",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "re-reviewing the rejected renewal needs documents.write and clearance",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "re-reviewing the rejected renewal needs documents.write and clearance",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "re-reviewing the rejected renewal needs documents.write and clearance",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "another organization: re-review not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "re-review of the rejected renewal without a reason is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "refused re-reviews left the renewal rejected",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "review_status": "rejected"
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: authorized re-review (rejected \u2192 accepted) with reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: after re-review: valid-through moves to v2's date, no renewal flags, not expiring",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "valid_until": "2027-10-28"
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: the renewal work row is gone after re-review",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1-rejected-renewal",
+      "case": "c2: history keeps the rejection and the re-review (append-only)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "actions": [
+        "Validity recorded: effective 2026-10-28, expires 2027-10-28",
+        "Replaced with version 2",
+        "Review accepted",
+        "Validity recorded: effective 2026-01-01, expires 2026-11-02",
+        "Uploaded",
+        "Associated (primary owner: child)"
+      ]
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3 precondition: renewal still rejected after the browser walk",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "renewal_rejected": true
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3: new evidence (v3) uploaded after the rejection",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3: new evidence awaits review: renewal_pending again, not rejected",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3: the row turns into REVIEW work",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "rows": [
+        {
+          "state": "expiring_soon",
+          "renewal": "pending"
+        }
+      ]
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3: subsequent acceptance (v3 first decision)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3: accepted new evidence moves valid-through; no renewal flags",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "valid_until": "2027-12-02"
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3: the work row is gone",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R1B-subsequent-acceptance",
+      "case": "c3: all three versions kept, rejected v2 still rejected",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "versions": 3
+    }
+  ],
+  "superseded_attempts": [
+    {
+      "sections": [
+        "R1-rejected-renewal"
+      ],
+      "replaced_at": "2026-10-28T20:44:52+00:00",
+      "reason": "R1 fix-forward: rejected renewal of expiring evidence (new section, nothing replaced)",
+      "results": []
+    },
+    {
+      "sections": [
+        "R1B-subsequent-acceptance"
+      ],
+      "replaced_at": "2026-10-28T20:56:12+00:00",
+      "reason": "R1 fix-forward: subsequent acceptance after browser walk (new section)",
+      "results": []
+    }
+  ]
+}

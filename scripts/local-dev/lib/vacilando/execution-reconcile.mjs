@@ -1,0 +1,354 @@
+/**
+ * Vacilando Governor Phase 5 — reconciliation pass.
+ *
+ * Compare desired Governor state to substrate and repair deterministic drift.
+ * Known fault classes invoke a registered recovery policy. This is not a
+ * workspace doctor and does not invent remediations.
+ *
+ * Sensor tiers:
+ *   1. cheap local JSON / pid existence
+ *   2. targeted compute permit / exclusive window
+ *   3. doctor — not used on this pass
+ */
+import {
+  getExecutionRun,
+  isTerminalRunState,
+} from "./execution-run.mjs";
+import {
+  processOwnerHolds,
+  queuedRequestsFor,
+  readComputeHolders,
+  readResourceRequestStore,
+} from "./execution-resource.mjs";
+import {
+  evaluateExclusiveWindow,
+  readExclusiveWindow,
+} from "./execution-exclusive.mjs";
+import { reconcileGrantContinuations } from "./execution-resume.mjs";
+import {
+  executeRecovery,
+  listOwnedProcesses,
+  scanStaleSlotPidFiles,
+} from "./execution-recovery.mjs";
+import { pidAlive, readControlPlaneOwner } from "./control-plane-health.mjs";
+
+const ACTIVE = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
+let lastCheapMs = 0;
+let lastPass = {
+  repaired: 0,
+  recovered: 0,
+  skipped: 0,
+  failed: 0,
+  ms: 0,
+  at: null,
+};
+
+export const SENSOR_TIERS = Object.freeze({
+  1: "cheap local JSON / pid existence / exclusive window / run store",
+  2: "targeted alloy-compute permit status and canonical recover",
+  3: "workspace doctor — not used on the Governor hot path",
+});
+
+export function lastReconcilePass() {
+  return { ...lastPass };
+}
+
+export async function reconcileGovernor({
+  root,
+  nowMs = Date.now(),
+  reason = "manual",
+  depth = "cheap",
+  continuations = false,
+} = {}) {
+  const t0 = process.hrtime.bigint();
+  const summary = {
+    repaired: 0,
+    recovered: 0,
+    skipped: 0,
+    failed: 0,
+    actions: [],
+    reason,
+    depth,
+  };
+
+  // Proof of runtime absence must be acted on CONTINUOUSLY, not only at boot.
+  //
+  // THE DEFECT THIS FIXES: the session reaper ran once, in the Gateway's boot
+  // path. A provider pane closed while the Gateway kept running therefore left
+  // its Agent Session ACTIVE indefinitely, and every later operator send was
+  // refused `lane_has_active_session` — a healthy bound lane made unusable by
+  // closing a pane, recoverable only by restarting the Gateway.
+  try {
+    const { reconcileAgentSessionsWithoutRuntime } = await import("./agent-session-lifecycle.mjs");
+    const out = await reconcileAgentSessionsWithoutRuntime({ root, nowMs });
+    if (out?.ended?.length) {
+      summary.repaired += out.ended.length;
+      summary.actions.push("agent_session_runtime_absent");
+    }
+  } catch { /* never block the tick */ }
+
+  // NEEDS_INPUT must always be backed by something the operator can act on.
+  // A run parked there with no modeled input is an impossible operator state:
+  // the state is protective, so nothing else will ever close it.
+  try {
+    const { reconcileNeedsInputWithoutInput } = await import("./operator-input.mjs");
+    const out = reconcileNeedsInputWithoutInput({ root, nowMs });
+    if (out?.reconciled?.length) {
+      summary.repaired += out.reconciled.length;
+      summary.actions.push("needs_input_without_operator_input");
+    }
+  } catch { /* never block the tick */ }
+
+  const store = readResourceRequestStore(root);
+  const requests = store.requests || [];
+
+  for (const rec of requests) {
+    if (!ACTIVE.has(rec.state)) continue;
+    /*
+     * A RUN IS THE REQUESTER. A PROCESS CAN BE THE OWNER. THEY END AT DIFFERENT TIMES.
+     *
+     * MEASURED. The criterion-12 soak acquired `gateway_host_mutation`
+     * ereq_381b2f3aa73f7165 at 12:42:00.289Z and the Governor released it 2.4
+     * seconds later, with the soak process alive and its start identity
+     * matching. Its requesting run had reached FAILED seven minutes EARLIER, so
+     * every ordinary run-lifecycle rule below said "terminal run, reclaim its
+     * resources" — and for a run-owned resource that is exactly right.
+     *
+     * `cleanupRunResources` already knew better and had retained the same claim
+     * moments earlier: the event log reads `resource_survived_run` (agent) and
+     * then `resource_released` (governor) on the same request. One path
+     * retaining while another releases is not a fix, it is a race with extra
+     * steps.
+     *
+     * So the check moves to where every path in this loop must pass it. While a
+     * process owner is LIVE or UNVERIFIED it owns the lifetime, and run
+     * terminality alone cannot take the resource from it. A dead owner is still
+     * reclaimed — by `reclaimDeadProcessOwners`, from the readers it would
+     * otherwise block — and PID reuse is still refused by start identity.
+     */
+    if (processOwnerHolds(rec)) continue;
+    const run = getExecutionRun(rec.run_id, root);
+    if (run && !isTerminalRunState(run.state)) continue;
+    if (rec.state === "GRANTED" && String(rec.holder || "").startsWith("vac-erun_")) {
+      const out = executeRecovery("stale_governor_resource_holder", {
+        rec,
+        root,
+        nowMs,
+        target: rec.request_id,
+      });
+      if (out.ok && out.verified) {
+        summary.recovered += 1;
+        summary.actions.push(out.policy);
+      } else if (out.exhausted) summary.failed += 1;
+      else summary.skipped += 1;
+      continue;
+    }
+    if (rec.state === "QUEUED" || rec.state === "REQUESTED") {
+      const drift = executeRecovery("resource_queue_drift", {
+        rec,
+        root,
+        nowMs,
+        kind: "terminal_queued",
+        target: rec.request_id,
+      });
+      if (drift.ok) summary.repaired += 1;
+      else summary.failed += 1;
+    }
+  }
+
+  const exclusive = readExclusiveWindow(root);
+  if (exclusive?.phase) {
+    const owner = exclusive.run_id ? getExecutionRun(exclusive.run_id, root) : null;
+    if (!owner || isTerminalRunState(owner?.state)) {
+      const out = executeRecovery("exclusive_window_drift", {
+        root,
+        nowMs,
+        target: exclusive.window_id || exclusive.request_id,
+        lane_id: exclusive.lane_id,
+        run_id: exclusive.run_id,
+        resource_key: "runtime_timing_certification",
+        rec: {
+          lane_id: exclusive.lane_id,
+          run_id: exclusive.run_id,
+          resource_key: "runtime_timing_certification",
+        },
+      });
+      if (out.ok) summary.repaired += 1;
+      else summary.failed += 1;
+    } else {
+      evaluateExclusiveWindow(root, nowMs);
+    }
+  }
+
+  if (depth !== "cheap") {
+    const compute = readComputeHolders("browser-certification");
+    const latest = readResourceRequestStore(root).requests || [];
+    const grantedBrowser = latest.filter((r) => r.resource_key === "browser_certification" && r.state === "GRANTED");
+    for (const rec of grantedBrowser) {
+      const held = compute.some((h) => h.holder === rec.holder);
+      if (!held && rec.holder) {
+        const out = executeRecovery("resource_queue_drift", {
+          rec,
+          root,
+          nowMs,
+          kind: "granted_missing_lease",
+          target: rec.request_id,
+        });
+        if (out.ok) summary.repaired += 1;
+        else summary.failed += 1;
+      }
+    }
+    for (const h of compute) {
+      const runId = h.governor ? String(h.holder || "").replace(/^vac-/, "") : null;
+      const govRun = runId ? getExecutionRun(runId, root) : null;
+      if (h.governor && govRun && !isTerminalRunState(govRun.state)) continue;
+      if (h.governor && latest.some((r) => r.holder === h.holder && r.state === "GRANTED")) continue;
+      if (h.alive && !h.governor) {
+        summary.skipped += 1;
+        continue;
+      }
+      if (h.alive) continue;
+      const out = executeRecovery("abandoned_browser_cert_lease", {
+        holder: h.holder,
+        permit: h,
+        root,
+        nowMs,
+        target: h.holder,
+      });
+      if (out.ok && out.verified) summary.recovered += 1;
+      else summary.skipped += 1;
+    }
+
+    const stillGranted = (readResourceRequestStore(root).requests || [])
+      .some((r) => r.resource_key === "browser_certification" && r.state === "GRANTED");
+    if (!stillGranted) {
+      const q = queuedRequestsFor(readResourceRequestStore(root), "browser_certification");
+      const liveForeign = readComputeHolders("browser-certification").some((h) => h.alive && !h.governor);
+      if (q[0] && !liveForeign) {
+        const out = executeRecovery("resource_queue_drift", {
+          root,
+          nowMs,
+          kind: "idle_head",
+          resource_key: "browser_certification",
+          target: `idle:${q[0].request_id}`,
+        });
+        if (out.ok && !out.skipped) summary.repaired += 1;
+      }
+    }
+
+    for (const rec of readResourceRequestStore(root).requests || []) {
+      if (rec.state !== "GRANTED") continue;
+      if (rec.continuation?.delivery_state !== "DELIVERING") continue;
+      const run = getExecutionRun(rec.run_id, root);
+      if (run?.state === "NEEDS_INPUT" || run?.state === "FAILED") continue;
+      const out = executeRecovery("execution_command_timeout", {
+        rec,
+        root,
+        nowMs,
+        target: rec.continuation.continuation_id || rec.request_id,
+      });
+      if (out.ok) summary.repaired += 1;
+    }
+
+    for (const proc of listOwnedProcesses(root)) {
+      if (proc.pid && pidAlive(proc.pid)) continue;
+      const out = executeRecovery("disposable_cert_process", {
+        rec: proc,
+        root,
+        nowMs,
+        target: proc.id,
+      });
+      if (out.ok) summary.recovered += 1;
+    }
+
+    const owner = readControlPlaneOwner();
+    if (owner?.pid && !pidAlive(owner.pid)) {
+      const out = executeRecovery("stale_control_plane_owner", {
+        root,
+        nowMs,
+        pid: process.pid,
+        target: "control-plane",
+      });
+      if (out.ok && !out.skipped) summary.recovered += 1;
+    }
+
+    for (const file of scanStaleSlotPidFiles(root)) {
+      const out = executeRecovery("stale_slot_pid", {
+        path: file.path,
+        pid: file.pid,
+        root,
+        nowMs,
+        target: file.path,
+      });
+      if (out.ok) summary.recovered += 1;
+      else summary.skipped += 1;
+    }
+  }
+
+  if (continuations) {
+    try {
+      await reconcileGrantContinuations({ root, nowMs });
+    } catch { /* Phase 3 already conservative */ }
+  }
+
+  try {
+    const {
+      reconcileStaleExecutionRuns, reconcileUndeliveredRuns, reconcileExpiredRunWaits,
+    } = await import("./execution-stale.mjs");
+    const stale = reconcileStaleExecutionRuns({ root, nowMs });
+    if (stale?.count > 0) {
+      summary.repaired += stale.count;
+      summary.actions.push("stale_execution_run");
+    }
+    const undelivered = reconcileUndeliveredRuns({ root, nowMs });
+    if (undelivered?.count > 0) {
+      summary.repaired += undelivered.count;
+      summary.actions.push("undelivered_run");
+    }
+    // Rides the pass that already exists rather than adding a timer of its own.
+    // The two collectors above own EXECUTING runs and Cursor sends; this one
+    // owns every wait whose own declared bound has expired, which is the only
+    // reason `vac health` can call a run stale in the first place.
+    const expired = reconcileExpiredRunWaits({ root, nowMs });
+    if (expired?.collected > 0) {
+      summary.repaired += expired.collected;
+      summary.actions.push("expired_run_wait");
+    }
+  } catch { /* stale-run pass must not fail resource reconcile */ }
+
+  try {
+    const { evaluateAdmissionQueue } = await import("./execution-admission.mjs");
+    const admitted = await evaluateAdmissionQueue({ root, nowMs });
+    if (admitted?.admitted > 0) summary.repaired += admitted.admitted;
+  } catch { /* admission must not fail the resource pass */ }
+
+  try {
+    const {
+      reconcilePendingOrientation,
+      reconcileStuckStartingSessions,
+      tickAutomaticSessionRotation,
+    } = await import("./agent-session-lifecycle.mjs");
+    const orient = await reconcilePendingOrientation({ root, nowMs });
+    if (orient?.retried > 0) summary.repaired += orient.retried;
+    // A session left transitional with nothing to move it along reads as a hung
+    // lane in the UI while the provider works. Rides the pass that already
+    // exists rather than adding a timer.
+    const stuck = await reconcileStuckStartingSessions({ root, nowMs });
+    if (stuck?.promoted?.length) summary.repaired += stuck.promoted.length;
+    const rot = await tickAutomaticSessionRotation({ root, nowMs });
+    if (rot?.considered > 0) summary.repaired += rot.considered;
+  } catch { /* orientation retry / auto-rotation must not fail the resource pass */ }
+
+  summary.ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  lastPass = { ...summary, at: new Date(nowMs).toISOString() };
+  lastCheapMs = nowMs;
+  return summary;
+}
+
+export async function maybeReconcileGovernor(opts = {}) {
+  const now = opts.nowMs || Date.now();
+  if (opts.reason === "lanes_poll" && now - lastCheapMs < 3000) {
+    return { skipped: true, ...lastPass };
+  }
+  return reconcileGovernor({ ...opts, nowMs: now, depth: opts.depth || "cheap" });
+}

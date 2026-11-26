@@ -1,0 +1,56 @@
+{
+  "width": 1680,
+  "position": {
+    "present": true,
+    "text": "DISCOUNTS | Sibling discount (QA specimen) | Certa Certhouse · Expected $18.50 · 10% of $185.00 | Certb Certhouse · Expected $145.00 · 10% of $1,450.00",
+    "policies": [
+      {
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "grain": "Sibling discount (QA specimen)",
+        "subjects": [
+          {
+            "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+            "text": "Certa Certhouse · Expected $18.50 · 10% of $185.00"
+          },
+          {
+            "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "text": "Certb Certhouse · Expected $145.00 · 10% of $1,450.00"
+          }
+        ]
+      }
+    ]
+  },
+  "positionGeometry": {
+    "box": "1036x74",
+    "clipped": false,
+    "insideViewport": true,
+    "pageHorizontalOverflow": false
+  },
+  "management": {
+    "present": true,
+    "text": "Manage discounts | Which policies reach this family, and whether a relationship is excepted from one. Rates and eligibility are organization configuration. | Sibling discount (QA specimen) | Certa Certhouse · Expected $18.50 · 10% of $185.00 | Add exception | Certb Certhouse · Expected $145.00 · 10% of $1,450.00 | Add exception | Close",
+    "policies": [
+      {
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "grain": "Sibling discount (QA specimen) Add exception Add exception",
+        "subjects": [
+          {
+            "ocm": null,
+            "text": "Certa Certhouse · Expected $18.50 · 10% of $185.00"
+          },
+          {
+            "ocm": null,
+            "text": "Certb Certhouse · Expected $145.00 · 10% of $1,450.00"
+          }
+        ]
+      }
+    ]
+  },
+  "managementGeometry": {
+    "box": "1036x202",
+    "clipped": false,
+    "insideViewport": true,
+    "pageHorizontalOverflow": false
+  },
+  "exceptionControls": 2
+}

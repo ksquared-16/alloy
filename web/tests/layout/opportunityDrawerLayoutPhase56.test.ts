@@ -114,7 +114,9 @@ describe("conditional visibility", () => {
 
 describe("sample preview data", () => {
     it("does not use raw Inquiry status label in preview children", () => {
-        const statuses = (LAYOUT_DRAWER_PREVIEW_RECORD.children ?? []).map((c) => String(c["child.status"] ?? ""));
+        const statuses = ((LAYOUT_DRAWER_PREVIEW_RECORD.children ?? []) as Record<string, unknown>[]).map((c) =>
+            String(c["child.status"] ?? ""),
+        );
         expect(statuses).not.toContain("Inquiry");
         expect(statuses.some((s) => s.length > 0)).toBe(true);
     });

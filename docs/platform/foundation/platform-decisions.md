@@ -1,0 +1,467 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
+# Platform Decisions
+
+**Purpose:** Concise register of consequential, durable, cross-platform decisions.
+
+| Artifact | Role |
+|----------|------|
+| **Canonical doctrine** | How Alloy works today |
+| **RFCs** | Proposals and ratification paths |
+| **Release history** | Shipped capability milestones |
+| **Sprint / audit / archive** | Execution and investigation history |
+| **This register** | Durable decisions and their rationale |
+
+Detailed behavior always lives in the **canonical owner** documents linked below — not here.
+
+## Entry format
+
+```text
+## YYYY-MM — Decision title
+
+**Decision:** what was decided.
+**Why:** why it was necessary.
+**Consequences:** what future work must respect.
+**Canonical owners:** links to detailed doctrine.
+**Status:** Active | Superseded
+**Superseded by:** link when applicable.
+```
+
+---
+
+## 2026-09 — Route capabilities authorize; RLS isolates tenants; mutation is server-side
+
+**Decision:** Product authorization is owned by **server route capability assertion**. **RLS** owns
+tenant and data isolation, and on the write side its job is to say *no*, not to decide *who*.
+Supported mutation happens on the **server path under the service role**, after capability, tenancy
+and scope have been resolved. **UI visibility is presentation, never authority.** RLS does not
+replace capability authorization, and role titles appearing inside policies are admission-and-tenancy
+heuristics rather than a second authorization model.
+
+**Why:** this was already the written architecture in two places —
+[`../governance/implementation-patterns.md`](../governance/implementation-patterns.md) § *Supabase
+access* and the configuration publication model — and it is what the runtime does: **604 of 682 API
+route files** resolve through `createAdminClient` (service role, which bypasses RLS by definition),
+**zero** use a request-scoped RLS-bound client, and no client component writes through Supabase at
+all. A layer the product never executes cannot be its authorization model, whatever its policies
+say. The alternatives were not merely more expensive — RLS-primary and dual-authority would each
+require either rewriting the data plane onto the authenticated principal or maintaining an
+authorization layer that never runs.
+
+**Consequences:**
+- Authenticated direct-PostgREST write grants and policies beyond this model are **implementation
+  drift to converge**, not a competing authority to honour. They are reachable only by a principal
+  calling PostgREST directly, which no product code does and the browser client cannot — it
+  authenticates only.
+- Convergence is staged and reversible: lock the supported data path, repair the tenancy class
+  (`app_users` policies lacking an org predicate, `work_units` self-comparisons), decide the one
+  RLS-disabled table, then retire unnecessary write grants family by family. A capability primitive
+  in SQL is built only if browser→table writes are ever adopted.
+- Until grants are retired, statements about authority should say **"on the supported path"** — that
+  phrasing is true of the product and of the database at the same time.
+- This does **not** block Access & Identity V2. Route capabilities remain the canonical business
+  authority and every promoted slice is enforced on the path the product actually takes.
+
+**Canonical owners:** [`../governance/roles-and-permissions.md`](../governance/roles-and-permissions.md)
+(capability vs visibility) · [`../governance/implementation-patterns.md`](../governance/implementation-patterns.md)
+§ *Supabase access* (the data-path rule) ·
+[`../governance/rls-authority-model-director-gate.md`](../governance/rls-authority-model-director-gate.md)
+(the measurement this ratifies, and the staged plan)
+
+## 2026-09 — Domain capability gating moves from feature flags to RBAC capabilities
+
+**Decision:**
+A shipped operational domain is gated by a **granted capability**, not by a feature flag. Attendance
+ships behind `attendance.record` / `attendance.read`; financial adjustment, responsibility and subsidy
+each ship behind their own permission migration. Feature flags remain only for genuine rollout
+controls, not for deciding whether a domain exists for a tenant.
+
+**Why:**
+A feature flag answers "is this code enabled here", which is a deployment question. Whether an
+operator may record attendance or adjust a charge is an **authority** question, and authority already
+has an owner — the four-layer access model. Flag-gating a domain put authority in a second place,
+where it could not be audited, granted, or reasoned about alongside every other permission.
+
+**Consequences:**
+A new domain declares capability keys in a migration and grants them to roles; it does not add an
+`org_settings.metadata.feature_flags` entry. Two flag readers remain in the codebase
+(`web/lib/childcareOperational/featureFlag.ts` and the Operational Expectations ledger authoring
+flag); both are rollout controls, and the latter is the subject of an open decision. Documentation
+must not describe a capability as "flag-gated off" when it is in fact permission-gated — the two
+mean different things to a reader deciding whether a tenant has the feature.
+
+**Canonical owners:** [`../governance/roles-and-permissions.md`](../governance/roles-and-permissions.md), [`platform-capabilities.md`](./platform-capabilities.md).
+
+**Status:** Active
+
+---
+
+## 2026-08 — Organization is the canonical configuration namespace
+
+**Decision:**
+Every configuration surface lives under `/organization/*`. `/admin` and `/settings` are
+**compatibility redirects**, not control planes.
+
+**Why:**
+Configuration had accumulated three entry namespaces, so no document could name "the configuration
+plane" without being wrong somewhere. Operators configure an organization; the route now says so.
+
+**Consequences:**
+Documentation names `/organization/*` when it means the configuration control plane. `/admin` and
+`/settings` may be described as redirects and must not be presented as where configuration lives.
+New configuration surfaces are added under `/organization/*`; the redirects in `web/next.config.ts`
+are compatibility, not extension points.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../operator/configuration-workspace-platform-doctrine.md`](../operator/configuration-workspace-platform-doctrine.md), [`system-overview.md`](./system-overview.md).
+
+**Status:** Active
+
+---
+
+## 2026-08 — The modal record product is deleted; the Focus Panel is the only record surface
+
+**Decision:**
+Operators reach a record through the **Focus Panel**. The modal record overlay and its router are
+deleted, not deprecated. "Drawer" survives only as the name of ViewModel and reveal infrastructure
+that now feeds the Focus Panel.
+
+**Why:**
+Two record surfaces meant two answers to "where does an operator work a subject", and the modal one
+could not carry the composition, subject identity and readiness model the runtime had grown.
+
+**Consequences:**
+This is enforced, not merely stated: `web/tests/operator/drawerProductEradication.test.ts` asserts the
+modules do not exist, and `certification/playwright/drawer-eradication.cert.spec.ts` certifies no
+operator path produces the overlay. Documentation uses **Focus Panel** for the operator construct and
+must explain, rather than hide, that `drawer` persists in module and ViewModel names as compatibility
+vocabulary. Do not reintroduce a record overlay.
+
+**Canonical owners:** [`../operator/focus-panel-architecture-vocabulary.md`](../operator/focus-panel-architecture-vocabulary.md), [`../operator/drawer-system.md`](../operator/drawer-system.md), [`../operator/drawer-sunset-roadmap.md`](../operator/drawer-sunset-roadmap.md).
+
+**Status:** Active
+
+---
+
+## 2026-08 — Trust Platform (cognitive / reasoning)
+
+**Decision:**
+Alloy introduces a **Trust Platform** as the single owner of trusted operational reasoning — not an AI Platform, prompt platform, or model runtime. Capabilities submit Decision Contracts and consume Decision Packages. Privacy precedes reasoning. Deterministic reasoning is preferred. Validation and Trust remain independent of Confidence. Operational Learning promotes Knowledge through review; graduation toward deterministic capability is preferred. Providers are implementation details. The Trust Runtime is the only reasoning runtime; Objective Runtime remains the only execution runtime; Records remain the only operational truth.
+
+**Why:**
+Without a shared platform every capability invents its own prompts, providers, privacy, cost, explainability, learning, and governance — fragmenting trust.
+
+**Consequences:**
+No capability implements independent reasoning. Do not treat BOS/AI module docs as a substitute for Trust Platform doctrine. Permanent Trust architectural decisions live in the Trust ADR; this register summarizes the cross-platform commitment.
+
+**Canonical owners:** [`../trust/trust-platform.md`](../trust/trust-platform.md), [`../trust/trust-platform-decisions.md`](../trust/trust-platform-decisions.md), [`../trust/trust-platform-manifesto.md`](../trust/trust-platform-manifesto.md), [`../trust/README.md`](../trust/README.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — BOS Command Runtime Convergence (Mission 1)
+
+**Decision:**
+BOS is a Command placement, not a mutation engine. Business Process `command_set_v1` owns process-wide Command selection. Surfaces do not configure Commands. A standalone Organization Commands operator product is rejected. Confirmed BOS invokes go through one shared bridge into Command Runtime; domain executors remain authoritative. Representative families prove the architecture; not every Command must be conversational.
+
+**Why:**
+Create Lead–centric BOS paths and bespoke family clients would not scale and risked inventing Commands outside Process authority.
+
+**Consequences:**
+Future BOS adapters prepare only and execute via `executePlatformCommandViaActionsApi`. Conversation Runtime is a separate mission. Coverage ledger honesty is required. Do not reopen Surface Command Exposure or a standalone Commands product.
+
+**Canonical owners:** [`../milestones/bos-command-runtime-convergence-closeout.md`](../milestones/bos-command-runtime-convergence-closeout.md), [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md), [`../modules/ai-platform.md`](../modules/ai-platform.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — Organization publishes; Locations consume
+
+**Decision:**
+Organization Configuration Runtime V2 is frozen. Organization publishes reusable configuration through nine first-class domains; Locations consume it through inheritance, assignment, or provider-gated Apply. Programs is the operator-facing reusable service catalog. Locations own Programs offered, Rooms/Delivery Resources, and local scheduling; resources and runtime own capacity.
+
+**Why:**
+Organization configuration needed one canonical ownership and distribution model above the frozen Locations experience. Treating Programs as Location-owned room containers conflated reusable service identity with operational delivery.
+
+**Consequences:**
+Future Configuration domains use the Configuration Domain Card and publisher/consumer contract. Commercial may remain an internal compatibility runtime/route name, but operator language is Programs. No downstream domain may infer health, expose Apply without authoritative delivery, or move resource/capacity/scheduling truth into Programs.
+
+**Canonical owners:** [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md), [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../core/configuration-ownership-and-inheritance.md`](../core/configuration-ownership-and-inheritance.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — Configuration Platform Expansion Constitution
+
+**Decision:**
+After Programs proves Publication Runtime (assignment), remaining Organization domains are governed by the Configuration Platform Expansion Constitution. Domains are classified as Organization-only, publishable, assignable, Location-consumed, override-capable, and/or effective-value resolved. Operational Calculations is the recommended Product Consumer #2 because it proves value inheritance and Controlled Difference complementary to Programs’ availability assignment. Fields and Statuses remain Organization-only vocabulary.
+
+**Why:**
+Expansion must reuse frozen runtimes without making every domain behave like Programs or inventing sibling infrastructure.
+
+**Consequences:**
+Future Configuration domain initiatives cite
+`docs/platform/foundation/configuration-platform-expansion-constitution.md`
+and do not reopen Programs, Assignment, Locations Runtime, or Configuration visual language.
+
+**Canonical owners:** [`configuration-platform-expansion-constitution.md`](configuration-platform-expansion-constitution.md), [`../modules/configuration-platform.md`](../modules/configuration-platform.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — Organization Programs route is `/organization/programs`
+
+**Decision:**
+Programs is an Organization-owned Configuration domain. The canonical operator
+route is `/organization/programs` with optional `?programId=` selection.
+`/settings/commercial/programs` and related Commercial entry points are
+compatibility redirects only and must not render a competing page.
+
+**Why:**
+Product certification rejected Commercial/Settings hierarchy as Programs
+identity. Organization is the place; Programs, Locations, and Processes are its
+domains. Publication is behavior inside Programs, not the page’s parent identity.
+
+**Consequences:**
+Organization landing and domain cards link to `/organization/programs`.
+Locations and Processes remain on `/settings/locations` and `/settings/processes`
+until separately converged to `/organization/locations` and
+`/organization/processes`.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — Program publication delivery is assignment, not Apply
+
+**Decision:**
+Configuration Publication Runtime V1 is a subsystem of Configuration Runtime.
+Publishing makes an immutable Organization Program revision authoritative.
+Distribution assigns that revision to selected Locations and advances their
+consumption pointers. Each Location independently owns whether it offers the
+Program.
+
+**Why:**
+Frozen ownership doctrine classifies a Program offered at a site as
+availability/assignment. Apply is reserved for copying published patterns into
+Location-owned truth. Program revision delivery preserves offer state,
+evidence, metadata, resources, schedules, and other operational facts, so
+calling it Apply would collapse two distinct contracts.
+
+**Consequences:**
+Programs registers `distributionMode: "assignment"` and does not register an
+Apply provider. Delivery statuses are `delivered`, `unchanged`, or `failed`.
+Future domains must declare independently whether publication delivery is
+inheritance, assignment, Apply, or none.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../core/configuration-ownership-and-inheritance.md`](../core/configuration-ownership-and-inheritance.md), [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md).
+
+**Status:** Active
+
+---
+
+## 2026-07 — Operational Expectations Authority represented by a governed catalog + assignments
+
+**Decision:**
+The already-frozen **Authority** tuple facet of an Operational Expectation is represented by (1) a governed
+org-scoped **authority catalog**, (2) append-only **effective-dated held-authority assignments** (holder
+= human/policy/process/external, never AI; scoped), and (3) one **canonical held-authority resolver**.
+**RBAC permission authorizes commands; a held-authority assignment authorizes semantic Standing** — both
+may be required, neither implies the other. This is the implementation *representation* of a frozen facet,
+**not** a new platform concept.
+
+**Why:**
+The frozen doctrine requires authority-holding gating (§12: "an author may assert only expectations whose
+Authority they hold") and self-ratification within authority (§5), but the substrate had only a free-text
+`authority_key` claim. A governed representation was required to certify G-Standing without inventing new
+architecture.
+
+**Consequences:**
+Future work must resolve held authority through the single resolver; must not equate RBAC permission,
+admin role, or service-role with held authority; must keep AI non-holding; and must not add an authority
+hierarchy unless the frozen contract defines dominance (current rule: exact authority-key match). Legacy
+free-text authority claims remain readable but can never bind.
+
+**Canonical owners:** [`platform/core/operational-expectations-system-design.md`](../core/operational-expectations-system-design.md) (§5·§12), [`platform/milestones/operational-expectations-engineering-realization.md`](../milestones/operational-expectations-engineering-realization.md) (X0), [`platform/milestones/operational-expectations-p1-wave-c-standing-ratification.md`](../milestones/operational-expectations-p1-wave-c-standing-ratification.md).
+**Status:** Active
+
+---
+
+## 2026-07 — Documentation Platform v1.0 frozen
+
+**Decision:**  
+Documentation is **production infrastructure**. Active doctrine has **one canonical owner** per concept. Feature work that changes platform behavior updates its owning canonical document in the **same change**. Sprint, audit, closeout, and archive material do **not** redefine current doctrine. No additional **broad** documentation reorganization is planned.
+
+**Why:**  
+Canonical ownership, governance, docs-lint/CI, handbook onboarding, history separation, curation, and repository certification are complete. The repository must maintain documentation **incrementally** with feature work rather than periodically rebuilding it.
+
+**Consequences:**  
+- New docs fit established lifecycle and placement rules.  
+- Documentation regressions are CI-governed.  
+- Future cleanup is ordinary maintenance — not a new platform initiative.
+
+**Canonical owners:**  
+- [`../governance/documentation-governance.md`](../governance/documentation-governance.md)  
+- [`alloy-platform-handbook.md`](./alloy-platform-handbook.md)  
+- [`../milestones/documentation-rebaseline-v2-certification.md`](../milestones/documentation-rebaseline-v2-certification.md)  
+- `docs/sprints/completed/documentation-rebaseline-v2/00-closeout.md` *(initiative history — not current doctrine)*  
+- [`../../README.md`](../../README.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — Business Process is the operator-facing execution model
+
+**Decision:**  
+Operators think in **Business Process → Stage / Work View → Record**. Work units and queue definitions remain **implementation/runtime** constructs. **Status does not replace** stage, work, or outcome.
+
+**Why:**  
+Alloy is an operations OS, not a CRM-first, work-unit-first, or queue-as-truth product. The operator model must stay stable across domains.
+
+**Consequences:**  
+Surfaces, language, and new domains orient to Business Processes first. Runtime constructs may exist underneath but must not become the primary nouns in product or platform docs.
+
+**Canonical owners:**  
+- [`../core/business-process-system.md`](../core/business-process-system.md)  
+- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)  
+- [`../modules/business-process-execution-platform.md`](../modules/business-process-execution-platform.md)  
+- [`alloy-platform-handbook.md`](./alloy-platform-handbook.md) (Ch. 2–3)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — One truth and one owner per platform concern
+
+**Decision:**  
+Every durable concern has **one canonical owner**. Queue rows are **previews**; record/entity resolvers provide authoritative detail. Configuration **steers** behavior and presentation; **code owns** invariants and executable semantics. Status belongs to a **named subject grain**.
+
+**Why:**  
+Parallel doctrine and dual sources of truth produce operator distrust and implementation churn. Ownership must be discoverable and enforced.
+
+**Consequences:**  
+Do not introduce a second owner for an already-owned concern. Prefer config and vertical presets over industry-specific branches in shared modules. Treat queue payloads as selection, not truth.
+
+**Canonical owners:**  
+- [`../core/entity-model.md`](../core/entity-model.md)  
+- [`../core/record-system.md`](../core/record-system.md)  
+- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)  
+- [`../core/data/status-architecture.md`](../core/data/status-architecture.md)  
+- [`../modules/configuration-platform.md`](../modules/configuration-platform.md)  
+- [`../operator/queue-system.md`](../operator/queue-system.md)  
+- [`../governance/design-and-operational-doctrine.md`](../governance/design-and-operational-doctrine.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — Runtime is stable infrastructure
+
+**Decision:**  
+Runtime work proceeds by **correcting ownership domains**, not rediscovering or multiplying runtimes. **One runtime owner** per concern. Compatibility paths are **migration mechanisms** and must be deleted after parity. Primary operational surfaces reveal as **stable, complete** experiences (coordinated reveal; no false empties).
+
+**Why:**  
+Architecture discovery is finished for OS Runtime / Presentation Runtime. Remaining work is product completion and ownership cleanup inside the locked model.
+
+**Consequences:**  
+Do not invent parallel reveal engines, shells, or ownership trees. Prefetch is allowed; partial above-fold reveal is not. Update ownership maps when moving runtimes.
+
+**Canonical owners:**  
+- [`../runtime/operational-runtime-doctrine.md`](../runtime/operational-runtime-doctrine.md)  
+- [`os-runtime-map.md`](./os-runtime-map.md)  
+- [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md)  
+- [`../governance/runtime-ownership-migration-map.md`](../governance/runtime-ownership-migration-map.md)  
+- [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — AI remains human-in-the-loop
+
+**Decision:**  
+BOS may **assist, recommend, explain, and prepare**. Authoritative or irreversible decisions remain governed by **validated platform actions** and **human confirmation**. AI does **not** create parallel mutation paths.
+
+**Why:**  
+Alloy’s trust model requires the same records, permissions, workflows, events, and audit paths for AI-assisted work as for human operators.
+
+**Consequences:**  
+No privileged client-side service-role shortcuts “for AI.” Recommendations stay grounded in platform commands and config. Product pauses on agent expansion do not change this law.
+
+**Canonical owners:**  
+- [`../modules/ai-platform.md`](../modules/ai-platform.md)  
+- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
+- [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)  
+- [`../../product/bos-foundation.md`](../../product/bos-foundation.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — BOS actionable interface binds to Operational Command Runtime
+
+**Decision:**  
+BOS is Alloy’s **universal conversational command interface** for registered operational commands, but it is a **placement** over the **Operational Command Runtime** — not a parallel mutation, identity, form, or Processing engine. Confirmed Create Lead execution uses existing `POST /api/admin/actions/execute` / registered `create_lead`. Conversation and Form share one `BosCommandDraft`. Processing owns inbound identity resolution at the established approval/commit boundary. V1 stops at the Create Lead reference flow + Actions placement convergence; slash commands and daily briefing are deferred foundations.
+
+**Why:**  
+Operators need one trusted command surface without duplicating authority. Binding BOS to the registered action path preserves permissions, eligibility, audit, idempotency, and Processing identity guarantees.
+
+**Consequences:**  
+No new foundational execute API for BOS Create Lead. No Processing Case on first paste. No auto-open Focus Panel on success. No new identity tables for V1 session state (sessionStorage). Modal Create Lead remains a compatibility host behind an explicit flag.
+
+**Canonical owners:**  
+- [`../modules/ai-platform.md`](../modules/ai-platform.md)  
+- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)
+
+**Design reference (not an owner):** the BOS actionable-interface sprint material at
+`docs/sprints/active/bos-actionable-interface/`. A sprint directory cannot be a canonical owner, and
+listing it as one here was an authority defect — the two owners above hold the doctrine. Named as a
+path rather than linked, so this decision register takes no dependency on execution material.
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — Configuration is object-centric
+
+**Decision:**  
+Operators configure **operational objects** — Location, Program, Room, Commercial Offering, Business Process, Communication Template, Automation, Role, Surface, Field — **not records, tables, or CRUD forms**. Configuration is an operational experience. Every configuration domain inherits **one** platform (the Configuration Workspace Platform); no domain invents its own configuration experience. **Locations is the reference implementation.**
+
+**Why:**  
+Building Locations surfaced that the operator is *running a place*, not editing its row. Designed as CRUD, configuration becomes a form to decode; designed as an operational experience — object, health, attention, the parts you own — it becomes obvious. CRUD-first, database-first, and drawer-over-table configuration are prohibited because they expose implementation (providers, precedence, versioning) the operator must never meet, and because per-domain reinvention forks the platform.
+
+**Consequences:**  
+New configuration domains adopt the platform's object model, workspace anatomy, two-status model (Attention + Setup Progress), business-language and quiet-inheritance rules, and inline/focused editing. No large CRUD forms, edit drawers over tables, provider/precedence terminology, configuration-precedence UI, implementation-driven navigation, generic forms, or object-less settings pages. Commercial Configuration validates the platform as a second consumer; future domains reference Locations.
+
+**Canonical owners:**  
+- [`../operator/configuration-workspace-platform-doctrine.md`](../operator/configuration-workspace-platform-doctrine.md)  
+- [`../operator/configuration-workspace-visual-language.md`](../operator/configuration-workspace-visual-language.md)  
+- [`../operator/configuration-workspace-component-library.md`](../operator/configuration-workspace-component-library.md)  
+- [`../modules/configuration-platform.md`](../modules/configuration-platform.md) *(control-plane substrate — orthogonal layer)*
+
+**Status:** Active  
+
+**Superseded by:** —

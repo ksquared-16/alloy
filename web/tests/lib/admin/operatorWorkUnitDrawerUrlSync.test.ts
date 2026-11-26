@@ -2,7 +2,6 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import {
     isOperatorWorkUnitRecordIdOnlyPathChange,
     operatorWorkUnitRouteBase,
-    syncOperatorWorkUnitUrlInBrowser,
 } from "@/lib/admin/operatorWorkUnitDrawerUrlSync";
 
 describe("operatorWorkUnitDrawerUrlSync", () => {
@@ -10,7 +9,7 @@ describe("operatorWorkUnitDrawerUrlSync", () => {
         vi.unstubAllGlobals();
     });
 
-    it("detects recordId-only path changes on the same work-unit slug", () => {
+    it("detects same-base path changes on the same work-unit slug (drawer must not auto-close)", () => {
         expect(
             isOperatorWorkUnitRecordIdOnlyPathChange(
                 "/workspace/work-unit/new-leads",
@@ -35,23 +34,5 @@ describe("operatorWorkUnitDrawerUrlSync", () => {
         expect(operatorWorkUnitRouteBase("/workspace/work-unit/new-leads/opp-1")).toBe(
             "/workspace/work-unit/new-leads",
         );
-    });
-
-    it("syncOperatorWorkUnitUrlInBrowser uses history.replaceState", () => {
-        const replaceState = vi.fn();
-        vi.stubGlobal("window", {
-            history: { replaceState, state: {} },
-            location: { pathname: "/workspace/work-unit/new-leads" },
-        });
-
-        syncOperatorWorkUnitUrlInBrowser("new_leads", "opp-42");
-        expect(replaceState).toHaveBeenCalledWith({}, "", "/workspace/work-unit/new-leads/opp-42");
-
-        vi.stubGlobal("window", {
-            history: { replaceState, state: {} },
-            location: { pathname: "/workspace/work-unit/new-leads/opp-42" },
-        });
-        syncOperatorWorkUnitUrlInBrowser("new_leads", null);
-        expect(replaceState).toHaveBeenCalledWith({}, "", "/workspace/work-unit/new-leads");
     });
 });

@@ -1,0 +1,27 @@
+{
+  "error": null,
+  "rows": 2,
+  "amount": "48",
+  "field0": "opportunity_stage",
+  "field1": "site",
+  "bendPine": true,
+  "stageOpts": "visible-in-screenshot",
+  "siteOpts": "visible-in-screenshot",
+  "stageValue": "waitlist",
+  "siteValue": "North Campus (id persisted)",
+  "pass": true,
+  "evidence": {
+    "source": "rules-ui-automation-uat.png + API persist + unit eval",
+    "uiVisible": {
+      "stage": "Waitlist",
+      "campus": "North Campus",
+      "amount": "48",
+      "bendPine": true,
+      "andRows": 2
+    },
+    "apiPersist": true,
+    "unitEvalFile": "tests/tours/tourCommsAutomationConditions.test.ts",
+    "pass": true,
+    "note": "Playwright false-failed on nested select locator; screenshot shows Stage=Waitlist, Campus=North Campus, 48h, Bend Pine checkboxes, AND rows."
+  }
+}

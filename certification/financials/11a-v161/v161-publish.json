@@ -1,0 +1,305 @@
+{
+  "step": "done",
+  "fromVersion": 160,
+  "fromId": "3bc7f601-ceec-4cd6-937b-e26fcea4ddfc",
+  "newVersion": 161,
+  "newId": "cd3edf93-d224-4009-9c00-fa1798d544a8",
+  "createdStatus": 201,
+  "publishStatus": 200,
+  "publishBody": null,
+  "before": {
+    "grid": {
+      "areas": [
+        {
+          "card": "business_process",
+          "colSpan": 8,
+          "rowSpan": 2,
+          "colStart": 1,
+          "rowStart": 1
+        },
+        {
+          "card": "financials",
+          "colSpan": 4,
+          "rowSpan": 1,
+          "colStart": 9,
+          "rowStart": 2
+        },
+        {
+          "card": "children",
+          "colSpan": 6,
+          "rowSpan": 1,
+          "colStart": 1,
+          "rowStart": 3
+        },
+        {
+          "card": "household",
+          "colSpan": 6,
+          "rowSpan": 4,
+          "colStart": 7,
+          "rowStart": 4
+        },
+        {
+          "card": "attendance",
+          "colSpan": 6,
+          "rowSpan": 2,
+          "colStart": 7,
+          "rowStart": 8
+        },
+        {
+          "card": "health_safety",
+          "colSpan": 6,
+          "rowSpan": 2,
+          "colStart": 1,
+          "rowStart": 6
+        }
+      ],
+      "columns": 12
+    },
+    "rows": [
+      {
+        "cells": [
+          {
+            "cards": [
+              "business_process"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "financials"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "children"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "household"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "health_safety"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "attendance"
+            ],
+            "width": "full"
+          }
+        ]
+      }
+    ]
+  },
+  "after": {
+    "grid": {
+      "areas": [
+        {
+          "card": "business_process",
+          "colSpan": 8,
+          "rowSpan": 2,
+          "colStart": 1,
+          "rowStart": 1
+        },
+        {
+          "card": "financials",
+          "colSpan": 4,
+          "rowSpan": 1,
+          "colStart": 9,
+          "rowStart": 2
+        },
+        {
+          "card": "children",
+          "colSpan": 6,
+          "rowSpan": 1,
+          "colStart": 1,
+          "rowStart": 3
+        },
+        {
+          "card": "household",
+          "colSpan": 6,
+          "rowSpan": 4,
+          "colStart": 7,
+          "rowStart": 4
+        },
+        {
+          "card": "attendance",
+          "colSpan": 6,
+          "rowSpan": 2,
+          "colStart": 7,
+          "rowStart": 8
+        },
+        {
+          "card": "health_safety",
+          "colSpan": 6,
+          "rowSpan": 2,
+          "colStart": 1,
+          "rowStart": 6
+        },
+        {
+          "card": "billing_preview",
+          "colSpan": 6,
+          "rowSpan": 2,
+          "colStart": 1,
+          "rowStart": 8
+        }
+      ],
+      "columns": 12
+    },
+    "rows": [
+      {
+        "cells": [
+          {
+            "cards": [
+              "business_process"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "financials"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "children"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "household"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "health_safety"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "attendance"
+            ],
+            "width": "full"
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "cards": [
+              "billing_preview"
+            ],
+            "width": "full"
+          }
+        ]
+      }
+    ]
+  },
+  "sections": [
+    {
+      "card": "business_process",
+      "visibility": "visible"
+    },
+    {
+      "card": "financials",
+      "visibility": "visible"
+    },
+    {
+      "card": "children",
+      "visibility": "visible"
+    },
+    {
+      "card": "household",
+      "visibility": "visible"
+    },
+    {
+      "card": "health_safety",
+      "visibility": "visible"
+    },
+    {
+      "card": "attendance",
+      "visibility": "visible"
+    },
+    {
+      "card": "scheduling",
+      "visibility": "linked"
+    },
+    {
+      "card": "billing_preview",
+      "visibility": "visible"
+    },
+    {
+      "card": "milestones",
+      "visibility": "linked"
+    }
+  ],
+  "gridAreaCards": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "attendance",
+    "health_safety",
+    "billing_preview"
+  ],
+  "rowsCards": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "health_safety",
+    "attendance",
+    "billing_preview"
+  ]
+}

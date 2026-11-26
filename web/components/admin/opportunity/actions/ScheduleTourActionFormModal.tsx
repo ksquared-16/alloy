@@ -1,3 +1,4 @@
+import { earliestTourLocalDate } from "@/lib/tours/bookings/tourEarliestDate";
 import React, { useMemo, useState } from "react";
 import {
     BOS_EXECUTION_LOADER_PHASES_SCHEDULE_TOUR,
@@ -102,6 +103,8 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                             <div className="mb-1 font-medium text-alloy-midnight">Tour date</div>
                             <input
                                 type="date"
+                                // Usability mirror of the service rule (tourEarliestDate): from tomorrow.
+                                min={earliestTourLocalDate(Intl.DateTimeFormat().resolvedOptions().timeZone)}
                                 value={tourDate}
                                 onChange={(e) => setTourDate(e.target.value)}
                                 className="w-full rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm outline-none focus:border-alloy-midnight/30"

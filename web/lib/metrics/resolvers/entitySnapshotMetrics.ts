@@ -7,6 +7,7 @@ import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { resolveMetricTimeWindowBounds } from "@/lib/metrics/timeWindow";
 import { loadScopedOpportunityIds, resolveMetricScopeFilter } from "@/lib/metrics/scopeFilter";
+import { metricUnavailable } from "@/lib/metrics/metricScopeGuard";
 
 export type OperationalTaskMetricRow = {
     id: string;
@@ -39,7 +40,8 @@ export async function resolveOpsWorkOverdueCount(ctx: MetricResolveContext): Pro
     };
 
     if (filter.impossible) {
-        return { ...base, value: 0, formattedValue: formatMetricValue(def.format, 0), meta: { overdue: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     let q = ctx.supabase

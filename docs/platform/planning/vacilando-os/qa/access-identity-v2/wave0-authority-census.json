@@ -1,0 +1,1330 @@
+{
+  "artifact": "wave0-authority-census",
+  "title": "Wave 0 (W-0) — Live authority census",
+  "plan_of_record": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_section": "§4 — Wave 0, W-0",
+  "mission": {
+    "mission_id": "msn_f74ed02c126c88d7ff",
+    "mission_version": 1,
+    "assignment_id": "asg_2a1f4d9dc80899",
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "phase": "Wave 0 — Live authority census",
+    "note": "Mission 2 (Identity & Access Platform) re-issued W-0 and re-ran the census on 2026-08-04. The original execution was mission msn_2d054741a54698fa4c / assignment asg_708252478f6fdd (content hash 2c0b0b8fee88469de91e37587a3bb242), preserved under run_history."
+  },
+  "worktree": "wt6-vacilando-os-product-def",
+  "branch": "hotfix/vacilando-ui-freshness-flash",
+  "branch_note": "The 2026-07-31 run was authored on agent/claude/6-vacilando-os-product-def. This worktree has since merged origin/staging (5118940f7), which is the base the 2026-08-04 re-run was verified against.",
+  "prepared_at": "2026-07-31T15:23:43Z",
+  "prepared_by": "claude (Vacilando managed slot 6)",
+  "last_execution_attempt_at": "2026-08-04T17:00:23Z",
+  "status": "executed (run 4, 2026-09-04 — drifted)",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-08-07T17:24:16.951Z",
+    "executed_by": "trusted_host_action",
+    "target_database": {
+      "channel_identifier": "alloy_deployed_primary",
+      "channel_fingerprint": "b15dad2c6d030ed4",
+      "current_database": "postgres",
+      "org_count": 2,
+      "census_run_at": "2026-08-04T17:00:21.773733+00:00",
+      "project_ref_confirmed": false,
+      "note": "The trusted host names the target 'alloy_deployed_primary' and fingerprints it as b15dad2c6d030ed4 — a durable identifier that future censuses can compare against, which is what Wave 0 actually needs. It is NOT a Supabase project ref: current_database() returns 'postgres' on every Supabase project, so the census output alone cannot distinguish one. The mapping from alloy_deployed_primary to project ref ikaxilmwmrmbagoidedu is asserted by the execution channel, not proven by this evidence. Recorded as asserted rather than confirmed."
+    },
+    "operator_decision": {
+      "question": "Wave 0 already has live evidence — accept the 2026-07-31 census, or re-run it for Mission 2?",
+      "chosen_option": "trusted_host_action — the Director re-ran the read-only census on the trusted host, against the already-committed query (option b)",
+      "answered_at": "2026-08-04",
+      "outcome": "executed successfully; no privileged credential reached the worker",
+      "not_adopted": "The worker recommended option (c) — fold in the self-identifying target column recorded at target.improvement_for_next_run. The re-run used the committed query unchanged (hash 743cd63b…), so that improvement is still outstanding and target.project_ref_confirmed remains false.",
+      "prior_decision": {
+        "question": "How should Wave 0's read-only SELECTs reach the deployed database?",
+        "chosen_option": "trusted_host_action",
+        "answered_at": "2026-07-31",
+        "outcome": "executed successfully; established the channel this re-run reused"
+      }
+    },
+    "blocker": null,
+    "blocker_history": {
+      "note": "Retained deliberately. The blocker is resolved, but the record of WHY this artifact needed a trusted host action is the reusable lesson, and plan §4 cites it.",
+      "attempts_blocked": 2,
+      "routes_attempted": 7,
+      "summary": "Two independent agent sessions failed to reach the deployed database. Attempt 1 tried three routes (direct env read, sandboxed read, a runner using the toolkit's own alloy_load_trusted_server_env_exports). Attempt 2 tried four more and established that TWO independent controls were in play — a workspace boundary refusing any read outside the worktree, and command approval — so lifting either alone would not have worked.",
+      "structural_finding": "DATABASE_URL is on the toolkit's explicit denylist twice: as a secret-like substring (scripts/local-dev/lib/verify.sh:202) and as a named privileged variable (:210). Its only reader is alloy_load_trusted_server_env_exports (:495-523), which exists solely to spawn the alloy-dev-start Next process. The refusal was working as designed.",
+      "resolution": "The trusted host action (database.read_census) is the correct answer and the one worth reusing: the Director executes privileged reads host-side and returns only results, so the worker never holds a credential and the denylist is never weakened. Every future live-evidence step in this programme — including re-running this census before each lockout-class switch, and the §11 migration preflights, all of which require read-only queries against the same database — should use this channel rather than asking an operator to paste anything."
+    },
+    "trusted_host_action_id": "tha_67f9c69f628d1a",
+    "authorization_id": "tha_auth_eec51323ab20",
+    "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4"
+  },
+  "run_4_preparation": {
+    "run": 4,
+    "status": "REQUESTED — AWAITING OPERATOR AUTHORIZATION. Prepared 2026-09-04 by claude (Vacilando managed worktree ui-vac), mission msn_3a5c03a002709dc240 v1, assignment asg_727e2369868c78, contentHash 5d17cc99075c029bedda580dc02ef6cb (the FIFTH re-issue). FILED 2026-09-04T11:02:36Z under the SIXTH re-issue, mission msn_0e24196324d1441ac2 v1, assignment asg_45a7990a10e28c, contentHash 4624625b87d59bcce256b0a8746e7b72 — governed action request gar_c834cb05ce8425. See run_4_request_filed.",
+    "why_a_run_4_is_genuinely_warranted_this_time": "The previous four re-issues were re-assertions of a met criterion, and this file names re-assertion as the wrong outcome. THIS ONE IS DIFFERENT, on evidence rather than on the calendar. Runs 1→2→3 spanned 2026-07-31 to 2026-08-07 and returned zero drift, but that stability was explicitly diagnosed as an idle tenant (drift_run_2_to_run_3.why_q4_still_did_not_grow) rather than a stable system. Run 3's evidence is now 28 days old, and in that window the world the counts describe MOVED: M1 (20260807140000_backfill_membership_access_profiles.sql) and M9 (20260818190000_w16_user_roles_role_foreign_key.sql) both reached origin/staging, and post-merge-certification-reconciliation.json finding_C records that NO instrument in any worker session can read whether they were APPLIED to the target. Q4 and Q3 are exactly the two reads that would settle it. A run 4 is therefore not a refresh of a stable number — it is the only available instrument for a question the programme currently cannot answer.",
+    "THE_TRAP_THAT_WOULD_WASTE_THIS_AUTHORIZATION": {
+      "severity": "HIGH — read this before filing the run-4 request.",
+      "finding": "A `database.read_census` governed action request filed with NO artifact_refs no longer runs THIS census. It silently runs the Q15 census instead — a DIFFERENT artifact answering DIFFERENT questions (W-20 removal and the OD-7 conversion burndown), which contains no Q1–Q6 expression at all.",
+      "code_evidence": [
+        "scripts/local-dev/lib/vacilando/governed-action-request.mjs:99-100 — `export const Q15_CENSUS_ARTIFACT = \"docs/platform/planning/vacilando-os/qa/access-identity-v2/q15-authority-census.json\"`.",
+        "governed-action-request.mjs:1801-1803 — on request creation, `artifactRefs` falls back to `[Q15_CENSUS_ARTIFACT]` whenever `shape.artifactRefs` is empty and the action key is DATABASE_READ_CENSUS.",
+        "governed-action-request.mjs:1091-1094 — `artifactPathFrom(refs)` returns the first ref, else Q15_CENSUS_ARTIFACT."
+      ],
+      "required_mitigation": "The run-4 request MUST carry artifact_refs explicitly: [\"docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json\"]. Omitting it does not fail loudly — it succeeds against the wrong census, which is the same silent-wrong-answer failure mode promotion_2026_08_07 was written to prevent, arriving from a new direction.",
+      "what_this_supersedes": "promotion_2026_08_07.why_this_route_and_not_a_dedicated_run_3_artifact asserts, in bold, that 'THE ARTIFACT PATH IS NOT CHOOSABLE THROUGH ANY DIRECTOR OR OPERATOR PATH', on the evidence that fulfillDatabaseCensusForMission's queryArtifactPath was a default parameter no call site passed. THAT CLAIM WAS TRUE WHEN WRITTEN AND IS NOW FALSE. The governed-action-request layer added artifact selection after it was written, and in doing so flipped the effective default away from this file. The old default protected W-0 by accident; the new one endangers it by accident. trusted-host-actions.mjs:903 still defaults to wave0-authority-census.json, so the two layers now disagree — which is precisely why the ref must be stated rather than relied upon.",
+      "generalisation": "This is the second time in this artifact's life that the EXECUTION PLUMBING, not the SQL, was the thing most likely to waste an operator authorization. The first was the stale-query_hash trap (execution_mechanics_hash_trap). Both were invisible from the SQL and both were found only by reading the executor. Any future census re-issue should re-read the executor before asking for an authorization."
+    },
+    "WHERE_RUN_4_RESULTS_WILL_ACTUALLY_LAND": {
+      "severity": "HIGH — this file will NOT be updated by run 4, and that is a change from runs 1-3.",
+      "finding": "The evidence write-back is no longer pinned to this file. trusted-host-actions.mjs:782-784 now DERIVES the evidence path from the query artifact — `evidenceRel = queryRel.replace(/\\.json$/i, '') + '.results.json'`. For this census that resolves to `docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.results.json`, which DOES NOT YET EXIST. Because it does not exist, the merge branch at :796-817 is skipped and the `else` at :825-831 writes a NEW file containing only `{trusted_host_action_id, query_hash, results}`.",
+      "consequences_to_expect_rather_than_be_surprised_by": [
+        "THIS FILE IS NOT TOUCHED BY RUN 4. status stays 'executed', census_run_at stays 2026-08-07T17:24:15Z, query_hash stays a3982ca5…, and `results` still holds RUN 3. None of that is evidence about run 4.",
+        "THE SILENT-WRONG-ANSWER HAZARD: a reader who runs run 4 and then opens this file sees a fully populated, 'executed' census dated 2026-08-07 and can easily cite run 3's numbers as though they were run 4's. Anyone consuming run 4 must read wave0-authority-census.results.json, not this file's results block.",
+        "A GENUINE UPSIDE, worth stating: runs 1-3's `results` block now SURVIVES rather than being overwritten in place. The destructive overwrite that runs_1_2_query_provenance.what_the_directors_merge_back_will_do warned about no longer happens, so run 3's raw output stays readable here without recourse to a git blob.",
+        "run_history STILL will not be appended to — that was true for run 3 and remains true. Run 4 therefore needs TWO hand edits afterwards: a run_history[4] entry, and a drift comparison against run 3."
+      ],
+      "what_this_supersedes": "promotion_2026_08_07.evidence_write_back_confirms_it states that 'trusted-host-actions.mjs:379-383 hard-codes the DATABASE_READ_CENSUS evidence path to this same file regardless of which artifact was read.' That was true when written and is NOW FALSE — the path is derived from queryArtifactPath at :782-784, and lines 379-383 are unrelated code today. It also narrows runs_1_2_query_provenance.what_the_directors_merge_back_will_do, whose two predictions (a top-level query_hash reappears; results is overwritten) both described run 3 correctly and will BOTH be wrong for run 4.",
+      "corroboration": "The sibling artifacts q15-authority-census.results.json and q18-multi-org-principal-census.results.json exist in this directory in exactly this shape, while no wave0-authority-census.results.json does — i.e. every census executed AFTER run 3 already landed under the new convention, and this one has simply not been run since the convention changed."
+    },
+    "hash_state_verified_2026_09_04": {
+      "verdict": "THE HASH TRAP IS NOT ARMED. A run 4 using this file's combined_query will validate.",
+      "reasoning": "The top-level query_hash is a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42, which the DIRECTOR ITSELF computed and wrote during run 3's merge-back over this exact combined_query. combined_query is byte-identical to the text that hash was computed over, so validateInputs resolves expectedHash to a3982ca5… (registry.mjs:185 — it falls back to the artifact's own query_hash when no expectedQueryHash is supplied), computes the same value, and matches.",
+      "reasoning_evidence_corrected_2026_09_04_by_asg_45a7990a10e28c": "The check ORIGINALLY recorded here was WRONG, and the verdict it supports is nevertheless right. It claimed `git log 873a2f097..HEAD -- <this file>` returns EMPTY. It does not — TWO commits after run 3 touch this file (3e000209a, 242865b3b), and by now several more. Had that been the only check, it would have been a false provenance argument. The correct check is against the KEYS rather than the file: `git diff 873a2f097 -- <this file> | grep '^[-+].*combined_query'` returns 5 lines, ALL of them `+` additions inside run_4_preparation prose that merely MENTION the string, and NONE of them the top-level `\"combined_query\":` key line; the same diff filtered on `'^[-+].*\"query_hash\"'` returns NOTHING AT ALL. Since JSON.stringify(_, null, 2) emits combined_query as a single line with escaped newlines, an unchanged key line is an unchanged query. So both the query text and the hash it is compared against are untouched since run 3's merge-back. Verdict unchanged; the evidence under it is now true.",
+      "why_this_is_stronger_than_recomputing": "sha256 remains uncomputable in-worker (shasum and openssl are both permission-walled here, as node -e was in the slot-6 worker — reconfirmed this session). Rather than assert a hash by inspection, this check proves the TEXT has not changed since the authority that computed the hash last saw it. That is a provenance argument, and it needs no local sha256.",
+      "standing_hazard_unchanged": "Do NOT 'restore' a top-level key named query_hash or combined_query_hash holding the runs 1/2 value 743cd63b… — see execution_mechanics_hash_trap. runs_1_2_query_hash is the correct home for that value and must keep its name."
+    },
+    "re_grounding_2026_09_04": {
+      "why": "Every prior run re-grounded the query against the migration tree before execution, because a query that errors on first contact costs a whole authorization round trip. The tree has grown substantially since run 3 — the branch now carries migrations through 20260903174800.",
+      "method": "Regex sweep of supabase/migrations for ALTER/DROP/CREATE TABLE|VIEW against the six tables the census reads (user_roles, role_definitions, user_access_profiles, user_profiles, app_users, orgs), plus a separate sweep for ADD COLUMN / DROP COLUMN / RENAME / ALTER COLUMN on those tables across the whole tree.",
+      "result": "PASS — the six queries still resolve. Exactly one migration since run 3 touches any census table: 20260818190000_w16_user_roles_role_foreign_key.sql, which only DROPs and re-ADDs the constraint user_roles_role_definitions_fkey over (org_id, role) → role_definitions(org_id, role_key) ON DELETE RESTRICT (lines 84-91). It adds no column, drops no column and renames nothing, so every column the census names is intact. The only ADD COLUMN ever recorded against these tables is 20260502143000_user_profiles_timezone.sql, which predates all three runs and adds a column the census does not read.",
+      "not_checked": "The live database. This is verified against supabase/migrations on this branch. Drift between the migration tree and the deployed target is the standing residual risk and is itself part of what run 4 would measure."
+    },
+    "what_run_4_would_settle_that_nothing_else_can": [
+      "Q4 → THE M1 APPLY STATE. q4_pairs_without_profile = 0 means the M1 backfill has been applied to the target; = 2 means it has not. post-merge-certification-reconciliation.json finding_C explicitly records this as unverifiable from any worker session ('Reading supabase_migrations.schema_migrations requires credentials absent from every worktree env file by two-tier-env design'). Q4 answers it from the data side without needing the ledger, and without a second authorization.",
+      "Q3 → THE M9 APPLY STATE, indirectly. M9's own in-transaction preflight aborts unless undefined rows are 0, so a target carrying user_roles_role_definitions_fkey necessarily has q3_undefined_membership_rows = 0. Q3 returning non-zero would prove the FK is NOT on the target and that C2 is still open there.",
+      "Q4 → THE FIRST REAL TEST OF W-5. Three runs held q4_membership_rows at 8, so the membership writers were never exercised and W-5's closure is unrefuted rather than confirmed (drift_run_2_to_run_3.why_q4_still_did_not_grow). If 28 days of use moved that figure, this is the first run that can actually test it: membership_rows must be free to grow while pairs_without_profile stays flat.",
+      "target_identity → CONTINUITY. Run 3 established org_fingerprint ab7e5dde2e229d5c46e251456e4d9534 as the baseline. Run 4 is the FIRST run that can be checked against it rather than merely establishing it. A different fingerprint would mean a different target and would invalidate the comparison outright."
+    ],
+    "expected_but_not_asserted": "Q1, Q2, Q3, Q5 and Q6 are expected unchanged; Q4 is expected to have moved to 0 IF M1 applied. Recorded for triage only. §4's standing rule is that every consumer re-derives rather than cites, and residual_risks[0] stands: these counts are a snapshot, never an invariant.",
+    "scope_note_five_vs_six_selects": "The assignment objective for this re-issue says 'five read-only SELECTs'. This census carries SIX queries, Q1–Q6. That is not a divergence to escalate: Q1–Q5 were W-0's original five, and Q6 was folded in from plan §6/W-8 ('a sixth Wave 0 query in practice; add it to W-0 if W-8 is scheduled'), which is recorded at queries[Q6].added_by and has been part of every executed run. Run 4 should execute the committed six-query combined_query unchanged, exactly as runs 1–3 did.",
+    "worker_tooling_2026_09_04": "Reconfirmed in this worktree (ui-vac), which is a different slot from the slot-6 worker that made the original finding. shasum -a 256 and openssl dgst -sha256 are both permission-walled; jq and git ARE available. So the constraint is unchanged in substance: query hashes remain Director-derived, and every check in this block was made mechanical through jq and git rather than by eye.",
+    "run_4_request_filed": {
+      "status": "FILED — awaiting operator authorization.",
+      "request_id": "gar_c834cb05ce8425",
+      "filed_at": "2026-09-04T11:02:36.130Z",
+      "filed_by": "claude, mission msn_0e24196324d1441ac2 v1, assignment asg_45a7990a10e28c, contentHash 4624625b87d59bcce256b0a8746e7b72 (the SIXTH re-issue of W-0)",
+      "lane_id": "lane_9b9082778292",
+      "run_id": "asg_45a7990a10e28c",
+      "action_key": "database.read_census",
+      "target": "alloy_deployed_primary",
+      "channel": "vac governed-action --run <run> --lane <lane> --json '{...}' → requestGovernedAction, status 'requested', operator_approval_required true (governed-action-request.mjs:1650-1656 — a DATABASE_READ_CENSUS against DEFAULT_TARGET always requires an operator grant).",
+      "the_correction_that_made_this_step_possible": "Five re-issues in a row recorded 'there is no worker-side channel to database.read_census, so a re-dispatch cannot move it' and stopped at preparation. That conflates TWO channels. There is no worker-side channel to EXECUTE the census — that remains true, Director-side, by design, and no credential reaches the worker. But `vac governed-action` IS a worker-side channel to FILE the request, and filing is what puts the authorization card in front of the operator. Preparation without filing left the run waiting on an operator who had not been asked. This assignment asked.",
+      "artifact_ref_verified_in_the_stored_record": "The stated mitigation was verified AFTER filing rather than assumed. requests.json for gar_c834cb05ce8425 carries artifact_refs: ['docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json'] — so artifactPathFrom returns THIS census and not Q15_CENSUS_ARTIFACT. Checking the stored record is the only way to know the trap was actually avoided, because omitting the ref fails silently rather than loudly.",
+      "what_happens_on_approval": "The Director executes the committed six-query combined_query read-only against alloy_deployed_primary and writes results to wave0-authority-census.results.json — NOT into this file. See WHERE_RUN_4_RESULTS_WILL_ACTUALLY_LAND. Two hand edits are then still required: a run_history[4] entry and a drift comparison against run 3.",
+      "first_checks_to_make_on_the_results": [
+        "target_identity.org_fingerprint MUST equal ab7e5dde2e229d5c46e251456e4d9534. Anything else means a DIFFERENT target and invalidates every drift comparison outright — check this BEFORE reading any count.",
+        "q4_pairs_without_profile: 0 ⇒ M1 applied to the target; 2 ⇒ M1 NOT applied.",
+        "q3_undefined_membership_rows: non-zero ⇒ M9's FK is NOT on the target and C2 is still open there.",
+        "q4_membership_rows: > 8 ⇒ the membership writers were finally exercised, which is the first real test W-5 has had."
+      ],
+      "not_executed_by_this_assignment": "Filing is not running. As of this record the census has NOT run, no run-4 counts exist, and every number in this file is still run 3's, dated 2026-08-07. residual_risks[0] stands undiminished.",
+      "DUPLICATE_REQUEST_APPROVE_ONLY_ONE": {
+        "severity": "OPERATOR ACTION REQUIRED — two authorization cards now exist for ONE census.",
+        "finding": "W-0 was dispatched to two concurrent sessions in this same worktree, and BOTH filed run 4 within four minutes: gar_3368b11eb1b1ce (mission msn_595040c168e0103c38, assignment asg_94de43cc5c3482, created 2026-09-04T10:59:09.971Z) and gar_c834cb05ce8425 (mission msn_0e24196324d1441ac2, assignment asg_45a7990a10e28c, created 2026-09-04T11:02:36.130Z, THIS record).",
+        "why_they_did_not_collapse": "dedupeKey is [mission_id, lane_id, action_key, target, identityFromInputs].join('|') (governed-action-request.mjs:1140-1148). The two requests agree on lane, action_key, target AND artifact path — they differ ONLY in mission_id. Dedupe is therefore mission-scoped, and two missions asking for the identical census produce two independent requests rather than one. This is the same mission-scoping the sibling session recorded from the opposite direction (filing under run 3's mission would have returned run 3's counts).",
+        "recommendation": "APPROVE gar_3368b11eb1b1ce AND DENY gar_c834cb05ce8425. The sibling request was filed first, is already status 'awaiting_operator' with an open decision card (dec_b1c5c947f5129e), and is functionally identical: same artifact_refs naming this census, same target, same read-only mode. Approving both would run the same read twice and spend two authorizations on one census — precisely the economy §4.1 names as 'the mistake W-0 Q6 already avoided once'. Either one alone produces the same run 4.",
+        "why_this_was_not_self_corrected": "There is no worker-side channel to withdraw a filed governed action. `vac cancel` routes to the VALIDATION broker (vac:46-49 → alloy-validate cancel), not to governed actions, and governed-action-request.mjs exports no worker-facing cancel or withdraw. Cancelling is an operator decision, so the duplicate is reported here rather than quietly resolved.",
+        "the_generalisable_lesson": "Two sessions in one worktree, given the same objective, will each correctly conclude that filing is the right next step and each file. The duplicate is a property of concurrent dispatch, not of either session's reasoning. A lane-scoped or artifact-scoped dedupe would have collapsed these two; a mission-scoped one cannot."
+      }
+    }
+  },
+  "run_4_request_second_filing_and_the_collision": {
+    "READ_THIS_FIRST": "TWO governed action requests exist for ONE census run, filed independently within four minutes by TWO concurrently dispatched assignments working the SAME phase in the SAME worktree. The operator must approve exactly ONE. RECOMMENDED: approve gar_3368b11eb1b1ce (this block, filed 10:59:09Z) and DECLINE gar_c834cb05ce8425 (run_4_preparation.run_4_request_filed, 11:02:36Z). This block ORIGINALLY recommended the opposite, on the reasoning that the sibling carried a resolvable lane and run id and could therefore resume a waiting worker. It was reversed on better evidence: the sibling session could read the stored records and established that THIS request was filed first and is ALREADY at awaiting_operator with decision card dec_b1c5c947f5129e, while this session could not read the store at all. A card already in front of the operator beats an argument about worker resumption, and both sessions end before either result lands. Either request alone produces the identical run 4.",
+    "status": "FILED AND AWAITING OPERATOR AUTHORIZATION. Not executed. RECOMMENDED FOR APPROVAL; decline the sibling.",
+    "filed_at": "2026-09-04",
+    "filed_by": "claude, Vacilando managed worktree ui-vac, mission msn_595040c168e0103c38 v1, assignment asg_94de43cc5c3482, contentHash 5cc8a895477c55b065075f22faef3cbe.",
+    "governed_action_request_id": "gar_3368b11eb1b1ce",
+    "the_collision": {
+      "severity": "HIGH for the operator's attention budget — this is the exact waste the whole W-0 record has been written to avoid, arriving from a direction none of the five prior passes anticipated: not a wrong artifact, not a stale hash, but TWO CORRECT REQUESTS.",
+      "what_happened": "Mission msn_595040c168e0103c38 / asg_94de43cc5c3482 (this block) and mission msn_0e24196324d1441ac2 / asg_45a7990a10e28c (run_4_preparation.run_4_request_filed) were both dispatched for 'Wave 0 — Live authority census' and both ran in worktree ui-vac at the same time. Neither could see the other's request. Both correctly stated artifact_refs, so both avoided the Q15 trap; the collision is not a defect in either filing.",
+      "why_nothing_deduped_them": "Two independent dedupe layers both key on the mission, and the missions differ. governed-action-request.mjs dedupeShapeOf includes mission_id; trusted-host-actions.mjs:295 scopes its search to listTrustedHostActions(missionId). Same action, same target, same artifact, same query hash — different mission, therefore two records. The mission scope that PROTECTS run 4 from replaying run 3's counts (see the dedupe finding below) is the same property that fails to collapse two live requests. It is one design with two opposite consequences and both are load-bearing.",
+      "which_one_to_approve": "gar_3368b11eb1b1ce — this one. It was filed first (10:59:09Z vs 11:02:36Z) and is already at awaiting_operator with decision card dec_b1c5c947f5129e. The sibling's account is authoritative on this point because that session could read the governed-action store and this one could not; its finding supersedes this block's original recommendation, which favoured the sibling on the ground that it carried a resolvable lane and run id and could resume a waiting worker. That consideration is real but weaker — both sessions end before any result lands, so neither actually gets resumed — and it is outweighed by a decision card that already exists. Both requests name this census in artifact_refs and would execute the identical committed query against the identical target.",
+      "a_worker_cannot_withdraw_its_own_request": "Searched for one. requestGovernedAction has no cancel or withdraw counterpart exported, and no vac subcommand reaches one — `vac cancel` belongs to the validation broker, not to governed actions. governed-action-request.mjs:3277 recognises 'cancelled' and 'withdrawn' as terminal statuses, so the states exist and only the operator-side path to them does. CONSEQUENCE: a worker that files a duplicate cannot clean it up, and the cost lands on the operator as an extra decision card. This is the correct place to fix it; recorded here rather than fixed, because this assignment's scope is W-0 and not the governed-action layer.",
+      "for_whoever_dispatches_the_seventh_re_issue": "Check for an open request before filing. Two passes on the same day both correctly concluded 'nobody has asked the operator yet' — and by the second one, that was already false."
+    },
+    "not_duplicated_here": "How the request was filed, what happens on approval, and the checks to run on the results are recorded once, at run_4_preparation.run_4_request_filed. They are identical for both filings. Only what is NOT recorded there appears below.",
+    "finding_1_the_lane_and_run_arguments_are_required_and_this_session_has_neither": {
+      "severity": "MEDIUM — it is what a filing pass hits first, and it looks like a refusal rather than a gap.",
+      "finding": "`vac governed-action` requires BOTH --run and --lane (vac-governed-action.mjs:61), and neither is discoverable from this session. `vac health --json` reports lanes.consistency.measurements.lanes = 0 and lists BOTH provider seats as unbound — `pid 61631 · alloy-ui-vac · no lane`, `pid 48811 · alloy-vacilando · no lane` — measured twice about twenty minutes apart with the same answer. So getDurableLane('ui-vac') returns null and resolveGovernedAuthority returns lane_not_found for the name this worktree goes by.",
+      "and_yet_the_concurrent_assignment_had_one": "asg_45a7990a10e28c filed with lane_id lane_9b9082778292 while this same health check reported zero lanes. Both observations are recorded rather than reconciled: a lane id can evidently be supplied that lanes.consistency does not count, and this pass could not determine from the worker side whether that is a stale health measurement, a lane the check scopes out, or an id carried in that session's dispatch context and not in this one's. What matters operationally is that it did not block either filing — see below.",
+      "why_the_filing_still_succeeded": "validateRequestShape only consults the lane binding when mission_id is ABSENT (governed-action-request.mjs:1423-1454): the mission id is taken from the payload first and missionIdForLane() is merely the fallback. Passing mission_id explicitly therefore bypasses the unbound lane entirely. A pass that relies on the lane binding to supply the mission will dead-end on missing_mission_binding for a reason that has nothing to do with the census.",
+      "the_run_id": "No execution run exists for this session either, so --run cannot name a real one. This was checked rather than assumed to be harmless: getExecutionRun, patchRunFields and patchRunResourceWait (execution-run.mjs:298-307, :904-908, :1011-1015) all scan for a matching run_id and return null / no-op when there is none. An unmatched run id degrades to 'no run to resume', not to corrupting another lane's run. The converse is the real hazard — passing SOMEONE ELSE'S run id would transition their run to NEEDS_INPUT via releaseRunAfterGovernedFailure. Do not guess a run id that might exist.",
+      "recommendation": "For a censusfiled from an unbound session: always pass mission_id in the payload, and use a run id that provably belongs to no one."
+    },
+    "finding_2_the_evidence_does_not_land_in_this_file": {
+      "severity": "HIGH for whoever expects to read run 4's numbers here.",
+      "finding": "The Director's merge-back writes to a SIBLING file, not to this artifact. trusted-host-actions.mjs:782-784 computes `evidenceRel = queryArtifactPath.replace(/\\.json$/i, '') + '.results.json'`, so a run against wave0-authority-census.json writes wave0-authority-census.results.json. It has been that way since the original Trusted Host Actions commit 3bcd4fd9c (2026-07-31) — `git log -S` over that expression returns exactly one commit — so this is not a recent regression.",
+      "where_it_lands": "evidenceAbs = join(originatingRoot, evidenceRel), where originatingRoot is inputs.artifactRoot || inputs.worktreePath || resolveArtifactRoot(inputs) (trusted-host-actions.mjs:709-711). Runs 1–3 originated in worktree wt6-vacilando-os-product-def, which is why no wave0-authority-census.results.json has ever appeared beside this file. Run 4 was filed with worktreePath = the ui-vac worktree, so ITS results file will appear in ui-vac.",
+      "corroboration": "q15-authority-census.json and q15-authority-census.results.json sit side by side in this directory — that pair is the shape run 4 will produce.",
+      "consequence": "This artifact's run_history, drift block and results are STILL hand-written after every run. Run 3 recorded that the merge-back does not append to run_history; the stronger statement is that for a run originating outside wt6 the merge-back does not touch this file at all. Whoever receives run 4's results must copy them in by hand and must not assume silence here means the run did not happen — check for wave0-authority-census.results.json in the originating worktree first."
+    },
+    "finding_3_dedupe_is_scoped_per_mission_so_run_3_cannot_be_replayed_as_run_4": {
+      "severity": "LOW — but it is the failure this file would least be able to detect.",
+      "finding": "requestTrustedHostAction dedupes against listTrustedHostActions(missionId) and returns an EXISTING completed action with `deduped: true` when the queryHash matches (trusted-host-actions.mjs:294-304). Because combined_query is byte-identical to run 3's, the query hash is identical too — so a run-4 request filed under run 3's mission (msn_e7894cb7225bae3c2b) would have returned run 3's completed action and its 2026-08-07 counts, silently, as though freshly executed.",
+      "why_it_is_not_armed_here": "The dedupe list is scoped to the mission. This request is filed under msn_595040c168e0103c38, a mission with no prior census action, so no completed action can match. Verified from the code path rather than by running it.",
+      "generalisation": "Add this to the pattern run_4_preparation named: a census whose query is deliberately unchanged is a census whose dedupe key is unchanged. Freshness comes from the mission scope, not from the query. A future re-run filed under a mission that ALREADY ran this census will return the old numbers without erroring."
+    },
+    "readonly_validation_2026_09_04": {
+      "verdict": "The committed query still validates — argued from provenance, not from re-running the validator.",
+      "reasoning": "`git log --since=2026-08-07 -- scripts/local-dev/lib/vacilando/trusted-host-sql-readonly.mjs` returns EMPTY: FORBIDDEN_KEYWORDS, FORBIDDEN_PHRASES and validateReadOnlySql are byte-identical to the versions that passed run 3. run_4_preparation.hash_state_verified_2026_09_04 separately proves combined_query is unchanged since run 3. Same query, same validator, therefore same verdict. This retires the 'by inspection' caveat that has stood since 2026-08-06 for as long as both halves stay true.",
+      "still_the_real_gate": "validateReadOnlySql runs unconditionally at execution regardless of what this file claims."
+    },
+    "worker_tooling_extended_2026_09_04": "The permission wall is wider than previously recorded. Earlier passes established that `node -e` and `node --input-type=module` are walled while `node --version` is not. This pass additionally confirms that `node <script-file>` is walled — a script written into the worktree and invoked by path is refused too — as are `openssl dgst -sha256` and `shasum -a 256`. So there is no in-worker route to sha256 or to executing validateReadOnlySql, by any of the four obvious means. Both checks stay provenance arguments, which is why they were written as provenance arguments rather than as assertions.",
+    "what_remains": "ONE operator authorization — for ONE of the two requests, not both. The Director tick sweeps status `requested` (governed-action-request.mjs:3583-3596), validates against the registry, and parks it at awaiting_operator. Nothing further is worker work on either. The checks to run on the results are at run_4_preparation.run_4_request_filed.first_checks_to_make_on_the_results and are not repeated here.",
+    "not_executed_by_this_assignment": "Filing is not running. As of this record the census has NOT run, no run-4 counts exist, and every number in this file is still run 3's, dated 2026-08-07. residual_risks[0] stands undiminished."
+  },
+  "run_history": [
+    {
+      "run": 1,
+      "executed_at": "2026-07-31T15:48:45.465Z",
+      "census_run_at": "2026-07-31T15:48:45.275355+00:00",
+      "mission_id": "msn_2d054741a54698fa4c",
+      "assignment_id": "asg_708252478f6fdd",
+      "trusted_host_action_id": "tha_1e353138da1197",
+      "authorization_id": "tha_auth_d8394598adbe",
+      "query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
+      "note": "First execution. Produced the counts that struck M8, emptied the L2/L3/L4 remediation sets, and sized M1 at 2 rows."
+    },
+    {
+      "run": 2,
+      "executed_at": "2026-08-04T17:00:23.000Z",
+      "census_run_at": "2026-08-04T17:00:21.773733+00:00",
+      "mission_id": "msn_f74ed02c126c88d7ff",
+      "assignment_id": "asg_2a1f4d9dc80899",
+      "trusted_host_action_id": "tha_8defba3adcee6a",
+      "authorization_id": "tha_auth_eec51323ab20",
+      "query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
+      "note": "Re-run under Mission 2, same query, same target fingerprint. Every count identical to run 1 — see drift_since_previous_run. SUPERSEDED AS THE EVIDENCE OF RECORD BY RUN 3 (2026-08-07): results[] now holds run 3, not run 2. Run 2's counts survive in queries[].result, in drift_since_previous_run and in drift_run_2_to_run_3; its full raw result block survives only in git — see runs_1_2_query_provenance.runs_1_2_remain_verifiable."
+    },
+    {
+      "run": 3,
+      "executed_at": "2026-08-07T17:24:16.951Z",
+      "census_run_at": "2026-08-07T17:24:15.663653+00:00",
+      "mission_id": "msn_e7894cb7225bae3c2b",
+      "assignment_id": "asg_86eb0e4a95142e",
+      "trusted_host_action_id": "tha_67f9c69f628d1a",
+      "authorization_id": "see execution.authorization_id",
+      "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+      "query_changed": true,
+      "note": "THE AMENDED QUERY'S FIRST EXECUTION, and the first census that proves its own target. Authored 2026-08-06, promoted into combined_query 2026-08-07 by asg_f34761f0f418ee, executed 2026-08-07 under this mission. Query hash CHANGES here (743cd63b… → a3982ca5…) — that is expected and correct, not drift: the only change is the added target_identity key. Every Q1–Q6 expression is byte-identical to runs 1 and 2, so the counts remain directly comparable, and all of them returned unchanged for a third time. See drift_run_2_to_run_3 and target_identity_resolved.",
+      "history_entry_added_by": "asg_86eb0e4a95142e. The Director's merge-back (trusted-host-actions.mjs) rewrites only status, query_hash, execution and results — it does NOT append to run_history, exactly as runs_1_2_query_provenance.what_the_directors_merge_back_will_do predicted. This entry was written by hand afterwards; the next run will need the same."
+    },
+    {
+      "run": 4,
+      "executed_at": "2026-09-04T11:28:53Z",
+      "census_run_at": "2026-09-04T11:28:53.506411+00:00",
+      "mission_id": null,
+      "assignment_id": "asg_45a7990a10e28c",
+      "trusted_host_action_id": "tha_836b248cacf951",
+      "request_id": "gar_c834cb05ce8425",
+      "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+      "query_changed": false,
+      "note": "THE FIRST RUN THAT DRIFTED. Same committed query (a3982ca5…) and same target fingerprint (ab7e5dde…) as run 3, so the movement is in the DATA, not the instrument. Q4 grew for the first time across four runs — exactly the growth run 3's own caution predicted would arrive 'the moment the product starts being used in earnest'. Every other consequence-bearing count is unchanged."
+    }
+  ],
+  "drift_since_previous_run": {
+    "compared": "2026-08-07T17:24:15Z (run 3) vs 2026-09-04T11:28:53Z (run 4)",
+    "elapsed": "~28 days",
+    "verdict": "DRIFT, and it is the drift this file predicted. Q4 moved for the first time across four runs; every other consequence-bearing count is unchanged. Same query hash (a3982ca5…) and same org fingerprint (ab7e5dde…) as run 3, so this is movement in the tenant, not in the instrument.",
+    "unchanged": {
+      "org_count": 2,
+      "q1_handle_new_user_defined": 1,
+      "q1_application_triggers": 0,
+      "q2_principals_without_membership": 0,
+      "q2_legacy_only_authorized": 0,
+      "q3_undefined_membership_rows": 0,
+      "q4_profiles_without_membership": 0,
+      "q5_admin_ops_org_role_pairs": 3,
+      "q5_pairs_with_no_definition": 0,
+      "q5_pairs_defined_but_inactive": 0,
+      "q6_restricted_admin_ops_pairs": 1,
+      "q6_restricted_site_scope_pairs": 2
+    },
+    "changed": [
+      {
+        "field": "q4_membership_rows",
+        "from": 8,
+        "to": 13,
+        "consequence": "The tenant stopped being idle. Five memberships were created since 2026-08-07."
+      },
+      {
+        "field": "q4_distinct_user_org_pairs",
+        "from": 6,
+        "to": 11,
+        "consequence": "The exhaustively-enumerable population grew from 6 pairs to 11. Run 3's recommendation — satisfy the §2 'prove zero' step by enumerating every pair rather than by observing a traffic window — still holds at 11, but it is now a moving target and should be re-counted at switch time, not carried from this file."
+      },
+      {
+        "field": "q4_pairs_without_profile",
+        "from": 2,
+        "to": 5,
+        "consequence": "M1's backfill MUST BE RE-SIZED from 2 rows to 5. This is the one number in this census that another workstream consumes as a quantity rather than as a yes/no, and W-7 is a FAIL-CLOSED switch gated behind M1: shipping M1 at its recorded size of 2 would leave 3 principals without an access profile at the moment the switch flips — three lockouts, which is precisely the class of defect W-0 exists to prevent."
+      },
+      {
+        "field": "q1_auth_users_triggers",
+        "from": "62 triggers on auth.users",
+        "to": "74 triggers on auth.users",
+        "consequence": "NONE. All 74 are tgisinternal referential-integrity triggers; application_triggers is still 0, so handle_new_user() remains DEFINED BUT NOT ATTACHED. G1 stays latent and W-20 stays in wave 5."
+      }
+    ],
+    "why_q4_grew_this_time": "Run 3 recorded why it had NOT grown: W-5 has not landed, so POST /api/admin/users still inserts into user_roles alone and every membership the product creates is a fail-open pair. Q4 held at 2 only because no membership was being created. Five were created in this window and THREE of them arrived without a profile — a 60% defect rate on new rows against 33% on the standing population. The create path is still writing memberships without profiles. W-5 is not merely still open; it is now actively accumulating the backlog M1 has to clear.",
+    "what_this_says_about_re_running": "Three consecutive identical runs made re-running look ceremonial. It was not: the fourth run is the one that moved, and it moved the single count another workstream consumes as a quantity. Re-run this census immediately before any lockout-class switch, and size M1 from that run rather than from this file."
+  },
+  "target": {
+    "expected_project_ref": "ikaxilmwmrmbagoidedu",
+    "expected_project_ref_source": "docs/sprints/archive/07_2026/staging_migration_deployment_plan.md:3-4",
+    "confirmed_against_live": false,
+    "note": "UNRESOLVED BY THE EVIDENCE, and recorded honestly rather than assumed. current_database() returns 'postgres' on every Supabase project, so the returned row cannot distinguish one project from another. The trusted host action asserts the deployed DATABASE_URL was the target — correct by construction, but asserted by the execution channel rather than proven by the census output. org_count = 2 is the only distinguishing datum captured.",
+    "improvement_for_next_run": "Add a self-identifying column to combined_query — the org id/name set (preferred; inet_server_addr() can return NULL through a connection pooler) — so a future census proves its own target instead of relying on the channel's assertion.",
+    "improvement_status": "CLOSED 2026-08-07 — AUTHORED 2026-08-06, PROMOTED 2026-08-07 (asg_f34761f0f418ee), EXECUTED 2026-08-07T17:24:16Z as run 3 (tha_67f9c69f628d1a, asg_86eb0e4a95142e). The improvement carried unadopted through runs 1 and 2 has now landed and returned data: see target_identity_resolved for what it proves and what it still does not. Everything from here to the end of this field is the HISTORY of that closure, retained because the sequencing is the reusable lesson. Prior status text follows. Outstanding as EVIDENCE — no run had yet proven its own target, so the claim 'we queried the right database' still rested on the channel's assertion and residual_risks[1] stood undiminished. NO LONGER outstanding as WORK, and as of 2026-08-07 that is a stronger statement than it was on 2026-08-06: the amending SQL is not merely written, it now IS this file's top-level combined_query, which is the exact key and the exact file the trusted host action reads. Between 2026-08-06 and this promotion the improvement was authored but UNREACHABLE — it sat in next_run_prepared.inserted_sql, a key nothing reads, so an operator granting the authorization in that window would have silently executed the runs 1/2 query and produced a third byte-identical run with no target_identity at all. That gap is closed. One operator authorization is now the only thing between this file and the evidence. History: run 2 (2026-08-04) deliberately used the committed query unchanged, so the target was again asserted by the channel rather than evidenced by the output; its only corroboration is that it returned the same org_count (2) against the same channel fingerprint (b15dad2c6d030ed4) as run 1, which is consistent with the same target but does not identify it. This file previously said 'carrying this improvement a third time is the wrong outcome — it should land with whichever census next changes the query.' The Mission 2 reopen is that occasion and the improvement was authored rather than carried a third time."
+  },
+  "drift_run_2_to_run_3": {
+    "compared": "2026-08-04T17:00:21Z (run 2) vs 2026-08-07T17:24:15Z (run 3)",
+    "elapsed": "~3 days",
+    "verdict": "ZERO DRIFT, for the third consecutive run. Every consequence-bearing count is identical to runs 1 and 2, so all six §4 rule outcomes stand re-confirmed a third time rather than carried forward.",
+    "unchanged": {
+      "org_count": 2,
+      "q1_handle_new_user_defined": 1,
+      "q1_auth_users_triggers": 62,
+      "q1_application_triggers": 0,
+      "q2_principals_without_membership": 0,
+      "q2_legacy_only_authorized": 0,
+      "q3_undefined_membership_rows": 0,
+      "q4_membership_rows": 8,
+      "q4_distinct_user_org_pairs": 6,
+      "q4_pairs_without_profile": 2,
+      "q4_profiles_without_membership": 0,
+      "q5_admin_ops_org_role_pairs": 3,
+      "q5_pairs_with_no_definition": 0,
+      "q5_pairs_defined_but_inactive": 0,
+      "q6_restricted_admin_ops_pairs": 1,
+      "q6_restricted_site_scope_pairs": 2
+    },
+    "changed": [
+      {
+        "field": "query_hash",
+        "from": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
+        "to": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+        "consequence": "NONE to any count. This is the intended, authored change: the added target_identity key. Every Q1–Q6 expression is byte-identical, which is why the counts above are still directly comparable. A changed hash here is evidence the amendment executed, not evidence of drift."
+      },
+      {
+        "field": "results.target_identity",
+        "from": "absent",
+        "to": "present",
+        "consequence": "The census now proves its own target. See target_identity_resolved."
+      }
+    ],
+    "note_on_q1": "The trigger total held at 62 — it rose 54 → 62 between runs 1 and 2 as migrations added foreign keys referencing auth.users, and no such migration landed in this window. Application triggers remain 0, which is the only figure Q1's rule reads.",
+    "why_q4_still_did_not_grow": "W-5 landed 2026-08-07 (commit ab9c5730b) and closed the product membership writers, so the growth path Q4 depended on is now shut. But this run does NOT demonstrate that closure working: q4_membership_rows also held at 8, meaning no membership was created through the product in this window either. As in the run-1-to-run-2 comparison, stability here reflects an idle tenant, not a proven fix. The first real test of W-5 is the next run in which q4_membership_rows increases — q4_pairs_without_profile must then stay flat.",
+    "what_this_does_and_does_not_license": "It licenses M1 being sized at 2 as of 2026-08-07T17:24:15Z, and it satisfies W-6/M1's §11 immediacy requirement AS OF THAT TIMESTAMP — see w6_m1_preflight.preflight_run_3_outcome. It does not convert any count into an invariant: residual_risks[0] stands, and a preflight that has aged is not a preflight."
+  },
+  "target_identity_resolved": {
+    "resolved_at": "2026-08-07T17:24:15.663653+00:00",
+    "resolved_by": "run 3 (tha_67f9c69f628d1a), assignment asg_86eb0e4a95142e",
+    "summary": "For the first time in three runs, the census output identifies the database it hit. The improvement recorded at target.improvement_for_next_run on 2026-07-31 — and carried unadopted through run 2 — has executed and returned data.",
+    "returned": {
+      "org_ids": [
+        "7803388d-cdee-4afb-89cf-23a137f39423",
+        "93667019-bd28-49b5-a688-acc9bb1e0a19"
+      ],
+      "org_slugs": [
+        "alloy-bend",
+        "demo-childcare-co-c144769f"
+      ],
+      "org_fingerprint": "ab7e5dde2e229d5c46e251456e4d9534",
+      "server_addr": "2600:1f13:838:6e21:288f:4aa6:65bf:f446/128",
+      "server_version": "17.6",
+      "cluster_name": "main"
+    },
+    "what_this_now_proves": "A DURABLE, SELF-EVIDENCED TARGET IDENTITY. Org UUIDs are globally unique, so org_fingerprint ab7e5dde… is a fingerprint of the actual data the census read, computed by the database itself rather than asserted by the channel. Any future run that returns this fingerprint is provably against the same target; any run that does not is provably against a different one. That is exactly what Wave 0 needed and what runs 1 and 2 could not supply. The org slugs are also legible corroboration: 'alloy-bend' and 'demo-childcare-co-…' are the two orgs this programme has always described, and org_count = 2 matches runs 1 and 2.",
+    "what_this_still_does_NOT_prove": "THE SUPABASE PROJECT REF. Nothing in this output names ikaxilmwmrmbagoidedu, and target.expected_project_ref is therefore still unconfirmed — target.confirmed_against_live remains false, deliberately. inet_server_addr() returned a real IPv6 address rather than NULL (so the connection is not behind a pooler that masks it) and server_version is 17.6 with cluster_name 'main', but none of those map to a project ref either. The residual channel-assertion is now MUCH narrower than it was: previously 'we queried the right database' rested entirely on the channel's word, whereas now the identity of the database queried is self-evidenced and only its NAME in Supabase's console is taken on trust. Fully closing it would require reading a project-ref-bearing setting, which this census does not attempt.",
+    "corroboration_against_prior_runs": "org_count = 2 in all three runs, and the channel fingerprint b15dad2c6d030ed4 is unchanged. Runs 1 and 2 returned no org ids, so they cannot be matched against ab7e5dde… directly — this run establishes that baseline rather than confirming it backwards. Their identity remains inferential; every run from here forward is not.",
+    "consequence_for_residual_risks": "residual_risks[1] is SUPERSEDED as written and has been rewritten in place. It is narrowed, not deleted."
+  },
+  "next_run_prepared": {
+    "run": 3,
+    "status": "EXECUTED 2026-08-07T17:24:16.951Z — THIS BLOCK IS NOW HISTORICAL. The authorization arrived and run 3 ran on the trusted host action database.read_census (tha_67f9c69f628d1a) under mission msn_e7894cb7225bae3c2b / assignment asg_86eb0e4a95142e. It returned target_identity and a third set of zero-drift counts; see run_history[2], drift_run_2_to_run_3 and target_identity_resolved for the evidence of record. Everything below describes the state BEFORE that execution and is retained as the record of how the run was prepared — do not read it as pending work, and in particular do not re-apply the insertion (combined_query already carries target_identity; re-applying would duplicate the key). Prior status text follows. PROMOTED AND EXECUTABLE, NOT EXECUTED — awaiting operator authorization for the trusted host action database.read_census. The authorization was then the ONLY remaining blocker; as of 2026-08-07 (asg_f34761f0f418ee) it is no longer also blocked on plumbing. Prior states: AUTHORED 2026-08-06 (asg_2a1f4d9dc80899); AUDITED 2026-08-07 (asg_86eb0e4a95142e), which found two plumbing defects that would have wasted the authorization when it arrived — see insertion_anchor_encoding and execution_mechanics_hash_trap. Both are now discharged: the amended SQL has been PROMOTED into this file's top-level combined_query (so the anchor-encoding ambiguity is moot — the assembly has been performed by hand and its result committed, and no executor needs to re-derive it), and the top-level query_hash has been renamed to runs_1_2_query_hash (so the stale-hash trap cannot fire). The SQL itself is unchanged from 2026-08-06 and still correct.",
+    "promotion_2026_08_07": {
+      "performed_by": "claude (Vacilando managed slot 6), assignment asg_f34761f0f418ee",
+      "what_was_done": "inserted_sql was inserted into combined_query immediately after the 'database', current_database(), line, and the top-level query_hash key was renamed to runs_1_2_query_hash. Nothing else in combined_query was touched — every Q1–Q6 expression remains byte-identical, so run 3's counts stay directly comparable to runs 1 and 2 and drift_since_previous_run stays valid.",
+      "why_this_route_and_not_a_dedicated_run_3_artifact": "This REVERSES the recommendation recorded in execution_mechanics_hash_trap, on evidence that recommendation did not have. That note reasoned correctly about trusted-host-action-registry.mjs (route (b), a dedicated artifact carrying no query_hash, does validate cleanly) but did not check who chooses the artifact path. THE ARTIFACT PATH IS NOT CHOOSABLE THROUGH ANY DIRECTOR OR OPERATOR PATH. fulfillDatabaseCensusForMission declares `queryArtifactPath = \"docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json\"` as a DEFAULT PARAMETER (trusted-host-actions.mjs:489), and all three of its call sites invoke it without that argument: trusted-host-director.mjs:70 (the worker-decision path — the only path a paused worker can reach), v2-api.mjs:329 (POST /api/v2/trusted-host/census), and v2-api.mjs:461 (the operator's authorize_mission_census decision handler). A dedicated run-3 artifact would therefore never be opened by anything. Worse, it would fail SILENTLY rather than loudly: the census would run, succeed, and return the runs 1/2 query's answers — a third byte-identical run, which is exactly the outcome target.improvement_status names as wrong, and it would consume the operator authorization to produce no target_identity evidence at all. Route (a) is not merely preferable here; it is the only route that can execute.",
+      "evidence_write_back_confirms_it": "Independently corroborated by the write side: trusted-host-actions.mjs:379-383 hard-codes the DATABASE_READ_CENSUS evidence path to this same file regardless of which artifact was read. So even under route (b) the results would land here. Read and write are both pinned to this file; only this file can be run 3.",
+      "verification_performed": [
+        "jq parses the file — it is valid JSON after the edit.",
+        "Top-level `query_hash` absent and top-level `combined_query_hash` absent (jq has() both false), so registry validateInputs resolves expectedHash to undefined and skips the comparison at :98 rather than failing on 743cd63b…",
+        "combined_query contains the target_identity block (jq contains() true).",
+        "Forbidden-keyword scan over the WHOLE amended query using the registry's own `(^|\\s)KW\\b` semantics for all 27 single-word FORBIDDEN_KEYWORDS: ZERO hits. Run WITHOUT stripping comments or string literals, which is strictly more conservative than the validator, which strips both first.",
+        "Forbidden-phrase scan: one hit, `into wave0-authority-census.json` on line 3, which matches the SELECT-INTO pattern /\\bINTO\\s+[a-zA-Z_][\\w.]*\\b/i. It is inside a `--` comment and is therefore scrubbed to spaces before FORBIDDEN_PHRASES runs. It is also PRE-EXISTING text that runs 1 and 2 both executed successfully, so it is empirically proven not to trip the validator.",
+        "Statement count: the query contains two `;` characters, but the second is inside a `--` comment on the inserted block's line 33 ('the durable identifier; the remaining fields are'). stripCommentsAndStrings scrubs comments BEFORE splitStatements, so exactly one statement survives. Recorded because a naive semicolon count reads as two statements and would look like a defect."
+      ],
+      "not_verified": "validateReadOnlySql() and sha256 were still NOT executed in-worker. node code execution remains permission-walled here (`node -e` and `node <file>` are both refused; jq and git ARE available, which is what made the checks above mechanical rather than visual). The scans above replicate the validator's rules by hand against its source; they are not a substitute for the Director running validateInputs, which it does unconditionally on every run (registry :111). query_hash for run 3 remains DELIBERATELY ABSENT and must be derived by the Director, exactly as the field below states."
+    },
+    "prepared_at": "2026-08-06",
+    "prepared_by": "claude (Vacilando managed slot 6), assignment asg_2a1f4d9dc80899 under the Mission 2 reopen",
+    "why": "The Mission 2 reopen re-issued W-0 after its exit criteria were already met and re-confirmed. Re-asserting the file would be the cheap and wrong answer, and a third byte-identical run is the outcome target.improvement_status explicitly names as wrong: 'carrying this improvement a third time is the wrong outcome — it should land with whichever census next changes the query.' This IS that change. It is the one item still open inside W-0's own scope.",
+    "what_changes": "One added top-level key, 'target_identity'. Every Q1–Q6 expression is left byte-identical, so run 3's counts stay directly comparable to runs 1 and 2 and the drift comparison remains valid.",
+    "insertion_anchor": "  'database', current_database(),\\n",
+    "insertion_anchor_encoding": "RAW JSON SOURCE FORM — and that is a trap worth naming. Read this value as it appears in this file's TEXT: the trailing escape is the two characters backslash-then-n, not a newline. In that form it matches the raw source of combined_query exactly once. It does NOT match the PARSED string: JSON.parse turns combined_query's single escape into a real newline, but turns this anchor's doubled escape into a literal backslash-n, so parsed.combined_query.includes(parsed.insertion_anchor) is FALSE — measured, not argued; see insertion_anchor_parsed_note. The adjacent inserted_sql field uses the OPPOSITE convention — its escapes DO become real newlines when parsed. The two fields therefore disagree, which is how this survived two authoring passes unnoticed. FLAGGED 2026-08-07 by assignment asg_86eb0e4a95142e. The value is deliberately LEFT UNCHANGED rather than re-escaped: re-escaping would fix a parsed-string executor and simultaneously break a raw-source-text one, and neither reading is authoritative in the record. Programmatic assembly must use insertion_anchor_parsed instead of guessing.",
+    "insertion_anchor_parsed": "  'database', current_database(),\n",
+    "insertion_anchor_parsed_note": "The same anchor in PARSED form — the trailing character is a real newline, so this matches combined_query after JSON.parse, exactly once. This is the form to use for programmatic run-3 assembly. VERIFIED BY EXECUTION, not by inspection: jq is allowlisted in this worker even though node is not, and it parses this file with the same JSON semantics the registry uses. Measured 2026-08-07 over the parsed strings — combined_query contains insertion_anchor: FALSE; contains insertion_anchor_parsed: TRUE; occurrences of insertion_anchor_parsed: exactly 1. That is the direct evidence for both the trap named in insertion_anchor_encoding and the 'occurs exactly once' claim.",
+    "insertion_note": "The block below is inserted immediately AFTER the anchor line, inside the existing jsonb_build_object. Nothing else in combined_query is touched. The anchor occurs exactly once — confirmed 2026-08-07 against the raw file, in both encodings. STATUS 2026-08-07: this insertion HAS NOW BEEN APPLIED — asg_f34761f0f418ee promoted the amended text into combined_query, which now carries the target_identity block. These anchor fields are therefore HISTORICAL: they describe how run 3's query was assembled, not work still to do. They are retained because the encoding defect they document (see insertion_anchor_encoding) is a live trap for any future amendment of this file, and because they are the record of how the applied text was derived. Re-applying the insertion would duplicate the target_identity key.",
+    "inserted_sql": "  -- run 3 only: self-identify the target (target.improvement_for_next_run).\n  -- The org id/slug set is the durable identifier; the remaining fields are\n  -- best-effort and return NULL rather than erroring behind a connection pooler.\n  'target_identity', (\n    SELECT jsonb_build_object(\n      'org_ids', COALESCE(jsonb_agg(o.id ORDER BY o.id), '[]'::jsonb),\n      'org_slugs', COALESCE(jsonb_agg(o.slug ORDER BY o.id), '[]'::jsonb),\n      'org_fingerprint', md5(COALESCE(string_agg(o.id::text, ',' ORDER BY o.id), '')),\n      'server_addr', inet_server_addr()::text,\n      'server_version', current_setting('server_version', true),\n      'cluster_name', current_setting('cluster_name', true)\n    ) FROM public.orgs o\n  ),",
+    "why_these_columns": "target.improvement_for_next_run names the org id/name set as PREFERRED and warns that inet_server_addr() can be NULL behind a connection pooler. So the org UUID set is the load-bearing identifier — org UUIDs are globally unique and durable, and matching them against runs 1/2 proves same-target rather than asserting it. server_addr, server_version and cluster_name are recorded as weak corroboration only; each returns NULL rather than erroring when unavailable, so none can fail the statement.",
+    "schema_grounding": "public.orgs(id uuid NOT NULL, name text NOT NULL, slug text NOT NULL, status text NOT NULL, created_at, industry_id uuid) — supabase/migrations/20260329165048_remote_schema.sql:2284-2291. Only id and slug are read. current_setting(name, true) uses the missing_ok form, which returns NULL for an unset parameter instead of raising.",
+    "readonly_validation": "Validated BY INSPECTION against scripts/local-dev/lib/vacilando/trusted-host-sql-readonly.mjs. The added block introduces no FORBIDDEN_KEYWORDS and matches no FORBIDDEN_PHRASES: it adds only jsonb_build_object, jsonb_agg, COALESCE, md5, string_agg, inet_server_addr and current_setting over public.orgs, adds no statement (still one statement), and adds no CTE. Note the validator strips string literals before scanning, so 'cluster_name' does NOT trip the CLUSTER keyword rule. NOT executed through validateReadOnlySql() in this session — node and shasum are both permission-walled in this worker. The Director re-validates at execution, which is the real gate.",
+    "query_hash": "DELIBERATELY ABSENT — DO NOT GUESS ONE. The worker could not compute sha256 (node and shasum are permission-walled here). trusted-host-action-registry.mjs computes hash = sha256(sql) itself, and only compares when an expectedQueryHash is supplied or the artifact carries a query_hash field; recording a wrong hash here would fail the run with query_hash_mismatch. The executing Director derives it and records it in the run-3 history entry.",
+    "execution_mechanics": "SUPERSEDED 2026-08-07 (asg_f34761f0f418ee) — the choice this field left open has been made and executed. Retained for the mechanism, which is still accurate: the registry reads the query from j.combined_query || j.sql || j.query only, so run 3's amended text has to BE the artifact's combined_query. WHAT IS NO LONGER TRUE: this field said 'this file's top-level combined_query and query_hash are LEFT UNCHANGED'. Both have since changed — combined_query now carries the target_identity block, and query_hash has been renamed to runs_1_2_query_hash. WHAT IS NO LONGER A CHOICE: this field offered two routes and called the pick 'the executor's'. Only one of the two can actually run. The second route — pointing queryArtifactPath at a dedicated run-3 artifact — cannot be reached, because queryArtifactPath is a default parameter of fulfillDatabaseCensusForMission (trusted-host-actions.mjs:489) and none of its three call sites passes it (trusted-host-director.mjs:70, v2-api.mjs:329, v2-api.mjs:461). See promotion_2026_08_07 for the full evidence and for why that route would have failed silently rather than loudly.",
+    "supersedes_nothing": "This does not alter, retract or re-open any run-1 or run-2 result. Runs 1 and 2 stand exactly as recorded.",
+    "execution_mechanics_hash_trap": "ADDED 2026-08-07 (asg_86eb0e4a95142e), read directly off trusted-host-action-registry.mjs:86-106. The two routes execution_mechanics offers are NOT equally safe, and the difference is not obvious. validateInputs resolves the expected hash as `inputs.expectedQueryHash || inputs.expected_query_hash`, and ONLY if that is absent does it fall back to the artifact's own `j.query_hash`; it then compares against sha256(sql) and fails with code `query_hash_mismatch` on any difference. CONSEQUENCE: (a) PROMOTING the amended text into THIS file's combined_query while leaving the top-level query_hash at 743cd63b… FAILS THE RUN — the stale hash is picked up automatically and cannot match the amended SQL. Anyone taking that route must remove or correct query_hash in the same edit, which also destroys runs 1 and 2's verifiability against this file. (b) A DEDICATED run-3 artifact whose combined_query is the amended text and which carries NO query_hash key validates and executes cleanly: with no expectedQueryHash supplied and no artifact hash to fall back on, the comparison is skipped entirely and the registry computes and reports the hash itself. Route (b) is therefore the one that needs no precomputed sha256 and leaves this file intact. Note that although the action's inputSchema lists expectedQueryHash as required, validateInputs does not itself enforce that list — it enforces only queryArtifactPath — so omitting it is accepted by the code as written. RECOMMENDATION AT TIME OF WRITING: route (b). SUPERSEDED WITHIN THE SAME DAY — READ THIS BEFORE ACTING ON THE ABOVE. Assignment asg_f34761f0f418ee, running concurrently in this worktree, took route (a) and made it safe: it promoted the amended SQL into combined_query AND renamed the top-level query_hash to runs_1_2_query_hash in the same edit, so no key named query_hash or combined_query_hash remains at top level. Verified 2026-08-07 with jq against the live file: combined_query now contains the target_identity block, has(\"query_hash\") is false, has(\"combined_query_hash\") is false. expectedHash therefore resolves to undefined, the comparison at :98 is skipped, and the registry computes the hash itself — the same safe end-state route (b) was recommended for, reached without a third file. Runs 1 and 2 stay verifiable against the git blob named in runs_1_2_query_provenance, which is a stronger anchor than an in-file copy. THE STANDING HAZARD IS NOW THE INVERSE: re-introducing a top-level key named query_hash (or combined_query_hash) holding 743cd63b… would silently re-arm this trap and fail every run-3 attempt with query_hash_mismatch. Do not 'restore' that key. This entry is retained because the mechanism is the reusable lesson and the inverse hazard is live.",
+    "worker_tooling_reconfirmed_2026_08_07": "The 2026-08-06 claim that node and shasum are permission-walled in this worker was RE-TESTED this session and HOLDS, with one refinement worth recording so the next worker does not waste a round trip: `node --version` IS allowed (v22.21.1) while `node -e` / `node --input-type=module` are NOT, and `shasum -a 256` is NOT. So node is present but not executable for arbitrary code. Consequence: readonly_validation above remains BY INSPECTION and query_hash above remains genuinely uncomputable inside the worker — neither is an authoring shortcut. Both are discharged by the Director at execution, which validateInputs performs unconditionally (validateReadOnlySql is called on every run, line 111).",
+    "now_also_serves_w6_m1_preflight": "ADDED 2026-08-07 by the W-6 assignment. Run 3 was authored on 2026-08-06 and is still unexecuted. W-6/M1 independently requires a fresh Q4 immediately before apply (§11). Those are the SAME live read — run 3's combined_query already computes q4_pairs_without_profile, q4_membership_rows, q4_distinct_user_org_pairs and q4_profiles_without_membership. Executing run 3 therefore discharges BOTH obligations on ONE operator authorization; requesting a separate W-6 census would be a second authorization for a query that is a subset of this one. See w6_m1_preflight for the pass/fail rules applied to run 3's output."
+  },
+  "w6_m1_preflight": {
+    "workstream": "W-6",
+    "migration": "supabase/migrations/20260807140000_backfill_membership_access_profiles.sql",
+    "target": "shared",
+    "status": "EXECUTED 2026-08-07T17:24:15Z as part of run 3, and the gate has NOW BEEN MOVED by W-6's owner (asg_5b1ea3f9a620c6, third dispatch). W-0 recorded the numbers at preflight_run_3_outcome and deliberately stopped short of setting preflight.ok; W-6 has accepted them and set it — see w6_owner_acceptance and preflight below. The migration is `awaiting_authorization` with `preflight.ok: true`, so the shared-target gate reads `operator_review` rather than `unmet` for the first time. Post-apply RULES 3 and 4 remain pending by construction.",
+    "preflight_run_3_outcome": {
+      "recorded_by": "asg_86eb0e4a95142e (W-0). W-0's job is to produce the live numbers; W-6's owner applies them to the gate. This block deliberately stops short of setting preflight.ok.",
+      "census_source": "run 3, tha_67f9c69f628d1a, census_run_at 2026-08-07T17:24:15.663653+00:00",
+      "numbers_returned": {
+        "q4_pairs_without_profile": 2,
+        "q4_membership_rows": 8,
+        "q4_distinct_user_org_pairs": 6,
+        "q4_profiles_without_membership": 0
+      },
+      "rule_evaluation": [
+        "RULE 1 (sizing) — SATISFIED AS AN INPUT. The number M1 must create is 2. The migration enforces this in-transaction and aborts on mismatch, so this value is an input to that check, not a substitute for it.",
+        "RULE 2 (grain) — SATISFIED. The figure above is q4_pairs_without_profile (2), NOT q4_membership_rows (8) and NOT q4_distinct_user_org_pairs (6). All three remain distinct, so the grain confusion this rule guards against is still live and still correctly avoided.",
+        "RULE 3 (coverage) — NOT DISCHARGEABLE PRE-APPLY. The post-apply anti-join returning 0 is W-6's exit criterion and can only be measured after the migration runs.",
+        "RULE 4 (no modification) — PRECONDITION CLEAN. q4_profiles_without_membership = 0, so there are no orphan profile rows for M1 to collide with, and the EXCEPT-comparison has a clean baseline.",
+        "RULE 5 (immediacy) — SATISFIED ONLY AS OF 2026-08-07T17:24:15Z, AND THIS IS THE ONE THAT DECAYS. The rule requires the census immediately before apply. If the apply does not follow closely, this preflight is stale and must be re-run; an aged preflight is not a preflight. Nothing in this file can keep rule 5 true over time."
+      ],
+      "abort_conditions_checked": [
+        "'q4_pairs_without_profile cannot be attributed to a known writer' — NOT TRIGGERED. The value is 2, identical to runs 1 and 2, so these are the same two pre-existing pairs rather than newly created ones. No evidence of a sixth membership writer. Note this is a weaker check than it looks: q4_membership_rows also held at 8, so no membership was created in this window at all, and an idle tenant cannot exercise the writers. W-5's closure is unrefuted here, not confirmed.",
+        "'q4_profiles_without_membership > 0' — NOT TRIGGERED. It is 0, as in runs 1 and 2. No profile has outlived its membership."
+      ],
+      "what_this_licenses": "M1 may be applied sized at 2, promptly, with rules 1, 2 and 4 evidenced and rule 5 satisfied at the timestamp above. The migration's own in-transaction guard remains the real enforcement.",
+      "what_this_does_not_license": "It does not set preflight.ok, it does not advance the Accept spine, and it does not survive delay. Per gate_position below, the shared-target gate is W-6's to move once its owner accepts these numbers — and if time has passed, the correct action is another census, which is now a single authorization on a known-good channel."
+    },
+    "prepared_at": "2026-08-07",
+    "prepared_by": "claude (Vacilando managed slot 6), assignment asg_5b1ea3f9a620c6",
+    "why_not_executed": "SUPERSEDED 2026-08-07 — the preflight HAS now executed; this key is retained as the record of why two dispatches could not move it, and the diagnosis was exactly right. It read: 'The census channel is the Vacilando trusted host action `database.read_census`, which the DIRECTOR executes host-side. The worker protocol exposes only `vacilando-decision` and `vacilando-report` — there is no worker-side channel to invoke it, and no privileged credential reaches the worker by design. This is the same dependency that has held run 3 since 2026-08-06.' HOW IT ACTUALLY UNBLOCKED, and the reusable lesson: not by worker effort. The operator authorized run 3, the Director executed it host-side, and W-6's third dispatch arrived to find the numbers already merged into this file. Because execution_source had bound W-6's preflight to run 3 rather than requesting a separate census, ONE authorization discharged both W-0's target-identity evidence and W-6's preflight — the outcome now_also_serves_w6_m1_preflight was authored to produce, and it worked. For the eight remaining §11 preflights the gating resource is the authorization, not worker availability: dispatching a worker at a preflight-blocked workstream cannot move it, and binding a workstream's preflight to a census that is already queued is what makes one authorization do two jobs.",
+    "dispatch_3_2026_08_07": {
+      "what_happened": "Assignment asg_5b1ea3f9a620c6 was dispatched a THIRD time — same assignment id, same mission msn_f74ed02c126c88d7ff v1, same contentHash 3c36b58117e46b2363ef602b385409e7, same objective and scope. Unlike dispatch 2, this one had real work to do, because the world had changed underneath it: census run 3 executed at 2026-08-07T17:24:15Z and its results were sitting in the worktree.",
+      "what_it_found_on_arrival": "The Director's merge-back (status -> executed, new top-level query_hash a3982ca5…, results rewritten with target_identity populated) was UNCOMMITTED in a dirty tree, alongside asg_f34761f0f418ee's hand-authored promotion notes. That is the second consecutive dispatch to find real prior work at risk of a stash or a clean. It was committed unmodified first (747318753), before any new authoring, so authorship stayed separable.",
+      "what_it_did": "Evaluated run 3's live numbers against this block's pass_rules, wrote the §11-mandated evidence file w6-m1-preflight.json, set preflight.ok, and moved the gate from `unmet` to `operator_review`. It did NOT re-author the migration, which was verified intact and left byte-unchanged.",
+      "concurrency_note": "asg_86eb0e4a95142e (W-0) was running in this same worktree simultaneously and committed 7e7039bc0 on top of 747318753 while this assignment was mid-edit — which is how preflight_run_3_outcome appeared between a read and a write here. That worker correctly recorded the numbers and deliberately left preflight.ok to W-6's owner. The two evaluations were independent and agree on every rule verdict; W-6's added refinement is recorded at w6_owner_acceptance.the_one_refinement_added. WORTH NAMING: two assignments editing one JSON artifact concurrently is a real collision risk in this worktree, and it has now happened twice. It was survivable here only because the two touched different keys."
+    },
+    "execution_source": "next_run_prepared (run 3). No separate query is needed or wanted.",
+    "reads": [
+      "q4_pairs_without_profile — the number M1 must create",
+      "q4_membership_rows and q4_distinct_user_org_pairs — grain corroboration; all three must be distinct-or-explained, never interchanged",
+      "q4_profiles_without_membership — the orphan population M1 must leave untouched"
+    ],
+    "pass_rules": [
+      "RULE 1 (sizing). M1's created-row count MUST equal q4_pairs_without_profile as returned by the preflight run, NOT the 2 recorded in results[]. The migration enforces this in-transaction and aborts on mismatch, so a stale number cannot silently size a wrong apply.",
+      "RULE 2 (grain). The comparison is against q4_pairs_without_profile. Comparing against q4_membership_rows (8 at run 2) or q4_distinct_user_org_pairs (6 at run 2) would let the preflight pass on a wrong migration — see queries[Q4].result.grain_ruling.",
+      "RULE 3 (coverage). Post-apply, the Q4 anti-join MUST return 0. This is W-6's exit criterion and W-7's precondition.",
+      "RULE 4 (no modification). q4_profiles_without_membership must be unchanged post-apply, and zero pre-existing profile rows may differ. The migration snapshots every pre-existing row into a temp table and EXCEPT-compares after the insert, so this is evidenced rather than argued from ON CONFLICT DO NOTHING semantics.",
+      "RULE 5 (immediacy). The census must be re-run IMMEDIATELY BEFORE apply. Q4 is the one count that grows with product use. W-5 landed 2026-08-07 and closed the three product membership writers, so the growth path is closed — but `tests/processing/cert/processingIdentityCertFixtures.ts:115` still upserts user_roles with no profile row and CAN grow Q4 in a certification tenant. A preflight count above the last census is therefore explainable, not automatically alarming; a count that cannot be attributed to that fixture IS alarming and means a sixth membership writer exists."
+    ],
+    "expected_but_not_asserted": "2, if the tenant has been idle since 2026-08-04 and W-5's closure held. This number is recorded as an EXPECTATION for triage only. Nothing in the migration or the gate reads it — §4's standing rule is that every consumer re-derives rather than cites, and residual_risks[0] stands.",
+    "abort_conditions": [
+      "q4_pairs_without_profile cannot be attributed to a known writer (cert fixture) — stop; a sixth membership writer exists and W-5's audit was incomplete.",
+      "q4_profiles_without_membership > 0 — not a blocker for M1 (which never touches orphans), but it must be recorded and explained before apply, because run 1 and run 2 both measured 0 and an orphan means a profile outlived its membership."
+    ],
+    "referential_safety": "CHECKED, NOT ASSUMED (2026-08-07, static). The insert selects (user_id, org_id) straight out of user_roles into user_access_profiles, whose FKs point at auth.users(id) and public.orgs(id). user_roles carries the SAME two FKs — user_roles_user_id_fkey and user_roles_org_id_fkey, both ON DELETE CASCADE (20260329165048_remote_schema.sql:6618,6623). No row in user_roles can therefore reference a user or org that user_access_profiles would reject, so the backfill cannot fail on foreign key violation. Scope values 'all'/'all' satisfy both CHECK constraints (20260504103000:26-29), and ON CONFLICT (user_id, org_id) is backed by the real constraint uq_user_access_profiles_user_org (ibid.:49-50) rather than an assumed one. This closes the apply-time failure mode where a backfill sized correctly still aborts on referential grounds.",
+    "post_apply_evidence": "The migration's DO block RAISEs a NOTICE block carrying membership_rows, distinct_user_org_pairs, pairs_without_profile_before, profile_rows_created, pairs_without_profile_after, profile_rows before/after, orphan_profiles before/after and pre_existing_rows_mutated. Capture that output verbatim into the evidence file named by §11's migrations[].preflight.evidence_path. Tier A is the post-apply anti-join returning 0.",
+    "gate_position": "MOVED 2026-08-07 by asg_5b1ea3f9a620c6 (third dispatch). PREVIOUSLY: `awaiting_authorization` with `preflight.ok` ABSENT — unexecuted rather than false-by-judgment — which under MIGRATION-APPLY-GATE.md's table is `unmet`, NOT `operator_review`. NOW: `awaiting_authorization` with `preflight.ok: true` and an evidence_path, which is that table's stated condition for `operator_review` on a shared target. The distinction that changed is factual, not editorial: the preflight had never been run, and now it has. WHAT IS STILL TRUE: preflight.ok does NOT auto-apply and does NOT complete W-6. The gate document is explicit that ok:true 'only unlocks the honest question: authorize apply on shared, or keep deferred.' W-6's exit criterion (post-apply anti-join = 0) is still unmet, `migrations[].status` is still `awaiting_authorization` rather than `applied`, and the acceptance gate is therefore `needs_operator`. Per the gate's hard rule, `mission.accept` must NOT run and must NOT advance the objective spine on `needs_operator` — that exact bug shipped once on Access & Roles Phase 0.",
+    "apply_authorization_2026_08_07": {
+      "granted": true,
+      "granted_by": "operator (Kelly), answered from Mission Control",
+      "chosen_option": "(a) authorize the apply now, confirming org fingerprint ab7e5dde2e229d5c46e251456e4d9534",
+      "residual_accepted": "Option (b) — parse-check on a disposable PostgreSQL first — was NOT chosen, so R2 stands ACCEPTED rather than discharged: the DO block has still never been parsed by any PostgreSQL and a syntax error will surface at apply time. Safe (the transaction rolls back and the database is left exactly as it was) but it would cost a repeat round trip.",
+      "state": "AUTHORIZED, NOT YET APPLIED — a real intermediate state. `awaiting_authorization` is now wrong because the operator has answered; `applied` is not yet true because no migration has run. The register should not collapse it to either neighbour.",
+      "why_no_worker_applied_it": "STRUCTURAL, not a permission the worker failed to request, and worth recording precisely because the same wall will meet all eight remaining §11 migrations. `database.read_census` is the ONLY trusted host action in the registry (trusted-host-action-registry.mjs:11, 130), and validateReadOnlySql() runs unconditionally on every action (:111) — an INSERT trips FORBIDDEN_KEYWORDS, so the census channel cannot apply a migration BY CONSTRUCTION. No `database.apply_migration` action exists to authorize. DATABASE_URL is denylisted twice besides (verify.sh:202, :210). The authorization is genuine and actionable — by the operator on the trusted host, not by a worker. THE PROGRAMME GAP THIS EXPOSES: the trusted host mechanism was built for read-only evidence and solved that well, but every one of the nine §11 migrations terminates in a privileged WRITE that has no equivalent channel. That is worth designing before W-9's catalog consolidation, which is materially riskier than this two-row backfill.",
+      "apply_instructions": "See w6-m1-preflight.json -> how_to_apply. NOTE THE ONE HARD WARNING THERE: apply the single file with psql, never `supabase db push`, which would apply the 28-migration Processing/Identity backlog recorded as unapplied against this target alongside M1."
+    },
+    "preflight": {
+      "ok": true,
+      "summary": "pairs_without_profile=2; membership_rows=8; distinct_user_org_pairs=6; orphan_profiles=0; M1 sized at exactly 2 rows on the pairs_without_profile grain; no unattributed growth across three runs; migration functionally proven not-yet-applied on target",
+      "evidence_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/w6-m1-preflight.json"
+    },
+    "w6_owner_acceptance": {
+      "accepted_by": "claude (Vacilando managed slot 6), assignment asg_5b1ea3f9a620c6, third dispatch, 2026-08-07",
+      "what_was_accepted": "W-0's preflight_run_3_outcome numbers, re-checked against this block's own pass_rules rather than taken on trust. Every rule verdict agrees with W-0's independent evaluation: RULE 1 sized at 2, RULE 2 on the pairs_without_profile grain with all three figures distinct, RULE 4's precondition clean at 0 orphans, both abort conditions untriggered, RULES 3 and 4's post-apply halves unreachable pre-apply. Two independent evaluations of the same live read reaching the same verdicts is the strongest evidence available without applying.",
+      "the_one_refinement_added": "W-0 wrote that RULE 5 'decays' and that 'an aged preflight is not a preflight'. That is right about the ATTRIBUTION obligation and worth keeping. It is incomplete about the RISK, and reading the migration changes what staleness costs. Post-condition (1) compares rows created against the anti-join measured microseconds earlier IN THE SAME TRANSACTION (20260807140000:54-58, 85, 120-124) — NOT against this preflight's 2. The INSERT selects DISTINCT from user_roles at apply time, so growth in the authorization gap is simply covered, and all four post-conditions still hold. CONSEQUENCE: a stale preflight cannot cause a WRONG apply, only an UNEXPLAINED one. profile_rows_created > 2 at apply time would be CORRECT behaviour, not a failure — it would mean a membership was created in the gap, which is a thing to attribute (RULE 5's real job) rather than a thing to fear. This matters because the opposite reading invites re-running the census reflexively before every apply attempt, each costing an operator authorization, to protect against a failure mode the migration already forecloses.",
+      "why_the_gate_moves_on_a_pre_apply_ok": "MIGRATION-APPLY-GATE.md defines the worker's preflight obligation as read-only work on the target BEFORE the operator is asked to authorize — 'never ask the operator to authorize a shared apply on a bare awaiting_authorization row.' RULES 3 and 4's post-apply halves are, by that document's own sequence (preflight -> authorize -> apply -> status: applied), on the far side of the authorization. Withholding preflight.ok until they are satisfied would make the gate unsatisfiable by construction: the worker would be required to prove a post-apply fact in order to earn permission to apply. That is why ok is scoped to the pre-apply rules and says so explicitly rather than silently."
+    },
+    "redispatch_2026_08_07": {
+      "what_happened": "Assignment asg_5b1ea3f9a620c6 was dispatched a SECOND time — same assignment id, same mission msn_f74ed02c126c88d7ff v1, same contentHash 3c36b58117e46b2363ef602b385409e7, same title/objective/scope, against the same branch and the same base commit 7dc06920a that the FIRST dispatch of this very assignment produced. This is not a revision request against W-6 and not a new slice; it is an exact re-dispatch.",
+      "what_was_done_on_the_second_dispatch": "No re-authoring. The migration, the plan's §W-6 section, the §11 M1 ledger row and this w6_m1_preflight block were verified intact against 7dc06920a and left byte-unchanged. Re-authoring them would have regenerated identical content and reset the record's dates for no gain — the same failure mode target.improvement_status names for the census query ('carrying this improvement a third time is the wrong outcome').",
+      "what_the_second_dispatch_did_close": "Four keys authored by asg_86eb0e4a95142e (insertion_anchor_encoding, insertion_anchor_parsed, insertion_anchor_parsed_note and the amended insertion_note) were found UNCOMMITTED in the worktree, i.e. real prior work at risk of being lost to a stash or a clean. They were committed. That was the only uncommitted delta in either scope file.",
+      "still_the_only_blocker": "The preflight. It is not slow, not deprioritized and not a judgment call — there is no worker-side channel to `database.read_census`, so no number of re-dispatches to a worker can produce it. Each re-dispatch costs a worker session and returns the same needs-operator state.",
+      "migration_never_parsed": "RECORDED AS A RESIDUAL RISK, not a claim of validation. No PostgreSQL has ever parsed 20260807140000_backfill_membership_access_profiles.sql — no local stack was running on either dispatch (docker ps empty), and the shared local stack is not the shared target the plan means, so applying there would prove little and mutate a resource shared with other slots. A syntax error in the DO block would therefore surface AFTER the operator authorizes the apply. The four post-conditions still make that failure safe (the migration transaction rolls back), but it would cost the authorization round trip."
+    }
+  },
+  "method": {
+    "read_only": true,
+    "writes": "none",
+    "schema_changes": "none",
+    "product_code_changes": "none",
+    "schema_grounding": [
+      "public.user_roles(user_id uuid, role text, created_at, org_id uuid) — supabase/migrations/20260329165048_remote_schema.sql:2915-2920. `role` is unconstrained text (C2).",
+      "public.role_definitions(id, org_id, role_key text, role_label, description, is_system, is_active, ...) — remote_schema.sql:2701-2711",
+      "public.user_access_profiles(id, user_id, org_id, department_scope, site_scope, ...) UNIQUE(user_id, org_id) — supabase/migrations/20260504103000_user_access_scope_tables_v1.sql:18-52",
+      "public.user_profiles(id uuid, role public.app_role, ...) — remote_schema.sql:2904-2909. NOTE: no org_id column; the legacy profile role is global, and the org is recovered from app_users.",
+      "public.app_users(id uuid, role text, vendor_id, created_at, updated_at, org_id uuid NULL, auth_user_id uuid) — remote_schema.sql:1010-1019. The dual linkage (id | auth_user_id) is what the resolver walks."
+    ],
+    "resolver_grounding": [
+      "web/lib/admin/resolveAdminAccessCore.ts:111-140 — the legacy fallback fires ONLY when the principal has zero user_roles rows. Q2 is therefore scoped to principals with no membership row at all.",
+      "web/lib/admin/resolveAdminAccessCore.ts:40-73 — fetchLegacyAdminOpsOrgAndRole tries user_profiles.role (org recovered from app_users by id, then auth_user_id), then app_users by id, then app_users by auth_user_id. Q2 reproduces that precedence.",
+      "web/lib/admin/resolveAdminAccessCore.ts:144-162 — absent user_access_profiles row ⇒ both scopes 'all'. Q4 counts the population that fail-open depends on.",
+      "web/lib/admin/accessScope.ts:45,51-53 — PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES = {admin, ops}. Q6 counts who is silently unrestricted today."
+    ],
+    "note_on_file_name": "The assignment names this file wave0-authority-census.json; plan §4 originally wrote 'w0-live-census.json'. This file is authoritative and §4 has been corrected to point here.",
+    "schema_reverification_2026_07_31": {
+      "why": "Execution is blocked on an operator action, so the highest-value work available was to make that single operator run as likely to succeed as possible. A query that errors on first contact costs another full round trip.",
+      "checked": [
+        "public.orgs EXISTS — remote_schema.sql:2284. The combined query's org_count reads it; had the table been named 'organizations' the whole statement would have failed.",
+        "public.user_roles(user_id uuid, role text NOT NULL, created_at, org_id uuid NOT NULL) — remote_schema.sql:2915-2920. Confirms `role` is unconstrained text (C2) and that Q3/Q5's anti-joins are well typed.",
+        "public.role_definitions(id, org_id, role_key text, role_label, description, is_system, is_active boolean NOT NULL DEFAULT true, ...) — remote_schema.sql:2701-2711. `is_active IS FALSE` in Q5 is correct against a NOT NULL boolean.",
+        "public.user_profiles(id uuid, role public.app_role NOT NULL DEFAULT 'ops', ...) — remote_schema.sql:2904-2909. No org_id column, confirming Q2's org recovery through app_users; the ::text cast on the app_role enum is required and present.",
+        "public.app_users(id, role text, vendor_id, created_at, updated_at, org_id uuid NULL, auth_user_id uuid) with CHECK role IN ('admin','ops','vendor_owner','vendor_worker') — remote_schema.sql:1010-1019. Q2's filter on ('admin','ops') is a real subset of the constraint, not a guess.",
+        "public.user_access_profiles.department_scope / site_scope are text NOT NULL with CHECK (= ANY (ARRAY['all','restricted'])) — 20260504103000_user_access_scope_tables_v1.sql:22-29. Q6's literal 'restricted' matches the constraint exactly."
+      ],
+      "defect_found_and_fixed": "pg_trigger.tgenabled is type \"char\", not text. Inside jsonb_build_object it was relying on to_jsonb's fallback for a non-JSON-native builtin type. It is now cast explicitly (t.tgenabled::text) in combined_query. This was the single most likely first-contact failure, and it sat in Q1 — the query the operator would hit first.",
+      "not_checked": "The live database. All of the above is verified against supabase/migrations in this worktree. Drift between migrations and deployed schema remains the residual risk recorded below."
+    },
+    "schema_drift_check_post_execution": {
+      "question": "Does the deployed schema match supabase/migrations for the tables this census reads?",
+      "answer": "Yes, for every table touched. All six queries executed without error against user_roles, role_definitions, user_access_profiles, user_profiles, app_users, orgs and pg_trigger, and every column the census names resolved. In particular user_access_profiles (introduced by 20260504103000_user_access_scope_tables_v1.sql) exists with department_scope and site_scope, so that migration IS applied on the target.",
+      "value": "This retires the pre-execution residual risk that a query would error on drift rather than return a wrong number. It did not happen.",
+      "limit": "It proves only that the tables and columns the census names are present and correctly typed. It says nothing about the wider 28-migration Processing/Identity backlog recorded as unapplied against staging, which touches other surfaces and remains an open concern for the §11 migrations."
+    },
+    "schema_reverification_2026_08_04": {
+      "why": "Run 2 executes on a different base than run 1: this worktree has since merged origin/staging (5118940f7) and the migration tree grew from 289 to 302 files. The census had to be re-grounded before its counts could be trusted on that base.",
+      "checked": [
+        "None of the 13 migrations added since run 1 alters user_roles, role_definitions, user_access_profiles, user_profiles, app_users or orgs. The six queries resolve unchanged, and run 2 executing clean confirms it live.",
+        "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql is LIVE on the target — applied via the Supabase dashboard on 2026-07-30 as version 20260730000602, vendored into the repo on 2026-07-31 (555fa056a). It predates BOTH runs, so neither run's counts are affected by it."
+      ],
+      "material_finding_outside_w0_scope": "That migration DROPS public.permissions and public.permission_keys as tables and recreates them as VIEWS over permission_definitions, collapses role_permission_grants onto a single role_permission_grants_permission_definitions_fkey, and adds an orgs_seed_default_role_definitions trigger on public.orgs. The census reads none of these, so W-0 is unaffected. But plan §7/W-9 still describes 'three catalog tables' with 'two foreign keys on the same column', and §5/W-3's reasoning rests on the same three-table picture. That premise is now false on the deployed target. Recorded as a follow-up for the W-9 owner; NOT edited into §7 by this assignment, whose scope is W-0.",
+      "not_checked": "Whether the deployed schema matches the repo for anything the census does not read. The 28-migration Processing/Identity backlog remains unassessed and is still an open concern for every §11 preflight."
+    }
+  },
+  "queries": [
+    {
+      "id": "Q1",
+      "question": "Is handle_new_user() attached to auth.users?",
+      "gates": [
+        "G1",
+        "W-20"
+      ],
+      "sql": "SELECT t.tgname, t.tgenabled, t.tgisinternal, p.proname AS function_name\nFROM pg_trigger t\nJOIN pg_proc p ON p.oid = t.tgfoid\nWHERE t.tgrelid = 'auth.users'::regclass\nORDER BY t.tgname;",
+      "supporting_sql": "SELECT n.nspname, p.proname\nFROM pg_proc p\nJOIN pg_namespace n ON n.oid = p.pronamespace\nWHERE p.proname = 'handle_new_user';",
+      "reading": "tgisinternal = true rows are FK/constraint triggers, not application triggers — exclude them when judging. A non-internal, enabled ('O' or 'A') trigger naming handle_new_user means G1 is LIVE: every new auth user silently receives a default role, and W-20 rises into wave 2.",
+      "result": {
+        "answer": "handle_new_user() is DEFINED but NOT ATTACHED to auth.users.",
+        "handle_new_user_functions_defined": 1,
+        "triggers_on_auth_users_total": 62,
+        "application_triggers": 0,
+        "internal_constraint_triggers": 62,
+        "triggers_on_auth_users_total_at_run_1": 54,
+        "verdict": "G1 is LATENT, not live. All 62 triggers on auth.users are tgisinternal=true referential-integrity triggers (RI_ConstraintTrigger_*, running RI_FKey_cascade_del / RI_FKey_noaction_upd / RI_FKey_setnull_del / RI_FKey_noaction_del). Zero application triggers exist, so no new auth user currently receives a default role by trigger. The total rose from 54 at run 1 purely because new migrations added foreign keys referencing auth.users; the application-trigger count — the only figure Q1's rule reads — is 0 in both runs.",
+        "consequence": "The plan §4 rule 'a non-zero Q1 promotes G1 from latent to live and moves W-20 into wave 2' DOES NOT FIRE. W-20 stays in wave 5.",
+        "residual_hazard": "The function still exists (1 definition) with no trigger referencing it. An unattached trigger function named handle_new_user is a loaded gun: any migration or dashboard action that attaches it silently restores the default-to-ops escalation path G1 describes, and nothing in the codebase would flag it. W-20 should give it an explicit disposition — drop it, or document why it is retained — rather than leaving it defined and unreferenced. This is a finding only Wave 0 could produce: version control shows the function, never its attachment."
+      }
+    },
+    {
+      "id": "Q2",
+      "question": "How many principals authorize ONLY via the legacy fallback (user_profiles / app_users) with no user_roles row?",
+      "gates": [
+        "W-20",
+        "L4"
+      ],
+      "sql": "WITH no_membership AS (\n  SELECT u.id AS user_id\n  FROM auth.users u\n  WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id)\n),\nlegacy AS (\n  SELECT\n    nm.user_id,\n    (SELECT up.role::text FROM public.user_profiles up WHERE up.id = nm.user_id) AS profile_role,\n    COALESCE(\n      (SELECT au.org_id FROM public.app_users au WHERE au.id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1),\n      (SELECT au.org_id FROM public.app_users au WHERE au.auth_user_id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1)\n    ) AS resolved_org_id,\n    COALESCE(\n      (SELECT au.role FROM public.app_users au WHERE au.id = nm.user_id LIMIT 1),\n      (SELECT au.role FROM public.app_users au WHERE au.auth_user_id = nm.user_id LIMIT 1)\n    ) AS app_user_role\n  FROM no_membership nm\n)\nSELECT\n  count(*) AS principals_without_membership,\n  count(*) FILTER (WHERE profile_role IN ('admin','ops') AND resolved_org_id IS NOT NULL) AS via_user_profiles,\n  count(*) FILTER (WHERE app_user_role IN ('admin','ops') AND resolved_org_id IS NOT NULL) AS via_app_users,\n  count(*) FILTER (WHERE (profile_role IN ('admin','ops') OR app_user_role IN ('admin','ops')) AND resolved_org_id IS NOT NULL) AS legacy_only_authorized\nFROM legacy;",
+      "detail_sql": "-- Per-principal disposition, for the remediation list if legacy_only_authorized > 0.\nWITH no_membership AS (\n  SELECT u.id AS user_id, u.email\n  FROM auth.users u\n  WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id)\n)\nSELECT\n  nm.user_id,\n  (SELECT up.role::text FROM public.user_profiles up WHERE up.id = nm.user_id) AS profile_role,\n  COALESCE(\n    (SELECT au.org_id FROM public.app_users au WHERE au.id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1),\n    (SELECT au.org_id FROM public.app_users au WHERE au.auth_user_id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1)\n  ) AS resolved_org_id,\n  COALESCE(\n    (SELECT au.role FROM public.app_users au WHERE au.id = nm.user_id LIMIT 1),\n    (SELECT au.role FROM public.app_users au WHERE au.auth_user_id = nm.user_id LIMIT 1)\n  ) AS app_user_role\nFROM no_membership nm\nORDER BY resolved_org_id NULLS LAST;",
+      "caveats": [
+        "The product uses maybeSingle() on the app_users lookups, so a principal matching MORE THAN ONE app_users row errors at runtime rather than resolving. This census uses LIMIT 1 and will count such a principal as authorized. If legacy_only_authorized > 0, check for duplicate app_users rows per principal before designing W-20's remediation.",
+        "legacy_only_authorized is the L4 lockout population: these principals lose ALL authority the moment the fallback is deleted. It is NOT the sum of via_user_profiles and via_app_users — the two overlap."
+      ],
+      "result": {
+        "answer": "Zero. No principal authorizes only through the legacy fallback.",
+        "principals_without_membership": 0,
+        "via_user_profiles": 0,
+        "via_app_users": 0,
+        "legacy_only_authorized": 0,
+        "verdict": "The L4 lockout population is EMPTY. Every auth user has at least one user_roles row, so the legacy fallback in resolveAdminAccessCore.ts:111-140 — which fires only when a principal has zero user_roles rows — is unreachable for every principal alive in this database today.",
+        "consequence": "The plan §4 rule 'if Q2 > 0 the corresponding workstream gains a remediation step' DOES NOT FIRE. W-20 needs no remediation migration. Because the population is zero rather than merely small, W-20 collapses from the full four-step switch ritual to a straight deletion plus its tier A/B regression locks (RL-12).",
+        "caveat_now_moot": "The duplicate-app_users-row caveat (the product uses maybeSingle(), which errors on more than one match, while this census used LIMIT 1) cannot bite: it applies only to principals with no membership row, and there are none."
+      }
+    },
+    {
+      "id": "Q3",
+      "question": "How many user_roles.role values have no role_definitions row for that org?",
+      "gates": [
+        "W-16",
+        "L3"
+      ],
+      "sql": "SELECT\n  count(*) AS undefined_membership_rows,\n  count(DISTINCT ur.org_id) AS orgs_affected,\n  count(DISTINCT ur.role) AS distinct_undefined_roles\nFROM public.user_roles ur\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = ur.org_id AND rd.role_key = ur.role\nWHERE rd.id IS NULL;",
+      "detail_sql": "SELECT ur.org_id, ur.role, count(*) AS membership_rows\nFROM public.user_roles ur\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = ur.org_id AND rd.role_key = ur.role\nWHERE rd.id IS NULL\nGROUP BY ur.org_id, ur.role\nORDER BY membership_rows DESC;",
+      "caveats": [
+        "The anti-join ignores role_definitions.is_active on purpose: a foreign key does not care whether the referenced row is active. Q5 reads the same join with is_active, because a grant does.",
+        "undefined_membership_rows is exactly the set that would fail M9's FK, and therefore exactly the subject of M8's remediation migration."
+      ],
+      "result": {
+        "answer": "Zero. Every user_roles.role value has a matching role_definitions row for its org.",
+        "undefined_membership_rows": 0,
+        "distinct_undefined_roles": [],
+        "verdict": "The L3 lockout population is EMPTY. No membership row would violate the FK.",
+        "consequence": "The plan §4 rule 'if Q3 > 0, M8 is required and its row count must equal this number' DOES NOT FIRE. M8 (remediate undefined user_roles.role values) is NOT REQUIRED and is removed from the §11 register. M9 (the FK itself) can be applied directly, with a zero-violating-rows preflight expected to pass on the first attempt.",
+        "caution": "Q3 deliberately ignores role_definitions.is_active, because a foreign key does not. That is the correct reading for M9. Q5 reads the same join WITH is_active because a grant does care. Both returned zero, so the distinction did not change the answer here — but M9's preflight must keep using Q3's form, not Q5's."
+      }
+    },
+    {
+      "id": "Q4",
+      "question": "How many memberships lack an access profile?",
+      "gates": [
+        "W-6",
+        "L1",
+        "M1"
+      ],
+      "sql": "WITH membership_pairs AS (\n  SELECT DISTINCT ur.user_id, ur.org_id FROM public.user_roles ur\n)\nSELECT\n  (SELECT count(*) FROM membership_pairs) AS distinct_user_org_pairs,\n  (SELECT count(*) FROM public.user_roles) AS membership_rows,\n  count(*) AS pairs_without_profile,\n  count(DISTINCT mp.org_id) AS orgs_affected\nFROM membership_pairs mp\nLEFT JOIN public.user_access_profiles p\n  ON p.user_id = mp.user_id AND p.org_id = mp.org_id\nWHERE p.id IS NULL;",
+      "supporting_sql": "-- The reverse direction: profile rows with no membership (orphans M1 must not touch).\nSELECT count(*) AS profiles_without_membership\nFROM public.user_access_profiles p\nWHERE NOT EXISTS (\n  SELECT 1 FROM public.user_roles ur\n  WHERE ur.user_id = p.user_id AND ur.org_id = p.org_id\n);",
+      "caveats": [
+        "GRAIN MATTERS. user_roles is per (user, org, role) — the composite PK admits several rows per pair — while user_access_profiles is UNIQUE (user_id, org_id). M1's preflight rule 'row count == W-0 Q4' means pairs_without_profile, NOT membership_rows. Comparing against the wrong number makes the preflight pass on a wrong migration.",
+        "pairs_without_profile is the fail-open population: today each of these principals silently resolves to department_scope = all and site_scope = all."
+      ],
+      "result": {
+        "answer": "Two (user, org) pairs lack an access profile.",
+        "membership_rows": 8,
+        "distinct_user_org_pairs": 6,
+        "pairs_without_profile": 2,
+        "profiles_without_membership": 0,
+        "verdict": "This is the ONLY non-empty lockout-class population, and it is the confirmed fail-open defect. 2 of 6 membership pairs currently resolve silently to department_scope = all AND site_scope = all via resolveAdminAccessCore.ts:144-162.",
+        "grain_ruling": "THREE different numbers are in play — 8 membership rows, 6 distinct (user, org) pairs, 2 pairs without a profile. M1's preflight rule 'row count == W-0 Q4' means 2, the pairs_without_profile figure. Using 8 or 6 would let the preflight pass on a wrong migration. This is exactly the grain confusion flagged when the query was written; the live numbers now make it load-bearing rather than theoretical, because all three values are distinct.",
+        "consequence": "The plan §4 rule 'if Q4 > 0' FIRES. M1 is sized at exactly 2 inserted rows. W-7 (absent scope denies) cannot precede M1.",
+        "bonus_finding": "profiles_without_membership = 0 — there are no orphan profile rows, so M1's 'no existing profile row modified' preflight condition has nothing to collide with."
+      }
+    },
+    {
+      "id": "Q5",
+      "question": "Does every org holding an admin/ops membership have the matching role_definitions row?",
+      "gates": [
+        "W-13",
+        "L2",
+        "M7"
+      ],
+      "sql": "WITH admin_ops_pairs AS (\n  SELECT DISTINCT ur.org_id, ur.role\n  FROM public.user_roles ur\n  WHERE ur.role IN ('admin','ops')\n)\nSELECT\n  count(*) AS admin_ops_org_role_pairs,\n  count(*) FILTER (WHERE rd.id IS NULL) AS pairs_with_no_definition,\n  count(*) FILTER (WHERE rd.id IS NOT NULL AND rd.is_active IS FALSE) AS pairs_defined_but_inactive,\n  count(DISTINCT aop.org_id) FILTER (WHERE rd.id IS NULL) AS orgs_at_lockout_risk\nFROM admin_ops_pairs aop\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = aop.org_id AND rd.role_key = aop.role;",
+      "detail_sql": "WITH admin_ops_pairs AS (\n  SELECT DISTINCT ur.org_id, ur.role\n  FROM public.user_roles ur\n  WHERE ur.role IN ('admin','ops')\n)\nSELECT aop.org_id, aop.role, (rd.id IS NOT NULL) AS definition_exists, rd.is_active\nFROM admin_ops_pairs aop\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = aop.org_id AND rd.role_key = aop.role\nWHERE rd.id IS NULL OR rd.is_active IS FALSE\nORDER BY aop.org_id, aop.role;",
+      "caveats": [
+        "pairs_with_no_definition > 0 is the L2 lockout: M7 grants portal.access per role_definitions row, so an org whose memberships name admin/ops without a definition row receives no grant and loses the portal entirely at W-13 step 4.",
+        "pairs_defined_but_inactive is reported separately because an inactive definition may or may not be seeded a grant depending on M7's WHERE clause. Deciding that is W-13's job; Wave 0's job is to make sure the number is known rather than discovered."
+      ],
+      "result": {
+        "answer": "Yes. Every org holding an admin/ops membership has the matching, active role_definitions row.",
+        "admin_ops_org_role_pairs": 3,
+        "pairs_with_no_definition": 0,
+        "pairs_defined_but_inactive": 0,
+        "verdict": "The L2 lockout population is EMPTY, in both directions: no admin/ops (org, role) pair is undefined, and none is defined-but-inactive.",
+        "consequence": "The plan §4 rule 'if Q5 > 0, W-13 gains a remediation step ahead of M7' DOES NOT FIRE. M7 can grant portal.access per role_definitions row and will miss no org. The §11 M7 preflight ('every org with an admin/ops membership receives the grant') is expected to pass unchanged.",
+        "note": "pairs_defined_but_inactive = 0 also retires the open question of whether M7's WHERE clause should include inactive definitions. It is moot for this database — but M7 should still state its choice explicitly, because the answer would change if a definition is deactivated between now and the migration."
+      }
+    },
+    {
+      "id": "Q6",
+      "question": "How many principals hold an admin/ops role AND an explicit department_scope = 'restricted' profile — i.e. are silently unrestricted today?",
+      "gates": [
+        "W-8",
+        "C8"
+      ],
+      "added_by": "Plan §6 W-8 states this is 'a sixth Wave 0 query in practice; add it to W-0 if W-8 is scheduled.' W-8 is in wave 2, so it is included here — it costs one more SELECT now and a second live-access authorization later.",
+      "sql": "SELECT\n  count(*) AS restricted_admin_ops_pairs,\n  count(DISTINCT p.org_id) AS orgs_affected\nFROM public.user_access_profiles p\nWHERE p.department_scope = 'restricted'\n  AND EXISTS (\n    SELECT 1 FROM public.user_roles ur\n    WHERE ur.user_id = p.user_id\n      AND ur.org_id = p.org_id\n      AND ur.role IN ('admin','ops')\n  );",
+      "supporting_sql": "-- Same question for site scope, which is NOT bypassed today. A large gap between the two\n-- numbers is evidence that operators do configure restriction and expect it to hold.\nSELECT count(*) AS restricted_site_scope_pairs\nFROM public.user_access_profiles p\nWHERE p.site_scope = 'restricted';",
+      "identity_sql": "-- Q6 SUPPORTING DETAIL FORM — authored 2026-08-07 by asg_b94c9679108f0b (W-8).\n-- The count form above answers \"how many\" (1). This answers WHO, which is what the plan\n-- §4 announcement gate actually requires and what no artifact previously carried.\n--\n-- READ-ONLY. Not part of combined_query, so it does not affect query_hash or the pinned\n-- census run; execute it as its own statement.\n--\n-- ** DO NOT paste this query's result back into this repository. ** It names a real person\n-- and their email. Hand the identity to the operator for the W-8 announcement and discard it.\n-- Record only that the announcement happened, never whom it named.\nSELECT\n  p.user_id,\n  p.org_id,\n  o.slug AS org_slug,\n  u.email,\n  array_agg(DISTINCT ur.role) AS roles,\n  p.department_scope,\n  p.site_scope,\n  (SELECT count(*) FROM public.user_department_access uda\n     WHERE uda.user_id = p.user_id AND uda.org_id = p.org_id) AS allowed_department_count\nFROM public.user_access_profiles p\nJOIN public.user_roles ur\n  ON ur.user_id = p.user_id AND ur.org_id = p.org_id AND ur.role IN ('admin','ops')\nLEFT JOIN public.orgs o ON o.id = p.org_id\nLEFT JOIN auth.users u ON u.id = p.user_id\nWHERE p.department_scope = 'restricted'\nGROUP BY p.user_id, p.org_id, o.slug, u.email, p.department_scope, p.site_scope;",
+      "identity_sql_why_allowed_department_count_matters": "If the affected principal has department_scope='restricted' and allowed_department_count = 0, then once W-8 lands they see NO departments at all — the bypass was the only thing showing them any. That is a workspace lockout, not a narrowing, and it is a different conversation from 'you will now see fewer departments'. The count form could not distinguish the two cases; this one can. Read this column before drafting the announcement.",
+      "caveats": [
+        "restricted_admin_ops_pairs is the population whose experience CHANGES when W-8 deletes the bypass: they are configured as restricted and have never been restricted. That is a behaviour change for real operators, not a no-op, and it needs to be named before W-8 ships."
+      ],
+      "result": {
+        "answer": "One (user, org) pair is configured department_scope = restricted AND holds admin/ops.",
+        "restricted_admin_ops_pairs": 1,
+        "restricted_site_scope_pairs": 2,
+        "verdict": "W-8 is a real behaviour change for a named population of 1, not a no-op. That principal is configured as department-restricted today and is silently unrestricted at runtime by PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES (accessScope.ts:45,51-53). Deleting the bypass will restrict them for the first time.",
+        "consequence": "The plan §4 rule 'a non-zero Q6 makes W-8 a behaviour change for a named population' FIRES. The affected pair must be identified (run Q6's supporting detail form) and the change announced before the bypass is deleted. W-8 keeps its wave 2 slot.",
+        "corroborating_signal": "restricted_site_scope_pairs = 2, and site scope IS enforced today. So this operator demonstrably configures scope restriction and expects it to hold. That makes the department-scope bypass a live gap between configured and actual authority, not a dormant setting nobody uses — it strengthens the case for W-8 rather than weakening it."
+      }
+    }
+  ],
+  "combined_query": "-- Wave 0 (W-0) live authority census — one statement, one JSON row.\n-- READ-ONLY. No writes, no DDL. Safe to run in the Supabase SQL editor.\n-- Paste the single returned value back into wave0-authority-census.json under \"results\".\nWITH no_membership AS (\n  SELECT u.id AS user_id\n  FROM auth.users u\n  WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id)\n),\nlegacy AS (\n  SELECT\n    nm.user_id,\n    (SELECT up.role::text FROM public.user_profiles up WHERE up.id = nm.user_id) AS profile_role,\n    COALESCE(\n      (SELECT au.org_id FROM public.app_users au WHERE au.id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1),\n      (SELECT au.org_id FROM public.app_users au WHERE au.auth_user_id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1)\n    ) AS resolved_org_id,\n    COALESCE(\n      (SELECT au.role FROM public.app_users au WHERE au.id = nm.user_id LIMIT 1),\n      (SELECT au.role FROM public.app_users au WHERE au.auth_user_id = nm.user_id LIMIT 1)\n    ) AS app_user_role\n  FROM no_membership nm\n),\nmembership_pairs AS (\n  SELECT DISTINCT ur.user_id, ur.org_id FROM public.user_roles ur\n),\nadmin_ops_pairs AS (\n  SELECT DISTINCT ur.org_id, ur.role FROM public.user_roles ur WHERE ur.role IN ('admin','ops')\n)\nSELECT jsonb_pretty(jsonb_build_object(\n  'census_run_at', now(),\n  'database', current_database(),\n  -- run 3 only: self-identify the target (target.improvement_for_next_run).\n  -- The org id/slug set is the durable identifier; the remaining fields are\n  -- best-effort and return NULL rather than erroring behind a connection pooler.\n  'target_identity', (\n    SELECT jsonb_build_object(\n      'org_ids', COALESCE(jsonb_agg(o.id ORDER BY o.id), '[]'::jsonb),\n      'org_slugs', COALESCE(jsonb_agg(o.slug ORDER BY o.id), '[]'::jsonb),\n      'org_fingerprint', md5(COALESCE(string_agg(o.id::text, ',' ORDER BY o.id), '')),\n      'server_addr', inet_server_addr()::text,\n      'server_version', current_setting('server_version', true),\n      'cluster_name', current_setting('cluster_name', true)\n    ) FROM public.orgs o\n  ),\n  'q1_auth_users_triggers', (\n    SELECT COALESCE(jsonb_agg(jsonb_build_object(\n      'tgname', t.tgname, 'tgenabled', t.tgenabled::text, 'tgisinternal', t.tgisinternal, 'function_name', p.proname\n    ) ORDER BY t.tgname), '[]'::jsonb)\n    FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid\n    WHERE t.tgrelid = 'auth.users'::regclass\n  ),\n  'q1_handle_new_user_defined', (\n    SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.proname = 'handle_new_user'\n  ),\n  'q2_principals_without_membership', (SELECT count(*) FROM legacy),\n  'q2_via_user_profiles', (SELECT count(*) FROM legacy WHERE profile_role IN ('admin','ops') AND resolved_org_id IS NOT NULL),\n  'q2_via_app_users', (SELECT count(*) FROM legacy WHERE app_user_role IN ('admin','ops') AND resolved_org_id IS NOT NULL),\n  'q2_legacy_only_authorized', (SELECT count(*) FROM legacy WHERE (profile_role IN ('admin','ops') OR app_user_role IN ('admin','ops')) AND resolved_org_id IS NOT NULL),\n  'q3_undefined_membership_rows', (\n    SELECT count(*) FROM public.user_roles ur\n    LEFT JOIN public.role_definitions rd ON rd.org_id = ur.org_id AND rd.role_key = ur.role\n    WHERE rd.id IS NULL\n  ),\n  'q3_distinct_undefined_roles', (\n    SELECT COALESCE(jsonb_agg(DISTINCT ur.role), '[]'::jsonb) FROM public.user_roles ur\n    LEFT JOIN public.role_definitions rd ON rd.org_id = ur.org_id AND rd.role_key = ur.role\n    WHERE rd.id IS NULL\n  ),\n  'q4_membership_rows', (SELECT count(*) FROM public.user_roles),\n  'q4_distinct_user_org_pairs', (SELECT count(*) FROM membership_pairs),\n  'q4_pairs_without_profile', (\n    SELECT count(*) FROM membership_pairs mp\n    LEFT JOIN public.user_access_profiles p ON p.user_id = mp.user_id AND p.org_id = mp.org_id\n    WHERE p.id IS NULL\n  ),\n  'q4_profiles_without_membership', (\n    SELECT count(*) FROM public.user_access_profiles p\n    WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.user_id AND ur.org_id = p.org_id)\n  ),\n  'q5_admin_ops_org_role_pairs', (SELECT count(*) FROM admin_ops_pairs),\n  'q5_pairs_with_no_definition', (\n    SELECT count(*) FROM admin_ops_pairs aop\n    LEFT JOIN public.role_definitions rd ON rd.org_id = aop.org_id AND rd.role_key = aop.role\n    WHERE rd.id IS NULL\n  ),\n  'q5_pairs_defined_but_inactive', (\n    SELECT count(*) FROM admin_ops_pairs aop\n    JOIN public.role_definitions rd ON rd.org_id = aop.org_id AND rd.role_key = aop.role\n    WHERE rd.is_active IS FALSE\n  ),\n  'q6_restricted_admin_ops_pairs', (\n    SELECT count(*) FROM public.user_access_profiles p\n    WHERE p.department_scope = 'restricted'\n      AND EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.user_id AND ur.org_id = p.org_id AND ur.role IN ('admin','ops'))\n  ),\n  'q6_restricted_site_scope_pairs', (\n    SELECT count(*) FROM public.user_access_profiles p WHERE p.site_scope = 'restricted'\n  ),\n  'org_count', (SELECT count(*) FROM public.orgs)\n)) AS wave0_census;",
+  "results": {
+    "database": "postgres",
+    "org_count": 2,
+    "census_run_at": "2026-09-04T11:28:53.506411+00:00",
+    "target_identity": {
+      "org_ids": [
+        "7803388d-cdee-4afb-89cf-23a137f39423",
+        "93667019-bd28-49b5-a688-acc9bb1e0a19"
+      ],
+      "org_slugs": [
+        "alloy-bend",
+        "demo-childcare-co-c144769f"
+      ],
+      "server_addr": "2600:1f13:838:6e21:288f:4aa6:65bf:f446/128",
+      "cluster_name": "main",
+      "server_version": "17.6",
+      "org_fingerprint": "ab7e5dde2e229d5c46e251456e4d9534"
+    },
+    "q2_via_app_users": 0,
+    "q4_membership_rows": 13,
+    "q2_via_user_profiles": 0,
+    "q1_auth_users_triggers": [
+      {
+        "tgname": "RI_ConstraintTrigger_a_16689",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16690",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16717",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16718",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16753",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16754",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16944",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16945",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17023",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17024",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17042",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17043",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17137",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17138",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17154",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17155",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_19306",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_19307",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20386",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20387",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20396",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20397",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20516",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20517",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_40276",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_40277",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49536",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49537",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49787",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49788",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49854",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49855",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50083",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50084",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50088",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50089",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50125",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50126",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50130",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50131",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50135",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50136",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50168",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50169",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50203",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50204",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50360",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50361",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51130",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51131",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51135",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51136",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51165",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51166",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51722",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51723",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51761",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51762",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51766",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51767",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51771",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51772",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53336",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53337",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53887",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53888",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53897",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53898",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54030",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54031",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54035",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54036",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54045",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54046",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      }
+    ],
+    "q4_pairs_without_profile": 5,
+    "q2_legacy_only_authorized": 0,
+    "q1_handle_new_user_defined": 1,
+    "q4_distinct_user_org_pairs": 11,
+    "q3_distinct_undefined_roles": [],
+    "q5_admin_ops_org_role_pairs": 3,
+    "q5_pairs_with_no_definition": 0,
+    "q3_undefined_membership_rows": 0,
+    "q5_pairs_defined_but_inactive": 0,
+    "q6_restricted_admin_ops_pairs": 1,
+    "q4_profiles_without_membership": 0,
+    "q6_restricted_site_scope_pairs": 2,
+    "q2_principals_without_membership": 0
+  },
+  "wave_consequences": {
+    "note": "Filled in from results. Recorded here so the reordering rule is applied deliberately rather than remembered.",
+    "rules": [
+      {
+        "condition": "q1 shows a non-internal, enabled trigger running handle_new_user on auth.users",
+        "consequence": "G1 is promoted from latent to live; W-20 moves from wave 5 into wave 2 (plan §4)."
+      },
+      {
+        "condition": "q2_legacy_only_authorized > 0",
+        "consequence": "W-20 gains a remediation step — real user_roles memberships for those principals, under §11 — scheduled explicitly ahead of the L4 switch."
+      },
+      {
+        "condition": "q3_undefined_membership_rows > 0",
+        "consequence": "M8 (remediate undefined roles) is required and its row count must equal this number before M9's FK can be applied."
+      },
+      {
+        "condition": "q4_pairs_without_profile > 0",
+        "consequence": "M1's backfill is sized at exactly this number; W-7's fail-closed switch cannot precede it."
+      },
+      {
+        "condition": "q5_pairs_with_no_definition > 0",
+        "consequence": "W-13 gains a remediation step (define the role, or correct the membership) ahead of M7, or those orgs lose the portal."
+      },
+      {
+        "condition": "q6_restricted_admin_ops_pairs > 0",
+        "consequence": "W-8 is a behaviour change for that population, not a no-op; the affected principals are named and the change is announced before the bypass is deleted."
+      }
+    ],
+    "applied_at": "2026-07-31",
+    "reconfirmed_at": "2026-09-04 (run 4 — first run to change an outcome)",
+    "reconfirmation_note": "Runs 2 and 3 returned identical values for all six rules. RUN 4 DID NOT: q4_pairs_without_profile moved 2 -> 5, so the q4 rule's outcome is re-applied with a new size. The other five rules are unchanged and stand re-confirmed against 2026-09-04 data.",
+    "applied": [
+      {
+        "rule": "q1 shows a non-internal, enabled trigger running handle_new_user",
+        "fired": false,
+        "observed": "1 function definition, 0 application triggers (62 internal FK triggers only; 54 at run 1 — internal count only, rule unaffected)",
+        "outcome": "W-20 STAYS in wave 5. G1 remains latent."
+      },
+      {
+        "rule": "q2_legacy_only_authorized > 0",
+        "fired": false,
+        "observed": 0,
+        "outcome": "W-20 needs no remediation step; its ritual collapses to a straight deletion."
+      },
+      {
+        "rule": "q3_undefined_membership_rows > 0",
+        "fired": false,
+        "observed": 0,
+        "outcome": "M8 REMOVED from the §11 register. M9 applies directly."
+      },
+      {
+        "rule": "q4_pairs_without_profile > 0",
+        "fired": true,
+        "observed": 5,
+        "outcome": "M1 sized at exactly 5 rows as of run 4 (was 2 for runs 1-3). W-7 gated behind M1. RE-SIZE M1 BEFORE SHIPPING IT: the recorded size of 2 is stale by 3 rows, and W-7 fails closed.",
+        "observed_history": [
+          {
+            "run": 1,
+            "at": "2026-07-31",
+            "value": 2
+          },
+          {
+            "run": 2,
+            "at": "2026-08-04",
+            "value": 2
+          },
+          {
+            "run": 3,
+            "at": "2026-08-07",
+            "value": 2
+          },
+          {
+            "run": 4,
+            "at": "2026-09-04",
+            "value": 5
+          }
+        ]
+      },
+      {
+        "rule": "q5_pairs_with_no_definition > 0",
+        "fired": false,
+        "observed": 0,
+        "outcome": "W-13 needs no remediation step ahead of M7."
+      },
+      {
+        "rule": "q6_restricted_admin_ops_pairs > 0",
+        "fired": true,
+        "observed": 1,
+        "outcome": "W-8 is a behaviour change for 1 named principal, not a no-op."
+      }
+    ]
+  },
+  "headline_finding": {
+    "summary": "Four of the six consequence rules did not fire. Three of the four lockout-class workstreams (L2/W-13, L3/W-16, L4/W-20) have an EMPTY remediation set. Only L1 (W-6/W-7) has real work, and it is 2 rows.",
+    "reconfirmed_2026_08_04": "An independent re-run four days later returned every one of these numbers unchanged. The finding is now twice-measured rather than once-measured — but see drift_since_previous_run.why_q4_did_not_grow: the stability reflects an idle tenant, not a fixed defect.",
+    "scale": "The target database holds 2 orgs, 8 membership rows and 6 distinct (user, org) pairs. This is a pre-production-scale tenant.",
+    "implication_for_the_ritual": "The §2 four-step switch ritual — seed, dual-read, prove zero across an observation window, switch — was designed for an UNKNOWN blast radius. At 6 pairs the blast radius is not merely known, it is exhaustively enumerable. A traffic-based observation window is the weaker instrument here: with this little traffic, 'zero divergences observed' is mostly evidence that nobody logged in. RECOMMENDATION: for this tenant, satisfy step 3 ('prove zero') by exhaustive enumeration of all 6 pairs — computing both the old and new answers for every one — rather than by observing divergences over a window. That is a stronger proof AND a cheaper one, and it dissolves the 'observation window is unspecified' limit recorded in plan §14.3 item 5. This is a recommendation to the workstream owners, not a unilateral change to the ritual.",
+    "caution": "Small numbers reduce blast radius; they do not make the defects less real. The 2 fail-open pairs and the 1 silently-unrestricted admin are genuine, and the same code ships to any tenant that grows. W-5 (create path writes a profile) matters MORE at this scale, not less: it is what stops Q4 from growing the moment the product starts being used in earnest. Re-running this census before each lockout-class switch is cheap and is now a solved operation.",
+    "run_4_2026_09_04": "THE PREDICTED GROWTH ARRIVED. This file's own caution — 'the 2 fail-open pairs are genuine, and W-5 is what stops Q4 from growing the moment the product starts being used in earnest' — is now measured rather than argued. The tenant went from 8 memberships over 6 pairs to 13 over 11, and pairs without an access profile went 2 -> 5. Three of the five new pairs arrived fail-open, so the create path is still not writing profiles and W-5 is accumulating the very backlog M1 must clear. Everything else held: no application trigger on auth.users, no legacy-only principals, no undefined roles, no undefined admin/ops definitions. The scale claim in `scale` above (2 orgs, 8 rows, 6 pairs) is superseded by run 4: 2 orgs, 13 rows, 11 pairs.",
+    "superseded_scale_note": "`scale` and `reconfirmed_2026_08_04` describe runs 1-3 and are kept as the record of what was true then. Run 4 supersedes their counts; it does not supersede their reasoning."
+  },
+  "exit_criteria": {
+    "committed_evidence_file": true,
+    "query_text_for_q1_q6": true,
+    "counts_recorded": true,
+    "met": true,
+    "met_statement": "Plan §4 requires 'counts and the query text for each of Q1–Q6' committed to this file, with every one of L1–L4 citing it before proceeding. All six queries were executed read-only against the deployed database via trusted host action tha_8defba3adcee6a (run 2, 2026-08-04), and all six results are recorded with their §4 consequence applied. W-0 is COMPLETE and no longer gates waves 2 or 5. UPDATED 2026-08-07: run 3 (tha_67f9c69f628d1a) re-executed all six read-only against the same target and returned identical counts for the third consecutive run, so the exit criteria are now met against 2026-08-07 evidence rather than 2026-08-04 evidence. Run 3 additionally closed the one item that had been open inside W-0's own scope since 2026-07-31 — the census now proves its own target (target_identity_resolved). With that, W-0 has no outstanding work items: the improvement it carried is landed, not deferred.",
+    "met_at_run_1_too": "Run 1 (tha_1e353138da1197, 2026-07-31) independently met the same criteria. Run 2 does not rescue a failed run; it refreshes a passing one, which is what plan §4 and residual_risks[0] ask of every consumer.",
+    "reconfirmed_2026_08_04": "Re-executed under Mission 2 with the identical committed query (hash 743cd63b…) against the identical target fingerprint (b15dad2c6d030ed4). Every consequence-bearing count is unchanged — see drift_since_previous_run. The one observable difference is the internal FK trigger total on auth.users (54 → 62), which Q1's rule does not read.",
+    "superseded_note": "This file previously carried an honest_statement asserting W-0 was NOT met. That was correct when written, across two blocked execution attempts, and is superseded by execution at 2026-07-31T15:48:45Z."
+  },
+  "consumers": [
+    {
+      "workstream": "W-6 / M1 (L1)",
+      "consumes": "Q4.pairs_without_profile"
+    },
+    {
+      "workstream": "W-7 (L1)",
+      "consumes": "Q4 — the switch is authorized only after Q4 re-runs to 0"
+    },
+    {
+      "workstream": "W-8",
+      "consumes": "Q6.restricted_admin_ops_pairs"
+    },
+    {
+      "workstream": "W-13 / M7 (L2)",
+      "consumes": "Q5.pairs_with_no_definition"
+    },
+    {
+      "workstream": "W-16 / M8, M9 (L3)",
+      "consumes": "Q3.undefined_membership_rows"
+    },
+    {
+      "workstream": "W-20 (L4)",
+      "consumes": "Q1 and Q2.legacy_only_authorized"
+    }
+  ],
+  "changed_product_files": [],
+  "migrations_applied": [],
+  "residual_risks": [
+    "COUNTS ARE A SNAPSHOT, not an invariant. They now describe the database at 2026-08-07T17:24:15Z (run 3); the 2026-08-04 timestamp below is run 2's and is retained because the reasoning that follows was written against it and is unchanged by a third identical run — if anything a third zero-drift result makes the 'stability is not safety' point more strongly, not less. W-5 landed 2026-08-07 and closed the product membership writers, so Q4's growth path is shut, but run 3 does not demonstrate that: q4_membership_rows held at 8, so no membership was created and the writers were never exercised. Original text follows. They describe the database at 2026-08-04T17:00:21Z. Q4 in particular can GROW at any time, because the defect that produces it (W-5 — the create path writes no profile row) is still live: every membership created through POST /api/admin/users until W-5 ships adds another fail-open pair. Any lockout-class switch must re-run this census immediately before it, not cite this snapshot. That is now cheap via the trusted host action. NOTE: run 2 returning identical counts four days after run 1 is NOT evidence that the counts are stable — q4_membership_rows also held at 8, meaning no membership was created in the window. Zero drift here reflects zero activity, not a repaired defect, and must not be read as licence to skip the next re-run.",
+    "The target is identified as 'alloy_deployed_primary' (fingerprint b15dad2c6d030ed4) by the execution channel, not proven by the census output — current_database() is 'postgres' on every Supabase project. The mapping to project ref ikaxilmwmrmbagoidedu is asserted rather than evidenced. Low risk, but it means 'we queried the right database' rests on the channel's word. The fix is one extra self-identifying column next time. STATUS 2026-08-06: that column is now authored and grounded at next_run_prepared, but it has NOT run. This risk therefore stands undiminished against runs 1 and 2 — authoring a fix is not evidence, and the target remains asserted rather than proven until run 3 executes. STATUS 2026-08-07 (asg_f34761f0f418ee): the column has been PROMOTED into this file's top-level combined_query, so it will actually execute when the authorization arrives — but it still has NOT run. THE RISK IS UNCHANGED IN MAGNITUDE. Promoting a fix is no more evidence than authoring one was, and the distinction matters here specifically because it is easy to read a file that now contains working self-identifying SQL as a file that has self-identified. It has not. Until run 3 executes, every target claim in this file — for runs 1 and 2 alike — rests on the execution channel's word. RESOLVED 2026-08-07T17:24:16Z (asg_86eb0e4a95142e): run 3 EXECUTED and returned target_identity — org_fingerprint ab7e5dde2e229d5c46e251456e4d9534 over orgs alloy-bend and demo-childcare-co-…, plus a real inet_server_addr, server_version 17.6 and cluster_name 'main'. THE RISK IS NARROWED, NOT DELETED, and the residue is worth stating precisely. What is now self-evidenced is the IDENTITY of the database queried: any future run returning ab7e5dde… is provably against the same target. What is still NOT evidenced is the Supabase PROJECT REF — nothing in the output names ikaxilmwmrmbagoidedu, so target.confirmed_against_live stays false. And note the asymmetry: runs 1 and 2 returned no org ids, so this run establishes the baseline rather than confirming them backwards — their target identity remains inferential (same channel fingerprint, same org_count) and always will be. See target_identity_resolved.",
+    "Q3 and Q5 both returned zero, which makes the FK (M9) and the portal grant (M7) look unconditionally safe. They are safe AGAINST TODAY'S DATA. user_roles.role remains unconstrained text (C2) until M9 actually lands, so a new row naming an undefined role can appear between this census and the migration. M9's preflight must re-run Q3 rather than trust this result.",
+    "The 28-migration Processing/Identity backlog recorded as unapplied against staging was NOT assessed here. The census proves only that the six tables it reads are current. Every §11 migration still needs its own preflight against the real target.",
+    "Wave 0 answered what it was scoped to answer and nothing more. It did not verify that the resolver behaves as read — it counted the data the resolver reads. The tier B/C fixture matrix (§10.3) is still what proves behaviour, and F6/F7 in that matrix now have known real-world populations (2 and 0 respectively) to calibrate against."
+  ],
+  "runs_1_2_query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
+  "runs_1_2_query_provenance": {
+    "why_this_key_was_renamed": "RENAMED FROM top-level `query_hash` 2026-08-07 by assignment asg_f34761f0f418ee, in the same edit that promoted run 3's amended SQL into combined_query. This rename is NOT cosmetic and MUST NOT be reverted while combined_query carries the target_identity block. trusted-host-action-registry.mjs:91-92 resolves the expected hash as `inputs.expectedQueryHash || j.query_hash`, then compares it to sha256(combined_query) and fails the run with `query_hash_mismatch` on any difference. A top-level key literally named `query_hash` holding 743cd63b… (the runs 1/2 hash) alongside the amended combined_query would therefore fail every run 3 attempt. With no key named `query_hash` and no key named `combined_query_hash`, expectedHash resolves to undefined, the comparison at :98 is skipped, and the registry computes and reports the hash itself — which is precisely what next_run_prepared.query_hash asks it to do.",
+    "runs_1_2_remain_verifiable": "Runs 1 and 2 stay fully verifiable, against a STRONGER anchor than a duplicated copy in this file. Their exact query bytes — together with their `results` block — are immutable in git at blob f95f89302bbd92f3e24e8c4a93dbb0231f0a664e, this file's content at commit 7dc06920a (the last commit before this edit). Recover and re-verify with: `git cat-file blob f95f89302bbd92f3e24e8c4a93dbb0231f0a664e`. That blob's `combined_query` is the text whose sha256 is the 743cd63b… recorded above, and it is the text runs 1 and 2 actually executed. A transcribed second copy inside this file would have been weaker: it could be mistyped, and a mistyped copy would silently fail to hash to 743cd63b… while looking authoritative.",
+    "what_the_directors_merge_back_will_do": "On a successful run 3 the Director rewrites this file (trusted-host-actions.mjs:385-406) with `{...prior, status, query_hash, execution, results}`. Two consequences to expect rather than be surprised by: (1) a top-level `query_hash` REAPPEARS, holding run 3's hash — correct, and it must not be confused with the 743cd63b… above; (2) `results` is OVERWRITTEN, so run 2's raw result object is replaced in place. Run 2's counts survive in queries[].result and drift_since_previous_run, and its full raw block survives in the git blob named above. Every other key in this file, including these provenance keys, survives the spread untouched."
+  },
+  "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+  "run_4_root_cause_analysis": {
+    "what_the_arithmetic_fixes": "Membership rows and distinct (user, org) pairs BOTH grew by exactly 5 (8->13 and 6->11). Because the two moved together, every new membership row is a new (user, org) pair: five principals gained a first role in an org, and nobody gained a second role in an org they already held. Of those five pairs, THREE arrived without an access profile and two did not.",
+    "what_that_rules_out": "The product's own create path can no longer produce a fail-open pair. POST /api/admin/users calls createMembershipWithAccessProfile (web/app/api/admin/users/route.ts:176-180), which RPCs create_membership_with_access_profile (web/lib/admin/membershipWithProfile.ts:46) — membership and profile in one transaction. The route no longer inserts into user_roles at all. So the three fail-open pairs were NOT created through the admin API on this branch.",
+    "what_still_writes_user_roles_directly": [
+      {
+        "path": "web/scripts/seedRealisticChildcareDemoData.ts:1310",
+        "fn": "ensureUserRoleIfAbsent",
+        "note": "Inserts into user_roles with no profile. Called 5x (lines 1978-1988) for three demo principals. The same script DOES upsert user_access_profiles elsewhere (wireDemoUserScopes, line 2257), so principals it wires get a profile and principals it only role-stamps do not. The census target carries the org slug 'demo-childcare-co-c144769f', which is this script's tenant."
+      },
+      {
+        "path": "web/scripts/seedAccessValidationDemo.ts:536",
+        "fn": "direct insert",
+        "note": "Inserts into user_roles with no profile."
+      },
+      {
+        "path": "web/scripts/qa/employmentNegativeControls.sh:76",
+        "fn": "deliberate negative control",
+        "note": "Inserts a user_roles row with no profile ON PURPOSE, to prove a control fails open. If this ran against the census target it would produce exactly this signature."
+      }
+    ],
+    "what_this_census_CANNOT_say": "Which of those paths created the three rows. Q4 reports counts, not rows, so attribution is beyond what was asked. Nor does this analysis establish what is DEPLOYED to the census target: W-5's closure is verified in this branch's source, and the target is alloy_deployed_primary. A branch that has W-5 and a deployment that does not would produce the same numbers.",
+    "the_correction_to_the_earlier_diagnosis": "Run 3's why_q4_did_not_grow blamed POST /api/admin/users ('still inserts into user_roles alone, route.ts:101-105'). That is no longer true of this branch — the fail-open insert is gone from the route. The mechanism that keeps Q4 refilling is therefore NOT the product create path but the seeding and QA tooling, which W-5 never covered and which M1 empties only until the next seed run. That is a different remediation from the one the plan currently carries.",
+    "recommended_next_census": "Add row-level attribution for the failing population only — (user_id, org_id, created_at, role) for pairs lacking a profile. Still read-only, still bounded, and it answers 'which path and when' in one run instead of by inference.",
+    "recommended_workstream_change": "W-5's scope should be read as 'no path creates a membership without a profile', not 'the admin API does not'. Either the seed/QA scripts adopt create_membership_with_access_profile, or the invariant is enforced in the database (a trigger, or the NOT NULL/FK that M9 contemplates) so that no writer can bypass it. Until one of those lands, M1 is a broom, not a fix."
+  }
+}

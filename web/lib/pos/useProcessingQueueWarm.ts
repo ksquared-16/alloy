@@ -26,9 +26,11 @@ export interface UseProcessingQueueWarmResult {
  * refreshes quietly in place.
  */
 export function useProcessingQueueWarm(): UseProcessingQueueWarmResult {
+    // Explicitly the BROWSE scope: this hook backs the Work rail, which renders completed and
+    // archived lanes too. The actionable cohort is a different read with a different right answer.
     const state = useSyncExternalStore(
         subscribeProcessingQueueWarm,
-        getProcessingQueueWarmSnapshot,
+        () => getProcessingQueueWarmSnapshot("browse"),
         () => SERVER_SNAPSHOT,
     );
 

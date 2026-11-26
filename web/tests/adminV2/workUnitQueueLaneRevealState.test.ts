@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { buildWorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/buildWorkUnitAboveFoldRenderModel";
 import { workUnitAboveFoldQueueRowsLoading } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import { workUnitPageContentReady } from "@/lib/adminV2/workUnitPageRevealPolicy";
-import { workUnitRevealRowsReady } from "@/lib/adminV2/workUnitRevealGate";
 import {
     resolveWorkUnitQueueLaneRevealState,
     workUnitQueueLaneRevealSettled,
@@ -43,12 +42,7 @@ describe("workUnitQueueLaneRevealState", () => {
             queue_items_error: null,
         });
         expect(state).toBe("ready_empty");
-        expect(workUnitRevealRowsReady({
-            lane_authority_ready: true,
-            queue_summaries: [{ key: "waitlist" }],
-            queue_summaries_error: null,
-            lane_reveal_settled: true,
-        })).toBe(true);
+        expect(workUnitQueueLaneRevealSettled(state)).toBe(true);
     });
 
     it("above-fold queue lane uses held — never row skeleton loading", () => {

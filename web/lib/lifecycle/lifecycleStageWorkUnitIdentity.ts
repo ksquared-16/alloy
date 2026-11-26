@@ -409,6 +409,13 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
         sortOrder?: number;
         statusKeys?: readonly string[];
         stageMembership?: QueueMembershipV1 | null;
+        /**
+         * Stage label from the caller's already-parsed builder. Supplying it (together with
+         * processId and statusKeys) lets this helper skip its own `departments` read — the stage
+         * save resolves those facts from the draft it is holding, so re-reading the published
+         * projection here would reintroduce a read-after-write.
+         */
+        stageLabel?: string | null;
     },
 ): Promise<{
     identity: LifecycleStageWorkUnitIdentity;
@@ -418,19 +425,25 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
     const sk = normalizeLifecycleStageKeyForIdentity(stageKey);
     if (!sk) throw new Error("stage is required");
 
-    const { data: dept, error: deptErr } = await supabase
-        .from("departments")
-        .select("metadata")
-        .eq("id", departmentId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-    if (deptErr) throw new Error(deptErr.message);
-    if (!dept) throw new Error("Department not found");
+    const callerSuppliedBuilderFacts =
+        opts.processId != null && opts.stageLabel != null && (opts.statusKeys?.length ?? 0) > 0;
 
-    const metadata =
-        dept.metadata !== null && typeof dept.metadata === "object" && !Array.isArray(dept.metadata)
-            ? (dept.metadata as Record<string, unknown>)
-            : {};
+    let metadata: Record<string, unknown> = {};
+    if (!callerSuppliedBuilderFacts) {
+        const { data: dept, error: deptErr } = await supabase
+            .from("departments")
+            .select("metadata")
+            .eq("id", departmentId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (deptErr) throw new Error(deptErr.message);
+        if (!dept) throw new Error("Department not found");
+        metadata =
+            dept.metadata !== null && typeof dept.metadata === "object" && !Array.isArray(dept.metadata)
+                ? (dept.metadata as Record<string, unknown>)
+                : {};
+    }
+
     const processId =
         opts.processId !== undefined && opts.processId !== null
             ? String(opts.processId).trim() || null
@@ -446,21 +459,23 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
         throw new LifecycleStageWorkUnitIdentityConflictError(identity);
     }
 
-    const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
-    const process = builder ? activeLifecycleProcess(builder) : null;
-    const stageRecord = process?.stages.find((s) => s.key === sk && s.is_active);
-    const assignedFromDb = await resolveLifecycleStageAssignedStatusKeys(
-        supabase,
-        orgId,
-        departmentId,
-        sk
-    );
+    let stageLabel = opts.stageLabel?.trim() || undefined;
+    let stageSortOrder = opts.sortOrder;
+    if (!callerSuppliedBuilderFacts) {
+        const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
+        const process = builder ? activeLifecycleProcess(builder) : null;
+        const stageRecord = process?.stages.find((s) => s.key === sk && s.is_active);
+        stageLabel = stageLabel ?? stageRecord?.label.trim();
+        stageSortOrder = stageSortOrder ?? stageRecord?.sort_order;
+    }
+
     const assignedKeys =
-        opts.statusKeys && opts.statusKeys.length > 0 ? [...opts.statusKeys] : assignedFromDb;
+        opts.statusKeys && opts.statusKeys.length > 0
+            ? [...opts.statusKeys]
+            : await resolveLifecycleStageAssignedStatusKeys(supabase, orgId, departmentId, sk);
     const filterKeys = queueFilterKeysFromAssignedStatusKeys(sk, requireLifecycleStageQueueStatusKeys(sk, assignedKeys));
-    const displayName =
-        opts.name?.trim() || stageRecord?.label.trim() || defaultWorkUnitQueueNameForStageKey(sk);
-    const sortOrder = opts.sortOrder ?? stageRecord?.sort_order ?? 0;
+    const displayName = opts.name?.trim() || stageLabel || defaultWorkUnitQueueNameForStageKey(sk);
+    const sortOrder = stageSortOrder ?? 0;
     const now = new Date().toISOString();
     const wuKey = lifecycleStageWorkUnitKey(sk);
     let created = false;
@@ -475,7 +490,7 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
         {
             processId: processId ?? undefined,
             statusKeys: filterKeys,
-            stageLabel: stageRecord?.label,
+            stageLabel,
             queueMembership: membershipForWorkUnit,
         },
         identity.workUnit?.metadata ?? null,

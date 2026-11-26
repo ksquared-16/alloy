@@ -7,9 +7,7 @@
 
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import {
-    CHILDCARE_PROGRAM_FIELD_MODEL,
     isEnrollmentOperatorFieldVisible,
-    isLegacyChildProgramFieldKey,
     lifecycleRequirementEntityToFieldDefinitionEntity,
 } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import {
@@ -21,6 +19,7 @@ import {
     customFieldRuleId,
     lifecycleFieldRuleBinding,
 } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
+import { resolveLifecycleCanonicalFieldLabel } from "@/lib/lifecycle/lifecycleCanonicalFieldMetadata";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import { isDeprecatedLifecycleFieldRule, sanitizeLifecycleFieldRuleIds } from "@/lib/lifecycle/lifecycleConfiguration";
 
@@ -40,10 +39,15 @@ export type LifecycleFieldPaletteEntry = {
 
 function catalogEntryToPalette(entry: LifecycleFieldRequirementDefinition): LifecycleFieldPaletteEntry {
     const binding = lifecycleFieldRuleBinding(entry.rule_id);
+    const field_label = resolveLifecycleCanonicalFieldLabel(
+        entry.entity,
+        binding?.field_key ?? null,
+        entry.field_label,
+    );
     return {
         rule_id: entry.rule_id,
         entity: entry.entity,
-        field_label: entry.field_label,
+        field_label,
         field_key: binding?.field_key ?? null,
         field_source: binding?.field_key ? "catalog" : "catalog",
         runtime_enforced: binding?.runtime_enforced ?? entry.runtime_enforced,
@@ -94,18 +98,9 @@ function catalogPaletteEntryVisible(entry: LifecycleFieldPaletteEntry): boolean 
 
 function shouldSkipOrgRow(
     entityKey: LifecycleRequirementEntityKey,
-    row: OrgFieldDefinitionRow,
-    paletteByFieldKey: Set<string>
+    row: OrgFieldDefinitionRow
 ): boolean {
-    if (!paletteEntryPassesVisibility(entityKey, row.field_key, row)) return true;
-    if (isLegacyChildProgramFieldKey(row.field_key)) return true;
-    if (
-        row.field_key === CHILDCARE_PROGRAM_FIELD_MODEL.legacy_alias_field_key &&
-        paletteByFieldKey.has(CHILDCARE_PROGRAM_FIELD_MODEL.canonical_field_key)
-    ) {
-        return true;
-    }
-    return false;
+    return !paletteEntryPassesVisibility(entityKey, row.field_key, row);
 }
 
 /** Prefer catalog label when org field_definitions still use legacy system labels (e.g. Mobile for phone). */
@@ -165,7 +160,7 @@ export function mergeLifecycleFieldPaletteForStage(
         );
         for (const row of rows) {
             if (catalogKeys.has(row.field_key)) continue;
-            if (shouldSkipOrgRow(entityKey, row, catalogKeys)) continue;
+            if (shouldSkipOrgRow(entityKey, row)) continue;
             const custom = orgRowToPalette(entityKey, row);
             if (!byRuleId.has(custom.rule_id)) {
                 byRuleId.set(custom.rule_id, custom);

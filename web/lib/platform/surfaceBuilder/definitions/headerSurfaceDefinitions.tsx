@@ -89,13 +89,6 @@ export const WORKSPACE_HEADER_TEMPLATE = headerDoc([
     { instanceId: "wh-overdue", contentId: "ops.work_overdue_count" },
 ]);
 
-export const WORK_UNIT_HEADER_TEMPLATE = headerDoc([
-    { instanceId: "wu-attn", contentId: "ops.needs_attention_count" },
-    { instanceId: "wu-overdue", contentId: "ops.work_overdue_count" },
-    { instanceId: "wu-tour", contentId: "enrollment.tour_conversion_rate" },
-    { instanceId: "wu-forms", contentId: "forms.completion_rate" },
-]);
-
 function headerDefinition(opts: {
     surfaceType: string;
     title: string;
@@ -132,13 +125,3 @@ export function workspaceHeaderSurfaceDefinition(persistence: SurfacePersistence
     });
 }
 
-export function workUnitHeaderSurfaceDefinition(persistence: SurfacePersistenceAdapter): SurfaceDefinition {
-    return headerDefinition({
-        surfaceType: "work_unit_header",
-        title: "Work Unit Header",
-        appearsIn: "Top of a work unit",
-        runtimeHref: "/workspace",
-        template: WORK_UNIT_HEADER_TEMPLATE,
-        persistence,
-    });
-}

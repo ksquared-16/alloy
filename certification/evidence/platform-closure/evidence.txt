@@ -1,0 +1,7 @@
+P1 load http=200 draft_revision=4 status=publication_blocked is_default=true
+P2 BEFORE published=(none) draft_revision=4
+P2 save http=200 publication_required=true draft 4 -> 5
+P3 unknown participation field after a save: survive me
+P3 reload http=200 draft participation present=true
+P4 stale token=6 http=409 error="Someone else changed this configuration while you were editing. Reload to see th"
+P5 validate can_publish=false errors=9

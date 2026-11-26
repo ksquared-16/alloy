@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
-import { mergeRoleDefinitionsWithDefaults, type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
+import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
-/** GET: list roles for org. Portal (admin/ops) or Users & Roles managers. */
+/**
+ * GET: list roles for org. Portal (admin/ops) or Users & Roles managers.
+ *
+ * **W-61.** Every role in this response has a persisted `role_definitions` row. The response
+ * used to be passed through `mergeRoleDefinitionsWithDefaults`, which fabricated any missing
+ * member of a hard-coded four-role constant; see `@/lib/admin/defaultRoleDefinitions` for why
+ * that was removed and why removing it changes no org's role list. The database orders by
+ * `is_system` then `role_label`, which is the order the merge used to impose.
+ */
 export async function GET() {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_READ);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -21,21 +32,20 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rolesRaw: RoleDefinitionRow[] = (rows ?? []).map((r) => ({
+    const roles: RoleDefinitionRow[] = (rows ?? []).map((r) => ({
         role_key: (r as { role_key: string }).role_key,
         role_label: (r as { role_label: string }).role_label,
         is_system: (r as { is_system: boolean }).is_system,
         is_active: (r as { is_active: boolean }).is_active,
         created_at: (r as { created_at?: string }).created_at ?? null,
     }));
-    const roles = mergeRoleDefinitionsWithDefaults(rolesRaw);
 
     return NextResponse.json({ roles });
 }
 
 /** POST: create role. Requires org admin or `settings.users_roles` permission. */
 export async function POST(request: NextRequest) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -70,22 +80,38 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Role key already exists in this org" }, { status: 409 });
     }
 
+    // D2 — role creation moved to a transaction owner so the role row and its audit event commit
+    // together. The route previously wrote a single statement, which is atomic alone and cannot be
+    // atomic WITH an event.
+    const audit = accessMutationAudit(auth.access);
     const { data: created, error } = await supabase
-        .from("role_definitions")
-        .insert({
-            org_id: orgId,
-            role_key,
-            role_label,
-            is_system: false,
-            is_active: true,
+        .rpc("create_role_definition_audited", {
+            p_org_id: orgId,
+            p_role_key: role_key,
+            p_role_label: role_label,
+            p_permission_keys: [],
+            p_actor_user_id: audit.actorUserId,
+            p_origin: audit.origin,
+            p_correlation_id: audit.correlationId,
         })
         .select("role_key, role_label, is_system, is_active, created_at")
         .single();
 
     if (error) {
+        const unlinked = moneyCapableGrantRefusal(error.message);
+        if (unlinked) return NextResponse.json({ error: unlinked }, { status: 403 });
         const status = error.code === "23505" ? 409 : 400;
         return NextResponse.json({ error: error.message }, { status });
     }
+
+    /*
+     * A brand-new role has no members, so no resolved bundle is stale — and an exemption argued
+     * exactly that way is how the access-scope gap stayed invisible until D2's lock found it. The
+     * cost is one eviction on an administrator action taken a few times a day; the alternative is an
+     * exception list on a safety check, which this codebase has repeatedly recorded as a list of the
+     * failures it has agreed not to see.
+     */
+    invalidateAdminShellContextCache();
 
     return NextResponse.json(created);
 }

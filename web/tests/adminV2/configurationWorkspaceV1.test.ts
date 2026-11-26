@@ -95,7 +95,7 @@ describe("Configuration Workspace V1", () => {
     it("F1 field registry convergence paths remain wired", () => {
         expect(read("lib/fields/formFieldRegistryPicker.ts")).toContain("field_definitions");
         expect(read("lib/lifecycle/lifecycleFieldPaletteMerge.ts")).toContain("field_definitions");
-        expect(read("lib/fields/fieldRegistryReferenceMatrix.ts")).toContain("desired_program_category_id");
+        expect(read("lib/fields/fieldRegistryReferenceMatrix.ts")).toContain("program_category_id");
     });
 
     it("layout settings entity order excludes unfinished entities", () => {

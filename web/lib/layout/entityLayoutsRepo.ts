@@ -156,8 +156,27 @@ export async function createDraft(
 export async function updateDraft(
     supabase: SupabaseClient,
     id: string,
-    patch: { name?: string; doc?: LayoutDoc; metadata?: Record<string, unknown> },
+    patch: {
+        name?: string;
+        doc?: LayoutDoc;
+        metadata?: Record<string, unknown>;
+        /** When set, reject the write if the row's updated_at does not match (stale write protection). */
+        expectedUpdatedAt?: string | null;
+    },
 ): Promise<EntityLayoutRecord> {
+    if (patch.expectedUpdatedAt !== undefined) {
+        const current = await getLayoutById(supabase, id);
+        if (!current) throw new Error("Draft not found");
+        const currentUpdated = current.updatedAt ?? null;
+        const expected = patch.expectedUpdatedAt ?? null;
+        if (currentUpdated !== expected) {
+            const err = new Error(
+                "This surface was updated elsewhere. Reload to continue — your newer edits were not overwritten.",
+            );
+            (err as Error & { code?: string }).code = "STALE_LAYOUT_WRITE";
+            throw err;
+        }
+    }
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.name !== undefined) update.name = patch.name;
     if (patch.doc !== undefined) update.doc = patch.doc;

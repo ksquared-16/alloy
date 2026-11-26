@@ -201,7 +201,7 @@ export function readStickyWorkspaceSiteIdForNavigation(opts?: {
         const explicit = opts.explicitSiteId?.trim() || "";
         return explicit.length > 0 ? explicit : null;
     }
-    if (typeof window !== "undefined" && window.location) {
+    if (typeof window !== "undefined" && typeof window.location?.pathname === "string") {
         const fromHref = opts?.href ? readWorkspaceSiteFromHref(opts.href) : null;
         if (fromHref) return fromHref;
         if (isWorkspaceAreaPath(window.location.pathname)) {

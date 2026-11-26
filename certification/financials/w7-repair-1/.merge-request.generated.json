@@ -1,0 +1,16 @@
+{
+  "action_key": "repository.merge_pull_request",
+  "reason_worker_cannot_execute": "This lane holds no GitHub credential; merges are performed only from the trusted host.",
+  "reason": "W7 Repair Batch 1. Three repairs: the Accounts command now renders over the account floor instead of replacing it; a charge whose amount resolves to $0.00 is refused before the commit rather than by a 409; and the Focus Panel's Financials card now asks whether the projection carries producer results rather than whether a projection exists, which is what left it pulsing with zero requests on the drawer-VM path. All required gates green; Surfaces / Focus Panel certification repaired and passing.",
+  "inputs": {
+    "repository": "ksquared-16/alloy",
+    "pullRequestNumber": 1379,
+    "targetBranch": "staging",
+    "expectedHeadSha": "07772fdff5fe329aa5a065e64c5c4fc7f867a4f4",
+    "mergeMethod": "squash",
+    "promotion": {
+      "disposition": "PROMOTE_NOW",
+      "promote_now_reason": "Human QA W7 is blocked on these defects: the Accounts surface goes blank behind the Add command, and the Focus Panel's Financials card never reads its account. Kelly cannot retest the affected scenarios until they are deployed."
+    }
+  }
+}

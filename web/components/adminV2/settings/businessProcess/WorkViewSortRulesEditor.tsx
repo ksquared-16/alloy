@@ -1,18 +1,20 @@
 "use client";
 
+import { useMemo } from "react";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
+import type { WorkViewSortV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import {
-    WORK_VIEW_SORT_FIELD_OPTIONS,
-    type WorkViewSortV1,
-} from "@/lib/lifecycle/workViewsConfigV1";
+    resolveWorkViewSortFieldLabel,
+    resolveWorkViewSortFieldOptions,
+} from "@/lib/lifecycle/workViewSortOperands";
 
-const SORT_FIELD_LABELS = Object.fromEntries(
-    WORK_VIEW_SORT_FIELD_OPTIONS.map((opt) => [opt.key, opt.label]),
-) as Record<string, string>;
-
-export function formatWorkViewSortSummary(sorts: WorkViewSortV1[]): string {
+export function formatWorkViewSortSummary(
+    sorts: WorkViewSortV1[],
+    tenantFieldDefinitions?: readonly import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[],
+): string {
     const primary = sorts[0];
     if (!primary?.field_key) return "Updated · Newest first";
-    const fieldLabel = SORT_FIELD_LABELS[primary.field_key] ?? primary.field_key;
+    const fieldLabel = resolveWorkViewSortFieldLabel(primary.field_key, tenantFieldDefinitions);
     const directionLabel = primary.direction === "asc" ? "Oldest first" : "Newest first";
     const suffix = sorts.length > 1 ? ` (+${sorts.length - 1} more)` : "";
     return `${fieldLabel} · ${directionLabel}${suffix}`;
@@ -43,6 +45,17 @@ export default function WorkViewSortRulesEditor({
     onChange: (sorts: WorkViewSortV1[]) => void;
     testIdPrefix: string;
 }) {
+    const { tenantFieldDefinitions: opportunityFieldDefinitions } = useTenantFieldDefinitions("opportunities");
+    const { tenantFieldDefinitions: memberFieldDefinitions } = useTenantFieldDefinitions("customer_member");
+    const tenantFieldDefinitions = useMemo(
+        () => [...opportunityFieldDefinitions, ...memberFieldDefinitions],
+        [memberFieldDefinitions, opportunityFieldDefinitions],
+    );
+    const sortFieldOptions = useMemo(
+        () => resolveWorkViewSortFieldOptions(tenantFieldDefinitions),
+        [tenantFieldDefinitions],
+    );
+
     const updateRow = (index: number, patch: Partial<WorkViewSortV1>) => {
         onChange(sorts.map((row, i) => (i === index ? { ...row, ...patch } : row)));
     };
@@ -75,7 +88,7 @@ export default function WorkViewSortRulesEditor({
                         className="config-runtime-select"
                         data-testid={`${testIdPrefix}-sort-field-${index}`}
                     >
-                        {WORK_VIEW_SORT_FIELD_OPTIONS.map((opt) => (
+                        {sortFieldOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
                                 {opt.label}
                             </option>

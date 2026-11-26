@@ -136,7 +136,7 @@ const CAPABILITY_OVERRIDES: Partial<Record<FocusPanelCardKey, Partial<FocusPanel
         expansionEvidenceGroups: ["message_history"],
     },
     readiness_kpi: { supportsExpanded: true, expansionEvidenceGroups: ["blockers"] },
-    current_work: { supportsExpanded: true, expansionEvidenceGroups: ["work_items"] },
+    current_work: { supportsFocus: true, supportsExpanded: false },
     tasks: { supportsExpanded: true, expansionEvidenceGroups: ["task_list"] },
     timeline: { supportsExpanded: true, expansionEvidenceGroups: ["event_list"], relatedViews: [{ id: "full_timeline", label: "Full Timeline" }] },
     billing_preview: { supportsExpanded: true, expansionEvidenceGroups: ["billing_readiness"] },

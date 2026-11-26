@@ -1,13 +1,20 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Universal Card System (Alloy OS — System 4)
 
 **Status:** Design freeze — System 5 owns operational surface presentation; System 5A owns archetype composition; System 5B/5C own interaction and content templates (doctrine only until implementation requested).  
 **Visual law:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) (System 5A) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) (System 5B) · [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) (System 5C)  
-**Full artifact:** [`docs/sprints/06_2026/alloy_os_system_4_universal_card_system.md`](../../sprints/06_2026/alloy_os_system_4_universal_card_system.md) (all 13 deliverables, Concept A/B/C, freeze checklist)  
+**Full artifact:** `docs/sprints/archive/06_2026/alloy_os_system_4_universal_card_system.md` (historical: `../../sprints/archive/06_2026/alloy_os_system_4_universal_card_system.md`) (all 13 deliverables, Concept A/B/C, freeze checklist)  
 **Interactive mock:** Cursor Canvas `universal-card-system.canvas.tsx` (when opened beside chat)
 
 This document is the **platform entry point** for the Universal Card System. The sprint doc remains the authoritative design freeze; promote sections into [`alloy-runtime-specification.md`](./alloy-runtime-specification.md) Part 7–8 only after checklist approval.
 
-**Unifying umbrella:** The Card sits inside the broader **Presentation Runtime** — see [`presentation-runtime-doctrine.md`](./presentation-runtime-doctrine.md). Note its renderer-first conclusion: the Card is a mid-level composite, while the **Renderer** is the smallest reusable presentation primitive shared across cards, queue rows, dashboards, documents, and POS.
+**Unifying umbrella:** The Card sits inside the broader **Presentation Runtime** — see [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md). Note its renderer-first conclusion: the Card is a mid-level composite, while the **Renderer** is the smallest reusable presentation primitive shared across cards, queue rows, dashboards, documents, and POS.
 
 ---
 
@@ -38,7 +45,7 @@ A **Universal Card** is a reusable **business primitive** — not a field contai
 
 Header (icon, title, status chip, primary insight, overflow) · Body (secondary details, widgets) · Footer (primary action, related actions, metadata). States: empty, loading (coordinated reveal — no section skeletons), error, expand/collapse.
 
-Sizing tokens: header 36–56px by density; padding 16×12px; title 14/600; body 13/400; icon 16–20px; radius 10px; flat elevation (Attention tier may lift one level).
+Sizing tokens: header 36–56px by density; padding 16×12px; title 14/600; body 13/400; icon 16–20px; radius from Focus Panel card radius token; soft layered elevation (near + ambient) on all cards; optional tiny hover lift for clickable/expandable cards only.
 
 ---
 
@@ -54,7 +61,7 @@ Responsive card grid inside the Focus Panel body:
 | Inline strip | Micro KPI tiles |
 | Collapsible section | Reference / History groups |
 
-Grid: up to **4 columns** at wide panel (≥1040px); **16px** gaps; min card **240px** (160px micro). Collapses to 2-col, then single column by **tier priority** (not raw config order).
+Grid: up to **4 columns** at wide panel (≥1040px); min card **240px** (160px micro). The live composer grid gap is **10px** (`COMPOSER_GRID_GAP_PX`, `web/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps.ts`). `FOCUS_PANEL_GRID_GAP_PX = 16` still exists in `focusPanelCardGrid.ts` but has no consumer outside that file, so 16px is not what renders. Collapses to 2-col, then single column by **tier priority** (not raw config order).
 
 ---
 

@@ -1,0 +1,48 @@
+{
+  "stopReason": "I stopped because I found conflicting instructions.",
+  "whatHappened": "Your Mission Brief says not to implement the product yet — it asks for discovery and specification work. The plan Vacilando prepared treated this as implementation work instead. I also found that much of the requested discovery already exists and was accepted, while a few important gaps remain. I cannot follow both instructions at once.",
+  "whyStopped": {
+    "lead": "If I continue now, I will either:",
+    "bullets": [
+      "ignore your instruction not to implement, or",
+      "redo discovery work that has already been accepted."
+    ],
+    "close": "I stopped before either occurred."
+  },
+  "recommendation": "I recommend completing only the remaining specification gaps and reusing the accepted work.",
+  "recommendationWhy": [
+    "option A is the only one that respects both the brief's 'do not implement' instruction and the fact that most of the requested discovery already exists and was accepted",
+    "option D is genuinely valuable and I would run it next — the ingestion defects will recur on every multi-stage brief — but it is a Vacilando fix, not Access & Identity work, and it should not block the auth model, which is the largest and most consequential gap"
+  ],
+  "impact": [
+    "Low risk",
+    "~2–4 focused phases",
+    "No accepted work repeated"
+  ],
+  "alternatives": [
+    {
+      "id": "b",
+      "title": "Recompile the full four-stage discovery mission",
+      "description": "Rebuild all twelve outputs from the brief, re-deriving the seven already covered. Highest fidelity to the brief as written; substantially mo…",
+      "whenToChoose": "Useful if you intentionally want to rewrite every accepted artifact.",
+      "isRecommended": false
+    },
+    {
+      "id": "c",
+      "title": "Proceed to implementation anyway",
+      "description": "Treat p1's kind='implement' as authoritative and begin building Access & Identity V2 from the existing corpus. Contradicts the brief; the sp…",
+      "whenToChoose": "Choose only if you are ready to start building product now.",
+      "isRecommended": false
+    },
+    {
+      "id": "d",
+      "title": "Fix Vacilando's brief ingestion first, then re-ingest",
+      "description": "Repair M1 (truncated title used as objective) and M2 (multi-stage brief collapsed to one phase) in the champion worktree, then re-ingest thi…",
+      "whenToChoose": "Choose if platform correctness matters more than finishing this mission’s gaps first.",
+      "isRecommended": false
+    }
+  ],
+  "approvalResult": "Director will re-scope the mission to the remaining specification gaps, reuse accepted work, refresh assignments, and resume paused workers.",
+  "rejectionResult": "Director will keep work paused and wait for different direction — nothing resumes until you choose another path or give new instructions.",
+  "recommendedOptionId": "a"
+}

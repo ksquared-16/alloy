@@ -47,6 +47,10 @@ export function linkRequiresLeadCapture(metadata: Record<string, unknown> | null
     if (mode === "existing_record") {
         return false;
     }
+    // A Studio-minted Processing intake link — including per-campus "Share by location"
+    // links — still runs intake when the form's operational intent marked it lead-capture.
+    // Fall through to the lead_capture/intake flag check below; a processing_intake link
+    // WITHOUT those flags still returns false, preserving prior behaviour.
     if (mode === "packet") {
         const st =
             typeof (metadata as { source_entity_type?: unknown }).source_entity_type === "string"

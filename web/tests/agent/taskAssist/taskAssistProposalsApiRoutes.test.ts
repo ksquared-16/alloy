@@ -10,18 +10,32 @@ const userId = "22222222-2222-4222-8222-222222222222";
 const oppId = "33333333-3333-4333-8333-333333333333";
 const proposalId = "55555555-5555-4555-8555-555555555555";
 
-const { mockGetAdminContextCached, mockList, mockCreate, mockApprove, mockReject, mockAssertRowOrg } = vi.hoisted(() => ({
+const { mockGetAdminContextCached, mockList, mockCreate, mockApprove, mockReject, mockAssertRowOrg, mockAccess } = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
     mockList: vi.fn(),
     mockCreate: vi.fn(),
     mockApprove: vi.fn(),
     mockReject: vi.fn(),
     mockAssertRowOrg: vi.fn(),
+    mockAccess: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>("@/lib/admin/getAdminContext");
     return { ...actual, getAdminContextCached: mockGetAdminContextCached };
+});
+
+/*
+ * AI Residual V1 gave these three routes an authority. They previously answered to
+ * `requireAdminOrOps()` alone — portal ADMISSION — while the sibling door to the same
+ * `task_assist_proposals` row required `ai.enrichment.use`. They now resolve the access bundle and
+ * require that key, so this suite must supply both. Granting the key here is what keeps these cases
+ * about what they were always about (delegation to the persistence service); the REFUSAL side is
+ * certified in tests/access/aiResidualAuthorityDirect.test.ts across ten personas.
+ */
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>("@/lib/admin/getAdminAccessContext");
+    return { ...actual, getAdminAccessContext: mockAccess, getAdminAccessContextCached: mockAccess };
 });
 
 vi.mock("@/lib/adminAuth", async () => {
@@ -47,6 +61,12 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 describe("task-assist proposals admin routes", () => {
     beforeEach(() => {
         mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin" });
+        mockAccess.mockResolvedValue({
+            ok: true, orgId, userId,
+            permissionKeys: ["ai.enrichment.use"], roleKeys: ["admin"],
+            departmentScope: "all", allowedDepartmentIds: [],
+            siteScope: "all", allowedSiteLocationIds: [],
+        });
         mockAssertRowOrg.mockResolvedValue({ ok: true });
     });
 

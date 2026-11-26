@@ -1,0 +1,73 @@
+{
+  "trusted_host_action_id": "tha_0c7d5b3863bbe3",
+  "query_hash": "9422afeea6cfb29ae28e7834413e96478599638bb9aa8c6e68f3060bc6abd6eb",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-23T20:02:13.147Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0c7d5b3863bbe3",
+    "query_hash": "9422afeea6cfb29ae28e7834413e96478599638bb9aa8c6e68f3060bc6abd6eb",
+    "authorization_id": "grnt_e8a0ce16234d483b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-23T20:02:15.120Z",
+    "question_ids": [
+      "c1_exclusion_constraint_carries_charge",
+      "c2_triggers",
+      "c3_rls_enabled",
+      "c4_rls_policies",
+      "c5_unique_indexes",
+      "c6_reason_not_null"
+    ],
+    "questions": {
+      "c1_exclusion_constraint_carries_charge": {
+        "question_id": "c1_exclusion_constraint_carries_charge",
+        "row_count": null,
+        "rows": [
+          "redefined_with_charge_id"
+        ]
+      },
+      "c2_triggers": {
+        "question_id": "c2_triggers",
+        "row_count": null,
+        "rows": [
+          "scope_parity_ok,exclusion_parity_ok,assignment_parity_ok"
+        ]
+      },
+      "c3_rls_enabled": {
+        "question_id": "c3_rls_enabled",
+        "row_count": null,
+        "rows": [
+          "exclusions_rls_on,assignments_rls_on"
+        ]
+      },
+      "c4_rls_policies": {
+        "question_id": "c4_rls_policies",
+        "row_count": null,
+        "rows": [
+          "commercial_policy_assignments_org_read,commercial_policy_charge_exclusions_org_read"
+        ]
+      },
+      "c5_unique_indexes": {
+        "question_id": "c5_unique_indexes",
+        "row_count": null,
+        "rows": [
+          "financial_responsibility_arrangements_charge_idx,ux_commercial_policy_assignments_live"
+        ]
+      },
+      "c6_reason_not_null": {
+        "question_id": "c6_reason_not_null",
+        "row_count": null,
+        "rows": [
+          "exclusion_reason_not_null"
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

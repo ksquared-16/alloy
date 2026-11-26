@@ -1,0 +1,16 @@
+{
+  "run": {
+    "status": 200,
+    "body": "{\"ok\":true,\"data\":{\"execution_result\":{\"period_key\":\"2026-09\",\"cadence_key\":\"weekly\",\"service_period\":{\"start\":\"2026-09-01\",\"end\":\"2026-09-30\"},\"generated\":4,\"unchanged\":0,\"alreadyPosted\":0,\"notDue\":1,\"refused\":0,\"errors\":0,\"refused_outcomes\":[],\"error_outcomes\":[]},\"affected_id\":\"e978987c-56d1-4972-af34-54ccc32f37e2\"},\"correlation_id\":\"c48812fc-52aa-43ac-b865-66a5ce217c9c\"}"
+  },
+  "again": {
+    "status": 200,
+    "body": {
+      "outcome": "evaluation_requested",
+      "scheduleId": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+      "handlerKey": "financials.periodic_billing.evaluate",
+      "previousNextDueAt": "2026-09-23T03:05:36.948+00:00",
+      "nextDueAt": "2026-09-22T03:14:06.759Z"
+    }
+  }
+}

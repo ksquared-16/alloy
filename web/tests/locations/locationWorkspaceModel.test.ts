@@ -1,0 +1,330 @@
+import { describe, expect, it } from "vitest";
+import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import {
+    buildLocationProgramOperationalSummaries,
+    buildLocationWorkspaceModel,
+    buildLocationsCollectionModel,
+    formatStaffingThreshold,
+    locationWorkspaceHref,
+    locationsLandingHref,
+    normalizeUsLocationTimezone,
+    parseStaffingThresholds,
+    parseLocationWorkspaceTab,
+    serializeStaffingThresholds,
+    US_LOCATION_TIMEZONE_OPTIONS,
+} from "@/lib/locations/locationWorkspaceModel";
+
+function site(overrides: Partial<LocationHierarchyRow> = {}): LocationHierarchyRow {
+    return {
+        id: "site-1",
+        label: "Downtown Campus",
+        location_type: "site",
+        parent_location_id: null,
+        is_active: true,
+        city: "Portland",
+        state: "OR",
+        address1: "123 Main Street",
+        postal_code: "97201",
+        metadata: { site_phone: "(503) 555-1234", timezone: "America/Los_Angeles" },
+        ...overrides,
+    };
+}
+
+function room(id: string, metadata: Record<string, unknown>): LocationHierarchyRow {
+    return {
+        id,
+        label: `Room ${id}`,
+        location_type: "unit",
+        parent_location_id: "site-1",
+        is_active: true,
+        city: null,
+        state: null,
+        metadata,
+    };
+}
+
+function program(id: string): LocationProgramCategoryRow {
+    return {
+        id,
+        org_id: "org-1",
+        location_id: "site-1",
+        key: id,
+        label: `Program ${id}`,
+        is_active: true,
+    };
+}
+
+describe("location workspace model", () => {
+    it("builds the healthy multi-program and multi-room state without fabricating enrollment", () => {
+        const model = buildLocationWorkspaceModel({
+            site: site(),
+            rooms: [
+                room("a", {
+                    capacity: "12",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+                room("b", {
+                    capacity: "18",
+                    category: "preschool",
+                    student_teacher_ratio: "1:8",
+                }),
+            ],
+            programs: [program("toddler"), program("preschool")],
+            schedules: [{ id: "schedule-1", is_active: true }],
+            ownedConcernSetup: {
+                tours: true,
+                placement: true,
+                access: true,
+            },
+        });
+
+        // 30 was the legacy seat sum. There is no canonical site seat total, and a
+        // legacy number whose KIND nobody confirmed cannot mean a site is complete —
+        // both rooms now read as needing review, and setup is no longer complete.
+        expect(model.capacityCoverage).toEqual({ total: 2, confirmed: 0, needsReview: 2, unset: 0 });
+        expect(model.activeRoomCount).toBe(2);
+        expect(model.activeProgramCount).toBe(2);
+        expect(model.setupComplete).toBe(false);
+        // The operator consequence of §15, stated rather than smoothed over: a site
+        // that read as fully set up now shows capacity work, because its rooms carry
+        // numbers whose meaning nobody has confirmed.
+        expect(model.criticalCount).toBe(1);
+        expect(model.attention.map((a) => a.key)).toContain("room-capacity");
+    });
+
+    it("keeps unknown capacity unknown and identifies partial setup", () => {
+        const model = buildLocationWorkspaceModel({
+            site: site(),
+            rooms: [
+                room("configured", {
+                    capacity: "10",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+                room("unknown", { category: "preschool" }),
+            ],
+            programs: [program("toddler")],
+            schedules: [],
+        });
+
+        // One room carries an unconfirmed legacy value, one carries nothing; neither
+        // has a confirmed meaning, so both are outstanding.
+        expect(model.capacityCoverage).toEqual({ total: 2, confirmed: 0, needsReview: 1, unset: 1 });
+        expect(model.roomsNeedingCapacity).toBe(2);
+        expect(model.attention).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ key: "room-capacity", grade: "fix" }),
+                expect.objectContaining({ key: "schedule", grade: "improve" }),
+            ]),
+        );
+        expect(model.setupComplete).toBe(false);
+        expect(model.criticalCount).toBe(1);
+        expect(model.recommendedCount).toBeGreaterThan(0);
+    });
+
+    it("represents an unconfigured location with honest nulls rather than zero", () => {
+        const model = buildLocationWorkspaceModel({
+            site: site({
+                address1: null,
+                city: null,
+                state: null,
+                postal_code: null,
+                metadata: {},
+            }),
+            rooms: [],
+            programs: [],
+            schedules: [],
+        });
+
+        expect(model.capacityCoverage).toEqual({ total: 0, confirmed: 0, needsReview: 0, unset: 0 });
+        expect(model.address).toBeNull();
+        expect(model.phone).toBeNull();
+        expect(model.timezone).toBeNull();
+        expect(model.setupPercent).toBe(0);
+        expect(model.attention.map((item) => item.key)).toEqual(["timezone", "rooms", "programs", "schedule"]);
+    });
+
+    it("excludes unknown readiness areas from the setup denominator", () => {
+        const model = buildLocationWorkspaceModel({
+            site: site(),
+            rooms: [
+                room("a", {
+                    capacity: "12",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+            ],
+            programs: [program("toddler")],
+            schedules: [{ id: "schedule-1", is_active: true }],
+            // tours/placement/access omitted → null/unknown
+        });
+
+        // Was 100 while an unconfirmed legacy number counted as configured capacity.
+        expect(model.setupPercent).toBe(75);
+        // Same consequence: rooms carrying unconfirmed legacy capacity leave the
+        // site incomplete until someone says what those numbers mean.
+        expect(model.setupComplete).toBe(false);
+        expect(model.setupItems.filter((item) => item.complete === null).map((item) => item.key)).toEqual([
+            "tours",
+            "placement",
+            "access",
+        ]);
+        // The new capacity-review item is a recommendation, not a blocker.
+        expect(model.recommendedCount).toBe(1);
+    });
+
+    it("keeps selected location, tab, and nested item URL-addressable", () => {
+        expect(locationsLandingHref()).toBe("/organization/locations");
+        expect(locationWorkspaceHref("site-1", "rooms", "room-2")).toBe(
+            "/organization/locations?locationId=site-1&tab=rooms&itemId=room-2",
+        );
+        expect(parseLocationWorkspaceTab("communications")).toBe("overview");
+        expect(parseLocationWorkspaceTab("unknown")).toBe("overview");
+    });
+
+    it("builds an organization Location collection rollup without auto-selecting a location", () => {
+        const collection = buildLocationsCollectionModel({
+            sites: [
+                site(),
+                site({
+                    id: "site-2",
+                    label: "West Campus",
+                    city: "Beaverton",
+                    address1: null,
+                    metadata: {},
+                }),
+            ],
+            rooms: [
+                room("a", {
+                    capacity: "12",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+            ],
+            programs: [program("toddler")],
+            schedules: [{ id: "schedule-1", site_location_id: "site-1", is_active: true }],
+        });
+
+        expect(collection.locationCount).toBe(2);
+        expect(collection.activeLocationCount).toBe(2);
+        expect(collection.totalRooms).toBe(1);
+        expect(collection.totalPrograms).toBe(1);
+        // Coverage adds COUNTS OF ROOMS across locations, never capacities.
+        expect(collection.totalCapacityCoverage.total).toBe(1);
+        expect(collection.totalCapacityCoverage.confirmed + collection.totalCapacityCoverage.needsReview + collection.totalCapacityCoverage.unset).toBe(1);
+        expect(JSON.stringify(collection.totalCapacityCoverage)).not.toContain("12");
+        expect(collection.locations[0]?.id).toBe("site-2");
+        expect(collection.locations[0]?.criticalCount).toBeGreaterThan(0);
+        expect(collection.attentionHighlights.map((highlight) => highlight.item.key)).toEqual([
+            "timezone",
+            "rooms",
+            "room-capacity",
+            "programs",
+            "schedule",
+        ]);
+        // site-1 used to have nothing outstanding. It now surfaces capacity review,
+        // because its room carries a number whose meaning was never confirmed —
+        // which is the whole point of the readiness change.
+        expect(new Set(collection.attentionHighlights.map((h) => h.locationId))).toEqual(
+            new Set(["site-1", "site-2"]),
+        );
+        expect(
+            collection.attentionHighlights.filter((h) => h.locationId === "site-1").map((h) => h.item.key),
+        ).toEqual(["room-capacity"]);
+        expect(collection.locations[0]?.topAttention?.key).toBe("timezone");
+        expect(collection.locations.find((location) => location.id === "site-1")?.setupComplete).toBe(false);
+    });
+
+    it("builds a priority-ordered cross-location queue without collapsing distinct work", () => {
+        const collection = buildLocationsCollectionModel({
+            sites: [
+                site({ id: "site-2", label: "West Campus", metadata: {} }),
+                site({ id: "site-3", label: "North Campus", metadata: {} }),
+            ],
+            rooms: [],
+            programs: [],
+            schedules: [],
+        });
+
+        expect(collection.attentionHighlights).toHaveLength(8);
+        expect(
+            collection.attentionHighlights.slice(0, 2).map((highlight) => [
+                highlight.locationId,
+                highlight.item.key,
+            ]),
+        ).toEqual([
+            ["site-3", "timezone"],
+            ["site-2", "timezone"],
+        ]);
+        expect(
+            new Set(
+                collection.attentionHighlights.map(
+                    (highlight) => `${highlight.locationId}:${highlight.item.key}`,
+                ),
+            ).size,
+        ).toBe(collection.attentionHighlights.length);
+        expect(
+            collection.attentionHighlights.filter((highlight) => highlight.locationId === "site-2"),
+        ).toHaveLength(4);
+    });
+
+    it("limits location timezone choices to canonical United States IANA values", () => {
+        expect(US_LOCATION_TIMEZONE_OPTIONS).toEqual([
+            { label: "Eastern Time", value: "America/New_York" },
+            { label: "Central Time", value: "America/Chicago" },
+            { label: "Mountain Time", value: "America/Denver" },
+            { label: "Arizona", value: "America/Phoenix" },
+            { label: "Pacific Time", value: "America/Los_Angeles" },
+            { label: "Alaska Time", value: "America/Anchorage" },
+            { label: "Hawaii Time", value: "Pacific/Honolulu" },
+        ]);
+        expect(normalizeUsLocationTimezone(" America/Chicago ")).toBe("America/Chicago");
+        expect(normalizeUsLocationTimezone("America/Toronto")).toBeNull();
+        expect(normalizeUsLocationTimezone("UTC")).toBeNull();
+    });
+
+    it("supports threshold staffing while preserving legacy one-to-five values", () => {
+        const thresholds = parseStaffingThresholds("1:5, 2–11\n3-17");
+        expect(thresholds).toEqual([
+            { requiredStaff: 1, maxChildren: 5 },
+            { requiredStaff: 2, maxChildren: 11 },
+            { requiredStaff: 3, maxChildren: 17 },
+        ]);
+        expect(thresholds.map(formatStaffingThreshold)).toEqual(["1–5", "2–11", "3–17"]);
+        expect(serializeStaffingThresholds(thresholds)).toBe("1:5,2:11,3:17");
+    });
+
+    it("builds program cards from the rooms and capacity each program serves", () => {
+        const programs = [
+            {
+                ...program("toddler"),
+                label: "Toddler",
+                metadata: {
+                    age_range_from: "18",
+                    age_range_to: "36",
+                    age_range_unit: "months",
+                },
+            },
+        ];
+        const summaries = buildLocationProgramOperationalSummaries({
+            programs,
+            rooms: [
+                room("a", { category: "toddler", capacity: "11" }),
+                room("b", { category: "toddler", capacity: "17" }),
+                room("c", { category: "preschool", capacity: "20" }),
+            ],
+        });
+
+        expect(summaries).toEqual([
+            expect.objectContaining({
+                label: "Toddler",
+                roomCount: 2,
+                configuredCapacity: 28,
+                ageRange: "18–36 months",
+                isActive: true,
+            }),
+        ]);
+    });
+});

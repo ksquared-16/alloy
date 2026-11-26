@@ -1,0 +1,171 @@
+{
+  "augustWeekly": {
+    "period": "2026-08",
+    "cadence": "weekly",
+    "after": {
+      "period_key": "2026-08",
+      "cadence_key": "weekly",
+      "service_period": {
+        "start": "2026-08-01",
+        "end": "2026-08-31"
+      },
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "total_amount_cents": 0,
+      "refused_outcomes": [],
+      "not_due_outcomes": [
+        {
+          "kind": "not_due",
+          "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "periodKey": "2026-07-28~2026-08-03",
+          "periodLabel": "Jul 28–Aug 3, 2026",
+          "reason": "term_not_yet_effective"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "periodKey": "2026-08-04~2026-08-10",
+          "periodLabel": "Aug 4–10, 2026",
+          "reason": "term_not_yet_effective"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "periodKey": "2026-08-11~2026-08-17",
+          "periodLabel": "Aug 11–17, 2026",
+          "reason": "term_not_yet_effective"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "periodKey": "2026-08-18~2026-08-24",
+          "periodLabel": "Aug 18–24, 2026",
+          "reason": "term_not_yet_effective"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "periodKey": "2026-08-25~2026-08-31",
+          "periodLabel": "Aug 25–31, 2026",
+          "reason": "term_not_yet_effective"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "periodKey": "2026-07-28~2026-08-03",
+          "periodLabel": "Jul 28–Aug 3, 2026",
+          "reason": "cadence_not_billed_by_this_run"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "periodKey": "2026-08-04~2026-08-10",
+          "periodLabel": "Aug 4–10, 2026",
+          "reason": "cadence_not_billed_by_this_run"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "periodKey": "2026-08-11~2026-08-17",
+          "periodLabel": "Aug 11–17, 2026",
+          "reason": "cadence_not_billed_by_this_run"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "periodKey": "2026-08-18~2026-08-24",
+          "periodLabel": "Aug 18–24, 2026",
+          "reason": "cadence_not_billed_by_this_run"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "periodKey": "2026-08-25~2026-08-31",
+          "periodLabel": "Aug 25–31, 2026",
+          "reason": "cadence_not_billed_by_this_run"
+        }
+      ],
+      "error_outcomes": [],
+      "already_posted_outcomes": []
+    }
+  },
+  "augustMonthly": {
+    "period": "2026-08",
+    "cadence": "monthly",
+    "after": {
+      "period_key": "2026-08",
+      "cadence_key": "monthly",
+      "service_period": {
+        "start": "2026-08-01",
+        "end": "2026-08-31"
+      },
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "total_amount_cents": 0,
+      "refused_outcomes": [],
+      "not_due_outcomes": [
+        {
+          "kind": "not_due",
+          "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "periodKey": "2026-08",
+          "periodLabel": "August 2026",
+          "reason": "cadence_not_billed_by_this_run"
+        },
+        {
+          "kind": "not_due",
+          "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "periodKey": "2026-08",
+          "periodLabel": "August 2026",
+          "reason": "term_not_yet_effective"
+        }
+      ],
+      "error_outcomes": [],
+      "already_posted_outcomes": []
+    }
+  },
+  "septemberMonthly": {
+    "period": "2026-09",
+    "cadence": "monthly",
+    "after": {
+      "period_key": "2026-09",
+      "cadence_key": "monthly",
+      "service_period": {
+        "start": "2026-09-01",
+        "end": "2026-09-30"
+      },
+      "counts": {
+        "generated": 1,
+        "unchanged": 0,
+        "notDue": 1,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "total_amount_cents": 145000,
+      "refused_outcomes": [],
+      "not_due_outcomes": [
+        {
+          "kind": "not_due",
+          "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "periodKey": "2026-09",
+          "periodLabel": "September 2026",
+          "reason": "cadence_not_billed_by_this_run"
+        }
+      ],
+      "error_outcomes": [],
+      "already_posted_outcomes": []
+    }
+  }
+}

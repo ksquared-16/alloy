@@ -1,0 +1,160 @@
+{
+  "trusted_host_action_id": "tha_70aeaf5d84a0b1",
+  "query_hash": "93a10bc86839a3ed529c0b52ec6a21916691c560ce3e6ac6d80386e55335ed34",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:35:15.657Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_70aeaf5d84a0b1",
+    "query_hash": "93a10bc86839a3ed529c0b52ec6a21916691c560ce3e6ac6d80386e55335ed34",
+    "authorization_id": "grnt_487c718d9ea64d08",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:35:17.041Z",
+    "question_ids": [
+      "coverage_wave2_after_correct"
+    ],
+    "questions": {
+      "coverage_wave2_after_correct": {
+        "question_id": "coverage_wave2_after_correct",
+        "row_count": null,
+        "rows": [
+          {
+            "step": "revision_correction_refusal_battery",
+            "rows_on_date": [
+              {
+                "id": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "superseded",
+                "transition": null,
+                "supersedes": null,
+                "root": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "start": "08:00:00",
+                "end": "10:00:00",
+                "room": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "reason": "wave2_authored",
+                "cancel_reason": null,
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-22 01:33:41.073814+00"
+              },
+              {
+                "id": "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "active",
+                "transition": null,
+                "supersedes": null,
+                "root": "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+                "start": "10:00:00",
+                "end": "12:00:00",
+                "room": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "reason": "wave2_adjacent",
+                "cancel_reason": null,
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-22 01:33:41.730285+00"
+              },
+              {
+                "id": "f745b56d-d56f-4658-86f9-3f1f8947022f",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "superseded",
+                "transition": "revision",
+                "supersedes": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "root": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "start": "09:00:00",
+                "end": "10:00:00",
+                "room": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "reason": "qa_revision",
+                "cancel_reason": null,
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-22 01:34:51.529511+00"
+              },
+              {
+                "id": "956c7a37-fff7-430e-b6fe-f9b502729cf9",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "active",
+                "transition": "correction",
+                "supersedes": "f745b56d-d56f-4658-86f9-3f1f8947022f",
+                "root": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "start": "09:00:00",
+                "end": "10:00:00",
+                "room": null,
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "reason": "qa_correction",
+                "cancel_reason": null,
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-22 01:34:52.287043+00"
+              },
+              {
+                "id": "ad0a7129-e7c1-49ab-9c26-b102923d5dcc",
+                "employment": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                "state": "active",
+                "transition": null,
+                "supersedes": null,
+                "root": "ad0a7129-e7c1-49ab-9c26-b102923d5dcc",
+                "start": "10:00:00",
+                "end": "12:00:00",
+                "room": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "reason": "wave2_shared_room",
+                "cancel_reason": null,
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-22 01:34:52.891561+00"
+              },
+              {
+                "id": "54cf129f-aa9f-41d6-a90f-9cc093955b40",
+                "employment": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                "state": "active",
+                "transition": null,
+                "supersedes": null,
+                "root": "54cf129f-aa9f-41d6-a90f-9cc093955b40",
+                "start": "13:00:00",
+                "end": "14:00:00",
+                "room": null,
+                "site": "ae34d822-60ef-4f82-81eb-8f3513059627",
+                "reason": "wave2_out_of_scope",
+                "cancel_reason": null,
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-22 01:34:56.289752+00"
+              }
+            ],
+            "effective_by_employment_x": [
+              "956c7a37-fff7-430e-b6fe-f9b502729cf9",
+              "b62206f4-999a-4f5a-8c40-60b5397b8f31"
+            ],
+            "effective_by_employment_y": [
+              "54cf129f-aa9f-41d6-a90f-9cc093955b40",
+              "ad0a7129-e7c1-49ab-9c26-b102923d5dcc"
+            ],
+            "effective_by_place": [
+              "956c7a37-fff7-430e-b6fe-f9b502729cf9",
+              "ad0a7129-e7c1-49ab-9c26-b102923d5dcc",
+              "b62206f4-999a-4f5a-8c40-60b5397b8f31"
+            ],
+            "effective_by_place_site_b": [
+              "54cf129f-aa9f-41d6-a90f-9cc093955b40"
+            ],
+            "shared_room_same_time": 2,
+            "staff_assignments_live": 3,
+            "staff_assignments_supply": 3,
+            "child_demand_assignments": 3,
+            "assignment_weekday_intervals": 35,
+            "availability_windows": 7,
+            "availability_exceptions": 7,
+            "presence_events": 5,
+            "effective_anywhere": 4,
+            "total_rows": 13,
+            "observed_at": "2026-09-22 01:35:16.998148+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

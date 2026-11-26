@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Generate concrete Cursor/Claude prompts for a managed Alloy agent.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-agent-instructions <worktree-name|slot> [--copy] [--refresh]
+
+Prints a concrete agent prompt for the managed worktree.
+  --refresh  regenerate the instruction file from current metadata
+  --copy     copy the prompt to the clipboard (pbcopy on macOS)
+
+Examples:
+  alloy-agent-instructions 2
+  alloy-agent-instructions wt1-queue-perf --copy
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local target="" do_copy=0 refresh=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --copy) do_copy=1; shift ;;
+      --refresh) refresh=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="$1"
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$target" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_agent_runtime_dirs
+
+  local name path instructions
+  name="$(alloy_resolve_worktree_name "$target")"
+  alloy_load_metadata "$name"
+  path="$ALLOY_WORKTREE_PATH"
+  [[ -d "$path" ]] || alloy_die "worktree path missing: $path"
+
+  if [[ "$refresh" -eq 1 ]] || [[ ! -f "$(alloy_instructions_path "$path")" ]]; then
+    instructions="$(alloy_generate_agent_instructions "$name")"
+    if [[ -z "${ALLOY_AGENT_ROLE:-}" ]]; then
+      alloy_augment_metadata_agent_fields "$name" \
+        "$(alloy_slot_role "$ALLOY_WORKTREE_SLOT")" \
+        "${ALLOY_AGENT_STATUS:-active}" \
+        "$instructions"
+    else
+      alloy_augment_metadata_agent_fields "$name" \
+        "$ALLOY_AGENT_ROLE" \
+        "${ALLOY_AGENT_STATUS:-active}" \
+        "$instructions"
+    fi
+  else
+    instructions="$(alloy_instructions_path "$path")"
+  fi
+
+  local body
+  body="$(cat "$instructions")"
+
+  if [[ "$do_copy" -eq 1 ]]; then
+    alloy_copy_to_clipboard "$body"
+    alloy_info "Copied instructions for ${name} to clipboard."
+    alloy_info "File: ${instructions}"
+  else
+    printf '%s\n' "$body"
+  fi
+}
+
+main "$@"

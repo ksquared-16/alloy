@@ -16,6 +16,7 @@ const {
     mockResolveTodayYmd,
     mockBuildSummary,
     mockListForMemberSite,
+    mockGetAdminAccessContextCached,
 } = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
     mockRequireAdminOrOps: vi.fn(),
@@ -25,6 +26,7 @@ const {
     mockResolveTodayYmd: vi.fn(),
     mockBuildSummary: vi.fn(),
     mockListForMemberSite: vi.fn(),
+    mockGetAdminAccessContextCached: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -40,6 +42,19 @@ vi.mock("@/lib/admin/getAdminContext", async () => {
 vi.mock("@/lib/adminAuth", () => ({
     requireAdminOrOps: mockRequireAdminOrOps,
 }));
+
+/*
+ * ENROLLMENT RECORD AUTHORITY V1 — the agreement writes are `enrollment.decide` now.
+ *
+ * They were gated by `requireAdminOrOps()`, which resolves PORTAL ADMISSION and no role, so the
+ * mock above no longer decides anything for POST. Authority is a grant on the access context.
+ */
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
+        "@/lib/admin/getAdminAccessContext"
+    );
+    return { ...actual, getAdminAccessContextCached: mockGetAdminAccessContextCached };
+});
 
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: mockCreateAdminClient,
@@ -74,6 +89,17 @@ vi.mock("@/lib/childcareOperational/operationalEnrollmentReadModel", () => ({
 
 describe("operational enrollment API routes", () => {
     beforeEach(() => {
+        mockGetAdminAccessContextCached.mockResolvedValue({
+            ok: true,
+            userId: "u-1",
+            orgId,
+            roleKeys: [],
+            permissionKeys: ["enrollment.decide"],
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "all",
+            allowedSiteLocationIds: null,
+        });
         vi.clearAllMocks();
         mockGetAdminContextCached.mockResolvedValue({
             ok: true,
@@ -111,10 +137,26 @@ describe("operational enrollment API routes", () => {
         );
     });
 
-    it("POST child-enrollment-agreements requires admin or ops", async () => {
-        mockRequireAdminOrOps.mockResolvedValue(
-            new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 })
-        );
+    it("POST child-enrollment-agreements requires enrollment.decide, not portal admission", async () => {
+        // A principal admitted to the portal, holding every NEIGHBOURING key and not this one.
+        mockGetAdminAccessContextCached.mockResolvedValue({
+            ok: true,
+            userId: "u-1",
+            orgId,
+            roleKeys: ["admin"],
+            permissionKeys: [
+                "portal.access",
+                "enrollment.record.manage",
+                "crm.customers.write",
+                "work.operate",
+                "business_process.configure",
+                "crm.opportunities.write",
+            ],
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "all",
+            allowedSiteLocationIds: null,
+        });
         const res = await postAgreements(
             new NextRequest("http://localhost/api/admin/child-enrollment-agreements", {
                 method: "POST",
@@ -125,6 +167,8 @@ describe("operational enrollment API routes", () => {
             })
         );
         expect(res.status).toBe(403);
+        expect(await res.json()).toMatchObject({ required_permission: "enrollment.decide" });
+        expect(mockCreateAgreement).not.toHaveBeenCalled();
     });
 
     it("POST child-enrollment-agreements creates agreement via service", async () => {

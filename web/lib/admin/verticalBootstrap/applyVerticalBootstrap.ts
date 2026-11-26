@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 import { prepareQueueDefinitionPatch } from "@/lib/agent/v0/applyWorkUnitQueueDefinitionUpdate";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
 import { parseVerticalBootstrapPayload } from "@/lib/admin/verticalBootstrap/parseVerticalBootstrapPayload";
@@ -87,12 +88,32 @@ export async function applyVerticalBootstrap(
                 metadata: Record<string, unknown> | null;
             };
             const sort = d.sort_order ?? 0;
+
+            // A bootstrap INITIALIZES; it never overwrites an established department.
+            //
+            // This previously wrote `metadata: meta` — a full replace of the column from the
+            // blueprint constant — destroying every process, stage, perspective and work view
+            // under `lifecycle_builder_v1`. Worse, the equality check INVERTED: a department with
+            // no authored config compared equal and was skipped, while a department *with*
+            // authored config was guaranteed unequal, so the destructive write fired precisely
+            // where there was something to lose.
+            //
+            // Now: publication-owned lifecycle configuration is never supplied by a blueprint to
+            // an existing department, and existing keys win over blueprint keys. The database
+            // guard (20260730130000) enforces the lifecycle half independently of this code.
+            const existingMeta = (ex.metadata ?? {}) as Record<string, unknown>;
+            const { lifecycle_builder_v1: _publicationOwned, ...blueprintMeta } = meta as Record<
+                string,
+                unknown
+            >;
+            const mergedMeta = { ...blueprintMeta, ...existingMeta };
+
             const same =
                 ex.name === d.name &&
                 (ex.description ?? null) === (d.description ?? null) &&
                 ex.sort_order === sort &&
                 ex.is_active === (d.is_active !== false) &&
-                JSON.stringify(ex.metadata ?? {}) === JSON.stringify(meta);
+                JSON.stringify(existingMeta) === JSON.stringify(mergedMeta);
             deptIdByKey.set(d.key, ex.id);
             if (same) {
                 continue;
@@ -104,7 +125,7 @@ export async function applyVerticalBootstrap(
                     description: d.description ?? null,
                     sort_order: sort,
                     is_active: d.is_active !== false,
-                    metadata: meta,
+                    metadata: mergedMeta,
                     updated_at: now,
                 })
                 .eq("id", ex.id)
@@ -297,5 +318,8 @@ export async function applyVerticalBootstrap(
         summary.work_units_updated += 1;
     }
 
+    // Vertical bootstrap authors status definitions for the org; the caches in front of them must
+    // not keep serving the pre-bootstrap (often empty) set.
+    revalidateEffectiveStatusDefinitionsCache(orgId);
     return { ok: true, summary };
 }

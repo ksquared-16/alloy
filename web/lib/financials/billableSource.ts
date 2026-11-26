@@ -15,11 +15,42 @@
  */
 
 /** Polymorphic billable-source kinds. Neither is privileged. */
-export const BILLABLE_SOURCE_TYPES = ["job", "enrollment_agreement"] as const;
+/*
+ * THE BILLABLE SOURCE VOCABULARY.
+ *
+ * `customer` closes HOUSEHOLD_BILLABLE_SOURCE. A family incurs charges BEFORE anyone is enrolled — a
+ * waitlist fee, a registration or application fee, a deposit — and those have no agreement to hang
+ * off. The household is an existing canonical durable subject, so no Financials-only "account"
+ * entity is invented and no childcare-specific `child_id` column is added: the polymorphic pair
+ * already carries the distinction.
+ *
+ * None of the three is privileged. Which source a PARTICULAR charge requires is a property of its
+ * charge template, never of the Financials surface.
+ */
+export const BILLABLE_SOURCE_TYPES = ["job", "enrollment_agreement", "customer"] as const;
 export type BillableSourceType = (typeof BILLABLE_SOURCE_TYPES)[number];
 
 export function isBillableSourceType(value: unknown): value is BillableSourceType {
     return typeof value === "string" && (BILLABLE_SOURCE_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * THE CHILDCARE BILLABLE SOURCES — the set the childcare money guarantees apply to.
+ *
+ * Posted-charge immutability, the correction-by-lineage rule and the RESTRICTIVE role gate were all
+ * written against the literal `'enrollment_agreement'`. When `customer` was admitted so a family
+ * could be charged before enrolling, it became representable without becoming protected. This is the
+ * set those rules quantify over, in one place, so admitting a fourth source cannot silently skip
+ * them again. `job` is deliberately outside it: job billing owns its own lifecycle.
+ */
+export const CHILDCARE_BILLABLE_SOURCE_TYPES = ["enrollment_agreement", "customer"] as const;
+export type ChildcareBillableSourceType = (typeof CHILDCARE_BILLABLE_SOURCE_TYPES)[number];
+
+export function isChildcareBillableSource(value: unknown): value is ChildcareBillableSourceType {
+    return (
+        typeof value === "string"
+        && (CHILDCARE_BILLABLE_SOURCE_TYPES as readonly string[]).includes(value)
+    );
 }
 
 /**

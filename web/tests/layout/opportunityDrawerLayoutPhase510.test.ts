@@ -31,22 +31,28 @@ import {
 import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
 
 const NAME_FIELD: LayoutCatalogField = {
+    entityKey: "person",
+    entityLabel: "Person",
+    fieldKey: "primary_contact_name",
     refKey: "person.primary_contact_name",
     fieldLabel: "Full name",
     fieldType: "text",
-    sourceEntity: "person",
 };
 const EMAIL_FIELD: LayoutCatalogField = {
+    entityKey: "person",
+    entityLabel: "Person",
+    fieldKey: "primary_email",
     refKey: "person.primary_email",
     fieldLabel: "Email",
     fieldType: "text",
-    sourceEntity: "person",
 };
 const PHONE_FIELD: LayoutCatalogField = {
+    entityKey: "person",
+    entityLabel: "Person",
+    fieldKey: "primary_phone",
     refKey: "person.primary_phone",
     fieldLabel: "Phone",
     fieldType: "phone",
-    sourceEntity: "person",
 };
 
 describe("section row composition", () => {

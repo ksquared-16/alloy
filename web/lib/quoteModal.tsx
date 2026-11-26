@@ -1,25 +1,19 @@
 "use client";
 
-import { createContext, useContext, useState, useRef, useCallback, useMemo, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from "react";
 
-type DefaultService = "cleaning" | "gutters" | null;
-
-/** Campaign flows that use the same modal shell + constrained quick quote, then custom handoff (e.g. T&C page). */
-export type CampaignQuoteFlowId = "firstfree4x120";
-
+/**
+ * The public quote modal.
+ *
+ * It used to carry two verticals and a campaign flow. The legacy home-cleaning product was retired
+ * (`ea3eaf377`, July 2026) and its residual front end removed, so one service remains and the modal no
+ * longer has anything to choose between or any campaign to constrain. `defaultService`,
+ * `campaignQuoteFlow` and the campaign completion callback went with it — including the ref that
+ * existed only because a callback in `useState` would have been invoked as an updater.
+ */
 interface QuoteModalContextType {
   isOpen: boolean;
-  defaultService: DefaultService;
-  /** When set, cleaning quote uses campaign constraints and custom post-submit handoff. */
-  campaignQuoteFlow: CampaignQuoteFlowId | null;
-  /** Run after campaign quote saves (ref-backed — never pass callbacks through useState). */
-  invokeCampaignQuoteComplete: () => void;
-  openModal: (options?: {
-    defaultService?: "cleaning" | "gutters";
-    campaignQuoteFlow?: CampaignQuoteFlowId | null;
-    /** Called after quote is saved and modal closes (e.g. advance landing page to T&C). */
-    onCampaignQuoteComplete?: () => void;
-  }) => void;
+  openModal: () => void;
   closeModal: () => void;
 }
 
@@ -27,54 +21,14 @@ const QuoteModalContext = createContext<QuoteModalContextType | undefined>(undef
 
 export function QuoteModalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [defaultService, setDefaultService] = useState<DefaultService>(null);
-  const [campaignQuoteFlow, setCampaignQuoteFlow] = useState<CampaignQuoteFlowId | null>(null);
-  /**
-   * Callbacks must live in a ref: setState(fn) treats fn as an updater and CALLS it.
-   * @see https://react.dev/reference/react/useState#im-trying-to-set-state-to-a-function-but-it-gets-called-instead
-   */
-  const onCampaignQuoteCompleteRef = useRef<(() => void) | null>(null);
 
-  const invokeCampaignQuoteComplete = useCallback(() => {
-    onCampaignQuoteCompleteRef.current?.();
-  }, []);
+  /** Stable identity: consumers may call this from an effect. */
+  const openModal = useCallback(() => setIsOpen(true), []);
+  const closeModal = useCallback(() => setIsOpen(false), []);
 
-  /** Stable identity required: consumers (e.g. campaign useEffect) must not re-run on every provider render. */
-  const openModal = useCallback((options?: {
-    defaultService?: "cleaning" | "gutters";
-    campaignQuoteFlow?: CampaignQuoteFlowId | null;
-    onCampaignQuoteComplete?: () => void;
-  }) => {
-    onCampaignQuoteCompleteRef.current = options?.onCampaignQuoteComplete ?? null;
-    setDefaultService(options?.defaultService || null);
-    setCampaignQuoteFlow(options?.campaignQuoteFlow ?? null);
-    setIsOpen(true);
-  }, []);
+  const value = useMemo(() => ({ isOpen, openModal, closeModal }), [isOpen, openModal, closeModal]);
 
-  const closeModal = useCallback(() => {
-    setIsOpen(false);
-    setDefaultService(null);
-    setCampaignQuoteFlow(null);
-    onCampaignQuoteCompleteRef.current = null;
-  }, []);
-
-  const value = useMemo(
-    () => ({
-      isOpen,
-      defaultService,
-      campaignQuoteFlow,
-      invokeCampaignQuoteComplete,
-      openModal,
-      closeModal,
-    }),
-    [isOpen, defaultService, campaignQuoteFlow, invokeCampaignQuoteComplete, openModal, closeModal]
-  );
-
-  return (
-    <QuoteModalContext.Provider value={value}>
-      {children}
-    </QuoteModalContext.Provider>
-  );
+  return <QuoteModalContext.Provider value={value}>{children}</QuoteModalContext.Provider>;
 }
 
 export function useQuoteModal() {
@@ -84,4 +38,3 @@ export function useQuoteModal() {
   }
   return context;
 }
-

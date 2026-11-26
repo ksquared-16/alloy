@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Operational Workspace Shell
 
 **Status:** Canonical operator-UI doctrine (June 2026). Defines the one shell, header rhythm, and structural grammar every operational *module* surface inherits. Distinct from the [Drawer / Focus Panel](./drawer-system.md), which is record-detail; this doctrine governs **module workspaces** (Communications, Processing, Work Items, Analytics, and future Billing / Scheduling / Compliance).
@@ -79,14 +86,19 @@ Mode is the **primary** navigation layer. Child sections belong to exactly one m
 
 | Module | Work sections | Studio sections |
 |--------|---------------|-----------------|
-| Processing | Incoming | Documents · Forms · Packets · Settings |
-| Communications | Inbox · Announcements | Templates · Channels, signatures & rules |
-| Work Items | Process rail (Business Process → interim Stage; Work View is the target lens) → queue | — (no design-time assets) |
+| Processing (Digital Mailroom) | Overview · Queue | Forms · Packets · Fields · Branding |
+| Communications | Overview · Inbox · Announcements · Scheduled | Templates · Channels · Rules |
+| Work Items | **Folders · Views · Sources** rail → queue (`web/components/workItems/FoldersViewsSourcesRail.tsx`) | — (no design-time assets) |
 | Operational Intelligence | Overview *(future: Planning · Financials · Utilization)* | Playbooks · Configure *(future: Metrics · Targets · Display)* |
 
 **Configure belongs to Studio.** When a module has Work/Studio, configuration is a Studio entry — never a duplicated header action or a free-floating button repeated across views. Operational Intelligence exposes exactly one Configure, in Studio.
 
-Work Items has no design-time assets, so it omits the Work/Studio switch; its primary axis is the **process rail** (below).
+Work Items has no design-time assets, so it omits the Work/Studio switch. Its shipped primary
+axis is **Folders · Views · Sources** (`WORK_ITEM_FOLDER_DEFS` / `WORK_ITEM_VIEW_DEFS` /
+`WORK_ITEM_SOURCE_DEFS` in `web/lib/workItems/workItemQueueScope.ts`), not the process rail
+described below. The process-first model in the next section is the **approved direction**;
+the rail that ships today is the folders/views/sources scope. The canonical description of
+the Work Items queue is [`queue-system.md`](./queue-system.md) §Work Items queue.
 
 ---
 
@@ -184,7 +196,7 @@ Business Process → Work View → Operational Work → Focus Panel / Record
 
 **General / Cross-process fallback.** Tasks without Business Process metadata — manual tasks, Task Assist tasks, and any row lacking `department_id` — group under a single explicit **General / Cross-process** bucket. We never fabricate a Business Process for them.
 
-**Phase 2 gaps (next implementation phase).** (1) Configured Work Views are not yet rendered inside Work Items — Stage grouping is the interim stand-in for the Work View lens. (2) The client has **no Business Process / department *name* source** and **no Stage *label* source**, so process groups render with a generic fallback label and stages are humanized from the stage key — pass `processLabels` / `stageLabels` to `deriveWorkItemsProcessGroups` once a label source exists. (3) Workflow-created tasks may carry `lifecycle_stage_key` (via `context_snapshot`) but no `department_id`; they fall into General until a department is resolvable. (4) "Open record" does not yet route through the Work View / Focus Panel layout context (it opens the bare entity drawer).
+**Phase 2 gaps (next implementation phase).** (1) Configured Work Views are not yet rendered inside Work Items — Stage grouping is the interim stand-in for the Work View lens. (2) The client has **no Business Process / department *name* source** and **no Stage *label* source**, so process groups render with a generic fallback label and stages are humanized from the stage key — pass `processLabels` / `stageLabels` to `deriveWorkItemsProcessGroups` once a label source exists. (3) Workflow-created tasks may carry `lifecycle_stage_key` (via `context_snapshot`) but no `department_id`; they fall into General until a department is resolvable. (4) "Open record" does not yet route through the Work View / Focus Panel layout context (it opens the Focus Panel; the modal record overlay was deleted in August 2026 and `AdminEntityDrawer` no longer exists).
 
 ---
 
@@ -201,20 +213,26 @@ Categories/views sit on the left (or as a subordinate view strip); the selected 
 
 ## Operational work returns to context
 
-Operational work must always expose a path back to the operating context. Wherever a work item, queue row, or analytics object carries linked record context, the surface must offer a way to **open the record / open the Focus Panel / drawer**, or navigate to the relevant work unit / record surface. Work Items implements this today via "Open record" (and the linked entity name) for opportunity-backed items, which opens the entity drawer. Operators should never reach a dead end away from the record.
+Operational work must always expose a path back to the operating context. Wherever a work item, queue row, or analytics object carries linked record context, the surface must offer a way to **open the record / open the Focus Panel / drawer**, or navigate to the relevant work unit / record surface. Work Items implements this today via "Open record" (and the linked entity name) for opportunity-backed items, which opens the Focus Panel — the modal record overlay was deleted in August 2026. Operators should never reach a dead end away from the record.
 
 ---
 
 ## Shared primitives
 
-| Concern | Primitive | Location |
-|---------|-----------|----------|
-| Modal shell / geometry / width | `AdminV2WorkspaceBosModalShell` | `web/app/adminV2/components/` |
-| Header rhythm + action button classes | `OperationalModalHeader` (`OPERATIONAL_PRIMARY_ACTION_CLASS` / `OPERATIONAL_SECONDARY_ACTION_CLASS`) | `web/app/adminV2/components/` |
-| Active-modal anchor (left nav) | `useActiveAdminV2WorkspaceModal` | `web/lib/adminV2/` |
-| Mode switch | `AlloyModeSwitch` | `web/components/workspace/` |
-| KPI / status strip | `CompactKpiStrip` | `web/components/workspace/` |
-| KPI/status color semantics | `kpiSemantics` | `web/components/workspace/` |
+**Operational Workspace Doctrine V2 (July 2026, frozen).** Processing (Digital Mailroom) is the certified reference implementation. Certified adopters — **Communications** and **Work Items** — and all future operational modules (Scheduling, Attendance, Billing, Commercial, …) must compose the canonical stack below. Modules supply **data and tab content only**; they do not invent parallel shell chrome, module themes, or competing KPI components.
+
+| Concern | Doctrine primitive | Location |
+|---------|-------------------|----------|
+| Modal outer chrome + nav composition | `WorkspaceShell` | `web/components/workspace/WorkspaceShell.tsx` |
+| Header (icon + title + actions + Close) | `WorkspaceHeader` | `web/components/workspace/WorkspaceHeader.tsx` |
+| Work / Studio mode + section tabs | `WorkspaceModeNav` → `WorkspaceModeTabs` + `WorkspaceSubTabs` | `web/components/workspace/` |
+| KPI / status strip | `WorkspaceMetricTiles` | `web/components/workspace/WorkspaceMetricTiles.tsx` |
+| Execution / landing body | `WorkspaceSurface` | `web/components/workspace/WorkspaceSurface.tsx` |
+| Overview action tiles / contained panels | `WorkspaceCard` | `web/components/workspace/WorkspaceCard.tsx` |
+| Multi-column zone panels | `WorkspaceZonePanel` | `web/components/workspace/WorkspaceZonePanel.tsx` |
+| Hairline region separators | `WorkspaceDivider` | `web/components/workspace/WorkspaceDivider.tsx` |
+
+Barrel export: `@/components/workspace/doctrine`.
 
 **Color semantics** (`kpiSemantics.ts`) are platform-wide. States map to one meaning and one token; modules never invent decorative colors:
 
@@ -237,15 +255,15 @@ The first four operational modules. Future modules inherit this shell rather tha
 
 | Module | Host | Queue | Workspace |
 |--------|------|-------|-----------|
-| **Communications** | `CommunicationsWorkspaceShell` | Conversations · Announcements | Conversation detail · announcement composer |
-| **Processing** | `ProcessingModal` → `PosWorkspaceLayout` | Incoming items · folder/category rail | Document/source detail · recognized fields · approval actions |
-| **Work Items** | `MyTasksModal` → `MyTasksPanel` | Process rail (All work · Business Process → interim Stage · General / Cross-process; Work View is the target lens) → queue (filters as secondary axis) | Selected item detail · actions · Open record · empty state |
-| **Operational Intelligence** | `AnalyticsModal` → `AnalyticsWorkspacePanel` | Work/Studio mode → views (Overview · Playbooks · Configure) | Dashboard · metric detail · playbook insight · configuration entry |
+| **Processing** | `ProcessingModal` → `DigitalMailroomShell` | Overview landing · queue/folder rail | Case detail · form review · approval actions |
+| **Communications** | `InboxModal` → `CommunicationsWorkspaceShell` | Overview landing · conversation queue · announcements | Conversation detail · announcement composer · scheduled sends |
+| **Work Items** | `MyTasksModal` → `WorkItemsShell` | Process rail → queue (filters secondary) | Selected item detail · Open record · empty state |
+| **Operational Intelligence** | `AnalyticsModal` → `AnalyticsWorkspacePanel` | Work/Studio → view strip | Dashboard · playbook · Configure entry |
 
-- **Communications** — header (Compose New) → KPI strip → mode switch → child underline tab strip (Inbox/Announcements under Work; Templates + settings link under Studio).
-- **Processing** — header → left mode/section rail; Work lands on Incoming with folder rail + KPI strip.
-- **Work Items** — header (New task primary, opens the panel's create form via a nonce) → KPI strip (Open / Due soon / Overdue) → **process rail** (Business Process groups with interim Stage subgroups, plus General / Cross-process; Work View becomes the lens in Phase 2) → queue (search + secondary filter rail + queue header + compact rows) → workspace (selected item detail + actions + Open record). Overdue carries a thin left accent, never a full red card.
-- **Operational Intelligence** — header (Close only) → Work/Studio mode switch → view underline tabs. Work → Overview; Studio → Playbooks (pack rail + sections) and Configure (single entry → analytics settings). No duplicate Configure affordances.
+- **Processing** — `WorkspaceShell` stack → Work: Overview · Queue; Studio: Forms · Packets · Fields · Branding. Reference implementation for Doctrine V2.
+- **Communications** — same primitive stack (`doctrine-v2`); Work: Overview · Inbox · Announcements · Scheduled; Studio: Templates · Channels · Rules. Compose New in header on Overview/Inbox. No external Studio settings link — Channels/Rules embed existing setup surfaces.
+- **Work Items** — header (New task) → KPI strip → process rail → queue → workspace detail. No Work/Studio switch.
+- **Operational Intelligence** — header (Close only) → Work/Studio → view tabs. Work → Overview; Studio → Playbooks and Configure.
 
 ---
 
@@ -262,12 +280,13 @@ The left rail is the operator's anchor and must reflect the **active workspace**
 ## Rules for future modules
 
 1. Mount in `AdminV2WorkspaceBosModalShell`; never set custom width.
-2. Use `OperationalModalHeader` with icon + title + (optional) actions — **no subtitle/prose**; never hand-roll the header bar or invent a per-module header.
-3. Stack KPI strip → mode switch → child nav → body, in that order.
-4. Follow the **queue → workspace** model in the body (queue header + selection → detail/empty); a single-column queue is an acceptable waypoint, not a permanent shape.
-5. Reuse `CompactKpiStrip` + `kpiSemantics`; never fabricate metrics or invent colors.
-6. If the module has design-time assets, use `AlloyModeSwitch` and keep child sections subordinate to the mode layer.
-7. Register the modal in `workspaceModalCoordinator` and reflect it in the **left nav active state** via `useActiveAdminV2WorkspaceModal()`.
-8. Left app nav order is fixed: **Workspace · Inbox · Processing · Work Items · Analytics**.
+2. Compose **`WorkspaceShell` → `WorkspaceHeader` → `WorkspaceMetricTiles` (when KPIs apply) → `WorkspaceModeTabs` / `WorkspaceSubTabs` → `WorkspaceSurface`** from `@/components/workspace/operational`. Do not hand-roll modal header bars or module-specific KPI strips.
+3. Use `WorkspaceHeader` with icon + title + (optional) actions — optional subtitle for product taglines only; never hand-roll the header bar.
+4. Stack KPI strip → mode switch → child nav → body, in that order.
+5. Follow the **queue → workspace** model in the body (queue header + selection → detail/empty); a single-column queue is an acceptable waypoint, not a permanent shape.
+6. Reuse `WorkspaceMetricTiles` / `kpiSemantics`; never fabricate metrics or invent colors.
+7. If the module has design-time assets, use `WorkspaceModeTabs` and keep child sections subordinate via `WorkspaceSubTabs`.
+8. Register the modal in `workspaceModalCoordinator` and reflect it in the **left nav active state** via `useActiveAdminV2WorkspaceModal()`.
+9. Left app nav order is fixed: **Workspace · Inbox · Processing · Work Items · Analytics**.
 
 If a future surface genuinely cannot fit this grammar, change the doctrine deliberately — do not fork a one-off layout.

@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
             scheduleTypeKey,
             weekdays,
             sortOrder: body.sort_order != null ? Number(body.sort_order) : undefined,
+            isActive: typeof body.is_active === "boolean" ? body.is_active : undefined,
             metadata: parseJsonObject(body.metadata),
         });
         return NextResponse.json({ pattern }, { status: 201 });

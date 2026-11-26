@@ -18,7 +18,6 @@ import type {
     FocusPanelCardExpansion,
     FocusPanelCardField,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
-import { allConceptPaths } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 export type FocusPanelCardReference = {
@@ -41,6 +40,7 @@ const HOUSEHOLD_REFERENCE: FocusPanelCardReference = {
         {
             id: "primary_contact",
             label: "Primary Contact",
+            refKey: "person.primary_contact_name",
             concept: "Enrollment → Primary Contact → Name",
             renderer: "relationship_summary",
             kind: "field",
@@ -49,6 +49,7 @@ const HOUSEHOLD_REFERENCE: FocusPanelCardReference = {
         {
             id: "primary_phone",
             label: "Phone",
+            refKey: "person.primary_phone",
             concept: "Enrollment → Primary Contact → Phone",
             renderer: "text",
             kind: "field",
@@ -57,6 +58,7 @@ const HOUSEHOLD_REFERENCE: FocusPanelCardReference = {
         {
             id: "primary_email",
             label: "Email",
+            refKey: "person.primary_email",
             concept: "Enrollment → Primary Contact → Email",
             renderer: "text",
             kind: "field",
@@ -126,6 +128,7 @@ const CHILDREN_REFERENCE: FocusPanelCardReference = {
         {
             id: "child_name",
             label: "Name",
+            refKey: "child.first_name",
             concept: "Enrollment → Children → Name",
             renderer: "text",
             kind: "field",
@@ -134,6 +137,7 @@ const CHILDREN_REFERENCE: FocusPanelCardReference = {
         {
             id: "child_status",
             label: "Status",
+            refKey: "child.status",
             concept: "Enrollment → Children → Status",
             renderer: "status_pill",
             kind: "field",
@@ -142,6 +146,7 @@ const CHILDREN_REFERENCE: FocusPanelCardReference = {
         {
             id: "child_room",
             label: "Current Room",
+            refKey: "child.room",
             concept: "Enrollment → Children → Current Room",
             renderer: "text",
             kind: "field",
@@ -178,7 +183,9 @@ export function defaultCardExpansion(key: FocusPanelCardKey): FocusPanelCardExpa
     return REFERENCES[key]?.expansion ?? { default: "collapsed" };
 }
 
-/** Concepts surfaced first in the picker for a card (full tree still available). */
+/** Concepts surfaced first in legacy condition pickers (canonical refKeys preferred for fields). */
 export function conceptOptionsForCard(key: FocusPanelCardKey): string[] {
-    return REFERENCES[key]?.conceptOptions ?? allConceptPaths();
+    return (REFERENCES[key]?.fields ?? [])
+        .map((field) => field.refKey ?? field.concept)
+        .filter(Boolean);
 }

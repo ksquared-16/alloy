@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { attachMatchingRecordsToLifecycleWorkUnits } from "@/lib/lifecycle/attachLifecycleWorkUnitRecords";
+import { BUSINESS_PROCESS_ACTIVATE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 /** POST — attach existing opportunities (by status) to lifecycle_wu_* work units (builder-owned only). */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_ACTIVATE);
+    if (denied) return denied;
 
     let body: { department_id?: string } = {};
     try {

@@ -1,0 +1,75 @@
+{
+  "schema": "documents.d9h1.link_audit_verdict.v1",
+  "qa_run_id": "qar_143a8fbcad49",
+  "census_request": "gar_68fd3d757c2e77",
+  "trusted_host_action_id": "tha_09a6a2ec39c190",
+  "query_hash": "837416d15d799a03521c0eedf9ef5a17faf7056e676c2d109cbd5b3aa11774d8",
+  "census_run_at": "2026-11-09T02:05:12.486Z",
+  "checks": {
+    "d9_l11_link_rows_present": true,
+    "d9_l11_attribution_complete": true,
+    "d9_l11_no_scope_cert_links": true,
+    "d9_l11_no_secondary_links": true
+  },
+  "total_d9_link_rows": 4,
+  "t_a": {
+    "installation_id": "1b9ef9bb-c6ba-497d-a3ff-09ba3de04282",
+    "credential_id": "63b61fae-a04f-4ef3-bbe7-1b181c2f57e9",
+    "document_id": "d8195b27-ed63-48ff-b3f9-a25988375cdb",
+    "rows": [
+      "4a30c6a7-562b-46af-9119-47bbcf36d027",
+      "153f27be-c84f-47fd-a66b-047194def39e"
+    ]
+  },
+  "criterion_1_two_rows_on_T_A": true,
+  "criterion_2_no_refused_call_audited": true,
+  "criterion_3_history_counts": [
+    {
+      "as": "T_B",
+      "i": null,
+      "before": 0,
+      "after": 0,
+      "pass": true
+    },
+    {
+      "as": "T_A",
+      "i": 1,
+      "before": 0,
+      "after": 1,
+      "pass": true
+    },
+    {
+      "as": "T_A",
+      "i": 2,
+      "before": 1,
+      "after": 2,
+      "pass": true
+    }
+  ],
+  "criterion_3_pass": true,
+  "clock_information_only": [
+    {
+      "created_at": "2026-11-09T02:00:58.714871+00:00",
+      "after_send_s": 1.734,
+      "before_resp_s": -0.049
+    },
+    {
+      "created_at": "2026-11-09T02:01:02.729315+00:00",
+      "after_send_s": 1.791,
+      "before_resp_s": -0.212
+    }
+  ],
+  "rows_not_this_run": [
+    {
+      "event_id": "c8a1927e-5ee8-4689-89db-56defda5a3c4",
+      "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+      "created_at": "2026-11-08T17:24:13.042475+00:00"
+    },
+    {
+      "event_id": "1fae7458-e038-48a2-858c-72a7fc2942c8",
+      "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+      "created_at": "2026-11-08T17:24:13.904494+00:00"
+    }
+  ],
+  "verdict": "CASE_11_PASS"
+}

@@ -21,6 +21,13 @@ export type WorkIntentRuntimeExecutionBundle = {
     department_id: string;
     requires_outcome_picker: boolean;
     subject: StageOutcomeExecutionSubject;
+    /**
+     * Present ONLY on a child-grain plan whose caller named no child. The subject is truthful about
+     * the family case and the grain, and carries no child — so it cannot be executed, and the outcome
+     * path refuses it. A surface reading this can decline to offer the action instead of offering one
+     * that fails at the guard. Absent means the subject is complete for its grain.
+     */
+    subject_unresolved?: "child_identity_required";
 };
 
 export type WorkIntentRuntimeProjection = {

@@ -85,7 +85,7 @@ describe("attachQueueRowContextToItems", () => {
                             outcome_status_key: "tour_scheduled",
                             location_id: "loc-1",
                             location_label: "North Campus",
-                            desired_program_type: "infant",
+                            program_key: "infant",
                             desired_program_label: "Infant",
                         },
                     ],

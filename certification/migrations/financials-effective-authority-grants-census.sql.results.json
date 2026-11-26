@@ -1,0 +1,96 @@
+{
+  "trusted_host_action_id": "tha_530d385cc5c15c",
+  "query_hash": "65734fe643e3217826396ddf41989142ebae349d755cdf4195803002cd5141a5",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T01:23:56.349Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_530d385cc5c15c",
+    "query_hash": "65734fe643e3217826396ddf41989142ebae349d755cdf4195803002cd5141a5",
+    "authorization_id": "grnt_067f92eb4bc941ca",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T01:23:58.169Z",
+    "question_ids": [
+      "catalog",
+      "grants",
+      "custom_holders",
+      "catalogue",
+      "scale",
+      "role_keys"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "fin.adjust ~ active=true",
+          "fin.post ~ active=true",
+          "fin.read ~ active=true",
+          "fin.responsibility ~ active=true",
+          "fin.subsidy ~ active=true",
+          "fin.write ~ active=true"
+        ]
+      },
+      "grants": {
+        "question_id": "grants",
+        "row_count": null,
+        "rows": [
+          "fin.adjust ~ role=admin ~ allowed=true ~ orgs=3",
+          "fin.post ~ role=admin ~ allowed=true ~ orgs=3",
+          "fin.read ~ role=admin ~ allowed=true ~ orgs=3",
+          "fin.read ~ role=ops ~ allowed=true ~ orgs=2",
+          "fin.read ~ role=regional_lead ~ allowed=true ~ orgs=3",
+          "fin.read ~ role=school_director ~ allowed=true ~ orgs=3",
+          "fin.responsibility ~ role=admin ~ allowed=true ~ orgs=3",
+          "fin.subsidy ~ role=admin ~ allowed=true ~ orgs=3",
+          "fin.write ~ role=admin ~ allowed=true ~ orgs=3",
+          "fin.write ~ role=ops ~ allowed=true ~ orgs=2"
+        ]
+      },
+      "custom_holders": {
+        "question_id": "custom_holders",
+        "row_count": null,
+        "rows": [
+          "fin.read ~ custom_roles=2"
+        ]
+      },
+      "catalogue": {
+        "question_id": "catalogue",
+        "row_count": null,
+        "rows": [
+          3,
+          6,
+          4
+        ]
+      },
+      "scale": {
+        "question_id": "scale",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "role_keys": {
+        "question_id": "role_keys",
+        "row_count": null,
+        "rows": [
+          "_w17_a ~ orgs=1",
+          "_w17_b ~ orgs=1",
+          "admin ~ orgs=3",
+          "assistant_director ~ orgs=1",
+          "director ~ orgs=1",
+          "ops ~ orgs=3",
+          "regional_lead ~ orgs=3",
+          "school_director ~ orgs=3"
+        ]
+      }
+    },
+    "row_count": 29
+  }
+}

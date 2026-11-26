@@ -17,11 +17,14 @@ import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workf
 import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { isCommunicationCanonicalDualWriteEnabled } from "@/lib/communications/communicationsEnabled";
+import { legacyWorkflowSmsRefusal } from "@/lib/workflows/actions/legacyWorkflowSms";
 import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirrorQueuedMessage";
 import { logCommDualWrite, orgIdTail } from "@/lib/communications/mirrorObservation";
 import { assertWorkflowStatusMutationGrain } from "@/lib/admin/actions/resolveStatusMutationGrain";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { executeInstantiateWorkWorkflowAction } from "@/lib/admin/operationalWork/workflowInstantiateWork/executeInstantiateWorkWorkflowAction";
+import { executeSendCommunicationTemplateWorkflowAction } from "@/lib/workflows/actions/executeSendCommunicationTemplateWorkflowAction";
+import { refuseQaOrgSmsQueueInsert } from "@/lib/qa/sharedQaSafety";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -299,7 +302,10 @@ function getConditionActual(payload: Record<string, unknown>, defaultEntityType:
     if (c.field && typeof c.field === "string" && c.field.trim()) {
         return getByPath(payload, c.field.trim());
     }
-    return undefined;
+    // The EVENT's own facts (e.g. `new_family` on `lead_created`) live at the payload root, not on an
+    // entity. The conditions API writes `field_path` only, so without this fallback a root fact could
+    // never be matched and the condition failed every run.
+    return getByPath(payload, path);
 }
 
 function normalizeConditionValue(v: unknown): string | number | boolean | null | unknown[] {
@@ -1406,7 +1412,22 @@ async function enrichVendorPayload(supabase: SupabaseClient, payload: WorkflowEv
 export type ExecuteWorkflowRunOptions = {
     event_id?: string | null;
     org_id?: string | null;
+    /**
+     * Set by an event emitter whose domain has REFUSED outbound communication for the
+     * entity this event is about (e.g. a tour booking still awaiting approval). Every
+     * action that sends a message is skipped and recorded with this reason; every other
+     * action — logging, assignments, work, entity updates — still runs, so operator work
+     * keyed on the event is preserved.
+     */
+    outboundMessagingRefusedReason?: string | null;
 };
+
+/** Workflow action types that put a message in front of a recipient. */
+export const WORKFLOW_OUTBOUND_MESSAGE_ACTION_TYPES: ReadonlySet<string> = new Set([
+    "create_message",
+    "send_message",
+    "send_communication_template",
+]);
 
 /** Canonical entity type for matching (plural form used in workflow_events). */
 const ENTITY_TYPE_ALIASES: Record<string, string> = {
@@ -1612,12 +1633,22 @@ export async function executeWorkflowRun(
         org_id: payload.org_id ?? null,
     });
 
-    const { data: conditions } = await supabase
+    // `*`: the evaluator reads whichever shape the table carries (`field`/`value`, or the richer columns).
+    // Naming columns the table lacks made this read fail, the error was discarded, and "no conditions" let
+    // EVERY conditioned workflow run — fail OPEN. A condition that cannot be read now fails the run.
+    const { data: conditions, error: conditionsError } = await supabase
         .from("workflow_conditions")
-        .select("target_entity, field_path, field, operator, value, value_jsonb, enabled")
+        .select("*")
         .eq("workflow_id", workflowId);
+    if (conditionsError) {
+        await supabase
+            .from("workflow_runs")
+            .update({ status: "failed", completed_at: new Date().toISOString(), error: `conditions_unreadable: ${conditionsError.message}` })
+            .eq("id", runId);
+        return { ok: false, status: "failed", workflow_run_id: runId, error: `conditions_unreadable: ${conditionsError.message}` } as WorkflowRunResult;
+    }
 
-    const conditionRows = conditions ?? [];
+    const conditionRows = (conditions ?? []) as ConditionRow[];
     const conditionEval = conditionRows.map((c: ConditionRow) => {
         try {
             const actual = getConditionActual(payload, defaultEntityType, c);
@@ -1701,11 +1732,32 @@ export async function executeWorkflowRun(
             let skipReason = "";
             let actionOutputs: Record<string, unknown> = {};
 
+            const outboundRefusal = String(options?.outboundMessagingRefusedReason ?? "").trim();
             try {
-                switch (action.action_type) {
+                if (outboundRefusal && WORKFLOW_OUTBOUND_MESSAGE_ACTION_TYPES.has(String(action.action_type ?? ""))) {
+                    logs.push(`${action.action_type}: outbound refused (${outboundRefusal})`);
+                    actionSkipped = true;
+                    skipReason = `outbound_refused:${outboundRefusal}`;
+                } else switch (action.action_type) {
                 case "create_message": {
                     const channel = pl.channel != null ? String(pl.channel) : "email";
                     const triggerProcess = pl.trigger_messages_process !== false;
+                    if (channel.toLowerCase() === "sms") {
+                        const smsOrgId =
+                            (run?.org_id != null ? String(run.org_id).trim() : "") ||
+                            (payload.org_id != null ? String(payload.org_id).trim() : "") ||
+                            (options?.org_id != null ? String(options.org_id).trim() : "");
+                        const smsGate = refuseQaOrgSmsQueueInsert(smsOrgId || null);
+                        if (!smsGate.ok) {
+                            throw new Error(`create_message: ${smsGate.code}: ${smsGate.detail}`);
+                        }
+                        const refused = legacyWorkflowSmsRefusal("create_message");
+                        logs.push(refused.log);
+                        actionSkipped = true;
+                        skipReason = refused.skipReason;
+                        actionOutputs = refused.outputs;
+                        break;
+                    }
                     const tplPayload = bridgeContactFromPersonForTemplates(payload as Record<string, unknown>);
                     const toValueRaw = pl.to_value != null ? String(pl.to_value) : "";
                     const bodyRaw = pl.body != null ? String(pl.body) : "";
@@ -1838,6 +1890,14 @@ export async function executeWorkflowRun(
                 }
                 case "send_message": {
                     const channel = (pl.channel ?? "sms") as string;
+                    if (channel.toLowerCase() === "sms") {
+                        const refused = legacyWorkflowSmsRefusal("send_message");
+                        logs.push(refused.log);
+                        actionSkipped = true;
+                        skipReason = refused.skipReason;
+                        actionOutputs = refused.outputs;
+                        break;
+                    }
                     const template = (pl.template ?? pl.body ?? "") as string;
                     const templateKey = (pl.template_key != null ? String(pl.template_key) : "") as string;
                     const recipients = (pl.recipients ?? []) as RecipientSpec[];
@@ -2015,6 +2075,15 @@ export async function executeWorkflowRun(
 
                         const bodyPreviewRow = (bodyForRecipient ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
                         if (isSms && toPhone) {
+                            const smsOrgId =
+                                (run?.org_id != null ? String(run.org_id).trim() : "") ||
+                                (payload.org_id != null ? String(payload.org_id).trim() : "") ||
+                                (options?.org_id != null ? String(options.org_id).trim() : "") ||
+                                (linkOrgIdForVendorOffer != null ? String(linkOrgIdForVendorOffer).trim() : "");
+                            const smsGate = refuseQaOrgSmsQueueInsert(smsOrgId || null);
+                            if (!smsGate.ok) {
+                                throw new Error(`send_message: ${smsGate.code}: ${smsGate.detail}`);
+                            }
                             const msgRow = buildPublicMessagesInsertForSendMessageSms(payload as Record<string, unknown>, {
                                 workflowId,
                                 runId,
@@ -2490,6 +2559,25 @@ export async function executeWorkflowRun(
                         if (taskId) {
                             (payload as Record<string, unknown>)._last_instantiated_work_id = taskId;
                         }
+                    }
+                    break;
+                }
+                case "send_communication_template": {
+                    // A Template Library message, by reference, through the canonical sender.
+                    const sent = await executeSendCommunicationTemplateWorkflowAction({
+                        supabase,
+                        orgId: orgId ?? "",
+                        workflowId,
+                        actionPayload: pl,
+                        workflowPayload: payload as Record<string, unknown>,
+                    });
+                    logs.push(sent.log);
+                    actionOutputs = sent.outputs;
+                    if (sent.status === "skipped") {
+                        actionSkipped = true;
+                        skipReason = sent.skipReason;
+                    } else {
+                        actionCompleted = true;
                     }
                     break;
                 }

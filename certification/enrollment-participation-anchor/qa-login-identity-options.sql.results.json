@@ -1,0 +1,109 @@
+{
+  "trusted_host_action_id": "tha_bc7814c2cc58d1",
+  "query_hash": "722f87ac9f09453bcd02fffe024202d04d50f82f7fd4180714263ad21543b443",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T19:58:24.089Z",
+    "question_ids": [
+      "account_shapes",
+      "org_access"
+    ],
+    "questions": {
+      "account_shapes": {
+        "question_id": "account_shapes",
+        "row_count": null,
+        "rows": [
+          {
+            "kind": "human",
+            "email_domain": "gmail.com",
+            "accounts": 1,
+            "confirmed": 1,
+            "ever_signed_in": 1,
+            "newest": "2026-04-22"
+          },
+          {
+            "kind": "human",
+            "email_domain": "northwind.invalid",
+            "accounts": 1,
+            "confirmed": 1,
+            "ever_signed_in": 1,
+            "newest": "2026-08-20"
+          },
+          {
+            "kind": "human",
+            "email_domain": "test.com",
+            "accounts": 3,
+            "confirmed": 3,
+            "ever_signed_in": 3,
+            "newest": "2026-05-04"
+          },
+          {
+            "kind": "human",
+            "email_domain": "workwithalloy.com",
+            "accounts": 2,
+            "confirmed": 2,
+            "ever_signed_in": 2,
+            "newest": "2026-04-09"
+          },
+          {
+            "kind": "managed_qa_identity",
+            "email_domain": "example.com",
+            "accounts": 4,
+            "confirmed": 4,
+            "ever_signed_in": 4,
+            "newest": "2026-09-02"
+          }
+        ]
+      },
+      "org_access": {
+        "question_id": "org_access",
+        "row_count": null,
+        "rows": [
+          {
+            "kind": "human",
+            "email_domain": "gmail.com",
+            "role": "admin",
+            "accounts": 1
+          },
+          {
+            "kind": "human",
+            "email_domain": "northwind.invalid",
+            "role": "admin",
+            "accounts": 1
+          },
+          {
+            "kind": "human",
+            "email_domain": "test.com",
+            "role": "admin",
+            "accounts": 1
+          },
+          {
+            "kind": "human",
+            "email_domain": "test.com",
+            "role": "ops",
+            "accounts": 2
+          },
+          {
+            "kind": "human",
+            "email_domain": "test.com",
+            "role": "regional_lead",
+            "accounts": 1
+          },
+          {
+            "kind": "human",
+            "email_domain": "test.com",
+            "role": "school_director",
+            "accounts": 1
+          },
+          {
+            "kind": "managed_qa_identity",
+            "email_domain": "example.com",
+            "role": "admin",
+            "accounts": 4
+          }
+        ]
+      }
+    },
+    "row_count": 12
+  }
+}

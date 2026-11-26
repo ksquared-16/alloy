@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { executeMutation, resolvePhase, evaluatePhase, buildPreview } from "@/lib/mutations/runtime";
 import type { DecisionIntent } from "@/lib/mutations/types";
-import { LEAD_STATUS_DOMAIN } from "@/lib/mutations/leadStatusDomain";
+import { LEAD_STATUS_DOMAIN, resolveDomainForCommand } from "@/lib/mutations/leadStatusDomain";
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -227,8 +227,8 @@ describe("Mutation Runtime — domain isolation", () => {
         const leadCmd = "update_lead_status";
         const childCmd = "update_child_enrollment_status";
         expect(leadCmd).not.toBe(childCmd);
-        // Child enrollment domain is NOT registered yet — this is V1 (lead only)
-        const { resolveDomainForCommand } = require("@/lib/mutations/leadStatusDomain");
-        expect(resolveDomainForCommand(childCmd)).toBeNull();
+        expect(resolveDomainForCommand(leadCmd)?.key).toBe("lead_status");
+        expect(resolveDomainForCommand(childCmd)?.key).toBe("enrollment_status");
+        expect(resolveDomainForCommand(childCmd)?.key).not.toBe("lead_status");
     });
 });

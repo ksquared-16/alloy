@@ -5,40 +5,21 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-import { isConfiguredStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { LifecycleStageQueueFiltersEmptyError } from "@/lib/lifecycle/lifecycleStageQueueFilters";
 import { LifecycleStageWorkUnitIdentityConflictError } from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
 import { parsePerspectivesV1 } from "@/lib/lifecycle/perspectiveConfigV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
+import { parseStoredFieldRules } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import {
     saveLifecycleStageRuntimeConfig,
     validateLifecycleStageRuntimeConfigSnapshot,
 } from "@/lib/lifecycle/saveLifecycleStageRuntimeConfig";
-import { parseStageV2DraftInput, persistStageV2DraftFields } from "@/lib/lifecycle/persistStageV2DraftFields";
+import { parseStageV2DraftInput } from "@/lib/lifecycle/persistStageV2DraftFields";
 import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { snapshotEnrollmentPipelineWorkUnit } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
-
-async function isValidStageForDepartment(
-    orgId: string,
-    departmentId: string,
-    stageRaw: string
-): Promise<boolean> {
-    const supabase = createAdminClient();
-    const { data } = await supabase
-        .from("departments")
-        .select("metadata")
-        .eq("id", departmentId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-    if (!data) return false;
-    const metadata =
-        data.metadata !== null && typeof data.metadata === "object" && !Array.isArray(data.metadata)
-            ? (data.metadata as Record<string, unknown>)
-            : {};
-    return isConfiguredStageKey(metadata, stageRaw);
-}
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 /** POST — canonical stage setup (statuses + optional work unit queue) in one transaction. */
 export async function POST(request: NextRequest) {
@@ -46,9 +27,8 @@ export async function POST(request: NextRequest) {
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: {
         department_id?: string;
@@ -62,12 +42,17 @@ export async function POST(request: NextRequest) {
             required_rule_ids?: string[];
             recommended_rule_ids?: string[];
             rule_levels_v1?: { version?: number; by_rule_id?: Record<string, string> };
+            rule_meta_v1?: unknown;
         } | null;
         queue_membership_v1?: unknown;
         stage_operating_plan_v1?: unknown;
         status_rollup_v1?: unknown;
         perspectives_v1?: unknown;
         stage_v2_draft?: unknown;
+        /** Publication the editor loaded against — the PUBLICATION conflict token. */
+        base_revision_id?: string | null;
+        /** Draft revision the editor loaded — the DRAFT-EDIT conflict token. */
+        draft_revision?: number;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -93,13 +78,35 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
     }
 
+    /**
+     * Status keys are OPTIONAL, because they describe queue MEMBERSHIP — not the operating plan.
+     *
+     * This used to be a hard 400 on every save, which made a disposition-keyed child stage
+     * unauthorable: `enrolling` scopes its queue by `included_disposition_keys` and has no status
+     * keys at all, so editing its outcome rules was impossible without inventing membership the
+     * stage does not use. Those invented keys are threaded into the work-unit save, so the
+     * "harmless" workaround would have rewritten the stage's queue definition.
+     *
+     * Omitted now means "leave membership exactly as configured". Supplied still means "this IS
+     * the membership", validated as before.
+     */
+    const statusKeysSupplied =
+        Array.isArray(body.selected_status_keys) || Array.isArray(body.status_keys);
     const selectedStatusKeys = Array.isArray(body.selected_status_keys)
         ? body.selected_status_keys
         : Array.isArray(body.status_keys)
           ? body.status_keys
           : [];
-    if (!selectedStatusKeys.length) {
-        return NextResponse.json({ error: "selected_status_keys is required" }, { status: 400 });
+    if (statusKeysSupplied && !selectedStatusKeys.length) {
+        // An explicit empty array states an intent to clear the queue. Refuse it rather than
+        // silently preserving — silently ignoring a stated intent is its own defect.
+        return NextResponse.json(
+            {
+                error:
+                    "selected_status_keys cannot be empty — omit the field to leave membership unchanged.",
+            },
+            { status: 400 },
+        );
     }
 
     const workUnitName =
@@ -108,19 +115,7 @@ export async function POST(request: NextRequest) {
     const fieldRulesRaw = body.field_rules;
     const fieldRules =
         fieldRulesRaw && typeof fieldRulesRaw === "object" && !Array.isArray(fieldRulesRaw)
-            ? {
-                  required_rule_ids: Array.isArray(fieldRulesRaw.required_rule_ids)
-                      ? fieldRulesRaw.required_rule_ids.filter((x): x is string => typeof x === "string")
-                      : [],
-                  recommended_rule_ids: Array.isArray(fieldRulesRaw.recommended_rule_ids)
-                      ? fieldRulesRaw.recommended_rule_ids.filter((x): x is string => typeof x === "string")
-                      : [],
-                  ...(fieldRulesRaw.rule_levels_v1 &&
-                  typeof fieldRulesRaw.rule_levels_v1 === "object" &&
-                  !Array.isArray(fieldRulesRaw.rule_levels_v1)
-                      ? { rule_levels_v1: fieldRulesRaw.rule_levels_v1 }
-                      : {}),
-              }
+            ? parseStoredFieldRules(fieldRulesRaw)
             : null;
 
     const queueMembershipRaw = body.queue_membership_v1;
@@ -163,19 +158,32 @@ export async function POST(request: NextRequest) {
     const deptOk = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
     if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
 
-    if (!(await isValidStageForDepartment(ctx.orgId, departmentId, stageKey))) {
-        return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
-    }
+    // The stage inventory is the DRAFT's, and the orchestrator checks it there. A second gate on
+    // the published projection used to live here; it would now reject a stage the operator added
+    // to the draft but has not published yet — the editor refusing to open what it just created.
 
     try {
-        const result = await saveLifecycleStageRuntimeConfig(supabase, {
+        // The V2 stage fields are folded into the same in-memory draft mutation. They used to be a
+        // second, separate whole-column write issued from here after the orchestrator returned —
+        // a fifth lifecycle-builder write in one logical save, and one more way to tear a stage.
+        const v2Draft = parseStageV2DraftInput(body.stage_v2_draft);
+
+        const saveResult = await saveLifecycleStageRuntimeConfig(supabase, {
             orgId: ctx.orgId,
             departmentId,
             processId: body.process_id ?? null,
             stageKey,
-            selectedStatusKeys,
+            ...(statusKeysSupplied ? { selectedStatusKeys } : {}),
             workUnitName,
             fieldRules,
+            actorUserId: ctx.userId,
+            ...(v2Draft && Object.keys(v2Draft).length > 0 ? { stageV2Draft: v2Draft } : {}),
+            ...(body.base_revision_id !== undefined
+                ? { expectedBaseRevisionId: body.base_revision_id }
+                : {}),
+            ...(typeof body.draft_revision === "number"
+                ? { expectedDraftRevision: body.draft_revision }
+                : {}),
             ...(queueMembership ? { queueMembership } : {}),
             ...(stageOperatingPlan ? { stageOperatingPlan } : {}),
             ...(statusRollup ? { statusRollup } : {}),
@@ -184,27 +192,36 @@ export async function POST(request: NextRequest) {
                 : {}),
         });
 
-        // Persist V2 builder stage fields if provided
-        const v2Draft = parseStageV2DraftInput(body.stage_v2_draft);
-        if (v2Draft && Object.keys(v2Draft).length > 0) {
-            const { data: deptRow } = await supabase
-                .from("departments")
-                .select("metadata")
-                .eq("id", departmentId)
-                .eq("org_id", ctx.orgId)
-                .maybeSingle();
-            const currentMetadata =
-                deptRow?.metadata != null && typeof deptRow.metadata === "object" && !Array.isArray(deptRow.metadata)
-                    ? (deptRow.metadata as Record<string, unknown>)
-                    : {};
-            await persistStageV2DraftFields(supabase, {
-                orgId: ctx.orgId,
-                departmentId,
-                stageKey,
-                metadata: currentMetadata,
-                draft: v2Draft,
-            });
+        if (saveResult.status === "stale_conflict") {
+            // The two conflicts need different words because they need different recoveries:
+            // one means a colleague is editing, the other means a newer config is already live.
+            const isDraftEdit = saveResult.conflict?.kind === "draft_edit";
+            return NextResponse.json(
+                {
+                    error: isDraftEdit
+                        ? "Someone else changed this configuration while you were editing. " +
+                          "Reload to see their changes, then reapply yours."
+                        : "Someone else published a newer version of this configuration while you " +
+                          "were editing. Reload to see their changes, then reapply yours.",
+                    code: saveResult.conflict?.code,
+                    conflict: saveResult.conflict,
+                },
+                { status: 409 },
+            );
         }
+
+        if (saveResult.status === "blocked" || !saveResult.snapshot) {
+            return NextResponse.json(
+                {
+                    error: saveResult.errors[0]?.message ?? "This change cannot be saved.",
+                    errors: saveResult.errors,
+                    warnings: saveResult.warnings,
+                },
+                { status: 422 },
+            );
+        }
+
+        const result = saveResult.snapshot;
 
         const pipelineSnapshot =
             result.workUnitId && result.queueDefinitionRaw != null
@@ -247,6 +264,11 @@ export async function POST(request: NextRequest) {
             status_stages: result.statusStagesPayload,
             pipeline: pipelineSnapshot,
             queue_filter_validation: queueFilterValidation,
+            draft: saveResult.draft,
+            warnings: saveResult.warnings,
+            companion_writes: saveResult.companion_writes,
+            // The draft changed; runtime did not. Nothing here writes the published projection.
+            publication_required: saveResult.publication_required,
         });
     } catch (e) {
         if (e instanceof LifecycleStageWorkUnitIdentityConflictError) {

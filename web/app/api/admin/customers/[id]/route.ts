@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { getAdminAuthCached, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { getAdminAuthCached, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 const ALLOWED_KEYS = ["name", "status", "status_key", "customer_type", "external_source", "external_id"] as const;
 
@@ -13,14 +17,14 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
         const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
+        const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+        if (capDenied) return capDenied;
         const body = await request.json();
         const auth = await getAdminAuthCached();
         if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

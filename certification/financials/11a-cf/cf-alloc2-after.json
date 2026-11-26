@@ -1,0 +1,28 @@
+{
+  "before": {
+    "available": "200.00",
+    "balance": "$37.87",
+    "paid": "$0.00",
+    "targetResponsibility": "partial",
+    "targetResponsibilityText": "Cert Certhouse · $57.00 unassigned",
+    "targetCells": [
+      "Sep 18, 2026",
+      "Fee",
+      "Certb Certhouse",
+      "4010 · Registration Fees",
+      "$75.00",
+      "posted",
+      "Cert Certhouse · $57.00 unassigned",
+      "· $57.00 unassigned",
+      "Registration fee"
+    ]
+  },
+  "after": {
+    "available": "125.00",
+    "balance": "-$37.13",
+    "paid": "$75.00",
+    "targetResponsibility": null,
+    "targetResponsibilityText": null,
+    "targetCells": null
+  }
+}

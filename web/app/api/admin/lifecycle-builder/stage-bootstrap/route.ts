@@ -7,6 +7,12 @@ import {
     buildLifecycleStageBootstrap,
     isValidBootstrapBuilderStage,
 } from "@/lib/lifecycle/buildLifecycleStageBootstrap";
+import {
+    configuredStageInventoryFromMetadata,
+    stageConfigurationError,
+} from "@/lib/lifecycle/configuredStageInventory";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 
 /** GET — single payload for lifecycle builder stage configuration (prefetch). */
 export async function GET(request: NextRequest) {
@@ -47,8 +53,28 @@ export async function GET(request: NextRequest) {
             ? (dept.metadata as Record<string, unknown>)
             : {};
 
-    if (!isValidBootstrapBuilderStage(metadata, stageKey)) {
-        return NextResponse.json({ error: "Invalid stage_key for department" }, { status: 400 });
+    // The stage inventory that matters for EDITING is the draft's, not the published projection's.
+    // A stage added in the draft but not yet published is a legitimate thing to open; gating on
+    // published metadata here would make it unreachable in the very editor that created it.
+    const editorState = await loadBusinessProcessEditorState(supabase, {
+        orgId: ctx.orgId,
+        departmentId,
+        actorUserId: ctx.userId,
+    });
+    const builderMetadata = editorState
+        ? { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: editorState.draft_payload }
+        : metadata;
+
+    if (!isValidBootstrapBuilderStage(builderMetadata, stageKey)) {
+        const inventory = configuredStageInventoryFromMetadata(builderMetadata);
+        return NextResponse.json(
+            {
+                error: stageConfigurationError(inventory, stageKey).message,
+                code: "stage_not_configured",
+                configured_stages: inventory.stageKeys,
+            },
+            { status: 400 },
+        );
     }
 
     try {
@@ -58,6 +84,7 @@ export async function GET(request: NextRequest) {
             departmentId,
             builderStageKey: stageKey,
             primaryRecordLabel,
+            actorUserId: ctx.userId,
         });
         return NextResponse.json(bootstrap, {
             headers: { "Cache-Control": "private, no-store" },

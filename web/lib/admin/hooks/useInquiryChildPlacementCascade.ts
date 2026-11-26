@@ -10,9 +10,10 @@ import {
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
 import {
-    resolveDefaultInquiryChildSiteId,
+    resolveProgramCategoryOptionsForSite,
     resolveProgramsOfferedForSite,
     resolveRoomsForSiteAndProgram,
+    resolveDefaultInquiryChildSiteId,
     type InquiryChildPlacementHierarchyRow,
     type InquiryChildProgramOptionSetItem,
 } from "@/lib/admin/location/inquiryChildPlacementOptions";
@@ -22,15 +23,34 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const HIERARCHY_TTL_MS = 1500;
 
+/**
+ * Warm placement option caches so Program/Room selects open with labels immediately
+ * (Children card / Focus Panel mount). Safe to call repeatedly — TTL dedupe joins inflight.
+ */
+export function prefetchInquiryChildPlacementCascade(): void {
+    if (typeof window === "undefined") return;
+    const init = workspaceDataFetchInit();
+    void dedupeAdminFetchWithTtl(WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL, init, HIERARCHY_TTL_MS);
+    void fetchOptionSetItemsBySetKey("childcare_program_type", init);
+    void fetchLocationProgramCategories(init, { includeInactive: true }).catch(
+        () => [] as LocationProgramCategoryRow[],
+    );
+}
+
 export function useInquiryChildPlacementCascade(params: {
     locationValue: string;
-    /** Legacy program type key or category id when category-first mode is active. */
+    /**
+     * Program picker value: `location_program_categories.id` for OCM-persisting selects,
+     * or the stable program key for create_lead flows (`child_program`, FK resolved at persist).
+     */
     programValue: string;
     programCategoryId?: string;
-    programType?: string;
 }): {
     siteOptions: { value: string; label: string }[];
+    /** Stable program keys — create_lead / key-valued flows. */
     programOptions: { value: string; label: string }[];
+    /** `location_program_categories.id` values — OCM / Focus Panel Program edits. */
+    programCategoryIdOptions: { value: string; label: string }[];
     roomOptions: { value: string; label: string }[];
     programDisabled: boolean;
     roomDisabled: boolean;
@@ -53,7 +73,9 @@ export function useInquiryChildPlacementCascade(params: {
             const [locRes, items, categories] = await Promise.all([
                 dedupeAdminFetchWithTtl(WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL, init, HIERARCHY_TTL_MS),
                 fetchOptionSetItemsBySetKey("childcare_program_type", init),
-                fetchLocationProgramCategories(init, { includeInactive: true }),
+                fetchLocationProgramCategories(init, { includeInactive: true }).catch(
+                    () => [] as LocationProgramCategoryRow[],
+                ),
             ]);
             if (cancelled) return;
 
@@ -80,29 +102,6 @@ export function useInquiryChildPlacementCascade(params: {
         }));
     }, [siteFilter?.bootstrap?.sites, hierarchy]);
 
-    const siteId = params.locationValue.trim();
-    const programCategoryId = (params.programCategoryId ?? "").trim();
-    const programType = (params.programType ?? params.programValue).trim();
-    const programFilterKey = useMemo(
-        () =>
-            resolveProgramKeyForRoomCascade({
-                desired_program_category_id: programCategoryId,
-                desired_program_type: programType,
-                categories: locationCategories,
-            }) ?? "",
-        [locationCategories, programCategoryId, programType],
-    );
-
-    const programOptions = useMemo(
-        () => resolveProgramsOfferedForSite(hierarchy, siteId, programItems, locationCategories),
-        [hierarchy, siteId, programItems, locationCategories]
-    );
-
-    const roomOptions = useMemo(
-        () => resolveRoomsForSiteAndProgram(hierarchy, siteId, programFilterKey || undefined),
-        [hierarchy, siteId, programFilterKey]
-    );
-
     const defaultSiteId = useMemo(
         () =>
             resolveDefaultInquiryChildSiteId({
@@ -113,12 +112,45 @@ export function useInquiryChildPlacementCascade(params: {
         [params.locationValue, siteFilter?.selectedSiteId, siteOptions]
     );
 
+    // Prefer explicit child/lead site; otherwise workspace / single-site default so Program
+    // options still resolve when Create Lead only set opportunity.location_id.
+    const siteId = params.locationValue.trim() || defaultSiteId || "";
+    const programCategoryId = (params.programCategoryId ?? "").trim();
+    const programValue = params.programValue.trim();
+    const programFilterKey = useMemo(() => {
+        const fromCategory = resolveProgramKeyForRoomCascade({
+            program_category_id: programCategoryId || programValue,
+            categories: locationCategories,
+        });
+        if (fromCategory) return fromCategory;
+        // create_lead flows carry the stable program key directly (child_program).
+        return programCategoryId ? "" : programValue;
+    }, [locationCategories, programCategoryId, programValue]);
+
+    const programOptions = useMemo(
+        () => resolveProgramsOfferedForSite(hierarchy, siteId, programItems, locationCategories),
+        [hierarchy, siteId, programItems, locationCategories]
+    );
+
+    const programCategoryIdOptions = useMemo(
+        () => resolveProgramCategoryOptionsForSite(siteId, locationCategories),
+        [siteId, locationCategories],
+    );
+
+    const roomOptions = useMemo(
+        () => resolveRoomsForSiteAndProgram(hierarchy, siteId, programFilterKey || undefined),
+        [hierarchy, siteId, programFilterKey]
+    );
+
     return {
         siteOptions,
         programOptions,
+        programCategoryIdOptions,
         roomOptions,
-        programDisabled: !siteId,
-        roomDisabled: !siteId,
+        // Keep the control interactive while options resolve (site may come from
+        // workspace default after hierarchy load). Disable only once we know there is no site.
+        programDisabled: !loading && !siteId,
+        roomDisabled: !loading && !siteId,
         loading,
         defaultSiteId,
         siteSelectionReady: siteFilter?.siteSelectionReady ?? true,

@@ -1,0 +1,250 @@
+/**
+ * SECONDARY WORK IS VISIBLE, DISTINGUISHABLE, AND NOT WHAT "RECORD OUTCOME" ACTS ON.
+ *
+ * The stage work runtime has always published `primary` separately from `additional`, and each item
+ * carries its own `role`. The Current Work surface flattened the two into one list and dropped the
+ * role, with two consequences:
+ *
+ *   presentation  a second live work item was indistinguishable from the stage's actual subject —
+ *                 or, worse, sat among data requirements as though it were one.
+ *   action        `pickPrimaryOpenItem` took the first OPEN item in `[primary, ...additional]`, so
+ *                 the moment the primary was not open and a secondary was, the unqualified
+ *                 "Record outcome" control silently began acting on the secondary one.
+ *
+ * The second is the one that could lose an operator's work: pressing Record outcome on a stage whose
+ * primary work is "Review waitlist position" must never record an "Offer spot" outcome.
+ *
+ * Nothing here names a template key. The role comes from the runtime, so any process that configures
+ * secondary work gets this behaviour with no code change — asserted by driving invented work keys.
+ */
+
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { __testing } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkSurfaceVM";
+import type { StageWorkItemProjection, StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import type { WorkIntentRuntimeState } from "@/lib/lifecycle/workIntentRuntimeTypes";
+
+const { checklistFromStageRuntime, pickPrimaryOpenItem } = __testing;
+
+function work(
+    template_key: string,
+    role: "primary" | "secondary",
+    state: WorkIntentRuntimeState,
+): StageWorkItemProjection {
+    return {
+        template_key,
+        label: `${template_key} label`,
+        role,
+        state,
+        requires_outcome_picker: false,
+        work_id: `work-${template_key}`,
+        due_at: null,
+        due_urgency: "none",
+        attempt_count: 0,
+        last_outcome: null,
+        completed_at: state === "completed" ? "2026-09-11T00:00:00Z" : null,
+        outcomes: [],
+        completion_policy_summary: null,
+        completion_policy_min_attempts: null,
+        completion_policy_max_attempts: null,
+        outcome_automation_preview: [],
+    };
+}
+
+function runtime(items: StageWorkItemProjection[]): StageWorkRuntimeProjection {
+    return {
+        stage_key: "some_stage",
+        stage_label: "Some Stage",
+        purpose: null,
+        journey_segment: "family",
+        template_keys: items.map((i) => i.template_key),
+        primary: items[0] ?? null,
+        additional: items.slice(1),
+        execution: {} as never,
+    };
+}
+
+describe("Current Work — secondary work", () => {
+    it("carries the runtime's role onto every work row", () => {
+        const rows = checklistFromStageRuntime(
+            runtime([work("review_position", "primary", "open"), work("offer_place", "secondary", "open")]),
+        );
+
+        expect(rows.map((r) => [r.key, r.workRole])).toEqual([
+            ["review_position", "primary"],
+            ["offer_place", "secondary"],
+        ]);
+        // Work rows are work, not data requirements.
+        expect(new Set(rows.map((r) => r.kind))).toEqual(new Set(["stage_work"]));
+    });
+
+    it("treats a row with no stated role as primary rather than guessing from position", () => {
+        const item = { ...work("solo", "primary", "open") };
+        delete (item as Partial<StageWorkItemProjection>).role;
+        expect(checklistFromStageRuntime(runtime([item as StageWorkItemProjection]))[0]!.workRole).toBe("primary");
+    });
+
+    /* ------------------------------------------------------------ the ambiguity that mattered */
+
+    it("RECORD OUTCOME acts on the PRIMARY work, even when only a secondary is open", () => {
+        /*
+         * The regression in one line. Before, `[primary, ...additional].find(open)` returned the
+         * secondary item here, because the primary was merely planned.
+         */
+        const picked = pickPrimaryOpenItem(
+            runtime([work("review_position", "primary", "planned"), work("offer_place", "secondary", "open")]),
+        );
+        expect(picked?.template_key).toBe("review_position");
+    });
+
+    it("prefers the primary's open work over a secondary's open work", () => {
+        const picked = pickPrimaryOpenItem(
+            runtime([work("review_position", "primary", "open"), work("offer_place", "secondary", "open")]),
+        );
+        expect(picked?.template_key).toBe("review_position");
+    });
+
+    it("reaches a secondary item only when the primary has nothing to act on", () => {
+        const picked = pickPrimaryOpenItem(
+            runtime([work("review_position", "primary", "completed"), work("offer_place", "secondary", "open")]),
+        );
+        expect(picked?.template_key).toBe("offer_place");
+    });
+
+    it("has nothing to act on when no work is live", () => {
+        expect(pickPrimaryOpenItem(runtime([work("review_position", "primary", "completed")]))).toBeNull();
+        expect(pickPrimaryOpenItem(null)).toBeNull();
+    });
+
+    /* ------------------------------------------------------------ presentation */
+
+    /*
+     * THESE TWO CLAIMS MOVED TO A RENDER TEST, AND HERE IS WHY.
+     *
+     * They used to read `CurrentWorkWorkspace.tsx` and assert it contained
+     * `data-work-section="also-in-progress"`, `data-work-secondary-item` and
+     * `item.workRole === "secondary"`. Every assertion passed. Every one still would: that file
+     * still contains all of it.
+     *
+     * No product code imports that component. Its only importer in the repository is a test. So the
+     * two tests named "renders secondary work…" and "selects secondary work…" were describing a
+     * component an operator could never reach, and they stayed green through two cycles in which
+     * secondary work was genuinely unreachable on staging.
+     *
+     * The render proof now lives in `currentWorkSecondaryWorkIsReachable.test.tsx`, which mounts
+     * `CurrentWorkCard` and asserts the row in the emitted markup — including on a stage that
+     * projects no action stack, the shape that hid the defect. The reachability of the component
+     * itself is policed by `sourcePresenceIsNotRuntimeProof.test.tsx`.
+     *
+     * What survives here is the part that IS a static architecture contract: the section must not
+     * name a work key, because a hardcoded key would make it one process's feature rather than a
+     * platform behaviour. That is a property of the source and is correctly asserted against it —
+     * but against the component that actually renders.
+     */
+    it("the rendered secondary-work section names no work key", () => {
+        const src = readFileSync(
+            resolve(__dirname, "../../components/admin/focusPanel/cards/CurrentWorkFocusedSurface.tsx"),
+            "utf8",
+        );
+        expect(src).toContain('data-work-section="also-in-progress"');
+        expect(src).toContain("data-work-secondary-item");
+        const code = src
+            .split("\n")
+            .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//") && !l.includes("/*"))
+            .join("\n");
+        expect(code).not.toContain("offer_spot");
+    });
+
+    it("only shows secondary work that is still outstanding", () => {
+        const rows = checklistFromStageRuntime(
+            runtime([
+                work("review_position", "primary", "open"),
+                work("offer_place", "secondary", "completed"),
+            ]),
+        );
+        const outstandingSecondary = rows.filter((r) => r.workRole === "secondary" && r.status !== "complete");
+        expect(outstandingSecondary).toEqual([]);
+    });
+});
+
+
+/**
+ * SECONDARY WORK MUST BE REACHABLE FROM THE CARD, NOT ONLY THE EXPANDED VIEW.
+ *
+ * `Record outcome` acts on the PRIMARY work — correctly. The consequence, measured on staging, was
+ * that a second open work item could not be resolved from the surface an operator is actually
+ * looking at: an `offer_spot` work was started, was live in the runtime, and its outcomes were
+ * reachable from nowhere, because the only place listing secondary work was a workspace component
+ * that has since been deleted as unreachable.
+ *
+ * Both live surfaces now derive it identically, so they cannot disagree about what counts as
+ * secondary — and both are proven by rendering, not by reading their source.
+ */
+describe("what the summary card's source can and cannot prove", () => {
+    const card = () => readFileSync(resolve(__dirname, "../..", "components/admin/focusPanel/cards/CurrentWorkCard.tsx"), "utf8");
+
+    /*
+     * THREE ASSERTIONS WERE REMOVED FROM HERE, AND ONE OF THEM WAS WRONG THE WHOLE TIME.
+     *
+     * They read this component's source and claimed the summary card "lists the stage's other open
+     * work", "uses the same derivation as the workspace section", and "selects through the same
+     * handler". All three passed. The markup was genuinely in the file.
+     *
+     * It was also nested inside `helpful.length > 0 || subordinateOutcome`, so a stage projecting
+     * no helpful commands and no subordinate outcome rendered no section at all — the same gate
+     * #877 removed from the focused surface, still live here. Rendering the card on exactly that
+     * shape is what exposed it; `toContain` never could, because presence in source was never the
+     * question. The render proofs now live in `currentWorkSecondaryWorkIsReachable.test.tsx`.
+     *
+     * A second one had quietly rotted: "the same derivation as the workspace section" named
+     * `CurrentWorkWorkspace`, which has since been deleted as unreachable. It was comparing the
+     * live card against a component nothing rendered.
+     *
+     * What remains below is the assertion that is genuinely about source: a hardcoded work key
+     * would make this one process's feature instead of a platform behaviour, and no amount of
+     * rendering proves the absence of a string.
+     */
+    it("names no work key — it is whatever the stage configured", () => {
+        const code = card()
+            .split("\n")
+            .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//") && !l.includes("/*"))
+            .join("\n");
+        expect(code).not.toContain("offer_spot");
+    });
+});
+
+
+/**
+ * A REQUIREMENT AND A PIECE OF WORK ARE NOT TWO ANSWERS TO ONE QUESTION.
+ *
+ * `stageChecklist` is the only source carrying the stage's WORK rows, and it was reached only when
+ * both requirement sources were empty. So the moment a stage authored any requirement, every work
+ * row vanished from the checklist — and with them the only record that a second work item was open.
+ *
+ * Measured on staging: an offer work was started and live (a repeat invocation deduped onto the same
+ * work id), and it appeared in no checklist, so no surface could offer its outcomes. Four authored
+ * field requirements on the Waitlist stage were all it took.
+ */
+describe("work rows compose with requirement rows", () => {
+    const vm = () =>
+        readFileSync(resolve(__dirname, "../..", "lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkSurfaceVM.ts"), "utf8");
+
+    it("work rows are no longer gated behind an empty requirement set", () => {
+        const src = vm();
+        // The old shape returned stageChecklist only as a final fallback.
+        expect(src).not.toMatch(/:\s*stageChecklist;/);
+        expect(src).toContain("...stageChecklist.filter((item) => !requirementKeys.has(item.key))");
+    });
+
+    it("requirement source precedence is unchanged", () => {
+        // config still wins over readiness; an authored empty set still means empty.
+        expect(vm()).toContain("configChecklist.length > 0\n            ? mergeChecklists(configChecklist, readinessChecklist)\n            : readinessChecklist;");
+    });
+
+    it("a requirement key still wins over a work row of the same key", () => {
+        // Dedupe keeps the requirement's richer projection rather than shadowing it with work.
+        expect(vm()).toContain("requirementKeys.has(item.key)");
+    });
+});

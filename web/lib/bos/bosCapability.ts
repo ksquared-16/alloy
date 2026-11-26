@@ -14,7 +14,11 @@ export type BosCapabilityKey =
     | "agent_v0_queue_definition"
     | "agent_v1_record_overview_layout"
     | "agent_v2_field_visibility"
-    | "packet_review_insight";
+    | "packet_review_insight"
+    | "operational_question_future_room_capacity"
+    | "operational_question_room_utilization"
+    | "operational_question_room_utilization_fte"
+    | "operational_question_equivalent_child_count";
 
 /** Product domain for routing, policy, and UI grouping. */
 export type BosCapabilityDomain = "orchestration" | "config" | "operational" | "insight";

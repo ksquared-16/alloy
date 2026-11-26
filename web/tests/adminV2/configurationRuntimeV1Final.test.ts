@@ -19,8 +19,8 @@ const V1_CONFIGURATION_PAGES = [
     "components/adminV2/settings/locations/LocationsConfigurationPage.tsx",
     "components/adminV2/settings/fields/FieldsConfigurationPage.tsx",
     "components/adminV2/settings/statuses/StatusesConfigurationPage.tsx",
-    "components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx",
-    "components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx",
+    "components/adminV2/settings/access/AccessWorkspaceSurface.tsx",
+    "components/adminV2/settings/organization/OrganizationCommunicationsPage.tsx",
     "components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell.tsx",
 ] as const;
 
@@ -49,17 +49,25 @@ describe("Configuration Runtime V1 final", () => {
     it("V1 configuration pages use ConfigurationShell without per-page width hacks", () => {
         for (const page of V1_CONFIGURATION_PAGES) {
             const src = read(page);
-            expect(src).toContain("ConfigurationShell");
+            const usesShell =
+                src.includes("ConfigurationShell") || src.includes("SettingsConfigurationSurfaceShell");
+            expect(usesShell).toBe(true);
             expect(src).not.toMatch(/width:\s*\d+px/);
             expect(src).not.toContain("17.5rem");
             expect(src).not.toContain("15.5rem");
         }
+        expect(read("components/adminV2/settings/configurationRuntime/SettingsConfigurationSurfaceShell.tsx")).toContain(
+            "ConfigurationShell",
+        );
     });
 
-    it("Locations uses Configuration Mode with updated subtitle and Sections queue", () => {
+    it("Locations uses Configuration Mode with an object selector and owned-concern tabs", () => {
         const loc = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(loc).toContain("Configure campuses, programs, classrooms, and scheduling resources.");
-        expect(loc).toContain('title="Sections"');
+        const selector = read("components/adminV2/settings/locations/LocationsObjectSelector.tsx");
+        expect(loc).toContain("LocationsObjectSelector");
+        expect(selector).toContain('data-testid="locations-object-selector"');
+        expect(loc).toContain("LOCATION_WORKSPACE_TABS");
+        expect(loc).not.toContain("locations-section-queue");
         expect(loc).not.toContain("LocationsHierarchySettingsClient");
         expect(loc).not.toContain("data-locations-editor-table");
     });

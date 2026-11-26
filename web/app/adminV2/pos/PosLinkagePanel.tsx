@@ -24,7 +24,7 @@ export default function PosLinkagePanel({ onNavigate }: { onNavigate: (section: 
             </div>
             <div className="flex min-h-0 flex-1 items-center justify-center bg-white p-6">
                 <div className="max-w-sm rounded-lg border border-alloy-stone/15 bg-white p-5 text-center shadow-sm">
-                    <GitMerge className="mx-auto h-5 w-5 text-emerald-600" aria-hidden />
+                    <GitMerge className="mx-auto h-5 w-5 text-alloy-bend-pine" aria-hidden />
                     <div className="mt-2 text-[13px] font-semibold text-alloy-midnight">Resolution lane coming together</div>
                     <p className="mt-1 text-[12px] leading-relaxed text-stone-500">
                         Match candidates and link/create/route decisions are live today inside each Processing case (the third

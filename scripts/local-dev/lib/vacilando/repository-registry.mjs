@@ -1,0 +1,1129 @@
+/**
+ * Repository Registry — the canonical owner of repositories Vacilando can execute in.
+ *
+ * WHY THIS EXISTS. Every path in Vacilando assumed one repository: /Users/Kelly/Alloy,
+ * worktrees under ~/Code/alloy-worktrees, a base of origin/staging, six sprint
+ * slots, and Alloy's own validation tooling. The single hard chokepoint was
+ * startPersistentAgentSession, which refuses any provider working directory
+ * outside the one Alloy worktree root. That check is correct as a containment
+ * boundary and wrong as a definition of "managed" — so the registry becomes the
+ * authority for what "managed" means, and the check consults it instead of a
+ * constant.
+ *
+ * WHAT A REPOSITORY IS. An execution and security boundary: a canonical root, a
+ * Git common directory, a base branch, a worktree parent, and a profile that
+ * says which conventions apply. It is NOT a folder. Folders organise lanes for
+ * the eye; a repository decides where a provider is allowed to run. Moving a
+ * lane between folders is presentation. Moving it between repositories is an
+ * execution rebind and does not happen by reorganising a list.
+ *
+ * IDENTITY IS GIT'S, NOT THE NAME'S. Two registrations of the same repository
+ * under different display names or different symlinked paths are the same
+ * repository, and a Git WORKTREE of a repository is not a second repository —
+ * it reports its parent's common directory, which is exactly how we tell them
+ * apart. Registering a worktree as its own repository would let two "different"
+ * repositories write to one Git object store.
+ */
+import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { promisify } from "node:util";
+
+const run = promisify(execFile);
+
+export const REPOSITORY_SCHEMA = "vacilando.repository.v1";
+export const REPOSITORY_NAME_MAX = 80;
+export const ALLOY_REPOSITORY_ID = "repo_alloy";
+
+/**
+ * The PROJECT identity of a repository.
+ *
+ * Not a second registry and not a second record: a project is what a repository
+ * is called when the question is "whose conventions are these?", and it is
+ * carried on the repository record so there is exactly one authority. Alloy has
+ * a fixed id for the same reason its repository_id is fixed — lanes, grants and
+ * audit rows already reference it, and a fingerprint would move between
+ * machines.
+ */
+export const ALLOY_PROJECT_ID = "prj_alloy";
+
+export function projectIdFor(rec) {
+  if (!rec) return null;
+  if (rec.project_id) return String(rec.project_id);
+  return rec.repository_id === ALLOY_REPOSITORY_ID ? ALLOY_PROJECT_ID : null;
+}
+
+/**
+ * A stable, readable project identity from the operator's own name for it.
+ *
+ * `prj_vacilando`, not `prj_` plus a fingerprint: the id appears in the Projects
+ * detail, in scope resolution and in every governed record that names a project,
+ * and an operator has to be able to recognise it. Collisions take a numeric
+ * suffix rather than silently reusing an identity.
+ */
+/**
+ * Give a record a project identity if it has none.
+ *
+ * Alloy is deliberately left alone: its record predates the field and
+ * `projectIdFor` answers `prj_alloy` for it by repository id, so writing one
+ * would change a persisted identity that every governed record already uses.
+ */
+export function ensureProjectIdentity(rec, store) {
+  if (!rec || rec.project_id) return rec?.project_id ?? null;
+  if (rec.repository_id === ALLOY_REPOSITORY_ID) return ALLOY_PROJECT_ID;
+  rec.project_id = mintProjectId(rec.name, store);
+  return rec.project_id;
+}
+
+export function mintProjectId(name, store = null) {
+  const slug = String(name || "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "project";
+  const taken = new Set();
+  for (const rec of Object.values(store?.repositories || {})) {
+    const id = rec?.project_id || (rec?.repository_id === ALLOY_REPOSITORY_ID ? ALLOY_PROJECT_ID : null);
+    if (id) taken.add(id);
+  }
+  let candidate = `prj_${slug}`;
+  for (let n = 2; taken.has(candidate); n += 1) candidate = `prj_${slug}_${n}`;
+  return candidate;
+}
+
+/**
+ * Profiles. A profile is the set of conventions a repository actually has —
+ * never a set of conditionals sprinkled through the codebase.
+ *
+ * The generic profile assumes nothing: no staging, no alloy-root, no sprint
+ * slots, no fixed ports, no validation commands, no governed promotion. A
+ * repository with none of that must still work completely.
+ */
+export const REPOSITORY_PROFILES = Object.freeze({
+  generic: {
+    id: "generic",
+    label: "Git repository",
+    slots: false,               // no fixed slot placement
+    governed_promotion: false,  // no push/merge automation of any kind
+    sprint_tooling: false,      // no alloy-sprint-* lifecycle
+    fixed_ports: false,
+    // Instruction files a provider should be told about if present. Discovery
+    // is READ-ONLY: nothing here is ever executed.
+    instruction_files: ["AGENTS.md", "CLAUDE.md", ".cursorrules"],
+    branch_policy: { style: "free", prefix: "" },
+    /*
+     * PROMOTION POLICY, AND THE GENERIC ANSWER IS "NONE".
+     *
+     * These values lived as module constants in trusted-host-merge and in the
+     * execution-authority module, which made them GLOBAL: every repository
+     * Vacilando touched inherited Alloy's staging trunk and Alloy's protected
+     * names, whether or not it had either. A profile is the set of conventions
+     * a repository ACTUALLY has, so the generic profile declares that it has no
+     * promotion policy at all rather than quietly borrowing one.
+     */
+    promotion: {
+      promotion_branch: null,
+      protected_branches: [],
+      promoted_ref: null,
+    },
+    /*
+     * EXECUTION CONVENTIONS, AND THE GENERIC ANSWER IS AGAIN "NONE".
+     *
+     * Slots, ports, a worktree namespace, a deployed target and a hosted
+     * domain are things ALLOY has. They lived as module constants and as
+     * default arguments, which made them the runtime's: a repository with no
+     * managed slots still had 3011 waiting for it, and a repository with no
+     * deployment still resolved Alloy's.
+     *
+     * Absence is a valid answer and is stated here as one. 3011 is not a
+     * default port that Alloy happens to use — it is Alloy's port, and a
+     * repository without a managed slot range has none at all.
+     */
+    execution: {
+      managed_slots: false,
+      managed_slot_count: 0,
+      first_agent_port: null,
+      worktree_namespace: null,
+      remote_slug: null,
+      deployed_target: null,
+      database_target: null,
+      hosted_host: null,
+      /*
+       * WHERE THIS PROJECT'S SERVER CREDENTIALS LIVE, relative to its root.
+       *
+       * `ALLOY_SERVER_ENV_SOURCE` named ONE file — Alloy's `web/.env.local` —
+       * from generic runtime, with a guess chain ending in another person's
+       * home directory. It is not a host setting; it is a property of a
+       * project that HAS a server. A repository-only project has none, and
+       * null is the correct answer rather than a path that does not exist.
+       */
+      env_source_relpath: null,
+      /*
+       * Where this project keeps migrations, and what its local database stack
+       * is called. Both were literals — `supabase/migrations` in the promotion
+       * train, `alloy-cert` in the process classifier — and both are properties
+       * of a project that HAS a database. A repository-only project has neither.
+       */
+      migrations_relpath: null,
+      local_stack_name: null,
+    },
+  },
+  alloy: {
+    id: "alloy",
+    label: "Alloy managed sprint",
+    slots: true,
+    governed_promotion: true,
+    sprint_tooling: true,
+    fixed_ports: true,
+    instruction_files: ["CLAUDE.md", "AGENTS.md"],
+    branch_policy: { style: "agent", prefix: "agent/" },
+    // Alloy's actual conventions, stated once. staging is the development
+    // trunk; main is release truth AND the GitHub default branch, which is why
+    // it is protected rather than promotable.
+    promotion: {
+      promotion_branch: "staging",
+      protected_branches: ["main", "master", "production", "prod"],
+      promoted_ref: "origin/staging",
+    },
+    // Alloy's actual execution conventions, stated once and owned here.
+    execution: {
+      managed_slots: true,
+      // Six permanent slots on 3011-3016. The count lived only in an observer's
+      // frozen port list, which meant the observer and the allocator could
+      // disagree about how many slots Alloy has.
+      managed_slot_count: 6,
+      first_agent_port: 3011,
+      worktree_namespace: "alloy-worktrees",
+      remote_slug: "ksquared-16/alloy",
+      deployed_target: "alloy_staging_web",
+      database_target: "alloy_deployed_primary",
+      hosted_host: "staging.workwithalloy.com",
+      env_source_relpath: "web/.env.local",
+      migrations_relpath: "supabase/migrations",
+      local_stack_name: "alloy-cert",
+    },
+  },
+});
+
+export function profileFor(id) {
+  return REPOSITORY_PROFILES[String(id || "generic")] || REPOSITORY_PROFILES.generic;
+}
+
+/**
+ * The promotion policy that governs a repository.
+ *
+ * Record first, then profile. A record may narrow what its profile allows; it
+ * may never widen it, and nothing falls back to Alloy. An unregistered or
+ * unknown repository resolves to the GENERIC policy — no promotion branch, no
+ * protected names — which refuses rather than inheriting, and that refusal is
+ * the point: Alloy being the primary consumer must not make Alloy the default.
+ */
+/**
+ * The execution conventions that govern a repository.
+ *
+ * Record first, then profile, floor generic — the same shape as
+ * `promotionPolicyFor`, deliberately, so there is one resolution rule to learn
+ * and one place a fallback could hide. Nothing here names Alloy; it resolves
+ * whatever profile it is handed, and an unknown one gets the empty set.
+ */
+export function executionProfileFor(rec) {
+  const profile = profileFor(rec?.profile);
+  const base = profile.execution || REPOSITORY_PROFILES.generic.execution;
+  const override = rec?.execution || null;
+  const pick = (k) => (override && override[k] !== undefined ? override[k] : base[k]);
+  return Object.freeze({
+    managed_slots: Boolean(pick("managed_slots")),
+    managed_slot_count: Number(pick("managed_slot_count") ?? 0) || 0,
+    first_agent_port: pick("first_agent_port") ?? null,
+    worktree_namespace: pick("worktree_namespace") ?? null,
+    remote_slug: rec?.remote_slug ?? pick("remote_slug") ?? null,
+    deployed_target: pick("deployed_target") ?? null,
+    database_target: pick("database_target") ?? null,
+    hosted_host: pick("hosted_host") ?? null,
+    env_source_relpath: pick("env_source_relpath") ?? null,
+    migrations_relpath: pick("migrations_relpath") ?? null,
+    local_stack_name: pick("local_stack_name") ?? null,
+    source: override ? "repository_record" : `profile:${profile.id}`,
+  });
+}
+
+/**
+ * Where a repository's worktrees live.
+ *
+ * The record's own `worktree_parent` wins — it is per-repository and already
+ * stored. Otherwise the profile's namespace under ~/Code, and for a profile
+ * with no namespace, NULL. `~/Code/alloy-worktrees` appeared as a default
+ * argument in six modules, which made Alloy's namespace every repository's.
+ */
+export function worktreeParentFor(rec) {
+  if (rec?.worktree_parent) return String(rec.worktree_parent).replace(/\/+$/, "");
+  const ns = executionProfileFor(rec).worktree_namespace;
+  return ns ? join(homedir(), "Code", ns) : null;
+}
+
+/**
+ * Where a repository's server environment file lives, as an absolute path.
+ *
+ * This is the owner of what `ALLOY_SERVER_ENV_SOURCE` used to be. That variable
+ * named one project's credential file from generic runtime: every consumer that
+ * asked for "the server environment" got ALLOY'S, whichever project the
+ * operation was actually for, and when the variable was unset the fallback
+ * guessed its way down to `/Users/Kelly/Alloy`.
+ *
+ * The record may state an absolute `env_source` of its own; otherwise the
+ * profile's relative path is joined to the project's root. A project with no
+ * root, or a profile with no server, resolves NULL — which is what a
+ * repository-only project actually has, and the reason this returns a path
+ * rather than accepting one.
+ */
+export function environmentSourceFor(rec) {
+  if (rec?.env_source) return String(rec.env_source);
+  const rel = executionProfileFor(rec).env_source_relpath;
+  if (!rel || !rec?.root) return null;
+  return join(String(rec.root).replace(/\/+$/, ""), rel);
+}
+
+/**
+ * The slot ports a repository actually has, in order.
+ *
+ * `reconciliation-observe` froze `[3011 … 3016]` as a module constant, so an
+ * observer scanning ANY project looked at Alloy's six ports. The range is
+ * first_agent_port + managed_slot_count, and a project with no managed slots
+ * has an EMPTY range rather than Alloy's.
+ */
+export function slotPortsFor(rec) {
+  const e = executionProfileFor(rec);
+  if (!e.managed_slots || !e.first_agent_port || !e.managed_slot_count) return Object.freeze([]);
+  return Object.freeze(
+    Array.from({ length: e.managed_slot_count }, (_, i) => e.first_agent_port + i),
+  );
+}
+
+/**
+ * Every deployed database target that belongs to a registered project.
+ *
+ * WHY THIS REPLACES TWO FROZEN LITERALS. `PRODUCTION_APPLY_TARGETS` and
+ * `LEDGER_REPAIR_TARGETS` were each `["alloy_deployed_primary"]`, written into
+ * the modules that guard them. The exact-name discipline was right and is kept:
+ * this returns EXACT NAMES a project actually declares, never a pattern and
+ * never a class flag, so "looks like production" still cannot point a mutation
+ * at the wrong database.
+ *
+ * What changes is who says which names those are. A project with no database
+ * contributes none, which is why a repository-only project has no applicable
+ * production target — it does not inherit Alloy's, and the guard refuses.
+ *
+ * TWO SOURCES, NEITHER OF THEM A LITERAL: the databases the known PROFILES
+ * declare, and the databases REGISTERED PROJECTS declare. The union is the
+ * answer.
+ *
+ * The first version read the registry alone and returned nothing when nothing
+ * was registered. That looked like admirable fail-closed behaviour and was
+ * wrong, because it answers the wrong question. This list is not "may this
+ * request proceed" — authorization decides that, and it is operator-only with
+ * Director approval either way. It is "which names does this capability ever
+ * address", and that does not depend on whether a particular host has been
+ * seeded. A CI runner with an empty runtime root is not a host where Alloy's
+ * production database stopped existing; it is a host that has not been told
+ * about it, and 19 ledger-repair cases failed saying so.
+ *
+ * The property that matters is unchanged and is what case 9 pins: a project
+ * whose profile declares NO database contributes nothing. A repository-only
+ * project still has no production target, because the generic profile has none
+ * to contribute — not because the registry happened to be empty.
+ */
+export function deployedDatabaseTargets({ root = runtimeRoot() } = {}) {
+  const seen = [];
+  const add = (t) => { if (t && !seen.includes(t)) seen.push(t); };
+  for (const profile of Object.values(REPOSITORY_PROFILES)) add(profile.execution?.database_target);
+  try {
+    for (const rec of Object.values(readRepositoryStore(root).repositories)) {
+      if (rec.state !== "ACTIVE") continue;
+      add(executionProfileFor(rec).database_target);
+    }
+  } catch { /* an unreadable store narrows the set; it never widens it */ }
+  return Object.freeze(seen);
+}
+
+/**
+ * EVERYTHING AN OPERATION NEEDS TO KNOW ABOUT THE PROJECT IT IS FOR.
+ *
+ * Vacilando runtime has to be able to answer five questions — which project is
+ * this for, which environment, which database, which deployment target, which
+ * worktree/observation scope — and until now it answered all five the same way:
+ * implicitly, as Alloy. A scanner defaulted to `~/Code/alloy-worktrees`, a
+ * migration defaulted to `alloy_deployed_primary`, a credential read defaulted
+ * to Alloy's `web/.env.local`. None of those defaults was wrong for Alloy; all
+ * of them were wrong for anything else, and silently.
+ *
+ * This is the one place those five are answered together, from the record that
+ * already owns them. It is deliberately NOT a new subsystem: every field is
+ * read straight off `executionProfileFor` / `worktreeParentFor` /
+ * `environmentSourceFor`, which are the existing authority.
+ *
+ * `known` is false for an unregistered id, and every scope field is null. That
+ * is the honest answer, and it is what makes an unscoped observation refuse
+ * instead of quietly scanning Alloy's worktrees.
+ */
+export function projectScope(repositoryId, { root = runtimeRoot() } = {}) {
+  let rec = null;
+  try { rec = repositoryId ? getRepository(repositoryId, root) : null; } catch { rec = null; }
+  const e = executionProfileFor(rec);
+  return Object.freeze({
+    known: Boolean(rec),
+    repository_id: rec?.repository_id ?? null,
+    project_id: projectIdFor(rec),
+    root: rec?.root ?? null,
+    worktree_parent: rec ? worktreeParentFor(rec) : null,
+    slot_ports: rec ? slotPortsFor(rec) : Object.freeze([]),
+    database_target: e.database_target,
+    deployed_target: e.deployed_target,
+    hosted_host: e.hosted_host,
+    env_source: rec ? environmentSourceFor(rec) : null,
+    migrations_relpath: e.migrations_relpath,
+    local_stack_name: e.local_stack_name,
+  });
+}
+
+/**
+ * The canonical remote identity of a registered repository, or null.
+ *
+ * ONE OWNER, THREE SOURCES, IN ORDER. A record may state `remote_slug`
+ * explicitly; failing that the normalised remote the registry already captured
+ * at registration answers; failing that the raw remote URL does. An operator
+ * who registered a project by pointing at a clone has already told Vacilando
+ * where it lives, and should not have to type it a second time in another form.
+ *
+ * `prj_vacilando` is exactly that case: its record carries
+ * `remote_normalized: "github.com/ksquared-16/vacilando"` and a null
+ * `remote_slug`, and this resolves `ksquared-16/vacilando` from it.
+ *
+ * AMBIGUITY RESOLVES TO NULL, never to a guess. A record with no remote is a
+ * local-only project, which is a legitimate thing to be and not a push target.
+ */
+export function canonicalRemoteFor(rec) {
+  const stated = executionProfileFor(rec).remote_slug;
+  const raw = stated || rec?.remote_normalized || rec?.remote || "";
+  const slug = String(raw)
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^git@([^:]+):/i, "$1/")
+    .replace(/^ssh:\/\//i, "")
+    .replace(/^github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  // owner/name, and nothing else. A bare name, a path with extra segments, or
+  // anything carrying a scheme we did not strip is ambiguous and refused.
+  return /^[a-z0-9._-]+\/[a-z0-9._-]+$/.test(slug) ? slug : null;
+}
+
+/**
+ * Every registered repository whose remote may be a governed target.
+ *
+ * ELIGIBILITY IS NOT AUTHORIZATION. This answers "is this a repository
+ * Vacilando knows and may be asked about", and nothing more: whether a specific
+ * push proceeds is governance's decision, unchanged, downstream of this.
+ *
+ * Three conditions, each for its own reason. ACTIVE, because a retired project
+ * is one an operator took out of service. Validation healthy, because a record
+ * pointing at a checkout that is gone is a record that cannot be pushed to
+ * anyway. A canonical remote, because an ambiguous one is not an identity.
+ */
+export function eligibleRepositoryRemotes({ root = runtimeRoot() } = {}) {
+  const out = [];
+  let records = [];
+  try { records = Object.values(readRepositoryStore(root).repositories); } catch { records = []; }
+  for (const rec of records) {
+    if (rec?.state !== "ACTIVE") continue;
+    if (rec?.validation && rec.validation.ok === false) continue;
+    const slug = canonicalRemoteFor(rec);
+    if (slug && !out.includes(slug)) out.push(slug);
+  }
+  return Object.freeze(out);
+}
+
+export function promotionPolicyFor(rec) {
+  const profile = profileFor(rec?.profile);
+  const base = profile.promotion || REPOSITORY_PROFILES.generic.promotion;
+  const override = rec?.promotion || null;
+  return Object.freeze({
+    /*
+     * THE RECORD DECIDES THIS ONE, AND UNTIL NOW IT COULD NOT.
+     *
+     * Every other dimension here already honoured a record-level override; this
+     * line read the PROFILE and nothing else, so a project that stated
+     * `governed_promotion: true` was still told false. The defect was invisible
+     * while no write path could set the field: registering the real Vacilando
+     * repository and trying to give it governed promotion is what surfaced it.
+     *
+     * Governed promotion is the one convention a project DECIDES rather than
+     * inherits — Alloy's profile still says true, and a generic project that
+     * has not said anything still gets false.
+     */
+    governed_promotion: override?.governed_promotion !== undefined
+      ? Boolean(override.governed_promotion)
+      : Boolean(profile.governed_promotion),
+    promotion_branch: override?.promotion_branch ?? base.promotion_branch,
+    protected_branches: Object.freeze([...(override?.protected_branches ?? base.protected_branches)]),
+    promoted_ref: override?.promoted_ref ?? base.promoted_ref,
+    source: override ? "repository_record" : `profile:${profile.id}`,
+  });
+}
+
+function runtimeRoot() {
+  return process.env.ALLOY_RUNTIME_ROOT?.trim()
+    || join(homedir(), ".local", "state", "alloy-dev");
+}
+
+export function repositoryStorePath(root = runtimeRoot()) {
+  return join(root, "vacilando", "repositories.json");
+}
+
+function iso(ms) { return new Date(ms ?? Date.now()).toISOString(); }
+
+function atomicWrite(path, obj) {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
+  renameSync(tmp, path);
+}
+
+function emptyStore() {
+  return { schema_version: REPOSITORY_SCHEMA, repositories: {} };
+}
+
+export function readRepositoryStore(root = runtimeRoot()) {
+  try {
+    const raw = JSON.parse(readFileSync(repositoryStorePath(root), "utf8"));
+    if (!raw || typeof raw !== "object") return emptyStore();
+    return {
+      schema_version: REPOSITORY_SCHEMA,
+      repositories: raw.repositories && typeof raw.repositories === "object" ? raw.repositories : {},
+    };
+  } catch {
+    return emptyStore();
+  }
+}
+
+function writeStore(store, root) {
+  atomicWrite(repositoryStorePath(root), store);
+  return store;
+}
+
+// ---------------------------------------------------------------- containment
+
+/**
+ * Roots a repository or worktree is allowed to live under.
+ *
+ * This is the containment boundary: nothing outside it can be registered, and
+ * no provider can be started outside a registered repository's worktree parent.
+ * The browser never supplies this list.
+ */
+export function approvedRoots() {
+  const extra = String(process.env.VACILANDO_REPOSITORY_ROOTS || "")
+    .split(":").map((s) => s.trim()).filter(Boolean);
+  return [
+    join(homedir(), "Alloy"),
+    join(homedir(), "Code"),
+    join(homedir(), "Projects"),
+    join(homedir(), "src"),
+    ...extra,
+  ].map((p) => p.replace(/\/+$/, ""));
+}
+
+/**
+ * Resolve a path to its real location and prove it is inside an approved root.
+ *
+ * realpath is the point: a symlink from an approved root to /etc would
+ * otherwise pass a prefix test while resolving somewhere else entirely. The
+ * check is done on the RESOLVED path, and with a separator so that
+ * "/Users/Kelly/Codex" cannot pass as being inside "/Users/Kelly/Code".
+ */
+export function containPath(input, { roots = approvedRoots() } = {}) {
+  const raw = String(input || "").trim();
+  if (!raw) return { ok: false, error: "path_required" };
+  if (!isAbsolute(raw)) return { ok: false, error: "path_must_be_absolute" };
+  if (/[\u0000-\u001f]/.test(raw)) return { ok: false, error: "path_refused" };
+  let real;
+  try {
+    real = realpathSync(resolve(raw));
+  } catch {
+    return { ok: false, error: "path_not_found" };
+  }
+  for (const root of roots) {
+    let realRoot;
+    try { realRoot = realpathSync(root); } catch { continue; }
+    if (real === realRoot || real.startsWith(realRoot + sep)) {
+      return { ok: true, path: real, root: realRoot };
+    }
+  }
+  return { ok: false, error: "path_outside_approved_roots", roots };
+}
+
+// ------------------------------------------------------------------- identity
+
+/**
+ * Normalise a remote so the same repository is recognised across its forms.
+ *
+ * git@github.com:org/repo.git, https://github.com/org/repo.git and
+ * ssh://git@github.com/org/repo all name one repository; without normalisation
+ * they register as three.
+ */
+export function normalizeRemote(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return null;
+  let s = raw.replace(/\.git$/i, "");
+  const scp = s.match(/^([^@/]+)@([^:]+):(.+)$/);         // git@host:path
+  if (scp) s = `${scp[2]}/${scp[3]}`;
+  else s = s.replace(/^[a-z+]+:\/\//i, "").replace(/^[^@/]+@/, "");
+  return s.replace(/\/+$/, "").toLowerCase();
+}
+
+/** A stable id derived from Git's own identity, not from a name or a path. */
+export function repositoryFingerprint(gitCommonDir) {
+  return createHash("sha256").update(String(gitCommonDir || ""), "utf8").digest("hex").slice(0, 16);
+}
+
+/**
+ * Ask Git what this path actually is.
+ *
+ * `--git-common-dir` is the load-bearing answer: for a primary checkout it is
+ * that checkout's own .git, and for a WORKTREE it is the PARENT's .git. That
+ * single difference is how a worktree is prevented from registering as a
+ * separate repository sharing another's object store.
+ */
+export async function inspectGitPath(path, { git = null } = {}) {
+  const exec = git || ((args, cwd) => run("git", args, { cwd, timeout: 15_000, maxBuffer: 4 * 1024 * 1024 }));
+  const at = String(path);
+  const one = async (args) => {
+    try { const { stdout } = await exec(args, at); return String(stdout).trim(); }
+    catch { return null; }
+  };
+  const inside = await one(["rev-parse", "--is-inside-work-tree"]);
+  if (inside !== "true") return { ok: false, error: "not_a_git_repository" };
+  const toplevel = await one(["rev-parse", "--show-toplevel"]);
+  const commonDir = await one(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  const gitDir = await one(["rev-parse", "--path-format=absolute", "--git-dir"]);
+  if (!toplevel || !commonDir) return { ok: false, error: "git_identity_unavailable" };
+  let realCommon = commonDir;
+  let realTop = toplevel;
+  try { realCommon = realpathSync(commonDir); } catch { /* keep as reported */ }
+  try { realTop = realpathSync(toplevel); } catch { /* keep as reported */ }
+  // A linked worktree's git-dir sits inside the parent's common dir; a primary
+  // checkout's git-dir IS the common dir.
+  const isWorktree = Boolean(gitDir && commonDir && gitDir !== commonDir);
+  const branch = await one(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const remote = await one(["remote", "get-url", "origin"]);
+  // The parent checkout of a linked worktree: the common dir's own directory.
+  const parentRoot = realCommon.endsWith(`${sep}.git`) ? dirname(realCommon) : null;
+  return {
+    ok: true,
+    root: realTop,
+    git_common_dir: realCommon,
+    git_dir: gitDir,
+    is_worktree: isWorktree,
+    parent_root: isWorktree ? parentRoot : realTop,
+    branch: branch && branch !== "HEAD" ? branch : null,
+    remote: remote || null,
+    remote_normalized: normalizeRemote(remote),
+  };
+}
+
+/** Resolve the default branch without assuming it is called staging or main. */
+export async function detectDefaultBranch(path, { git = null } = {}) {
+  const exec = git || ((args, cwd) => run("git", args, { cwd, timeout: 15_000 }));
+  const one = async (args) => {
+    try { const { stdout } = await exec(args, path); return String(stdout).trim(); }
+    catch { return null; }
+  };
+  const head = await one(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
+  if (head) return head.replace(/^refs\/remotes\//, "");
+  for (const candidate of ["main", "master", "develop", "trunk"]) {
+    if (await one(["rev-parse", "--verify", "--quiet", `refs/heads/${candidate}`])) return candidate;
+  }
+  return (await one(["rev-parse", "--abbrev-ref", "HEAD"])) || null;
+}
+
+// --------------------------------------------------------------------- records
+
+export function validateRepositoryName(raw) {
+  const name = String(raw ?? "").trim().replace(/\s+/g, " ");
+  if (!name) return { ok: false, error: "repository_name_empty" };
+  if (name.length > REPOSITORY_NAME_MAX) return { ok: false, error: "repository_name_too_large" };
+  if (/[\u0000-\u001f]/.test(name)) return { ok: false, error: "repository_name_invalid" };
+  return { ok: true, name };
+}
+
+export function publicRepository(rec, { laneCount = 0 } = {}) {
+  if (!rec) return null;
+  const profile = profileFor(rec.profile);
+  return {
+    schema_version: REPOSITORY_SCHEMA,
+    repository_id: rec.repository_id,
+    project_id: projectIdFor(rec),
+    name: rec.name,
+    root: rec.root,
+    git_common_dir: rec.git_common_dir,
+    remote: rec.remote || null,
+    remote_normalized: rec.remote_normalized || null,
+    has_remote: Boolean(rec.remote),
+    default_branch: rec.default_branch || null,
+    worktree_parent: rec.worktree_parent,
+    profile: profile.id,
+    profile_label: profile.label,
+    // The UI uses these to decide which Alloy-only concepts to show at all.
+    supports_slots: profile.slots,
+    supports_governed_promotion: profile.governed_promotion,
+    branch_policy: rec.branch_policy || profile.branch_policy,
+    promotion: promotionPolicyFor(rec),
+    execution: executionProfileFor(rec),
+    validation_commands: rec.validation_commands || [],
+    instruction_files: profile.instruction_files,
+    state: rec.state,
+    validation: rec.validation || null,
+    created_at: rec.created_at,
+    updated_at: rec.updated_at,
+    lane_count: laneCount,
+  };
+}
+
+export function listRepositories({ includeRetired = false, root = runtimeRoot() } = {}) {
+  return Object.values(readRepositoryStore(root).repositories)
+    .filter((r) => includeRetired || r.state === "ACTIVE")
+    .sort((a, b) => {
+      // Alloy first: it is the incumbent and the operator's default.
+      if (a.repository_id === ALLOY_REPOSITORY_ID) return -1;
+      if (b.repository_id === ALLOY_REPOSITORY_ID) return 1;
+      return String(a.name).localeCompare(String(b.name));
+    })
+    .map((r) => publicRepository(r));
+}
+
+export function getRepository(repositoryId, root = runtimeRoot()) {
+  return readRepositoryStore(root).repositories[String(repositoryId || "")] || null;
+}
+
+export function findRepositoryByCommonDir(gitCommonDir, root = runtimeRoot()) {
+  const want = String(gitCommonDir || "");
+  if (!want) return null;
+  return Object.values(readRepositoryStore(root).repositories)
+    .find((r) => r.git_common_dir === want) || null;
+}
+
+/**
+ * Which registered repository owns this path?
+ *
+ * Used before every provider start and every instruction delivery. It asks Git,
+ * not the lane record — a stale binding must never be able to redirect
+ * execution into another repository.
+ */
+export async function repositoryForPath(path, { root = runtimeRoot(), git = null } = {}) {
+  const contained = containPath(path);
+  if (!contained.ok) return { ok: false, error: contained.error };
+  const info = await inspectGitPath(contained.path, { git });
+  if (!info.ok) return { ok: false, error: info.error };
+  const rec = findRepositoryByCommonDir(info.git_common_dir, root);
+  if (!rec) return { ok: false, error: "repository_not_registered", git_common_dir: info.git_common_dir };
+  return { ok: true, repository: rec, git: info };
+}
+
+/**
+ * Register a local repository.
+ *
+ * Fails closed on: a path outside approved roots, a non-repository, a linked
+ * worktree (with the parent named so the operator can register that instead),
+ * and a repository already registered under any name or path.
+ */
+export async function registerLocalRepository({
+  path,
+  name = null,
+  profile = "generic",
+  defaultBranch = null,
+  worktreeParent = null,
+  validationCommands = null,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  git = null,
+} = {}) {
+  const contained = containPath(path);
+  if (!contained.ok) return { ok: false, error: contained.error, roots: contained.roots };
+
+  const info = await inspectGitPath(contained.path, { git });
+  if (!info.ok) return { ok: false, error: info.error, path: contained.path };
+
+  if (info.is_worktree) {
+    // A worktree shares its parent's object store. Registering it separately
+    // would give two "repositories" write access to one Git database.
+    return {
+      ok: false,
+      error: "path_is_worktree",
+      parent_root: info.parent_root,
+      git_common_dir: info.git_common_dir,
+      hint: "connect_as_lane",
+    };
+  }
+
+  const existing = findRepositoryByCommonDir(info.git_common_dir, root);
+  if (existing && existing.state === "ACTIVE") {
+    return { ok: false, error: "repository_already_registered", repository: publicRepository(existing) };
+  }
+  if (existing) {
+    /*
+     * A RETIRED PROJECT IS RECONNECTED, NOT REFUSED.
+     *
+     * `findRepositoryByCommonDir` matched retired records too, so "Add project"
+     * on a path you had previously deactivated answered
+     * `repository_already_registered` and pointed at a record the list does not
+     * show by default. There was no way out of that from the product: the
+     * operator is looking at a repository Vacilando says it already has and
+     * cannot see.
+     *
+     * Retire has always meant disconnect, never delete — so registering the same
+     * path again is the operator reconnecting it, and the record, its lanes and
+     * its history come back rather than a duplicate being created beside them.
+     */
+    const store = readRepositoryStore(root);
+    const rec = store.repositories[existing.repository_id];
+    rec.state = "ACTIVE";
+    delete rec.retired_at;
+    if (name) {
+      const renamed = validateRepositoryName(name);
+      if (!renamed.ok) return renamed;
+      rec.name = renamed.name;
+    }
+    ensureProjectIdentity(rec, store);
+    rec.updated_at = iso(nowMs);
+    writeStore(store, root);
+    return { ok: true, repository: publicRepository(rec), reconnected: true };
+  }
+
+  const named = validateRepositoryName(name || info.root.split(sep).pop());
+  if (!named.ok) return named;
+
+  const base = defaultBranch || await detectDefaultBranch(info.root, { git });
+  const prof = profileFor(profile);
+
+  // Default worktree parent sits beside the repository, never inside it: a
+  // worktree created inside its own repository pollutes that repository's
+  // status and can be committed by accident.
+  let parent = worktreeParent
+    ? String(worktreeParent).replace(/\/+$/, "")
+    : join(dirname(info.root), `${info.root.split(sep).pop()}-worktrees`);
+  const parentContained = containPath(existsSync(parent) ? parent : dirname(parent));
+  if (!parentContained.ok) {
+    return { ok: false, error: "worktree_parent_outside_approved_roots", worktree_parent: parent };
+  }
+  if (parent.startsWith(info.root + sep)) {
+    return { ok: false, error: "worktree_parent_inside_repository", worktree_parent: parent };
+  }
+
+  const rec = {
+    schema_version: REPOSITORY_SCHEMA,
+    repository_id: `repo_${repositoryFingerprint(info.git_common_dir)}`,
+    /*
+     * A PROJECT IDENTITY, MINTED HERE, BECAUSE NOTHING ELSE MINTED ONE.
+     *
+     * S0 gave Alloy `prj_alloy` and gave every other project null, and no write
+     * path set the field — not registration, not update. The live registration
+     * of the real Vacilando repository is what surfaced it: the project
+     * registered correctly, resolved none of Alloy's conventions, and had no
+     * identity of its own, so `prj_vacilando` was unreachable through the
+     * product. A project model where exactly one project has an identity is
+     * half a model.
+     *
+     * Alloy is untouched: its record predates this and `projectIdFor` still
+     * answers `prj_alloy` for it by repository id.
+     */
+    project_id: mintProjectId(named.name, readRepositoryStore(root)),
+    name: named.name,
+    root: info.root,
+    git_common_dir: info.git_common_dir,
+    remote: info.remote || null,
+    remote_normalized: info.remote_normalized || null,
+    default_branch: base || null,
+    worktree_parent: parent,
+    profile: prof.id,
+    branch_policy: prof.branch_policy,
+    // Lifecycle commands come from a trusted profile/local boundary only. The
+    // API refuses this field from a browser body; see the route.
+    validation_commands: Array.isArray(validationCommands) ? validationCommands.slice(0, 8) : [],
+    state: "ACTIVE",
+    validation: { ok: true, checked_at: iso(nowMs), reason: null },
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+  };
+
+  const store = readRepositoryStore(root);
+  store.repositories[rec.repository_id] = rec;
+  writeStore(store, root);
+  return { ok: true, repository: publicRepository(rec), git: info };
+}
+
+/** Re-check a registered repository against the filesystem and Git. */
+export async function validateRepository(repositoryId, { nowMs = Date.now(), root = runtimeRoot(), git = null } = {}) {
+  const store = readRepositoryStore(root);
+  const rec = store.repositories[String(repositoryId || "")];
+  if (!rec) return { ok: false, error: "repository_not_found" };
+  let result;
+  if (!existsSync(rec.root)) {
+    result = { ok: false, checked_at: iso(nowMs), reason: "root_missing" };
+  } else {
+    const info = await inspectGitPath(rec.root, { git });
+    if (!info.ok) result = { ok: false, checked_at: iso(nowMs), reason: info.error };
+    else if (info.git_common_dir !== rec.git_common_dir) {
+      // The path now resolves to a DIFFERENT repository. Never silently adopt it.
+      result = { ok: false, checked_at: iso(nowMs), reason: "git_identity_changed" };
+    } else {
+      result = { ok: true, checked_at: iso(nowMs), reason: null };
+      rec.default_branch = rec.default_branch || info.branch;
+      rec.remote = info.remote || rec.remote;
+      rec.remote_normalized = info.remote_normalized || rec.remote_normalized;
+    }
+  }
+  rec.validation = result;
+  rec.updated_at = iso(nowMs);
+  writeStore(store, root);
+  return { ok: true, repository: publicRepository(rec), validation: result };
+}
+
+export function updateRepository(repositoryId, patch = {}, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const store = readRepositoryStore(root);
+  const rec = store.repositories[String(repositoryId || "")];
+  if (!rec) return { ok: false, error: "repository_not_found" };
+  if (patch.name != null) {
+    const named = validateRepositoryName(patch.name);
+    if (!named.ok) return named;
+    rec.name = named.name;
+  }
+  if (patch.default_branch != null) {
+    const b = String(patch.default_branch).trim();
+    if (!/^[A-Za-z0-9._\/-]{1,120}$/.test(b)) return { ok: false, error: "invalid_branch" };
+    rec.default_branch = b;
+  }
+  if (patch.worktree_parent != null) {
+    const p = String(patch.worktree_parent).replace(/\/+$/, "");
+    const contained = containPath(existsSync(p) ? p : dirname(p));
+    if (!contained.ok) return { ok: false, error: "worktree_parent_outside_approved_roots" };
+    if (p.startsWith(rec.root + sep)) return { ok: false, error: "worktree_parent_inside_repository" };
+    rec.worktree_parent = p;
+  }
+  /*
+   * THE PROMOTION POLICY IS SETTABLE, BECAUSE OTHERWISE IT IS ONLY EDITABLE.
+   *
+   * The Projects surface could SHOW a project's promotion policy and not change
+   * it, so a newly registered project could never be given governed promotion
+   * without opening repositories.json — which is the thing the Projects slice
+   * exists to end. Registering the real Vacilando repository is what made that
+   * concrete: canonical branch main, promotion branch main, and no way to say so.
+   *
+   * Narrow on purpose. Four named fields, each validated; `source` is derived by
+   * promotionPolicyFor and is not accepted, and a policy that states nothing is
+   * removed rather than stored as an empty object that would read as an override.
+   */
+  if (patch.promotion !== undefined) {
+    const inbound = patch.promotion || {};
+    const unknown = Object.keys(inbound)
+      .filter((k) => !["governed_promotion", "promotion_branch", "protected_branches", "promoted_ref"].includes(k));
+    if (unknown.length) return { ok: false, error: "invalid_promotion_field", fields: unknown };
+    const branch = (v) => /^[A-Za-z0-9._\/-]{1,120}$/.test(String(v));
+    const next = {};
+    if (inbound.governed_promotion !== undefined) next.governed_promotion = Boolean(inbound.governed_promotion);
+    if (inbound.promotion_branch !== undefined && inbound.promotion_branch !== null) {
+      if (!branch(inbound.promotion_branch)) return { ok: false, error: "invalid_branch" };
+      next.promotion_branch = String(inbound.promotion_branch);
+    }
+    if (inbound.promoted_ref !== undefined && inbound.promoted_ref !== null) {
+      if (!branch(inbound.promoted_ref)) return { ok: false, error: "invalid_branch" };
+      next.promoted_ref = String(inbound.promoted_ref);
+    }
+    if (inbound.protected_branches !== undefined) {
+      if (!Array.isArray(inbound.protected_branches)) return { ok: false, error: "invalid_protected_branches" };
+      if (inbound.protected_branches.some((b) => !branch(b))) return { ok: false, error: "invalid_branch" };
+      next.protected_branches = inbound.protected_branches.map(String).slice(0, 16);
+    }
+    if (Object.keys(next).length) rec.promotion = next;
+    else delete rec.promotion;
+  }
+  rec.updated_at = iso(nowMs);
+  writeStore(store, root);
+  return { ok: true, repository: publicRepository(rec) };
+}
+
+/**
+ * Retire a repository. Disconnect, never delete.
+ *
+ * Nothing on disk is touched: not the repository, not its worktrees, not its
+ * branches. Lanes keep their history and their attribution. Active work blocks
+ * the retirement rather than being torn down under the operator.
+ */
+export function retireRepository(repositoryId, { activeLaneIds = [], nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const store = readRepositoryStore(root);
+  const rec = store.repositories[String(repositoryId || "")];
+  if (!rec) return { ok: false, error: "repository_not_found" };
+  if (activeLaneIds.length) {
+    return { ok: false, error: "repository_has_active_work", active_lanes: activeLaneIds };
+  }
+  rec.state = "RETIRED";
+  rec.retired_at = iso(nowMs);
+  rec.updated_at = iso(nowMs);
+  writeStore(store, root);
+  return {
+    ok: true,
+    repository: publicRepository(rec),
+    // Say plainly what did NOT happen, so "disconnect" is never read as delete.
+    preserved: ["repository on disk", "worktrees", "branches", "lane history", "run history"],
+  };
+}
+
+export function reactivateRepository(repositoryId, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const store = readRepositoryStore(root);
+  const rec = store.repositories[String(repositoryId || "")];
+  if (!rec) return { ok: false, error: "repository_not_found" };
+  rec.state = "ACTIVE";
+  delete rec.retired_at;
+  // A record written before project identities existed gets one here rather
+  // than carrying a permanent null that nothing can ever fill.
+  ensureProjectIdentity(rec, store);
+  rec.updated_at = iso(nowMs);
+  writeStore(store, root);
+  return { ok: true, repository: publicRepository(rec) };
+}
+
+/**
+ * Is this path inside a registered, active repository's worktree parent?
+ *
+ * This replaces the constant that gated every provider start to one Alloy root.
+ * The containment property is unchanged — a provider still cannot start in an
+ * arbitrary directory — but "managed" now means "belongs to a repository the
+ * operator registered" instead of "under ~/Code/alloy-worktrees".
+ */
+export function managedWorktreePath(path, { root = runtimeRoot() } = {}) {
+  const raw = String(path || "").replace(/\/+$/, "");
+  if (!raw) return { ok: false, error: "path_required" };
+  let real = raw;
+  try { real = realpathSync(raw); } catch { /* compare the literal path */ }
+  for (const rec of Object.values(readRepositoryStore(root).repositories)) {
+    if (rec.state !== "ACTIVE") continue;
+    for (const base of [rec.worktree_parent, rec.root]) {
+      if (!base) continue;
+      let realBase = base;
+      try { realBase = realpathSync(base); } catch { /* may not exist yet */ }
+      if (real === realBase || real.startsWith(realBase + sep)) {
+        return { ok: true, repository_id: rec.repository_id, repository: rec, path: real };
+      }
+    }
+  }
+  // A worktree the operator CONNECTED may legitimately live outside the
+  // repository's default worktree parent — they made it before Vacilando knew
+  // about the repository. Connect and start must agree, so a path a lane of an
+  // active repository is actually bound to counts as managed too. Without this,
+  // connecting succeeded and then starting the provider refused the same path.
+  try {
+    const lanes = boundLanePaths(root);
+    const hit = lanes.get(real);
+    if (hit) {
+      const rec = readRepositoryStore(root).repositories[hit];
+      if (rec && rec.state === "ACTIVE") {
+        return { ok: true, repository_id: rec.repository_id, repository: rec, path: real, via: "lane_binding" };
+      }
+    }
+  } catch { /* the parent-directory rule above is the primary boundary */ }
+  return { ok: false, error: "worktree_not_managed", path: real };
+}
+
+/** Worktree path -> owning repository id, from durable lane bindings. */
+function boundLanePaths(root) {
+  const map = new Map();
+  try {
+    const storePath = join(root, "vacilando", "lanes", "lanes.json");
+    const raw = JSON.parse(readFileSync(storePath, "utf8"));
+    for (const lane of Object.values(raw?.lanes || {})) {
+      const p = lane?.binding?.worktree_path;
+      if (!p || !lane.repository_id) continue;
+      let real = p;
+      try { real = realpathSync(p); } catch { /* compare literally */ }
+      map.set(real, lane.repository_id);
+    }
+  } catch { /* no lane store yet */ }
+  return map;
+}
+
+/**
+ * Seed the Alloy repository from its real runtime configuration.
+ *
+ * Idempotent: an existing record is left alone. Alloy's behaviour becomes a
+ * PROFILE on this record rather than the global default it used to be.
+ */
+export async function ensureAlloyRepository({
+  cfg = null,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  git = null,
+  persist = true,
+} = {}) {
+  const store = readRepositoryStore(root);
+  const existing = store.repositories[ALLOY_REPOSITORY_ID];
+  if (existing) return { ok: true, created: false, repository: publicRepository(existing) };
+
+  let config = cfg;
+  if (!config) {
+    try {
+      const { resolveRuntimeConfig } = await import("./workspace-facts.mjs");
+      config = resolveRuntimeConfig();
+    } catch { config = {}; }
+  }
+  const alloyRoot = config.canonical_repo || join(homedir(), "Alloy");
+  if (!existsSync(alloyRoot)) {
+    return { ok: false, error: "alloy_root_missing", root: alloyRoot };
+  }
+  const info = await inspectGitPath(alloyRoot, { git });
+  if (!info.ok) return { ok: false, error: info.error, root: alloyRoot };
+
+  const rec = {
+    schema_version: REPOSITORY_SCHEMA,
+    // A fixed id, not a fingerprint: existing lanes migrate onto this exact
+    // value and it must be stable across machines and re-clones.
+    repository_id: ALLOY_REPOSITORY_ID,
+    name: "Alloy",
+    root: info.root,
+    git_common_dir: info.git_common_dir,
+    remote: info.remote || null,
+    remote_normalized: info.remote_normalized || null,
+    default_branch: config.base_ref || config.base_branch || "origin/staging",
+    worktree_parent: String(config.worktree_root || join(homedir(), "Code", "alloy-worktrees")).replace(/\/+$/, ""),
+    project_id: ALLOY_PROJECT_ID,
+    profile: "alloy",
+    branch_policy: REPOSITORY_PROFILES.alloy.branch_policy,
+    validation_commands: [],
+    state: "ACTIVE",
+    validation: { ok: true, checked_at: iso(nowMs), reason: null },
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+  };
+  // A dry run must not leave a record behind. Seeding the registry as a side
+  // effect of *inspecting* it is exactly the kind of write a dry run promises
+  // not to make.
+  if (!persist) return { ok: true, created: false, would_create: true, repository: publicRepository(rec) };
+  store.repositories[rec.repository_id] = rec;
+  writeStore(store, root);
+  return { ok: true, created: true, repository: publicRepository(rec) };
+}
+
+export function resetRepositoriesForTests(root = runtimeRoot()) {
+  writeStore(emptyStore(), root);
+}
+
+/** Bounded metadata for logs. Never a remote with credentials in it. */
+export function repositoryLogFields(rec) {
+  if (!rec) return null;
+  return {
+    repository_id: rec.repository_id,
+    profile: rec.profile,
+    state: rec.state,
+    has_remote: Boolean(rec.remote),
+  };
+}
+
+export function directoryExists(path) {
+  try { return statSync(path).isDirectory(); } catch { return false; }
+}

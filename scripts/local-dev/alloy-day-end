@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-day-end — the END OF DAY gate for a managed slot.
+#
+# A day's work is finished when it can survive the machine, not when the editor
+# closes. 880 commits across 79 branches once existed only on this laptop because
+# "done for the day" had no definition. This gives it one.
+#
+# Checks, all fail-closed:
+#   - coherent work committed (clean tree)
+#   - all commits pushed  (remote head == local head, 0 unpushed)
+#   - remote SHA equals local
+#   - handoff updated     (a handoff/continuation record touched today)
+#   - clean tree
+#   - no owned processes or leases
+#
+# This is NOT "one commit per day". Checkpoint commits and pushes throughout the
+# day are preferred; this only asserts the day does not END with work stranded.
+#
+#   alloy-day-end [<slot|worktree>] [--no-handoff-check]
+# =============================================================================
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+
+usage() {
+  sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+main() {
+  local target="" check_handoff=1
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-handoff-check) check_handoff=0; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) target="$1"; shift ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_ensure_sprint_ops_dirs
+
+  local name path
+  if [[ -n "$target" ]]; then
+    name="$(alloy_resolve_worktree_name "$target")" || alloy_die "unknown slot/worktree: $target"
+    alloy_load_metadata "$name"
+    path="$ALLOY_WORKTREE_PATH"
+  else
+    path="$(git rev-parse --show-toplevel 2>/dev/null)" || alloy_die "not in a git worktree"
+    name="$(basename "$path")"
+  fi
+
+  printf 'END OF DAY — %s\n' "$name"
+  printf -- '-------------------------------------------\n'
+
+  local evidence rc=0
+  evidence="$(alloy_assert_sprint_finishable "$name" "$path" 2>&1)" || rc=$?
+  printf '%s\n' "$evidence" | sed 's/^/  /'
+
+  if [[ "$check_handoff" -eq 1 ]]; then
+    # A handoff that was not touched today is a handoff that does not describe today.
+    local today recent
+    today="$(date +%Y-%m-%d)"
+    recent="$(git -C "$path" log --since="${today} 00:00" --name-only --format="" -- \
+                'docs/handoffs/**' 'docs/**/HANDOFF*.md' 'docs/**/*handoff*.md' 2>/dev/null \
+              | grep -c . || true)"
+    if [[ "${recent:-0}" -gt 0 ]]; then
+      printf '  DAY_END_HANDOFF=updated\n'
+    else
+      printf '  DAY_END_HANDOFF=not-updated-today\n'
+      printf '\n  ! No handoff document was committed today.\n' >&2
+      printf '    Tomorrow starts from whatever the handoff says. Update it, or pass\n' >&2
+      printf '    --no-handoff-check if this slot genuinely has no handoff surface.\n' >&2
+      rc=1
+    fi
+  fi
+
+  if [[ "$rc" -eq 0 ]]; then
+    printf '\nDAY_END_VERDICT=pass — work is durable, slot is quiet.\n'
+    return 0
+  fi
+  printf '\nDAY_END_VERDICT=fail — do not close the day here.\n' >&2
+  return 1
+}
+
+main "$@"

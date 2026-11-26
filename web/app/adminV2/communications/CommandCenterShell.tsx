@@ -1,36 +1,47 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
-    groupConversationsByQueue,
+    OPERATIONAL_QUEUES,
+    FALLBACK_QUEUE,
     computeCommandCenterMetrics,
     applyQueueFilters,
-    visibleCommandCenterQueues,
-    flattenVisibleConversationIds,
-    resolveCommandCenterSelection,
-    conversationDisplayTitle,
+    resolveCommandCenterSelectionPreferringLoadable,
+    conversationDisplayChildren,
     conversationDisplayRecipient,
-    conversationDisplaySubtitle,
-    conversationUnreadCount,
     conversationQueueStatusPill,
     queueStatusPillClass,
+    countDistinctQueueFamilies,
+    isQueueRowLoadable,
+    resolveQueueWorkspaceError,
+    prepareCommandCenterQueue,
+    NEEDS_RESOLUTION_QUEUE,
+    NEEDS_RESOLUTION_QUEUE_KEY,
     resolveCommandCenterHealthDisplay,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
 import {
+    buildCommunicationHubs,
+    findHubForConversation,
+    flattenHubPrimaryConversationIds,
+    groupHubsIntoSections,
+    type CommunicationHub,
+} from "@/lib/communications/v2/communicationHubProjection";
+import {
     getCommandCenterCacheSnapshot,
-    getCommandCenterFirstConversationWarm,
     getCommandCenterWarmSelectedConversationId,
+    getCommandCenterPendingSelection,
     prefetchCommandCenterConversations,
     subscribeCommandCenterCache,
 } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { buildCommandCenterRecordLinks, type CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
-import { fetchCommandCenterThreadMessages, type CommandCenterTimelineMessage } from "@/lib/communications/v2/commandCenterThreadMessages";
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
-import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import FamilyCommunicationWorkspaceView, { type WorkspaceDetail } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import UnidentifiedConversationPanel, {
+    isUnidentifiedConversation,
+} from "@/app/adminV2/communications/UnidentifiedConversationPanel";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import {
     COMMS_FILTER_INPUT_CLASS,
@@ -40,12 +51,18 @@ import {
     CommsWorkspacePanelReserve,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
-import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
-import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
-import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
-import { resolveWorkspaceModeAvailability, type WorkspaceMode } from "@/lib/communications/v2/workspaceModeAvailability";
+import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 import { conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
+import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
+import {
+    communicationWorkItemId,
+    conversationRequiresReplyForWorkItemProjection,
+} from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
+import { dispatchOperationalWorkRefresh } from "@/lib/workItems/operationalWorkRefresh";
+import type { WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import {
     buildOperationalTaskBody,
@@ -55,7 +72,6 @@ import {
 import {
     COMMS_FIXTURES_ENABLED,
     FIXTURE_CONVERSATIONS,
-    FIXTURE_MESSAGES,
     FIXTURE_FAMILY_DETAILS,
     type FixtureFamilyDetail,
 } from "@/app/adminV2/communications/fixtures";
@@ -68,56 +84,11 @@ import {
  *   - Composer = top-anchored, full-height, message body the dominant surface.
  * Presentation only; fixture mode kept; no data/route/outer-geometry/BOS/flag change.
  */
-type TimelineMessage = CommandCenterTimelineMessage;
-
-function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"]): TimelineMessage[] {
-    return events.map((e) => ({
-        id: e.id,
-        direction: e.direction,
-        channel: e.channel,
-        body: e.body,
-        created_at: e.createdAt,
-        kind: e.kind,
-        opened_at: e.openedAt,
-        replied_at: e.repliedAt,
-        thread_id: e.threadId,
-        status: e.status,
-    }));
-}
-
-function initialWorkspaceFromWarm(): {
-    messages: TimelineMessage[];
-    liveChildren: string[] | null;
-    liveRecipientGroups: RecipientGroup[] | null;
-    selectedRecipientIds: string[];
-} | null {
-    const warm = getCommandCenterFirstConversationWarm();
-    if (!warm) return null;
-    if (warm.workspace) {
-        const threadMsgs = warm.threadMessages?.length
-            ? warm.threadMessages
-            : mapLiveEvents(warm.workspace.messages.length ? warm.workspace.messages : warm.workspace.timelineEvents);
-        return {
-            messages: threadMsgs,
-            liveChildren: warm.workspace.children.map((c) => c.name),
-            liveRecipientGroups: warm.workspace.recipientGroups,
-            selectedRecipientIds: warm.workspace.selectedRecipients,
-        };
-    }
-    if (warm.threadMessages) {
-        return {
-            messages: warm.threadMessages,
-            liveChildren: null,
-            liveRecipientGroups: null,
-            selectedRecipientIds: [],
-        };
-    }
-    return null;
-}
 
 function initialConversations(): ConversationSummary[] {
     if (COMMS_FIXTURES_ENABLED) return FIXTURE_CONVERSATIONS;
-    return getCommandCenterCacheSnapshot()?.conversations ?? [];
+    const cached = getCommandCenterCacheSnapshot()?.conversations;
+    return cached ? prepareCommandCenterQueue(cached) : [];
 }
 
 function initialSelectedId(): string | null {
@@ -128,12 +99,6 @@ function initialSelectedId(): string | null {
 function initialLoading(): boolean {
     if (COMMS_FIXTURES_ENABLED) return false;
     return !getCommandCenterCacheSnapshot();
-}
-
-function initialHydratingWorkspace(): boolean {
-    if (COMMS_FIXTURES_ENABLED) return false;
-    if (getCommandCenterFirstConversationWarm()) return false;
-    return Boolean(getCommandCenterCacheSnapshot()?.conversations.length);
 }
 
 const attnAccent = (a: string | null | undefined): { rail: string; tint: string; dot: string } => {
@@ -148,44 +113,29 @@ const attnAccent = (a: string | null | undefined): { rail: string; tint: string;
 };
 
 
-
+function resolveCommunicationsWorkItemsView(
+    conversation: ConversationSummary,
+    viewerUserId: string | null | undefined,
+): WorkItemViewKey {
+    const assigned = conversation.assignment_state === "assigned" ? conversation.assigned_user_id?.trim() : null;
+    if (assigned && viewerUserId?.trim() && assigned === viewerUserId.trim()) return "mine";
+    return "unassigned";
+}
 
 
 const LIVE_WORKSPACE = isCommsV2FlagEnabled("comms_v2_live_workspace");
 const ASSIGNMENT_ENABLED = isCommsV2FlagEnabled("comms_v2_assignment");
 
-const warmWorkspaceSeed = initialWorkspaceFromWarm();
-
 export default function CommandCenterShell() {
-    const adminDrawer = useAdminDrawerOptional();
+    const focusRecord = useOperatorRecordFocus();
+    const adminAuth = useAdminAuthOptional();
     const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
     const [loading, setLoading] = useState(initialLoading);
     const [error, setError] = useState<string | null>(null);
     const [filters, setFilters] = useState<CommandCenterFilters>({});
     const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
-    const [messages, setMessages] = useState<TimelineMessage[]>(
-        COMMS_FIXTURES_ENABLED
-            ? (FIXTURE_MESSAGES[FIXTURE_CONVERSATIONS[0]?.id ?? ""] ?? [])
-            : (warmWorkspaceSeed?.messages ?? [])
-    );
-    const [liveWorkspaceVm, setLiveWorkspaceVm] = useState<FamilyCommunicationWorkspaceVM | null>(null);
     const [assignBusy, setAssignBusy] = useState(false);
-    const [liveChildren, setLiveChildren] = useState<string[] | null>(warmWorkspaceSeed?.liveChildren ?? null);
-    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-    const [liveRecipientGroups, setLiveRecipientGroups] = useState<RecipientGroup[] | null>(
-        warmWorkspaceSeed?.liveRecipientGroups ?? null
-    );
-    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(
-        warmWorkspaceSeed?.selectedRecipientIds ?? []
-    );
-    const [subjectDraft, setSubjectDraft] = useState("");
-    const [bodyDraft, setBodyDraft] = useState("");
-    const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
-    const [sending, setSending] = useState(false);
-    const [sendError, setSendError] = useState<string | null>(null);
-    const [hydratingWorkspace, setHydratingWorkspace] = useState(initialHydratingWorkspace);
-    const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("email");
     const [noteDraft, setNoteDraft] = useState("");
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
@@ -196,27 +146,32 @@ export default function CommandCenterShell() {
     const [preferenceSaving, setPreferenceSaving] = useState(false);
     const [triageBusy, setTriageBusy] = useState(false);
 
-    const loadLive = useCallback(async (customerId: string, threadId: string, resetSelection = false, composerChannel: ComposerChannel = "email") => {
-        try {
-            const qs = `customer_id=${encodeURIComponent(customerId)}&thread_id=${encodeURIComponent(threadId)}&composer_channel=${encodeURIComponent(composerChannel)}`;
-            const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
-            if (!res.ok) return null;
-            const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM };
-            const vm = data.workspace;
-            if (!vm) return null;
-            let msgs = mapLiveEvents(vm.messages.length ? vm.messages : vm.timelineEvents);
-            if (msgs.length === 0) {
-                msgs = await fetchCommandCenterThreadMessages(threadId);
-            }
-            setLiveWorkspaceVm(vm);
-            setMessages(msgs);
-            setLiveChildren(vm.children.map((c) => c.name));
-            setLiveRecipientGroups(vm.recipientGroups);
-            if (resetSelection) setSelectedRecipientIds(vm.selectedRecipients);
-            return vm;
-        } catch {
-            return null;
-        }
+    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
+    const selectedLoadable = useMemo(() => isQueueRowLoadable(selected), [selected]);
+    const selectedCustomerId = useMemo(() => {
+        if (!selectedLoadable) return null;
+        if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
+        return selected?.customer_id ?? null;
+    }, [selectedLoadable, selected, selectedId]);
+    const selectedEntity = useMemo(() => {
+        if (!selectedLoadable || selectedCustomerId) return undefined;
+        const entityType = selected?.primary_entity_type?.trim();
+        const entityId = selected?.primary_entity_id?.trim();
+        if (!entityType || !entityId) return undefined;
+        return { entityType, entityId };
+    }, [selectedLoadable, selectedCustomerId, selected?.primary_entity_type, selected?.primary_entity_id]);
+    const runtime = useFamilyCommunicationRuntime({
+        customerId: LIVE_WORKSPACE && selectedLoadable ? selectedCustomerId ?? undefined : undefined,
+        entity: LIVE_WORKSPACE && selectedLoadable ? selectedEntity : undefined,
+        initialThreadId: selectedLoadable ? selectedId : null,
+        surfaceVariant: "workspace_inbox",
+    });
+
+    const refreshOperationalCommunicationsWork = useCallback((threadId: string | null | undefined) => {
+        dispatchOperationalWorkRefresh({
+            communication_thread_id: threadId ?? null,
+            kind: "communications_reply",
+        });
     }, []);
 
     const loadConversations = useCallback(async (opts?: { background?: boolean }) => {
@@ -229,7 +184,7 @@ export default function CommandCenterShell() {
         }
         try {
             const snap = await prefetchCommandCenterConversations();
-            setConversations(snap.conversations);
+            setConversations(prepareCommandCenterQueue(snap.conversations));
             if (snap.error) setError(snap.error);
             else setError(null);
         } catch (e) {
@@ -243,75 +198,23 @@ export default function CommandCenterShell() {
         if (COMMS_FIXTURES_ENABLED) return;
         return subscribeCommandCenterCache(() => {
             const snap = getCommandCenterCacheSnapshot();
-            if (snap) setConversations(snap.conversations);
-            const warm = getCommandCenterFirstConversationWarm();
-            if (!warm) return;
-            const seeded = initialWorkspaceFromWarm();
-            if (!seeded) return;
-            setSelectedId((prev) => prev ?? warm.conversationId);
-            setMessages(seeded.messages);
-            setLiveChildren(seeded.liveChildren);
-            setLiveRecipientGroups(seeded.liveRecipientGroups);
-            setSelectedRecipientIds(seeded.selectedRecipientIds);
-            setHydratingWorkspace(false);
+            if (snap) setConversations(prepareCommandCenterQueue(snap.conversations));
+            const pending = getCommandCenterPendingSelection();
+            if (pending) {
+                setSelectedId(pending);
+                return;
+            }
+            setSelectedId((prev) => prev ?? getCommandCenterWarmSelectedConversationId());
         });
     }, []);
 
     useEffect(() => {
         void loadConversations({ background: !!getCommandCenterCacheSnapshot() });
-        if (LIVE_WORKSPACE && COMMS_FIXTURES_ENABLED) {
-            const c = FIXTURE_FAMILY_DETAILS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.customerId;
-            const tid = FIXTURE_CONVERSATIONS[0]?.id;
-            if (c && tid) void loadLive(c, tid, true);
-        }
-    }, [loadConversations, loadLive]);
+    }, [loadConversations]);
 
-    const openConversation = useCallback(async (id: string) => {
+    const openConversation = useCallback((id: string) => {
         setSelectedId(id);
-        setSelectedThreadId(null);
-        setWorkspaceMode("email");
-        setSubjectDraft("");
-        setBodyDraft("");
-        setLiveWorkspaceVm(null);
-        const conv = conversations.find((c) => c.id === id);
-        const warm = getCommandCenterFirstConversationWarm();
-        if (warm?.conversationId === id) {
-            const seeded = initialWorkspaceFromWarm();
-            if (seeded) {
-                setMessages(seeded.messages);
-                setLiveChildren(seeded.liveChildren);
-                setLiveRecipientGroups(seeded.liveRecipientGroups);
-                setSelectedRecipientIds(seeded.selectedRecipientIds);
-                if (warm.workspace) setLiveWorkspaceVm(warm.workspace);
-                return;
-            }
-        }
-        setHydratingWorkspace(true);
-        try {
-            if (COMMS_FIXTURES_ENABLED) {
-                const liveCustomerId = LIVE_WORKSPACE ? FIXTURE_FAMILY_DETAILS[id]?.customerId : undefined;
-                if (liveCustomerId) {
-                    await loadLive(liveCustomerId, id, true);
-                    return;
-                }
-                setMessages(FIXTURE_MESSAGES[id] ?? []);
-                setLiveChildren(null);
-                return;
-            }
-            setMessages([]);
-            const liveCustomerId = LIVE_WORKSPACE ? conv?.customer_id : undefined;
-            if (liveCustomerId) {
-                const vm = await loadLive(liveCustomerId, id, true);
-                if (!vm && conv?.last_message_preview) {
-                    setMessages(await fetchCommandCenterThreadMessages(id));
-                }
-                return;
-            }
-            setMessages(await fetchCommandCenterThreadMessages(id));
-        } finally {
-            setHydratingWorkspace(false);
-        }
-    }, [loadLive, conversations]);
+    }, []);
 
     const claim = useCallback(
         async (id: string) => {
@@ -323,81 +226,54 @@ export default function CommandCenterShell() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "claim" }),
                 });
-                await loadConversations();
+                await loadConversations({ background: true });
+                refreshOperationalCommunicationsWork(id);
             } finally {
                 setAssignBusy(false);
             }
         },
-        [loadConversations]
-    );
-
-    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
-    const selectedCustomerId = useMemo(() => {
-        if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
-        return selected?.customer_id ?? null;
-    }, [selected, selectedId]);
-
-    const openThread = useCallback(
-        async (threadId: string) => {
-            if (!LIVE_WORKSPACE) return;
-            setSelectedThreadId(threadId);
-            const cust = selectedCustomerId;
-            if (cust) await loadLive(cust, threadId);
-        },
-        [loadLive, selectedCustomerId]
+        [loadConversations, refreshOperationalCommunicationsWork]
     );
 
     const recordLinks = useMemo((): CommandCenterRecordLink[] => {
         if (!selected) return [];
         const childLinks =
-            liveWorkspaceVm?.children.map((c) => ({ id: c.id, name: c.name })) ??
+            runtime.vm?.children.map((c) => ({ id: c.id, name: c.name })) ??
             selected.child_links ??
             null;
-        const stageDisplay = selected.stage_label ?? liveWorkspaceVm?.family.stage ?? null;
+        const stageDisplay = selected.stage_label ?? runtime.vm?.family.stage ?? null;
         return buildCommandCenterRecordLinks(selected, childLinks).map((link) =>
             link.type === "opportunities" && stageDisplay ? { ...link, label: stageDisplay } : link
         );
-    }, [selected, liveWorkspaceVm]);
+    }, [selected, runtime.vm]);
 
+    // A conversation's record chips are CONTEXTS of the same family, so each one is a card in that
+    // family's Focus Panel rather than a separate record overlay. `customer_members` is the child
+    // grain — the same id the Children card rows carry, and the same one Search focuses.
     const openRecordLink = useCallback(
         (link: CommandCenterRecordLink) => {
-            if (!adminDrawer) return;
-            adminDrawer.openDrawer({ type: link.type, id: link.id });
+            const cardFocus =
+                link.type === "customer_members"
+                    ? { card_key: OPERATOR_FOCUS_CARDS.children, item_id: link.id }
+                    : link.type === "persons"
+                      ? { card_key: OPERATOR_FOCUS_CARDS.household, item_id: link.id }
+                      : link.type === "customers"
+                        ? { card_key: OPERATOR_FOCUS_CARDS.household }
+                        : null;
+            // A child is addressed through the household that holds it: `customer_members` is not a
+            // record with its own operational host, and the household's case is where it is worked.
+            const entityType = link.type === "customer_members" ? "customers" : link.type;
+            const entityId = link.type === "customer_members" ? (selected?.customer_id ?? "") : link.id;
+            if (!entityId) return;
+            void focusRecord({ entity_type: entityType, entity_id: entityId, card_focus: cardFocus });
         },
-        [adminDrawer]
+        [focusRecord, selected?.customer_id]
     );
-
-    const workspaceModeAvailability = useMemo(
-        () => resolveWorkspaceModeAvailability(liveWorkspaceVm, liveWorkspaceVm?.relatedTasks.length ?? 0),
-        [liveWorkspaceVm]
-    );
-
-    const liveChannel: ComposerChannel = workspaceMode === "sms" ? "sms" : "email";
-
-    const liveWorkspaceDetail = useMemo(() => {
-        if (!liveWorkspaceVm) return undefined;
-        const primaryRecipient =
-            liveWorkspaceVm.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary) ??
-            liveWorkspaceVm.recipientGroups.flatMap((g) => g.recipients)[0];
-        return {
-            owner: liveWorkspaceVm.family.ownerLabel ?? "Unassigned",
-            contactName: primaryRecipient?.displayName ?? liveWorkspaceVm.family.label,
-            program: liveWorkspaceVm.family.program,
-            stage: liveWorkspaceVm.family.stage,
-            consent: liveWorkspaceVm.consentSummary.household,
-            preferenceProfile: liveWorkspaceVm.consentSummary.preferenceProfile,
-        };
-    }, [liveWorkspaceVm]);
-
-    const refreshWorkspace = useCallback(async () => {
-        if (!selectedCustomerId || !selectedId) return;
-        await loadLive(selectedCustomerId, selectedThreadId ?? selectedId, false, liveChannel);
-    }, [loadLive, selectedCustomerId, selectedId, selectedThreadId, liveChannel]);
 
     const primaryPersonId = useMemo(() => {
-        const primary = liveWorkspaceVm?.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary);
-        return primary?.id ?? liveWorkspaceVm?.selectedRecipients[0] ?? selected?.primary_contact_person_id ?? null;
-    }, [liveWorkspaceVm, selected]);
+        const primary = runtime.vm?.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary);
+        return primary?.id ?? runtime.vm?.selectedRecipients[0] ?? selected?.primary_contact_person_id ?? null;
+    }, [runtime.vm, selected]);
 
     const runAddNote = useCallback(async () => {
         if (!LIVE_WORKSPACE || !selectedCustomerId || !noteDraft.trim()) return;
@@ -410,7 +286,7 @@ export default function CommandCenterShell() {
                 body: JSON.stringify({
                     customer_id: selectedCustomerId,
                     body: noteDraft,
-                    opportunity_id: liveWorkspaceVm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null,
+                    opportunity_id: runtime.vm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null,
                     person_id: primaryPersonId,
                 }),
             });
@@ -420,16 +296,16 @@ export default function CommandCenterShell() {
                 return;
             }
             setNoteDraft("");
-            await refreshWorkspace();
+            await runtime.refreshCurrent();
         } catch {
             setNoteError("Failed to save note");
         } finally {
             setNoteSaving(false);
         }
-    }, [LIVE_WORKSPACE, selectedCustomerId, noteDraft, liveWorkspaceVm, selected, primaryPersonId, refreshWorkspace]);
+    }, [LIVE_WORKSPACE, selectedCustomerId, noteDraft, runtime, selected, primaryPersonId]);
 
     const runCreateTask = useCallback(async () => {
-        const oppId = liveWorkspaceVm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null;
+        const oppId = runtime.vm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null;
         if (!oppId || !taskTitleDraft.trim()) {
             setTaskError("Link an opportunity before creating tasks.");
             return;
@@ -448,13 +324,13 @@ export default function CommandCenterShell() {
             }
             setTaskTitleDraft("");
             setTaskDueDraft("");
-            await refreshWorkspace();
+            await runtime.refreshCurrent();
         } catch {
             setTaskError("Failed to create task");
         } finally {
             setTaskSaving(false);
         }
-    }, [liveWorkspaceVm, selected, taskTitleDraft, taskDueDraft, refreshWorkspace]);
+    }, [runtime, selected, taskTitleDraft, taskDueDraft]);
 
     const runCompleteTask = useCallback(
         async (taskId: string) => {
@@ -467,14 +343,14 @@ export default function CommandCenterShell() {
                     setTaskError(data.error ?? "Failed to complete task");
                     return;
                 }
-                await refreshWorkspace();
+                await runtime.refreshCurrent();
             } catch {
                 setTaskError("Failed to complete task");
             } finally {
                 setTaskSaving(false);
             }
         },
-        [refreshWorkspace]
+        [runtime]
     );
 
     const runTriage = useCallback(
@@ -502,81 +378,71 @@ export default function CommandCenterShell() {
                         :   c
                     )
                 );
+                refreshOperationalCommunicationsWork(selectedId);
             } finally {
                 setTriageBusy(false);
             }
         },
-        [selectedId, loadConversations]
+        [selectedId, loadConversations, refreshOperationalCommunicationsWork]
     );
 
+    /**
+     * Edit ONE person's preference.
+     *
+     * `personId` is a parameter, not the household's primary contact. It used to
+     * be the latter unconditionally, so an edit made beside a secondary
+     * recipient's name silently wrote to the primary — the operator saw a
+     * different person's row change, or worse, did not notice. The canonical
+     * write path is unchanged; only who it is told about is.
+     */
     const runPreferenceChange = useCallback(
-        async (field: PreferenceFieldKey, status: "Allowed" | "Blocked") => {
-            if (!primaryPersonId) return;
+        async (personId: string, field: PreferenceFieldKey, status: "Allowed" | "Blocked") => {
+            if (!personId) return;
             setPreferenceSaving(true);
             try {
                 const res = await fetch("/api/admin/communications/preferences", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ person_id: primaryPersonId, field, status }),
+                    body: JSON.stringify({ person_id: personId, field, status }),
                 });
                 if (!res.ok) return;
-                await refreshWorkspace();
+                await runtime.refreshCurrent();
             } finally {
                 setPreferenceSaving(false);
             }
         },
-        [primaryPersonId, refreshWorkspace]
+        [runtime]
     );
-
-    const runFamilySend = useCallback(
-        async (confirm: boolean) => {
-            if (!LIVE_WORKSPACE) return;
-            const cust = selectedCustomerId;
-            if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
-            setSending(true);
-            setSendError(null);
-            try {
-                const res = await fetch("/api/admin/communications/family-send", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        customer_id: cust,
-                        recipient_person_ids: selectedRecipientIds,
-                        channel: liveChannel,
-                        subject: subjectDraft,
-                        body: bodyDraft,
-                        reply_to_thread_id: selectedThreadId,
-                        confirm,
-                    }),
-                });
-                const data = (await res.json()) as (FamilySendResult & { error?: string });
-                if (!res.ok) {
-                    setSendError(data.error ?? "Send failed");
-                    return;
-                }
-                setSendResult(data);
-                if (confirm) {
-                    await loadLive(cust, selectedThreadId ?? selectedId ?? "", false);
-                }
-            } catch {
-                setSendError("Send failed");
-            } finally {
-                setSending(false);
-            }
-        },
-        [loadLive, selectedCustomerId, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel]
-    );
-
-    useEffect(() => {
-        if (!LIVE_WORKSPACE || !selectedCustomerId || !selectedId) return;
-        if (workspaceMode !== "email" && workspaceMode !== "sms") return;
-        void loadLive(selectedCustomerId, selectedThreadId ?? selectedId, false, liveChannel);
-    }, [workspaceMode, liveChannel, selectedCustomerId, selectedId, selectedThreadId, loadLive]);
 
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
-    const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
-    const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
-    const visibleIds = useMemo(() => flattenVisibleConversationIds(queueSections), [queueSections]);
+    /*
+     * THE QUEUE'S GRAIN IS THE PARTY, NOT THE THREAD.
+     *
+     * A family holding three email subjects and an SMS thread used to render four
+     * rows, every one of them reading "Kurzman Family". They were not duplicates
+     * — they were four real threads shown at the wrong grain. `buildCommunicationHubs`
+     * rolls them into one row and keeps every canonical thread underneath it.
+     */
+    const hubs = useMemo(() => buildCommunicationHubs(filtered), [filtered]);
+    const hubSections = useMemo(
+        () =>
+            groupHubsIntoSections(hubs, [...OPERATIONAL_QUEUES, FALLBACK_QUEUE, NEEDS_RESOLUTION_QUEUE], {
+                unresolvedSectionKey: NEEDS_RESOLUTION_QUEUE_KEY,
+                fallbackSectionKey: FALLBACK_QUEUE.key,
+            }),
+        [hubs]
+    );
+    const selectedHub = useMemo(() => findHubForConversation(hubs, selectedId), [hubs, selectedId]);
+    // Selection still moves between CONVERSATIONS — a hub is a way of showing
+    // them, never a replacement for the canonical thread the workspace loads.
+    const visibleIds = useMemo(() => flattenHubPrimaryConversationIds(hubSections), [hubSections]);
+    const loadableIds = useMemo(
+        () => flattenHubPrimaryConversationIds(hubSections).filter((id) => {
+            const row = filtered.find((c) => c.id === id);
+            return row ? isQueueRowLoadable(row) : false;
+        }),
+        [hubSections, filtered]
+    );
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
 
     useEffect(() => {
@@ -592,56 +458,60 @@ export default function CommandCenterShell() {
     }, [kpiContext, metrics, loading]);
 
     const detail: WorkspaceDetail | FixtureFamilyDetail | undefined =
-        COMMS_FIXTURES_ENABLED && selected ? FIXTURE_FAMILY_DETAILS[selected.id] : liveWorkspaceDetail;
+        COMMS_FIXTURES_ENABLED && selected ? FIXTURE_FAMILY_DETAILS[selected.id] : runtime.detail;
     const childNames = useMemo(
         () => {
-            if (LIVE_WORKSPACE && liveChildren) return liveChildren;
+            if (LIVE_WORKSPACE && runtime.childNames.length > 0) return runtime.childNames;
             if (detail && "children" in detail && typeof detail.children === "string") {
                 return detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean);
             }
             return [];
         },
-        [detail, liveChildren]
+        [detail, runtime.childNames]
     );
 
     useEffect(() => {
         if (loading) return;
-        const nextId = resolveCommandCenterSelection(selectedId, visibleIds);
+        const nextId = resolveCommandCenterSelectionPreferringLoadable(selectedId, visibleIds, loadableIds);
         if (nextId && nextId !== selectedId) {
             void openConversation(nextId);
         } else if (!nextId && selectedId) {
             setSelectedId(null);
-            setMessages([]);
-            setLiveChildren(null);
-            setLiveRecipientGroups(null);
         }
-    }, [loading, visibleIds, selectedId, openConversation]);
+    }, [loading, visibleIds, loadableIds, selectedId, openConversation]);
+
+    const lastSendCompleteToken = useRef(0);
+    useEffect(() => {
+        const token = runtime.sendCompleteToken;
+        if (!token || token === lastSendCompleteToken.current) return;
+        lastSendCompleteToken.current = token;
+        refreshOperationalCommunicationsWork(selectedId);
+    }, [refreshOperationalCommunicationsWork, runtime.sendCompleteToken, selectedId]);
+
+    const workspaceError = useMemo(
+        () => resolveQueueWorkspaceError(selected, runtime.error),
+        [selected, runtime.error]
+    );
 
     const timelineMessageCount = useMemo(
-        () => messages.filter((m) => !m.kind || m.kind === "message").length,
-        [messages]
-    );
-    const health = useMemo(
-        () =>
-            computeCommunicationHealth({
-                messages: messages
-                    .filter((m) => !m.kind || m.kind === "message")
-                    .map((m) => ({ direction: m.direction, created_at: m.created_at, channel: m.channel, opened_at: m.opened_at, replied_at: m.replied_at })),
-                unreadCount: selected?.unread ?? undefined,
-            }),
-        [messages, selected]
+        () => runtime.messages.filter((m) => !m.kind || m.kind === "message").length,
+        [runtime.messages]
     );
     const healthDisplay = useMemo(
-        () => resolveCommandCenterHealthDisplay(selected, timelineMessageCount, health.engagementScore),
-        [selected, timelineMessageCount, health.engagementScore]
+        () => resolveCommandCenterHealthDisplay(selected, timelineMessageCount, runtime.vm?.healthSummary.engagementScore ?? 0),
+        [selected, timelineMessageCount, runtime.vm?.healthSummary.engagementScore]
     );
 
     const queueUnresolved = loading && conversations.length === 0;
     const workspaceHydrating =
         !COMMS_FIXTURES_ENABLED &&
         filtered.length > 0 &&
-        (loading || hydratingWorkspace || !selectedId) &&
+        (loading || !selectedId) &&
         !selected;
+    const workspaceLoading = Boolean(
+        selected && selectedLoadable && (runtime.loading || (!runtime.vm && !runtime.error))
+    );
+    const distinctFamilyCount = useMemo(() => countDistinctQueueFamilies(filtered), [filtered]);
 
     return (
         <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-white p-2.5">
@@ -654,7 +524,7 @@ export default function CommandCenterShell() {
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-alloy-midnight">Communication queue</span>
-                            <span className="text-[11px] tabular-nums text-alloy-midnight/45">{filtered.length} families</span>
+                            <span className="text-[11px] tabular-nums text-alloy-midnight/45">{distinctFamilyCount} families</span>
                         </div>
                         <div data-cc-filters className="mt-2 flex items-center gap-1.5">
                             <div className="relative shrink-0">
@@ -683,9 +553,12 @@ export default function CommandCenterShell() {
                     <div className="min-h-0 flex-1 overflow-auto px-2.5 py-2.5">
                         {queueUnresolved ?
                             <CommsQueueListReserve />
-                        :   queueSections.map((q) => {
-                            const items = q.items;
-                            const acc = attnAccent(q.key);
+                        :   hubSections.map((q) => {
+                            const items = q.hubs;
+                            const isReviewQueue = q.key === NEEDS_RESOLUTION_QUEUE_KEY;
+                            const acc = isReviewQueue
+                                ? { dot: "bg-alloy-amber", rail: "border-l-alloy-amber", tint: "bg-alloy-amber/8" }
+                                : attnAccent(q.key);
                             return (
                                 <div key={q.key} data-cc-queue={q.key} className="mb-3.5">
                                     <div className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
@@ -694,49 +567,80 @@ export default function CommandCenterShell() {
                                         <span className="ml-auto tabular-nums">{items.length}</span>
                                     </div>
                                     <ul className="space-y-1.5">
-                                        {items.map((c) => {
-                                            const d = FIXTURE_FAMILY_DETAILS[c.id];
-                                            const isSel = selectedId === c.id;
-                                            const a = attnAccent(c.attention_state);
-                                            const title = d ? (c.family_label ?? "Family") : conversationDisplayTitle(c);
-                                            const subtitle = d ? `${d.children} · ${d.program}` : conversationDisplaySubtitle(c);
-                                            const recipient = d ? null : conversationDisplayRecipient(c);
-                                            const preview = d ? null : (c.last_message_preview ?? null);
-                                            const unread = conversationUnreadCount(c);
-                                            const statusPill = conversationQueueStatusPill(c);
-                                            const activityAt = c.last_activity_at ?? c.last_message_at;
-                                            const channelLabel = (c.channel ?? "").toLowerCase() === "sms" ? "SMS" : (c.channel ?? "").toLowerCase() === "email" ? "Email" : (c.channel ?? "");
+                                        {items.map((hub) => {
+                                            /*
+                                             * ONE ROW PER PARTY. `hub.primaryConversationId` is what
+                                             * the row opens, and `hub.threadIds` is everything living
+                                             * underneath it — both deterministic, so the row does not
+                                             * move or open somewhere different between renders.
+                                             */
+                                            const primaryId = hub.primaryConversationId;
+                                            const primary =
+                                                hub.conversations.find((c) => c.id === primaryId) ?? hub.conversations[0];
+                                            if (!primary) return null;
+                                            const d = FIXTURE_FAMILY_DETAILS[primary.id];
+                                            const isSel = Boolean(selectedId && hub.threadIds.includes(selectedId));
+                                            const rowAccent = isReviewQueue
+                                                ? { dot: "bg-alloy-amber", rail: "border-l-alloy-amber", tint: "bg-alloy-amber/8" }
+                                                : attnAccent(primary.attention_state);
+                                            const familyName = hub.label;
+                                            const childrenLabel = d ? d.children : conversationDisplayChildren(primary);
+                                            const contactLabel = d ? null : conversationDisplayRecipient(primary);
+                                            const preview = d ? null : (primary.last_message_preview ?? null);
+                                            const statusPill = conversationQueueStatusPill(primary);
+                                            const activityAt = hub.lastActivityAt;
+                                            // The hub's CHANNELS replace the single-thread topic line.
+                                            // A row standing for several threads cannot honestly show
+                                            // one of their subjects as though it were the row's own.
+                                            const channelSummary = hub.channels
+                                                .filter((ch) => ch !== "other")
+                                                .map((ch) => (ch === "email" ? "Email" : "SMS"))
+                                                .join(" · ");
+                                            const threadCountLabel =
+                                                hub.threadIds.length > 1 ? `${hub.threadIds.length} conversations` : null;
+                                            const needsReplyLabel =
+                                                hub.needsReplyCount > 0
+                                                    ? hub.needsReplyCount > 1
+                                                        ? `${hub.needsReplyCount} need replies`
+                                                        : "Needs reply"
+                                                    : null;
                                             return (
-                                                <li key={c.id}>
+                                                <li key={hub.key}>
                                                     <button
                                                         type="button"
-                                                        data-cc-conversation={c.id}
-                                                        onClick={() => openConversation(c.id)}
+                                                        data-cc-hub={hub.key}
+                                                        data-cc-hub-kind={hub.kind}
+                                                        data-cc-hub-threads={hub.threadIds.length}
+                                                        data-cc-conversation={primary.id}
+                                                        onClick={() => openConversation(primary.id)}
                                                         className={`w-full rounded-xl border border-l-[3px] px-2.5 py-2 text-left transition ${
                                                             isSel
                                                                 ? COMMS_LIST_ROW_SELECTED_CLASS
-                                                                : `border-alloy-stone/15 ${a.rail} ${a.tint} hover:border-alloy-stone/30 hover:shadow-sm`
+                                                                : `border-alloy-stone/15 ${rowAccent.rail} ${rowAccent.tint} hover:border-alloy-stone/30 hover:shadow-sm`
                                                         }`}
                                                     >
                                                         <div className="flex items-start justify-between gap-2">
-                                                            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{title}</span>
+                                                            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{familyName}</span>
                                                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${queueStatusPillClass(statusPill.tone)}`}>{statusPill.label}</span>
                                                         </div>
-                                                        {recipient ? (
-                                                            <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{recipient}</div>
+                                                        {childrenLabel ? (
+                                                            <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{childrenLabel}</div>
+                                                        ) : contactLabel ? (
+                                                            <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{contactLabel}</div>
                                                         ) : null}
-                                                        <div className="mt-1 truncate text-[11px] text-alloy-midnight/55">{subtitle}</div>
                                                         {preview ? (
                                                             <div className="mt-1 line-clamp-2 text-[10px] leading-snug text-alloy-midnight/50">{preview}</div>
                                                         ) : null}
                                                         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-alloy-midnight/45">
-                                                            <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${a.dot}`} />
+                                                            <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${rowAccent.dot}`} />
                                                             <span className="truncate">
-                                                                {[channelLabel, activityAt ? relTime(activityAt) : null].filter(Boolean).join(" · ")}
+                                                                {[channelSummary, threadCountLabel, activityAt ? relTime(activityAt) : null, needsReplyLabel]
+                                                                    .filter(Boolean)
+                                                                    .join(" · ")}
                                                             </span>
                                                             <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                                                                {unread ? (
-                                                                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-alloy-juniper px-1 text-[9px] font-bold text-white shadow-sm">{unread}</span>
+                                                                {hub.unread ? (
+                                                                    <span data-cc-hub-unread className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-alloy-juniper px-1 text-[9px] font-bold text-white shadow-sm">{hub.unread}</span>
                                                                 ) : null}
                                                             </span>
                                                         </div>
@@ -756,26 +660,49 @@ export default function CommandCenterShell() {
 
                 {/* WORKSPACE — Conversation (context) | Composer (action) */}
                 <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className={`flex min-h-0 flex-col overflow-hidden ${COMMS_PANEL_SHELL_CLASS}`}>
-                    {selected ? (
+                    {selected && conversationRequiresReplyForWorkItemProjection(selected) ?
+                        <div className="flex shrink-0 justify-end border-b border-alloy-stone/12 px-3 py-1.5">
+                            <ViewInWorkItemsLink
+                                taskId={communicationWorkItemId(selected.id)}
+                                opportunityId={selected.opportunity_id ?? null}
+                                source="communications"
+                                view={resolveCommunicationsWorkItemsView(selected, adminAuth?.userId ?? null)}
+                                className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/22 bg-white px-2 py-1 text-[10px] font-semibold text-alloy-juniper hover:bg-alloy-juniper/[0.05]"
+                            />
+                        </div>
+                    :   null}
+                    {/*
+                      * `selectedLoadable` is load-bearing, not belt-and-braces. The
+                      * runtime keeps the last household's view model when the new
+                      * selection has no customer, so switching from a family
+                      * conversation to an unidentified one left this branch matching
+                      * on STALE `runtime.vm` — the previous family's name, children,
+                      * preferences and history rendered under a different
+                      * conversation. Requiring the selection to be the one the view
+                      * model actually describes is what makes the two mutually
+                      * exclusive.
+                      */}
+                    {selected && selectedLoadable && runtime.vm ? (
                         <FamilyCommunicationWorkspaceView
+                            surfaceVariant="workspace_inbox"
                             selected={selected}
                             detail={detail}
                             childNames={childNames}
-                            stageLabel={selected.stage_label ?? liveWorkspaceVm?.family.stage ?? detail?.stage ?? null}
+                            stageLabel={selected.stage_label ?? runtime.vm.family.stage ?? detail?.stage ?? null}
                             healthTone={healthDisplay.tone}
                             healthDot={healthDisplay.dot}
                             healthLabel={healthDisplay.label}
                             recordLinks={recordLinks}
-                            onOpenRecordLink={adminDrawer ? openRecordLink : undefined}
+                            onOpenRecordLink={openRecordLink}
                             showClaim={ASSIGNMENT_ENABLED}
-                            workspaceMode={workspaceMode}
-                            onWorkspaceModeChange={setWorkspaceMode}
-                            workspaceModeAvailability={workspaceModeAvailability}
-                            relatedTasks={liveWorkspaceVm?.relatedTasks ?? []}
-                            preferenceProfile={liveWorkspaceVm?.consentSummary.preferenceProfile}
+                            workspaceMode={runtime.workspaceMode}
+                            onWorkspaceModeChange={runtime.setWorkspaceMode}
+                            workspaceModeAvailability={runtime.workspaceModeAvailability}
+                            relatedTasks={runtime.vm.relatedTasks ?? []}
                             canEditPreferences={LIVE_WORKSPACE && !!primaryPersonId}
                             preferenceSaving={preferenceSaving}
-                            onPreferenceChange={(field, status) => void runPreferenceChange(field, status)}
+                            onPreferenceChange={(personId, field, status) => void runPreferenceChange(personId, field, status)}
+                            preferenceProfilesByContact={runtime.vm.consentSummary.preferenceProfilesByContact}
                             attentionLabel={conversationAttentionLabel(selected.attention_state)}
                             onTriage={(action) => void runTriage(action)}
                             triageBusy={triageBusy}
@@ -793,29 +720,67 @@ export default function CommandCenterShell() {
                             taskSaving={taskSaving}
                             taskError={taskError}
                             LIVE_WORKSPACE={LIVE_WORKSPACE}
-                            selectedThreadId={selectedThreadId}
-                            messages={messages}
-                            liveRecipientGroups={liveRecipientGroups}
-                            selectedRecipientIds={selectedRecipientIds}
-                            liveChannel={liveChannel}
-                            subjectDraft={subjectDraft}
-                            bodyDraft={bodyDraft}
-                            sendResult={sendResult}
-                            sendError={sendError}
-                            sending={sending}
+                            selectedThreadId={runtime.selectedThreadId}
+                            selectedThread={runtime.selectedThread}
+                            // The hub's children. Email is a set of subject
+                            // threads, so the workspace needs the list, not just
+                            // the one currently open.
+                            threads={runtime.vm.threads}
+                            messages={runtime.messages}
+                            timelineMessages={runtime.timelineMessages}
+                            liveRecipientGroups={runtime.vm.recipientGroups}
+                            selectedRecipientIds={runtime.selectedRecipientIds}
+                            liveChannel={runtime.liveChannel}
+                            subjectDraft={runtime.subjectDraft}
+                            bodyDraft={runtime.bodyDraft}
+                            sendResult={runtime.sendResult}
+                            sendError={runtime.sendError}
+                            sending={runtime.sending}
                             assignBusy={assignBusy}
                             onClaim={(id) => claim(id)}
-                            onAllMessages={() => { setSelectedThreadId(null); if (selectedCustomerId && selectedId) void loadLive(selectedCustomerId, selectedId, false); }}
-                            onOpenThread={(t) => void openThread(t)}
-                            onToggleRecipient={(id) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true))}
-                            onSubjectChange={setSubjectDraft}
-                            onBodyChange={setBodyDraft}
-                            onSendNow={() => void runFamilySend(false)}
-                            onConfirmSend={() => void runFamilySend(true)}
-                            onDismissSend={() => { setSendResult(null); setSendError(null); }}
+                            onAllMessages={runtime.showAllMessages}
+                            onOpenThread={runtime.openThread}
+                            onToggleRecipient={runtime.toggleRecipient}
+                            onSubjectChange={runtime.setSubjectDraft}
+                            onBodyChange={runtime.setBodyDraft}
+                            onSendNow={() => void runtime.send(false)}
+                            onConfirmSend={() => void runtime.send(true)}
+                            onDismissSend={runtime.dismissSendResult}
+                            viewerUserId={adminAuth?.userId ?? null}
+                            sendCompleteToken={runtime.sendCompleteToken}
                         />
+                    ) : selected && isUnidentifiedConversation(selected) ? (
+                        // Ordered BEFORE the workspace-error branch deliberately.
+                        // `resolveCommandCenterWorkspaceError` answers "Not linked to a
+                        // family yet — review the connection before replying" for every
+                        // unresolved or ambiguous conversation, which is true and is a
+                        // dead end: a real parent's message, received and retained, with
+                        // no way to answer it. Not being linked to a household is a fact
+                        // about routing, not a reason to leave someone unanswered.
+                        <UnidentifiedConversationPanel
+                            conversation={selected}
+                            onReplied={() => refreshOperationalCommunicationsWork(selected.id)}
+                        />
+                    ) : workspaceLoading ? (
+                        <CommsWorkspacePanelReserve label="Loading conversation" />
+                    ) : workspaceError ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+                            <p className="text-sm font-medium text-alloy-ember">{workspaceError.title}</p>
+                            <p className="max-w-sm text-xs leading-relaxed text-alloy-midnight/45">{workspaceError.message}</p>
+                            {workspaceError.canRetry ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void runtime.refreshCurrent()}
+                                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 shadow-sm transition hover:border-alloy-stone/40"
+                                >
+                                    Retry
+                                </button>
+                            ) : null}
+                        </div>
                     ) : workspaceHydrating ? (
                         <CommsWorkspacePanelReserve label="Loading first conversation" />
+                    ) : selected ? (
+                        <CommsWorkspacePanelReserve label="Loading conversation" />
                     ) : !loading && filtered.length === 0 ? (
                         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
                             <p className="text-sm font-medium text-alloy-midnight/60">No conversations yet</p>
@@ -823,7 +788,9 @@ export default function CommandCenterShell() {
                                 Conversations appear here when messages are sent or received.
                             </p>
                         </div>
-                    ) : null}
+                    ) : (
+                        <CommsWorkspacePanelReserve label="Loading conversation" />
+                    )}
                 </section>
             </div>
         </div>

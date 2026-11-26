@@ -1,0 +1,52 @@
+{
+ "tag": "before",
+ "build": "a1b1b25acd9be3d7025c91fcdad56c4be4556034",
+ "header": {
+  "rollup": {
+   "top": 287,
+   "bottom": 439,
+   "left": 530,
+   "right": 1494,
+   "h": 152
+  },
+  "lens": {
+   "top": 444,
+   "bottom": 501,
+   "left": 530,
+   "right": 1494,
+   "h": 57
+  },
+  "headerToLedgerTop": 157,
+  "contextRow": true,
+  "notYetDue": null,
+  "sideItems": [
+   "SPAN:$225.00 not yet due · next Oct 31, 2026",
+   "SPAN:$125.00 prepaid available"
+  ],
+  "dueNote": "$2,005.00 past due",
+  "stats": [
+   "Due now$2,005.00$2,005.00 past due",
+   "Balance · October 2026$2,076.00$2,116.00 charged · $40.00 paid",
+   "Scheduled$2,440.00activates with its period"
+  ],
+  "responsibilityLink": 1,
+  "gear": {
+   "aria": "Manage responsibility",
+   "title": "Manage responsibility — who contractually owes, from a date"
+  },
+  "managePayments": {
+   "top": 416,
+   "bottom": 433,
+   "left": 1003,
+   "right": 1126,
+   "h": 17
+  },
+  "actions": {
+   "top": 287,
+   "bottom": 317,
+   "left": 1150,
+   "right": 1494,
+   "h": 30
+  }
+ }
+}

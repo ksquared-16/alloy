@@ -1,13 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import {
-    assertCustomerMemberConfigFieldDefinitionsExist,
-    buildNativeCustomerMemberUpdates,
-    upsertCustomerMemberConfigFieldValues,
-    validateCustomerMemberPatchBody,
-} from "@/lib/admin/customerMemberPatch";
+import { applyCustomerMemberMutationPatch } from "@/lib/admin/customerMemberPatch";
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
+import { canManageHealth, canViewHealth } from "@/lib/health/healthAccess";
+import { isChildHealthProfileFieldKey } from "@/lib/health/childHealthProfileFields";
+
+/**
+ * A child's medical profile fields, only for a caller who holds `health.view`. Without it they are
+ * absent — not `null`, which would read as "none recorded" — and the response says so.
+ */
+function medicalProfileFields(
+    profile: { allergies?: string | null; medical_notes?: string | null; special_instructions?: string | null },
+    permissionKeys: readonly string[] | null,
+): Record<string, unknown> {
+    if (!canViewHealth({ permissionKeys })) return { health_fields_withheld: true };
+    return {
+        allergies: profile.allergies ?? null,
+        medical_notes: profile.medical_notes ?? null,
+        special_instructions: profile.special_instructions ?? null,
+    };
+}
 
 const CUSTOMER_MEMBER_SELECT =
     "id, org_id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, metadata, created_at, updated_at";
@@ -24,6 +42,8 @@ export async function GET(
             { status: ctx.status }
         );
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
 
     const { id } = await params;
     if (!id) {
@@ -45,16 +65,14 @@ export async function GET(
         return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    const profileByMember = await loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id]);
+    const profileByMember = await loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id], { permissionKeys: ctx.permissionKeys });
     const profile = profileByMember.get(id) ?? {};
 
     const out: Record<string, unknown> = {
         ...(row as Record<string, unknown>),
         preferred_name: profile.preferred_name ?? null,
         gender: profile.gender ?? null,
-        allergies: profile.allergies ?? null,
-        medical_notes: profile.medical_notes ?? null,
-        special_instructions: profile.special_instructions ?? null,
+        ...medicalProfileFields(profile, ctx.permissionKeys),
     };
 
     const customerId = (row as { customer_id: string | null }).customer_id;
@@ -72,6 +90,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const tRequest = Date.now();
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
@@ -79,9 +98,8 @@ export async function PATCH(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     const { id } = await params;
     if (!id) {
@@ -95,75 +113,85 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const validated = validateCustomerMemberPatchBody(body);
-    if (!validated.ok) {
-        return NextResponse.json({ error: validated.error }, { status: 400 });
+    // Writing a child's medical fields is a Medical write: health.manage, not CRM write alone.
+    const medicalKeys = Object.keys(body).filter((k) => isChildHealthProfileFieldKey(k));
+    if (medicalKeys.length > 0 && !canManageHealth({ permissionKeys: ctx.permissionKeys })) {
+        return NextResponse.json(
+            { error: "Changing a child's medical information requires Medical access.", code: "health_manage_required", fields: medicalKeys },
+            { status: 403 },
+        );
     }
-
-    const { native, config } = validated;
-    const nativeUpdates = buildNativeCustomerMemberUpdates(native);
-    const hasNative = Object.keys(nativeUpdates).length > 0;
-    const hasConfig = Object.keys(config).length > 0;
 
     const supabase = createAdminClient();
 
-    const { data: existing, error: fetchErr } = await supabase
-        .from("customer_members")
-        .select("id")
-        .eq("id", id)
-        .eq("org_id", ctx.orgId)
-        .maybeSingle();
+    /*
+     * SAVE TAIL SPANS. The operator's edit acknowledges locally in ~90 ms, but the authoritative
+     * response took ~3.2 s, and "the server is slow" is not an answer a fix can be built on. These
+     * spans separate AUTHORITATIVE PERSISTENCE from the post-write work that only shapes the
+     * response body, and are surfaced on `x-alloy-patch-spans` so the browser harness can read them
+     * without a server log. Diagnostic only — they change no behaviour.
+     */
+    const tStart = Date.now();
+    const spans: Record<string, number> = { auth_to_write: tStart - tRequest };
 
-    if (fetchErr) {
-        return NextResponse.json({ error: fetchErr.message }, { status: 500 });
-    }
-    if (!existing) {
-        return NextResponse.json({ error: "Member not found" }, { status: 404 });
-    }
-
-    if (hasConfig) {
-        const defErr = await assertCustomerMemberConfigFieldDefinitionsExist(supabase, ctx.orgId, config);
-        if (defErr) {
-            return NextResponse.json({ error: defErr }, { status: 400 });
-        }
-        await upsertCustomerMemberConfigFieldValues(supabase, ctx.orgId, id, config);
+    const tWrite = Date.now();
+    const applied = await applyCustomerMemberMutationPatch({
+        supabase,
+        orgId: ctx.orgId,
+        memberId: id,
+        body,
+    });
+    spans.write_ms = Date.now() - tWrite;
+    if (applied.ok && applied.spans) Object.assign(spans, applied.spans);
+    if (!applied.ok) {
+        return NextResponse.json({ error: applied.error }, { status: applied.status ?? 500 });
     }
 
-    if (hasNative) {
-        const { data, error } = await supabase
+    /*
+     * POST-WRITE READBACKS.
+     *
+     * Measured: authoritative persistence completed at ~1.9 s, and a further ~1.44 s (43% of the
+     * response) went on re-reading the row to shape the response BODY. Neither read carries an
+     * invariant, an audit guarantee, or transaction work — the write is already durable when they
+     * begin. Every caller of this endpoint in the codebase discards the body (it is parsed only to
+     * surface `error` on failure), so the operator was waiting on a projection nobody reads.
+     *
+     * `Prefer: return=minimal` is the standard HTTP way to say so. The default response is
+     * UNCHANGED, so any consumer that does want the row still gets it; only callers that opt in skip
+     * the readback. And when the readback does run, its two independent queries now run
+     * concurrently instead of serially — the operator was paying their SUM.
+     */
+    const preferMinimal = /return=minimal/i.test(request.headers.get("prefer") ?? "");
+    if (preferMinimal) {
+        spans.readback_ms = 0;
+        spans.total_ms = Date.now() - tRequest;
+        return NextResponse.json({ id }, { headers: { "x-alloy-patch-spans": JSON.stringify(spans) } });
+    }
+
+    const tRead = Date.now();
+    const [profileByMember, rowRes] = await Promise.all([
+        loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id], { permissionKeys: ctx.permissionKeys }),
+        supabase
             .from("customer_members")
-            .update(nativeUpdates)
+            .select(CUSTOMER_MEMBER_SELECT)
             .eq("id", id)
             .eq("org_id", ctx.orgId)
-            .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, created_at")
-            .single();
-
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-        if (!data) {
-            return NextResponse.json({ error: "Member not found" }, { status: 404 });
-        }
-    }
-
-    const profileByMember = await loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id]);
+            .single(),
+    ]);
+    spans.readback_ms = Date.now() - tRead;
     const profile = profileByMember.get(id) ?? {};
+    const row = rowRes.data;
 
-    const { data: row } = await supabase
-        .from("customer_members")
-        .select(CUSTOMER_MEMBER_SELECT)
-        .eq("id", id)
-        .eq("org_id", ctx.orgId)
-        .single();
-
-    return NextResponse.json({
-        ...(row ?? { id }),
-        preferred_name: profile.preferred_name ?? null,
-        gender: profile.gender ?? null,
-        allergies: profile.allergies ?? null,
-        medical_notes: profile.medical_notes ?? null,
-        special_instructions: profile.special_instructions ?? null,
-    });
+    spans.total_ms = Date.now() - tRequest;
+    return NextResponse.json(
+        {
+            ...(row ?? { id }),
+            preferred_name: profile.preferred_name ?? null,
+            gender: profile.gender ?? null,
+            ...medicalProfileFields(profile, ctx.permissionKeys),
+        },
+        { headers: { "x-alloy-patch-spans": JSON.stringify(spans) } }
+    );
 }
 
 /** DELETE: hard delete customer_member. Admin only. */
@@ -178,9 +206,8 @@ export async function DELETE(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     const { id } = await params;
     if (!id) {
@@ -195,6 +222,17 @@ export async function DELETE(
         .eq("org_id", ctx.orgId);
 
     if (error) {
+        // The Enrollment-journey guard (child_has_enrollment_journey / participation_has_enrollment_journey):
+        // a refusal the operator can act on (archive instead), not a server fault. Nothing was deleted.
+        if (/(child|participation)_has_enrollment_journey/.test(error.message ?? "")) {
+            return NextResponse.json(
+                {
+                    error: "This child has an Enrollment record (paperwork or a journey). Archive the child instead of deleting it.",
+                    code: "child_has_enrollment_journey",
+                },
+                { status: 409 },
+            );
+        }
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 

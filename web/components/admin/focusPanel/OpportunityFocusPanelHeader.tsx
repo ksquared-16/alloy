@@ -3,14 +3,16 @@
 import { useMemo } from "react";
 
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
+import { useRecordAttentionCounts } from "@/lib/adminV2/runtime/focusPanel/useRecordAttentionCounts";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
 import {
     buildFocusPanelContextChips,
     formatFocusPanelDisplayLabel,
+    resolveFocusPanelEffectiveStageChip,
     resolveFocusPanelLocationChip,
     resolveFocusPanelProcessLabel,
+    buildFocusPanelAttentionChips,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
-import { FOCUS_PANEL_HEADER_BOS_LABEL } from "@/lib/adminV2/runtime/focusPanel/focusPanelHeaderActions";
 import { buildSubjectManageMenuFromResolvedActions } from "@/lib/admin/recordManage/buildSubjectManageMenuFromResolvedActions";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -40,10 +42,18 @@ export type OpportunityFocusPanelHeaderProps = {
     actionPreflightBlocked: ActionPreflightUiPayload | null;
     onDismissActionPreflightBlocked: () => void;
     registryActionFeedback: OpportunityDrawerRegistryActionFeedback | null;
+    /**
+     * The SETTLED participant scope. When it names a child, the header shows that child's identity;
+     * when it is null the header stays the case/household identity — which is the right answer for
+     * a family with several children and none selected.
+     */
+    subjectScope?: { displayName: string | null; imageUrl: string | null; customerMemberId: string | null } | null;
     /** Ignored in Focus Panel — stage movement via operational actions, not header CTA. */
     primaryHeaderAction?: ResolvedActionForClient | null;
     onPrimaryHeaderAction?: (action: ResolvedActionForClient) => void;
     primaryActionLoading?: boolean;
+    /** Composer preview — match runtime header without dismiss control. */
+    hideClose?: boolean;
 };
 
 export default function OpportunityFocusPanelHeader({
@@ -64,6 +74,8 @@ export default function OpportunityFocusPanelHeader({
     actionPreflightBlocked,
     onDismissActionPreflightBlocked,
     registryActionFeedback,
+    hideClose = false,
+    subjectScope,
 }: OpportunityFocusPanelHeaderProps) {
     const subjectManageActions = useMemo(
         () => buildSubjectManageMenuFromResolvedActions(displayVm.actions.header_menu),
@@ -75,20 +87,60 @@ export default function OpportunityFocusPanelHeader({
         [statusLabel],
     );
 
+    // Effective Process Position stage rollup — prefer over raw status when participants diverge
+    // or have branched (e.g. both Waitlist while family status still reads New Lead).
+    const effectiveStageLabel = useMemo(
+        () => resolveFocusPanelEffectiveStageChip(record),
+        [record],
+    );
+
     const processLabel = useMemo(() => resolveFocusPanelProcessLabel(record), [record]);
 
     const locationLabel = useMemo(() => resolveFocusPanelLocationChip(record), [record]);
 
-    const contextChips = useMemo(
-        () =>
-            buildFocusPanelContextChips({
-                statusLabel: readOnlyStatusLabel,
+    const hasActiveTour = (displayVm.summaries.active_tour_bookings?.length ?? 0) > 0;
+
+    // What is WAITING on the operator for this record, read from the domains that own it.
+    const attention = useRecordAttentionCounts(opportunityId);
+
+    const contextChips = useMemo(() => {
+        const stageOrStatus = effectiveStageLabel ?? readOnlyStatusLabel;
+        // Booked Tour is overlapping operational context — not a stage move. Surface it beside
+        // Waitlist/EPP rollup so All / family Focus does not flatten to one stage alone.
+        const statusWithTour =
+            hasActiveTour && stageOrStatus && !/tour/i.test(stageOrStatus)
+                ? `${stageOrStatus} · Tour Scheduled`
+                : hasActiveTour && !stageOrStatus
+                  ? "Tour Scheduled"
+                  : stageOrStatus;
+        return [
+            /*
+             * The status chip is CONFIGURED GEOMETRY: it is always present, and readiness decides
+             * its content. When the owner has not answered (`resolveOpportunityVmStatusLabel`
+             * returns null = UNKNOWN) it holds its place as a reserved chip, so the chip row has
+             * the same shape before and after the value arrives and the later arrival is a fill,
+             * not an insertion.
+             */
+            ...(statusWithTour ? [] : [{ label: "", kind: "status" as const, reserved: true }]),
+            ...buildFocusPanelContextChips({
+                statusLabel: statusWithTour,
                 statusKey: currentStatusKey,
                 processLabel,
                 locationLabel,
             }),
-        [currentStatusKey, locationLabel, processLabel, readOnlyStatusLabel],
-    );
+            // Attention trails what the record IS — an operator reads identity first, then load.
+            ...buildFocusPanelAttentionChips({ work: attention.work, unread: attention.unread }),
+        ];
+    }, [
+        attention.unread,
+        attention.work,
+        currentStatusKey,
+        effectiveStageLabel,
+        hasActiveTour,
+        locationLabel,
+        processLabel,
+        readOnlyStatusLabel,
+    ]);
 
     const secondaryActions = (
         <OpportunityDrawerHeaderControls
@@ -103,8 +155,7 @@ export default function OpportunityFocusPanelHeader({
             canMutate={manageCanMutate}
             layout="modal-actions"
             proofLayoutActions
-            bosActionVariant="default"
-            bosAssistLabel={FOCUS_PANEL_HEADER_BOS_LABEL}
+            hideBos
             actionPreflightBlocked={actionPreflightBlocked}
             onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
             registryActionFeedback={registryActionFeedback}
@@ -119,11 +170,22 @@ export default function OpportunityFocusPanelHeader({
     return (
         <FocusPanelCompactHeader
             subjectTitle={title}
+            /*
+             * A scoped child's own identity, or nothing.
+             *
+             * `subjectScope` is the resolver's settled answer, not "the first child on the case" —
+             * merely HAVING children never picks one, and a scope that does not belong to this case
+             * has already resolved to null upstream.
+             */
+            personSubjectName={subjectScope?.displayName ?? null}
+            personSubjectImageUrl={subjectScope?.imageUrl ?? null}
+            personSubjectRecordId={subjectScope?.customerMemberId ?? null}
             contextChips={contextChips}
             secondaryActions={secondaryActions}
             activeMode={activeMode}
             onModeChange={onModeChange}
             onClose={onClose}
+            hideClose={hideClose}
         />
     );
 }

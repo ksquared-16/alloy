@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 export type ServicePlanTemplateListItem = {
     id: string;
@@ -87,6 +88,8 @@ const RECURRENCE_UNITS = ["day", "week", "month", "quarter", "year"] as const;
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: { plan_name?: string; plan_key?: string; is_recurring?: boolean; recurrence_unit?: string | null; recurrence_interval?: number | null; is_active?: boolean };
     try {

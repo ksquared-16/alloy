@@ -1,59 +1,104 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
+import {
+    assertDocumentAccess,
+    documentAccessHttp,
+    documentActorForRequest,
+    signedUrlExpirySeconds,
+} from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
+import { isStoragePathWithinOrg } from "@/lib/documents/storagePathAuthority";
+import { loadDocumentVersionLocation } from "@/lib/documents/documentVersions";
 
-const EXPIRES_IN = 60 * 10;
-
-/** GET: signed URL for a document row the admin org owns. */
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+/**
+ * GET: signed URL for a document the actor is authorized to read.
+ *
+ * Phase 0 commit 6 moved authorization into `assertDocumentAccess`. This route
+ * previously checked only `ctx.ok` — "is there a session?" — then signed with
+ * the service-role client, which bypasses the `documents` RLS restricting
+ * SELECT to owner|admin|ops|manager. Because `getAdminContextCached` returns ok
+ * for ANY org member, a viewer could mint a URL for any document in the org,
+ * including another child's records.
+ *
+ * D1a: the decision now carries the actor's department/site scope and the org-prefix check, and the
+ * issuance is recorded (`document_link_issued`) BEFORE the link is minted — no record, no link.
+ *
+ * The storage client is reached only after a decision of `allowed`.
+ *
+ * D2: `?version=<version id>` signs a HISTORICAL version of the same document. The decision is the document's own — the
+ * one decision for every version — and the version must belong to that document in that organization, inside its org
+ * prefix. The audit names the version.
+ */
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { ok: false, error: ctx.status === 401 ? "Unauthorized" : "Forbidden", code: "AUTH" },
-            { status: ctx.status }
-        );
-    }
-
+    const access = await getAdminAccessContextCached();
     const { id } = await context.params;
-    if (!id) return NextResponse.json({ ok: false, error: "Missing id", code: "BAD_REQUEST" }, { status: 400 });
 
     const supabase = createAdminClient();
-    const { data: row, error: rowErr } = await supabase
-        .from("documents")
-        .select("id, org_id, bucket, storage_path")
-        .eq("id", id)
-        .eq("org_id", ctx.orgId)
-        .maybeSingle();
 
-    if (rowErr) {
-        console.error("[DOCUMENT_SIGNED_URL_DB]", rowErr);
-        return NextResponse.json(
-            { ok: false, error: "Could not load document", code: "DOCUMENT_QUERY_FAILED" },
-            { status: 500 }
-        );
+    const decision = await assertDocumentAccess({
+        supabase,
+        actor: documentActorForRequest(ctx, access),
+        documentId: id,
+        operation: "download",
+    });
+
+    if (decision.outcome !== "allowed" || !ctx.ok) {
+        const http = documentAccessHttp(decision);
+        return NextResponse.json(http.body, { status: http.status });
     }
 
-    if (!row) {
-        return NextResponse.json({ ok: false, error: "Document not found", code: "NOT_FOUND" }, { status: 404 });
+    const requestedVersion = request.nextUrl.searchParams.get("version")?.trim() || null;
+    let target: { bucket: string; storagePath: string; versionId: string | null; versionNumber: number | null } = {
+        bucket: decision.document.bucket,
+        storagePath: decision.document.storagePath,
+        versionId: null,
+        versionNumber: null,
+    };
+    if (requestedVersion) {
+        const located = await loadDocumentVersionLocation(supabase, decision.document.orgId, decision.document.id, requestedVersion);
+        if (!located.ok) {
+            return NextResponse.json({ ok: false, error: "Document not found", code: "NOT_FOUND" }, { status: located.notFound ? 404 : 500 });
+        }
+        if (!isStoragePathWithinOrg(located.version.storagePath, decision.document.orgId)) {
+            return NextResponse.json({ ok: false, error: "This document could not be verified.", code: "PATH_OUTSIDE_ORG" }, { status: 403 });
+        }
+        target = {
+            bucket: located.version.bucket,
+            storagePath: located.version.storagePath,
+            versionId: located.version.id,
+            versionNumber: located.version.version_number,
+        };
     }
 
-    const bucket = (row as { bucket?: string | null }).bucket?.trim();
-    const path = (row as { storage_path?: string | null }).storage_path?.trim();
-    if (!bucket || !path) {
-        return NextResponse.json(
-            {
-                ok: false,
-                error: "This document has no file in storage (missing bucket or path). Re-upload or fix the row.",
-                code: "NO_STORAGE_LOCATION",
-            },
-            { status: 400 }
-        );
+    const expiresIn = signedUrlExpirySeconds("download");
+    const audit = await recordDocumentAudit({
+        orgId: decision.document.orgId,
+        actorUserId: ctx.userId,
+        event: "document_link_issued",
+        subject: { type: "documents", id: decision.document.id },
+        route: "admin/documents/signed-url",
+        detail: {
+            operation: "download",
+            expires_in_seconds: expiresIn,
+            document_entity_type: decision.document.entityType,
+            document_entity_id: decision.document.entityId,
+            ...(target.versionId ? { version_id: target.versionId, version_number: target.versionNumber } : {}),
+        },
+    });
+    if (!audit.ok) {
+        return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
     }
 
-    const { data, error: signErr } = await supabase.storage.from(bucket).createSignedUrl(path, EXPIRES_IN);
+    const { bucket, storagePath } = target;
+    const { data, error: signErr } = await supabase.storage.from(bucket).createSignedUrl(storagePath, expiresIn);
+
     if (signErr || !data?.signedUrl) {
-        console.error("[DOCUMENT_SIGNED_URL_STORAGE]", bucket, path, signErr);
+        // Never log the signed URL or the storage path.
+        console.error("[DOCUMENT_SIGNED_URL_STORAGE]", { document_id: decision.document.id });
         const classified = classifySupabaseStorageError(signErr);
         return NextResponse.json(
             { ok: false, error: classified.message, code: classified.code },

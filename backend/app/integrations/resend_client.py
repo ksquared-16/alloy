@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 import requests
 
+from .staging_outbound_guard import guard_outbound_recipients
+
 logger = logging.getLogger("alloy-dispatcher")
 
 
@@ -23,6 +25,9 @@ def send_resend_email(
     text_body: str,
     from_email: str,
     api_key: str,
+    message_id: str | None = None,
+    extra_headers: Dict[str, Any] | None = None,
+    attachments: list[dict[str, str]] | None = None,
 ) -> Dict[str, Any]:
     if not api_key.strip():
         raise RuntimeError("Resend API key missing")
@@ -30,6 +35,8 @@ def send_resend_email(
         raise RuntimeError("Resend from address missing")
     if not to_email.strip():
         raise ValueError("to_email required")
+    # Staging: test inboxes or the owner allowlist only (ALY-14). Before the payload is built.
+    guard_outbound_recipients("email", [to_email])
     payload: Dict[str, Any] = {
         "from": from_email.strip(),
         "to": [to_email.strip()],
@@ -37,8 +44,46 @@ def send_resend_email(
     }
     if html_body:
         payload["html"] = html_body
+        # Always include a text alternative. Friendly HTML anchors put the booking
+        # URL in href only; clients/filters that drop localhost or HTML still need
+        # a usable destination in the text part.
+        text = (text_body or "").strip()
+        if text:
+            payload["text"] = text
     else:
         payload["text"] = text_body.strip()
+
+    # RFC 5322 Message-ID, minted by Alloy from the canonical message's own id.
+    #
+    # Without it a reply's `In-Reply-To` names something Alloy has no record of:
+    # the id stored as `provider_message_id` is Resend's internal email id, not
+    # the header a parent's mail client echoes. Setting it here is what makes
+    # `In-Reply-To` correlation possible at all, and it is independent of whichever
+    # provider Alloy eventually uses to RECEIVE mail.
+    if message_id:
+        payload["headers"] = {**(payload.get("headers") or {}), "Message-ID": message_id}
+    # In-Reply-To / References, so the reply threads in the PARENT'S mail client
+    # and not only inside Alloy. Server-owned: the UI constructs none of these.
+    if extra_headers:
+        payload["headers"] = {**(payload.get("headers") or {}), **extra_headers}
+
+    if attachments:
+        # Resend: [{ "filename", "content" (base64), "content_type"? }]
+        cleaned: list[dict[str, str]] = []
+        for att in attachments:
+            if not isinstance(att, dict):
+                continue
+            filename = str(att.get("filename") or "").strip()
+            content = str(att.get("content") or att.get("content_base64") or "").strip()
+            if not filename or not content:
+                continue
+            entry: dict[str, str] = {"filename": filename, "content": content}
+            ctype = str(att.get("content_type") or "").strip()
+            if ctype:
+                entry["content_type"] = ctype
+            cleaned.append(entry)
+        if cleaned:
+            payload["attachments"] = cleaned
 
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=20)

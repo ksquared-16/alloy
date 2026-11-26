@@ -42,12 +42,12 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("opportunity");
     });
 
-    it("routes opportunity to legacy when kill switch is active", () => {
+    it("keeps VM route when kill switch env is set (permanent cutover)", () => {
         delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
         expect(
             resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, adminV2Wu)
-        ).toBe("legacy");
+        ).toBe("opportunity");
     });
 
     it("keeps legacy for non-adminV2 surfaces", () => {
@@ -73,14 +73,14 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("person");
     });
 
-    it("keeps persons on legacy when person VM kill switch is active", () => {
+    it("keeps persons on VM when person kill switch env is set (permanent cutover)", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH", "1");
         expect(
             resolveVmDrawerRuntimeRoute(
                 { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
                 adminV2Wu
             )
-        ).toBe("legacy");
+        ).toBe("person");
     });
 
     it("routes adminV2 child inquiry to child runtime by default", () => {
@@ -108,7 +108,7 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("opportunity");
     });
 
-    it("coerceAdminV2VmDrawerRoute respects kill switch", () => {
+    it("coerceAdminV2VmDrawerRoute keeps VM route when kill switch env is set", () => {
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
         expect(
             coerceAdminV2VmDrawerRoute(
@@ -116,131 +116,11 @@ describe("vmDrawerRuntimeRoute", () => {
                 { type: "opportunities", id: "opp-1" },
                 adminV2Wu
             )
-        ).toBe("legacy");
+        ).toBe("opportunity");
     });
 });
 
 describe("VM drawer runtime wiring", () => {
-    it("AdminEntityDrawer is a thin router to VmRuntime vs Legacy", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        // Phase C: router mounts subject surface runtimes via canonical shim names.
-        expect(router).toContain("EnrollmentSubjectSurfaceRuntime");
-        expect(router).toContain("PersonSubjectSurfaceRuntime");
-        expect(router).not.toContain("PersonDrawerVmRuntime");
-        expect(router).not.toContain("ChildDrawerVmRuntime");
-        expect(router).toContain("AdminEntityDrawerLegacy");
-        expect(router).not.toContain("opportunityInquiryWorkflowHeaderStatus");
-    });
-
-    it("PersonsDrawerVmRuntime wires VM status through proof layout header", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const vm = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        const header = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/PersonDrawerProofLayoutHeader.tsx"),
-            "utf8"
-        );
-        expect(vm).toContain("PersonDrawerProofLayoutHeader");
-        expect(vm).toContain("displayVm?.header.status");
-        expect(header).toContain("VmPersonStatusControl");
-        expect(vm).toContain("usePersonsDrawerVmPayload");
-        expect(vm).not.toContain("drawer-operational-bootstrap");
-        expect(vm).not.toContain("status-options");
-    });
-
-    it("VM payload hooks hold prior drawer during swap and suppress cold shell", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        for (const file of [
-            "useOpportunityDrawerVmPayload.ts",
-            "usePersonsDrawerVmPayload.ts",
-        ]) {
-            const src = readFileSync(
-                join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime", file),
-                "utf8"
-            );
-            expect(src).toContain("swap_hold_current");
-            expect(src).toContain("shouldHoldPriorDrawerContent");
-            expect(src).toContain("suppressFullDrawerLoading");
-        }
-    });
-
-    it("OpportunityDrawerVmRuntime does not use legacy status or pill fetch paths", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const vm = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        expect(vm).toContain("VmProgressiveStatusDropdown");
-        expect(vm).not.toContain("VmOpportunityStatusControl");
-        expect(vm).not.toContain("statusBadge");
-        expect(vm).not.toContain("postTabStrip=");
-        expect(vm).toContain("OpportunityDrawerOverviewBody");
-        expect(vm).not.toContain("OpportunityDrawerInquiryWorkflowOverview");
-        expect(vm).not.toContain("VmInquiryRightColumn");
-        expect(vm).not.toContain("opportunityInquiryWorkflowHeaderStatus");
-        expect(vm).not.toContain("opportunityDrawerOverviewRevealReady");
-        expect(vm).not.toContain("OpportunityOperationalCompactStrip");
-        expect(vm).not.toContain("DrawerOpportunityOperationalLoadingComposition");
-        expect(vm).not.toContain("opportunityDrawerPipeline");
-    });
-
-    it("VmReadonlyStatusPill has no skeleton, select, or hooks", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const pill = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/VmReadonlyStatusPill.tsx"),
-            "utf8"
-        );
-        expect(pill).not.toContain("skeleton");
-        expect(pill).not.toContain("<select");
-        expect(pill).not.toContain("useState");
-        expect(pill).toContain("data-vm-readonly-status-pill");
-    });
-
-    it("OpportunityDrawerVmRuntime resolves status in title rail before actions mount", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const vm = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        expect(vm).toContain("resolveOpportunityVmStatusLabel");
-        expect(vm).toContain("data-drawer-vm-status-rail");
-        expect(vm).not.toContain("statusBadge");
-    });
-
-    it("OpportunityDrawerInquiryWorkflowOverview uses production right column not VmInquiryRightColumn", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const overview = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx"),
-            "utf8"
-        );
-        expect(overview).toContain("OpportunityInquirySummaryRightColumn");
-        expect(overview).not.toContain("VmInquiryRightColumn");
-        expect(overview).toContain("fetchEnabled={false}");
-    });
 
     it("swap phases suppress full loading shell", () => {
         expect(shouldHoldPriorDrawerContent("swap_preparing")).toBe(true);
@@ -249,20 +129,4 @@ describe("VM drawer runtime wiring", () => {
         ).toBe(false);
     });
 
-    it("logs drawer_vm_runtime client events", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const log = readFileSync(
-            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog.ts"),
-            "utf8"
-        );
-        expect(log).toContain("drawer_vm_runtime:${event}");
-        expect(log).toContain('"mounted"');
-        expect(log).toContain("swap_committed");
-        expect(log).toContain("swap_hold_current");
-        expect(log).toContain("related_prefetch_start");
-        expect(log).toContain("compose_ok");
-    });
 });

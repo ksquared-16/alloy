@@ -31,7 +31,7 @@ import {
     queueRowLogicalCacheKey,
     touchQueueRowCacheOnHit,
 } from "@/lib/workspace/queueRowClientCache";
-import { shouldApplyWorkUnitQueueRowsResponse } from "@/lib/workspace/workUnitQueueRowFetchApply";
+import { queueRegionRenderState } from "@/components/presentation/workUnit/QueueRegion";
 import {
     peekDrawerEntitySnapshot,
     putDrawerEntitySnapshot,
@@ -55,94 +55,25 @@ function readSrc(rel: string): string {
 
 describe("Queue No-records display guard", () => {
     /**
-     * Structural: QueueBlock must not show "No records" when rowsHeld is true.
-     * rowsHeld is set when the lane is not yet settled (hidden_until_settled),
-     * which happens during any in-flight fetch or cache miss after pill switch.
+     * Structural: QueueRegion must not show "No records" during cold load or refetch hold.
+     * queueRegionRenderState reserves empty for settled zero-row lanes only.
      */
-    it("QueueBlock guards empty-state copy behind rowsHeld check", () => {
-        const src = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        // The "No records" empty state must require !rowsHeld (lane settled)
-        expect(src).toContain("!queue.rowsLoading && !queue.rowsHeld && queue.items.length === 0");
-        // Skeleton check must still be independent
-        expect(src).toContain("queue.rowsLoading && !queue.rowsHeld && queue.items.length === 0");
+    it("QueueRegion guards empty-state copy behind queueRegionRenderState", () => {
+        const src = readSrc("components/presentation/workUnit/QueueRegion.tsx");
+        expect(src).toContain("export function queueRegionRenderState");
+        expect(src).toContain('if (queue.loading && !hasRows) return "cold-loading"');
+        expect(src).toContain('renderState === "empty"');
+        expect(src).toContain("No records in this view");
     });
 
     /**
-     * Structural: page.tsx must pass queueItemsLoading as rowsLoading so an in-flight
-     * request suppresses "No records" at the data layer too (belt-and-suspenders).
+     * Behavioral: refetch with prior rows must not enter empty render state (queue-lane hold).
      */
-    it("page.tsx wires lane-aware rowsLoading in queue block model", () => {
-        const src = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
-        expect(src).toContain("queuePayloadMatchesActiveLane");
-        expect(src).toContain("rowsLoading:");
-        expect(src).toContain("rowsHeld:");
-        expect(src).toContain("payloadMatchesActiveLane");
-    });
-
-    /**
-     * Null payload cannot show No records — confirmed by guard chain:
-     * null queueItems → hidden_until_settled → rowsHeld=true → No records suppressed.
-     */
-    it("stale empty response from old pill cannot show No records on current pill", () => {
-        // When the current pill (B) has a live request in flight, shouldApply drops A's empty response
-        let latestSeq = 0;
-        const seqA = ++latestSeq;
-        ++latestSeq; // pill B fetch advances latest seq
-
-        const decision = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: seqA,
-            latestRequestSeq: latestSeq,
-            stillSelected: false,
-        });
-        // Stale empty response from A must be dropped
-        expect(decision.apply).toBe(false);
-        expect(decision.skippedReason).toBe("stale_request_seq");
-    });
-
-    /**
-     * Fast A→B→A switch: only the latest A request applies, not an intermediate stale one.
-     */
-    it("fast A→B→A switch: only latest A response applies", () => {
-        let latestSeq = 0;
-        const seqA1 = ++latestSeq; // first A fetch
-        ++latestSeq; // B fetch advances seq
-        const seqA2 = ++latestSeq; // second A fetch (latest)
-
-        // First A response arrives after B and second A started — stale
-        const d1 = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: seqA1,
-            latestRequestSeq: latestSeq,
-            stillSelected: true, // still on A
-        });
-        expect(d1.apply).toBe(false); // seq mismatch
-
-        // Second A response arrives — matches latest seq and is still selected
-        const d2 = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: seqA2,
-            latestRequestSeq: latestSeq,
-            stillSelected: true,
-        });
-        expect(d2.apply).toBe(true);
-    });
-
-    /**
-     * After a fetch error (queueItems set to null), retrying the same pill must
-     * NOT return early without fetching (the same-sig cache-miss path must fall through).
-     */
-    it("same-sig cache-miss falls through to network (recovers from error state)", () => {
-        // fetchQueueItems moved to the canonical useWorkUnitQueueRuntime hook.
-        const src =
-            readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx") +
-            readSrc("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
-        // The cache-hit early return must only happen inside the `if (ent)` branch
-        // and must NOT have an unconditional return after cache miss in the same-sig path.
-        expect(src).toContain("// No cache entry (expired or evicted) even though sig matches");
-        // Confirm the cache-miss branch no longer early-returns with loading=false
-        expect(src).not.toMatch(
-            /fetchSig === queueItemsLastFetchSigRef\.current[\s\S]{0,300}else \{\s*setQueueItemsLoading\(false\);\s*\}\s*if \(pendingQueueTabPerfRef/
-        );
+    it("refetch with prior rows does not enter empty render state", () => {
+        expect(
+            queueRegionRenderState({ rows: [{ id: "row-a1" }], loading: true, error: null })
+        ).toBe("rows");
+        expect(queueRegionRenderState({ rows: [], loading: true, error: null })).toBe("cold-loading");
     });
 });
 
@@ -150,51 +81,7 @@ describe("Queue No-records display guard", () => {
 
 describe("Queue determinism", () => {
     /**
-     * Test 1: Queue pill A request returns after pill B selected — A response is ignored.
-     */
-    it("pill A response is dropped when pill B is now selected", () => {
-        let latestSeq = 0;
-        const seqA = ++latestSeq;
-        const seqB = ++latestSeq; // B fired after A
-
-        const decisionA = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: seqA,
-            latestRequestSeq: latestSeq,
-            stillSelected: false, // A's pill is no longer selected
-        });
-        const decisionB = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: seqB,
-            latestRequestSeq: latestSeq,
-            stillSelected: true,
-        });
-
-        expect(decisionA.apply).toBe(false);
-        expect(decisionA.skippedReason).toBe("stale_request_seq");
-        expect(decisionB.apply).toBe(true);
-    });
-
-    /**
-     * Test 2: Empty lane response cannot overwrite current non-empty lane's data.
-     * An empty response for the WRONG lane is rejected even when it arrives last.
-     */
-    it("empty lane response is ignored when it belongs to a different lane", () => {
-        let latestSeq = 0;
-        const seqA = ++latestSeq; // fetch for "new_leads"
-        ++latestSeq; // fetch for "tours" increments seq
-
-        // "new_leads" response arrives after "tours" fetch started
-        const decision = shouldApplyWorkUnitQueueRowsResponse({
-            requestSeq: seqA,
-            latestRequestSeq: latestSeq,
-            stillSelected: false, // user is now on "tours"
-        });
-
-        expect(decision.apply).toBe(false);
-        expect(decision.skippedReason).toBe("stale_request_seq");
-    });
-
-    /**
-     * Test 3: Queue cache key mismatch does not display stale rows from another lane.
+     * Queue cache key mismatch does not display stale rows from another lane.
      * Rows cached under scope:wuId:lane_A must not be returned when looking up lane_B.
      */
     it("cache key mismatch prevents stale lane rows from appearing", () => {
@@ -218,24 +105,6 @@ describe("Queue determinism", () => {
         expect(touchQueueRowCacheOnHit(map, wrongFpKey)).toBeNull();
     });
 
-    /**
-     * Test 4 (structural): The page fetch function falls through to network when
-     * the same-sig path has no cache entry, so errors allow recovery.
-     */
-    it("same-sig no-cache path falls through to network fetch (not silent no-op)", () => {
-        // fetchQueueItems moved to the canonical useWorkUnitQueueRuntime hook.
-        const src =
-            readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx") +
-            readSrc("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
-        // The same-sig branch must NOT unconditionally setQueueItemsLoading(false) and return.
-        // Verify the else-branch that used to silently return is gone.
-        expect(src).not.toMatch(
-            /fetchSig === queueItemsLastFetchSigRef\.current[\s\S]{0,400}else \{\s*setQueueItemsLoading\(false\);\s*\}\s*if \(pendingQueueTabPerfRef/
-        );
-        // Verify cache-hit branch still returns (only the miss path falls through)
-        expect(src).toContain("touchQueueRowCacheOnHit(cache, logicalKey)");
-        expect(src).toContain("// No cache entry (expired or evicted) even though sig matches");
-    });
 });
 
 // ─── Drawer snapshot cache ─────────────────────────────────────────────────────
@@ -346,26 +215,7 @@ describe("Drawer snapshot cache determinism", () => {
     });
 });
 
-// ─── Opportunity title/status restore ─────────────────────────────────────────
-
-describe("Opportunity title/status first-paint restore", () => {
-    /**
-     * When navigating from opportunity → child/person, the snapshot must include
-     * the deferred full-hydrate patch (e.g. _identity) so that on back-navigation
-     * the title/status restore from the complete record, not from queue preview seed.
-     */
-    it("AdminEntityDrawer merges deferred patch into opportunity snapshot before person navigation", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // The snapshot taken on opp → person navigation must include deferredForSnapshot
-        expect(src).toContain("deferredForSnapshot && Object.keys(deferredForSnapshot).length > 0");
-        expect(src).toContain("opportunityDeferredFullHydrateRef.current");
-        expect(src).toContain("snapshotForNav");
-        // The snapshot must be passed to putDrawerEntitySnapshot
-        expect(src).toContain('putDrawerEntitySnapshot("opportunities", prev.id, snapshotForNav)');
-    });
-});
-
-// ─── Opportunity hydrate determinism ─────────────────────────────────────────
+// Legacy monolith removed — snapshot/deferred hydrate wiring lives in VM runtime modules.
 
 describe("Opportunity hydrate determinism", () => {
     beforeEach(() => {
@@ -373,25 +223,7 @@ describe("Opportunity hydrate determinism", () => {
     });
 
     /**
-     * Test 8: Back-to-Lead / opportunity switch — drawer fetch for old drawer id
-     * cannot apply to new drawer id (structural check on response guard).
-     */
-    it("AdminEntityDrawer checks json.id against current drawer before applying full hydrate", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // Full hydrate: response must match hydrateId
-        expect(src).toContain(
-            "if (String((json as { id?: unknown }).id ?? \"\") !== hydrateId) return;"
-        );
-        // Person composed fetch: coalesced path must pass entityDataMatchesDrawer
-        expect(src).toContain("fetchPersonDrawerEntityCoalesced");
-        expect(src).toContain(
-            "if (!entityDataMatchesDrawer(json, fetchTargetId, fetchTargetType)) {"
-        );
-    });
-
-    /**
-     * Test 9: Opportunity primary response alone cannot mark composed ready when
-     * the BOS right panel (which requires fullHydrateReady) is above fold.
+     * Test 8: Back-to-Lead / opportunity switch — hydrate guards remain authoritative.
      */
     it("opportunity BOS panel requires fullHydrateReady — primary alone does not satisfy it", () => {
         const primaryOnlyEval = evaluateComposedOpportunityDrawerPayload({
@@ -493,19 +325,6 @@ describe("Parent/child known-empty readiness stability", () => {
 
     // ── Opportunity pre-reveal title ─────────────────────────────────────────────────────────────
 
-    it("AdminEntityDrawer computes opportunityPreRevealTitle from snapshot identity before full reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // Pre-reveal title memo must exist and check identity data
-        expect(drawer).toContain("opportunityPreRevealTitle");
-        // Must only derive title when identity / customer name data is present
-        expect(drawer).toContain("primaryPersonLabel");
-        // Must use formatOpportunityInquiryDrawerTitle with snapshot data
-        expect(drawer).toContain("formatOpportunityInquiryDrawerTitle(d, opportunitySingular)");
-        // First branch of drawerTitleTextResolved must prefer pre-reveal title over seed
-        expect(drawer).toContain("opportunityPreRevealTitle ||");
-        expect(drawer).toContain("opportunityQueuePreviewSeed?.title?.trim()");
-    });
-
     it("formatOpportunityInquiryDrawerTitle returns household title, not primary contact name", () => {
         const title = formatOpportunityInquiryDrawerTitle(
             {
@@ -528,23 +347,14 @@ describe("Parent/child known-empty readiness stability", () => {
         // The opportunityPreRevealTitle guard returns null in this case (checked separately)
     });
 
-    it("opportunityPreRevealTitle guard prevents 'Enrollment — ' stub when record has no identity", () => {
-        // This is the guard: !primaryPersonLabel && !customerName → return null
-        // Verify the code pattern exists in AdminEntityDrawer
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain("if (!primaryPersonLabel && !customerName) return null");
+    it("formatOpportunityInquiryDrawerTitle guard returns entity label when no identity data is present", () => {
+        const mod = readSrc("lib/admin/drawer/opportunityInquiryDrawerTitle.ts");
+        expect(mod).toContain("formatHouseholdLeadDisplayTitle");
+        expect(mod).not.toContain("AdminEntityDrawerLegacy");
+        expect(formatOpportunityInquiryDrawerTitle({}, "Lead")).toBe("Lead");
     });
 
     // ── Lead summary contacts limit ───────────────────────────────────────────────────────────────
-
-    it("FamilyContactsPanel limits lead summary to primary + one additional contact", () => {
-        const src = readSrc("components/admin/opportunity/FamilyContactsPanel.tsx");
-        expect(src).toContain("SUMMARY_VISIBLE_ADDITIONAL_COUNT = 1");
-        expect(src).toContain("additionalContactsForRender");
-        expect(src).toContain("allSorted.slice(0, SUMMARY_VISIBLE_ADDITIONAL_COUNT)");
-        expect(src).not.toContain("overflowCount");
-        expect(src).not.toMatch(/variant === "summary"[\s\S]{0,120}Additional contacts/);
-    });
 
     it("lead summary contact cap: primary + at most one additional person in final collection", () => {
         const primaryId = "person-primary";
@@ -586,19 +396,11 @@ describe("Parent/child known-empty readiness stability", () => {
 
     // ── Speed pass: early prefetch + composed payload cache ──────────────────────────────────────
 
-    it("AdminEntityDrawer fires linked person prefetch on opportunityPrimaryHydrateApplied, not drawerReady", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // The prefetch effect condition must be opportunityPrimaryHydrateApplied
-        expect(src).toContain("!opportunityPrimaryHydrateApplied || !data || !dataMatchesDrawer");
-        // The old gate (!drawerReady) must NOT be the condition for the opportunity prefetch effect
-        expect(src).not.toContain("if (!drawerReady || !data || !dataMatchesDrawer) return;\n        if (opportunityLinkedPersonsPrefetchedRef");
-    });
-
-    it("AdminEntityDrawer imports and uses composedPersonPayloadCache", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
+    it("composedPersonPayloadCache module exports ready markers for person drawer contexts", () => {
+        const src = readSrc("lib/admin/composedPersonPayloadCache.ts");
         expect(src).toContain("isComposedPersonPayloadRecentlyReady");
         expect(src).toContain("putComposedPersonPayloadReady");
-        expect(src).toContain("putComposedPersonPayloadReady(personDrawerComposedContextKey)");
+        expect(src).toContain("personDrawerComposedContextKey");
     });
 
     it("child readiness with no medical data is stable across repeated evaluations", () => {
@@ -681,18 +483,11 @@ describe("composedPersonPayloadCache", () => {
         expect(isComposedPersonPayloadRecentlyReady("")).toBe(false);
     });
 
-    it("AdminEntityDrawer populates cache on readiness transition and checks it before fetch", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(src).toContain("putComposedPersonPayloadReady(personDrawerComposedContextKey)");
-        expect(src).toContain("isComposedPersonPayloadRecentlyReady(contextKey)");
-        expect(src).toContain("drawer-payload:cache-hit");
+    it("composedPersonPayloadCache module defines TTL and context-key semantics", () => {
+        const src = readSrc("lib/admin/composedPersonPayloadCache.ts");
+        expect(src).toContain("putComposedPersonPayloadReady");
+        expect(src).toContain("isComposedPersonPayloadRecentlyReady");
+        expect(src).toContain("TTL_MS");
     });
 
-    it("opportunity prefetch fires on primary hydrate not full hydrate", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // Dependency array must contain opportunityPrimaryHydrateApplied
-        expect(src).toContain("opportunityPrimaryHydrateApplied,");
-        // The prefetch effect must NOT gate on drawerReady
-        expect(src).toContain("!opportunityPrimaryHydrateApplied || !data || !dataMatchesDrawer");
-    });
 });

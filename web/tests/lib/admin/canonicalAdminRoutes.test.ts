@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
     CANONICAL_ADMIN_CONFIG_LANDING,
-    CANONICAL_ADMIN_WORKSPACE,
     CANONICAL_OPERATOR_BASE,
     isCanonicalDrawerHostPath,
     isCanonicalWorkspacePath,
@@ -14,16 +13,18 @@ import {
 import { operatorWorkUnitHrefFromKey, parseOperatorWorkUnitPath, normalizeOperatorPathname } from "@/lib/admin/canonicalOperatorRoutes";
 
 describe("canonicalAdminRoutes", () => {
-    it("maps transitional adminV2 paths to canonical /settings", () => {
+    it("maps transitional roots to Organization and settings subpaths to /settings", () => {
         expect(normalizeTransitionalAdminPath("/adminV2")).toBe(CANONICAL_ADMIN_CONFIG_LANDING);
+        expect(normalizeTransitionalAdminPath("/adminV2/settings")).toBe("/organization");
+        expect(normalizeTransitionalAdminPath("/adminV2/settings/organization")).toBe("/organization");
         expect(normalizeTransitionalAdminPath("/adminV2/settings/lifecycle")).toBe(
             "/settings/lifecycle",
         );
     });
 
-    it("redirects legacy admin financials to legacy-admin", () => {
-        expect(legacyAdminRedirectTarget("/admin/financials")).toBe("/legacy-admin/financials");
-        expect(legacyAdminRedirectTarget("/admin/opportunities")).toBe("/legacy-admin/opportunities");
+    it("redirects non-canonical /admin bookmarks to operator workspace", () => {
+        expect(legacyAdminRedirectTarget("/admin/financials")).toBe("/workspace");
+        expect(legacyAdminRedirectTarget("/admin/opportunities")).toBe("/workspace");
     });
 
     it("does not redirect canonical admin workspace or settings", () => {
@@ -41,11 +42,23 @@ describe("canonicalAdminRoutes", () => {
         expect(isCanonicalDrawerHostPath("/workspace/work-unit/new-leads")).toBe(true);
     });
 
-    it("suppresses marketing chrome for canonical /settings URLs", () => {
+    it("suppresses marketing chrome for Organization and canonical /settings URLs", () => {
+        expect(isPublicMarketingChromeSuppressedPath("/organization")).toBe(true);
         expect(isPublicMarketingChromeSuppressedPath("/settings")).toBe(true);
         expect(isPublicMarketingChromeSuppressedPath("/settings/business-processes")).toBe(true);
         expect(isPublicMarketingChromeSuppressedPath("/settings/layouts")).toBe(true);
         expect(isPublicMarketingChromeSuppressedPath("/platform")).toBe(false);
+        /*
+         * A PAYER AUTHORIZING A BANK DEBIT IS NOT A VISITOR.
+         *
+         * Measured on deployed staging before this: `/bank-setup/<token>` rendered inside the
+         * marketing site, so the mandate sat between a Sign In link and a copyright footer —
+         * inviting the one person on that page who has no account to go and look for one.
+         */
+        expect(isPublicMarketingChromeSuppressedPath("/bank-setup/abc123")).toBe(true);
+        expect(isPublicMarketingChromeSuppressedPath("/bank-setup")).toBe(true);
+        /* And the same judgement already made for the sibling participant surface. */
+        expect(isPublicMarketingChromeSuppressedPath("/tour-booking/abc123")).toBe(true);
     });
 
     it("builds operator work unit hrefs without department or uuid segments", () => {

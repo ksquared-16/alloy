@@ -4,12 +4,14 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
+    LIFECYCLE_ACTIVATION_METADATA_KEY,
     lifecycleActivationFromMetadata,
-    mergeLifecycleActivationIntoMetadata,
     parseLifecycleActivationV1,
     type LifecycleActivationV1,
 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { deleteActivationLifecycleForDepartment } from "@/lib/lifecycle/lifecycleActivationOwned";
+import { mergeCategoryFDepartmentMetadata } from "@/lib/lifecycle/mergeCategoryFDepartmentMetadata";
+import { BUSINESS_PROCESS_ACTIVATE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 async function loadDepartment(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -52,9 +54,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 export async function PATCH(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_ACTIVATE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
@@ -73,25 +74,46 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const parsed = parseLifecycleActivationV1(body);
-    if (!parsed) {
-        return NextResponse.json({ error: "Invalid activation payload" }, { status: 400 });
-    }
-
-    const activation: LifecycleActivationV1 = {
-        ...parsed,
-        updated_at: new Date().toISOString(),
-    };
-
     try {
         const row = await loadDepartment(ctx.orgId, departmentId);
         if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        /**
+         * PATCH means PATCH: a key absent from the body leaves the persisted value alone.
+         *
+         * This handler used to parse the body alone and write the result wholesale, so the verb
+         * said "partial" while the semantics were "replace". That obliged every caller to rebuild
+         * the entire bundle from component state, and the client duly defaulted
+         * `action_definition_id` to null and `action_placement_ids` to [] on every call — so
+         * renaming the lifecycle silently cleared both, and any field whose state had not resolved
+         * yet was persisted as whatever the client happened to hold (R-009).
+         *
+         * Merging the body's PRESENT keys over the persisted bundle makes absence mean "unchanged",
+         * while an explicit `null` still clears — which is what callers clearing a work unit send.
+         * Validation is unchanged: the merged object is parsed as a complete bundle, so a first
+         * save with no persisted activation behaves exactly as it did before.
+         */
+        const existing = lifecycleActivationFromMetadata(row.metadata);
+        const merged = existing ? { ...existing, ...body } : body;
+
+        const parsed = parseLifecycleActivationV1(merged);
+        if (!parsed) {
+            return NextResponse.json({ error: "Invalid activation payload" }, { status: 400 });
+        }
+
+        const activation: LifecycleActivationV1 = {
+            ...parsed,
+            updated_at: new Date().toISOString(),
+        };
 
         const metadata =
             row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
                 ? (row.metadata as Record<string, unknown>)
                 : {};
-        const nextMeta = mergeLifecycleActivationIntoMetadata(metadata, activation);
+        // Category F — activation sibling only; never rewrite publication-owned builder.
+        const nextMeta = mergeCategoryFDepartmentMetadata(metadata, {
+            [LIFECYCLE_ACTIVATION_METADATA_KEY]: activation,
+        });
 
         const supabase = createAdminClient();
         const { error } = await supabase
@@ -111,9 +133,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_ACTIVATE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);

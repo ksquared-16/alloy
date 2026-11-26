@@ -1,0 +1,155 @@
+RESP 200 /api/admin/scheduling?view=assignment_types ok=true
+RESP 200 /api/admin/scheduling?view=sites ok=true
+RESP 200 /api/admin/scheduling?view=assignment_types ok=true
+RESP 200 /api/admin/scheduling?view=sites ok=true
+RESP 500 /api/admin/scheduling?view=assignment_roster&site_location_id=1a5644a7-45c4-413b-9021-5f556118b6e2 ok=false
+BODY {"error":"column schedule_assignments.weekdays does not exist","code":"db_error"}
+RESP 500 /api/admin/scheduling?view=assignment_roster&site_location_id=1a5644a7-45c4-413b-9021-5f556118b6e2 ok=false
+directAPI={"status":500,"text":"{\"error\":\"column schedule_assignments.weekdays does not exist\",\"code\":\"db_error\"}"}
+BODY {"error":"column schedule_assignments.weekdays does not exist","code":"db_error"}
+RESP 200 /api/admin/scheduling?view=overview&site_location_id=1a5644a7-45c4-413b-9021-5f556118b6e2 ok=true
+RESP 200 /api/admin/scheduling?view=roster&site_location_id=1a5644a7-45c4-413b-9021-5f556118b6e2 ok=true
+rosterUI=
+Assignments
+
+North Campus · operational
+
+Site
+Select…
+North Campus
+South Campus
+West Campus
+Add Assignment
+Actions
+Close
+Work
+Studio
+Overview
+Roster
+Attendance
+
+ASSIGNMENT HEALTH
+
+0Missing assignments
+
+—
+
+0Multiple
+
+—
+
+0Upcoming
+
+—
+
+0Future primary
+
+—
+
+0Conflicts
+
+—
+
+0Expiring soon
+
+—
+
+Assignments
+Room board
+
+No assignments at North Campus
+
+Proposed and committed assignments appear here with room, Assignment Kind, role, and lifecycle state.
+RESP 200 /api/admin/scheduling?view=calculations ok=true
+RESP 200 /api/admin/scheduling?view=studio_config&site_location_id=1a5644a7-45c4-413b-9021-5f556118b6e2 ok=true
+RESP 200 /api/admin/scheduling?view=studio_config&site_location_id=1a5644a7-45c4-413b-9021-5f556118b6e2 ok=true
+editor=
+Assignments
+
+North Campus · operational
+
+Site
+Select…
+North Campus
+South Campus
+West Campus
+Close
+Work
+Studio
+Assignment Kinds
+Patterns
+Validation
+
+STUDIO INVENTORY
+
+8Assignment Kinds
+
+—
+
+6Patterns
+
+—
+
+ASSIGNMENT KINDS
+
+Assignment Kinds define what an assignment represents and which spaces, programs, operational effects, and financial relationships may apply at North Campus.
+
+Create Kind
+
+Primary Classroom
+
+Active · Space optional
+
+Edit
+Archive
+
+Before Care
+
+Active · Space optional
+
+Edit
+Archive
+
+After Care
+
+Active · Space optional
+
+Edit
+Archive
+
+Enrichment
+
+Active · Space optional
+
+Edit
+Archive
+
+Transportation
+
+Active · Space optional
+
+Edit
+Archive
+
+Therapy
+
+Active · Space optional
+
+Edit
+Archive
+
+Recurring Service
+
+Active · Space optional
+
+Edit
+Archive
+
+Homeroom
+
+Active · Can be primary · Space required
+
+Edit
+Archive
+spaceReq=0
+eligible=0

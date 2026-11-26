@@ -1,0 +1,14 @@
+web/lib/layout/featureFlag.ts:266:function isDrawerSummaryStripBoundaryDefaultOn(): boolean {
+web/lib/layout/featureFlag.ts:286:export function isDrawerSummaryStripBoundaryEnabledServer(): boolean {
+web/lib/layout/featureFlag.ts:287:    return readFlag(process.env.DRAWER_SUMMARY_STRIP_BOUNDARY, isDrawerSummaryStripBoundaryDefaultOn());
+web/lib/layout/featureFlag.ts:290:export function isDrawerSummaryStripBoundaryEnabledClient(): boolean {
+web/lib/layout/featureFlag.ts:291:    return readFlag(process.env.NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY, isDrawerSummaryStripBoundaryDefaultOn());
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:7:    isDrawerSummaryStripBoundaryEnabledClient,
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:8:    isDrawerSummaryStripBoundaryEnabledServer,
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:35:        expect(isDrawerSummaryStripBoundaryEnabledClient()).toBe(false);
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:36:        expect(isDrawerSummaryStripBoundaryEnabledServer()).toBe(false);
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:42:        expect(isDrawerSummaryStripBoundaryEnabledClient()).toBe(true);
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:47:        expect(isDrawerSummaryStripBoundaryEnabledServer()).toBe(true);
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:52:        expect(isDrawerSummaryStripBoundaryEnabledClient()).toBe(true);
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:58:        expect(isDrawerSummaryStripBoundaryEnabledClient()).toBe(false);
+web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts:61:        expect(isDrawerSummaryStripBoundaryEnabledServer()).toBe(true);

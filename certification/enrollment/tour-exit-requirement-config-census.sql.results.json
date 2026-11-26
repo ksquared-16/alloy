@@ -1,0 +1,328 @@
+{
+  "trusted_host_action_id": "tha_ed372742a7290f",
+  "query_hash": "d8464f713705f0186368b19c152d147d2aaa579ab24aa2b58a85830354b8937e",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-13T02:10:50.190Z",
+    "question_ids": [
+      "q1_shape",
+      "q2_stages",
+      "q3_tour_stage_verbatim"
+    ],
+    "questions": {
+      "q1_shape": {
+        "question_id": "q1_shape",
+        "row_count": null,
+        "rows": [
+          "dept=04958a78-32ca-4091-bcd3-4bbaef3fee4b | metadata_keys=audience,growth_capabilities,onboarding_lane,opportunity_attention_rules,tenant_slice | lifecycle_builder_v1=absent | processes=absent",
+          "dept=17820bbd-50c6-40b7-8c99-9613023292fd | metadata_keys=scaffold_note,tenant_slice | lifecycle_builder_v1=absent | processes=absent",
+          "dept=3933ac47-077a-4de8-aaac-8aed48d80413 | metadata_keys=lifecycle_actions_matrix_order_v1,lifecycle_activation_v1,lifecycle_builder_owned_v1,lifecycle_builder_stage_field_rules_v1,lifecycle_builder_v1,lifecycle_progression_requirements_v1 | lifecycle_builder_v1=object | processes=array",
+          "dept=5f6bba4c-9d69-4b61-940f-c32fb165ba2e | metadata_keys=scaffold_note,tenant_slice | lifecycle_builder_v1=absent | processes=absent",
+          "dept=f73bb50f-01cd-4789-a199-9e7b2866862b | metadata_keys=scaffold_note,tenant_slice | lifecycle_builder_v1=absent | processes=absent"
+        ]
+      },
+      "q2_stages": {
+        "question_id": "q2_stages",
+        "row_count": null,
+        "rows": [
+          "stage_key=decision | label=Decision | stage_object_keys=action_catalog_v1,allow_skipping,grain,id,is_active,key,label,queue_membership_v1,requirements_v1,sort_order,stage_annotations_v1,stage_operating_plan_v1,status_rollup_v1,subject_resolution_strategy,track_key",
+          "stage_key=enrolled | label=Enrolled | stage_object_keys=action_catalog_v1,allow_skipping,grain,id,is_active,key,label,queue_membership_v1,requirements_v1,sort_order,stage_annotations_v1,stage_operating_plan_v1,status_rollup_v1,subject_resolution_strategy,track_key",
+          "stage_key=enrolling | label=Enrolling | stage_object_keys=action_catalog_v1,allow_skipping,grain,id,is_active,key,label,queue_membership_v1,requirements_v1,sort_order,stage_annotations_v1,stage_operating_plan_v1,status_rollup_v1,subject_resolution_strategy,track_key",
+          "stage_key=lead | label=Lead | stage_object_keys=action_catalog_v1,allow_skipping,description,grain,id,is_active,key,label,perspectives_v1,queue_membership_v1,requirements_v1,sort_order,stage_annotations_v1,stage_operating_plan_v1,status_rollup_v1,subject_resolution_strategy,track_key",
+          "stage_key=tour | label=Tour | stage_object_keys=action_catalog_v1,allow_skipping,description,grain,id,is_active,key,label,queue_membership_v1,requirements_v1,sort_order,stage_annotations_v1,stage_operating_plan_v1,status_rollup_v1,subject_resolution_strategy,track_key",
+          "stage_key=waitlist | label=Waitlist | stage_object_keys=action_catalog_v1,allow_skipping,description,grain,id,is_active,key,label,queue_membership_v1,requirements_v1,sort_order,stage_annotations_v1,stage_operating_plan_v1,status_rollup_v1,subject_resolution_strategy,track_key"
+        ]
+      },
+      "q3_tour_stage_verbatim": {
+        "question_id": "q3_tour_stage_verbatim",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "34c63d23-4b43-42d7-bde8-2a7899c66eaf",
+            "key": "tour",
+            "grain": "family",
+            "label": "Tour",
+            "is_active": true,
+            "track_key": "family_track",
+            "sort_order": 2,
+            "description": "Scheduled and Completed Tours",
+            "allow_skipping": false,
+            "requirements_v1": {
+              "version": 1,
+              "requirements": [
+                {
+                  "kind": "field",
+                  "level": "required",
+                  "rule_id": "opportunity:tour_date",
+                  "requirement_id": "legacy:field:opportunity:tour_date"
+                },
+                {
+                  "kind": "field",
+                  "level": "required",
+                  "rule_id": "opportunity:tour_time",
+                  "requirement_id": "legacy:field:opportunity:tour_time"
+                },
+                {
+                  "kind": "work",
+                  "level": "required",
+                  "timing": "stage_exit",
+                  "enforcement": "blocking",
+                  "requirement_id": "work_conduct_tour",
+                  "work_template_key": "work_3",
+                  "applies_to_transition_keys": [
+                    "tour_transition_2"
+                  ]
+                }
+              ]
+            },
+            "status_rollup_v1": {
+              "version": 1,
+              "categories": [
+                {
+                  "label": "Enrollment Participation",
+                  "entity_type": "enrollment_mixed",
+                  "category_key": "enrollment_statuses",
+                  "selected_status_keys": []
+                }
+              ]
+            },
+            "action_catalog_v1": {
+              "version": 1,
+              "candidate_actions": []
+            },
+            "queue_membership_v1": {
+              "version": 1,
+              "stage_key": "tour",
+              "count_unit": "cases",
+              "subject_type": "case",
+              "lifecycle_key": "enrollment",
+              "included_status_keys": [
+                "open"
+              ],
+              "location_scope_source": null,
+              "included_disposition_keys": []
+            },
+            "stage_annotations_v1": {
+              "slots": [
+                "scheduled_datetime",
+                "location_label"
+              ]
+            },
+            "stage_operating_plan_v1": {
+              "purpose": "Book and conduct tours of the facility with interested families.",
+              "version": 1,
+              "outcomes": [
+                {
+                  "label": "Tour Scheduled",
+                  "successful": true,
+                  "outcome_key": "outcome_1",
+                  "completes_work": true,
+                  "work_template_key": "work_1"
+                },
+                {
+                  "label": "Awaiting Family Response",
+                  "outcome_key": "outcome_2",
+                  "work_template_key": "work_1"
+                },
+                {
+                  "label": "Family Declined Tour",
+                  "successful": true,
+                  "outcome_key": "outcome_3",
+                  "completes_work": true,
+                  "work_template_key": "work_1"
+                },
+                {
+                  "label": "Move to Waitlist",
+                  "successful": true,
+                  "outcome_key": "outcome_4",
+                  "completes_work": true,
+                  "work_template_key": "work_1"
+                },
+                {
+                  "label": "Closed Lost",
+                  "successful": true,
+                  "outcome_key": "outcome_5",
+                  "completes_work": true,
+                  "work_template_key": "work_1"
+                },
+                {
+                  "label": "Tour Confirmed",
+                  "successful": true,
+                  "outcome_key": "outcome_6",
+                  "completes_work": true
+                },
+                {
+                  "label": "Tour Completed — Interested",
+                  "outcome_key": "outcome_7"
+                },
+                {
+                  "label": "Tour Completed — Needs Follow-up",
+                  "outcome_key": "outcome_8"
+                },
+                {
+                  "label": "Tour Rescheduled",
+                  "outcome_key": "outcome_9"
+                },
+                {
+                  "label": "No Show",
+                  "outcome_key": "outcome_10"
+                },
+                {
+                  "label": "Tour Cancelled",
+                  "successful": true,
+                  "outcome_key": "outcome_11",
+                  "completes_work": true
+                }
+              ],
+              "stage_key": "tour",
+              "lifecycle_key": "enrollment",
+              "outcome_rules": [
+                {
+                  "targets": [
+                    {
+                      "kind": "no_movement"
+                    }
+                  ],
+                  "rule_key": "outcome_1_automation_1",
+                  "when_outcome_key": "outcome_1"
+                },
+                {
+                  "targets": [
+                    {
+                      "kind": "no_movement"
+                    }
+                  ],
+                  "rule_key": "outcome_2_automation_2",
+                  "when_outcome_key": "outcome_2"
+                },
+                {
+                  "targets": [
+                    {
+                      "kind": "move_to_stage",
+                      "transition_ref": "tour_transition_2"
+                    }
+                  ],
+                  "rule_key": "outcome_7_behavior",
+                  "when_outcome_key": "outcome_7"
+                },
+                {
+                  "targets": [
+                    {
+                      "kind": "no_movement"
+                    }
+                  ],
+                  "rule_key": "outcome_11_behavior",
+                  "when_outcome_key": "outcome_11"
+                },
+                {
+                  "targets": [
+                    {
+                      "kind": "no_movement"
+                    },
+                    {
+                      "kind": "create_needs_attention",
+                      "wait_bucket": "waiting_on_staff",
+                      "attention_reason": "Family no show."
+                    }
+                  ],
+                  "rule_key": "outcome_10_behavior",
+                  "when_outcome_key": "outcome_10"
+                },
+                {
+                  "targets": [
+                    {
+                      "kind": "move_to_stage",
+                      "transition_ref": "tour_transition_2"
+                    }
+                  ],
+                  "rule_key": "outcome_8_behavior",
+                  "when_outcome_key": "outcome_8"
+                }
+              ],
+              "work_templates": [
+                {
+                  "label": "Schedule Tour",
+                  "required": false,
+                  "due_policy": {
+                    "days": 1,
+                    "kind": "offset_days"
+                  },
+                  "outcome_refs": [
+                    {
+                      "outcome_ref": "outcome_1"
+                    },
+                    {
+                      "outcome_ref": "outcome_2"
+                    }
+                  ],
+                  "template_key": "work_1",
+                  "owner_strategy": "record_owner",
+                  "primary_action": {
+                    "action_ref": "schedule_tour"
+                  },
+                  "helpful_actions": [
+                    {
+                      "action_ref": "quick_message"
+                    }
+                  ],
+                  "work_definition_key": "manual_ad_hoc"
+                },
+                {
+                  "label": "Confirm Tour",
+                  "required": false,
+                  "due_policy": {
+                    "days": 1,
+                    "kind": "offset_days"
+                  },
+                  "outcome_refs": [
+                    {
+                      "outcome_ref": "outcome_6"
+                    }
+                  ],
+                  "template_key": "work_2",
+                  "execution_mode": "outcome_led",
+                  "owner_strategy": "record_owner",
+                  "work_definition_key": "manual_ad_hoc"
+                },
+                {
+                  "label": "Conduct Tour",
+                  "primary": true,
+                  "required": false,
+                  "due_policy": {
+                    "days": 1,
+                    "kind": "offset_days"
+                  },
+                  "outcome_refs": [
+                    {
+                      "outcome_ref": "outcome_7"
+                    },
+                    {
+                      "outcome_ref": "outcome_8"
+                    }
+                  ],
+                  "template_key": "work_3",
+                  "execution_mode": "outcome_led",
+                  "owner_strategy": "record_owner",
+                  "work_definition_key": "manual_ad_hoc"
+                }
+              ],
+              "attention_rules": [],
+              "journey_segment": "family",
+              "outgoing_transitions": [
+                {
+                  "label": "Move to Decision",
+                  "available": true,
+                  "transition_ref": "tour_transition_2",
+                  "source_stage_key": "tour",
+                  "target_stage_key": "decision"
+                }
+              ]
+            },
+            "subject_resolution_strategy": "ask_operator"
+          }
+        ]
+      }
+    },
+    "row_count": 12
+  }
+}

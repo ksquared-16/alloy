@@ -136,7 +136,7 @@ describe("row builder inside blocks", () => {
         const detailRow = rows[1];
         expect(detailRow?.columnCount).toBe(3);
         const refs = detailRow?.fields.map((f) => f.refKey) ?? [];
-        expect(refs).toEqual(["child.program", "child.desired_start_date", "child.dob_age"]);
+        expect(refs).toEqual(["child.program", "child.start_date", "child.dob_age"]);
     });
 
     it("supports multi-field row via column count patch", () => {

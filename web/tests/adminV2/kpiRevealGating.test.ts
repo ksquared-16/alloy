@@ -4,11 +4,6 @@ import {
     computeWorkspaceRevealGate,
     workspaceRevealKpiRegionReady,
 } from "@/lib/adminV2/workspaceRevealGate";
-import {
-    computeWorkUnitRevealGate,
-    workUnitRevealKpiReady,
-} from "@/lib/adminV2/workUnitRevealGate";
-
 /**
  * KPI reveal-gating (Experience Layer Phase 0 #1).
  * Locks the atomic-reveal law: KPI/health readiness is part of above-fold readiness,
@@ -76,44 +71,5 @@ describe("KPI reveal gating — workspace", () => {
                 errored: true,
             }),
         ).toBe(true);
-    });
-});
-
-describe("KPI reveal gating — work unit", () => {
-    const READY_BASE = {
-        shell_ready: true,
-        summaries_ready: true,
-        actions_ready: true,
-        rows_ready: true,
-    };
-
-    it("blocks above-fold reveal while KPI metrics are pending and the strip is shown", () => {
-        const kpi_ready = workUnitRevealKpiReady({
-            suppress_kpi_strip: false,
-            kpi_metrics_pending: true,
-        });
-        expect(kpi_ready).toBe(false);
-
-        const gate = computeWorkUnitRevealGate({ ...READY_BASE, kpi_ready });
-        expect(gate.above_fold_ready).toBe(false);
-        expect(gate.reason_if_blocked).toContain("kpi");
-    });
-
-    it("reveals once KPI metrics settle", () => {
-        const kpi_ready = workUnitRevealKpiReady({
-            suppress_kpi_strip: false,
-            kpi_metrics_pending: false,
-        });
-        expect(kpi_ready).toBe(true);
-        expect(computeWorkUnitRevealGate({ ...READY_BASE, kpi_ready }).above_fold_ready).toBe(true);
-    });
-
-    it("does not block forever: a suppressed KPI strip is ready even while metrics are pending (degraded)", () => {
-        const kpi_ready = workUnitRevealKpiReady({
-            suppress_kpi_strip: true,
-            kpi_metrics_pending: true,
-        });
-        expect(kpi_ready).toBe(true);
-        expect(computeWorkUnitRevealGate({ ...READY_BASE, kpi_ready }).above_fold_ready).toBe(true);
     });
 });

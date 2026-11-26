@@ -1,0 +1,43 @@
+{
+  "trusted_host_action_id": "tha_3263ffc651aeb4",
+  "query_hash": "6a36de65956b35ee8a82b2fdbf22c68e88a60426abb8b57c73194e95b1ea368f",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T17:36:02.895Z",
+    "question_ids": [
+      "w13",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "w13": {
+        "question_id": "w13",
+        "row_count": null,
+        "rows": [
+          "permission_definitions ~ portal.access ~ present ~ false",
+          "role_permission_grants ~ portal.access ~ admin_orgs ~ 0",
+          "role_permission_grants ~ portal.access ~ ops_orgs ~ 0",
+          "role_definitions ~ admin ~ orgs ~ 2",
+          "role_definitions ~ ops ~ orgs ~ 2",
+          "role_permission_grants ~ portal.access ~ other_roles ~ 0",
+          "schema_migrations ~ 20260911140000 ~ present ~ false"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260911130000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          403
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}

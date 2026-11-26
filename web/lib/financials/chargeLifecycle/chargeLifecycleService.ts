@@ -17,14 +17,48 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { addDaysYmd } from "@/lib/financials/billingPeriod";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
+import {
+    EMPTY_FINANCIAL_POLICY_SCOPE,
+    policyScopeNarrowingNeeded,
+    resolveFinancialPolicyScope,
+    type FinancialPolicyScope,
+} from "@/lib/financials/policies/resolveFinancialPolicyScope";
+import type { FinancialPolicyRow } from "@/lib/financials/policies/financialPolicyTypes";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import {
+    bindChargeBillingPeriodWithBounds,
+    previewChargeBillingPeriod,
+} from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
+import {
+    chargeDateProvenance,
+    resolveChargeDateChain,
+    resolveInvoiceTimingRule,
+    type ChargeDateChain,
+    type ChargeDatePeriod,
+} from "@/lib/financials/chargeDates/resolveChargeDateChain";
+import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeTemplateTypes";
+import {
+    ineligibleChargeIntent,
     resolveChargeFromTemplate,
     type ChargeIntent,
 } from "@/lib/financials/chargeLifecycle/resolveChargeFromTemplate";
+import {
+    catalogChargeDefinition,
+    catalogChargeSnapshot,
+    evaluateCatalogCharge,
+    readCatalogChargeConfig,
+    type CatalogChargeAccount,
+} from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import {
+    catalogAmountOverrideRecord,
+    type CatalogAmountOverride,
+} from "@/lib/financials/catalogCharges/catalogAmountOverride";
+import type { CommercialProductDef } from "@/lib/commercial/execution/commercialExport";
 
 const TABLE = "charges";
 const ENROLLMENT = "enrollment_agreement";
@@ -40,16 +74,51 @@ type ChargeLifecycleRow = {
     amount_cents: number;
     occurs_on: string | null;
     billable_on: string | null;
+    due_date: string | null;
     charge_template_id: string | null;
     metadata: Record<string, unknown> | null;
 };
 
 export type SimulateArgs = {
     templateId: string;
+    /**
+     * A COMMERCIAL CATALOG ITEM instead of a template — manual Add Charge's source (`commercial_products`).
+     *
+     * Present, it wins and `templateId` is ignored: the item is judged by `evaluateCatalogCharge`
+     * (org, site, business date, one-time fee, configured amount, its own account) and then dated,
+     * reviewed and written by exactly the path a template charge takes. Absent, nothing changes.
+     */
+    catalogProductId?: string | null;
     agreementId?: string | null;
+    /**
+     * THE BILLABLE SOURCE, when it is not an enrollment agreement.
+     *
+     * A family incurs charges before anyone is enrolled — a waitlist fee, a registration fee, a
+     * deposit — and those have no agreement to hang off. `customer` is an existing canonical
+     * durable subject, so this carries the pair the charge is actually written against rather than
+     * forcing every charge through an agreement that may not exist.
+     *
+     * Absent means "agreement", which keeps every existing caller and every enrolled-child charge
+     * behaving exactly as before.
+     */
+    billableSource?: { type: "enrollment_agreement" | "customer"; id: string } | null;
+    /**
+     * THE CHILD a household charge is for, when it is for one.
+     *
+     * A per-child fee can fall due before the child has an agreement (a registration fee owed when
+     * the paperwork is done). The household is then the billable source — Financials' own answer for
+     * pre-enrolment charges — but two siblings falling due on the same day must stay two charges. The
+     * subject narrows the idempotency key to the child and is recorded on the charge, so the
+     * obligation can be found, explained and corrected per child. The payer is still the household.
+     *
+     * Ignored for an agreement source: an agreement already belongs to one child.
+     */
+    subjectCustomerMemberId?: string | null;
     occursDate?: string | null;
     eventDate?: string | null;
     servicePeriodStart?: string | null;
+    /** Add Charge's operator-chosen service date — see `ChargeResolutionContext.operatorServiceDate`. */
+    operatorServiceDate?: string | null;
     quantity?: number | null;
     unitAmountCents?: number | null;
     /**
@@ -58,6 +127,19 @@ export type SimulateArgs = {
      * existing resolver prices the charge — Consumption never reimplements pricing.
      */
     resolvedAmountCents?: number | null;
+    /**
+     * The AGREED commercial amount (cents) from an accepted `enrollment_pricing_terms` row.
+     * Authoritative over the template's `amount_strategy`; see `ChargeResolutionContext`.
+     */
+    acceptedAmountCents?: number | null;
+    /**
+     * AN AUTHORIZED PER-CHARGE AMOUNT for a catalog item (`catalogAmountOverride.ts`), validated and
+     * permission-checked by the command before it reaches here. Honoured only with `catalogProductId`:
+     * it prices this charge and is recorded on it (`metadata.amount_override`, beside the Catalog price
+     * in `metadata.catalog_item`). An amount equal to the Catalog price is no override. Absent, the
+     * Catalog price is the price, exactly as before.
+     */
+    catalogAmountOverride?: CatalogAmountOverride | null;
     today: string;
 };
 
@@ -65,10 +147,42 @@ export type DraftWriteIntent = "create" | "recalculate" | "unchanged" | "skipped
 
 export type ChargePreviewResult = {
     intent: ChargeIntent;
+    /** The operator's name for what is being charged: the template's label, or the catalog item's name. */
+    label: string;
     /** Advisory: what a draft write WOULD do. Preview writes nothing. */
     wouldWrite: DraftWriteIntent;
+    /** A catalog charge's Catalog price (cents), so a surface can show it beside an override; null otherwise. */
+    catalogPriceCents: number | null;
     existing: { id: string; status: string } | null;
 };
+
+/**
+ * A catalog item as a charge definition, or the reason this charge may not be made from it.
+ *
+ * Judged against the site THIS charge's billable source attends and the business date the intent is
+ * resolved on — the same two facts the picker judged it by.
+ */
+async function loadCatalogDefinition(
+    supabase: SupabaseClient,
+    orgId: string,
+    productId: string,
+    args: { today: string; locationId: string | null; overrideCents?: number | null },
+): Promise<{
+    template: ChargeTemplateRow;
+    catalog: { product: CommercialProductDef; account: CatalogChargeAccount | null };
+    refusal: string | null;
+}> {
+    const config = await readCatalogChargeConfig(supabase, orgId, args.today);
+    const product = config.products.find((p) => p.id === productId);
+    if (!product) fail("not_found", "Catalog item not found");
+    const evaluation = evaluateCatalogCharge(product, config, { asOf: args.today, locationIds: [args.locationId] });
+    const account = evaluation.status === "offerable" ? evaluation.account : null;
+    return {
+        template: catalogChargeDefinition({ orgId, product, account, asOf: args.today, amountCents: args.overrideCents ?? null }),
+        catalog: { product, account },
+        refusal: evaluation.status === "offerable" ? null : evaluation.reason,
+    };
+}
 
 async function loadTemplate(supabase: SupabaseClient, orgId: string, templateId: string) {
     const templates = await listChargeTemplates(supabase, orgId);
@@ -77,30 +191,63 @@ async function loadTemplate(supabase: SupabaseClient, orgId: string, templateId:
     return t;
 }
 
-/** Resolve posting-review policy for a template's context (real policy consumption). */
-async function resolveReviewPolicy(
-    supabase: SupabaseClient,
-    orgId: string,
+/**
+ * THE ORGANISATION'S FINANCIAL POLICIES, READ ONCE PER RESOLUTION.
+ *
+ * Posting review, invoice timing and the due date are three questions for the same set of rows, and
+ * loading them separately would be three reads and three chances to disagree about the window.
+ */
+async function loadChargePolicies(supabase: SupabaseClient, orgId: string): Promise<readonly FinancialPolicyRow[]> {
+    return listFinancialPolicies(supabase, orgId);
+}
+
+/**
+ * POSTING REVIEW, NARROWED BY THE SUBJECT'S OWN SCOPE.
+ *
+ * This resolved with `serviceId` alone, so a review rule scoped to a location or to one account
+ * could never match on the write path, while consumption — which passes the location — honoured it.
+ * Two writers, two answers to "does this charge need a person?". It now narrows by the same scope
+ * the due date and invoice timing use.
+ */
+function reviewRequiredByPolicy(
+    policies: readonly FinancialPolicyRow[],
     serviceId: string | null,
+    scope: FinancialPolicyScope,
     today: string,
-): Promise<boolean> {
-    const policies = await listFinancialPolicies(supabase, orgId);
-    const r = resolveFinancialPolicy(policies, "posting_review", { serviceId: serviceId ?? undefined }, today);
+): boolean {
+    const r = resolveFinancialPolicy(
+        policies,
+        "posting_review",
+        {
+            serviceId: serviceId ?? undefined,
+            locationId: scope.locationId ?? undefined,
+            customerId: scope.customerId ?? undefined,
+        },
+        today,
+    );
     return r.resolved ? r.policy.value.required === true : false;
 }
 
+/**
+ * The existing charge for this resolution key, searched IN THE SCOPE THE CHARGE WOULD BE WRITTEN.
+ *
+ * This used to be hardcoded to `enrollment_agreement`, and was only called when the caller had an
+ * agreement. A household charge therefore had no idempotency at all: two submissions of the same
+ * waitlist fee wrote two drafts, and the family owed it twice. The dedupe scope has to be the same
+ * pair the insert uses, or it is not dedupe.
+ */
 async function findExistingByResolutionKey(
     supabase: SupabaseClient,
     orgId: string,
-    agreementId: string,
+    source: { type: "enrollment_agreement" | "customer"; id: string },
     resolutionKey: string,
 ): Promise<ChargeLifecycleRow | null> {
     const { data, error } = await supabase
         .from(TABLE)
-        .select("id, status, amount_cents, occurs_on, billable_on, charge_template_id, metadata")
+        .select("id, status, amount_cents, occurs_on, billable_on, due_date, charge_template_id, metadata")
         .eq("org_id", orgId)
-        .eq("billable_source_type", ENROLLMENT)
-        .eq("billable_source_id", agreementId);
+        .eq("billable_source_type", source.type)
+        .eq("billable_source_id", source.id);
     if (error) fail("db_error", error.message);
     const rows = (data ?? []) as ChargeLifecycleRow[];
     return rows.find((c) => (c.metadata as { resolution_key?: string } | null)?.resolution_key === resolutionKey) ?? null;
@@ -111,48 +258,305 @@ function isWritable(intent: ChargeIntent): boolean {
     return intent.eligible && intent.amountCents != null && intent.amountCents > 0;
 }
 
+/**
+ * THE DATE CHAIN FOR ONE INTENT, given the billing period it belongs to.
+ *
+ * Shared by preview (period read without writing) and commit (period read back from the binding),
+ * so the two run the same pure resolver over the same kind of input and cannot disagree about the
+ * invoice date, the due date or whether the charge waits for its period.
+ */
+function chainForIntent(args: {
+    intent: ChargeIntent;
+    template: ChargeTemplateRow;
+    policies: readonly FinancialPolicyRow[];
+    period: ChargeDatePeriod | null;
+    scope: FinancialPolicyScope;
+    /** Where invoice timing narrows by site: the enrolment's, else the location whose calendar governs. */
+    invoiceLocationId: string | null;
+    createdOn: string;
+    today: string;
+    /** The period after `period`, for a late add's payment event (W7-F013). */
+    nextPeriod?: ChargeDatePeriod | null;
+}): ChargeDateChain {
+    const serviceDate = args.intent.occursOn as string;
+    const invoiceRule = resolveInvoiceTimingRule({
+        policies: args.policies,
+        template: args.template,
+        locationId: args.invoiceLocationId,
+        customerId: args.scope.customerId,
+        serviceId: args.template.service_id,
+        asOf: args.period?.startsOn ?? serviceDate,
+    });
+    return resolveChargeDateChain({
+        serviceDate,
+        period: args.period,
+        invoiceRule,
+        policies: args.policies,
+        scope: {
+            serviceId: args.template.service_id,
+            customerId: args.scope.customerId,
+            locationId: args.scope.locationId,
+        },
+        createdOn: args.createdOn,
+        businessDate: args.today,
+        nextPeriod: args.nextPeriod ?? null,
+    });
+}
+
+/**
+ * THE NEXT BILLING PERIOD, from the same calendar authority the charge's own period came from —
+ * asked only when the charge's period had already begun at creation, which is the only case whose
+ * payment event can already have passed (W7-F013). Persisted period rows win over the calendar,
+ * exactly as they do for the charge's own period. Unresolvable is null, never a guess.
+ */
+async function nextPeriodAfter(
+    supabase: SupabaseClient,
+    args: { orgId: string; source: { type: string; id: string } | null; period: ChargeDatePeriod | null; createdOn: string },
+): Promise<ChargeDatePeriod | null> {
+    if (!args.source || !args.period || args.period.startsOn > args.createdOn) return null;
+    const found = await previewChargeBillingPeriod(supabase, {
+        orgId: args.orgId,
+        billableSourceType: args.source.type,
+        billableSourceId: args.source.id,
+        placementDate: addDaysYmd(args.period.endsOn, 1),
+    });
+    return found.kind === "resolved" ? found.period : null;
+}
+
+/** Apply a resolved chain to the intent: the chain is the authority for every date it decides. */
+function applyChain(intent: ChargeIntent, chain: ChargeDateChain): void {
+    intent.dateChain = chain;
+    intent.billableOn = chain.invoice.actual;
+    intent.dueDate = chain.due.actual;
+    intent.lifecycleStatus = chain.posting.gate === "awaits_period" ? "scheduled" : "draft";
+}
+
+/** The day this draft was first created, so a recalculation never re-dates its invoice forward. */
+function createdOnOf(existing: ChargeLifecycleRow | null, today: string): string {
+    const dates = (existing?.metadata as { charge_dates?: { created_on?: unknown } } | null)?.charge_dates;
+    const v = typeof dates?.created_on === "string" ? dates.created_on : "";
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : today;
+}
+
+/** The child a household charge is for — only ever a household (customer) source's narrowing. */
+function subjectOf(args: Pick<SimulateArgs, "billableSource" | "subjectCustomerMemberId">): string | null {
+    const child = typeof args.subjectCustomerMemberId === "string" ? args.subjectCustomerMemberId.trim() : "";
+    return child && args.billableSource?.type === "customer" ? child : null;
+}
+
+/** The idempotency scope: the billable source, narrowed to the child when a household charge is for one. */
+function scopeKeyFor(source: { type: string; id: string }, subjectCustomerMemberId: string | null | undefined): string {
+    const child = typeof subjectCustomerMemberId === "string" ? subjectCustomerMemberId.trim() : "";
+    return source.type === "customer" && child ? `${source.id}:child:${child}` : source.id;
+}
+
 /** Resolve a Charge intent + idempotency status for a template/context. No write. */
 export async function previewTemplateCharge(
     supabase: SupabaseClient,
     orgId: string,
     args: SimulateArgs,
 ): Promise<ChargePreviewResult> {
-    const template = await loadTemplate(supabase, orgId, args.templateId);
-    const reviewByPolicy = await resolveReviewPolicy(supabase, orgId, template.service_id, args.today);
-    const intent = resolveChargeFromTemplate(template, {
+    return (await resolveTemplateCharge(supabase, orgId, args)).result;
+}
+
+/** What the write path needs to re-run the chain against the period it actually binds. */
+type ResolutionContext = {
+    template: ChargeTemplateRow;
+    /** The catalog item this charge is made from, when it is one; null for a template charge. */
+    catalog: { product: CommercialProductDef; account: CatalogChargeAccount | null } | null;
+    /** The authorized per-charge amount that priced this catalog charge, when one did. */
+    amountOverride: CatalogAmountOverride | null;
+    policies: readonly FinancialPolicyRow[];
+    existing: ChargeLifecycleRow | null;
+    /** The scope the chain narrowed by (the subject's, completed by the household the period resolved). */
+    chainScope: FinancialPolicyScope;
+    invoiceLocationId: string | null;
+};
+
+async function resolveTemplateCharge(
+    supabase: SupabaseClient,
+    orgId: string,
+    args: SimulateArgs,
+): Promise<{ result: ChargePreviewResult; ctx: ResolutionContext }> {
+    const catalogProductId = (args.catalogProductId ?? "").trim();
+    const policies = await loadChargePolicies(supabase, orgId);
+    const source = billableSourceFor(args);
+    /*
+     * THE SUBJECT'S SCOPE, read only when some rule of a type this resolution consumes is scoped to an
+     * account or a site — otherwise it cannot change any answer and the round trip is skipped. A
+     * catalog item ALWAYS needs it: its own location scope is checked against the site it names.
+     */
+    const scope = source && (
+        catalogProductId
+        || policyScopeNarrowingNeeded(policies, "due_date")
+        || policyScopeNarrowingNeeded(policies, "posting_review")
+        || policyScopeNarrowingNeeded(policies, "invoice_timing")
+    )
+        ? await resolveFinancialPolicyScope(supabase, {
+              orgId,
+              billableSourceType: source.type,
+              billableSourceId: source.id,
+          })
+        : EMPTY_FINANCIAL_POLICY_SCOPE;
+    const override = catalogProductId ? args.catalogAmountOverride ?? null : null;
+    const loaded = catalogProductId
+        ? await loadCatalogDefinition(supabase, orgId, catalogProductId, { today: args.today, locationId: scope.locationId, overrideCents: override?.amountCents ?? null })
+        : { template: await loadTemplate(supabase, orgId, args.templateId), catalog: null, refusal: null };
+    const template = loaded.template;
+    const scopeKey = source?.id ? scopeKeyFor(source, args.subjectCustomerMemberId) : "org";
+    /* The override that actually applies: one equal to the Catalog price changes nothing. */
+    const appliedOverride = override && loaded.catalog && override.amountCents !== loaded.catalog.product.amountCents ? override : null;
+    let intent = loaded.refusal
+        ? ineligibleChargeIntent(template, loaded.refusal, `tpl:${template.template_key}:pending:${scopeKey}`)
+        : resolveChargeFromTemplate(template, {
         today: args.today,
         eventDate: args.eventDate,
         servicePeriodStart: args.servicePeriodStart,
+        operatorServiceDate: args.operatorServiceDate,
         resolvedAmountCents: args.resolvedAmountCents,
+        acceptedAmountCents: args.acceptedAmountCents,
         quantity: args.quantity,
         unitAmountCents: args.unitAmountCents,
-        reviewRequiredByPolicy: reviewByPolicy,
-        scopeKey: args.agreementId ?? "org",
+        reviewRequiredByPolicy: reviewRequiredByPolicy(policies, template.service_id, scope, args.today),
+        /*
+         * THE SCOPE IS THE BILLABLE SOURCE, not the agreement.
+         *
+         * `tpl:<key>:<occurs_on>:<scopeKey>` was scoped to the agreement id, falling back to the
+         * literal `"org"`. For a household charge that fallback made the key ORG-WIDE: two different
+         * families' registration fees resolved to the same key on the same day. Scoping to the
+         * source id makes the key mean what it says — this template, this date, this payer.
+         */
+        scopeKey,
     });
 
     let existing: ChargeLifecycleRow | null = null;
-    if (intent.eligible && args.agreementId) {
-        existing = await findExistingByResolutionKey(supabase, orgId, args.agreementId, intent.resolutionKey);
+    if (intent.eligible && source) {
+        existing = await findExistingByResolutionKey(supabase, orgId, source, intent.resolutionKey);
+    }
+
+    /*
+     * ── AN OVERRIDE BELONGS TO ONE CHARGE, SO IT NEVER REPRICES ANOTHER ──────────────────────
+     *
+     * The resolution key has no amount in it: the same item, payer, subject and day is one charge,
+     * and a re-run recalculates its draft. That convergence must not become a way to reprice a draft
+     * someone already priced by hand — or to quietly put an overridden draft back to the Catalog
+     * price. So when either the request or the existing draft carries an override and their amounts
+     * differ, this refuses and says which charge already stands.
+     */
+    if (loaded.catalog && existing && existing.status === "draft" && intent.eligible && existing.amount_cents !== intent.amountCents) {
+        const priorOverride = (existing.metadata as Record<string, unknown> | null)?.amount_override;
+        if (appliedOverride || priorOverride) {
+            const money = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: intent.currencyCode || "USD" });
+            intent = ineligibleChargeIntent(
+                template,
+                `A draft of this charge for the same date already exists at ${money(Number(existing.amount_cents))}. Change or cancel that draft instead of adding it again at ${money(Number(intent.amountCents))}.`,
+                intent.resolutionKey,
+            );
+        }
+    }
+
+    /*
+     * ── SERVICE DATE → BILLING PERIOD → INVOICE → DUE → POSTING ──────────────────────────────
+     *
+     * The period is resolved from the SERVICE DATE (Director decision, W7): invoice timing decides
+     * when we bill, never which interval the obligation belongs to. Read without writing — a
+     * preview mints no billing period. A refusal (no calendar, an ambiguous household) is carried
+     * on the intent so the surface can say so; the write path will refuse the same way.
+     */
+    let invoiceLocationId = scope.locationId;
+    let chainScope = scope;
+    if (intent.eligible && intent.occursOn) {
+        let period: ChargeDatePeriod | null = null;
+        if (source) {
+            const found = await previewChargeBillingPeriod(supabase, {
+                orgId,
+                billableSourceType: source.type,
+                billableSourceId: source.id,
+                placementDate: intent.occursOn,
+            });
+            if (found.kind === "resolved") {
+                period = found.period;
+                invoiceLocationId = scope.locationId ?? found.calendarSourceLocationId;
+                chainScope = { customerId: scope.customerId ?? found.customerId, locationId: scope.locationId };
+            } else if (found.kind === "unresolved") {
+                intent.periodIssue = { code: found.code, message: found.message };
+            }
+        }
+        const createdOn = createdOnOf(existing, args.today);
+        applyChain(intent, chainForIntent({
+            intent,
+            template,
+            policies,
+            period,
+            scope: chainScope,
+            invoiceLocationId,
+            createdOn,
+            today: args.today,
+            nextPeriod: await nextPeriodAfter(supabase, { orgId, source, period, createdOn }),
+        }));
     }
 
     let wouldWrite: DraftWriteIntent;
-    if (!isWritable(intent) || !args.agreementId) {
+    if (!isWritable(intent) || !source) {
         wouldWrite = "not_writable";
     } else if (!existing) {
         wouldWrite = "create";
     } else if (existing.status !== "draft") {
         wouldWrite = "skipped_posted";
-    } else if (existing.amount_cents !== intent.amountCents || existing.billable_on !== intent.billableOn) {
+    } else if (
+        existing.amount_cents !== intent.amountCents
+        || existing.billable_on !== intent.billableOn
+        /*
+         * THE DUE DATE IS PART OF THE INTENT, SO IT IS PART OF CONVERGENCE.
+         *
+         * Only amount and billable date were compared, so a tenant who authored due-date terms
+         * after a draft already stood never saw them reach it: the rerun answered `unchanged` and
+         * the charge kept reading "No configured terms" forever. Measured on the certification
+         * tenant, whose due-date policies begin 2026-09-18 while the September obligations invoice
+         * on 2026-09-01.
+         *
+         * Guarded on a resolved date so an organisation with NO due-date policy keeps today's
+         * behaviour exactly — a null intent never rewrites a date a charge already carries.
+         */
+        || (intent.dueDate != null && existing.due_date !== intent.dueDate)
+    ) {
         wouldWrite = "recalculate";
     } else {
         wouldWrite = "unchanged";
     }
 
-    return { intent, wouldWrite, existing: existing ? { id: existing.id, status: existing.status } : null };
+    return {
+        result: {
+            intent,
+            label: template.label,
+            wouldWrite,
+            existing: existing ? { id: existing.id, status: existing.status } : null,
+            catalogPriceCents: loaded.catalog ? loaded.catalog.product.amountCents : null,
+        },
+        ctx: { template, catalog: loaded.catalog, amountOverride: appliedOverride, policies, existing, chainScope, invoiceLocationId },
+    };
 }
 
 export type DraftWriteResult =
-    | { status: "created" | "recalculated" | "unchanged" | "skipped_posted"; chargeId: string; resolutionKey: string }
+    | {
+          status: "created" | "recalculated" | "unchanged" | "skipped_posted";
+          chargeId: string;
+          resolutionKey: string;
+          /**
+           * WHETHER THIS CHARGE IS WAITING FOR A HUMAN, as CONFIGURATION already decided.
+           *
+           * The resolver has always computed this — the template's `review_required` OR'd with the
+           * org's `posting_review` policy ("Whether draft charges require review before they can be
+           * posted") — and this function has always thrown it away. Callers could not honour a
+           * decision the tenant had already made, so every charge got the same ceremony whatever
+           * the policy said.
+           *
+           * Reported, never acted on here: this service writes drafts and only drafts, and posting
+           * stays the separate authoritative act it has always been. What changes is that a caller
+           * can now ask whether a review boundary exists before deciding to cross it.
+           */
+          reviewRequired: boolean;
+      }
     | { status: "not_writable"; reason: string };
 
 /**
@@ -160,40 +564,103 @@ export type DraftWriteResult =
  * billable source). Never posts; never mutates a posted charge. Re-running with
  * the same template/context recalculates the draft (no duplicates).
  */
+/**
+ * The pair a charge is written against — resolved ONCE so the guard, the dedupe scope and the
+ * insert cannot disagree about what this charge belongs to.
+ *
+ * `agreementId` still wins when present, which is what preserves child attribution for an enrolled
+ * child. Only when there is no agreement does a customer source apply, and it must be stated
+ * explicitly by the caller — this never invents one.
+ */
+function billableSourceFor(
+    args: SimulateArgs,
+): { type: "enrollment_agreement" | "customer"; id: string } | null {
+    if (args.agreementId) return { type: ENROLLMENT, id: args.agreementId };
+    if (args.billableSource?.id) return { type: args.billableSource.type, id: args.billableSource.id };
+    return null;
+}
+
 export async function writeTemplateDraftCharge(
     supabase: SupabaseClient,
     orgId: string,
     args: SimulateArgs & { actorUserId?: string | null },
 ): Promise<DraftWriteResult> {
-    if (!args.agreementId) fail("invalid_input", "an enrollment agreement is required to write a draft charge");
-    const { intent, existing, wouldWrite } = await previewTemplateCharge(supabase, orgId, args);
+    /*
+     * A BILLABLE SOURCE is required; an ENROLLMENT AGREEMENT is not.
+     *
+     * This used to demand an agreement, which is what made Financials enrollment-gated: a family
+     * with a registration fee and no enrolment had nothing to charge against. The requirement is a
+     * source — and `customer` is one. Whether a PARTICULAR charge needs an agreement stays with its
+     * template and the resolver, which is where that rule belongs.
+     */
+    const source = billableSourceFor(args);
+    if (!source) fail("invalid_input", "a billable source is required to write a draft charge");
+    const { result, ctx } = await resolveTemplateCharge(supabase, orgId, args);
+    const { intent, existing, wouldWrite } = result;
     if (wouldWrite === "not_writable") {
         return { status: "not_writable", reason: intent.eligible ? "amount_not_resolvable" : intent.reason ?? "ineligible" };
     }
     if (wouldWrite === "skipped_posted") {
-        return { status: "skipped_posted", chargeId: existing!.id, resolutionKey: intent.resolutionKey };
+        return {
+            status: "skipped_posted",
+            chargeId: existing!.id,
+            resolutionKey: intent.resolutionKey,
+            reviewRequired: intent.reviewRequired,
+        };
     }
     if (wouldWrite === "unchanged") {
-        return { status: "unchanged", chargeId: existing!.id, resolutionKey: intent.resolutionKey };
+        return {
+            status: "unchanged",
+            chargeId: existing!.id,
+            resolutionKey: intent.resolutionKey,
+            reviewRequired: intent.reviewRequired,
+        };
     }
 
-    const metadata = {
+    const catalog = ctx.catalog;
+    const metadataFor = (chain: ChargeDateChain | null | undefined) => ({
         resolution_key: intent.resolutionKey,
-        charge_template_key: intent.templateKey,
+        /* A catalog charge has no template; its item is recorded whole instead (`catalog_item`). */
+        ...(catalog ? {} : { charge_template_key: intent.templateKey }),
         gl_mapping_key: intent.glMappingKey,
         responsibility_key: intent.responsibilityKey,
         review_required: intent.reviewRequired,
         lifecycle_status: intent.lifecycleStatus,
-        source: "charge_template",
-    };
+        source: catalog ? "commercial_catalog" : "charge_template",
+        ...(catalog ? { catalog_item: catalogChargeSnapshot(catalog.product, catalog.account) } : {}),
+        /* Who changed the amount from the Catalog price, to what, and why — on the charge itself. */
+        ...(catalog && ctx.amountOverride
+            ? {
+                  amount_override: catalogAmountOverrideRecord({
+                      catalogAmountCents: catalog.product.amountCents,
+                      override: ctx.amountOverride,
+                      actorUserId: args.actorUserId ?? null,
+                      at: new Date().toISOString(),
+                  }),
+              }
+            : {}),
+        ...(subjectOf(args) ? { subject_customer_member_id: subjectOf(args) } : {}),
+        /* How every date on this charge was reached, so it can be explained without re-resolving. */
+        ...(chain ? { charge_dates: chargeDateProvenance(chain) } : {}),
+    });
 
     if (wouldWrite === "recalculate") {
+        /*
+         * The prior metadata is kept and the resolution's keys laid over it, so a recalculation does
+         * not erase what other authorities recorded on the draft (a posting gate, a failed attempt).
+         */
+        const metadata = {
+            ...((ctx.existing?.metadata ?? {}) as Record<string, unknown>),
+            ...metadataFor(intent.dateChain),
+        };
         const { data, error } = await supabase
             .from(TABLE)
             .update({
                 amount_cents: intent.amountCents,
                 occurs_on: intent.occursOn,
                 billable_on: intent.billableOn,
+                /* A recalculated draft re-dates its due date from the same terms. */
+                due_date: intent.dueDate,
                 service_id: intent.serviceId,
                 metadata,
                 updated_by: args.actorUserId ?? null,
@@ -204,8 +671,42 @@ export async function writeTemplateDraftCharge(
             .select("id")
             .single();
         if (error || !data) fail("db_error", error?.message ?? "draft recalculate failed");
-        return { status: "recalculated", chargeId: (data as { id: string }).id, resolutionKey: intent.resolutionKey };
+        return {
+            status: "recalculated",
+            chargeId: (data as { id: string }).id,
+            resolutionKey: intent.resolutionKey,
+            reviewRequired: intent.reviewRequired,
+        };
     }
+
+    /*
+     * ── CREATE: BIND THE PERIOD FROM THE SERVICE DATE, THEN DATE THE CHARGE FROM THAT PERIOD ──
+     *
+     * The binder is the only function that turns a household and a date into a period id. The
+     * chain is re-run against the period it actually bound — the same pure resolver the preview
+     * ran — so the invoice and due dates written are derived from the row this charge references.
+     */
+    const bound = await bindChargeBillingPeriodWithBounds(supabase, {
+        orgId,
+        billableSourceType: source.type,
+        billableSourceId: source.id,
+        placementDate: intent.occursOn ?? args.today,
+    });
+    if (bound.period && intent.occursOn) {
+        const createdOn = createdOnOf(ctx.existing, args.today);
+        applyChain(intent, chainForIntent({
+            intent,
+            template: ctx.template,
+            policies: ctx.policies,
+            period: bound.period,
+            scope: ctx.chainScope,
+            invoiceLocationId: ctx.invoiceLocationId,
+            createdOn,
+            today: args.today,
+            nextPeriod: await nextPeriodAfter(supabase, { orgId, source, period: bound.period, createdOn }),
+        }));
+    }
+    const metadata = metadataFor(intent.dateChain);
 
     // create
     const { data, error } = await supabase
@@ -213,8 +714,12 @@ export async function writeTemplateDraftCharge(
         .insert({
             org_id: orgId,
             job_id: null,
-            billable_source_type: ENROLLMENT,
-            billable_source_id: args.agreementId,
+            // The resolved source, not a hardcoded one. An enrolled child still writes against its
+            // agreement; a pre-enrolment family writes against the household.
+            billable_source_type: source.type,
+            billable_source_id: source.id,
+            /* The household's commercial period, bound from the SERVICE date above. */
+            ...bound.binding,
             charge_type: "fee",
             charge_category: intent.chargeCategory,
             status: "draft",
@@ -223,13 +728,50 @@ export async function writeTemplateDraftCharge(
             service_date: intent.occursOn,
             occurs_on: intent.occursOn,
             billable_on: intent.billableOn,
-            charge_template_id: intent.templateId,
+            /*
+             * WHEN PAYMENT IS EXPECTED — separate from the invoice date beside it, and written only
+             * where the organisation configured terms. `null` is the unconfigured tenant keeping
+             * exactly the behaviour it has today, not "due on the invoice date".
+             */
+            due_date: intent.dueDate,
+            /* A catalog charge references no template row; its item lives in `metadata.catalog_item`. */
+            charge_template_id: catalog ? null : intent.templateId,
             service_id: intent.serviceId,
-            description: intent.templateKey,
+            description: catalog ? catalog.product.name : intent.templateKey,
             metadata,
+            // Actor attribution. The recalculate path above already wrote `updated_by`; the create
+            // path did not, so a charge's original author was unrecoverable.
+            created_by: args.actorUserId ?? null,
+            updated_by: args.actorUserId ?? null,
         })
         .select("id")
         .single();
+    /*
+     * THE LOSER OF A RACE IS NOT AN ERROR.
+     *
+     * `charges_resolution_key_unique` makes the database the authority on "one charge per
+     * resolution key per billable source", so two runs generating the same occurrence collide here
+     * instead of both inserting. The read above cannot prevent that — it is a read — and the
+     * collision means the other writer already created exactly the charge this one was about to.
+     * So the winner is fetched and reported as `unchanged`, which is what a second identical run
+     * has always meant on this path.
+     */
+    if (error && (error as { code?: string }).code === "23505") {
+        const winner = await findExistingByResolutionKey(supabase, orgId, source, intent.resolutionKey);
+        if (winner) {
+            return {
+                status: "unchanged",
+                chargeId: winner.id,
+                resolutionKey: intent.resolutionKey,
+                reviewRequired: intent.reviewRequired,
+            };
+        }
+    }
     if (error || !data) fail("db_error", error?.message ?? "draft create failed");
-    return { status: "created", chargeId: (data as { id: string }).id, resolutionKey: intent.resolutionKey };
+    return {
+        status: "created",
+        chargeId: (data as { id: string }).id,
+        resolutionKey: intent.resolutionKey,
+        reviewRequired: intent.reviewRequired,
+    };
 }

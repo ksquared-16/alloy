@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "failures": [],
+  "candidate": {
+    "sha": "5132907da207fca17821d65c5198a8fe71b341b3",
+    "tree": "303080a80b0bfe4fc8c50b9d3772683c1a5bc28a",
+    "staging_sha": "c20315e8023b9f09e7609b2baf6f9d04739f757e",
+    "production_before_sha": "bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2",
+    "fast_forward": true,
+    "commits_ahead_of_main": 7830,
+    "tree_diff_from_staging": []
+  },
+  "migrations": 558,
+  "baseline_migrations": 229
+}

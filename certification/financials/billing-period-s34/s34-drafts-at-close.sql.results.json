@@ -1,0 +1,117 @@
+{
+  "trusted_host_action_id": "tha_596aca58cc4fa4",
+  "query_hash": "d7ccae051d1de0dc3b5e8bece9e2060c8d8b10578a9393b8d26b34826daadd84",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T18:17:48.137Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_596aca58cc4fa4",
+    "query_hash": "d7ccae051d1de0dc3b5e8bece9e2060c8d8b10578a9393b8d26b34826daadd84",
+    "authorization_id": "grnt_1883792002a24d5b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T18:17:53.495Z",
+    "question_ids": [
+      "q1",
+      "q3",
+      "q5",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "generation": "legacy",
+            "drafts": 35,
+            "bound_to_a_canonical_period": 0,
+            "legacy_only": 35,
+            "gross_cents_at_stake": 485226
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "source": "charge_template",
+            "charge_category": "one_time",
+            "billable_source_type": "enrollment_agreement",
+            "drafts": 1,
+            "oldest": "2026-08-27T23:05:01.354249+00:00",
+            "newest": "2026-08-27T23:05:01.354249+00:00",
+            "review_required_flag": 0
+          },
+          {
+            "source": "charge_template",
+            "charge_category": "tuition",
+            "billable_source_type": "enrollment_agreement",
+            "drafts": 20,
+            "oldest": "2026-09-19T02:29:35.092911+00:00",
+            "newest": "2026-09-29T03:15:04.39028+00:00",
+            "review_required_flag": 0
+          },
+          {
+            "source": "financial_reduction",
+            "charge_category": "discount",
+            "billable_source_type": "enrollment_agreement",
+            "drafts": 7,
+            "oldest": "2026-09-18T16:41:30.651423+00:00",
+            "newest": "2026-09-19T03:04:39.906241+00:00",
+            "review_required_flag": 0
+          },
+          {
+            "source": "manual_reduction",
+            "charge_category": "credit",
+            "billable_source_type": "enrollment_agreement",
+            "drafts": 6,
+            "oldest": "2026-09-13T12:21:31.19392+00:00",
+            "newest": "2026-09-14T11:14:10.093701+00:00",
+            "review_required_flag": 0
+          },
+          {
+            "source": "charge_template",
+            "charge_category": "late_pickup",
+            "billable_source_type": "enrollment_agreement",
+            "drafts": 1,
+            "oldest": "2026-08-26T19:28:02.198908+00:00",
+            "newest": "2026-08-26T19:28:02.198908+00:00",
+            "review_required_flag": 0
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "reduction_rows": 51,
+            "distinct_generations": 1,
+            "bound_to_canonical_period": 0,
+            "reversed": 13
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "status": "drafted",
+            "review_status": "pending",
+            "rows": 21,
+            "with_draft_charge": 21
+          }
+        ]
+      }
+    },
+    "row_count": 8
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "purpose": "Identify the two layouts assigned to Work Views via focus_panel_layout_id. If their layout_key is focus_panel_summary, the assignment points at a Focus Panel surface the Focus Panel runtime never reads, and the picker is offering the wrong class of layout.",
+  "requested_by": "lane_faacca6079ad",
+  "mode": "read_only",
+  "combined_query": "SELECT id, org_id, entity_type, surface, layout_key, name, status, version, updated_at FROM public.entity_layouts WHERE id IN ('9db0cc6f-cf57-4eb6-b61a-5a877657ec9c','9dedbfad-589f-480f-949c-2c5852d07e7d')\n",
+  "combined_query_hash": "37dd7cccc35e320d55ac3ddc0dbb8452bdcc513db8e8c903e431f37bc13b2160",
+  "expected_columns": [
+    "id",
+    "org_id",
+    "entity_type",
+    "surface",
+    "layout_key",
+    "name",
+    "status",
+    "version",
+    "updated_at"
+  ]
+}

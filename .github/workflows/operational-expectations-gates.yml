@@ -1,0 +1,53 @@
+# Operational Expectations certification gates — standing invariants.
+#
+# The frozen Engineering Realization §5 states: "Any gate regressing after green
+# blocks the next milestone — gates are standing invariants in CI, not one-time
+# checks." This job is what makes that true for P1's gates. Before it existed, every
+# G-* claim below was a one-time local run.
+#
+# Gates held standing here (P1 / M1):
+#   G-Modality-Closure         — authoring rejects any sixth modality
+#   G-Standing (authoring)     — no unratified deontic binds; AI cannot self-ratify
+#   G-Revision                 — revision re-plans forward; the valid past is intact
+#   G-Acyclic (P1 contribution)— every write is an authoring act; derived state is read-only
+#   G-Correction (authoring)   — correction unwinds; distinct from revision
+#
+# Scoped by design. The repository's full Vitest suite is not green at baseline, so a
+# whole-suite job could not be a gate — it would be red for reasons unrelated to
+# Operational Expectations and would be ignored within a week. A scoped job is a real
+# invariant: it is green today and any regression is unambiguously ours. This reuses
+# the pattern already established by `docs-lint.yml` (`docs-lint-tests`), which runs a
+# single scoped Vitest file the same way.
+#
+# This workflow adds no gate and changes no runtime. It only makes existing, already
+# certified gates standing.
+name: Operational Expectations gates
+
+on:
+  pull_request:
+    paths:
+      # The ledger, intake, standing/authority and resolver code + their suites.
+      - "web/**"
+      # The migration-scan certifications read supabase/migrations directly, so a
+      # migration change can regress a gate without touching web/**.
+      - "supabase/migrations/**"
+      - ".github/workflows/operational-expectations-gates.yml"
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  operational-expectations-gates:
+    name: P1 certification gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Run Operational Expectations certification suites
+        run: npm run test -- tests/operationalExpectations/

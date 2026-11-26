@@ -1,0 +1,642 @@
+{
+  "allRows": [
+    {
+      "candidateId": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "label": "1/12Adjust",
+      "position": 1,
+      "total": 12,
+      "index": 0
+    },
+    {
+      "candidateId": "e6808c7d-8382-4f54-b3bd-4ce9df70b4f5",
+      "label": "2/12Adjust",
+      "position": 2,
+      "total": 12,
+      "index": 1
+    },
+    {
+      "candidateId": "f3a7bd94-3fd4-48d4-a4b2-3e510186dc4a",
+      "label": "3/12Adjust",
+      "position": 3,
+      "total": 12,
+      "index": 2
+    },
+    {
+      "candidateId": "cb3518ba-a086-436e-b0d1-e8f7faddad1f",
+      "label": "4/12Adjust",
+      "position": 4,
+      "total": 12,
+      "index": 3
+    },
+    {
+      "candidateId": "89729749-e923-4cbc-9b11-e14b42620219",
+      "label": "5/12Adjust",
+      "position": 5,
+      "total": 12,
+      "index": 4
+    },
+    {
+      "candidateId": "fee56574-88eb-4f7e-b1c5-a635ad9f53fa",
+      "label": "6/12Adjust",
+      "position": 6,
+      "total": 12,
+      "index": 5
+    },
+    {
+      "candidateId": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "label": "7/12Adjust",
+      "position": 7,
+      "total": 12,
+      "index": 6
+    },
+    {
+      "candidateId": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "label": "8/12Adjust",
+      "position": 8,
+      "total": 12,
+      "index": 7
+    },
+    {
+      "candidateId": "b43526c6-f107-40a7-95bd-0e042a2b1028",
+      "label": "9/12Adjust",
+      "position": 9,
+      "total": 12,
+      "index": 8
+    },
+    {
+      "candidateId": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "label": "10/12Adjust",
+      "position": 10,
+      "total": 12,
+      "index": 9
+    },
+    {
+      "candidateId": "b34bbdec-fa92-4218-a3b1-e420e03d857c",
+      "label": "11/12Adjust",
+      "position": 11,
+      "total": 12,
+      "index": 10
+    },
+    {
+      "candidateId": "d1d49d72-f823-4277-9a20-99abff6f12bf",
+      "label": "12/12Adjust",
+      "position": 12,
+      "total": 12,
+      "index": 11
+    },
+    {
+      "candidateId": "83114f57-3fac-4bf0-8999-ffc9d4c26764",
+      "label": "1/1Adjust",
+      "position": 1,
+      "total": 1,
+      "index": 12
+    },
+    {
+      "candidateId": "603b6f56-aa1c-4162-bf30-eb2c4c1ffd7f",
+      "label": "1/1Adjust",
+      "position": 1,
+      "total": 1,
+      "index": 13
+    },
+    {
+      "candidateId": "33c11a4c-aff5-4160-ad9b-756507b8e6a0",
+      "label": "1/2Adjust",
+      "position": 1,
+      "total": 2,
+      "index": 14
+    },
+    {
+      "candidateId": "5c7ffc33-032d-4602-8d46-52d497a54279",
+      "label": "2/2Adjust",
+      "position": 2,
+      "total": 2,
+      "index": 15
+    },
+    {
+      "candidateId": "ba8cdcf5-73b2-43e6-8a86-aa28f1098c0e",
+      "label": "1/1Adjust",
+      "position": 1,
+      "total": 1,
+      "index": 16
+    }
+  ],
+  "before": [
+    {
+      "candidateId": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "label": "1/12Adjust",
+      "position": 1,
+      "total": 12,
+      "index": 0
+    },
+    {
+      "candidateId": "e6808c7d-8382-4f54-b3bd-4ce9df70b4f5",
+      "label": "2/12Adjust",
+      "position": 2,
+      "total": 12,
+      "index": 1
+    },
+    {
+      "candidateId": "f3a7bd94-3fd4-48d4-a4b2-3e510186dc4a",
+      "label": "3/12Adjust",
+      "position": 3,
+      "total": 12,
+      "index": 2
+    },
+    {
+      "candidateId": "cb3518ba-a086-436e-b0d1-e8f7faddad1f",
+      "label": "4/12Adjust",
+      "position": 4,
+      "total": 12,
+      "index": 3
+    },
+    {
+      "candidateId": "89729749-e923-4cbc-9b11-e14b42620219",
+      "label": "5/12Adjust",
+      "position": 5,
+      "total": 12,
+      "index": 4
+    },
+    {
+      "candidateId": "fee56574-88eb-4f7e-b1c5-a635ad9f53fa",
+      "label": "6/12Adjust",
+      "position": 6,
+      "total": 12,
+      "index": 5
+    },
+    {
+      "candidateId": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "label": "7/12Adjust",
+      "position": 7,
+      "total": 12,
+      "index": 6
+    },
+    {
+      "candidateId": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "label": "8/12Adjust",
+      "position": 8,
+      "total": 12,
+      "index": 7
+    },
+    {
+      "candidateId": "b43526c6-f107-40a7-95bd-0e042a2b1028",
+      "label": "9/12Adjust",
+      "position": 9,
+      "total": 12,
+      "index": 8
+    },
+    {
+      "candidateId": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "label": "10/12Adjust",
+      "position": 10,
+      "total": 12,
+      "index": 9
+    },
+    {
+      "candidateId": "b34bbdec-fa92-4218-a3b1-e420e03d857c",
+      "label": "11/12Adjust",
+      "position": 11,
+      "total": 12,
+      "index": 10
+    },
+    {
+      "candidateId": "d1d49d72-f823-4277-9a20-99abff6f12bf",
+      "label": "12/12Adjust",
+      "position": 12,
+      "total": 12,
+      "index": 11
+    }
+  ],
+  "afterMoveTo4": [
+    {
+      "candidateId": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "label": "1/12Adjust",
+      "position": 1,
+      "total": 12,
+      "index": 0
+    },
+    {
+      "candidateId": "e6808c7d-8382-4f54-b3bd-4ce9df70b4f5",
+      "label": "2/12Adjust",
+      "position": 2,
+      "total": 12,
+      "index": 1
+    },
+    {
+      "candidateId": "f3a7bd94-3fd4-48d4-a4b2-3e510186dc4a",
+      "label": "3/12Adjust",
+      "position": 3,
+      "total": 12,
+      "index": 2
+    },
+    {
+      "candidateId": "d1d49d72-f823-4277-9a20-99abff6f12bf",
+      "label": "4/12Adjust",
+      "position": 4,
+      "total": 12,
+      "index": 3
+    },
+    {
+      "candidateId": "cb3518ba-a086-436e-b0d1-e8f7faddad1f",
+      "label": "5/12Adjust",
+      "position": 5,
+      "total": 12,
+      "index": 4
+    },
+    {
+      "candidateId": "89729749-e923-4cbc-9b11-e14b42620219",
+      "label": "6/12Adjust",
+      "position": 6,
+      "total": 12,
+      "index": 5
+    },
+    {
+      "candidateId": "fee56574-88eb-4f7e-b1c5-a635ad9f53fa",
+      "label": "7/12Adjust",
+      "position": 7,
+      "total": 12,
+      "index": 6
+    },
+    {
+      "candidateId": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "label": "8/12Adjust",
+      "position": 8,
+      "total": 12,
+      "index": 7
+    },
+    {
+      "candidateId": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "label": "9/12Adjust",
+      "position": 9,
+      "total": 12,
+      "index": 8
+    },
+    {
+      "candidateId": "b43526c6-f107-40a7-95bd-0e042a2b1028",
+      "label": "10/12Adjust",
+      "position": 10,
+      "total": 12,
+      "index": 9
+    },
+    {
+      "candidateId": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "label": "11/12Adjust",
+      "position": 11,
+      "total": 12,
+      "index": 10
+    },
+    {
+      "candidateId": "b34bbdec-fa92-4218-a3b1-e420e03d857c",
+      "label": "12/12Adjust",
+      "position": 12,
+      "total": 12,
+      "index": 11
+    }
+  ],
+  "afterMoveTo2": [
+    {
+      "candidateId": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "label": "1/12Adjust",
+      "position": 1,
+      "total": 12,
+      "index": 0
+    },
+    {
+      "candidateId": "d1d49d72-f823-4277-9a20-99abff6f12bf",
+      "label": "2/12Adjust",
+      "position": 2,
+      "total": 12,
+      "index": 1
+    },
+    {
+      "candidateId": "e6808c7d-8382-4f54-b3bd-4ce9df70b4f5",
+      "label": "3/12Adjust",
+      "position": 3,
+      "total": 12,
+      "index": 2
+    },
+    {
+      "candidateId": "f3a7bd94-3fd4-48d4-a4b2-3e510186dc4a",
+      "label": "4/12Adjust",
+      "position": 4,
+      "total": 12,
+      "index": 3
+    },
+    {
+      "candidateId": "cb3518ba-a086-436e-b0d1-e8f7faddad1f",
+      "label": "5/12Adjust",
+      "position": 5,
+      "total": 12,
+      "index": 4
+    },
+    {
+      "candidateId": "89729749-e923-4cbc-9b11-e14b42620219",
+      "label": "6/12Adjust",
+      "position": 6,
+      "total": 12,
+      "index": 5
+    },
+    {
+      "candidateId": "fee56574-88eb-4f7e-b1c5-a635ad9f53fa",
+      "label": "7/12Adjust",
+      "position": 7,
+      "total": 12,
+      "index": 6
+    },
+    {
+      "candidateId": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "label": "8/12Adjust",
+      "position": 8,
+      "total": 12,
+      "index": 7
+    },
+    {
+      "candidateId": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "label": "9/12Adjust",
+      "position": 9,
+      "total": 12,
+      "index": 8
+    },
+    {
+      "candidateId": "b43526c6-f107-40a7-95bd-0e042a2b1028",
+      "label": "10/12Adjust",
+      "position": 10,
+      "total": 12,
+      "index": 9
+    },
+    {
+      "candidateId": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "label": "11/12Adjust",
+      "position": 11,
+      "total": 12,
+      "index": 10
+    },
+    {
+      "candidateId": "b34bbdec-fa92-4218-a3b1-e420e03d857c",
+      "label": "12/12Adjust",
+      "position": 12,
+      "total": 12,
+      "index": 11
+    }
+  ],
+  "afterSequential": [
+    {
+      "candidateId": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "label": "1/12Adjust",
+      "position": 1,
+      "total": 12,
+      "index": 0
+    },
+    {
+      "candidateId": "d1d49d72-f823-4277-9a20-99abff6f12bf",
+      "label": "2/12Adjust",
+      "position": 2,
+      "total": 12,
+      "index": 1
+    },
+    {
+      "candidateId": "cb3518ba-a086-436e-b0d1-e8f7faddad1f",
+      "label": "3/12Adjust",
+      "position": 3,
+      "total": 12,
+      "index": 2
+    },
+    {
+      "candidateId": "e6808c7d-8382-4f54-b3bd-4ce9df70b4f5",
+      "label": "4/12Adjust",
+      "position": 4,
+      "total": 12,
+      "index": 3
+    },
+    {
+      "candidateId": "f3a7bd94-3fd4-48d4-a4b2-3e510186dc4a",
+      "label": "5/12Adjust",
+      "position": 5,
+      "total": 12,
+      "index": 4
+    },
+    {
+      "candidateId": "89729749-e923-4cbc-9b11-e14b42620219",
+      "label": "6/12Adjust",
+      "position": 6,
+      "total": 12,
+      "index": 5
+    },
+    {
+      "candidateId": "fee56574-88eb-4f7e-b1c5-a635ad9f53fa",
+      "label": "7/12Adjust",
+      "position": 7,
+      "total": 12,
+      "index": 6
+    },
+    {
+      "candidateId": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "label": "8/12Adjust",
+      "position": 8,
+      "total": 12,
+      "index": 7
+    },
+    {
+      "candidateId": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "label": "9/12Adjust",
+      "position": 9,
+      "total": 12,
+      "index": 8
+    },
+    {
+      "candidateId": "b43526c6-f107-40a7-95bd-0e042a2b1028",
+      "label": "10/12Adjust",
+      "position": 10,
+      "total": 12,
+      "index": 9
+    },
+    {
+      "candidateId": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "label": "11/12Adjust",
+      "position": 11,
+      "total": 12,
+      "index": 10
+    },
+    {
+      "candidateId": "b34bbdec-fa92-4218-a3b1-e420e03d857c",
+      "label": "12/12Adjust",
+      "position": 12,
+      "total": 12,
+      "index": 11
+    }
+  ],
+  "afterReload": [
+    {
+      "candidateId": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "label": "1/12Adjust",
+      "position": 1,
+      "total": 12,
+      "index": 0
+    },
+    {
+      "candidateId": "d1d49d72-f823-4277-9a20-99abff6f12bf",
+      "label": "2/12Adjust",
+      "position": 2,
+      "total": 12,
+      "index": 1
+    },
+    {
+      "candidateId": "cb3518ba-a086-436e-b0d1-e8f7faddad1f",
+      "label": "3/12Adjust",
+      "position": 3,
+      "total": 12,
+      "index": 2
+    },
+    {
+      "candidateId": "e6808c7d-8382-4f54-b3bd-4ce9df70b4f5",
+      "label": "4/12Adjust",
+      "position": 4,
+      "total": 12,
+      "index": 3
+    },
+    {
+      "candidateId": "f3a7bd94-3fd4-48d4-a4b2-3e510186dc4a",
+      "label": "5/12Adjust",
+      "position": 5,
+      "total": 12,
+      "index": 4
+    },
+    {
+      "candidateId": "89729749-e923-4cbc-9b11-e14b42620219",
+      "label": "6/12Adjust",
+      "position": 6,
+      "total": 12,
+      "index": 5
+    },
+    {
+      "candidateId": "fee56574-88eb-4f7e-b1c5-a635ad9f53fa",
+      "label": "7/12Adjust",
+      "position": 7,
+      "total": 12,
+      "index": 6
+    },
+    {
+      "candidateId": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "label": "8/12Adjust",
+      "position": 8,
+      "total": 12,
+      "index": 7
+    },
+    {
+      "candidateId": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "label": "9/12Adjust",
+      "position": 9,
+      "total": 12,
+      "index": 8
+    },
+    {
+      "candidateId": "b43526c6-f107-40a7-95bd-0e042a2b1028",
+      "label": "10/12Adjust",
+      "position": 10,
+      "total": 12,
+      "index": 9
+    },
+    {
+      "candidateId": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "label": "11/12Adjust",
+      "position": 11,
+      "total": 12,
+      "index": 10
+    },
+    {
+      "candidateId": "b34bbdec-fa92-4218-a3b1-e420e03d857c",
+      "label": "12/12Adjust",
+      "position": 12,
+      "total": 12,
+      "index": 11
+    }
+  ],
+  "queueRank": "2/12",
+  "focusPanelRanks": [],
+  "focusPanelShowsAnyRank": false,
+  "afterClear": [
+    {
+      "candidateId": "698f850a-2441-48d5-bed3-0b0870afa848",
+      "label": "1/12Adjust",
+      "position": 1,
+      "total": 12,
+      "index": 0
+    },
+    {
+      "candidateId": "d1d49d72-f823-4277-9a20-99abff6f12bf",
+      "label": "2/12Adjust",
+      "position": 2,
+      "total": 12,
+      "index": 1
+    },
+    {
+      "candidateId": "cb3518ba-a086-436e-b0d1-e8f7faddad1f",
+      "label": "3/12Adjust",
+      "position": 3,
+      "total": 12,
+      "index": 2
+    },
+    {
+      "candidateId": "e6808c7d-8382-4f54-b3bd-4ce9df70b4f5",
+      "label": "4/12Adjust",
+      "position": 4,
+      "total": 12,
+      "index": 3
+    },
+    {
+      "candidateId": "f3a7bd94-3fd4-48d4-a4b2-3e510186dc4a",
+      "label": "5/12Adjust",
+      "position": 5,
+      "total": 12,
+      "index": 4
+    },
+    {
+      "candidateId": "89729749-e923-4cbc-9b11-e14b42620219",
+      "label": "6/12Adjust",
+      "position": 6,
+      "total": 12,
+      "index": 5
+    },
+    {
+      "candidateId": "fee56574-88eb-4f7e-b1c5-a635ad9f53fa",
+      "label": "7/12Adjust",
+      "position": 7,
+      "total": 12,
+      "index": 6
+    },
+    {
+      "candidateId": "e392cb90-29a7-4327-b91e-b063b06fa4b6",
+      "label": "8/12Adjust",
+      "position": 8,
+      "total": 12,
+      "index": 7
+    },
+    {
+      "candidateId": "17ce4d8e-3003-44a9-86a5-ba96ecda6d1c",
+      "label": "9/12Adjust",
+      "position": 9,
+      "total": 12,
+      "index": 8
+    },
+    {
+      "candidateId": "b43526c6-f107-40a7-95bd-0e042a2b1028",
+      "label": "10/12Adjust",
+      "position": 10,
+      "total": 12,
+      "index": 9
+    },
+    {
+      "candidateId": "9e230cf8-d444-4d0c-8f8b-54be3162a6ad",
+      "label": "11/12Adjust",
+      "position": 11,
+      "total": 12,
+      "index": 10
+    },
+    {
+      "candidateId": "b34bbdec-fa92-4218-a3b1-e420e03d857c",
+      "label": "12/12Adjust",
+      "position": 12,
+      "total": 12,
+      "index": 11
+    }
+  ]
+}

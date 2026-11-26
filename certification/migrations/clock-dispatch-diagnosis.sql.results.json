@@ -1,0 +1,73 @@
+{
+  "trusted_host_action_id": "tha_2e1bcecaffd903",
+  "query_hash": "f40c247dccdcb57573886fadd99ff553648e82ae724acd447e117c14624182c8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T19:06:40.941Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_2e1bcecaffd903",
+    "query_hash": "f40c247dccdcb57573886fadd99ff553648e82ae724acd447e117c14624182c8",
+    "authorization_id": "grnt_41b214c318ea4b5c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T19:06:42.876Z",
+    "question_ids": [
+      "dispatch"
+    ],
+    "questions": {
+      "dispatch": {
+        "question_id": "dispatch",
+        "row_count": null,
+        "rows": [
+          {
+            "responses_total": 2,
+            "recent_status_codes": [
+              {
+                "id": 2,
+                "status": 401,
+                "created": "2026-09-21 19:05:00.17259+00"
+              },
+              {
+                "id": 1,
+                "status": 401,
+                "created": "2026-09-21 19:00:00.191851+00"
+              }
+            ],
+            "recent_errors": [],
+            "recent_bodies": [
+              "{\"ok\":false,\"error\":\"UNAUTHORIZED\"}",
+              "{\"ok\":false,\"error\":\"UNAUTHORIZED\"}"
+            ],
+            "queue_depth": 0,
+            "cron_runs": 3,
+            "cron_recent": [
+              {
+                "at": "2026-09-21 19:05:00.131168+00",
+                "status": "succeeded",
+                "ret": "1 row"
+              },
+              {
+                "at": "2026-09-21 19:00:00.153807+00",
+                "status": "succeeded",
+                "ret": "1 row"
+              },
+              {
+                "at": "2026-09-21 18:55:00.152814+00",
+                "status": "succeeded",
+                "ret": "0 rows"
+              }
+            ],
+            "wake_url_override_set": false,
+            "observed_at": "2026-09-21 19:06:42.795761+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

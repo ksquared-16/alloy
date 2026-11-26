@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "components/adminV2/settings/lifecycle/LifecycleStageOutcomeBehaviorEditor.tsx",
+    "components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor.tsx",
+    "components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx",
+    "components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx"
+  ]
+}

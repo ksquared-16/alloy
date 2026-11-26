@@ -1,0 +1,150 @@
+{
+  "monthly": {
+    "label": "monthly account",
+    "status": 200,
+    "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "event_date": "2026-11-18",
+    "affected_id": "a57b8725-1402-42ff-a078-427305b2129b",
+    "execution_result": {
+      "write_status": "created",
+      "resolution_key": "tpl:field_trip:2026-11-18:e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "review_required": false,
+      "posted": true
+    },
+    "error": null,
+    "raw": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "write_status": "created",
+          "resolution_key": "tpl:field_trip:2026-11-18:e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+          "review_required": false,
+          "posted": true
+        },
+        "affected_id": "a57b8725-1402-42ff-a078-427305b2129b"
+      },
+      "correlation_id": "e4e0819d-7852-47b5-91de-2d2e3229bc7f"
+    }
+  },
+  "weekly": {
+    "label": "weekly account",
+    "status": 200,
+    "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+    "event_date": "2026-11-18",
+    "affected_id": "540b87f6-4d79-472c-acaa-c7361de78a38",
+    "execution_result": {
+      "write_status": "created",
+      "resolution_key": "tpl:field_trip:2026-11-18:fd000000-0000-4000-8000-0000000c0002",
+      "review_required": false,
+      "posted": true
+    },
+    "error": null,
+    "raw": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "write_status": "created",
+          "resolution_key": "tpl:field_trip:2026-11-18:fd000000-0000-4000-8000-0000000c0002",
+          "review_required": false,
+          "posted": true
+        },
+        "affected_id": "540b87f6-4d79-472c-acaa-c7361de78a38"
+      },
+      "correlation_id": "bbb5090f-d3a6-4ece-9eea-9df37252659e"
+    }
+  },
+  "biweekly": {
+    "label": "biweekly account (explicit)",
+    "status": 200,
+    "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "event_date": "2026-11-18",
+    "affected_id": "3685fc71-fe9b-4990-af07-53ff28f28a92",
+    "execution_result": {
+      "write_status": "created",
+      "resolution_key": "tpl:field_trip:2026-11-18:29944d3e-8267-45b7-8dcb-7405060e2573",
+      "review_required": false,
+      "posted": true
+    },
+    "error": null,
+    "raw": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "write_status": "created",
+          "resolution_key": "tpl:field_trip:2026-11-18:29944d3e-8267-45b7-8dcb-7405060e2573",
+          "review_required": false,
+          "posted": true
+        },
+        "affected_id": "3685fc71-fe9b-4990-af07-53ff28f28a92"
+      },
+      "correlation_id": "ef308fc8-05bd-47da-8f34-c0ab5532c9ec"
+    }
+  },
+  "ambiguous": {
+    "label": "ambiguous household",
+    "status": 500,
+    "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+    "event_date": "2026-11-18",
+    "affected_id": null,
+    "execution_result": {},
+    "error": {
+      "code": "INTERNAL",
+      "message": "This household attends more than one location and has no billing calendar of its own, so there is no single commercial period to bill into. Set the account's billing calendar first."
+    },
+    "raw": {
+      "ok": false,
+      "error": {
+        "code": "INTERNAL",
+        "message": "This household attends more than one location and has no billing calendar of its own, so there is no single commercial period to bill into. Set the account's billing calendar first."
+      },
+      "correlation_id": "f88e613f-b4cd-4e71-b5ff-65c8ee8b3e2d"
+    }
+  },
+  "nov_second": {
+    "label": "monthly, second charge same period",
+    "status": 200,
+    "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "event_date": "2026-11-24",
+    "affected_id": "974ef27e-2dc2-430c-b3e5-9f8225e4b945",
+    "execution_result": {
+      "write_status": "created",
+      "resolution_key": "tpl:field_trip:2026-11-24:e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "review_required": false,
+      "posted": true
+    },
+    "error": null,
+    "raw": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "write_status": "created",
+          "resolution_key": "tpl:field_trip:2026-11-24:e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+          "review_required": false,
+          "posted": true
+        },
+        "affected_id": "974ef27e-2dc2-430c-b3e5-9f8225e4b945"
+      },
+      "correlation_id": "fe8e568b-e864-4ed9-8303-15d10868e8a2"
+    }
+  },
+  "surface_autopay": {
+    "status": 200,
+    "keys": [
+      "arrangement",
+      "amountDueCents",
+      "nextDueDate"
+    ]
+  },
+  "surface_position": {
+    "status": 200,
+    "keys": [
+      "ok",
+      "rows",
+      "totals",
+      "counts",
+      "scope",
+      "truncated",
+      "scanCap"
+    ]
+  }
+}

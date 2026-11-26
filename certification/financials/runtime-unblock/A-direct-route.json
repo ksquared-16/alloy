@@ -1,0 +1,23 @@
+{
+  "settledAtMs": 4562,
+  "subject": "46105cd4-6030-417d-a7cb-faf409071c0d",
+  "account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+  "reserved": null,
+  "emptyState": null,
+  "skeletons": 0,
+  "detailsNav": 1,
+  "netObligation": "$1,487.87",
+  "due": "$1,416.00",
+  "balance": "$1,412.87",
+  "paid": "$75.00",
+  "prepaid": "$125.00",
+  "headline": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $1,450.00 Fee $150.00 Consumable fee $36.00 DISCOUNTS & CREDITS Credit -$260.06 Adjustment $146.71 Discount -$145.00 NET OBLIGATION $1,487.87 A",
+  "bodySubject": "b5b62172-8b27-44ff-a852-b11b8888a6cd",
+  "settlement": [
+    {
+      "outcome": "applied",
+      "addressed": "[\"enrolled-children\",null,null,null,null]",
+      "t": 4516
+    }
+  ]
+}

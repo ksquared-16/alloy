@@ -1,114 +1,642 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { AvailableTourSlot } from "@/lib/tours/availability/types";
+/**
+ * The parent's tour surface. No login, mobile-first, one screen.
+ *
+ * It renders the server-built `view` and nothing else. It does not know invitation
+ * statuses, booking status keys, or ids, and it never shows a raw server error —
+ * every message a parent can read is authored, either in `tourParentView` or here.
+ *
+ * Every action is a POST to a guarded route that consumes the credential exactly
+ * once. Re-opening or re-submitting is safe because consumption is server-side and
+ * idempotent; this page simply re-reads its state afterwards.
+ */
 
-type ResolveJson = { ok?: boolean; opportunity_label?: string; location_label?: string; error?: string };
+import Image from "next/image";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AvailableTourSlot } from "@/lib/tours/availability/types";
+import type { TourParentAction, TourParentView } from "@/lib/tours/public/tourParentView";
+import { participantBrandStyle } from "@/lib/public/forms/participantBrandTheme";
+import type { CSSProperties } from "react";
+import {
+    buildTourCalendarWeeks,
+    formatParentDayLabel,
+    formatParentMonthLabel,
+    formatParentTimeOnly,
+    isTourMonthInPast,
+    shiftTourMonthKey,
+    tourMonthAnchorDay,
+    tourMonthKeyOf,
+    tourMonthSlotsWindow,
+    tourSlotDayKey,
+} from "@/lib/tours/public/tourParentView";
+
+/** The school's brand, resolved server-side for this link's org and location (S4). Display only. */
+type TourPublicBrand = { displayName: string | null; accentColor: string; logoUrl: string | null };
+type ResolveJson = { ok?: boolean; view?: TourParentView; brand?: TourPublicBrand };
+
+/**
+ * How many times to show at once. A full availability set runs to dozens of rows,
+ * which reads as work rather than an invitation. The parent can ask for more.
+ */
+type SlotsJson = { ok?: boolean; slots?: AvailableTourSlot[] };
+
+/** One authored sentence per failure. The server's own wording never reaches here. */
+const TROUBLE = "We couldn't load this page just now. Please try again in a moment, or reply to our message and we'll help.";
+const ACTION_TROUBLE = "That didn't go through. Please try again, or reply to our message and we'll sort it out.";
+const GONE = "This link is no longer active. Please reply to our message and we'll send you a new one.";
+const SPENT = "Thanks — we already have your answer. If something doesn't look right, reply to our message and we'll sort it out.";
+const SLOT_GONE = "That time is no longer available. Please choose another.";
 
 export default function TourBookingPublicClient({ token }: { token: string }) {
-    const [resolved, setResolved] = useState<ResolveJson | null>(null);
+    const [view, setView] = useState<TourParentView | null>(null);
+    const [brand, setBrand] = useState<TourPublicBrand | null>(null);
     const [slots, setSlots] = useState<AvailableTourSlot[]>([]);
     const [pick, setPick] = useState<AvailableTourSlot | null>(null);
-    const [err, setErr] = useState<string | null>(null);
+    const [trouble, setTrouble] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [loaded, setLoaded] = useState(false);
+    const [day, setDay] = useState<string | null>(null);
+    /**
+     * The month the calendar is SHOWING. Deliberately separate from `day`.
+     *
+     * The month used to be derived from the selected day, which is why there was nothing to
+     * navigate: with no month state, "next month" had nothing to change. Browsing a month is
+     * a viewing act — it never touches `day` or `pick`, so moving around the calendar cannot
+     * select a date and cannot mutate the tour.
+     */
+    const [month, setMonth] = useState<string | null>(null);
+    /** Months already fetched, so re-visiting one does not re-query. */
+    const [loadedMonths, setLoadedMonths] = useState<string[]>([]);
+    const [monthBusy, setMonthBusy] = useState(false);
+    /** Bounded cancellation: the parent has chosen Cancel and must confirm. */
+    const [confirmingCancel, setConfirmingCancel] = useState(false);
+
+    const api = useCallback((suffix: string) => `/api/public/tour-booking/${encodeURIComponent(token)}${suffix}`, [token]);
+
+    const load = useCallback(async () => {
+        try {
+            const r = await fetch(api("/resolve"));
+            if (r.status === 409) {
+                // The authorizer's answer for a credential that has already been
+                // spent. Not an error to the parent — they simply already replied.
+                setTrouble(SPENT);
+                setLoaded(true);
+                return;
+            }
+            if (r.status === 404 || r.status === 403 || r.status === 410) {
+                setTrouble(GONE);
+                setLoaded(true);
+                return;
+            }
+            if (!r.ok) {
+                setTrouble(TROUBLE);
+                setLoaded(true);
+                return;
+            }
+            const j = (await r.json()) as ResolveJson;
+            const v = j.view ?? null;
+            setView(v);
+            setBrand(j.brand ?? null);
+            setTrouble(null);
+
+            if (v?.showsOptions) {
+                const from = new Date();
+                const to = new Date(from.getTime() + 21 * 24 * 60 * 60 * 1000);
+                const sr = await fetch(
+                    api(`/slots?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`)
+                );
+                if (sr.ok) {
+                    const sj = (await sr.json()) as SlotsJson;
+                    setSlots(sj.slots ?? []);
+                }
+                // A slots failure is not fatal: the parent still sees where they are
+                // and can reply to the message.
+            } else {
+                setSlots([]);
+            }
+        } catch {
+            setTrouble(TROUBLE);
+        } finally {
+            setLoaded(true);
+        }
+    }, [api]);
 
     useEffect(() => {
-        void (async () => {
-            try {
-                const r = await fetch(`/api/public/tour-booking/${encodeURIComponent(token)}/resolve`);
-                const j = (await r.json()) as ResolveJson;
-                if (!r.ok) {
-                    setErr((j as { error?: string }).error ?? r.statusText);
-                    return;
-                }
-                setResolved(j);
-                const from = new Date();
-                from.setUTCHours(0, 0, 0, 0);
-                const to = new Date(from);
-                to.setUTCDate(to.getUTCDate() + 21);
-                const sr = await fetch(
-                    `/api/public/tour-booking/${encodeURIComponent(token)}/slots?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`
-                );
-                const sj = (await sr.json()) as { ok?: boolean; slots?: AvailableTourSlot[]; error?: string };
-                if (!sr.ok) {
-                    setErr(sj.error ?? sr.statusText);
-                    return;
-                }
-                setSlots(sj.slots ?? []);
-            } catch (e) {
-                setErr(e instanceof Error ? e.message : String(e));
-            }
-        })();
-    }, [token]);
+        void load();
+    }, [load]);
 
-    const book = async () => {
-        if (!pick) return;
+    /**
+     * Availability grouped by the CENTRE's calendar day.
+     *
+     * Lifted out of the render so the month effect below can reason about it. This is the
+     * same grouping the calendar always used — one availability model, not a second one.
+     */
+    const byDay = useMemo(() => {
+        const m = new Map<string, AvailableTourSlot[]>();
+        for (const s of slots) {
+            const k = tourSlotDayKey(s.startAt, s.timezone);
+            if (!k) continue;
+            const list = m.get(k) ?? [];
+            list.push(s);
+            m.set(k, list);
+        }
+        for (const list of m.values()) list.sort((a, b) => a.startAt.localeCompare(b.startAt));
+        return m;
+    }, [slots]);
+
+    const availableDays = useMemo(() => [...byDay.keys()].sort(), [byDay]);
+
+    /**
+     * Which month the grid shows.
+     *
+     * Falls back to the first day that actually has availability, which is what the surface
+     * did before month navigation existed — so first paint is unchanged, including the case
+     * where the soonest opening is already in the next month.
+     */
+    const displayedMonth =
+        month
+        ?? (day ? tourMonthKeyOf(day) : null)
+        ?? (availableDays.length ? tourMonthKeyOf(availableDays[0]!) : null)
+        ?? tourMonthKeyOf(new Date().toISOString().slice(0, 10));
+
+    /**
+     * Fetch a whole month of availability the first time it is shown.
+     *
+     * The initial load asks for a rolling 21-day window, which is what the invitation offers
+     * from — it is NOT a month, so the back half of the displayed month was always blank even
+     * when times existed there. Loading the month the visitor is actually looking at makes the
+     * grid truthful, and it is what makes navigating to September show September's real
+     * availability rather than an empty grid.
+     */
+    const loadMonth = useCallback(
+        async (monthKey: string) => {
+            const { from, to } = tourMonthSlotsWindow(monthKey);
+            setMonthBusy(true);
+            try {
+                const r = await fetch(
+                    api(`/slots?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`)
+                );
+                if (r.ok) {
+                    const j = (await r.json()) as SlotsJson;
+                    const incoming = j.slots ?? [];
+                    setSlots((prev) => {
+                        const seen = new Set(prev.map((x) => `${x.startAt}|${x.ruleId}`));
+                        const merged = [...prev];
+                        for (const x of incoming) {
+                            const k = `${x.startAt}|${x.ruleId}`;
+                            if (seen.has(k)) continue;
+                            seen.add(k);
+                            merged.push(x);
+                        }
+                        return merged;
+                    });
+                }
+                // A month that fails to load is marked loaded anyway: retrying on every render
+                // would hammer the route, and the empty state already tells the truth.
+                setLoadedMonths((prev) => (prev.includes(monthKey) ? prev : [...prev, monthKey]));
+            } catch {
+                setLoadedMonths((prev) => (prev.includes(monthKey) ? prev : [...prev, monthKey]));
+            } finally {
+                setMonthBusy(false);
+            }
+        },
+        [api]
+    );
+
+    /**
+     * Preselect the soonest available day exactly once.
+     *
+     * Before month navigation the grid always had a day selected, because it fell back to the
+     * first available one on every render. Doing it once here keeps that first impression and
+     * makes the difference explicit: navigating months afterwards must NOT select anything.
+     */
+    const preselected = useRef(false);
+    useEffect(() => {
+        if (preselected.current || day || !availableDays.length) return;
+        preselected.current = true;
+        setDay(availableDays[0]!);
+    }, [availableDays, day]);
+
+    useEffect(() => {
+        if (!loaded || !view?.showsOptions || !displayedMonth) return;
+        if (loadedMonths.includes(displayedMonth)) return;
+        void loadMonth(displayedMonth);
+    }, [loaded, view?.showsOptions, displayedMonth, loadedMonths, loadMonth]);
+
+    const act = async (action: TourParentAction) => {
+        if (busy) return;
         setBusy(true);
-        setErr(null);
+        setTrouble(null);
         try {
-            const res = await fetch(`/api/public/tour-booking/${encodeURIComponent(token)}/book`, {
+            let path: string;
+            let body: Record<string, unknown> | null = null;
+
+            switch (action.intent) {
+                case "book":
+                    if (!pick) {
+                        setBusy(false);
+                        return;
+                    }
+                    path = "/book";
+                    body = { rule_id: pick.ruleId, start_at: pick.startAt, end_at: pick.endAt, timezone: pick.timezone };
+                    break;
+                case "reschedule":
+                    if (!pick) {
+                        // Reschedule needs a new time; reveal the list rather than posting.
+                        setView((v) => (v ? { ...v, showsOptions: true } : v));
+                        await loadSlots();
+                        setBusy(false);
+                        return;
+                    }
+                    path = "/reschedule";
+                    body = { start_at: pick.startAt, end_at: pick.endAt, timezone: pick.timezone };
+                    break;
+                case "decline":
+                    path = "/decline";
+                    break;
+                case "confirm":
+                    path = "/confirm";
+                    break;
+                case "confirm_attendance":
+                    path = "/confirm-attendance";
+                    break;
+                case "cancel": {
+                    if (!confirmingCancel) {
+                        // First press only REVEALS the consequence. Nothing is
+                        // authorised and nothing is mutated until the parent confirms.
+                        setConfirmingCancel(true);
+                        setBusy(false);
+                        return;
+                    }
+                    // Confirmed. Ask for the bounded, single-use credential, then use
+                    // it — the message never carried one.
+                    const intent = await fetch(api("/cancel-intent"), { method: "POST" });
+                    if (!intent.ok) {
+                        setTrouble(intent.status === 409 ? GONE : ACTION_TROUBLE);
+                        setBusy(false);
+                        return;
+                    }
+                    const ij = (await intent.json()) as { cancel_url?: string };
+                    const url = String(ij.cancel_url ?? "");
+                    if (!url) {
+                        setTrouble(ACTION_TROUBLE);
+                        setBusy(false);
+                        return;
+                    }
+                    // The intent returns the parent-facing PAGE url; the mutation lives
+                    // on the API path for that same credential.
+                    const boundedToken = url.split("/").filter(Boolean).pop() ?? "";
+                    const res2 = await fetch(
+                        `/api/public/tour-booking/${encodeURIComponent(boundedToken)}/cancel`,
+                        { method: "POST" }
+                    );
+                    if (!res2.ok && res2.status !== 409) {
+                        setTrouble(ACTION_TROUBLE);
+                        setBusy(false);
+                        return;
+                    }
+                    setConfirmingCancel(false);
+                    await load();
+                    setBusy(false);
+                    return;
+                }
+                default:
+                    setBusy(false);
+                    return;
+            }
+
+            const res = await fetch(api(path), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    rule_id: pick.ruleId,
-                    start_at: pick.startAt,
-                    end_at: pick.endAt,
-                    timezone: pick.timezone,
-                }),
+                body: body ? JSON.stringify(body) : undefined,
             });
-            const j = (await res.json()) as { ok?: boolean; error?: string; booking?: { status_key?: string } };
-            if (!res.ok) throw new Error(j.error ?? res.statusText);
-            setErr(null);
-            setResolved((prev) => ({ ...prev, opportunity_label: `${prev?.opportunity_label ?? "Tour"} — booked (${j.booking?.status_key ?? "ok"})` }));
-            setSlots([]);
+
+            if (res.status === 409) {
+                let code = "";
+                try {
+                    const j = (await res.json()) as { code?: string };
+                    code = String(j.code ?? "");
+                } catch {
+                    /* ignore */
+                }
+                if (code === "SLOT_UNAVAILABLE" && action.intent === "book") {
+                    setTrouble(SLOT_GONE);
+                    setPick(null);
+                    await loadSlots();
+                    return;
+                }
+                // Spent / already answered — re-read so a successful double-confirm
+                // still lands on the confirmation state when the server allows it.
+                setPick(null);
+                await load();
+                return;
+            }
+
+            if (!res.ok) {
+                setTrouble(res.status === 404 || res.status === 403 ? GONE : ACTION_TROUBLE);
+                return;
+            }
+
+            // The server owns the outcome. Re-read rather than guessing it here — that
+            // is also what makes a duplicate submit harmless.
             setPick(null);
-        } catch (e) {
-            setErr(e instanceof Error ? e.message : String(e));
+            await load();
+        } catch {
+            setTrouble(ACTION_TROUBLE);
         } finally {
             setBusy(false);
         }
     };
 
-    if (err && !resolved) {
-        return <div className="mx-auto max-w-md p-6 text-sm text-red-800">{err}</div>;
+    // Confirm I'm coming links auto-affirm attendance on open (idempotent; once per mount).
+    const autoAttendanceRan = useRef(false);
+    useEffect(() => {
+        if (!loaded || busy || autoAttendanceRan.current) return;
+        if (view?.autoIntent !== "confirm_attendance") return;
+        autoAttendanceRan.current = true;
+        void act({ intent: "confirm_attendance", label: "Confirm I'm coming", tone: "primary" });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto intent
+    }, [view?.autoIntent, loaded, busy]);
+
+    const loadSlots = async () => {
+        const from = new Date();
+        const to = new Date(from.getTime() + 21 * 24 * 60 * 60 * 1000);
+        const sr = await fetch(api(`/slots?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`));
+        if (sr.ok) {
+            const sj = (await sr.json()) as SlotsJson;
+            setSlots(sj.slots ?? []);
+        }
+    };
+
+    if (!loaded) {
+        return (
+            <main className="mx-auto flex min-h-screen max-w-md items-center justify-center p-6">
+                <p className="text-sm text-alloy-midnight/50">Loading…</p>
+            </main>
+        );
     }
 
+    if (!view) {
+        return (
+            <main className="mx-auto max-w-md space-y-3 p-6 pt-16">
+                <h1 className="text-xl font-semibold text-alloy-midnight">
+                    {trouble === SPENT ? "You\u2019ve already replied" : "We couldn\u2019t open this link"}
+                </h1>
+                <p className="text-[15px] leading-relaxed text-alloy-midnight/70">{trouble ?? GONE}</p>
+            </main>
+        );
+    }
+
+    const needsPick = view.actions.some((a) => a.intent === "book");
+    const bookAction = view.actions.find((a) => a.intent === "book") ?? null;
+    const otherActions = view.actions.filter((a) => a.intent !== "book");
+
     return (
-        <div className="mx-auto max-w-lg space-y-4 p-6">
-            <h1 className="text-lg font-semibold text-alloy-midnight">Book a tour</h1>
-            {resolved ? (
-                <p className="text-sm text-alloy-midnight/70">
-                    {resolved.opportunity_label} · {resolved.location_label}
+        <main
+            className="mx-auto max-w-md space-y-6 p-5 pb-16 pt-6"
+            style={brand ? (participantBrandStyle({ accentColor: brand.accentColor, logoUrl: brand.logoUrl, brandName: brand.displayName }) as CSSProperties) : undefined}
+            data-tour-brand={brand?.displayName || brand?.logoUrl ? "school" : "platform"}
+        >
+            {/* The school's identity when it has one; otherwise Alloy's brandmark only — the
+                wordmark carries "SERVICES", which is our internal org naming. */}
+            <div className="flex items-center gap-2 pb-1" data-testid="tour-brand-header">
+                {brand?.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={brand.logoUrl} alt="" className="h-7 w-7 rounded object-contain" />
+                ) : brand?.displayName ? null : (
+                    <Image src="/brand/alloy-brandmark-gradient.svg" alt="Alloy" width={28} height={28} className="h-7 w-7" priority />
+                )}
+                <span className="text-[15px] font-semibold tracking-tight text-alloy-midnight">{brand?.displayName ?? "Alloy"}</span>
+            </div>
+
+            <header className="space-y-1.5">
+                <h1 className="text-2xl font-semibold leading-tight text-alloy-midnight">{view.headline}</h1>
+                <p className="text-[15px] font-medium text-alloy-midnight/80">{view.locationLine}</p>
+                {view.locationAddress ? (
+                    <p className="text-[15px] text-alloy-midnight/60">{view.locationAddress}</p>
+                ) : null}
+            </header>
+
+            <p className="text-[15px] leading-relaxed text-alloy-midnight/75">{view.bodyLine}</p>
+
+            {view.bookingLabel && !view.showsOptions ? (
+                <div className="rounded-xl border border-alloy-stone/20 bg-alloy-stone/5 p-4">
+                    <p className="text-[15px] font-semibold text-alloy-midnight">{view.bookingLabel}</p>
+                </div>
+            ) : null}
+
+            {trouble ? (
+                <p role="alert" className="rounded-lg bg-amber-50 p-3 text-[14px] leading-relaxed text-amber-900">
+                    {trouble}
                 </p>
-            ) : (
-                <p className="text-sm text-alloy-midnight/55">Loading…</p>
-            )}
-            {err ? <p className="text-sm text-red-700">{err}</p> : null}
-            <ul className="max-h-80 space-y-1 overflow-auto rounded border border-alloy-stone/15 p-2 text-sm">
-                {slots.map((s) => (
-                    <li key={`${s.startAt}-${s.ruleId}`}>
+            ) : null}
+
+            {view.showsOptions ? (
+                (() => {
+                    // The month the grid draws. `day` is the parent's SELECTION and is
+                    // deliberately independent — browsing months never changes it.
+                    const activeDay = day && byDay.has(day) ? day : null;
+                    const weeks = buildTourCalendarWeeks(tourMonthAnchorDay(displayedMonth));
+                    const prevMonth = shiftTourMonthKey(displayedMonth, -1);
+                    // The booking boundary: a parent cannot tour in a month that has ended.
+                    // There is no canonical FORWARD horizon in the platform — the only
+                    // canonical bound is the 45-day span cap on a single availability query,
+                    // which one month can never exceed — so forward stays open.
+                    const canGoBack = !isTourMonthInPast(prevMonth);
+                    const monthLoaded = loadedMonths.includes(displayedMonth);
+                    const monthHasTimes = availableDays.some((d) => tourMonthKeyOf(d) === displayedMonth);
+                    const times = activeDay ? (byDay.get(activeDay) ?? []) : [];
+
+                    return (
+                        <div className="space-y-4">
+                            <div className="rounded-2xl border border-alloy-midnight/10 bg-white p-3 shadow-sm">
+                                <div className="flex items-center justify-between pb-2">
+                                    <button
+                                        type="button"
+                                        disabled={!canGoBack}
+                                        aria-label="Previous month"
+                                        onClick={() => setMonth(prevMonth)}
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-participant-accent/[0.10] disabled:pointer-events-none disabled:text-alloy-midnight/20"
+                                    >
+                                        <span aria-hidden>&lsaquo;</span>
+                                    </button>
+                                    <p aria-live="polite" className="text-center text-[14px] font-semibold text-alloy-midnight">
+                                        {formatParentMonthLabel(tourMonthAnchorDay(displayedMonth))}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        aria-label="Next month"
+                                        onClick={() => setMonth(shiftTourMonthKey(displayedMonth, 1))}
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-participant-accent/[0.10]"
+                                    >
+                                        <span aria-hidden>&rsaquo;</span>
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-7 gap-1 pb-1" aria-hidden>
+                                    {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                                        <div key={`${d}-${i}`} className="text-center text-[11px] font-medium text-alloy-midnight/40">
+                                            {d}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="space-y-1">
+                                    {weeks.map((week, wi) => (
+                                        <div key={wi} className="grid grid-cols-7 gap-1">
+                                            {week.map((key, di) => {
+                                                if (!key) return <div key={di} />;
+                                                const has = byDay.has(key);
+                                                const isActive = key === activeDay;
+                                                const dayNum = Number(key.slice(8));
+                                                return (
+                                                    <button
+                                                        key={key}
+                                                        type="button"
+                                                        disabled={!has}
+                                                        aria-pressed={isActive}
+                                                        aria-label={formatParentDayLabel(key)}
+                                                        onClick={() => {
+                                                            setDay(key);
+                                                            setPick(null);
+                                                        }}
+                                                        // 44px tap target — thumb-sized on a phone.
+                                                        className={`flex h-11 w-full items-center justify-center rounded-xl text-[15px] transition ${
+                                                            isActive
+                                                                ? "bg-participant-accent font-semibold text-participant-on-accent"
+                                                                : has
+                                                                  ? "font-medium text-alloy-midnight hover:bg-participant-accent/[0.10]"
+                                                                  : "text-alloy-midnight/25"
+                                                        }`}
+                                                    >
+                                                        {dayNum}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                                {monthLoaded && !monthHasTimes ? (
+                                    // Truthful, not fabricated: this month really has no
+                                    // configured availability, and the parent can keep looking.
+                                    <p className="pt-2 text-center text-[13px] leading-relaxed text-alloy-midnight/55">
+                                        No times available this month. Try another month.
+                                    </p>
+                                ) : null}
+                                {monthBusy && !monthLoaded ? (
+                                    <p className="pt-2 text-center text-[13px] text-alloy-midnight/45">Loading times…</p>
+                                ) : null}
+                            </div>
+
+                            {activeDay ? (
+                                <div className="space-y-2">
+                                    <p className="text-[15px] font-medium text-alloy-midnight">{formatParentDayLabel(activeDay)}</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {times.map((s) => {
+                                            const chosen = pick?.startAt === s.startAt && pick?.ruleId === s.ruleId;
+                                            return (
+                                                <button
+                                                    key={`${s.startAt}-${s.ruleId}`}
+                                                    type="button"
+                                                    aria-pressed={chosen}
+                                                    onClick={() => setPick(chosen ? null : s)}
+                                                    className={`rounded-xl border px-3 py-3.5 text-center text-[15px] font-medium transition ${
+                                                        chosen
+                                                            ? "border-participant-accent bg-participant-accent text-participant-on-accent shadow-sm"
+                                                            : "border-alloy-midnight/15 bg-white text-alloy-midnight hover:border-participant-accent"
+                                                    }`}
+                                                >
+                                                    {formatParentTimeOnly(s.startAt, s.timezone)}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ) : loaded && !availableDays.length && loadedMonths.length ? (
+                                <p className="text-[15px] leading-relaxed text-alloy-midnight/70">
+                                    We don&rsquo;t have times available right now. Reply to our message and we&rsquo;ll find one for you.
+                                </p>
+                            ) : null}
+
+                            {pick && bookAction ? (
+                                <div className="space-y-3 rounded-2xl border border-alloy-midnight/10 bg-white p-4 shadow-sm">
+                                    <div className="space-y-0.5">
+                                        <p className="text-[15px] font-semibold text-alloy-midnight">
+                                            {formatParentDayLabel(tourSlotDayKey(pick.startAt, pick.timezone) ?? activeDay ?? "")}
+                                        </p>
+                                        <p className="text-[15px] text-alloy-midnight/80">
+                                            {formatParentTimeOnly(pick.startAt, pick.timezone)}
+                                        </p>
+                                        <p className="text-[15px] text-alloy-midnight/70">{view.locationLine}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void act(bookAction)}
+                                        className="w-full rounded-xl bg-participant-accent px-4 py-3.5 text-[15px] font-semibold text-participant-on-accent transition disabled:opacity-40"
+                                    >
+                                        {bookAction.label}
+                                    </button>
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })()
+            ) : null}
+
+            {confirmingCancel ? (
+                <div className="space-y-3 rounded-2xl border border-alloy-midnight/10 bg-white p-4 shadow-sm">
+                    <p className="text-[15px] font-semibold text-alloy-midnight">Cancel this tour?</p>
+                    <p className="text-[15px] leading-relaxed text-alloy-midnight/75">
+                        {view.bookingLabel
+                            ? `We'll release your ${view.bookingLabel} visit at ${view.locationLine}, and the time may be taken by another family.`
+                            : `We'll release your visit at ${view.locationLine}, and the time may be taken by another family.`}
+                    </p>
+                    <p className="text-[14px] leading-relaxed text-alloy-midnight/60">
+                        You can always ask us for a new time later.
+                    </p>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void act({ intent: "cancel", label: "Cancel tour", tone: "quiet" })}
+                        className="w-full rounded-xl border border-participant-accent bg-white px-4 py-3.5 text-[15px] font-semibold text-participant-accent-ink transition disabled:opacity-40"
+                    >
+                        Yes, cancel my tour
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setConfirmingCancel(false)}
+                        className="w-full rounded-xl bg-participant-accent px-4 py-3.5 text-[15px] font-semibold text-participant-on-accent transition disabled:opacity-40"
+                    >
+                        Keep my tour
+                    </button>
+                </div>
+            ) : null}
+
+            <div className="space-y-2.5 pt-1">
+                {(confirmingCancel ? [] : otherActions).map((a) => {
+                    const disabled = busy || (needsPick && a.intent === "book" && !pick);
+                    const cls =
+                        a.tone === "primary"
+                            ? "bg-participant-accent text-participant-on-accent"
+                            : a.tone === "secondary"
+                              ? "border border-participant-accent/40 text-participant-accent-ink"
+                              : "text-alloy-midnight/60";
+                    return (
                         <button
+                            key={a.intent}
                             type="button"
-                            className={`w-full rounded px-2 py-2 text-left ${pick?.startAt === s.startAt && pick?.ruleId === s.ruleId ? "bg-alloy-midnight/10" : "hover:bg-alloy-stone/10"}`}
-                            onClick={() => setPick(s)}
+                            disabled={disabled}
+                            onClick={() => void act(a)}
+                            className={`w-full rounded-xl px-4 py-3.5 text-[15px] font-semibold transition disabled:opacity-40 ${cls}`}
                         >
-                            {new Date(s.startAt).toLocaleString(undefined, { timeZone: s.timezone })} —{" "}
-                            {new Date(s.endAt).toLocaleString(undefined, { timeZone: s.timezone })}
+                            {a.label}
                         </button>
-                    </li>
-                ))}
-            </ul>
-            <button
-                type="button"
-                className="rounded-lg bg-alloy-midnight px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                disabled={!pick || busy || slots.length === 0}
-                onClick={() => void book()}
-            >
-                Request booking
-            </button>
-            <p className="text-[11px] text-alloy-midnight/50">
-                If this site requires approval, your request stays pending until staff confirms. No account is created on this page.
-            </p>
-        </div>
+                    );
+                })}
+            </div>
+
+            {view.notice ? <p className="text-[14px] leading-relaxed text-alloy-midnight/55">{view.notice}</p> : null}
+        </main>
     );
 }

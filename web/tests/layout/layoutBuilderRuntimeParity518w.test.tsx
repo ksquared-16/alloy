@@ -197,10 +197,10 @@ describe("layoutBuilderRuntimeParity 5.18W", () => {
             const derived = deriveAgeFromDateOfBirth(dob, asOf);
             expect(derived?.value).toEqual({ years: 2, months: 4 });
             expect(formatAgePartsDisplay(2, 4, "years")).toBe("2y");
-            expect(formatAgePartsDisplay(2, 4, "years_months")).toBe("2y 4m");
+            expect(formatAgePartsDisplay(2, 4, "years_months")).toBe("2y4m");
             expect(formatAgePartsDisplay(2, 4, "months")).toBe("28m");
             expect(formatAgePartsDisplay(2, 4, "full_text")).toBe("2 years 4 months");
-            expect(formatAgeFromDateOfBirthIso(dob, "years_months", asOf)).toBe("2y 4m");
+            expect(formatAgeFromDateOfBirthIso(dob, "years_months", asOf)).toBe("2y4m");
         });
 
         it("runtime repeater column applies configured age format from DOB", () => {
@@ -212,7 +212,7 @@ describe("layoutBuilderRuntimeParity 5.18W", () => {
                 label: "Age",
                 metadata: { layoutEditorDisplay: { ageFormat: "years_months" } },
             };
-            expect(formatLayoutRuntimeRepeaterColumnDisplay(row, col)).toBe("2y 4m");
+            expect(formatLayoutRuntimeRepeaterColumnDisplay(row, col)).toBe("2y4m");
             vi.useRealTimers();
         });
 

@@ -1,0 +1,178 @@
+/**
+ * What the Attendance overview says about today — pure, and derived only from
+ * the roster model the workspace already loaded.
+ *
+ * ── THE DISTINCTION THIS MODULE EXISTS TO KEEP ──
+ *
+ * There are two honest answers to "how many children are in Toddler 1", and the
+ * workspace needs both:
+ *
+ *   - ROSTER PRESENCE — how many children placed in Toddler 1 made it in today.
+ *     Answers "is my class here". Counts a child who walked to the playground.
+ *   - PHYSICAL OCCUPANCY — how many children are standing in Toddler 1 right now.
+ *     Answers "how many am I looking at". Counts visitors from other rooms and
+ *     excludes her.
+ *
+ * The pre-existing `cell.actualChildrenPresent` is the first. The overview used
+ * it to answer the second, which is only correct on a day when nobody moves.
+ * Rather than redefine a certified field, this derives the second alongside it
+ * and the UI labels which is which.
+ *
+ * No new Attendance truth: `actualRoomLocationId` is the certified whereabouts
+ * fold's answer, resolved upstream in `buildCombinedRoster`.
+ */
+
+import { presentChildRoom } from "@/lib/roster/dailyOperatingState";
+
+/** The subset of a roster child this model reads. */
+export type OverviewChild = {
+    customerMemberId: string;
+    displayName: string;
+    actual: {
+        state: "present" | "checked_out" | "absent" | "no_record";
+        actualRoomLocationId: string | null;
+    };
+    /**
+     * How the day reads once known intent is applied. Absent on a child nobody
+     * said anything about, which is the ordinary case.
+     */
+    serviceDay?: {
+        state: string;
+        reasonKey: string | null;
+        raisesAttention: boolean;
+        dayClosed?: boolean;
+    } | null;
+};
+
+/** The subset of a roster cell (room·date) this model reads. */
+export type OverviewCell = {
+    roomLocationId: string;
+    roomName: string;
+    children: readonly OverviewChild[];
+};
+
+export type AwayFromPlacement = {
+    key: string;
+    customerMemberId: string;
+    displayName: string;
+    /** The room the child is placed in — where their roster row lives. */
+    placedIn: string;
+    /** The room the child is actually in right now. */
+    nowIn: string;
+};
+
+export type AttendanceOverviewModel = {
+    /** Children physically in each room right now, keyed by room location id. */
+    hereNowByRoom: ReadonlyMap<string, number>;
+    /** Present children who are not in the room they are placed in. */
+    awayFromPlacement: AwayFromPlacement[];
+    counts: {
+        expected: number;
+        present: number;
+        /**
+         * UNEXPLAINED missing arrivals only.
+         *
+         * This is the number a director acts on, so a child whose parent rang at
+         * seven must not be in it. Counting known absences here is how a holiday
+         * week reads as a crisis and the number stops being looked at.
+         */
+        notArrived: number;
+        checkedOut: number;
+        absent: number;
+        /** Children nobody expected today — off sick, on holiday, room closed. */
+        knownAway: number;
+        /** Here, and not expected. Safe, and worth knowing about. */
+        unplannedArrivals: number;
+        /** Children whose plan could not be determined. Never counted as normal. */
+        planUnclear: number;
+    };
+};
+
+export function buildAttendanceOverviewModel(
+    cells: readonly OverviewCell[]
+): AttendanceOverviewModel {
+    const roomNameById = new Map(cells.map((c) => [c.roomLocationId, c.roomName]));
+
+    const hereNowByRoom = new Map<string, number>();
+    const awayFromPlacement: AwayFromPlacement[] = [];
+    const counts = {
+        expected: 0,
+        present: 0,
+        notArrived: 0,
+        checkedOut: 0,
+        absent: 0,
+        knownAway: 0,
+        unplannedArrivals: 0,
+        planUnclear: 0,
+    };
+
+    /*
+     * ONE CHILD, ONE COUNT (V7 S6). A child expected in two spaces (homeroom and Before Care) sits on
+     * both cards but is one expected child, here or not, in one room — and is "away" only when she is
+     * in none of the spaces that expect her.
+     */
+    const expectedRoomsByChild = new Map<string, Set<string>>();
+    for (const cell of cells) {
+        for (const child of cell.children) {
+            const rooms = expectedRoomsByChild.get(child.customerMemberId) ?? new Set<string>();
+            rooms.add(cell.roomLocationId);
+            expectedRoomsByChild.set(child.customerMemberId, rooms);
+        }
+    }
+    const counted = new Set<string>();
+
+    for (const cell of cells) {
+        for (const child of cell.children) {
+            if (counted.has(child.customerMemberId)) continue;
+            counted.add(child.customerMemberId);
+            counts.expected += 1;
+
+            /*
+             * The interpreted reading, when there is one, decides how SILENCE is
+             * counted. Observed presence still decides everything physical: a
+             * child who is here is here, whatever anyone planned.
+             */
+            const interpreted = child.serviceDay?.state ?? null;
+            if (interpreted === "known_away" || interpreted === "closed") counts.knownAway += 1;
+            if (interpreted === "attended_despite_plan") counts.unplannedArrivals += 1;
+            if (interpreted === "unknown") counts.planUnclear += 1;
+
+            switch (child.actual.state) {
+                case "present":
+                    counts.present += 1;
+                    break;
+                case "checked_out":
+                    counts.checkedOut += 1;
+                    break;
+                case "absent":
+                    counts.absent += 1;
+                    break;
+                default:
+                    // `raisesAttention` is the projection's own answer, so the
+                    // header count and the exception list cannot disagree about
+                    // which children are actually missing.
+                    if (child.serviceDay && !child.serviceDay.raisesAttention) break;
+                    counts.notArrived += 1;
+            }
+
+            // A present child with no resolved location is counted where she is
+            // placed — the fold could not say otherwise, and dropping her would
+            // make the room totals quietly disagree with the header count.
+            const at = presentChildRoom(child.actual, cell.roomLocationId);
+            if (!at) continue;
+            hereNowByRoom.set(at, (hereNowByRoom.get(at) ?? 0) + 1);
+
+            if (!expectedRoomsByChild.get(child.customerMemberId)?.has(at)) {
+                awayFromPlacement.push({
+                    key: `away:${child.customerMemberId}`,
+                    customerMemberId: child.customerMemberId,
+                    displayName: child.displayName,
+                    placedIn: cell.roomName,
+                    nowIn: roomNameById.get(at) ?? "another room",
+                });
+            }
+        }
+    }
+
+    return { hereNowByRoom, awayFromPlacement, counts };
+}

@@ -18,6 +18,16 @@ import {
 } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import { opMetadata, opMutedMeta, opSectionTitle } from "@/lib/operational/ui/operationalVisualTokens";
 
+/** Concise, business-language one-liner describing what each purpose does. */
+const INTENT_SUMMARY: Record<OperationalIntentKey, string> = {
+    enrollment_lead: "Creates or updates a lead through Processing.",
+    existing_family: "Attaches submissions to an existing family or record.",
+    operational_document: "Collects an operational document for review.",
+    waitlist: "Captures waitlist interest.",
+    packet_step: "Runs as one step in an intake packet.",
+    custom: "Uses your advanced intake settings.",
+};
+
 type Props = {
     formId: string;
     formKey: string;
@@ -139,12 +149,12 @@ export function FormOperationalIntentPicker({
         <div className="rounded-lg bg-white/95 px-3 py-2.5 ring-1 ring-alloy-midnight/[0.07]" data-testid="form-operational-intent-picker">
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <h3 className={opSectionTitle}>What is this form used for?</h3>
+                    <h3 className={opSectionTitle}>Form purpose</h3>
                     <p className={opMutedMeta}>Choose the operational purpose — Alloy configures intake behavior underneath.</p>
                 </div>
                 {effectiveIntent ?
                     <span
-                        className="rounded-full bg-alloy-blue/10 px-2.5 py-0.5 text-xs font-semibold text-alloy-midnight"
+                        className="rounded-full bg-alloy-bend-pine/[0.10] px-2.5 py-0.5 text-xs font-semibold text-alloy-bend-pine"
                         data-testid="form-operational-intent-active-label"
                     >
                         {OPERATIONAL_INTENT_CATALOG.find((t) => t.key === effectiveIntent)?.label ??
@@ -153,31 +163,16 @@ export function FormOperationalIntentPicker({
                 :   null}
             </div>
 
+            {effectiveIntent ?
+                <p className={clsx("mt-2 text-sm text-alloy-midnight/70", opMetadata)} data-testid="form-operational-intent-summary">
+                    {INTENT_SUMMARY[effectiveIntent]}
+                </p>
+            :   null}
+
             {inferredLabel ?
                 <p className={clsx("mt-2", opMetadata)} data-testid="form-operational-intent-inferred-note">
                     Detected from current settings — select an intent to make it explicit.
                 </p>
-            :   null}
-
-            {!hasOperationalLink ?
-                <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
-                    <p className="text-xs font-medium text-amber-900">Create a share link to apply intake defaults.</p>
-                    {canMutate && onCreateLink ?
-                        <button
-                            type="button"
-                            className={clsx(intakeWorkspaceBtnPrimary, "mt-2")}
-                            disabled={creatingLink || busy || shareCreationBlocked}
-                            data-testid="form-intent-create-share-link"
-                            onClick={onCreateLink}
-                        >
-                            {creatingLink ?
-                                "Creating…"
-                            : shareCreationBlocked ?
-                                shareBlockButtonLabel
-                            :   "Get share link"}
-                        </button>
-                    :   null}
-                </div>
             :   null}
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2" data-testid="form-operational-intent-options">
@@ -187,11 +182,11 @@ export function FormOperationalIntentPicker({
                         <button
                             key={template.key}
                             type="button"
-                            disabled={!canMutate || busy || (!hasOperationalLink && template.key !== "custom")}
+                            disabled={!canMutate || busy}
                             className={clsx(
                                 "rounded-lg px-3 py-2.5 text-left ring-1 transition",
                                 selected ?
-                                    "bg-alloy-blue/10 ring-alloy-blue/30"
+                                    "bg-alloy-bend-pine/[0.10] ring-alloy-bend-pine/30"
                                 :   "bg-white ring-alloy-midnight/[0.08] hover:bg-alloy-stone/10",
                                 (!canMutate || busy) && "opacity-60"
                             )}

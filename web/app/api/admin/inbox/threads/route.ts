@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { listInboxThreads, parseInboxFolder, parseInboxLimit } from "@/lib/communications/inboxThreadsService";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * GET /api/admin/inbox/threads?folder=inbox|unread|sent|scheduled|archived&limit=
@@ -11,6 +15,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 export async function GET(request: NextRequest) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(request.url);
     const folder = parseInboxFolder(searchParams.get("folder")) ?? "inbox";

@@ -1,0 +1,38 @@
+{
+  "recommendations": [
+    "Alloy workspace orchestration: reduce watcher/index load from generated and dependency trees.",
+    "Repository-local only — does not change user-global Cursor settings."
+  ],
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/coverage/**": true,
+    "**/test-results/**": true,
+    "**/playwright-report/**": true,
+    "**/tmp/**": true,
+    "**/*.tsbuildinfo": true,
+    "**/.worktrees/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/coverage": true,
+    "**/test-results": true,
+    "**/playwright-report": true,
+    "**/tmp": true,
+    "**/*.tsbuildinfo": true,
+    "**/.worktrees": true
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/node_modules": false,
+    "**/*.tsbuildinfo": true
+  },
+  "typescript.tsserver.maxTsServerMemory": 4096,
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.tsdk": "web/node_modules/typescript/lib",
+  "git.autofetch": false
+}

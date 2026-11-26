@@ -1,0 +1,512 @@
+/**
+ * IdentityCommandPorts — the adapter seam between semantic identity commands and
+ * canonical domain storage. Each port OWNS the physical mapping for one semantic
+ * operation (RFC Decisions A/B: "command implementations own physical mapping").
+ *
+ * Production wiring (`createDefaultIdentityCommandPorts`) delegates to the canonical
+ * server helpers and org-scoped writes. Tests inject in-memory fakes. Commands never
+ * reach a physical table except through a port, and never name transitional storage
+ * (OCM / process_instances) in their contract.
+ */
+
+import { normalizePhoneForPersonWrite } from "@/lib/identity";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
+import { documentSubjectTypeForLegacy, setPrimaryDocumentSubject } from "@/lib/documents/documentSubjects";
+import { persistCommunicationPreference } from "@/lib/communications/v2/persistCommunicationPreference";
+import {
+    PREFERENCE_CATEGORIES,
+    type PreferenceCategory,
+    type PreferenceState,
+} from "@/lib/communications/v2/preferences";
+
+export type PortContext = {
+    supabase: SupabaseClient;
+    orgId: string;
+    actorId?: string | null;
+};
+
+export type UpsertResult = { id: string; created: boolean };
+
+export interface IdentityCommandPorts {
+    createPerson(
+        ctx: PortContext,
+        input: {
+            first_name: string | null;
+            last_name: string | null;
+            email: string | null;
+            phone: string | null;
+            status_key_on_create?: string | null;
+        },
+    ): Promise<UpsertResult | null>;
+
+    updatePerson(
+        ctx: PortContext,
+        input: {
+            person_id: string;
+            patch: Record<string, unknown>;
+            expected_version?: string | null;
+        },
+    ): Promise<{ ok: true } | { ok: false; error: string; code?: string }>;
+
+    createHousehold(
+        ctx: PortContext,
+        input: { household_name: string; vertical_id?: string | null },
+    ): Promise<UpsertResult>;
+
+    linkPersonToHousehold(
+        ctx: PortContext,
+        input: { person_id: string; household_id: string; role_type: string },
+    ): Promise<UpsertResult>;
+
+    createChild(
+        ctx: PortContext,
+        input: {
+            household_id: string;
+            person_id: string | null;
+            display_name: string;
+            first_name: string | null;
+            last_name: string | null;
+            dob: string | null;
+            relationship: string;
+            gender?: "female" | "male" | null;
+        },
+    ): Promise<UpsertResult>;
+
+    updateChild(
+        ctx: PortContext,
+        input: {
+            child_id: string;
+            patch: Record<string, unknown>;
+            expected_version?: string | null;
+        },
+    ): Promise<{ ok: true } | { ok: false; error: string; code?: string }>;
+
+    createLead(
+        ctx: PortContext,
+        input: {
+            household_id: string;
+            primary_person_id: string;
+            name: string;
+            status_key: string;
+            stage_key: string;
+            work_unit_id: string | null;
+            location_id?: string | null;
+        },
+    ): Promise<UpsertResult>;
+
+    updateLead(
+        ctx: PortContext,
+        input: {
+            lead_id: string;
+            patch: Record<string, unknown>;
+            expected_version?: string | null;
+        },
+    ): Promise<{ ok: true } | { ok: false; error: string; code?: string }>;
+
+    linkPersonToLead(
+        ctx: PortContext,
+        input: {
+            person_id: string;
+            lead_id: string;
+            role_type: string;
+            role: string | null;
+        },
+    ): Promise<UpsertResult>;
+
+    createProcessParticipation(
+        ctx: PortContext,
+        input: {
+            child_id: string;
+            lead_id: string;
+            stage_key: string | null;
+            state: string | null;
+            participation: Record<string, unknown>;
+        },
+    ): Promise<{ id: string | null; error?: string }>;
+
+    updateProcessParticipation(
+        ctx: PortContext,
+        input: {
+            participation_id: string;
+            patch: Record<string, unknown>;
+            expected_version?: string | null;
+        },
+    ): Promise<{ ok: true } | { ok: false; error: string; code?: string }>;
+
+    /** Reads an existing record's org for cross-tenant validation. Null when not found. */
+    readRecordOrg(
+        ctx: PortContext,
+        input: { table: RecordOrgTable; id: string },
+    ): Promise<string | null>;
+
+    attachDocument(
+        ctx: PortContext,
+        input: {
+            document_id: string;
+            target_entity_type: string;
+            target_entity_id: string;
+            doc_type: string | null;
+        },
+    ): Promise<{ ok: true } | { ok: false; error: string }>;
+
+    updateCommunicationPreferences(
+        ctx: PortContext,
+        input: {
+            person_id: string;
+            category: string;
+            state: string;
+            method: string | null;
+            source: string | null;
+        },
+    ): Promise<{ ok: true } | { ok: false; error: string }>;
+}
+
+export type RecordOrgTable =
+    | "persons"
+    | "customers"
+    | "customer_members"
+    | "opportunities"
+    | "documents"
+    | "process_instances";
+
+const PERSON_HOUSEHOLD_ROLE = "primary_contact" as const;
+
+/** Production ports: canonical helpers + org-scoped writes. */
+export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
+    return {
+        async createPerson(ctx, input) {
+            return findOrCreatePersonInOrgWithMeta(ctx.supabase, {
+                email: input.email,
+                phone: input.phone,
+                first_name: input.first_name,
+                last_name: input.last_name,
+                org_id: ctx.orgId,
+                default_status_key_on_create: input.status_key_on_create ?? null,
+            });
+        },
+
+        async updatePerson(ctx, input) {
+            // E2E-16: an update writes the same stored phone form as a create. Processing's plan
+            // creates the person (canonical, via find-or-create) and then patches it from the intake
+            // facts — which carried the phone as typed, so the patch overwrote the canonical value
+            // (measured on deployed ed61cfc7: Create Lead "(555) 555-0151" persisted as typed).
+            const patch =
+                "phone" in input.patch ?
+                    { ...input.patch, phone: normalizePhoneForPersonWrite(input.patch.phone as string | null | undefined) }
+                :   input.patch;
+            let q = ctx.supabase
+                .from("persons")
+                .update({ ...patch, updated_at: new Date().toISOString() })
+                .eq("id", input.person_id)
+                .eq("org_id", ctx.orgId);
+            if (input.expected_version) q = q.eq("updated_at", input.expected_version);
+            const { data, error } = await q.select("id");
+            if (error) return { ok: false, error: error.message, code: error.code };
+            if (!data || (Array.isArray(data) && data.length === 0)) {
+                return { ok: false, error: "record_not_found_or_stale", code: "stale" };
+            }
+            return { ok: true };
+        },
+
+        async createHousehold(ctx, input) {
+            const { data, error } = await ctx.supabase
+                .from("customers")
+                .insert({
+                    org_id: ctx.orgId,
+                    name: input.household_name,
+                    ...(input.vertical_id ? { vertical_id: input.vertical_id } : {}),
+                })
+                .select("id")
+                .single();
+            if (error || !data) throw new Error(error?.message ?? "create_household_failed");
+            return { id: String((data as { id: string }).id), created: true };
+        },
+
+        async linkPersonToHousehold(ctx, input) {
+            const { data, error } = await ctx.supabase
+                .from("customer_persons")
+                .upsert(
+                    {
+                        org_id: ctx.orgId,
+                        customer_id: input.household_id,
+                        person_id: input.person_id,
+                        role_type: input.role_type || PERSON_HOUSEHOLD_ROLE,
+                    },
+                    // Live unique: uq_customer_persons_unique (org_id, customer_id, person_id, role_type)
+                    { onConflict: "org_id,customer_id,person_id,role_type", ignoreDuplicates: false },
+                )
+                .select("id")
+                .maybeSingle();
+            if (error) throw new Error(error.message);
+            return { id: data ? String((data as { id: string }).id) : "", created: Boolean(data) };
+        },
+
+        async createChild(ctx, input) {
+            const { data, error } = await ctx.supabase
+                .from("customer_members")
+                .insert({
+                    org_id: ctx.orgId,
+                    customer_id: input.household_id,
+                    person_id: input.person_id,
+                    display_name: input.display_name,
+                    first_name: input.first_name,
+                    last_name: input.last_name,
+                    dob: input.dob,
+                    relationship: input.relationship,
+                })
+                .select("id")
+                .single();
+            if (error || !data) throw new Error(error?.message ?? "create_child_failed");
+            const childId = String((data as { id: string }).id);
+            if (input.gender === "female" || input.gender === "male") {
+                await upsertCustomerMemberConfigFieldValues(ctx.supabase, ctx.orgId, childId, {
+                    gender: input.gender,
+                });
+            }
+            return { id: childId, created: true };
+        },
+
+        async updateChild(ctx, input) {
+            let q = ctx.supabase
+                .from("customer_members")
+                .update({ ...input.patch, updated_at: new Date().toISOString() })
+                .eq("id", input.child_id)
+                .eq("org_id", ctx.orgId);
+            if (input.expected_version) q = q.eq("updated_at", input.expected_version);
+            const { data, error } = await q.select("id");
+            if (error) return { ok: false, error: error.message, code: error.code };
+            if (!data || (Array.isArray(data) && data.length === 0)) {
+                return { ok: false, error: "record_not_found_or_stale", code: "stale" };
+            }
+            return { ok: true };
+        },
+
+        async createLead(ctx, input) {
+            const locationId =
+                typeof input.location_id === "string" && input.location_id.trim()
+                    ? input.location_id.trim()
+                    : null;
+            const { data, error } = await ctx.supabase
+                .from("opportunities")
+                .insert({
+                    org_id: ctx.orgId,
+                    customer_id: input.household_id,
+                    primary_person_id: input.primary_person_id,
+                    name: input.name,
+                    status_key: input.status_key,
+                    stage_key: input.stage_key,
+                    stage_entered_at: new Date().toISOString(),
+                    ...(input.work_unit_id ? { work_unit_id: input.work_unit_id } : {}),
+                    ...(locationId ? { location_id: locationId } : {}),
+                })
+                .select("id")
+                .single();
+            if (error || !data) throw new Error(error?.message ?? "create_lead_failed");
+            return { id: String((data as { id: string }).id), created: true };
+        },
+
+        async updateLead(ctx, input) {
+            let q = ctx.supabase
+                .from("opportunities")
+                .update({ ...input.patch, updated_at: new Date().toISOString() })
+                .eq("id", input.lead_id)
+                .eq("org_id", ctx.orgId);
+            if (input.expected_version) q = q.eq("updated_at", input.expected_version);
+            const { data, error } = await q.select("id");
+            if (error) return { ok: false, error: error.message, code: error.code };
+            if (!data || (Array.isArray(data) && data.length === 0)) {
+                return { ok: false, error: "record_not_found_or_stale", code: "stale" };
+            }
+            return { ok: true };
+        },
+
+        async linkPersonToLead(ctx, input) {
+            const { data, error } = await ctx.supabase
+                .from("opportunity_persons")
+                .upsert(
+                    {
+                        org_id: ctx.orgId,
+                        opportunity_id: input.lead_id,
+                        person_id: input.person_id,
+                        role_type: input.role_type,
+                        ...(input.role ? { metadata: { role: input.role } } : {}),
+                    },
+                    // Live unique: uq_opportunity_persons_opp_person (opportunity_id, person_id)
+                    { onConflict: "opportunity_id,person_id", ignoreDuplicates: false },
+                )
+                .select("id")
+                .maybeSingle();
+            if (error) throw new Error(error.message);
+            return { id: data ? String((data as { id: string }).id) : "", created: Boolean(data) };
+        },
+
+        async createProcessParticipation(ctx, input) {
+            /*
+             * INTAKE ESTABLISHES THE PARTICIPATION, NOT THE ENROLLMENT EXECUTION.
+             *
+             * This used to create a child Enrollment Process Instance during Create Lead. The
+             * configured operating plans are explicit that `lead` is a FAMILY-grain stage, so that
+             * put a CHILD journey into a family stage — cross-grain impersonation — and it is why an
+             * acquisition child reported "Stage lead requires no Forms" and could never realize a
+             * participant objective.
+             *
+             * What intake legitimately owns is the child's durable Enrollment Participation bridge:
+             * the OCM, carrying the acquisition Opportunity. That is identity, and it is kept. What
+             * it does not own is the decision that the child is ENTERING Enrollment — that is the
+             * governed family `decision → Continue to Enrolling` outcome, which creates the child
+             * journey at the CHILD stage `enrollment`.
+             *
+             * So the OCM id is what this returns. "Participation" was always the OCM; the command
+             * had merely been returning the journey it should not have been creating.
+             */
+            const participation = await ensureOpportunityCustomerMemberParticipation({
+                supabase: ctx.supabase,
+                orgId: ctx.orgId,
+                opportunityId: input.lead_id,
+                customerMemberId: input.child_id,
+                source: "create_lead_ingest",
+                outcomeStatusKey: NEW_LEAD_STATUS_KEY,
+            });
+            return { id: participation.ocmId };
+        },
+
+        async updateProcessParticipation(ctx, input) {
+            /*
+             * ── ONE TRANSACTION, NOT A BARE UPDATE ───────────────────────────────────────────────
+             *
+             * This used to issue the UPDATE directly. That left the participation lifecycle write
+             * with no transaction of its own, so Step 2 had nowhere to attach the maintained
+             * opportunity fact without risking a split commit — canonical truth moving while the
+             * fact it feeds did not.
+             *
+             * The RPC IS that transaction. Semantics are unchanged and now live in SQL: the
+             * stage-entry stamp keys on `stage_key` being SUPPLIED (not on the value changing), the
+             * optimistic-concurrency guard is absent when no expected version is given, and not-found
+             * and stale remain one outcome under the same `record_not_found_or_stale` / `stale`
+             * vocabulary.
+             *
+             * The command above this port sends at most `stage_key` and `state`, so anything else is
+             * refused rather than silently dropped — this is the domain operation, not a table writer.
+             */
+            const ALLOWED_PATCH_FIELDS = new Set(["stage_key", "state"]);
+            const unexpected = Object.keys(input.patch).filter((k) => !ALLOWED_PATCH_FIELDS.has(k));
+            if (unexpected.length > 0) {
+                return {
+                    ok: false,
+                    error: `unsupported_participation_patch_fields: ${unexpected.sort().join(",")}`,
+                    code: "unsupported_patch",
+                };
+            }
+
+            const setStage = Object.prototype.hasOwnProperty.call(input.patch, "stage_key");
+            const setState = Object.prototype.hasOwnProperty.call(input.patch, "state");
+
+            const { data, error } = await ctx.supabase.rpc("update_participation_and_maintain_facts", {
+                p_org_id: ctx.orgId,
+                p_participation_id: input.participation_id,
+                p_expected_version: input.expected_version ?? null,
+                p_set_stage_key: setStage,
+                // `null` means SET NULL and absent means LEAVE ALONE; the flag carries that distinction.
+                p_stage_key: setStage ? ((input.patch.stage_key as string | null) ?? null) : null,
+                p_set_state: setState,
+                p_state: setState ? ((input.patch.state as string | null) ?? null) : null,
+            });
+            if (error) return { ok: false, error: error.message, code: error.code };
+
+            const result = (data ?? {}) as { ok?: boolean; error?: string; code?: string };
+            if (result.ok !== true) {
+                return {
+                    ok: false,
+                    error: result.error ?? "record_not_found_or_stale",
+                    code: result.code ?? "stale",
+                };
+            }
+            return { ok: true };
+        },
+
+        async readRecordOrg(ctx, input) {
+            const { data } = await ctx.supabase
+                .from(input.table)
+                .select("org_id")
+                .eq("id", input.id)
+                .maybeSingle();
+            const orgId = (data as { org_id?: string } | null)?.org_id;
+            return typeof orgId === "string" ? orgId : null;
+        },
+
+        async attachDocument(ctx, input) {
+            // D2: filing a document makes the target its PRIMARY OWNER through the canonical association; the legacy
+            // entity_type / entity_id follow as the projection. The target must be an owning subject of this org.
+            const subjectType = documentSubjectTypeForLegacy(input.target_entity_type);
+            if (!subjectType) return { ok: false, error: "document_subject_type_unsupported" };
+            const filed = await setPrimaryDocumentSubject(ctx.supabase, {
+                orgId: ctx.orgId,
+                documentId: input.document_id,
+                subjectType,
+                subjectId: input.target_entity_id,
+                actorUserId: ctx.actorId ?? null,
+            });
+            if (!filed.ok) return { ok: false, error: filed.code === "NOT_FOUND" ? "document_not_found" : filed.error };
+            if (input.doc_type) {
+                const { error } = await ctx.supabase
+                    .from("documents")
+                    .update({ doc_type: input.doc_type, updated_at: new Date().toISOString() })
+                    .eq("id", input.document_id)
+                    .eq("org_id", ctx.orgId);
+                if (error) return { ok: false, error: error.message };
+            }
+            return { ok: true };
+        },
+
+        async updateCommunicationPreferences(ctx, input) {
+            // Single preference write authority — upsert + append-only event.
+            // Marketing opt-in never silently overwrites an existing opt-out
+            // (repeat inquiry / identity commit must preserve suppression).
+            const category = String(input.category ?? "").trim();
+            if (!(PREFERENCE_CATEGORIES as readonly string[]).includes(category)) {
+                return { ok: false, error: `unknown_preference_category:${category}` };
+            }
+            const toStateRaw = String(input.state ?? "").trim();
+            if (toStateRaw !== "opted_in" && toStateRaw !== "opted_out" && toStateRaw !== "unset") {
+                return { ok: false, error: `invalid_preference_state:${toStateRaw}` };
+            }
+            const toState = toStateRaw as PreferenceState;
+
+            const { data: existing } = await ctx.supabase
+                .from("communication_preferences")
+                .select("state")
+                .eq("org_id", ctx.orgId)
+                .eq("person_id", input.person_id)
+                .eq("category", category)
+                .maybeSingle();
+            const fromState =
+                existing && typeof existing === "object" && "state" in existing
+                    ? ((existing as { state: PreferenceState }).state ?? null)
+                    : null;
+
+            const isMarketing =
+                category === "email_marketing" || category === "sms_marketing";
+            const effectiveToState: PreferenceState =
+                isMarketing && fromState === "opted_out" && toState === "opted_in"
+                    ? "opted_out"
+                    : toState;
+
+            const result = await persistCommunicationPreference(ctx.supabase, {
+                orgId: ctx.orgId,
+                personId: input.person_id,
+                category: category as PreferenceCategory,
+                fromState,
+                toState: effectiveToState,
+                source: input.source ?? "processing_identity",
+                method: input.method,
+                actorUserId: ctx.actorId ?? null,
+            });
+            if (!result.ok) return { ok: false, error: result.message };
+            return { ok: true };
+        },
+    };
+}

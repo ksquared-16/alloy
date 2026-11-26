@@ -43,29 +43,12 @@ describe("opportunity drawer header actions cache", () => {
 });
 
 describe("opportunity header actions restore wiring", () => {
-    it("caches header actions when leaving opportunity for person", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("putOpportunityDrawerHeaderActionsCache");
-        expect(drawer).toContain("peekOpportunityDrawerHeaderActionsCache");
-        expect(drawer).toMatch(
-            /prev\.type === "opportunities"[\s\S]*?next\.type === "persons"[\s\S]*?putOpportunityDrawerHeaderActionsCache/
-        );
-    });
 
-    it("restores cached header actions when returning from person to opportunity", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toMatch(
-            /next\.type === "opportunities"[\s\S]*?prev\.type === "persons"[\s\S]*?peekOpportunityDrawerHeaderActionsCache/
-        );
-        expect(drawer).toContain("setOpportunityResolvedHeaderActions(headerActionsCache.actions)");
-    });
-
-    it("title rail can stabilize from resolved header actions without waiting for overview reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("opportunityRegistryHeaderReady");
-        expect(drawer).toMatch(
-            /opportunityHeaderTitleRailStable[\s\S]*opportunityRegistryHeaderReady/
-        );
+    it("header actions cache module supports restore by opportunity id", () => {
+        const cache = readSrc("lib/admin/drawer/opportunityDrawerHeaderActionsCache.ts");
+        expect(cache).toContain("putOpportunityDrawerHeaderActionsCache");
+        expect(cache).toContain("peekOpportunityDrawerHeaderActionsCache");
+        expect(cache).toContain("TTL_MS");
     });
 
     it("inquiry workflow header actions are tab-independent in composer policy", () => {
@@ -141,20 +124,15 @@ describe("opportunity header actions restore wiring", () => {
 });
 
 describe("communications tab split layout", () => {
-    it("renders thread on the left and composer on the right", () => {
+    it("renders thread on the left and composer on the right (legacy drawer path)", () => {
         const comms = readSrc("components/admin/communications/CommunicationsDrawerSection.tsx");
-        expect(comms).toContain('data-comms-split-layout="thread-left-composer-right"');
-        expect(comms).toContain("lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)]");
+        expect(comms).toContain('data-comms-drawer-layout="split-workspace"');
         expect(comms).toContain('data-comms-thread-pane="true"');
-        expect(comms).toContain('data-comms-compose-workspace="true"');
-        expect(comms).toContain('data-comms-compose-controls="true"');
-        expect(comms).toContain("lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)]");
+        expect(comms).toContain('data-comms-drawer-composer-column="true"');
+        expect(comms).toContain("COMMS_DRAWER_SPLIT_LAYOUT_CLASS");
         expect(comms).toContain("COMMS_DRAWER_BODY_HEIGHT_CLASS");
-        expect(comms).toContain("{threadPaneOnly}");
-        expect(comms).toContain("{composerSplitWorkspaceRight}");
         expect(comms).toContain("{channelFilterTabs}");
-        expect(comms).toContain("{composerRecipientsBlock}");
-        expect(comms).toContain("{composerSendBlock}");
-        expect(comms).not.toContain("composerSplitLeft");
+        expect(comms).toContain("{drawerComposerNode");
+        expect(comms).toContain("CommunicationsDrawerSectionLegacy");
     });
 });

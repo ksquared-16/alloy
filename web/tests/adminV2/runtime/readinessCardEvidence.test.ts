@@ -13,7 +13,7 @@ function signals(attention?: Partial<OperationalContextSignals["attention"]>): O
     return {
         work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
         attention: { needsAttention: false, primaryReason: null, reasonCount: 0, ...attention },
-        tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+        tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
         communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
         billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
     };
@@ -57,7 +57,7 @@ describe("buildReadinessCardEvidence", () => {
                     child({
                         desired_program_label: "Preschool",
                         desired_schedule_label: "Full day",
-                        desired_start_date: "2025-08-26",
+                        start_date: "2025-08-26",
                     }),
                 ],
             }),
@@ -111,7 +111,7 @@ describe("buildReadinessCardEvidence", () => {
                     id: "opp-1",
                     "person.primary_contact_name": "Sarah Johnson",
                     _inquiry_children: [
-                        child({ desired_program_label: "Preschool", desired_schedule_label: "Full day", desired_start_date: "2025-08-26" }),
+                        child({ desired_program_label: "Preschool", desired_schedule_label: "Full day", start_date: "2025-08-26" }),
                     ],
                 },
                 { needsAttention: true, primaryReason: "Immunization record missing", reasonCount: 1 },

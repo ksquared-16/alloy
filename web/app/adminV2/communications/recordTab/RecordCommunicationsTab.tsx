@@ -2,10 +2,17 @@
 
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import FamilyCommunicationWorkspace from "@/app/adminV2/communications/FamilyCommunicationWorkspace";
+import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import type {
+    FamilyComposeDraftSeed,
+    FamilyComposeIntent,
+} from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import {
     buildRecordCommunicationsModel,
     type RecordTimelineEntry,
 } from "@/lib/communications/v2/recordTabModel";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { FamilySendWorkConsequence } from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
 
 /**
  * Record-drawer Communications tab (PKG-13) — DARK (self-gated behind comms_v2_record_tab).
@@ -16,6 +23,14 @@ import {
 export default function RecordCommunicationsTab(props: {
     entityType?: string;
     entityId?: string;
+    initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
+    compactActivityLoading?: boolean;
+    surfaceVariant?: FamilyWorkspaceSurfaceVariant;
+    entryContext?: "current_work" | null;
+    composeIntent?: FamilyComposeIntent | null;
+    draftSeed?: FamilyComposeDraftSeed | null;
+    workConsequence?: FamilySendWorkConsequence | null;
+    onSendAcknowledged?: (() => void) | null;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
     unread?: number;
@@ -27,8 +42,25 @@ export default function RecordCommunicationsTab(props: {
     // Communication Workspace (same structure as the modal, no queue), scoped to this drawer.
     if (isCommsV2FlagEnabled("comms_v2_live_workspace") && props.entityType && props.entityId) {
         return (
-            <div data-cc-record-tab="communications" className="bg-white">
-                <FamilyCommunicationWorkspace entity={{ entityType: props.entityType, entityId: props.entityId }} />
+            <div
+                data-cc-record-tab="communications"
+                className={
+                    props.surfaceVariant === "activity_embed"
+                        ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white"
+                        : "bg-white"
+                }
+            >
+                <FamilyCommunicationWorkspace
+                    entity={{ entityType: props.entityType, entityId: props.entityId }}
+                    initialPreviewVm={props.initialPreviewVm}
+                    compactActivityLoading={props.compactActivityLoading}
+                    surfaceVariant={props.surfaceVariant}
+                    entryContext={props.entryContext}
+                    composeIntent={props.composeIntent}
+                    draftSeed={props.draftSeed}
+                    workConsequence={props.workConsequence}
+                    onSendAcknowledged={props.onSendAcknowledged}
+                />
             </div>
         );
     }

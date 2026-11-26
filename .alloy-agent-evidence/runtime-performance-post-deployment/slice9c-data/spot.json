@@ -1,0 +1,53 @@
+{
+ "p0_1_loader": {
+  "rejected_preparing_copy_frames": 0,
+  "boot_shell_frames": 0,
+  "first_rows_ms": 10964
+ },
+ "p0_7_4_reserved": {
+  "first_reserved_ms": 10964,
+  "first_resolving_ms": 10964,
+  "resolving_keys": [
+   "children",
+   "household"
+  ],
+  "resolving_text": [
+   "Resolving children…",
+   "Resolving household…"
+  ],
+  "last_resolving_ms": 17810,
+  "final_cards": 6
+ },
+ "p0_7_3_heldRows": {
+  "target": "new_leads",
+  "target_rows": 3,
+  "rows_before": 16,
+  "t_busy_appears": 166,
+  "t_rows_changed": 2949,
+  "busy_while_old_rows": 95,
+  "old_rows_with_NO_busy_frames": 4,
+  "t_busy_clears": 2949
+ },
+ "p0_5_acknowledgement": {
+  "t_first_visible_response_ms": 166
+ },
+ "p0_2_bp_meaning": {
+  "t_bp_text_ms": 1,
+  "bp_first_text": "ENROLLMENT Lead Sep 16 Tour Decision Sep 16 Waitlist Enrolling PC Pathb Enrolled Sep 16 LE",
+  "bp_final_text": "ENROLLMENT Lead Sep 16 Tour Decision Sep 16 Waitlist Enrolling PC Pathb Enrolled Sep 16 LE",
+  "empty_or_placeholder_at_first": false
+ },
+ "attendance_health": {
+  "attendance": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for them. Det",
+  "health": null,
+  "subject": "ebe6cb44-957b-48f0-9a6d-603670443ec2",
+  "card_keys": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ]
+ }
+}

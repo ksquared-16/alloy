@@ -1,0 +1,42 @@
+{
+  "overview": {
+    "Fix now": ["Set time zone", "Configure capacity"],
+    "Do next": ["Set operating hours (when missing)", "Review tour availability (when incomplete)", "Add room (when zero rooms) OR Offer a program (when zero programs)"],
+    "Manage": ["Apply configuration", "Edit location"],
+    "More actions": ["Add room (when rooms already exist)", "Duplicate location (disabled)", "Open rooms", "Open programs"]
+  },
+  "programs": {
+    "Fix now": ["Offer a program / Complete program setup (when empty or incomplete)"],
+    "Do next": ["Add program (disabled — create flow deferred)"],
+    "Manage": ["Apply programs"]
+  },
+  "rooms": {
+    "Fix now": ["Configure room capacity (when gaps)"],
+    "Do next": ["Add room"],
+    "Manage": ["Apply room configuration"]
+  },
+  "schedule": {
+    "Fix now": ["Add schedule pattern (when none)"],
+    "Do next": ["Add schedule pattern (when patterns exist)"],
+    "Manage": ["Apply schedule configuration"],
+    "More actions": ["Add closure (disabled)"]
+  },
+  "tours": {
+    "Manage": ["Review availability", "Apply tour configuration"]
+  },
+  "placement": {
+    "Manage": ["Configure ranking"]
+  },
+  "access": {
+    "Manage": ["Manage access"]
+  },
+  "organization_landing": {
+    "Manage": ["Add location"]
+  },
+  "notes": [
+    "Page chrome no longer hosts Add Location or Edit Location inside a selected location workspace.",
+    "Org landing retains Add Location in content (fleet CTA) plus rail Manage.",
+    "Inline Edit program / Adjust room remain on the selected object; rail does not duplicate those.",
+    "Navigation-only Open rooms/programs sit behind More on Overview."
+  ]
+}

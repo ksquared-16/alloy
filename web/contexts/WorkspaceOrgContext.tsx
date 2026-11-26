@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { setCurrentWorkspaceScope } from "@/lib/workspace/currentWorkspaceScope";
 
 type WorkspaceOrgValue = {
   orgName: string | null;
@@ -35,13 +36,18 @@ export function WorkspaceOrgProvider({
   children: ReactNode;
 }) {
   const fp = typeof accessScopeFingerprint === "string" && accessScopeFingerprint.trim() ? accessScopeFingerprint.trim() : "scope:unknown";
-  return (
-    <WorkspaceOrgContext.Provider
-      value={{ orgName, orgId: orgId ?? null, principalUserId: principalUserId ?? null, accessScopeFingerprint: fp }}
-    >
-      {children}
-    </WorkspaceOrgContext.Provider>
+  // Publish the live workspace scope for non-React prewarm affordances (sidebar / shell nav) so their
+  // Work Unit surface prewarm keys match the runtime's session-cache scope exactly.
+  useEffect(() => {
+    setCurrentWorkspaceScope({ orgId: orgId ?? null, userId: principalUserId ?? null, scopeFingerprint: fp });
+  }, [orgId, principalUserId, fp]);
+  // Stable value identity (all primitives): consumers re-render only when a field actually changes,
+  // not on every unrelated parent render — this provider wraps the whole runtime tree.
+  const value = useMemo<WorkspaceOrgValue>(
+    () => ({ orgName, orgId: orgId ?? null, principalUserId: principalUserId ?? null, accessScopeFingerprint: fp }),
+    [orgName, orgId, principalUserId, fp],
   );
+  return <WorkspaceOrgContext.Provider value={value}>{children}</WorkspaceOrgContext.Provider>;
 }
 
 export function useWorkspaceOrg(): WorkspaceOrgValue {

@@ -1,0 +1,123 @@
+/**
+ * Operational Rooms (unit locations belonging to a site) for Assignment Kind
+ * eligibility and instant Create/Edit pickers.
+ *
+ * Resolution is by ANCESTRY, through the canonical Room provider. It used to read
+ * `parent_location_id = site`, which stopped being true the moment a physical
+ * space could contain operational groups: a classroom nested inside Room 1 has
+ * Room 1 as its parent and the site only as its grandparent, so it silently
+ * vanished from this list. That matters beyond a picker — staff assignments are
+ * what `assigned` attendance capture scope resolves through, so a teacher in a
+ * nested classroom could not be assigned to it and therefore could capture for
+ * nobody.
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
+import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import { readSpaceUses } from "@/lib/location/spaceUse";
+import { readRoomSupportedProgramKeys } from "@/lib/locations/roomOfferingMetadata";
+
+export type SiteOperationalRoom = {
+    roomId: string;
+    roomName: string | null;
+    /**
+     * The programs this room supports (the site's program category ids), from the Rooms editor's
+     * `supported_program_keys` — `null` when the room has no programs configured (unknown, never
+     * "every program").
+     */
+    supportedProgramCategoryIds: string[] | null;
+    /** The single program a room implies — set only when it supports exactly one. */
+    programCategoryId: string | null;
+    /** Configured uses (assignment category ids); `null` = never configured. See `spaceUse.ts`. */
+    spaceUses: string[] | null;
+    active: boolean;
+    /**
+     * What kind of unit this is. Exposed so a caller can tell a classroom from a
+     * playground; this loader deliberately still returns every unit, because
+     * narrowing the set is a separate decision from resolving it correctly.
+     */
+    unitRole: CanonicalUnitRole;
+    /** The physical space containing this room, or null when it hangs off the site. */
+    containingSpaceLocationId: string | null;
+};
+
+/** Load active-ish operational rooms belonging to a site, at any allowed depth. */
+export async function loadSiteOperationalRooms(
+    supabase: SupabaseClient,
+    orgId: string,
+    siteLocationId: string
+): Promise<SiteOperationalRoom[]> {
+    if (!siteLocationId) return [];
+    let rooms;
+    try {
+        // includeInactive, because this loader has always returned inactive rooms
+        // too and reports the fact through `active` rather than by omission.
+        rooms = await resolveRoomsForLocation(supabase, orgId, siteLocationId, {
+            includeInactive: true,
+        });
+    } catch (err) {
+        throw new OperationalEnrollmentServiceError(
+            "db_error",
+            err instanceof Error ? err.message : "failed to resolve rooms for site"
+        );
+    }
+
+    /*
+     * PROGRAMS ARE THE KEYS THE ROOMS EDITOR WRITES. This loader used to read
+     * `metadata.program_category_id`, which nothing in the product writes (census 2026-10-22: zero
+     * rooms carry it, six carry `supported_program_keys`), so every room read as program-less and
+     * "room implies program" never fired. Keys resolve against the site's own programs.
+     */
+    const { data: programRows, error: programError } = await supabase
+        .from("location_program_categories")
+        .select("id, key")
+        .eq("org_id", orgId)
+        .eq("location_id", siteLocationId);
+    if (programError) throw new OperationalEnrollmentServiceError("db_error", programError.message);
+    const programIdByKey = new Map(((programRows ?? []) as Array<{ id: string; key: string }>).map((p) => [p.key, p.id]));
+
+    return rooms
+        .map((r) => {
+            const status = (r.statusKey ?? "").trim().toLowerCase();
+            const active = status === "" || status === "active" || status === "open";
+            const keys = readRoomSupportedProgramKeys(r.metadata);
+            const supported = keys.length ? keys.map((k) => programIdByKey.get(k)).filter((id): id is string => Boolean(id)) : null;
+            return {
+                roomId: r.id,
+                roomName: r.name != null ? String(r.name).trim() || null : null,
+                supportedProgramCategoryIds: supported,
+                programCategoryId: supported?.length === 1 ? supported[0]! : null,
+                spaceUses: readSpaceUses(r.metadata),
+                active,
+                unitRole: r.unitRole,
+                containingSpaceLocationId: r.containingSpaceLocationId,
+            };
+        })
+        .sort((a, b) => (a.roomName ?? "").localeCompare(b.roomName ?? ""));
+}
+
+/**
+ * The rooms a CLASSROOM/GROUP question may offer.
+ *
+ * `loadSiteOperationalRooms` deliberately returns every unit — resolving the set
+ * correctly and narrowing it are different decisions, and Attendance needs the
+ * wide set. This is the narrowing, expressed once for the Staff/Scheduling
+ * consumer family rather than as `room.unitRole === "operational_group"` repeated
+ * through four call sites.
+ *
+ * It answers a CONSUMER question. It is not a topology authority: the role it
+ * reads was resolved by the canonical provider, and the predicate is the shared
+ * domain one.
+ *
+ * A historical unit with no stored role arrives here already reading as
+ * `operational_group`, so a tenant whose rooms all predate Topology V1 keeps
+ * every classroom option it had.
+ */
+export function assignableClassrooms(
+    rooms: readonly SiteOperationalRoom[]
+): SiteOperationalRoom[] {
+    return rooms.filter((room) => isOperationalGroupRole(room.unitRole));
+}

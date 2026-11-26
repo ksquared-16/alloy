@@ -1,0 +1,89 @@
+# Release runbook — 683b189fa4a0 → rehearsal
+
+Manifest sha256: `ce8244b440bb5c153e5f2f54cf257a0d7b0c9060b0646120ec439c959e674fa6` (confirm code `ce8244b440bb`)
+Replaces main `9837a56a9118d3538d514f36fcbe58a74c3027af`; 1 commit(s); 2 migration(s): 1 expand, 1 contract.
+Production ledger head at preflight: `20270101000100`.
+
+Every command below is the owner's. `$PRODUCTION_DB_URL` is the session pooler (5432), never the transaction pooler (6543); the release tool never sees it.
+
+## 4. owner.approval
+
+```bash
+node scripts/release/alloy-release.mjs approve --manifest <release-dir>/manifest.json --approver <owner> --confirm ce8244b440bb --ttl-hours 4
+node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step owner.approval --status pass --detail '{}'
+```
+
+## 5. production.snapshot
+
+Confirm in the Supabase dashboard that a backup / PITR point newer than now exists, then:
+
+```bash
+pg_dump "$PRODUCTION_DB_URL" -Fc --no-owner -f <release-dir>/pre-release-683b189fa4a0.dump && shasum -a 256 <release-dir>/pre-release-683b189fa4a0.dump
+curl -fsS https://www.workwithalloy.com/api/build-info > <release-dir>/before-build-info.json
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select version from supabase_migrations.schema_migrations order by version;" > <release-dir>/before-ledger.txt
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select 'columns_md5|' || md5(coalesce(string_agg(table_name||'.'||column_name||':'||data_type||':'||is_nullable||':'||coalesce(column_default,''), ',' order by table_name, ordinal_position),'')) from information_schema.columns where table_schema='public' union all select 'policies_md5|' || md5(coalesce(string_agg(tablename||'.'||policyname||':'||cmd||':'||array_to_string(roles,'+')||':'||coalesce(qual,'')||':'||coalesce(with_check,''), ',' order by tablename, policyname),'')) from pg_policies where schemaname='public' union all select 'functions_md5|' || md5(coalesce(string_agg(p.proname||'('||pg_get_function_identity_arguments(p.oid)||')', ',' order by p.proname, pg_get_function_identity_arguments(p.oid)),'')) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' union all select 'indexes_md5|' || md5(coalesce(string_agg(indexdef, ',' order by indexname),'')) from pg_indexes where schemaname='public' union all select 'tables|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' union all select 'rls_disabled|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity;" > <release-dir>/before-fingerprint.txt
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select o.id::text || '|' || coalesce(to_jsonb(o)->>'status','') || '|' || coalesce(to_jsonb(o)->>'name','') from public.orgs o order by o.id;" > <release-dir>/before-orgs.txt
+node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step production.snapshot --status pass --detail '{"dump_sha256":"<sha256>"}'
+```
+
+## 6. schema.expand
+
+Re-read the ledger first; it must equal the preflight read (any change → prepare and approve again).
+
+```bash
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select version from supabase_migrations.schema_migrations order by version;" > <release-dir>/pre-expand-ledger.txt
+node scripts/release/alloy-release.mjs check-ledger --manifest <release-dir>/manifest.json --ledger <release-dir>/pre-expand-ledger.txt
+node scripts/release/alloy-release.mjs emit-apply --manifest <release-dir>/manifest.json --version 20270201000000 | psql "$PRODUCTION_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -X -q -f -
+node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step schema.expand --status applied --detail '{"version":"20270201000000"}'
+```
+
+Any failure: stop. The failing file left nothing (one transaction); the previous build still serves and tolerates what was applied. Fix forward.
+
+## 7. code.deploy
+
+```bash
+test "$(git ls-remote origin refs/heads/main | cut -f1)" = "9837a56a9118d3538d514f36fcbe58a74c3027af"   # main is still what was approved
+git push origin 683b189fa4a07e2f9c4cce80417999f37ee03e97:refs/heads/main   # fast-forward only; never --force
+until curl -fsS https://www.workwithalloy.com/api/build-info | grep -q '"gitSha":"683b189fa4a07e2f9c4cce80417999f37ee03e97"'; do sleep 30; done
+node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step code.deploy --status pass --detail '{}'
+```
+
+## 8. production.verify
+
+```bash
+curl -fsS https://www.workwithalloy.com/api/build-info > <release-dir>/after-build-info.json
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select version from supabase_migrations.schema_migrations order by version;" > <release-dir>/after-ledger.txt
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select 'columns_md5|' || md5(coalesce(string_agg(table_name||'.'||column_name||':'||data_type||':'||is_nullable||':'||coalesce(column_default,''), ',' order by table_name, ordinal_position),'')) from information_schema.columns where table_schema='public' union all select 'policies_md5|' || md5(coalesce(string_agg(tablename||'.'||policyname||':'||cmd||':'||array_to_string(roles,'+')||':'||coalesce(qual,'')||':'||coalesce(with_check,''), ',' order by tablename, policyname),'')) from pg_policies where schemaname='public' union all select 'functions_md5|' || md5(coalesce(string_agg(p.proname||'('||pg_get_function_identity_arguments(p.oid)||')', ',' order by p.proname, pg_get_function_identity_arguments(p.oid)),'')) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' union all select 'indexes_md5|' || md5(coalesce(string_agg(indexdef, ',' order by indexname),'')) from pg_indexes where schemaname='public' union all select 'tables|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' union all select 'rls_disabled|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity;" > <release-dir>/after-fingerprint.txt
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select o.id::text || '|' || coalesce(to_jsonb(o)->>'status','') || '|' || coalesce(to_jsonb(o)->>'name','') from public.orgs o order by o.id;" > <release-dir>/after-orgs.txt
+node scripts/release/alloy-release.mjs check-production --manifest <release-dir>/manifest.json --build-info <release-dir>/after-build-info.json --ledger <release-dir>/after-ledger.txt --fingerprint <release-dir>/after-fingerprint.txt --orgs <release-dir>/after-orgs.txt --stage expand
+node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step production.verify --status pass --detail '{}'
+```
+
+On failure — **code.rollback** (granted with this approval): Vercel → Deployments → the production deployment of
+`9837a56a9118` → Instant Rollback. Wait until build-info serves it, then `node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step code.rollback --status pass --detail '{}'`. Migrations stay: they are additive. Restoring the snapshot needs a new owner approval.
+
+## 9. schema.contract
+
+Needs `schema_contract` in the approval. Only after step 8 passed.
+
+```bash
+node scripts/release/alloy-release.mjs emit-apply --manifest <release-dir>/manifest.json --version 20270201000200 | psql "$PRODUCTION_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -X -q -f -
+node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step schema.contract --status applied --detail '{"version":"20270201000200"}'
+curl -fsS https://www.workwithalloy.com/api/build-info > <release-dir>/final-build-info.json
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select version from supabase_migrations.schema_migrations order by version;" > <release-dir>/final-ledger.txt
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select 'columns_md5|' || md5(coalesce(string_agg(table_name||'.'||column_name||':'||data_type||':'||is_nullable||':'||coalesce(column_default,''), ',' order by table_name, ordinal_position),'')) from information_schema.columns where table_schema='public' union all select 'policies_md5|' || md5(coalesce(string_agg(tablename||'.'||policyname||':'||cmd||':'||array_to_string(roles,'+')||':'||coalesce(qual,'')||':'||coalesce(with_check,''), ',' order by tablename, policyname),'')) from pg_policies where schemaname='public' union all select 'functions_md5|' || md5(coalesce(string_agg(p.proname||'('||pg_get_function_identity_arguments(p.oid)||')', ',' order by p.proname, pg_get_function_identity_arguments(p.oid)),'')) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' union all select 'indexes_md5|' || md5(coalesce(string_agg(indexdef, ',' order by indexname),'')) from pg_indexes where schemaname='public' union all select 'tables|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' union all select 'rls_disabled|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity;" > <release-dir>/final-fingerprint.txt
+psql "$PRODUCTION_DB_URL_READONLY" -At -X -c "select o.id::text || '|' || coalesce(to_jsonb(o)->>'status','') || '|' || coalesce(to_jsonb(o)->>'name','') from public.orgs o order by o.id;" > <release-dir>/final-orgs.txt
+node scripts/release/alloy-release.mjs check-production --manifest <release-dir>/manifest.json --build-info <release-dir>/final-build-info.json --ledger <release-dir>/final-ledger.txt --fingerprint <release-dir>/final-fingerprint.txt --orgs <release-dir>/final-orgs.txt --stage final
+```
+
+Do not roll code back across an applied contract migration; fix forward.
+
+## 10. release.record
+
+```bash
+node scripts/release/alloy-release.mjs record --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step release.record --status pass --detail '{}'
+node scripts/release/alloy-release.mjs verify-audit <release-dir>/audit.jsonl
+```
+
+Commit the release directory (manifest, staging verification, approval, observations, audit) as the release's evidence.
+

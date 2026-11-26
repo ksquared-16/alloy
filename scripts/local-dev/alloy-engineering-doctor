@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Engineering Health — observe, explain, recommend; execute only with --yes.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+NODE_BIN="${ALLOY_NODE_BIN:-node}"
+ENGINE="${SCRIPT_DIR}/lib/engineering-health/cli.mjs"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-engineering-doctor              # human report (cached collectors)
+  alloy-engineering-doctor --json       # machine-readable report
+  alloy-engineering-doctor --refresh    # bypass collector cache
+  alloy-engineering-doctor --quick      # skip expensive git/large-file scans
+  alloy-engineering-doctor --fix <id> --yes
+  alloy-engineering-doctor --list-actions
+
+Philosophy: Observe → Evaluate → Explain → Recommend → Execute(only with --yes).
+Never silently deletes.
+
+Examples:
+  alloy-engineering-doctor
+  alloy-engineering-doctor --json
+  alloy-engineering-doctor --fix worktree_gc --yes
+  alloy-engineering-doctor --fix remove_cursor_backup_local --yes
+EOF
+}
+
+main() {
+  if [[ ! -f "$ENGINE" ]]; then
+    alloy_die "Engineering Health engine missing: $ENGINE"
+  fi
+  exec "$NODE_BIN" "$ENGINE" "$@"
+}
+
+main "$@"

@@ -71,7 +71,7 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
     return (
         <div className="w-full min-w-0 space-y-4 pb-2">
             <header>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Settings · Guardrails</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Configuration · Guardrails</p>
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Status transition guardrails</h1>
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-alloy-midnight/60">
                     These rules <strong>validate or block status transitions before they happen</strong> — for example, requiring tour
@@ -89,7 +89,7 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
                 </p>
                 <p className="mt-2 text-xs text-alloy-midnight/45">
                     <Link href="/admin/settings" className="font-medium text-alloy-pine hover:underline">
-                        ← Back to Settings
+                        ← Back to Configuration
                     </Link>
                 </p>
             </header>

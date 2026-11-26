@@ -69,7 +69,7 @@ export function buildProofOpportunityRecord(overrides: Partial<ProofRuntimeRecor
             {
                 id: "enroll-child-1",
                 "child.name": "Riley Brooks",
-                "inquiry_child.desired_start_date": "2026-09-01",
+                "inquiry_child.start_date": "2026-09-01",
                 "inquiry_child.location_id": "Sunshine — Main Campus",
                 "inquiry_child.program_room_cohort_key": "Infant AM",
                 "inquiry_child.outcome_status_key": "Active inquiry",
@@ -77,7 +77,7 @@ export function buildProofOpportunityRecord(overrides: Partial<ProofRuntimeRecor
             {
                 id: "enroll-child-2",
                 "child.name": "Sam Johnson",
-                "inquiry_child.desired_start_date": "2027-01-15",
+                "inquiry_child.start_date": "2027-01-15",
                 "inquiry_child.location_id": "Sunshine — Main Campus",
                 "inquiry_child.program_room_cohort_key": "Toddler PM",
                 "inquiry_child.outcome_status_key": "Waitlisted",

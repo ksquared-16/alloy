@@ -91,7 +91,7 @@ export default function LifecycleAddStageForm({
                     <input
                         type="text"
                         className="mt-0.5 w-full rounded-md border border-alloy-forge/20 px-2 py-1.5 text-sm"
-                        placeholder="Lead, Qualification, Tour…"
+                        placeholder="Lead, Tour, Decision…"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         data-testid="lifecycle-add-stage-name"

@@ -1,0 +1,305 @@
+{
+  "schema": "documents.r4.qa_run_open_receipt.v1",
+  "request_id": "gar_83ad11cec06578",
+  "run_id": "erun2_b516567f7b12da4c",
+  "lane_id": "lane_aa660dc9554d",
+  "sprint": "OPWORK_AA660DC9554D_SPRINT_E460BCD09185",
+  "operator_approval": {
+    "decision": "approved",
+    "actor": "operator",
+    "at": "2026-10-29T21:43:44.882Z"
+  },
+  "hosted_qa_authority": {
+    "declared": true,
+    "reason": "Documents R4 restricted personas can only be proven on hosted staging under authz_q1 Revision 3 (operator-authorized R4 scope)"
+  },
+  "contract": {
+    "revision": 3,
+    "sha256": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e"
+  },
+  "provisioning_reused": {
+    "qa_pool_06": "gar_8dd1137e8d62ff",
+    "qa_pool_07": "gar_bdcc5dbf8124a1",
+    "qa_pool_08": "gar_208e52f1780b9c"
+  },
+  "executed": {
+    "started": "2026-10-29T21:43:45.245Z",
+    "ended": "2026-10-29T21:43:45.245Z"
+  },
+  "result": {
+    "ok": true,
+    "status": "open",
+    "custom_roles": [
+      {
+        "role_key": "qa_doc_reader",
+        "grants": [
+          "documents.read",
+          "portal.access"
+        ],
+        "created": false
+      },
+      {
+        "role_key": "qa_no_docs",
+        "grants": [
+          "crm.customers.read",
+          "portal.access"
+        ],
+        "created": false
+      },
+      {
+        "role_key": "qa_processing_only",
+        "grants": [
+          "portal.access",
+          "processing.operate"
+        ],
+        "created": false
+      },
+      {
+        "role_key": "qa_ocr",
+        "grants": [
+          "documents.read",
+          "portal.access",
+          "processing.operate"
+        ],
+        "created": false
+      },
+      {
+        "role_key": "qa_scoped_ops",
+        "grants": [
+          "crm.customers.read",
+          "documents.read",
+          "portal.access",
+          "processing.operate"
+        ],
+        "created": false
+      },
+      {
+        "role_key": "qa_scoped_forms",
+        "grants": [
+          "crm.customers.read",
+          "documents.read",
+          "forms.submissions",
+          "forms.submissions.confirm",
+          "portal.access"
+        ],
+        "created": true
+      },
+      {
+        "role_key": "qa_health_viewer",
+        "grants": [
+          "documents.read",
+          "health.view",
+          "portal.access"
+        ],
+        "created": true
+      },
+      {
+        "role_key": "qa_doc_writer",
+        "grants": [
+          "documents.read",
+          "documents.write",
+          "portal.access"
+        ],
+        "created": true
+      }
+    ],
+    "qa_run_id": "qar_bc811ffc7da1",
+    "plan_key": "authz_q1",
+    "target": {
+      "kind": "hosted",
+      "key": "alloy_staging_web"
+    },
+    "lane_id": "lane_aa660dc9554d",
+    "state": "OPEN",
+    "lease_expires_at": "2026-10-30T03:43:45.245Z",
+    "fixture_namespace": {
+      "qa_run_id": "qar_bc811ffc7da1"
+    },
+    "personas": [
+      {
+        "persona_key": "fixture_admin",
+        "identity_key": "qa_shared_actor",
+        "email": "qa-shared-actor@example.com",
+        "org_key": "qa_shared",
+        "roles": [],
+        "scope": null,
+        "session": true
+      },
+      {
+        "persona_key": "doc_reader",
+        "identity_key": "qa_pool_01",
+        "email": "qa-pool-01@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_doc_reader"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "no_docs",
+        "identity_key": "qa_pool_02",
+        "email": "qa-pool-02@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_no_docs"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "processing_only",
+        "identity_key": "qa_pool_03",
+        "email": "qa-pool-03@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_processing_only"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "ocr",
+        "identity_key": "qa_pool_04",
+        "email": "qa-pool-04@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_ocr"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "scoped_ops",
+        "identity_key": "qa_pool_05",
+        "email": "qa-pool-05@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_scoped_ops"
+        ],
+        "scope": {
+          "department": "restricted",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "scoped_forms",
+        "identity_key": "qa_pool_06",
+        "email": "qa-pool-06@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_scoped_forms"
+        ],
+        "scope": {
+          "department": "restricted",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "health_viewer",
+        "identity_key": "qa_pool_07",
+        "email": "qa-pool-07@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_health_viewer"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "doc_writer",
+        "identity_key": "qa_pool_08",
+        "email": "qa-pool-08@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_doc_writer"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "cross_org_admin",
+        "identity_key": "qa_secondary_admin",
+        "email": "qa-secondary-admin@example.com",
+        "org_key": "qa_secondary",
+        "roles": [],
+        "scope": null,
+        "session": true
+      }
+    ],
+    "sessions": [
+      {
+        "persona_key": "fixture_admin",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "doc_reader",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "no_docs",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "processing_only",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "ocr",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "scoped_ops",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "scoped_forms",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "health_viewer",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "doc_writer",
+        "verified": true,
+        "failure": null
+      },
+      {
+        "persona_key": "cross_org_admin",
+        "verified": true,
+        "failure": null
+      }
+    ],
+    "close": null
+  },
+  "note": "storage_state paths omitted; no cookie, token or password recorded"
+}

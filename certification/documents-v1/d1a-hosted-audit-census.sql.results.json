@@ -1,0 +1,53 @@
+{
+  "trusted_host_action_id": "tha_202e9ebd75fcef",
+  "query_hash": "f5732ff6deae44a12be05e2aa687ced5e720b84fdf8ed614c3e6762b3641964b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-20T20:44:31.079Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_202e9ebd75fcef",
+    "query_hash": "f5732ff6deae44a12be05e2aa687ced5e720b84fdf8ed614c3e6762b3641964b",
+    "authorization_id": "grnt_6dd20f561dd74d10",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-20T20:44:50.487Z",
+    "question_ids": [
+      "v00_identity",
+      "v01_d1a_audit_by_type"
+    ],
+    "questions": {
+      "v00_identity": {
+        "question_id": "v00_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_head": "20261129090000",
+            "workflow_events_total": 9291,
+            "d1a_tagged_events": 1
+          }
+        ]
+      },
+      "v01_d1a_audit_by_type": {
+        "question_id": "v01_d1a_audit_by_type",
+        "row_count": null,
+        "rows": [
+          {
+            "event_type": "document_link_issued",
+            "entity_type": "documents",
+            "events": 1,
+            "with_actor": 1,
+            "with_route": 1,
+            "first_at": "2026-10-20T20:41:50.859+00:00",
+            "last_at": "2026-10-20T20:41:50.859+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

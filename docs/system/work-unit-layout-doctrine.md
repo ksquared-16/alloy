@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Work Unit Layout Doctrine
 
 **Status:** **Canonical V3 — frozen (June 2026)**  
@@ -7,7 +14,7 @@ This is a **doctrine lock**, not a redesign exercise. Do not propose alternative
 
 Related: **`workspace-system.md`**, **`queue-record-doctrine.md`**, **`platform-performance-doctrine.md`**, **`bos-foundation.md`**.
 
-Closeout: **`docs/sprints/06_2026/completed/work_unit_layout_v3_freeze_closeout.md`**.
+Closeout: **`docs/sprints/archive/06_2026/completed/work_unit_layout_v3_freeze_closeout.md`**.
 
 ---
 

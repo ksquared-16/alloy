@@ -1,0 +1,88 @@
+{
+  "trusted_host_action_id": "tha_98f41ad3bcc479",
+  "query_hash": "5c63833d8646ca45d5270bb1fa52bd17e4cd93f3bbc20dc987dc668c5305c5af",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-10T23:10:28.518Z",
+    "question_ids": [
+      "m100000",
+      "m110000",
+      "m120000",
+      "m130000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m100000": {
+        "question_id": "m100000",
+        "row_count": null,
+        "rows": [
+          "user_person_links ~ table ~ true",
+          "uq_user_person_link_active_user ~ index ~ true",
+          "uq_user_person_link_active_person ~ index ~ true",
+          "ck_user_person_link_revoked_has_timestamp ~ constraint ~ true",
+          "assert_user_person_link_same_org ~ trigger ~ true",
+          "user_person_links ~ rls_enabled_and_forced ~ true"
+        ]
+      },
+      "m110000": {
+        "question_id": "m110000",
+        "row_count": null,
+        "rows": [
+          "user_access_profiles.attendance_capture_scope ~ column ~ true",
+          "attendance_capture_scope ~ not_null_default_site ~ true",
+          "attendance_capture_scope ~ closed_vocabulary ~ true"
+        ]
+      },
+      "m120000": {
+        "question_id": "m120000",
+        "row_count": null,
+        "rows": [
+          "attendance_integration_producers ~ table ~ true",
+          "attendance_integration_producer_sites ~ table ~ true",
+          "attendance_integration_mappings ~ table ~ true",
+          "attendance_integration_events ~ table ~ true",
+          "ck_integration_mapping_target_matches_type ~ constraint ~ true",
+          "uq_integration_mapping_active_external ~ index ~ true",
+          "attendance_integration_events.disposition ~ vocabulary ~ true",
+          "attendance_integration_producer_sites ~ tenancy_trigger ~ true",
+          "attendance_integration_mappings ~ tenancy_trigger ~ true"
+        ]
+      },
+      "m130000": {
+        "question_id": "m130000",
+        "row_count": null,
+        "rows": [
+          "action_links.revoked_at ~ column ~ true",
+          "action_links.revoked_reason ~ column ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260911100000 ~ registered ~ absent ~ false",
+          "20260911110000 ~ registered ~ absent ~ false",
+          "20260911120000 ~ registered ~ absent ~ false",
+          "20260911130000 ~ registered ~ absent ~ false"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260910183000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          399
+        ]
+      }
+    },
+    "row_count": 26
+  }
+}

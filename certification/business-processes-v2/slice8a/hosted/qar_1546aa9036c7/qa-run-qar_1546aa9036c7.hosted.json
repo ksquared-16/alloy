@@ -1,0 +1,440 @@
+{
+  "schema": "alloy.bp_v2.hosted_qa_run.v1",
+  "toolkit": "43ce22941af3",
+  "deployed_staging": "8bb731eadbf3",
+  "supabase_project": "ikaxilmwmrmbagoidedu",
+  "lane_run": "erun2_0e745d4db26f8133",
+  "run": {
+    "run_id": "qar_1546aa9036c7",
+    "plan_key": "bp_v2",
+    "target": {
+      "kind": "hosted",
+      "key": "alloy_staging_web"
+    },
+    "lane_id": "lane_581d120e4e41",
+    "run_ref": "erun2_0e745d4db26f8133",
+    "open_request_id": "gar_9ad7f3df3a90fb",
+    "state": "CLOSED",
+    "opened_at": "2026-10-23T00:22:13.873Z",
+    "lease_expires_at": "2026-10-23T06:22:13.873Z",
+    "personas": [
+      {
+        "persona_key": "admin",
+        "identity_key": "qa_pool_01",
+        "email": "qa-pool-01@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "admin"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "director",
+        "identity_key": "qa_pool_02",
+        "email": "qa-pool-02@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "restricted_operator",
+        "identity_key": "qa_pool_03",
+        "email": "qa-pool-03@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "restricted"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "identity_key": "qa_pool_04",
+        "email": "qa-pool-04@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "qa_bp_no_finance"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      }
+    ],
+    "fixture_namespace": {
+      "qa_run_id": "qar_1546aa9036c7"
+    },
+    "sessions": [
+      {
+        "persona_key": "admin",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_1546aa9036c7/admin/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "director",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_1546aa9036c7/director/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "restricted_operator",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_1546aa9036c7/restricted_operator/storage-state.json",
+        "failure": null
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "verified": true,
+        "storage_state_path": "/Users/vacilando/.local/state/alloy-dev/gateway/auth/qa-runs/qar_1546aa9036c7/no_finance_operator/storage-state.json",
+        "failure": null
+      }
+    ],
+    "failure": null,
+    "close": {
+      "request_id": "gar_788652e7bece89",
+      "started_at": "2026-10-23T00:32:23.573Z",
+      "recovery": false,
+      "closed_at": "2026-10-23T00:32:23.573Z",
+      "verdict": "QUIESCED_RETAINED",
+      "access_clean": true,
+      "sessions_removed": true,
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ],
+      "custom_roles": [
+        {
+          "role_key": "qa_bp_no_finance",
+          "grants": 0,
+          "existed": true
+        }
+      ],
+      "sessions_signed_out": [
+        {
+          "identity_key": "qa_pool_01",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "signed_out": true
+        }
+      ],
+      "residue_census": {
+        "ok": true,
+        "request_id": "gar_91261ae7a0d440",
+        "executed_at": "2026-10-23T00:33:45.540Z",
+        "checks": [
+          "bp_qr_pool_access",
+          "bp_qr_zero_sent",
+          "bp_qr_org_exists",
+          "bp_qr_fin_no_merchant",
+          "bp_qr_fin_no_usable_method",
+          "bp_qr_fin_no_autopay",
+          "bp_qr_fin_no_provider_activity",
+          "bp_qr_fin_no_active_schedule",
+          "bp_qr_fin_no_draft",
+          "bp_qr_fin_no_open_balance",
+          "bp_qr_fin_no_open_variance",
+          "bp_qr_fin_no_unapplied_money",
+          "bp_qr_fin_attributed"
+        ]
+      },
+      "retained_by_design": [
+        "posted financial records (immutable), neutralized and attributed by run",
+        "published process configuration",
+        "access audit history (mutation_events)"
+      ]
+    },
+    "updated_at": "2026-10-23T00:44:57.946Z",
+    "history": [
+      {
+        "at": "2026-10-23T00:22:13.873Z",
+        "event": "opening"
+      },
+      {
+        "at": "2026-10-23T00:22:13.873Z",
+        "event": "open"
+      },
+      {
+        "at": "2026-10-23T00:32:23.573Z",
+        "event": "closing",
+        "detail": "live"
+      },
+      {
+        "at": "2026-10-23T00:32:23.573Z",
+        "event": "closed",
+        "detail": "ACCESS_CLEAN_RETAINED_ARTIFACTS_UNVERIFIED"
+      },
+      {
+        "at": "2026-10-23T00:44:57.946Z",
+        "event": "census_attached",
+        "detail": "gar_91261ae7a0d440"
+      }
+    ],
+    "sessions_minted": true
+  },
+  "requests": {
+    "open": {
+      "request_id": "gar_9ad7f3df3a90fb",
+      "action_key": "environment.qa_run_open",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_aa9787be6a64b4",
+      "execution_ended_at": "2026-10-23T00:22:13.873Z"
+    },
+    "close": {
+      "request_id": "gar_788652e7bece89",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_55ba2645a71f52",
+      "execution_ended_at": "2026-10-23T00:32:23.573Z"
+    },
+    "census": {
+      "request_id": "gar_91261ae7a0d440",
+      "action_key": "database.read_census",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_0423728e8c3397",
+      "execution_ended_at": "2026-10-23T00:33:45.540Z"
+    },
+    "bind": {
+      "request_id": "gar_2ab6bd0873f4eb",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_d77aa2932071f9",
+      "execution_ended_at": "2026-10-23T00:44:57.946Z"
+    }
+  },
+  "session_verification": {
+    "admin": "qa-pool-01@example.com PASS",
+    "director": "qa-pool-02@example.com PASS",
+    "restricted_operator": "qa-pool-03@example.com PASS",
+    "no_finance_operator": "qa-pool-04@example.com PASS"
+  },
+  "grants": {
+    "admin": {
+      "total": 95,
+      "prohibited_class": [
+        "billing.read",
+        "billing.write",
+        "enrollment.pricing.override",
+        "fin.adjust",
+        "fin.provider",
+        "fin.read",
+        "fin.responsibility",
+        "fin.subsidy",
+        "fin.write",
+        "staff.compensation.read",
+        "staff.compensation.write"
+      ],
+      "portal.access": true
+    },
+    "ops": {
+      "total": 61,
+      "prohibited_class": [
+        "billing.read",
+        "billing.write",
+        "fin.read",
+        "fin.write"
+      ],
+      "portal.access": true
+    },
+    "school_director": {
+      "total": 1,
+      "prohibited_class": [
+        "fin.read"
+      ],
+      "portal.access": false
+    },
+    "qa_bp_no_finance": {
+      "total": 57,
+      "prohibited_class": [],
+      "portal.access": true
+    }
+  },
+  "no_finance_equals_ops_minus_prohibited": true,
+  "director_effective_prohibited_class": [
+    "billing.read",
+    "billing.write",
+    "fin.read",
+    "fin.write"
+  ],
+  "billing_refusal": "no_finance_operator: all 5 Billing views terminal=error 'You don't have access to this Work View. You don't have access to view financial information for this organization.'; Billing tile view links carry no counts; Assignments views available. director: same 5 views terminal=projection, counts 0.",
+  "financial_api_probe": {
+    "no_finance_operator": {
+      "/api/admin/financials/subjects": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      },
+      "/api/admin/financials/overview-metrics": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      },
+      "/api/admin/financials/work-queue": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      },
+      "/api/admin/financials/charge-index": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      },
+      "/api/admin/financials/payments-health": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      },
+      "/api/admin/financials/accounts": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      },
+      "/api/admin/financials/statements": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      },
+      "/api/admin/financials/needs-recognition": {
+        "status": 403,
+        "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+      }
+    },
+    "director": {
+      "/api/admin/financials/subjects": {
+        "status": 200,
+        "body": "{\"ok\":true,\"subjects\":[],\"scope\":{\"siteLocationId\":null,\"siteScope\":\"all\"},\"truncated\":false,\"scanCap\":2000}"
+      },
+      "/api/admin/financials/overview-metrics": {
+        "status": 200,
+        "body": "{\"ok\":true,\"window\":\"rolling_30d\",\"site_location_id\":null,\"metrics\":[{\"metric_key\":\"financials.outstanding_amount\",\"label\":\"Outstanding\",\"fo"
+      },
+      "/api/admin/financials/work-queue": {
+        "status": 200,
+        "body": "{\"ok\":true,\"rows\":[],\"counts\":{\"actionable\":0,\"siteScoped\":0,\"orgScoped\":0,\"households\":0,\"needsAPerson\":0,\"waitingOnADate\":0},\"scope\":{\"sit"
+      },
+      "/api/admin/financials/charge-index": {
+        "status": 200,
+        "body": "{\"ok\":true,\"rows\":[],\"counts\":{\"attention\":0,\"scheduled\":0,\"posted\":0,\"cancelled\":0,\"legacy\":0},\"typeOptions\":[],\"periodOptions\":[],\"truncat"
+      },
+      "/api/admin/financials/payments-health": {
+        "status": 200,
+        "body": "{\"ok\":true,\"configuration\":{\"providerApi\":{\"status\":\"present\",\"mode\":\"test\",\"variable\":\"STRIPE_SECRET_KEY\"},\"webhookVerification\":{\"status\":"
+      },
+      "/api/admin/financials/accounts": {
+        "status": 200,
+        "body": "{\"data\":[]}"
+      },
+      "/api/admin/financials/statements": {
+        "status": 400,
+        "body": "{\"error\":\"start and end required for P&L\"}"
+      },
+      "/api/admin/financials/needs-recognition": {
+        "status": 200,
+        "body": "{\"ok\":true,\"rows\":[]}"
+      }
+    }
+  },
+  "census": {
+    "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "census_run_at": "2026-10-23T00:33:52.896Z",
+    "checks": {
+      "bp_qr_pool_access": "user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ true",
+      "bp_qr_zero_sent": "communication_messages ~ outbound_send_evidence ~ zero ~ true",
+      "bp_qr_org_exists": "orgs ~ qa_shared ~ present ~ true",
+      "bp_qr_fin_no_merchant": "payment_provider_merchants ~ any ~ zero ~ true",
+      "bp_qr_fin_no_usable_method": "payment_methods ~ usable ~ zero ~ true",
+      "bp_qr_fin_no_autopay": "payment_autopay_arrangements ~ active_or_paused ~ zero ~ true",
+      "bp_qr_fin_no_provider_activity": "payment_collection_attempts+payment_provider_refunds+provider_payments ~ any ~ zero ~ true",
+      "bp_qr_fin_no_active_schedule": "scheduled_work ~ financials_or_payments_active ~ zero ~ true",
+      "bp_qr_fin_no_draft": "charges ~ draft ~ zero ~ true",
+      "bp_qr_fin_no_open_balance": "charges ~ owed_unreversed_uncovered ~ zero ~ true",
+      "bp_qr_fin_no_open_variance": "financial_subsidy_variances ~ unresolved ~ zero ~ true",
+      "bp_qr_fin_no_unapplied_money": "payments ~ inbound_posted_unapplied ~ zero ~ true",
+      "bp_qr_fin_attributed": "charges+payments+variances ~ non_qa_actor ~ zero ~ true"
+    },
+    "retained": {
+      "bp_qr_retained_financial": [
+        {
+          "artifact": "posted financial records (immutable)",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_charge_rows": 0,
+          "by_status": {},
+          "reversal_rows": 0,
+          "payment_rows": 0,
+          "variance_rows": 0
+        }
+      ],
+      "bp_qr_retained_process_config": [
+        {
+          "artifact": "published process configuration",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_configuration_publication_rows": 2
+        }
+      ],
+      "bp_qr_retained_audit": [
+        {
+          "artifact": "access audit history (mutation_events)",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_mutation_event_rows": 62
+        }
+      ]
+    }
+  },
+  "pending": "bind gar_91261ae7a0d440 to qar_2765465b1e2b (closed 2026-10-22T21:47Z, before the census) \u2014 refused at filing because lane run erun2_0e745d4db26f8133 completed; one filing in the next lane run"
+}

@@ -1,0 +1,176 @@
+{
+  "generated_by": "web/scripts/checkUnauthenticatedSideEffects.mjs",
+  "counts": {
+    "routes": 572,
+    "side_effecting": 376,
+    "side_effecting_authenticated": 373,
+    "side_effecting_unauthenticated": 3,
+    "sessionless_side_effecting": 18,
+    "sessionless_sender_verified": 15,
+    "listed_exemptions": 3,
+    "by_model": {
+      "session": 358,
+      "signature": 3,
+      "credential": 12
+    }
+  },
+  "sessionless_side_effecting_routes": [
+    {
+      "route": "app/api/action-links/consume-accept-job/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/action-links/consume-reschedule/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/action/[token]/consume/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/leads/gutters/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": null
+    },
+    {
+      "route": "app/api/marketing/demo-request/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": null
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/[submissionId]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/book/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/cancel-intent/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/cancel/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/confirm/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/decline/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/reschedule/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "credential"
+    },
+    {
+      "route": "app/api/vendor-application/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": null
+    },
+    {
+      "route": "app/api/webhooks/resend/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "signature"
+    },
+    {
+      "route": "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "signature"
+    },
+    {
+      "route": "app/api/webhooks/twilio/sms-status/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "model": "signature"
+    }
+  ],
+  "ratchet": {
+    "max_unauthenticated_side_effect_routes": 3
+  },
+  "ok": true,
+  "violations": [],
+  "stale": [],
+  "unauthenticated": [
+    {
+      "route": "app/api/leads/gutters/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "exempted": "public-intake-create"
+    },
+    {
+      "route": "app/api/marketing/demo-request/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "exempted": "public-intake-notify"
+    },
+    {
+      "route": "app/api/vendor-application/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "exempted": "public-intake-create + env-pinned-org"
+    }
+  ],
+  "register_reviewed": "2026-08-11"
+}

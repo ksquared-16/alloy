@@ -1,0 +1,39 @@
+{
+  "before": [
+    {
+      "id": "31bc3220-0499-42f8-89b6-6901abf7c409",
+      "start": "2026-01-01",
+      "end": "2026-09-24",
+      "scope": "room",
+      "age": null,
+      "via": null,
+      "tiers": [
+        "1:4",
+        "2:8",
+        "3:12"
+      ]
+    }
+  ],
+  "serverToday": {
+    "status": 400
+  },
+  "submit": {
+    "status": 400,
+    "body": {
+      "error": "New version effective_start must be after the prior version start and any prior end date",
+      "code": "validation_failed"
+    }
+  },
+  "after": [
+    {
+      "id": "31bc3220-0499-42f8-89b6-6901abf7c409",
+      "start": "2026-01-01",
+      "end": "2026-09-24",
+      "tiers": [
+        "1:4",
+        "2:8",
+        "3:12"
+      ]
+    }
+  ]
+}

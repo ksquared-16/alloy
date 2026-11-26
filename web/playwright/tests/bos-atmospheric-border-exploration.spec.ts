@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { test, expect } from "@playwright/test";
 
-const outDir = path.join(__dirname, "../../../docs/sprints/06_2026/assets/bos-atmospheric-border-exploration");
+const outDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/assets/bos-atmospheric-border-exploration");
 
 const shots: { id: string; filename: string }[] = [
     { id: "soft-intelligence-field", filename: "A-soft-intelligence-field.png" },

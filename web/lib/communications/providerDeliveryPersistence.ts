@@ -198,6 +198,16 @@ export async function applyOutboundProviderDeliveryPatch(params: {
     const { error: upErr } = await params.supabase.from("communication_messages").update(updates).eq("id", id);
     if (upErr) return { ok: false, reason: upErr.message };
 
+    // A provider callback is proof of acceptance: a message that declared contact work and was not yet
+    // associated (the send's inline pass ran before the provider answered) becomes the contact attempt
+    // now. Idempotent per message; never fails the webhook.
+    try {
+        const { reconcileContactAttemptOnProviderAcceptance } = await import("@/lib/communications/contactAttemptOnProviderAcceptance");
+        await reconcileContactAttemptOnProviderAcceptance({ supabase: params.supabase, messageId: id });
+    } catch {
+        /* bookkeeping — the scheduled sweep retries */
+    }
+
     if (!params.patch.receipt) {
         return { ok: true, message_id: id, updated: applied };
     }

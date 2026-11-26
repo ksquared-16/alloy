@@ -1,0 +1,5864 @@
+/**
+ * Worker → Director governed-action handoff.
+ *
+ * A Development Lane that has proven it cannot reach a registered trusted-host
+ * capability emits a durable request. Director validates, auto-executes or
+ * asks the operator, then returns a bounded result to the same lane.
+ *
+ * This is not a parallel orchestrator: it sits on execution runs, mission
+ * decisions, and trusted-host actions.
+ */
+import { stampRepositoryAuthority } from "./repository-execution-authority.mjs";
+import { executionProfileFor as executionProfileForRepo, projectScope } from "./repository-registry.mjs";
+
+/** Alloy's database target, owned by Alloy's profile. */
+const alloyDatabaseTarget = () =>
+  executionProfileForRepo({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID_FOR_TARGET }).database_target;
+
+/**
+ * The database a request is actually FOR.
+ *
+ * S1 replaced the literal `"alloy_deployed_primary"` with Alloy's profile, which
+ * fixed where the value came from and left the behaviour: a request that omitted
+ * a target still acquired ALLOY'S DATABASE, whichever project it named.
+ *
+ * A request that NAMES a project now resolves that project's database, or none —
+ * a project with no database gets a null target and the action refuses
+ * downstream, which is the correct outcome for a repository-only project. Only a
+ * request that names no project at all keeps the incumbent Alloy default, and
+ * that last fallback belongs to S3, once every request carries its project.
+ */
+function requestDatabaseTarget(req = {}, inputs = {}) {
+  const stated = inputs.target || inputs.environment || req.target;
+  if (stated) return stated;
+  const named = req.authority?.repository_id || inputs.repository_id || null;
+  if (named) return projectScope(named).database_target || null;
+  return alloyDatabaseTarget();
+}
+const ALLOY_REPOSITORY_ID_FOR_TARGET = "repo_alloy";
+import { createHash, randomBytes } from "node:crypto";
+import { measureMergePullRequestGates } from "./trusted-host-repository-housekeeping.mjs";
+import { describeWait } from "./run-wait.mjs";
+import { evaluateDirectorAuthority } from "./director-authority.mjs";
+import { collectDirectorEvidence } from "./director-evidence.mjs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+
+import {
+  ACTION_TYPES,
+  DEFAULT_TARGET,
+  artifactContractFor,
+  classifyActionAvailability,
+  getActionDefinition,
+  resolveCanonicalRepoRoot,
+} from "./trusted-host-action-registry.mjs";
+import {
+  classifyGovernedActionFailure,
+  directorRegistryFreshness,
+  markDirectorCapabilitiesCurrent,
+  operatorDirectorCopy,
+  readDirectorCapabilityStatus,
+  refreshDirectorCapabilities,
+} from "./director-capability-freshness.mjs";
+import {
+  findAuthorization,
+  grantMissionAuthorization,
+  standingGrantEligible,
+  SUBJECT_SCOPES,
+  grantExactRequestAuthorization,
+  revokeAuthorization,
+} from "./trusted-host-authz.mjs";
+import {
+  fulfillRepositoryPushForMission,
+  fulfillClosePullRequestForMission,
+  fulfillApplyReconciliationPlanForMission,
+  fulfillTransferFilesForMission,
+  fulfillExecuteRegisteredReconciliationForMission,
+  fulfillRetireWorktreeForMission,
+  fulfillDeleteRemoteBranchForMission,
+  fulfillRestoreDeployedQaSessionForMission,
+  fulfillRestoreQaSessionForMission,
+  fulfillProvisionQaIdentityForMission,
+  fulfillAssignQaAccessForMission,
+  fulfillPromotionOpenPrForMission,
+  fulfillDatabaseCensusForMission,
+  fulfillRepositoryMergeForMission,
+  fulfillDatabaseMigrationForMission,
+  fulfillPromotedMigrationForMission,
+  fulfillLedgerRepairForMission,
+  fulfillSetProviderCeilingForMission,
+  fulfillRegisterDeveloperApplicationForMission,
+  fulfillInstallToolkitForMission,
+  fulfillLaneDispatchForMission,
+  previewTrustedHostAuthorization,
+  fulfillRepositoryMetadataPromotionForMission,
+} from "./trusted-host-actions.mjs";
+import { resolveDeployedTarget } from "./deployed-target-registry.mjs";
+import { qaActionNeedsDevelopmentSlot } from "./qa-slot-preflight.mjs";
+import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
+import { ACCESS_IDENTITY_STAGING_MIGRATIONS } from "./trusted-host-migrate.mjs";
+import { createDecision, listDecisions, answerDecision } from "./decisions.mjs";
+import { appendTimelineEvent } from "./timeline.mjs";
+import { attachEvidence } from "./evidence.mjs";
+import {
+  activeRunForLane,
+  candidateRuntimeRoots,
+  findExecutionRun,
+  getExecutionRun as getExecutionRun,
+  isTerminalRunState as isTerminalRunState,
+  isIrreversibleRunState,
+  patchRunFields as patchRunFields,
+  patchRunResourceWait as patchRunResourceWait,
+  publicExecutionRun,
+  transitionExecutionRun,
+} from "./execution-run.mjs";
+import { canonicalLaneStoreId, getDurableLane, missionIdForLane } from "./development-lane.mjs";
+import { laneSlot, qaIdentityForSlot } from "./browser-auth.mjs";
+import {
+  consumeGrant,
+  getGrant,
+  grantIsValidFor,
+  mintGrant,
+  resolveGovernedAuthoritySync,
+} from "./governed-repository-authority.mjs";
+import { inspectPullRequest, readMergeInputIdentity } from "./trusted-host-merge.mjs";
+import {
+  consumeMissionDelegation,
+  findCoveringDelegation,
+  releaseMissionDelegation,
+  reserveMissionDelegation,
+} from "./mission-delegation.mjs";
+import { classForGovernedStatus, isRoutineProgress, upsertNotification } from "./lane-notifications.mjs";
+
+export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
+export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
+export const Q15_CENSUS_ARTIFACT =
+  "docs/platform/planning/vacilando-os/qa/access-identity-v2/q15-authority-census.json";
+
+export const GOVERNED_STATUSES = Object.freeze([
+  "requested",
+  "awaiting_director",
+  "awaiting_operator",
+  "executing",
+  "complete",
+  "failed",
+]);
+
+export const GOVERNED_MODES = Object.freeze([
+  "read_only",
+  "certification",
+  "migration_apply",
+  "promotion",
+  "other",
+]);
+
+export const PENDING_GOVERNED_STATUSES = Object.freeze([
+  "requested",
+  "awaiting_director",
+  "awaiting_control_plane_refresh",
+  // A merge whose CI checks have not been reported yet. See enterCheckWait.
+  "awaiting_checks",
+  "awaiting_operator",
+  "executing",
+]);
+
+/**
+ * Gates that can only be answered once CI has reported.
+ *
+ * MEASURED. Three merges in one session escalated with "Required gates did not
+ * pass: required_checks_successful, certification_suite_passed" and every one
+ * was approved by hand. Re-measuring the same two PRs afterwards returns
+ * certification_suite_passed TRUE, 8/8 and 9/9 checks passing, none failing,
+ * none pending. The evidence was never missing and the plumbing was never
+ * absent — `measureMergePullRequestGates` is wired for exactly this action.
+ *
+ * The gates were measured ONCE, seconds after the pull request was opened,
+ * before GitHub had registered a single check run. With no checks reported,
+ * `required_checks_total` is 0, which the predicate scores FALSE — deliberately,
+ * because zero checks is not "all checks passed" — and the certification filter
+ * matches nothing, which is NULL. Both correct. Both permanent, because
+ * `tickGovernedActions` re-processes `requested`, `awaiting_director` and
+ * `awaiting_control_plane_refresh` and never `awaiting_operator`. A minute later
+ * the checks went green and nobody looked again.
+ *
+ * So the defect is not a missing producer. It is a measurement taken too early
+ * and never repeated.
+ */
+export const CHECK_AVAILABILITY_GATES = Object.freeze([
+  "required_checks_successful",
+  "certification_suite_passed",
+]);
+
+/** Bounded. A wait that never resolves must become a visible escalation, not a hang. */
+export const MAX_CHECK_WAIT_ATTEMPTS = 20;
+export const MAX_CHECK_WAIT_MS = 20 * 60_000;
+
+const STALE_REGISTRY_FAILURES = new Set([
+  "unauthorized_action_key",
+  "unsupported_action_key",
+  "director_registry_stale",
+  "action_unavailable",
+  "unknown_action_type",
+]);
+
+function secretRe() {
+  return /postgresql:\/\/[^\s]+|postgres:\/\/[^\s]+|DATABASE_URL|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gi;
+}
+
+function runtimeRoot() {
+  return process.env.ALLOY_RUNTIME_ROOT?.trim()
+    || join(homedir(), ".local", "state", "alloy-dev");
+}
+
+function iso(ms) {
+  return new Date(ms ?? Date.now()).toISOString();
+}
+
+function bound(s, max) {
+  const t = String(s || "").trim();
+  if (!t) return null;
+  return t.length > max ? t.slice(0, max) : t;
+}
+
+/**
+ * THE OBSERVABILITY CLOCK, DELIBERATELY SEPARATE FROM THE AUTHORIZATION CLOCK.
+ *
+ * THE DEFECT. `approveGovernedAction` captures one `nowMs` at entry and threads
+ * it through every downstream `appendAudit`. Every event of a single approval —
+ * `operator_approved`, `executing`, `grant_consumed`, `complete` — therefore
+ * carries an IDENTICAL timestamp. The audit looks like a timeline and is not
+ * one: computed over the 962 approvals with a terminal event in the 23 days to
+ * 2026-09-11, the median approve-to-terminal duration reads as 0.0s, which is
+ * not a fast system, it is a fabricated one. The question "how long did the
+ * operator wait" was unanswerable from the ledger that exists to answer it.
+ *
+ * WHY NOT JUST USE Date.now() EVERYWHERE. Because `nowMs` is load-bearing for
+ * AUTHORIZATION: grant expiry, decision validity windows and every test that
+ * pins time all depend on one injected, deterministic clock. Replacing it would
+ * make wall-clock timing part of authorization correctness, and make the suite
+ * non-deterministic — a bad trade for a metric.
+ *
+ * So the two clocks are split by role. `nowMs` stays the authorization clock and
+ * nothing about it changes. These stamps are observability only: nothing reads
+ * them to decide anything, and a test that pins `nowMs` still gets identical
+ * authorization behaviour while these move. They are recorded under
+ * `decision_timing` rather than beside the semantic timestamps precisely so that
+ * the distinction survives someone skimming the record.
+ */
+function observedNow() {
+  return new Date().toISOString();
+}
+
+function stampDecisionTiming(rec, field) {
+  if (!rec) return;
+  rec.decision_timing = { ...(rec.decision_timing || {}), [field]: observedNow() };
+}
+
+/**
+ * Stamp a moment that can only happen once.
+ *
+ * `projection_visible_at` is now reachable from two places — the terminal write
+ * and the resume — and the question it answers is "when did this first become
+ * readable", not "when was it last touched". Overwriting would silently report
+ * the later of the two and make the measured latency look worse than it was.
+ */
+function stampDecisionTimingOnce(rec, field) {
+  if (!rec) return;
+  if (rec.decision_timing?.[field]) return;
+  stampDecisionTiming(rec, field);
+}
+
+/**
+ * THE canonical location of the governed-action request store.
+ *
+ * Exported because a Director evidence collector hand-joined this path, missed
+ * the "vacilando" segment, and read nothing — which surfaced as an UNMEASURED
+ * gate and refused a cleanup. A missed file reads as "cannot tell", so that
+ * bug wore the costume of caution. Callers ask the owner now.
+ */
+export function governedActionStorePath(root = runtimeRoot()) {
+  return storePath(root);
+}
+
+function storePath(root = runtimeRoot()) {
+  return join(root, "vacilando", "governed-actions", "requests.json");
+}
+
+function auditPath(root = runtimeRoot()) {
+  return join(root, "vacilando", "governed-actions", "audit.jsonl");
+}
+
+function notifyPath(root = runtimeRoot()) {
+  return join(root, "vacilando", "notifications", "events.jsonl");
+}
+
+function emptyStore() {
+  return { schema_version: GOVERNED_ACTION_SCHEMA, requests: [] };
+}
+
+function atomicWrite(path, obj) {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
+  renameSync(tmp, path);
+}
+
+export function readGovernedActionStore(root = runtimeRoot()) {
+  try {
+    const raw = JSON.parse(readFileSync(storePath(root), "utf8"));
+    if (!raw || typeof raw !== "object") return emptyStore();
+    return {
+      schema_version: GOVERNED_ACTION_SCHEMA,
+      requests: Array.isArray(raw.requests) ? raw.requests : [],
+    };
+  } catch {
+    return emptyStore();
+  }
+}
+
+function writeStore(store, root) {
+  atomicWrite(storePath(root), store);
+  return store;
+}
+
+function newRequestId() {
+  return `gar_${randomBytes(7).toString("hex")}`;
+}
+
+function redact(text) {
+  return String(text || "").replace(secretRe(), "[redacted]");
+}
+
+function containsSecret(value) {
+  if (value == null) return false;
+  const text = typeof value === "string" ? value : (() => {
+    try { return JSON.stringify(value); } catch { return ""; }
+  })();
+  return secretRe().test(text);
+}
+
+export function isPendingGovernedStatus(status) {
+  return PENDING_GOVERNED_STATUSES.includes(status);
+}
+
+/**
+ * Resolve a lane's slot and registered QA identity FOR DISPLAY ONLY.
+ *
+ * Consults the same registry the executor uses, so the approval names the account it will act on.
+ * Never throws: a control that cannot resolve a name must still render, falling back to generic
+ * wording rather than breaking the surface the operator approves from.
+ */
+function resolveSlotIdentityForDisplay(laneId) {
+  try {
+    if (!laneId) return { identity: null, slot: null };
+    const lane = getDurableLane(laneId);
+    const slot = lane ? laneSlot(lane) : null;
+    if (!Number.isInteger(Number(slot))) return { identity: null, slot: null };
+    return { identity: qaIdentityForSlot(Number(slot)) || null, slot: Number(slot) };
+  } catch {
+    return { identity: null, slot: null };
+  }
+}
+
+export function presentationForGovernedAction(req = {}) {
+  const key = req.action_key || "";
+  const inputs = req.inputs || {};
+  if (req.status === "awaiting_control_plane_refresh") {
+    const copy = operatorDirectorCopy("refreshing");
+    const mergeN = inputs.pull_request_number || inputs.pullRequestNumber || "";
+    return {
+      approve_label: key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST ? "Authorize merge" : "Authorize",
+      deny_label: "Deny",
+      wait_label: copy.lane_label,
+      mission_need: copy.mission_label,
+      detail: mergeN
+        ? `${copy.detail} Merge of PR #${mergeN} will be offered for approval next.`
+        : copy.detail,
+    };
+  }
+  if (key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const n = inputs.pull_request_number || inputs.pullRequestNumber || "";
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").slice(0, 12);
+    return {
+      approve_label: "Authorize merge",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — staging merge",
+      mission_need: `Needs approval — Merge PR #${n} into staging`,
+      detail: `Merge PR #${n} into staging · expected SHA ${sha || "—"} · method ${inputs.merge_method || inputs.mergeMethod || "merge"}`,
+    };
+  }
+  if (key === ACTION_TYPES.REPOSITORY_PUSH) {
+    const b = inputs.branch || inputs.head_branch || inputs.headBranch || "";
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").slice(0, 12);
+    return {
+      approve_label: "Authorize push",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — branch push",
+      mission_need: `Needs approval — Push ${b || "a reviewed branch"}`,
+      detail: `Push ${b} at ${sha || "—"} to the remote · non-force · single ref`,
+    };
+  }
+  if (key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const b = inputs.head_branch || inputs.headBranch || inputs.branch || "";
+    const base = inputs.base || req.target || "staging";
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").slice(0, 12);
+    return {
+      approve_label: "Authorize pull request",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — promotion pull request",
+      mission_need: `Needs approval — Open ${b} → ${base}`,
+      detail: `Open a pull request from ${b} at ${sha || "—"} into ${base}`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    /*
+     * Says what access is granted, to whom, and where. "Staging admin" is the whole substance of
+     * this approval, so it belongs in the label rather than behind it.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || resolved.slot || "";
+    return {
+      approve_label: "Authorize QA access assignment",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA access assignment",
+      mission_need: `Needs approval — Assign staging admin access${slot ? ` for Slot ${slot}` : ""}`,
+      detail: `Assign staging admin access to ${identity}${slot ? ` for Slot ${slot}` : ""} in the canonical staging organization · lane ${lane} · one user_roles row · organization derived from existing staging admins, never supplied · no production or customer access`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    /*
+     * Names the account being created and the slot it belongs to. Provisioning creates an account;
+     * restoring signs into one. Two different decisions, so the words must not be interchangeable.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    /*
+     * The identity is RESOLVED for display, not read off the request.
+     *
+     * The request carries only a lane id - deliberately, so a caller cannot name a target - which
+     * left the control saying "the slot's registered QA identity". An approval that does not name
+     * the account being created is not an informed approval, so the same registry the executor uses
+     * is consulted here. It is display only: nothing downstream reads these values.
+     */
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || inputs.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || resolved.slot || "";
+    return {
+      approve_label: "Authorize QA identity provisioning",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA identity provisioning",
+      mission_need: `Needs approval — Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`,
+      detail: `Create the managed, non-production QA account ${identity}${slot ? ` for Slot ${slot}` : ""} in hosted staging · lane ${lane} · no email is sent · no human-managed password is created · creates no browser session`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    /*
+     * A deployed approval must READ as deployed. The hazard here is the exact inverse of the one the
+     * local branch below was written for: an operator shown "Restore QA session on Slot 1" while
+     * approving an action that authenticates a public host has approved something they were not
+     * told about. The card therefore names the environment and the host, because those are the two
+     * facts that decide whether this approval is the right one.
+     */
+    const key2 = inputs.deployed_target || inputs.deployedTarget || inputs.target_key || "";
+    const resolved = resolveDeployedTarget(key2);
+    const t = resolved.ok ? resolved.target : null;
+    const host = t?.host || "the registered deployed target";
+    const env = t?.environment || "deployed";
+    const identity = t?.qa_identity || "the target's registered QA identity";
+    return {
+      approve_label: "Authorize deployed QA session restore",
+      deny_label: "Deny",
+      wait_label: `Waiting on Director — deployed QA session restore (${env})`,
+      mission_need: `Needs approval — Restore QA session on ${host}`,
+      detail: `Restore the browser session for ${identity} on ${host} · ${env} · target resolved from the registry, not from the request · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    /*
+     * Without this branch the restore fell through to the census presentation and asked the operator
+     * to "Authorize census — Read-only database census · Data mode: Read-only" for an action that
+     * mints a Supabase session. Approving one thing while shown another is the specific hazard the
+     * subject-matching rules elsewhere in this file exist to prevent, so a privileged action must
+     * never inherit another action's words.
+     *
+     * The label names the identity and the slot, because those are the two facts that decide whether
+     * this approval is the right one.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || inputs.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || resolved.slot || "";
+    return {
+      approve_label: "Authorize QA session restore",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA session restore",
+      mission_need: `Needs approval — Restore QA session${slot ? ` on Slot ${slot}` : ""}`,
+      detail: `Restore the browser session for ${identity}${slot ? ` on Slot ${slot}` : ""} · lane ${lane} · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
+    };
+  }
+  if (key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    /*
+     * IT MUST NOT READ LIKE A MIGRATION, BECAUSE IT IS NOT ONE.
+     *
+     * Without this branch the ledger repair inherited the DEFAULT card —
+     * "Authorize" over whatever title the filing happened to carry — so the one
+     * fact that decides this approval, that NO SCHEMA CHANGES, was left to the
+     * requester's prose. An operator who approved it believing it applied
+     * migrations would have approved the wrong thing in the safer direction,
+     * which still means the card lied. The sibling production actions each got
+     * their own words for exactly this reason.
+     *
+     * The state matters as much as the versions: this capability asks the
+     * operator to approve a ledger going FROM one head and count TO another, so
+     * both ends are on the card rather than inferred.
+     */
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
+    const target = inputs.target || inputs.environment || req.target || DEFAULT_TARGET;
+    const expected = inputs.expectedLedger || inputs.expected_ledger || {};
+    const from = expected.head ?? expected.ledgerHead;
+    const to = expected.postHead ?? expected.post_head;
+    const fromCount = expected.count ?? expected.ledgerCount;
+    const toCount = expected.postCount ?? expected.post_count;
+    const move = (from && to)
+      ? ` · Ledger ${from} (${fromCount ?? "?"} rows) → ${to} (${toCount ?? "?"} rows)`
+      : "";
+    return {
+      approve_label: "Authorize ledger reconciliation",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — PRODUCTION migration ledger",
+      mission_need: `Needs approval — RECORD ${versions.length || "already-applied"} migration${versions.length === 1 ? "" : "s"} as applied on ${target}`,
+      detail: `PRODUCTION MIGRATION LEDGER · NO SCHEMA CHANGES — nothing is applied, created or altered.`
+        + ` Registers ${versions.length ? versions.join(", ") : "the named migrations"} on ${target} as already applied${move}.`
+        + " Refused unless a governed census already proves those effects physically present and matching the approved artifact.",
+    };
+  }
+  if (key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
+    /*
+     * PRODUCTION MUST NOT BE APPROVABLE BY HABIT.
+     *
+     * Without this branch the production migration inherited the DEFAULT card —
+     * "Authorize — <title>" — while the staging sibling below has words an
+     * operator has read many times. The single human decision in this whole
+     * loop was being asked in the vocabulary of the routine one, or in no
+     * vocabulary at all.
+     *
+     * So the environment leads every string, the target is named in full, and
+     * the word STAGING appears nowhere.
+     */
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
+    // The literal here meant any project omitting a target acquired Alloy's
+  // database. Alloy's profile answers for Alloy; another project supplies its own.
+  const target = requestDatabaseTarget(req, inputs);
+    const sha = String(inputs.expectedSha || inputs.expected_sha || "");
+    return {
+      approve_label: "Authorize PRODUCTION migration",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — PRODUCTION database migration",
+      mission_need: `Needs approval — PRODUCTION DATABASE MIGRATION on ${target}`,
+      detail: `PRODUCTION DATABASE MIGRATION · Target: ${target} (deployed primary) · Candidate ${sha || "—"}`
+        + ` · Applies ${versions.length ? versions.join(", ") : "the approved batch"}`
+        + " · This mutates the live database and cannot be undone by Vacilando.",
+    };
+  }
+  if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    const n = list.length || (inputs.expected_version ? 1 : 0);
+    const awaiting = req.status === "awaiting_operator";
+    return {
+      approve_label: "Authorize staging migrations",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — staging schema promotion",
+      mission_need: awaiting
+        ? "Needs approval — Apply Access & Identity staging migrations"
+        : "Preparing staging schema promotion",
+      detail: `Apply ${n || "ordered"} staging schema migration${n === 1 ? "" : "s"} · stop on first failure`,
+    };
+  }
+  if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return {
+      approve_label: "Authorize census",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director",
+      mission_need: "Needs approval — read-only census",
+      detail: `Read-only database census · Target: ${req.target || DEFAULT_TARGET} · Data mode: Read-only`,
+    };
+  }
+  if (key === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
+    const wt = inputs.worktree || inputs.worktree_path || inputs.worktreePath || req.title || "a worktree";
+    return {
+      approve_label: "Authorize worktree retirement",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — worktree retirement",
+      mission_need: `Needs approval — Retire ${wt}`,
+      detail: `Remove the worktree ${wt} via git worktree remove · no --force · branch is not deleted`,
+    };
+  }
+  /*
+   * Census copy used to be the default. Restore, retire, and every new action then asked the
+   * operator to "Authorize census" for something that was not a census. A privileged action must
+   * never inherit another action's words.
+   */
+  const title = req.title || key || "governed action";
+  return {
+    approve_label: "Authorize",
+    deny_label: "Deny",
+    wait_label: "Waiting on Director",
+    mission_need: `Needs approval — ${title}`,
+    detail: title,
+  };
+}
+
+/**
+ * The facts a Director weighs before authorizing a merge, as structured rows.
+ *
+ * WHY STRUCTURED AND NOT A SENTENCE. The card used to be one line — "Merge PR
+ * #508 into staging · expected SHA 4cffed0abe32 · method merge". That is enough
+ * to identify the action and not enough to DECIDE it: it never said what the PR
+ * was called, whether CI was green, how much it changed, or what merging would
+ * do that could not be undone. A Director approving from a phone had to leave
+ * the app to find out.
+ *
+ * Everything here is either pinned in the request or captured from a read-only
+ * inspection at request time. Nothing is a credential, and nothing is inferred.
+ */
+export const GRANT_TTL_MINUTES = 30;
+
+const MERGE_CONSEQUENCES = Object.freeze([
+  "The pull request is merged into the target branch on GitHub.",
+  "The target branch moves for everyone, not just this lane.",
+  "Vacilando cannot undo this. Reverting is a separate, human decision.",
+]);
+
+function factRow(label, value) {
+  if (value === null || value === undefined || value === "") return null;
+  return { label, value: String(value) };
+}
+
+const PUSH_CONSEQUENCES = Object.freeze([
+  "The named commit is published to the remote branch, visible to everyone.",
+  "Nothing is force-pushed and no other branch is touched.",
+  "The branch can be moved again afterwards, but this commit cannot be unpublished.",
+]);
+
+const OPEN_PR_CONSEQUENCES = Object.freeze([
+  "A pull request is opened against the canonical promotion branch.",
+  "It does not merge anything — merging is a separate decision.",
+  "An open pull request for the same branch is reused rather than duplicated.",
+]);
+
+/** The facts a Director weighs before authorizing a push. */
+function pushProposal(req) {
+  const i = req.inputs || {};
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const branch = i.branch || i.head_branch || i.headBranch || null;
+  const facts = [
+    factRow("Repository", i.repository || null),
+    factRow("Branch", branch),
+    factRow("Commit", sha ? sha.slice(0, 12) : null),
+    factRow("Remote ref", branch ? `refs/heads/${branch}` : null),
+    factRow("Force", "no — non-fast-forward is refused"),
+    factRow("Commits reviewed", Array.isArray(i.expected_commits || i.expectedCommits)
+      ? (i.expected_commits || i.expectedCommits).length : null),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "repository_push",
+    headline: branch ? `Push ${branch} to the remote` : "Push a reviewed branch",
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...PUSH_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes. If the branch moves, it stops working and this has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: true,
+  };
+}
+
+/** The facts a Director weighs before opening a promotion pull request. */
+function openPrProposal(req) {
+  const i = req.inputs || {};
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const head = i.head_branch || i.headBranch || i.branch || null;
+  const base = i.base || req.target || "staging";
+  const facts = [
+    factRow("Repository", i.repository || null),
+    factRow("From", head),
+    factRow("Into", base),
+    factRow("Commit", sha ? sha.slice(0, 12) : null),
+    factRow("Title", i.title || null),
+    factRow("Merges anything", "no — opening a pull request only"),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "promotion_open_pr",
+    headline: head ? `Open ${head} → ${base}` : "Open a promotion pull request",
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...OPEN_PR_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: true,
+  };
+}
+
+const PRODUCTION_MIGRATION_CONSEQUENCES = Object.freeze([
+  // TERMINOLOGY CORRECTION (2026-10-18, G3-B): false as written — the target is
+  // Alloy's hosted STAGING database (ALLOY_STAGING). Kept verbatim in this
+  // historical copy only because its suite pins the string; the running
+  // Vacilando toolkit states the true target.
+  "Schema changes are applied to the LIVE production database that serves real tenants.",
+  "The migrations run in ascending version order and stop on the first failure.",
+  "Vacilando cannot undo this. Reversing a migration is a separate, human decision.",
+  "A migration that has partially executed is never retried automatically.",
+]);
+
+/**
+ * The facts a Director weighs before authorizing a PRODUCTION schema mutation.
+ *
+ * The card has to answer four questions the staging card never has to: which
+ * database, which exact revision, which exact migrations, and what gap this is
+ * closing. The last is why both heads are rows — "apply two migrations" is
+ * enough to identify the action and not enough to decide it.
+ *
+ * Where a value was not measured, the row SAYS so. An omitted row reads as
+ * "fine"; "not measured at proposal time" reads as what it is — and the
+ * executor re-measures it regardless, because a proposal-time reading is not
+ * execution authority on this path.
+ */
+function productionMigrationProposal(req) {
+  const i = req.inputs || {};
+  const snap = req.proposal_snapshot || null;
+  const list = Array.isArray(i.migrations) ? i.migrations : [];
+  const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
+  const files = list.map((m) => (typeof m === "string" ? m : (m?.path || m?.migration_path || m?.version || ""))).filter(Boolean);
+  const target = requestDatabaseTarget(req, i);
+  const sha = String(i.expectedSha || i.expected_sha || "");
+  const facts = [
+    factRow("Environment", "PRODUCTION — deployed primary"),
+    factRow("Database target", target),
+    factRow("Repository", i.repository || i.repo || null),
+    factRow("Candidate commit", sha || null),
+    factRow("Migrations", files.length ? files.join("\n") : null),
+    factRow("Identities", versions.length ? versions.join(", ") : null),
+    factRow("Hosted head now", snap?.hosted_head || "not measured at proposal time — re-measured before execution"),
+    factRow("Required head", snap?.required_head || (versions.length ? versions[versions.length - 1] : null)),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "database_apply_promoted_migration",
+    headline: `PRODUCTION DATABASE MIGRATION — apply ${versions.length || "the approved"} migration${versions.length === 1 ? "" : "s"} to ${target}`,
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...PRODUCTION_MIGRATION_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to candidate ${sha.slice(0, 12) || "—"} and to exactly these migrations, valid for ${GRANT_TTL_MINUTES} minutes. Every production precondition is checked again at execution against a fresh reading of the hosted database; if anything has moved, it refuses and has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: Boolean(snap),
+  };
+}
+
+export function governedProposalFor(req = {}) {
+  if (req.action_key === ACTION_TYPES.REPOSITORY_PUSH) return pushProposal(req);
+  if (req.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) return openPrProposal(req);
+  if (req.action_key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) return productionMigrationProposal(req);
+  if (req.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  const i = req.inputs || {};
+  const snap = req.proposal_snapshot || null;
+  // THE CARD THE DIRECTOR ACTUALLY READS. These two lines carried the narrow
+  // vocabulary, so a merge proposed with `pull_request` / `head_sha` produced a
+  // card with no Pull request row and no Head commit row — the two facts that
+  // identify what is being merged. Same parser as the grant and the executor.
+  const mergeId = mergeIdentityFor(req);
+  const sha = String(mergeId.expectedHeadSha || "");
+  const number = mergeId.pullRequestNumber;
+
+  // CI is reported as what was OBSERVED, including "not checked" — a card that
+  // silently omits the check state reads as "fine" when it means "unknown".
+  let ci = "not checked at proposal time";
+  if (snap?.checks) {
+    const c = snap.checks;
+    const failing = (c.failing || []).length;
+    const pending = (c.pending || []).length;
+    const unknown = (c.unknown || []).length;
+    ci = failing ? `${failing} failing`
+      : pending ? `${pending} still running`
+        : unknown ? `${unknown} unknown`
+          : "all required checks green";
+  }
+
+  const facts = [
+    factRow("Repository", i.repository || i.repo || null),
+    factRow("Pull request", number ? `#${number}` : null),
+    factRow("Title", snap?.title || null),
+    factRow("Branch", snap?.headRefName ? `${snap.headRefName} → ${mergeId.targetBranch || req.target}` : null),
+    factRow("Target branch", mergeId.targetBranch || req.target || null),
+    factRow("Head commit", sha ? sha.slice(0, 12) : null),
+    factRow("Merge method", mergeId.mergeMethod),
+    factRow("Continuous integration", ci),
+    factRow("Mergeable", snap?.mergeable || null),
+    factRow("Changed files", Number.isFinite(snap?.changedFiles) ? snap.changedFiles : null),
+    factRow("Lines", Number.isFinite(snap?.additions) && Number.isFinite(snap?.deletions)
+      ? `+${snap.additions} / −${snap.deletions}` : null),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+
+  return {
+    kind: "repository_merge",
+    headline: number ? `Merge PR #${number} into ${i.target_branch || i.targetBranch || req.target}` : "Merge pull request",
+    url: snap?.url || null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...MERGE_CONSEQUENCES],
+    // Stated before approval so the Director knows what approving creates.
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes. If the branch moves, it stops working and this has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_at: snap?.observed_at || null,
+    snapshot_available: Boolean(snap),
+  };
+}
+
+/**
+ * Read-only look at the pull request, captured once when the proposal is made.
+ *
+ * Best effort on purpose: a Director must still be able to see and decide the
+ * proposal when GitHub is unreachable. When it fails the card says the facts
+ * were not captured rather than showing blanks that read as zeroes.
+ */
+function capturePullRequestSnapshot(rec, { gh = null } = {}) {
+  if (rec?.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  // Never reach the network from the test runner. Tests inject `gh`.
+  if (!gh && process.env.NODE_TEST_CONTEXT) return null;
+  try {
+    const out = inspectPullRequest(rec.inputs || {}, gh ? { gh } : {});
+    if (!out?.ok || !out.pr) return null;
+    const pr = out.pr;
+    return {
+      title: pr.title || null,
+      url: pr.url || null,
+      state: pr.state || null,
+      mergeable: pr.mergeable || null,
+      merge_state: pr.mergeStateStatus || null,
+      headRefName: pr.headRefName || null,
+      changedFiles: pr.changedFiles ?? null,
+      additions: pr.additions ?? null,
+      deletions: pr.deletions ?? null,
+      checks: pr.checks || null,
+      observed_at: iso(Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The canonical identity of WHAT an operator is being asked to approve.
+ *
+ * A request id is not enough. It names a row; it says nothing about the content
+ * that row currently points at. If the branch moves, the commit changes, or the
+ * migration set is edited after the approval card is drawn, the id still
+ * matches and the operator's tap would approve something they never read.
+ *
+ * So the decision binds to the content: the action, the normalised environment,
+ * the repository, the branch, the source commit, the pull request, and the
+ * migration set. Both halves compute it from this one function — the card
+ * renders what the server produced, and the server recomputes it at decision
+ * time. A fingerprint the client invented would prove nothing.
+ */
+export function governedContentFingerprint(req) {
+  if (!req) return null;
+  const inputs = req.inputs || {};
+  const migrations = Array.isArray(inputs.migrations)
+    ? inputs.migrations.map((m) => (typeof m === "string" ? m : `${m?.version || ""}:${m?.path || m?.migration_path || ""}`)).sort()
+    : [];
+  // Fields that get a normalisation rule of their own. Everything ELSE in
+  // inputs still contributes verbatim below — an allowlist here would mean
+  // that for an action whose content lives in an unlisted field (a census IS
+  // its query) the fingerprint could not tell two different requests apart,
+  // and the protection would be theatre for exactly that action.
+  const normalised = new Set([
+    "environment", "repository", "branch", "headBranch", "head_branch",
+    "expectedHeadSha", "expected_sha", "expectedSha",
+    "pullRequestNumber", "pull_request_number", "migrations",
+  ]);
+  const rest = {};
+  for (const key of Object.keys(inputs).sort()) {
+    if (normalised.has(key)) continue;
+    rest[key] = canonicalForFingerprint(inputs[key]);
+  }
+  const canonical = JSON.stringify({
+    action_key: req.action_key || null,
+    // Normalised so `cert` and `certification` cannot read as different
+    // content, and `development_certification` cannot read as the same.
+    environment: String(inputs.environment || req.target || "").trim().toLowerCase() || null,
+    repository: inputs.repository || null,
+    branch: inputs.branch || inputs.headBranch || inputs.head_branch || null,
+    source_sha: String(inputs.expectedHeadSha || inputs.expected_sha || inputs.expectedSha || "").toLowerCase() || null,
+    pull_request: inputs.pullRequestNumber ?? inputs.pull_request_number ?? null,
+    migrations,
+    rest,
+  });
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 32);
+}
+
+/**
+ * Deep key-sorted value, so an object that serialises in a different key order
+ * is not mistaken for different content. Array order is PRESERVED — for
+ * anything but the migration set, order is meaning.
+ */
+function canonicalForFingerprint(value) {
+  if (Array.isArray(value)) return value.map(canonicalForFingerprint);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const k of Object.keys(value).sort()) out[k] = canonicalForFingerprint(value[k]);
+    return out;
+  }
+  return value ?? null;
+}
+
+/**
+ * Shared by approve and deny.
+ *
+ * Deny is checked too, deliberately: denying content the operator did not read
+ * is a smaller harm than approving it, but it is still a decision recorded
+ * against the wrong thing, and a stale deny would let the real request slip
+ * through unnoticed.
+ */
+export function rejectStaleDecision(rec, expectedFingerprint) {
+  if (!expectedFingerprint) return null;
+  const current = governedContentFingerprint(rec);
+  if (current === expectedFingerprint) return null;
+  return {
+    ok: false,
+    error: "stale_content",
+    detail: "The request changed after this approval card was shown. Nothing was approved or denied; review the current request.",
+    presented_fingerprint: expectedFingerprint,
+    current_fingerprint: current,
+    request: publicGovernedAction(rec),
+  };
+}
+
+/**
+ * THE NAME OF THE THING BEING DECIDED.
+ *
+ * An approval was announced to the operator as "approve gar_4dc7b4d8bcd0e0".
+ * Nothing in the UI carried that string, so there was no way to tell which
+ * visible item it meant — and a governed action the operator cannot NAME is a
+ * governed action the operator cannot find. The request id is diagnostic
+ * metadata; it is never the operator's concept of the work.
+ *
+ * The label answers one question: what am I being asked to approve? It is
+ * derived deterministically from canonical inputs, so the same request always
+ * produces the same words, and it never falls back to an identifier.
+ */
+export function operatorLabel(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const work = operatorWorkTitle(rec);
+  const key = rec.action_key;
+  const target = rec.target || DEFAULT_TARGET;
+  const pr = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+  const branch = inputs.branch || inputs.head_branch || inputs.headBranch || "";
+
+  if (key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    if (work && pr) return `Merge ${work} — PR #${pr}`;
+    if (pr) return `Merge PR #${pr} to ${target}`;
+    return `Merge pull request to ${target}`;
+  }
+  if (key === ACTION_TYPES.REPOSITORY_PUSH) {
+    if (work) return `Push ${work} branch`;
+    return branch ? `Push ${branch}` : "Push a reviewed branch";
+  }
+  if (key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const base = inputs.base || target;
+    if (work) return `Open PR for ${work}`;
+    return branch ? `Open PR ${branch} → ${base}` : `Open promotion PR into ${base}`;
+  }
+  if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    // Never hardcode a work name here. The label used to read "Apply Access &
+    // Identity staging migrations" for EVERY migration set, which named the
+    // wrong work for every caller but one.
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    if (work) return `Apply ${work} migrations`;
+    const n = list.length || (inputs.expected_version ? 1 : 0);
+    return n
+      ? `Apply ${n} ${target} migration${n === 1 ? "" : "s"}`
+      : `Apply ${target} migrations`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    const slot = operatorSlotHint(rec);
+    return `Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    const slot = operatorSlotHint(rec);
+    return `Assign staging admin access${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    const slot = operatorSlotHint(rec);
+    return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    const k = inputs.deployed_target || inputs.deployedTarget || inputs.target_key || "";
+    const resolved = resolveDeployedTarget(k);
+    return resolved.ok
+      ? `Restore QA browser session on ${resolved.target.host}`
+      : "Restore QA browser session on a deployed target";
+  }
+  if (key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    const n = Array.isArray(inputs.corrections) ? inputs.corrections.length : 0;
+    return n ? `Apply Vacilando reconciliation metadata — ${n} correction${n === 1 ? "" : "s"}` : "Apply Vacilando reconciliation metadata";
+  }
+  if (key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    const n = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+    if (work && n) return `Close ${work} PR #${n}`;
+    return n ? `Close pull request #${n}` : "Close a pull request";
+  }
+  if (key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    const b = inputs.branch || inputs.branchName || "";
+    if (work) return `Delete ${work} branch`;
+    return b ? `Delete remote branch ${b}` : "Delete a remote branch";
+  }
+  if (key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    const from = inputs.expected_ceiling ?? inputs.expectedCeiling;
+    const to = inputs.requested_ceiling ?? inputs.requestedCeiling;
+    const back = inputs.rollback_ceiling ?? inputs.rollbackCeiling;
+    // The operator is approving a specific transition, so the numbers belong in
+    // the sentence. "Change the provider ceiling" hides the only detail that
+    // decides whether this is routine or alarming.
+    if (from != null && to != null) {
+      return `Set provider ceiling ${from} to ${to}${back != null ? ` (rollback ${back})` : ""}`;
+    }
+    return "Set the provider capacity ceiling";
+  }
+  if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    if (work) return `Read-only census — ${work}`;
+    return `Read-only database census on ${target}`;
+  }
+  // An unregistered key still gets words rather than an identifier.
+  return work || (key ? String(key).replace(/[._]/g, " ") : "Governed action");
+}
+
+/** An explicit human work name, when the caller supplied one. Never invented. */
+function operatorWorkTitle(rec) {
+  const raw = rec?.work_title || rec?.inputs?.workTitle || rec?.inputs?.work_title || null;
+  const t = raw == null ? "" : String(raw).trim();
+  return t && t.length <= 80 ? t : null;
+}
+
+function operatorSlotHint(rec) {
+  const lane = rec?.inputs?.laneId || rec?.inputs?.lane_id || rec?.lane_id || "";
+  const resolved = typeof resolveSlotIdentityForDisplay === "function"
+    ? resolveSlotIdentityForDisplay(lane)
+    : null;
+  return rec?.slot || resolved?.slot || "";
+}
+
+/**
+ * The card, as a hierarchy rather than a sentence: what it is, then why, then
+ * the facts, and the request id LAST and small. The order here is the order the
+ * operator reads, so presentation cannot drift from the contract.
+ */
+export function operatorApprovalCard(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const presentation = presentationForGovernedAction(rec);
+  const context = [];
+  const push = (label, value) => { if (value) context.push({ label, value: String(value) }); };
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) push("Action", `Merge to ${rec.target || DEFAULT_TARGET}`);
+  else if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) push("Action", "Push to the remote");
+  else if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) push("Action", `Open a pull request into ${inputs.base || rec.target || DEFAULT_TARGET}`);
+  else push("Action", rec.target ? `${rec.action_key} · ${rec.target}` : rec.action_key);
+  const sha = String(inputs.expectedHeadSha || inputs.expected_head_sha || inputs.expectedSha || "");
+  push("Commit", sha ? sha.slice(0, 12) : "");
+  push("Branch", inputs.branch || inputs.headBranch || inputs.head_branch || "");
+  push("Repository", inputs.repository || "");
+  return {
+    label: operatorLabel(rec),
+    decision: "Approval required",
+    context,
+    reason: rec.purpose || rec.reason_worker_cannot_execute || null,
+    approve_label: presentation.approve_label,
+    deny_label: presentation.deny_label,
+    // Diagnostic only. Rendered small, beneath the controls, never as the name.
+    request_id_debug: `Request ${rec.request_id}`,
+  };
+}
+
+/**
+ * EVERY pending approval on this host, ordered deterministically.
+ *
+ * The operator should not have to know which lane originated a request. They
+ * had no way to reach one at all: the only approval surface lived inside a lane
+ * you already had to be looking at.
+ *
+ * Order: work that is actively blocked first, then oldest, then request id as a
+ * final tiebreak so the list never reshuffles between two renders.
+ */
+export function pendingApprovals({ root = runtimeRoot() } = {}) {
+  const rows = listGovernedActions({ root })
+    .filter((r) => r && PENDING_GOVERNED_STATUSES.includes(r.status) && r.status !== "executing");
+  const blocking = (r) => (r.run_id ? 0 : 1);
+  const filedAt = (r) => Date.parse(r.created_at || "") || 0;
+  rows.sort((a, b) =>
+    blocking(a) - blocking(b)
+    || filedAt(a) - filedAt(b)
+    || String(a.request_id).localeCompare(String(b.request_id)));
+  return rows.map((r) => ({ ...publicGovernedAction(r), operator_card: operatorApprovalCard(r) }));
+}
+
+export function publicGovernedAction(req) {
+  if (!req) return null;
+  const presentation = presentationForGovernedAction(req);
+  return {
+    request_id: req.request_id,
+    // The identity the operator is actually deciding about. The card renders
+    // this and hands it back; the server recomputes and compares.
+    content_fingerprint: governedContentFingerprint(req),
+    mission_id: req.mission_id,
+    // What vouched for this action, so the approval card can say so instead of
+    // leaving a repository-authorized request looking unattributed.
+    authority: req.authority || (req.mission_id ? { kind: "mission", mission_id: req.mission_id } : null),
+    grant_id: req.grant_id || null,
+    proposal: governedProposalFor(req),
+    grant_expires_at: req.grant_expires_at || null,
+    lane_id: req.lane_id,
+    run_id: req.run_id || null,
+    action_key: req.action_key,
+    target: req.target || null,
+    purpose: req.purpose || null,
+    artifact_refs: req.artifact_refs || [],
+    requested_mode: req.requested_mode,
+    reason_worker_cannot_execute: req.reason_worker_cannot_execute || null,
+    operator_approval_required: Boolean(req.operator_approval_required),
+    operator_approval: req.operator_approval || null,
+    status: req.status,
+    result_ref: req.result_ref || null,
+    failure_reason: req.failure_reason || null,
+    failure_code: req.failure_code || null,
+    title: req.title || null,
+    trusted_host_action_id: req.trusted_host_action_id || null,
+    decision_id: req.decision_id || null,
+    inputs: req.inputs || {},
+    continuation_plan: req.continuation_plan || null,
+    continuation_intent: req.continuation_intent || null,
+    successor_of: req.successor_of || null,
+    revived_from_stale_registry: Boolean(req.revived_from_stale_registry),
+    // Infrastructure scheduling that happened on this request's behalf. Not an
+    // approval and never gated on one — but a slot that moved silently is a
+    // capacity change nobody can audit, so it is projected where it can be read.
+    slot_preflight: req.slot_preflight || null,
+    approve_label: presentation.approve_label,
+    deny_label: presentation.deny_label,
+    wait_label: presentation.wait_label,
+    mission_need: presentation.mission_need,
+    detail: presentation.detail,
+    // The operator's name for this decision. The id is diagnostic only.
+    operator_label: operatorLabel(req),
+    operator_card: operatorApprovalCard(req),
+    director_approval: req.director_approval || null,
+    director_decision: req.director_decision || null,
+    escalation_reason: req.escalation_reason || null,
+    // The answer to "why did you not ask me about this one?", on the record
+    // itself rather than only in the audit stream.
+    authorization_basis: req.authorization_basis || null,
+    // Observed lifecycle stamps. Never used to decide anything — see observedNow.
+    decision_timing: req.decision_timing || null,
+    /*
+     * "I APPROVED IT" IS NOT "THE LANE KNOWS."
+     *
+     * The status field already separates awaiting_operator from executing from
+     * complete, and the audit trail shows approval and execution as distinct
+     * events. What the record could NOT say is whether the requester was ever
+     * told the outcome — and that was the whole of the incident: two actions
+     * that failed in seconds, correctly and with good reasons, and a lane that
+     * refiled them five times because it never heard either reason.
+     *
+     * So the delivery state is projected beside the action state. DELIVERED
+     * means the lane knows. PENDING means it is owed and will be paid when the
+     * lane clears. UNDELIVERABLE means it can never be told, and says why.
+     * `null` means nothing has been attempted yet — which, after this fix, only
+     * happens before an action resolves.
+     */
+    notification_delivery: req.notification_delivery
+      ? {
+        state: req.notification_delivery.state,
+        kind: req.notification_delivery.kind || null,
+        reason: req.notification_delivery.reason || null,
+        attempts: req.notification_delivery.attempts || 0,
+        delivered_at: req.notification_delivery.delivered_at || null,
+      }
+      : null,
+    requester_informed: req.notification_delivery?.state === "DELIVERED",
+    created_at: req.created_at,
+    updated_at: req.updated_at,
+  };
+}
+
+export function getGovernedAction(requestId, root = runtimeRoot()) {
+  if (!requestId) return null;
+  return readGovernedActionStore(root).requests.find((r) => r.request_id === requestId) || null;
+}
+
+export function listGovernedActions({
+  missionId = null,
+  laneId = null,
+  status = null,
+  root = runtimeRoot(),
+} = {}) {
+  const lane = laneId ? canonicalLaneStoreId(laneId, root) : null;
+  return readGovernedActionStore(root).requests.filter((r) => {
+    if (missionId && r.mission_id !== missionId) return false;
+    if (lane && r.lane_id !== lane && r.lane_id !== laneId) return false;
+    if (status && r.status !== status) return false;
+    return true;
+  });
+}
+
+function newestPending(list) {
+  const pending = (list || []).filter((r) => isPendingGovernedStatus(r.status));
+  if (!pending.length) return null;
+  return pending.sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0))[0];
+}
+
+export function pendingGovernedActionForLane(laneId, root = runtimeRoot()) {
+  if (!laneId) return null;
+  const lane = canonicalLaneStoreId(laneId, root);
+  return newestPending(listGovernedActions({ laneId: lane, root }));
+}
+
+/**
+ * The most recently RESOLVED governed action for a lane.
+ *
+ * The approval card exists only while a request is PENDING, so the moment a
+ * Director approves, it disappears — identically whether the action succeeded
+ * or failed. Hiding a resolved card was the right fix for a stale button; it
+ * still leaves the operator with silence. "Unsure if the authorize push click
+ * actually worked" is the consequence, and the answer was in the record the
+ * whole time.
+ */
+export function lastResolvedGovernedActionForLane(laneId, root = runtimeRoot()) {
+  if (!laneId) return null;
+  const lane = canonicalLaneStoreId(laneId, root);
+  const resolved = listGovernedActions({ laneId: lane, root })
+    .filter((r) => r.status === "complete" || r.status === "failed");
+  if (!resolved.length) return null;
+  return resolved.sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0))[0];
+}
+
+/**
+ * What actually happened, in the terms the operator asked in.
+ *
+ * Read from the trusted-host RESULT rather than restating the request, because
+ * the question is never "what did I ask for" — it is "did it land". Bounded, and
+ * it names only identifiers that are already public.
+ */
+export function governedOutcomeFor(req) {
+  if (!req || (req.status !== "complete" && req.status !== "failed")) return null;
+  const ok = req.status === "complete";
+  const r = req.result || {};
+  let detail = null;
+  if (ok) {
+    if (req.action_key === ACTION_TYPES.REPOSITORY_PUSH && r.pushedSha) {
+      detail = `${r.branch || "branch"} is on the remote at ${String(r.pushedSha).slice(0, 12)}${r.idempotent ? " (already there)" : ""}`;
+    } else if (req.action_key === ACTION_TYPES.PROMOTION_OPEN_PR && r.pullRequestNumber) {
+      detail = `pull request #${r.pullRequestNumber} into ${r.base || "staging"}${r.reused ? " (already open)" : ""}`;
+    } else if (req.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST && (r.merge_sha || r.mergeSha)) {
+      detail = `merged as ${String(r.merge_sha || r.mergeSha).slice(0, 12)}`;
+    }
+  }
+  return {
+    ok,
+    action_key: req.action_key,
+    title: req.title || req.action_key,
+    at: req.updated_at || null,
+    approved_by: req.operator_approval?.actor || null,
+    detail: detail || (ok ? "completed" : bound(req.failure_reason || req.failure_code, 240)),
+    failure_code: ok ? null : (req.failure_code || null),
+  };
+}
+
+export function latestGovernedActionForMission(missionId, root = runtimeRoot()) {
+  if (!missionId) return null;
+  const list = listGovernedActions({ missionId, root });
+  if (!list.length) return null;
+  return [...list].sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0))[0];
+}
+
+export function pendingGovernedActionForMission(missionId, root = runtimeRoot()) {
+  if (!missionId) return null;
+  return newestPending(listGovernedActions({ missionId, root }));
+}
+
+export function pendingGovernedActionForRun(runId, root = runtimeRoot()) {
+  if (!runId) return null;
+  return newestPending(readGovernedActionStore(root).requests.filter((r) => r.run_id === runId));
+}
+
+/** Statuses after which a request will never need the operator again. */
+export const SETTLED_GOVERNED_STATUSES = Object.freeze(["complete", "failed"]);
+const SETTLED = new Set(SETTLED_GOVERNED_STATUSES);
+
+/**
+ * Retention that cannot evict an unanswered request.
+ *
+ * This was `slice(-200)`, which keeps the newest 200 records whatever state
+ * they are in — so a request still awaiting the Director could be dropped by
+ * 200 unrelated requests arriving after it. The card then disappears from the
+ * queue, and a pending approval that vanishes is indistinguishable from one
+ * that was resolved: the lane waits on a decision nobody can see any more.
+ *
+ * Only settled records are disposable, so only settled records are counted
+ * against the cap. Unsettled ones are kept regardless of age and of how many
+ * there are — an unbounded backlog is a problem to SHOW the operator, never
+ * one to fix by forgetting the oldest of it.
+ */
+/**
+ * How many SETTLED records to keep.
+ *
+ * 200 was a fine number for a queue and a poor one for history: a single busy
+ * day produced 200 governed actions, so the weekly operating report's SHIPPING
+ * figures were identical to the daily one - the week simply had no older
+ * records left to count.
+ *
+ * Raised, and made a setting. The cost is one JSON file: a record is roughly
+ * 1-2 KB, so this is a few megabytes at the cap, and the eviction rule below is
+ * unchanged - an unanswered request is never disposable at any cap.
+ *
+ * 2000 IS A MEASURED NUMBER, NOT A ROUND ONE. 2026-09-13 produced 204 governed
+ * actions in a single day, and the run store shows ordinary days between 4 and
+ * 56 runs at roughly 5 actions each. So 1000 was five days at the observed peak
+ * - short of the seven the weekly report needs, and with nothing left over for
+ * the week-over-week comparison it wants next. 2000 covers a heavy week twice.
+ *
+ * It cannot recover what is already gone: the records before today were evicted
+ * under the old 200 cap, and no retention setting brings them back. The weekly
+ * report's SHIPPING section becomes meaningful as days accumulate from here.
+ */
+export const GOVERNED_REQUEST_RETENTION_DEFAULT = 2000;
+
+export function governedRequestRetentionCap() {
+  const raw = Number(process.env.VACILANDO_GOVERNED_REQUEST_RETENTION);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : GOVERNED_REQUEST_RETENTION_DEFAULT;
+}
+
+export function retainGovernedRequests(requests, cap = governedRequestRetentionCap()) {
+  if (!Array.isArray(requests) || requests.length <= cap) return requests;
+  const unsettled = requests.filter((r) => !SETTLED.has(r.status));
+  const settled = requests.filter((r) => SETTLED.has(r.status));
+  // Budget can be zero once the unsettled backlog alone fills the cap, and
+  // `slice(-0)` is `slice(0)` — it returns EVERYTHING. Guard the zero case
+  // explicitly rather than letting a negative-index idiom decide it.
+  const budget = Math.max(0, cap - unsettled.length);
+  const keep = new Set(budget === 0 ? [] : settled.slice(-budget).map((r) => r.request_id));
+  return requests.filter((r) => !SETTLED.has(r.status) || keep.has(r.request_id));
+}
+
+function putRequest(store, rec) {
+  const idx = store.requests.findIndex((r) => r.request_id === rec.request_id);
+  if (idx >= 0) store.requests[idx] = rec;
+  else store.requests.push(rec);
+  store.requests = retainGovernedRequests(store.requests);
+  return store;
+}
+
+/**
+ * The store write, exported for the one module that must persist a record it
+ * did not create: governed-notification-delivery, which owns the redelivery
+ * state on these records and is imported lazily to avoid a cycle.
+ */
+export function saveGovernedActionRecord(rec, root = runtimeRoot()) {
+  return saveRequest(rec, root);
+}
+
+function saveRequest(rec, root) {
+  const store = readGovernedActionStore(root);
+  writeStore(putRequest(store, rec), root);
+  return rec;
+}
+
+function appendAudit(rec, event, extra = {}, root = runtimeRoot()) {
+  const line = {
+    schema_version: "vacilando.governed_action_audit.v1",
+    at: iso(extra.nowMs),
+    event,
+    request_id: rec.request_id,
+    mission_id: rec.mission_id,
+    lane_id: rec.lane_id,
+    run_id: rec.run_id || null,
+    requesting_worker: rec.requesting_worker || rec.lane_id,
+    action_key: rec.action_key,
+    target: rec.target || null,
+    artifact_refs: rec.artifact_refs || [],
+    policy_decision: rec.policy_decision || null,
+    // The two halves of accountability, carried on every audit line rather than
+    // reconstructed later from a store that retains only the last 200 requests:
+    // why this ran unattended, and why it had to ask.
+    authorization_basis: rec.authorization_basis || null,
+    escalation_reason: rec.escalation_reason || null,
+    // Every audit line carries the observed lifecycle so far, so duration is
+    // readable from the append-only stream without re-reading a store that
+    // retains only the last 200 requests. `at` above stays on the authorization
+    // clock and is deliberately NOT a substitute for these.
+    decision_timing: rec.decision_timing || null,
+    // Inspectable authority: what the mission delegated, and the Director's own
+    // sentence that delegated it. Present only when delegation supplied the
+    // approval; `delegation_declined` says why it did not when it could have.
+    mission_delegation: rec.mission_delegation || null,
+    delegation_declined: rec.delegation_declined || null,
+    operator_approval: rec.operator_approval || null,
+    execution_started_at: rec.execution_started_at || null,
+    execution_ended_at: rec.execution_ended_at || null,
+    result_ref: rec.result_ref || null,
+    failure_reason: rec.failure_reason || rec.failure_code || null,
+    ...extra.detail,
+  };
+  try {
+    mkdirSync(dirname(auditPath(root)), { recursive: true });
+    appendFileSync(auditPath(root), `${JSON.stringify(line)}\n`);
+  } catch { /* audit is best-effort */ }
+}
+
+function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {}) {
+  const event = {
+    schema_version: "vacilando.notification.v1",
+    notification_id: "ntf_" + randomBytes(8).toString("hex"),
+    type,
+    channel: "adapter",
+    title: title || rec.title || rec.action_key,
+    body: body || rec.purpose || "",
+    deep_link: `vacilando://governed-action/${rec.request_id}`,
+    web_path: rec.mission_id
+      ? `#/missions/${encodeURIComponent(rec.mission_id)}`
+      : (rec.lane_id ? `#/lanes/${encodeURIComponent(rec.lane_id)}` : "#/lanes"),
+    mission_id: rec.mission_id,
+    lane_id: rec.lane_id,
+    request_id: rec.request_id,
+    mobile_ready: true,
+    created_at: iso(),
+  };
+  try {
+    mkdirSync(dirname(notifyPath(root)), { recursive: true });
+    appendFileSync(notifyPath(root), `${JSON.stringify(event)}\n`);
+  } catch { /* notify best-effort */ }
+  // THE CANONICAL RECORD, NOT A FIFTH EVENT.
+  //
+  // The JSONL above stays as the delivery/history log. What the operator counts
+  // now lives in the one notification store, keyed on the DECISION rather than
+  // the step, so requested -> approved -> executing -> complete mutate a single
+  // record instead of appending four unrelated ones with no read state. The
+  // class is derived from the request's own durable status, which is the same
+  // status the UI will render — so a notification cannot claim an outcome the
+  // state has not reached.
+  try {
+    const cls = classForGovernedStatus(rec.status);
+    if (cls) {
+      // ROUTINE PROGRESS DOES NOT OPEN A RECORD.
+      //
+      // Measured on this host: `governed_action_worker_resumed` was 232 of the
+      // 500 records in the store and pushed zero times — pure feed noise from
+      // actions running inside policy. It is suppressed at CREATION only. If a
+      // record for this request already exists it is still updated, because the
+      // completion of an approved action is what resolves the approval that
+      // opened it.
+      // THE OPERATOR NAMED THIS LANE; THE NOTIFICATION SHOULD USE THAT NAME.
+      //
+      // This passed `laneId` and no `laneName`, and `upsertNotification` falls
+      // back to the id — so every governed record stored `lane_2cea84351d90` as
+      // its display name and the phone push, whose title is
+      // `record.lane_name || record.lane_id`, showed the id. Measured on this
+      // host: 22 of 74 live records carried an id where a name belongs, and all
+      // of them came through this path. The run-outcome path already resolves
+      // the durable lane for exactly this reason (execution-run.mjs:608).
+      let laneName = null;
+      try {
+        laneName = rec.lane_id ? (getDurableLane(rec.lane_id, root)?.name || null) : null;
+      } catch { /* an unnamed or unreadable lane keeps the id — never break the action */ }
+      const noted = upsertNotification({
+        subjectKey: `governed:${rec.request_id}`,
+        requestId: rec.request_id,
+        laneId: rec.lane_id || null,
+        laneName,
+        eventType: type,
+        state: rec.status || null,
+        attentionClass: cls,
+        createIfMissing: !isRoutineProgress(type),
+        summary: title || rec.title || rec.action_key,
+        path: rec.mission_id
+          ? `/#/missions/${encodeURIComponent(rec.mission_id)}`
+          : (rec.lane_id ? `/#/lanes/${encodeURIComponent(rec.lane_id)}` : "/#/lanes"),
+        root,
+      });
+      // ANNOUNCE A NEW DEMAND, NOT AN UNREAD ONE.
+      //
+      // The guard was `noted.created || noted.record.seen_at === null`, and
+      // `seen_at === null` is true of every unread record — so each routine
+      // progress event on an unread approval pushed the phone again with
+      // nothing new to say. That is the "nothing to do, nothing completed"
+      // notification. Only a record that was just opened, or that has genuinely
+      // become actionable again, is worth a push.
+      if (noted?.record && (noted.created || noted.becameActionable)) {
+        import("./lane-push.mjs")
+          .then((mod) => mod.pushGovernedNotification(noted.record, { root }))
+          .catch(() => { /* push is best-effort; the record is the truth */ });
+      }
+    }
+  } catch { /* the canonical record is best-effort too; never break the action */ }
+  return event;
+}
+
+/**
+ * THE QUERY A CENSUS RUNS IS NEVER INFERRED.
+ *
+ * THE INCIDENT THIS CLOSES. This returned Q15_CENSUS_ARTIFACT when a request
+ * carried no artifact_refs, so a census filed WITHOUT naming a query silently
+ * became the Q15 authority census and ran it against the deployed primary. The
+ * substitution was then written into the request record, so the store showed a
+ * query the filer had never asked for. Observed for real: gar_a1d647be39e8b6
+ * was filed with no refs and executed q15-authority-census.json.
+ *
+ * A privileged read whose SUBJECT is guessed is not a governed action; it is an
+ * unreviewed one wearing a governed action's record. Absence now returns null,
+ * which validateInputs turns into `missing_query_artifact`, and the request
+ * fails closed before any database is touched. Every legitimate census in the
+ * store already names its own artifact, so nothing that was explicit changes.
+ *
+ * `fallback` exists for the two DISPLAY callers — a label and a filename in a
+ * summary — which want a readable string and can never cause execution.
+ */
+function artifactPathFrom(refs = [], { fallback = null } = {}) {
+  const first = Array.isArray(refs) ? refs.find(Boolean) : refs;
+  return first ? String(first) : fallback;
+}
+
+/**
+ * THE IDENTITY TWO REQUESTS SHARE IF THEY ARE THE SAME WORK.
+ *
+ * THE DEFECT THIS REMOVES. This read a PR number and a SHA and nothing else, so
+ * for a repository.push — which has no PR — the whole identity was the head SHA.
+ * Two pushes of one commit to DIFFERENT branches therefore collapsed into one
+ * governed request: the second returned the first's record, and the first
+ * verdict was read back as the second's. Measured twice during S15, and it
+ * forced a request to be withdrawn to get a clean decision.
+ *
+ * A branch IS part of a push's identity. Rather than adding a branch field here
+ * — a second parser, which is the defect family this codebase has already paid
+ * for four times — the action's identity comes from the canonical resolver that
+ * mints and resolves its authorization. If two requests would mint the same
+ * authorization, they are the same work; if they would not, they are not.
+ */
+function identityFromInputs(input = {}) {
+  const inputs = input.inputs || {};
+  const actionKey = input.action_key || input.actionKey || null;
+  if (actionKey) {
+    const id = resolveActionAuthorizationIdentity({
+      actionType: actionKey,
+      scope: input.mission_id || input.authority?.repository_id || null,
+      inputs,
+      target: input.target || null,
+    });
+    if (id.ok) {
+      // Exactly the fields that make this action THIS action. Everything here
+      // is derived; nothing is spelled a second time.
+      const parts = [
+        id.repository, id.targetRef, id.sourceRef, id.sourceSha, id.subjectKey,
+        id.pullRequestNumber == null ? "" : String(id.pullRequestNumber),
+        id.mergeMethod || "",
+      ].map((v) => (v == null ? "" : String(v)));
+      const key = parts.join("#");
+      if (key.replace(/#/g, "")) return key;
+    }
+  }
+  const pr = inputs.pull_request_number || inputs.pullRequestNumber || "";
+  const sha = inputs.expected_head_sha || inputs.expectedHeadSha || inputs.expected_sha || inputs.expectedSha || "";
+  const versions = Array.isArray(inputs.migrations)
+    ? inputs.migrations.map((m) => m.version || m.prefix || m.path || "").join(",")
+    : "";
+  return [pr, sha, versions].filter(Boolean).join(":") || artifactPathFrom(input.artifact_refs, { fallback: "" });
+}
+
+function dedupeKey(input) {
+  return [
+    input.mission_id,
+    input.lane_id,
+    input.action_key,
+    input.target || "",
+    identityFromInputs(input),
+  ].join("|");
+}
+
+/**
+ * The shape dedupeKey needs from a stored record. A stored request keeps its
+ * action key on `action_key`, so it reads through the same function.
+ */
+function dedupeShapeOf(rec) {
+  return {
+    mission_id: rec?.mission_id ?? null,
+    lane_id: rec?.lane_id ?? null,
+    action_key: rec?.action_key ?? null,
+    authority: rec?.authority ?? null,
+    target: rec?.target ?? null,
+    inputs: rec?.inputs ?? {},
+    artifact_refs: rec?.artifact_refs ?? null,
+  };
+}
+
+function releaseRunAfterGovernedFailure(rec, { nowMs, root } = {}) {
+  if (!rec?.run_id) return;
+  const run = getExecutionRun(rec.run_id, root);
+  if (!run || isTerminalRunState(run.state)) return;
+  const pub = publicGovernedAction(rec);
+  if (run.state === "WAITING_RESOURCE") {
+    transitionExecutionRun(rec.run_id, "NEEDS_INPUT", {
+      reason: rec.failure_reason || rec.failure_code || "Governed action failed",
+      origin: "system",
+      nowMs,
+      root,
+      progress: rec.failure_reason || "Director could not finish the governed action",
+    });
+  }
+  patchRunFields(rec.run_id, { governed_action: pub }, { nowMs, root });
+  /*
+   * THE WAIT IS RESOLVED, NOT DELETED.
+   *
+   * This nulled the wait outright, immediately after the transition above had
+   * marked it `resolution_state: "resolved"` - so on the one path where an
+   * operator most wants to know what the run had been waiting for, the record
+   * was marked resolved and then thrown away a line later.
+   *
+   * Clearing was right when leaving a wait left it reading `waiting` forever;
+   * seventeen terminal runs carrying live "Waiting on Director" text was a real
+   * defect. The resolved-wait contract solved that without destroying anything:
+   * an EXECUTING or NEEDS_INPUT run can no longer carry an ACTIVE wait, because
+   * the exit marks it. Deleting on top of that only removes the evidence.
+   *
+   * An owner that genuinely wants the wait gone still calls
+   * patchRunResourceWait directly; this path does not want that.
+   */
+  /*
+   * A REFUSAL IS A SETTLEMENT, AND `failRequest` says so a few lines below about
+   * its own timing. The projection stamp did not agree: every one of the twenty
+   * failed governed actions measured carried no `projection_visible_at`, so the
+   * convergence of a failure was the one thing the metric could never report —
+   * and a failure is what an operator most needs to see quickly.
+   */
+  stampDecisionTimingOnce(rec, "projection_visible_at");
+  saveRequest(rec, root);
+}
+
+/**
+ * Say WHICH refusal fired, not merely that one did.
+ *
+ * `executeTrustedHostAction` returns `{ ok: false, error: "input_validation_failed",
+ * validation: { error, detail, evidence } }`. The nested half is the diagnosis; the
+ * outer half is only its category. This boundary used to forward `out.error` alone,
+ * so a worker was told `input_validation_failed` for six mutually exclusive causes —
+ * bad sha shape, missing reason, unsupported ref, unreadable promoted staging,
+ * compare-and-set mismatch, blocked convergence — with no way to tell them apart.
+ *
+ * Measured: three consecutive host.install_toolkit requests failed for THREE DIFFERENT
+ * reasons and reported two indistinguishable strings. The validator had already
+ * computed "request names 10bd40ca6b9d; promoted staging is b5a770518671" — the exact
+ * sentence that ends the confusion — and this line dropped it. The only recovery left
+ * to the worker was to guess and refile, which is how a compare-and-set race turns
+ * into repeated privileged-write attempts.
+ *
+ * Same family as every other propagation defect in this file: produced correctly,
+ * dropped at an intermediate boundary, consumed as though it never existed.
+ *
+ * Redacted on the way out, because a validator detail may quote an input. The
+ * shared filter is narrow — connection strings, DATABASE_URL, JWTs — so this is
+ * a backstop, not a licence for validators to quote secrets into `detail`.
+ */
+function describeExecutionFailure(out) {
+  const outer = String(out?.error || "").trim();
+  const v = out?.validation;
+  const inner = String(v?.error || "").trim();
+  const fallback = String(out?.action?.failureReason || "").trim();
+
+  /*
+   * BOTH HALVES OF THE FAILURE SURFACE, NOT JUST THE VALIDATION ONE.
+   *
+   * There are two ways a trusted-host action fails and they carry their detail
+   * in different places:
+   *
+   *   input validation   { error, validation: { error, detail } }
+   *   EXECUTION          { error, detail, action.result.detail }   <- failTrustedAction
+   *
+   * The first version of this function read only `validation.detail`, so the
+   * execution half stayed exactly as broken as before. Measured: an
+   * operator-approved write to main failed and the operator was shown
+   * `metadata_promote_threw`, while `defaultGit is not defined` — the sentence
+   * that names the bug — sat on the action record and reached nobody. Closing
+   * one half of a two-half defect and reporting the defect closed is its own
+   * failure mode.
+   */
+  const detail = String(v?.detail || out?.detail || out?.action?.result?.detail || "").trim();
+
+  const parts = [];
+  if (outer) parts.push(outer);
+  if (inner && inner !== outer) parts.push(inner);
+  let text = parts.join(": ");
+  // A detail that merely repeats the code adds nothing but noise.
+  if (detail && detail !== outer && detail !== inner) {
+    text = text ? `${text} \u2014 ${detail}` : detail;
+  }
+  if (!text) text = fallback;
+  return redact(text) || "trusted-host execution failed";
+}
+
+function failRequest(rec, code, reason, { nowMs, root, skipResume = false } = {}) {
+  rec.status = "failed";
+  rec.failure_code = code;
+  rec.failure_reason = bound(reason || code, 500);
+  // A refusal is a settlement. Timing that only covered the happy path would
+  // answer "how long does an approval take" while quietly excluding every
+  // approval that went wrong, which is the half worth measuring.
+  stampDecisionTiming(rec, "execution_settled_at");
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  appendAudit(rec, "failed", { nowMs, detail: { failure_code: code } }, root);
+  try {
+    appendTimelineEvent(rec.mission_id, {
+      type: "blocked",
+      headline: "Governed action failed",
+      summary: rec.failure_reason,
+      visibility: "summary",
+      actor: "director",
+      detail: { requestId: rec.request_id, failureCode: code },
+      nowMs,
+    });
+  } catch { /* */ }
+  let resumePromise = null;
+  if (!skipResume) {
+    releaseRunAfterGovernedFailure(rec, { nowMs, root });
+    resumePromise = resumeLaneAfterFailedGovernedAction(rec.request_id, { nowMs, root });
+  }
+  return { ok: false, error: code, request: publicGovernedAction(rec), resumePromise };
+}
+
+function enterControlPlaneRefresh(rec, { nowMs, root, reason = "director_registry_stale" } = {}) {
+  const attempts = Number(rec.control_plane_refresh?.attempts || 0) + 1;
+  rec.status = "awaiting_control_plane_refresh";
+  rec.failure_code = null;
+  rec.failure_reason = null;
+  rec.control_plane_refresh = {
+    reason,
+    started_at: iso(nowMs),
+    attempts,
+  };
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  appendAudit(rec, "awaiting_control_plane_refresh", { nowMs, extra: { reason, attempts } }, root);
+  attachRunWait(rec, { nowMs, root });
+  if (attempts > 3) {
+    return failRequest(
+      rec,
+      "director_refresh_failed",
+      "Director could not load the current governed capabilities.",
+      { nowMs, root },
+    );
+  }
+  Promise.resolve(refreshDirectorCapabilities({
+    reason,
+    requestId: rec.request_id,
+    root,
+    nowMs,
+  })).catch(() => {});
+  return {
+    ok: true,
+    refreshing: true,
+    classification: "director_registry_stale",
+    request: publicGovernedAction(rec),
+  };
+}
+
+export function isRecoverableStaleRegistryFailure(rec) {
+  if (!rec) return false;
+  if (rec.status === "awaiting_control_plane_refresh") return true;
+  if (rec.status !== "failed") return false;
+  const code = rec.failure_code || rec.failure_reason;
+  if (!STALE_REGISTRY_FAILURES.has(code) && rec.failure_reason !== "unauthorized_action_key") return false;
+  const avail = classifyActionAvailability(rec.action_key);
+  return avail.code === "available" || avail.code === "director_registry_stale" || Boolean(getActionDefinition(rec.action_key));
+}
+
+function waitProjection(rec, { nowMs } = {}) {
+  const presentation = presentationForGovernedAction(rec);
+  // A GOVERNED WAIT IS AN S6 WAIT, NOT A CAPTION.
+  //
+  // This used to return presentation fields only — resource_key, label,
+  // summary — with no schema, reason, owner, waiting_since, deadline or bound
+  // policy. describeWait() answers a missing reason with bound_policy
+  // "invalid", which is exactly how health came to report
+  // "Waiting on Director — staging merge" as an unowned wait nothing could
+  // resolve. The text was never the problem; the missing envelope was.
+  //
+  // The reason is needs_operator_input because that is what this IS: a
+  // question for a person. Its policy is human_indefinite, so it has no
+  // deadline BY DESIGN and must never be counted stale for waiting.
+  const descriptor = describeWait({
+    reason: "needs_operator_input",
+    resource_id: rec.request_id,
+    waiting_since: nowMs ?? Date.now(),
+    now: nowMs ?? Date.now(),
+  });
+  return {
+    ...descriptor,
+    resource_key: DIRECTOR_GOVERNED_RESOURCE_KEY,
+    label: "Director",
+    summary: presentation.wait_label || rec.title || "Waiting on Director",
+    governed_request_id: rec.request_id,
+    action_key: rec.action_key,
+    target: rec.target || null,
+    purpose: rec.purpose || null,
+  };
+}
+
+function attachRunWait(rec, { nowMs, root } = {}) {
+  if (!rec.run_id) return;
+  const run = getExecutionRun(rec.run_id, root);
+  if (!run || isTerminalRunState(run.state)) return;
+  const publicReq = publicGovernedAction(rec);
+  const wait = waitProjection(rec, { nowMs });
+  if (run.state === "WAITING_RESOURCE") {
+    patchRunResourceWait(rec.run_id, { ...(run.resource_wait || {}), ...wait }, root);
+    patchRunFields(rec.run_id, {
+      governed_action: publicReq,
+      state_reason: presentationForGovernedAction(rec).wait_label || rec.title || "Waiting on Director",
+    }, { nowMs, root });
+    return;
+  }
+  if (["EXECUTING", "VALIDATING", "RECOVERING", "NEEDS_INPUT"].includes(run.state)) {
+    transitionExecutionRun(rec.run_id, "WAITING_RESOURCE", {
+      reason: presentationForGovernedAction(rec).wait_label || rec.title || "Waiting on Director",
+      origin: "system",
+      nowMs,
+      root,
+      resource_wait: wait,
+    });
+    patchRunFields(rec.run_id, { governed_action: publicReq }, { nowMs, root });
+  }
+}
+
+function resolveStoreRoot(input = {}, explicitRoot = null) {
+  if (explicitRoot) return explicitRoot;
+  const runId = input.run_id || input.runId;
+  if (runId) {
+    const found = findExecutionRun(runId);
+    if (found?.root) return found.root;
+  }
+  const laneId = input.lane_id || input.laneId;
+  if (laneId) {
+    for (const root of candidateRuntimeRoots()) {
+      if (getDurableLane(laneId, root)) return root;
+    }
+  }
+  return runtimeRoot();
+}
+
+/**
+ * THE ONE PLACE THAT SAYS WHERE A GOVERNED ACTION RUNS.
+ *
+ * THE DEFECT THIS REMOVES. `repository.push` advertises `worktreePath` among
+ * its inputs, and the registry's own validateInputs reads
+ * `inputs.worktree_path || inputs.worktreePath`. This resolver did not: it read
+ * only the TOP-LEVEL payload and then fell through to the run's bound worktree.
+ * The request record's worktree_path therefore won, and the action was built
+ * with it — overwriting inputs.worktreePath entirely.
+ *
+ * MEASURED: gar_1e5d2e1dab9f7e supplied inputs.worktreePath = the promotion
+ * worktree at d9beb0c29, was executed against the lane's worktree at
+ * 033d76bd7c4d, and was refused `head_drift` — "the branch moved after this
+ * push was proposed" — for a branch that never moved. Re-proposing the
+ * identical push with a TOP-LEVEL worktree_path succeeded immediately against
+ * the same branch and the same SHA. The caller had followed the advertised
+ * schema and the reader could not see it.
+ *
+ * An EXPLICIT path now always beats the run-bound fallback, whichever of the
+ * two advertised locations it arrives in. The fallback is unchanged and still
+ * serves every request that supplies no path at all.
+ */
+function resolveWorktreePath(input, laneId, run, root) {
+  const inputs = input?.inputs || {};
+  return input.worktree_path
+    || input.worktreePath
+    // The location the registered action schema actually advertises.
+    || inputs.worktree_path
+    || inputs.worktreePath
+    || run?.worktree_path
+    || getDurableLane(laneId, root)?.binding?.worktree_path
+    || null;
+}
+
+/**
+ * Strip anything that looks like an arbitrary payload.
+ *
+ * `body` is on the blanket reject list because it is how a SQL or HTTP payload
+ * would arrive. A promotion pull request legitimately HAS a body — its
+ * description — so the exception is granted to that one action and nowhere
+ * else, and the text is still bounded and secret-scanned by
+ * validateOpenPrInputs before it reaches GitHub. Widening the blanket rule for
+ * everyone would have been the easy fix and the wrong one.
+ */
+function sanitizeActionInputs(raw, actionKey = null) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const bodyAllowed = actionKey === ACTION_TYPES.PROMOTION_OPEN_PR;
+  if (raw.sql || raw.statement || (raw.body && !bodyAllowed)
+    || raw.database_url || raw.databaseUrl || raw.token || raw.argv || raw.shell) {
+    return { __rejected: "arbitrary_sql_rejected" };
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v == null) continue;
+    if (/sql|token|password|secret|database_url|argv|shell|command/i.test(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function defaultModeForAction(actionKey, requested) {
+  if (requested) return requested;
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return "promotion";
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) return "promotion";
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) return "promotion";
+  if (actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION) return "migration_apply";
+  // Same governed mode as its non-production sibling: it IS a migration apply.
+  // Omitting it here is what made an operator-approved production migration
+  // fail `policy_denied` — the read_only default meets the non-read risk class
+  // in validateAgainstRegistry, and the refusal reads as the operator forbidding
+  // the action rather than nobody having assigned it a mode.
+  if (actionKey === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) return "migration_apply";
+  // A ledger reconciliation is a privileged production write. It shares the
+  // migration_apply mode because it belongs to the same governed family, and it
+  // is named here explicitly so it can never inherit read_only and surface as
+  // policy_denied — the trap two actions have already fallen into.
+  if (actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) return "migration_apply";
+  /*
+   * NOT "promotion" either. A transfer copies approved files between two
+   * project repositories; it produces no release and touches no product. It is
+   * named here explicitly so it can never inherit read_only and surface as
+   * `policy_denied` -- the trap three actions have now fallen into, and the one
+   * CI caught this action falling into before it ever ran.
+   */
+  if (actionKey === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) return "other";
+  /*
+   * NOT "promotion". That mode means an Alloy product release, and this action
+   * exists precisely because writing a workflow definition to main is NOT one -
+   * conflating them in the mode would put repository configuration and product
+   * release in the same governed bucket, which is the distinction the whole
+   * class was built to hold. "other" is the member for a privileged action that
+   * is neither a promotion nor a migration. Named here so it can never inherit
+   * read_only and surface as policy_denied, the trap documented below.
+   */
+  if (actionKey === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) return "other";
+  /*
+   * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
+   * refuses any non-read risk class in read_only mode, so an action added to the registry without
+   * a mode here is registered, discoverable, proposable — and then denied with `policy_denied`,
+   * which reads as "the operator's policy forbids this" rather than "nobody assigned it a mode".
+   * That cost a full delivery cycle to diagnose once; the fallthrough is the hazard, not this line.
+   */
+  // "other" is the existing GOVERNED_MODES member for a privileged action that is neither a
+  // promotion nor a migration. Inventing a mode name instead fails `invalid_mode`, and widening the
+  // enum would add governance vocabulary for one action that already has a home.
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
+  // A catalog write against a named database. It is not a promotion and not a
+  // migration — no schema changes — so it takes the same "other" home as the
+  // environment actions rather than widening the mode vocabulary for one action.
+  if (actionKey === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) return "other";
+  if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
+  if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
+  if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
+  /*
+   * Executing a registered reconciliation is a privileged_write against a permitted environment —
+   * `reconciliation-registry.mjs` permits staging and, by construction, no production entry exists.
+   * It is not a promotion: nothing moves between branches. It is not a migration_apply: no schema
+   * changes, and borrowing that mode would let it inherit migration governance it has no business
+   * inheriting. "other" is where its nearest neighbour `vacilando.apply_reconciliation_plan` already
+   * lives, and the mode is chosen from those semantics rather than to satisfy a red test.
+   *
+   * Operator approval is NOT granted by this line and is not affected by it: the registration carries
+   * `alwaysRequiresOperatorApproval: true`, which is enforced elsewhere and stays enforced.
+   */
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) return "other";
+  if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
+  if (actionKey === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) return "other";
+  /*
+   * Both of these shipped without a default and worked anyway, because every payload that ever
+   * proposed them set `requested_mode` explicitly. That is precisely the latent form of the trap
+   * NC14 exists to catch: the first caller that omits the mode gets `policy_denied`, which reads as
+   * the operator forbidding the action rather than nobody having assigned it one.
+   */
+  if (actionKey === ACTION_TYPES.HOST_INSTALL_TOOLKIT) return "other";
+  if (actionKey === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) return "other";
+  return "read_only";
+}
+
+/**
+ * THE DEFAULT TARGET OF AN ACTION IS THE THING THE ACTION ACTUALLY TOUCHES.
+ *
+ * THE DEFECT. `target` was defaulted to DEFAULT_TARGET — the deployed DATABASE
+ * identifier — for every action key except the four promotion ones. But `target`
+ * is not only a database name: `environmentOf` in director-authority reads it as
+ * the POLICY ENVIRONMENT, and `alloy_deployed_primary` is a member of
+ * OPERATOR_ONLY_ENVIRONMENTS. That check runs at step 3 of the evaluation, BEFORE
+ * a policy can be matched at step 5. So every action that did not name a target
+ * declared itself to be operating on the production database, and escalated with
+ * "This targets alloy_deployed_primary, which is always an operator decision" —
+ * whatever its tier, and however complete its delegated policy.
+ *
+ * MEASURED, not reasoned about. In the 23 days to 2026-09-11, host.install_toolkit
+ * — tier A, enabled policy, and a policy that already names a "host" environment
+ * precisely because someone hit the tail of this — was requested 83 times and sent
+ * to the operator on 67 of them, 61 in the last 7 days, every one carrying that
+ * reason and every one approved. Not one was ever denied. The same silence covered
+ * the enabled policies for close_pull_request, delete_remote_branch,
+ * retire_worktree, apply_reconciliation_plan, set_provider_ceiling and
+ * dispatch_measurement_instruction.
+ *
+ * WHAT THIS IS NOT. It is not a widening of what may run unattended. Every gate,
+ * every policy and every operator-owned action key is untouched; an action still
+ * has to match an enabled policy and pass every gate, measured. All this does is
+ * stop an action lying about where it runs. The direction of the lie mattered:
+ * a host-local toolkit install claiming to be a production database operation
+ * escalated, so the failure was expensive rather than unsafe — but a value nobody
+ * set, standing in for a fact nobody checked, is the wrong thing to have governing.
+ *
+ * FAIL-CLOSED BY CONSTRUCTION. Anything absent from this table keeps
+ * DEFAULT_TARGET, so a newly registered action escalates until someone states
+ * where it runs. THE DATABASE ACTIONS ARE ABSENT DELIBERATELY AND MUST STAY
+ * ABSENT: read_census, apply_migration, apply_promoted_migration and
+ * repair_migration_ledger really do address the deployed database, and for
+ * repair_migration_ledger the operator-only environment was, until this change
+ * added it to OPERATOR_OWNED_ACTION_KEYS, the ONLY thing standing between a
+ * delegate and a production ledger write. The environment.* actions are
+ * operator-owned in V1 by explicit action key, so their target is left as it was.
+ */
+const DEFAULT_TARGET_BY_ACTION = Object.freeze({
+  // Promotion surface — unchanged from the four-way condition this replaces.
+  [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST]: "staging",
+  [ACTION_TYPES.DATABASE_APPLY_MIGRATION]: "staging",
+  [ACTION_TYPES.REPOSITORY_PUSH]: "staging",
+  [ACTION_TYPES.PROMOTION_OPEN_PR]: "staging",
+  // Repository housekeeping acts on the canonical branch, exactly as its policy says.
+  [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST]: "staging",
+  [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH]: "staging",
+  // Local engineering surface. These never reach a deployed environment at all.
+  [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN]: "development_certification",
+  [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE]: "development_certification",
+  [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING]: "development_certification",
+  [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION]: "development_certification",
+  // "host" is the name routine_toolkit_convergence_v1 already uses, and it is the
+  // honest one: this changes what THIS machine runs, and nothing deployed.
+  [ACTION_TYPES.HOST_INSTALL_TOOLKIT]: "host",
+});
+
+export function defaultTargetForAction(actionKey) {
+  return DEFAULT_TARGET_BY_ACTION[actionKey] || DEFAULT_TARGET;
+}
+
+function validateRequestShape(input, { root } = {}) {
+  const actionKey = String(input.action_key || input.actionKey || "").trim();
+  const laneId = String(input.lane_id || input.laneId || "").trim();
+  if (!actionKey) return { ok: false, error: "missing_action_key" };
+  if (!laneId) return { ok: false, error: "missing_lane_id" };
+  const missionId = String(
+    input.mission_id || input.missionId || missionIdForLane(laneId, root) || "",
+  ).trim();
+  // A lane with no Mission is not automatically ungoverned.
+  //
+  // A provider on an authorized run reached repository.merge_pull_request and
+  // this refused with `missing_mission_binding`, leaving nothing for a Director
+  // to approve — the only route left was merging by hand outside Vacilando.
+  // The refusal was right; having nothing on the other side of it was the bug.
+  //
+  // Authority may instead come from the lane's REPOSITORY, and only when its
+  // profile actually carries governed promotion. A generic repository has no
+  // promotion policy and stays exactly as fail-closed as before: this widens
+  // where authority may come from, never what may be done without it.
+  let repositoryAuthority = null;
+  if (!missionId) {
+    // Resolve here rather than requiring every caller to thread it. Both entry
+    // points — the CLI and the WAITING_RESOURCE orchestrator — reach this one
+    // function, and a caller that forgot to pass authority would have failed
+    // closed for the wrong reason.
+    const authority = input.__authority || resolveGovernedAuthoritySync(laneId, { root });
+    if (!authority || authority.ok !== true) {
+      return {
+        ok: false,
+        error: authority?.error || "missing_mission_binding",
+        detail: authority?.detail || null,
+        repository_id: authority?.repository_id || null,
+      };
+    }
+    if (authority.kind !== "repository") return { ok: false, error: "missing_mission_binding" };
+    repositoryAuthority = authority;
+  }
+  const mode = defaultModeForAction(
+    actionKey,
+    String(input.requested_mode || input.requestedMode || "").trim() || null,
+  );
+  const authorityRecord = repositoryAuthority
+    ? {
+      kind: "repository",
+      repository_id: repositoryAuthority.repository_id,
+      repository_name: repositoryAuthority.repository_name || null,
+      profile: repositoryAuthority.profile || null,
+      canonical_branch: repositoryAuthority.canonical_branch || null,
+    }
+    : { kind: "mission", mission_id: missionId };
+  if (!GOVERNED_MODES.includes(mode)) return { ok: false, error: "invalid_mode", requested_mode: mode };
+  const reason = bound(input.reason_worker_cannot_execute || input.reasonWorkerCannotExecute, 1000);
+  if (!reason) return { ok: false, error: "missing_reason_worker_cannot_execute" };
+  const purpose = bound(input.purpose, 1000) || "Governed capability required";
+  const defaultTarget = defaultTargetForAction(actionKey);
+  const target = String(input.target || defaultTarget).trim() || defaultTarget;
+  const declaredRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
+    ? (input.artifact_refs || input.artifactRefs).map(String).filter(Boolean)
+    : (input.artifact ? [String(input.artifact)] : []);
+  const inputs = sanitizeActionInputs(input.inputs || {}, actionKey);
+  if (inputs.__rejected) return { ok: false, error: inputs.__rejected, failure_code: "policy_denied" };
+
+  /*
+   * NORMALISE THE ARTIFACT AT THE FILING BOUNDARY, ONCE.
+   *
+   * THE DEFECT THIS CLOSES, measured. A census was filed with
+   * `inputs.queryArtifactPath` naming a real artifact and `artifact_refs`
+   * empty. Execution resolves the query from `artifact_refs`, and
+   * `validateAgainstRegistry` overwrites whatever the caller put in `inputs`
+   * with `artifactPathFrom(artifactRefs)` — so the supplied path was discarded
+   * and the refusal read "queryArtifactPath required", naming the single field
+   * the filer HAD provided. Two semantically equivalent fields, one silently
+   * ignored.
+   *
+   * The fix belongs here rather than in the executor. Teaching execution to
+   * search alternate input fields would preserve the ambiguity and give the
+   * policy evaluator and the executor two places to disagree about which
+   * artifact is being run. Normalising once, before persistence, means the
+   * request that is stored already carries the reference execution consumes.
+   *
+   * THIS IS NOT A DEFAULT. It promotes a path the caller explicitly named and
+   * invents nothing when none was given — the distinction that matters, because
+   * an earlier fallback here silently substituted the Q15 authority census for
+   * requests that named no query at all, and a privileged read whose subject is
+   * guessed is not a governed action.
+   */
+  const artifactContract = artifactContractFor(getActionDefinition(actionKey));
+  let artifactRefs = declaredRefs;
+  let artifactNormalizedFrom = null;
+  if (artifactContract && !artifactRefs.length) {
+    for (const key of artifactContract.inputKeys) {
+      const supplied = inputs?.[key];
+      if (supplied && String(supplied).trim()) {
+        artifactRefs = [String(supplied).trim()];
+        artifactNormalizedFrom = key;
+        break;
+      }
+    }
+  }
+  if (artifactContract && !artifactRefs.length) {
+    // Refused HERE, at filing, rather than several layers later as an executor
+    // surprise — and the refusal names the canonical field instead of the one
+    // the caller is most likely to have already set.
+    return {
+      ok: false,
+      error: "missing_canonical_artifact_reference",
+      failure_code: "missing_canonical_artifact_reference",
+      detail: `${actionKey} executes from artifact_refs. Supply artifact_refs, or ${artifactContract.inputKeys.join(" / ")} in inputs, and it will be normalised into artifact_refs before the request is persisted.`,
+    };
+  }
+  return {
+    ok: true,
+    actionKey,
+    // null, never "", so every `if (missionId)` downstream reads the same way.
+    missionId: missionId || null,
+    // Present when a repository, not a mission, is vouching for this action.
+    authority: authorityRecord,
+    laneId,
+    mode,
+    reason,
+    purpose,
+    target,
+    artifactRefs,
+    // Recorded so evidence can say the reference was promoted from an input
+    // rather than supplied canonically. Observability, never behaviour.
+    artifactNormalizedFrom,
+    inputs,
+    continuationPlan: input.continuation_plan || input.continuationPlan || defaultContinuationPlan(actionKey, inputs),
+  };
+}
+
+function validateAgainstRegistry(actionKey, target, artifactRefs, mode, { worktreePath, inputs } = {}) {
+  const def = getActionDefinition(actionKey);
+  if (!def) {
+    const avail = classifyActionAvailability(actionKey);
+    if (avail.code === "director_registry_stale") {
+      return { ok: false, error: "director_registry_stale", failure_code: "director_registry_stale", stale: true };
+    }
+    return { ok: false, error: "unsupported_action_key", failure_code: "action_unavailable" };
+  }
+  if (mode === "read_only" && def.riskClass && !/read/i.test(def.riskClass) && actionKey !== ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return { ok: false, error: "policy_denied", failure_code: "policy_denied" };
+  }
+  if (typeof def.validateInputs === "function") {
+    const validated = def.validateInputs({
+      ...(inputs || {}),
+      queryArtifactPath: artifactPathFrom(artifactRefs),
+      databaseTarget: target,
+      // Only override when the RUN actually knows its worktree. Spreading
+      // `undefined` here erased a path the caller had supplied in `inputs`,
+      // which surfaced as `invalid_worktree_path` on a perfectly valid request.
+      ...(worktreePath ? { worktreePath, worktree_path: worktreePath } : {}),
+    });
+    if (!validated.ok) {
+      const readonlyFail = new Set([
+        "forbidden_keyword", "forbidden_construct", "writable_cte", "with_without_select",
+        "arbitrary_sql_rejected", "arbitrary_command_rejected",
+      ]);
+      const failure_code = validated.code === "wrong_database_target"
+        ? "target_unavailable"
+        : (readonlyFail.has(validated.code) ? "policy_denied" : (validated.code || "result_validation_failed"));
+      return {
+        ok: false,
+        error: failure_code,
+        failure_code,
+        validation: validated,
+      };
+    }
+    return { ok: true, def, normalized: validated.normalized };
+  }
+  return { ok: true, def, normalized: { databaseTarget: target } };
+}
+
+
+/**
+ * CAN THE MISSION'S OWN WORDS SATISFY THIS APPROVAL?
+ *
+ * Called ONLY where the ordinary evaluation has already concluded that a live
+ * operator approval would be required. It can therefore never widen anything:
+ * the worst it can do is decline, leaving the behaviour exactly as it was.
+ *
+ * It answers with the CONCRETE request in hand — repository, PR, head SHA,
+ * target, method, check state, and whether reconciliation found unrelated
+ * commits — so an intent captured at orientation is only spent on an execution
+ * proven to be inside it. The identity comes from the shared parsers, never
+ * re-derived here.
+ *
+ * A match does not execute anything and does not bypass the grant: the request
+ * still travels the normal governed path and the trusted host still validates
+ * its own PR/SHA/target/method binding.
+ */
+function missionDelegationDecision(rec, { nowMs, evidence = null } = {}) {
+  const actionKey = rec?.action_key;
+  const identity = readMergeInputIdentity(rec?.inputs || {});
+  const inputs = rec?.inputs || {};
+  const repository = inputs.repository || inputs.repo || null;
+  if (!repository) return { ok: false, error: "no_repository" };
+
+  // Checks. `true` only when observed green; unknown is NOT green, because a
+  // card that has not looked must never read as "fine".
+  let checksGreen = null;
+  const snapChecks = rec?.proposal_snapshot?.checks || null;
+  if (snapChecks) {
+    checksGreen = (snapChecks.failing || []).length === 0
+      && (snapChecks.pending || []).length === 0
+      && (snapChecks.unknown || []).length === 0;
+  } else if (inputs.required_checks_green === true || inputs.requiredChecksGreen === true) {
+    checksGreen = true;
+  }
+
+  // Unrelated content found during reconciliation disqualifies delegated
+  // authority outright: a mission that delegated ITS work never delegated
+  // whatever else landed on the branch.
+  const changed = Array.isArray(evidence?.unrelated_commits)
+    ? evidence.unrelated_commits.length
+    : Number(inputs.unrelated_commits || 0);
+
+  const targetBranch = actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
+    ? (inputs.base || inputs.baseBranch || rec.target)
+    : (identity.targetBranch || inputs.target_branch || inputs.targetBranch || rec.target);
+
+  return findCoveringDelegation({
+    missionId: rec.mission_id || null,
+    laneId: rec.lane_id || null,
+    actionKey,
+    repository,
+    targetBranch,
+    branch: inputs.branch || inputs.headBranch || inputs.head_branch || null,
+    mergeMethod: actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST ? identity.mergeMethod : null,
+    checksGreen,
+    unrelatedCommits: changed,
+  }, { root: runtimeRoot(), nowMs });
+}
+
+/**
+ * Wrap a decision that would require a live click. Returns the delegated
+ * decision when the mission already authorised exactly this, and the original
+ * decision otherwise — including the reason it did NOT apply, so the approval
+ * card can explain why it is still asking.
+ */
+function withMissionDelegation(rec, decision, { nowMs, evidence = null } = {}) {
+  if (!decision?.operator_approval_required) return decision;
+  let out;
+  try {
+    out = missionDelegationDecision(rec, { nowMs, evidence });
+  } catch (e) {
+    // A broken delegation path must never approve. Fall through to the operator.
+    return { ...decision, delegation_error: String(e?.message || e) };
+  }
+  if (!out?.ok) {
+    return { ...decision, delegation_declined: out?.error || "no_delegation" };
+  }
+  return {
+    auto_execute: true,
+    operator_approval_required: false,
+    reason: "mission_delegation",
+    authorized_by: "mission_delegation",
+    delegation_id: out.delegation.delegation_id,
+    delegation_mission_clause: out.delegation.mission_clause,
+    delegation_action_key: out.delegation.action_key,
+    delegation_target_branch: out.delegation.target_branch,
+  };
+}
+
+/**
+ * The operator-readable sentence behind each escalation `reason`, for the paths
+ * that never reach the director evaluator and therefore never carry one of its
+ * own. Keyed by the exact `reason` policyDecision returns, so a reason added
+ * without a sentence falls through to the generic line rather than to silence.
+ */
+const ESCALATION_REASON_TEXT = Object.freeze({
+  policy_default_requires_operator:
+    "No delegated policy authorised this action, so it escalates. Unknown is never allow.",
+  policy_denied_requires_operator:
+    "A delegated policy covers this action but at least one required gate did not pass.",
+});
+
+function policyDecision(rec, { nowMs } = {}) {
+  // Same identity the mint and the execution boundary use — including the
+  // environment, which this call used to leave out entirely while passing
+  // `rec.target` as the database target.
+  const identity = authorizationIdentityFor(rec);
+  const auth = findAuthorization({
+    ...identity.lookup,
+    nowMs: nowMs ?? Date.now(),
+  });
+  if (auth) {
+    return {
+      auto_execute: true,
+      operator_approval_required: false,
+      authorization_id: auth.authorizationId,
+      reason: "existing_mission_authorization",
+    };
+  }
+  // STANDING AUTHORITY THIS LANE ALREADY HOLDS.
+  //
+  // A separate probe rather than a widening of the one above, deliberately.
+  // The lookup above is filed under mission-or-repository; reordering it to
+  // prefer the lane would have re-homed every existing grant. This asks a
+  // strictly narrower question — "has the operator already approved THIS
+  // capability for THIS lane, in this repository and environment?" — and can
+  // only ever match a grant that was minted with an explicitly declared
+  // wildcard subject scope, for one of STANDING_ELIGIBLE_ACTIONS.
+  const standingScope = standingScopeFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: identity.environment })) {
+    const standing = findAuthorization({
+      ...identity.lookup,
+      missionId: standingScope,
+      nowMs: nowMs ?? Date.now(),
+    });
+    if (standing) {
+      return {
+        auto_execute: true,
+        operator_approval_required: false,
+        authorization_id: standing.authorizationId,
+        reason: "existing_lane_standing_authorization",
+      };
+    }
+  }
+  // THE DEPLOYED-PRIMARY CENSUS IS NOW DECIDED BY GATES, NOT BY A SHORT-CIRCUIT.
+  //
+  // This used to return `privileged_read_requires_operator` right here, before
+  // the evaluator ran. It cost the operator 182 approvals in the 23 days to
+  // 2026-09-11 — 73 in the last week, the single largest source of interruption
+  // — and produced ZERO denials, because the thing the human was being asked to
+  // supply was a measurement: is this the allowlisted query, does it still match
+  // its hash, is it provably non-mutating, is the target exactly the one that
+  // will be read. Every one of those is now a gate on
+  // allowlisted_read_only_census_v1, measured by re-running the registry's own
+  // validator at decision time.
+  //
+  // THE REFUSAL DID NOT GO AWAY, IT GOT A REASON. A census that fails any gate
+  // still escalates, and now says which one. Anything that is not a census, or
+  // is a census in any other mode, or names any other target, never matches this
+  // policy at all and takes the unchanged path below.
+  //
+  // Deleting the short-circuit rather than keeping it as a fallback is
+  // deliberate: two authorities for one decision is how they drift, and the
+  // evaluator is strictly the better-informed of the two. If it throws, the
+  // catch below still lands on the operator.
+  //
+  // DELEGATED GOVERNANCE. The Director may decide only what an explicit
+  // policy covers, on evidence gathered from sources the worker does not
+  // control. Anything unmatched, unmeasured or consequential falls through to
+  // the operator below — this can only ever produce MORE escalations than the
+  // policy set allows, never fewer.
+  try {
+    const evidence = collectDirectorEvidence(rec, {
+      stateRoot: runtimeRoot(),
+      worktree: rec.worktree_path || null,
+    });
+    if (Array.isArray(evidence.changed_files) && evidence.changed_files.length) {
+      // Let a governance-policy edit be SEEN rather than declared.
+      rec = { ...rec, inputs: { ...(rec.inputs || {}), changed_files: evidence.changed_files } };
+    }
+    const verdict = evaluateDirectorAuthority({
+      request: { ...rec, content_fingerprint: governedContentFingerprint(rec) },
+      evidence,
+      nowMs: nowMs ?? Date.now(),
+    });
+    if (verdict.decision === "director_approved") {
+      return {
+        auto_execute: true,
+        operator_approval_required: false,
+        reason: "director_approved",
+        director_decision: verdict,
+      };
+    }
+    if (verdict.decision === "policy_denied") {
+      return withMissionDelegation(rec, {
+        auto_execute: false,
+        operator_approval_required: true,
+        reason: "policy_denied_requires_operator",
+        director_decision: verdict,
+      }, { nowMs, evidence });
+    }
+    return withMissionDelegation(rec, {
+      auto_execute: false,
+      operator_approval_required: true,
+      reason: "policy_default_requires_operator",
+      director_decision: verdict,
+    }, { nowMs, evidence });
+  } catch {
+    // A broken evaluator must never approve. Fall through to the operator.
+  }
+  return withMissionDelegation(rec, {
+    auto_execute: false,
+    operator_approval_required: true,
+    reason: "policy_default_requires_operator",
+  }, { nowMs });
+}
+
+function requestTitle(rec) {
+  if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return "Read-only database census";
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const id = mergeIdentityFor(rec);
+    const into = id.targetBranch || rec.target || "staging";
+    return id.pullRequestNumber
+      ? `Merge PR #${id.pullRequestNumber} into ${into}`
+      : "Merge pull request into staging";
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
+    const b = rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || "";
+    return b ? `Push ${b} to the remote` : "Push a reviewed branch";
+  }
+  if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const b = rec.inputs?.head_branch || rec.inputs?.headBranch || rec.inputs?.branch || "";
+    return b ? `Open a staging pull request for ${b}` : "Open a promotion pull request";
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    return "Apply Access & Identity staging migrations";
+  }
+  return rec.action_key;
+}
+
+let executeImpl = null;
+let resumeImpl = null;
+let startSessionImpl = null;
+let sendImpl = null;
+
+export function setGovernedActionExecuteImplForTests(fn) {
+  executeImpl = typeof fn === "function" ? fn : null;
+}
+
+export function setGovernedActionResumeImplForTests({
+  resumeLane = null,
+  startLaneAgentSession = null,
+  sendLaneInstruction = null,
+} = {}) {
+  resumeImpl = typeof resumeLane === "function" ? resumeLane : null;
+  startSessionImpl = typeof startLaneAgentSession === "function" ? startLaneAgentSession : null;
+  sendImpl = typeof sendLaneInstruction === "function" ? sendLaneInstruction : null;
+}
+
+export function resetGovernedActionsForTests(root = runtimeRoot()) {
+  executeImpl = null;
+  resumeImpl = null;
+  startSessionImpl = null;
+  sendImpl = null;
+  writeStore(emptyStore(), root);
+}
+
+export function requestGovernedAction(input = {}, {
+  nowMs = Date.now(),
+  root = null,
+  processNow = true,
+} = {}) {
+  const storeRoot = resolveStoreRoot(input, root);
+  const shape = validateRequestShape(input, { root: storeRoot });
+  if (!shape.ok) return shape;
+
+  const laneId = canonicalLaneStoreId(shape.laneId, storeRoot) || shape.laneId;
+  const runId = input.run_id || input.runId || activeRunForLane(laneId, storeRoot)?.run_id || null;
+  const run = runId ? getExecutionRun(runId, storeRoot) : null;
+
+  /*
+   * ONE CANONICAL OWNER OF RUN IDENTITY.
+   *
+   * THE SPLIT-BRAIN THIS CLOSES. `runId` is whatever the CALLER passed on the
+   * command line. The canonical store was already consulted on the line above
+   * — and its answer was then thrown away. So a worker could name a run the
+   * execution-run store had never heard of, and this layer would file it,
+   * authorize it and execute it.
+   *
+   * Measured, not imagined: after run erun_9bccef4667cc68ef vanished from the
+   * canonical store, FOURTEEN governed actions stayed bound to it and TWELVE of
+   * them COMPLETED — push, pull request, merge, toolkit install, cross-lane
+   * dispatch — every one of them authorized against a run that
+   * `getExecutionRun` reported as absent. Meanwhile `checkpoint-create` asked
+   * the same question, got the honest answer, and refused. Two subsystems
+   * disagreed about whether the same run existed, and the one that could
+   * promote code to staging was the one that had stopped checking.
+   *
+   * The invariant: no subsystem may authorize work against a run the canonical
+   * owner considers nonexistent. A caller that names a run gets that name
+   * VERIFIED, not trusted. Naming nothing is still fine — plenty of governed
+   * work legitimately has no run — but naming a ghost is now a refusal rather
+   * than a silent parallel universe.
+   *
+   * This deliberately fails closed. If canonical run truth is ever lost again,
+   * governed actions stop instead of proceeding on stale identity, which is the
+   * behaviour that would have surfaced the durability defect on its first
+   * occurrence instead of its third.
+   */
+  const namedRun = Boolean(input.run_id || input.runId);
+  if (namedRun && !run) {
+    return {
+      ok: false,
+      error: "run_not_found",
+      failure_code: "run_not_found",
+      detail: `run ${runId} is not present in the canonical execution-run store; governed work may not be authorized against a run the run owner does not have`,
+    };
+  }
+
+  const worktreePath = resolveWorktreePath(input, laneId, run, storeRoot);
+  /*
+   * THE SUBSTITUTION HAD TWO HALVES AND ONLY ONE WAS CLOSED.
+   *
+   * `artifactPathFrom` was repaired to stop defaulting to Q15 — its comment
+   * records the incident, gar_a1d647be39e8b6 filed with no refs and executed
+   * q15-authority-census.json. But the fallback was ALSO here, upstream of it,
+   * writing Q15_CENSUS_ARTIFACT into the request's own artifact_refs. So the
+   * reader never saw the empty case for this path, the substitution still
+   * happened, and the store still recorded a query the filer never asked for.
+   *
+   * A privileged read whose SUBJECT is guessed is not a governed action. Absence
+   * stays absent; validateInputs turns it into `missing_query_artifact` and the
+   * request fails closed before any database is touched.
+   */
+  const artifactRefs = shape.artifactRefs;
+  // AN ABBREVIATED SHA CANNOT BE APPROVED INTO ANYTHING.
+  //
+  // A merge was requested with expectedHeadSha "d40f469b4". The operator pressed
+  // Approve three times; every attempt died inside GitHub with "Could not coerce
+  // value to GitObjectID", and because a failed request leaves the pending list,
+  // the operator was left hunting for a request that no longer appeared anywhere.
+  // Asking a human to authorize something that cannot possibly succeed is the
+  // defect — so the request is refused HERE, when the worker files it, rather
+  // than after a decision has been spent on it.
+  const shaInput = input.inputs || input.input || {};
+  const declaredSha = shaInput.expectedHeadSha || shaInput.expected_head_sha || shaInput.expectedSha || shaInput.expected_sha || null;
+  if (declaredSha != null && String(declaredSha).trim() !== "") {
+    const sha = String(declaredSha).trim();
+    if (!/^[0-9a-f]{40}$/i.test(sha)) {
+      return {
+        ok: false,
+        error: "abbreviated_source_sha",
+        failure_code: "invalid_request_inputs",
+        detail: `expectedHeadSha must be the full 40-character commit SHA; received "${sha}" (${sha.length} characters). An abbreviated SHA is ambiguous and is rejected by the merge API, so it can never be approved.`,
+      };
+    }
+  }
+
+  const availability = classifyActionAvailability(shape.actionKey);
+  if (availability.code === "unsupported_action_key") {
+    return { ok: false, error: "unsupported_action_key", failure_code: "action_unavailable" };
+  }
+
+  const existing = listGovernedActions({ missionId: shape.missionId, laneId, root: storeRoot })
+    .find((r) => isPendingGovernedStatus(r.status) && dedupeKey(dedupeShapeOf(r)) === dedupeKey({
+      mission_id: shape.missionId,
+      lane_id: laneId,
+      action_key: shape.actionKey,
+      authority: shape.authority,
+      target: shape.target,
+      artifact_refs: artifactRefs,
+      inputs: shape.inputs,
+    }));
+  if (existing) {
+    attachRunWait(existing, { nowMs, root: storeRoot });
+    return { ok: true, request: publicGovernedAction(existing), deduped: true };
+  }
+
+  const failedMatch = listGovernedActions({ missionId: shape.missionId, laneId, root: storeRoot })
+    .find((r) => r.status === "failed"
+      && dedupeKey(dedupeShapeOf(r)) === dedupeKey({
+        mission_id: shape.missionId,
+        lane_id: laneId,
+        action_key: shape.actionKey,
+        authority: shape.authority,
+        target: shape.target,
+        artifact_refs: artifactRefs,
+        inputs: shape.inputs,
+      })
+      && isRecoverableStaleRegistryFailure(r));
+  if (failedMatch) {
+    failedMatch.status = "requested";
+    failedMatch.failure_code = null;
+    failedMatch.failure_reason = null;
+    failedMatch.revived_from_stale_registry = true;
+    failedMatch.updated_at = iso(nowMs);
+    saveRequest(failedMatch, storeRoot);
+    appendAudit(failedMatch, "revived_after_director_refresh", { nowMs }, storeRoot);
+    attachRunWait(failedMatch, { nowMs, root: storeRoot });
+    if (!processNow) return { ok: true, request: publicGovernedAction(failedMatch), revived: true };
+    return processGovernedAction(failedMatch.request_id, { nowMs, root: storeRoot, actor: "director" });
+  }
+
+  /*
+   * THE REPOSITORY AUTHORITY IS DECIDED HERE, ONCE, AND TRAVELS WITH THE REQUEST.
+   *
+   * This is the first point that has both the governed action identity and a
+   * resolvable promoted authority, so it is where "the SHA this was decided
+   * against" is fixed. Nothing downstream re-reads a live ref to replace it;
+   * that is the whole stability contract, and re-resolving at execution would
+   * silently retarget an approved request onto whatever staging became.
+   *
+   * Stamped AFTER the dedupe lookups above deliberately: those compare the
+   * caller's inputs, and folding a moving SHA into them would stop two
+   * genuinely identical filings from deduping.
+   *
+   * Content-executing actions only. A requirement invented for metadata-only
+   * actions would be noise, and noise is what teaches people to work around a
+   * field.
+   */
+  const repoAuthority = stampRepositoryAuthority({
+    actionKey: shape.actionKey,
+    inputs: shape.inputs || {},
+    canonicalRoot: resolveCanonicalRepoRoot(),
+  });
+  if (!repoAuthority.ok) {
+    return { ok: false, error: repoAuthority.code, detail: repoAuthority.detail, failure_code: repoAuthority.code };
+  }
+
+  const rec = {
+    schema_version: GOVERNED_ACTION_SCHEMA,
+    request_id: newRequestId(),
+    mission_id: shape.missionId,
+    // What vouched for this action. A repository-authorized request has no
+    // mission, so this is the only place the audit trail can name its source.
+    authority: shape.authority || null,
+    lane_id: laneId,
+    run_id: runId,
+    worktree_path: worktreePath,
+    action_key: shape.actionKey,
+    target: shape.target,
+    purpose: shape.purpose,
+    artifact_refs: artifactRefs,
+    requested_mode: shape.mode,
+    reason_worker_cannot_execute: shape.reason,
+    operator_approval_required: true,
+    status: "requested",
+    result_ref: null,
+    failure_reason: null,
+    failure_code: null,
+    title: bound(input.title, 120) || requestTitle({ action_key: shape.actionKey, inputs: shape.inputs }),
+    requesting_worker: bound(input.requesting_worker || input.requestingWorker, 80) || laneId,
+    policy_decision: null,
+    operator_approval: null,
+    trusted_host_action_id: null,
+    decision_id: null,
+    execution_started_at: null,
+    execution_ended_at: null,
+    inputs: repoAuthority.inputs,
+    continuation_plan: shape.continuationPlan || null,
+    continuation_intent: bound(input.continuation_intent || input.continuationIntent, 500)
+      || (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS
+        ? "Continue the current assignment with census evidence."
+        : "Continue the current assignment with the governed result."),
+    successor_of: bound(input.successor_of || input.successorOf, 80) || null,
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+  };
+  // Capture the pull request's facts ONCE, at the moment the proposal is made,
+  // so the Director decides against what was true then and the head-SHA pin
+  // catches anything that moves afterwards.
+  const snapshot = capturePullRequestSnapshot(rec, { gh: input.__gh || null });
+  if (snapshot) rec.proposal_snapshot = snapshot;
+  saveRequest(rec, storeRoot);
+  appendAudit(rec, "requested", { nowMs }, storeRoot);
+  attachRunWait(rec, { nowMs, root: storeRoot });
+
+  if (!processNow) return { ok: true, request: publicGovernedAction(rec) };
+  return processGovernedAction(rec.request_id, { nowMs, root: storeRoot, actor: "director" });
+}
+
+/**
+ * WAITING_RESOURCE / director_governed_action seam.
+ * Not a local resource-lock. Creates or recovers the governed request.
+ */
+export function orchestrateDirectorGovernedWait({
+  run,
+  wait = null,
+  reason = null,
+  origin = "system",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  if (!run?.run_id) return { ok: false, error: "run_not_found" };
+  const fields = wait || run.resource_wait || {};
+  const existingId = fields.governed_request_id;
+  if (existingId) {
+    const rec = getGovernedAction(existingId, root);
+    if (rec && isPendingGovernedStatus(rec.status)) {
+      attachRunWait(rec, { nowMs, root });
+      return { ok: true, request: publicGovernedAction(rec), deduped: true };
+    }
+  }
+  const pending = pendingGovernedActionForRun(run.run_id, root)
+    || pendingGovernedActionForLane(run.lane_id, root);
+  if (pending) {
+    attachRunWait(pending, { nowMs, root });
+    return { ok: true, request: publicGovernedAction(pending), deduped: true };
+  }
+
+  const laneId = run.lane_id;
+  const rec = getDurableLane(laneId, root);
+  const missionId = fields.mission_id || fields.missionId || run.mission_id || rec?.mission_id || null;
+  const authority = fields.__authority
+    || (missionId ? null : resolveGovernedAuthoritySync(laneId, { root }));
+  if (!missionId && !(authority && authority.ok === true && authority.kind === "repository")) {
+    // Say WHICH authority is missing. "Lane has no Mission binding" sent the
+    // Director looking for a mission to repair, when the real answer is that
+    // this repository's profile does not carry governed promotion at all.
+    const detail = authority?.error === "repository_profile_forbids_governed_action"
+      ? `This repository's ${authority.profile} profile does not carry governed promotion.`
+      : "Lane has no Mission binding and no repository that can authorize this action.";
+    patchRunFields(run.run_id, { state_reason: detail }, { nowMs, root });
+    return { ok: false, error: authority?.error || "missing_mission_binding", detail };
+  }
+
+  const request = {
+    mission_id: missionId,
+    // Which authority vouched for this action, recorded on the request so the
+    // approval card and the audit trail can say so.
+    authority: missionId
+      ? { kind: "mission", mission_id: missionId }
+      : {
+        kind: "repository",
+        repository_id: authority.repository_id,
+        repository_name: authority.repository_name || null,
+        profile: authority.profile || null,
+        canonical_branch: authority.canonical_branch || null,
+      },
+    lane_id: laneId,
+    run_id: run.run_id,
+    action_key: fields.action_key || fields.actionKey || null,
+    target: fields.target || null,
+    purpose: fields.purpose || null,
+    artifact_refs: fields.artifact_refs || fields.artifactRefs || (fields.artifact ? [fields.artifact] : []),
+    // Defer to the action's own default instead of hardcoding read_only.
+    // A merge is privileged_write, so forcing read_only here made every merge
+    // raised through the WAITING_RESOURCE seam fail `policy_denied` before a
+    // Director ever saw it — the CLI path never hit this because it sends its
+    // own mode. Census still resolves to read_only, which is its default.
+    requested_mode: fields.requested_mode || fields.requestedMode || null,
+    reason_worker_cannot_execute: fields.reason_worker_cannot_execute
+      || fields.reasonWorkerCannotExecute
+      || reason
+      || "Lane cannot execute this privileged capability",
+    worktree_path: run.worktree_path || rec?.binding?.worktree_path || null,
+    title: fields.title || null,
+    // Forwarded, because a merge or a migration IS its inputs. Dropping them
+    // here left the request with nothing to validate and it failed as
+    // `missing_repository` — which reads like a registry problem rather than
+    // the plumbing gap it was. Census carries its parameters in artifact_refs
+    // and so never noticed.
+    inputs: fields.inputs || fields.action_inputs || {},
+  };
+  if (!request.action_key) {
+    patchRunFields(run.run_id, { state_reason: "Governed wait missing action_key" }, { nowMs, root });
+    return { ok: false, error: "missing_action_key" };
+  }
+  return requestGovernedAction(request, { nowMs, root, processNow: false });
+}
+
+/**
+ * What a Decision is ABOUT, as a comparable key.
+ *
+ * A Decision for a merge is not a standing permission to merge; it names one
+ * pull request at one head SHA. Reuse therefore has to be scoped to the
+ * subject, not merely to the action type — see openApprovalDecision.
+ *
+ * Returns null when the action has no identifiable subject, and a null subject
+ * never matches another null: unknown is not the same as equal.
+ */
+export function governedActionSubjectKey(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const n = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").toLowerCase();
+    if (n == null) return null;
+    return `merge:#${n}@${sha.slice(0, 40)}`;
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    const versions = Array.isArray(inputs.migrations)
+      ? inputs.migrations.map((m) => String(m?.version || m)).filter(Boolean).sort()
+      : [];
+    if (!versions.length) return null;
+    return `migration:${versions.join(",")}`;
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    const artifact = artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "";
+    if (!rec.target) return null;
+    return `census:${rec.target}:${artifact.split("/").pop()}`;
+  }
+  return null;
+}
+
+/**
+ * The subject an EXISTING decision was opened for.
+ *
+ * Prefers the structured marker written below. Decisions created before that
+ * marker existed are read from the situation text this same function composes,
+ * so an already-open decision is still matched correctly rather than being
+ * treated as subject-less and reused for anything.
+ */
+export function decisionSubjectKey(decision) {
+  if (!decision) return null;
+  const marked = (Array.isArray(decision.evidence) ? decision.evidence : [])
+    .find((e) => e && typeof e === "object" && e.governed_action_subject);
+  if (marked) return String(marked.governed_action_subject);
+
+  const text = String(decision.situation || "");
+  const pr = text.match(/^PR: #(\d+)\s*$/m);
+  if (pr) {
+    const sha = text.match(/^Expected SHA: ([0-9a-fA-F]{7,40})\s*$/m);
+    return `merge:#${pr[1]}@${String(sha ? sha[1] : "").toLowerCase()}`;
+  }
+  return null;
+}
+
+/**
+ * Evidence plus a structural record of what this decision is about, so matching
+ * never has to depend on parsing the prose above it.
+ */
+function decisionEvidenceWithSubject(rec) {
+  const base = Array.isArray(rec?.artifact_refs) ? rec.artifact_refs.slice() : [];
+  const subject = governedActionSubjectKey(rec);
+  if (!subject) return base;
+  base.push({
+    governed_action_subject: subject,
+    action_key: rec.action_key,
+    request_id: rec.request_id,
+  });
+  return base;
+}
+
+function subjectsMatch(decision, rec) {
+  const want = governedActionSubjectKey(rec);
+  const have = decisionSubjectKey(decision);
+  // Unknown on either side is not a match. Reusing a decision whose subject we
+  // cannot read is exactly the failure this guards against.
+  return Boolean(want) && Boolean(have) && want === have;
+}
+
+function openApprovalDecision(rec, { nowMs, root } = {}) {
+  const presentation = presentationForGovernedAction(rec);
+
+  // A repository-authorized request has no Mission, and the Decision store is
+  // mission-scoped by construction — createDecision throws without one. Two
+  // things follow, and both matter.
+  //
+  // First, do NOT fall through to listDecisions(null): that scans EVERY
+  // mission's open decisions, and the merge branch below matches on
+  // `defaultAction === "approve_governed_merge"` alone. This request would have
+  // silently adopted an unrelated mission's open merge decision, so approving
+  // one would have approved the other.
+  //
+  // Second, no parallel approval system is invented here. The governed action
+  // record IS the approval surface — `awaiting_operator` plus `operator_approval`
+  // is what the Director approves, exactly as a mission-bound request does. The
+  // Decision is the extra mission-side view, and its absence costs nothing.
+  if (!rec.mission_id) {
+    emitNotification("governed_action_approval_required", rec, {
+      title: presentation.mission_need,
+      body: presentation.detail,
+      root,
+    });
+    return null;
+  }
+
+  const isCensus = rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS;
+  // A DECISION IS ABOUT A SUBJECT, NOT ABOUT A CAPABILITY.
+  //
+  // This used to reuse any open decision of the right action type. Within one
+  // mission that meant a second merge request adopted the first one's decision:
+  // PR #531 bound itself to the open decision titled "Merge PR #529", and #529
+  // was already merged. The Director was shown an approval labelled for a
+  // finished PR, approving it could not produce the #531 merge, and the stale
+  // request sat on the shared decision indefinitely. Three approvals failed to
+  // land that way.
+  //
+  // Reuse now requires the same subject — same PR at the same head SHA, same
+  // migration set, same census artifact. A different SHA is a different
+  // decision, exactly as the single-use grant already treats it.
+  const open = listDecisions(rec.mission_id, { status: "open" })
+    .find((d) => {
+      const typeMatches = isCensus
+        ? d.defaultAction === "approve_governed_census" || /census/i.test(d.title || "")
+        : rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
+          ? d.defaultAction === "approve_governed_merge" || /merge pr/i.test(d.title || "")
+          : rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+            ? d.defaultAction === "approve_governed_migration" || /staging migration/i.test(d.title || "")
+            : d.title === rec.title;
+      if (!typeMatches) return false;
+      return subjectsMatch(d, rec);
+    });
+  if (open) {
+    rec.decision_id = open.decisionId;
+    return open;
+  }
+  if (isCensus) {
+    const { decision } = createDecision({
+      missionId: rec.mission_id,
+      title: rec.title || "Read-only database census",
+      situation: [
+        "Read-only database census",
+        "",
+        `Target: ${rec.target}`,
+        "",
+        "Purpose:",
+        rec.purpose,
+        "",
+        "Artifact:",
+        String(artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "").split("/").pop(),
+        "",
+        "Data mode:",
+        rec.requested_mode === "read_only" ? "Read-only" : rec.requested_mode,
+        "No customer content requested",
+        "No mutations",
+        "",
+        rec.reason_worker_cannot_execute,
+      ].join("\n"),
+      whyThisMatters: rec.purpose,
+      currentPlan: "Director executes database.read_census on the trusted host and returns a bounded result to the originating lane. Credentials never enter the worker.",
+      discovery: rec.reason_worker_cannot_execute,
+      options: [
+        {
+          optionId: "authorize_mission_census",
+          label: "Authorize census",
+          description: `Run ${rec.action_key} against ${rec.target}. Read-only. No mutations. Result returns to the same Development Lane.`,
+        },
+        {
+          optionId: "use_cert_only",
+          label: "Use cert only",
+          description: "Do not read the deployed primary. Keep this on certification environments only.",
+        },
+        {
+          optionId: "deny_production_reads",
+          label: "Deny",
+          description: "Deny this census. Director will not bounce the worker to retry a capability it cannot access.",
+        },
+      ],
+      recommendation: "authorize_mission_census",
+      recommendationReason: "The lane correctly cannot hold deployed-tenant credentials. Director/trusted host is the sanctioned path.",
+      defaultAction: "approve_governed_census",
+      actor: "director",
+      nowMs,
+      evidence: decisionEvidenceWithSubject(rec),
+    });
+    rec.decision_id = decision.decisionId;
+    emitNotification("governed_action_approval_required", rec, {
+      title: "Needs approval — read-only census",
+      body: `${rec.title} against ${rec.target}`,
+      root,
+    });
+    return decision;
+  }
+
+  // THE APPROVAL CARD SHOWS WHAT WILL ACTUALLY BE MERGED.
+  //
+  // This read the narrow vocabulary, so a merge proposed with `pull_request`
+  // rendered "PR: #" with nothing after it. The Director would then be asked to
+  // authorise a privileged staging merge whose PR number, the core identity of
+  // the decision, was simply missing from the card. It is the same parser the
+  // grant is pinned to, so the card and the grant cannot disagree.
+  const mergeId = mergeIdentityFor(rec);
+  const n = mergeId.pullRequestNumber;
+  const versions = Array.isArray(rec.inputs?.migrations)
+    ? rec.inputs.migrations.map((m) => m.version || m).join("\n")
+    : "";
+  const isMerge = rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST;
+  const repository = String(rec.inputs?.repository || rec.inputs?.repo || "").trim();
+  // Shown as its own lines so the operator reads the full merge identity —
+  // repository, PR, expected SHA, target branch and merge method — rather than
+  // inferring it from a title.
+  const mergeIdentityLines = isMerge
+    ? [
+      repository ? `Repository: ${repository}` : null,
+      `PR: #${n ?? "unknown"}`,
+      `Expected SHA: ${mergeId.expectedHeadSha || "unknown"}`,
+      `Target branch: ${mergeId.targetBranch || rec.target || "staging"}`,
+      `Merge method: ${mergeId.mergeMethod}`,
+    ].filter(Boolean).join("\n")
+    : "Migrations:";
+  const { decision } = createDecision({
+    missionId: rec.mission_id,
+    title: rec.title || presentation.mission_need.replace(/^Needs approval — /, ""),
+    situation: [
+      presentation.detail,
+      "",
+      `Target: ${rec.target}`,
+      "",
+      "Purpose:",
+      rec.purpose,
+      "",
+      mergeIdentityLines,
+      isMerge ? "" : versions,
+      "",
+      rec.reason_worker_cannot_execute,
+      "",
+      "Credentials stay on the trusted host. The Development Lane never receives them.",
+    ].join("\n"),
+    whyThisMatters: rec.purpose,
+    currentPlan: isMerge
+      ? "Director merges the named pull request into staging on the trusted host and returns the merge SHA to the originating lane."
+      : "Director applies the approved committed migration files to staging, one at a time, and stops on the first failure.",
+    discovery: rec.reason_worker_cannot_execute,
+    options: [
+      {
+        optionId: isMerge ? "authorize_staging_merge" : "authorize_staging_migrations",
+        label: presentation.approve_label,
+        description: presentation.detail,
+      },
+      {
+        optionId: "deny_governed_action",
+        label: "Deny",
+        description: "Deny this privileged action. Director will not bounce the worker to retry a capability it cannot access.",
+      },
+    ],
+    recommendation: isMerge ? "authorize_staging_merge" : "authorize_staging_migrations",
+    recommendationReason: "The lane correctly cannot hold GitHub or database credentials. Director/trusted host is the sanctioned path.",
+    defaultAction: isMerge ? "approve_governed_merge" : "approve_governed_migration",
+    actor: "director",
+    nowMs,
+    evidence: decisionEvidenceWithSubject(rec),
+  });
+  rec.decision_id = decision.decisionId;
+  emitNotification("governed_action_approval_required", rec, {
+    title: presentation.mission_need,
+    body: presentation.detail,
+    root,
+  });
+  return decision;
+}
+
+/**
+ * THE ONE KEY EXECUTION AUTHORITY IS SCOPED BY. Mint and lookup both use it.
+ *
+ * A mission when there is one; otherwise the repository that vouched. Same
+ * store, same states, same execution path — only the authority differs.
+ *
+ * S15 FAILED ON THREE DIFFERENT ANSWERS TO THIS ONE QUESTION. The delegated
+ * path minted under `mission_id || lane_id` (-> lane_73a897409906), the policy
+ * lookup asked for `mission_id` (-> null), and the trusted-host action was
+ * created under this resolver (-> repo_alloy). A repository-authorized lane has
+ * no mission, so the freshly minted authorization was written to one partition
+ * and searched for in another: authority minted and then not found, escalating
+ * a delegated push to awaiting_operator.
+ *
+ * That is the merge-input-alias defect for a third time — two sides
+ * independently deriving the same identity. This resolver already existed and
+ * the execution boundary already used it, so the fix is that everyone adopts it
+ * rather than a fourth spelling being invented.
+ *
+ * Lane isolation does not depend on the partition: an exact-request
+ * authorization is additionally bound to requestId, contentFingerprint,
+ * actionType, environment, repository and sourceSha, so one lane's authority
+ * cannot cover another lane's request even inside a shared repository scope.
+ */
+function authorityScopeFor(rec) {
+  return rec?.mission_id || rec?.authority?.repository_id || null;
+}
+
+/**
+ * THE SCOPE A STANDING GRANT IS FILED AND FOUND UNDER — THE LANE, AND ONLY THE LANE.
+ *
+ * The first attempt reused `authorityScopeFor`, and a certification caught it:
+ * that resolver falls back to `authority.repository_id`, so one lane's approved
+ * push minted a grant every OTHER lane on the same repository could inherit.
+ * The test that failed was "the requesting lane cannot approve its own push" —
+ * a fresh lane was auto-executing on authority nobody had given it.
+ *
+ * A repository is not an owner; it is a shared resource. The lane is the
+ * narrowest thing that owns work and outlives a single request, so a standing
+ * grant is filed under the lane and found under the lane. A request with no
+ * lane gets no standing grant at all, because there would be nothing to bound
+ * it to and "unbounded" is not a scope.
+ */
+function standingScopeFor(rec) {
+  const lane = String(rec?.lane_id || "").trim();
+  return lane || null;
+}
+
+/**
+ * THE AUTHORIZATION IDENTITY OF A GOVERNED REQUEST.
+ *
+ * The policy side's single entry point to the canonical resolver. Minting,
+ * lookup and the pre-consumption proof all read this; none of them derives a
+ * scope, environment, repository, ref or SHA of its own any more.
+ *
+ * `normalized` is the registry's normalization of the request's inputs when the
+ * caller already has it. The resolver produces the same identity from either
+ * shape — that equivalence is asserted directly in the anti-drift suite — and
+ * passing the normalized form means the policy side is reasoning about the
+ * exact inputs the trusted-host action will be built from.
+ */
+function authorizationIdentityFor(rec, { normalized = null } = {}) {
+  return resolveActionAuthorizationIdentity({
+    actionType: rec?.action_key,
+    scope: authorityScopeFor(rec),
+    inputs: normalized || rec?.inputs || {},
+    target: rec?.target || null,
+    requestId: rec?.request_id || null,
+    contentFingerprint: governedContentFingerprint(rec),
+  });
+}
+
+/** Everything a Director actually weighs, in the shape the grant is pinned to. */
+/**
+ * THE MERGE IDENTITY OF A REQUEST, FROM THE ONE PARSER THAT OWNS IT.
+ *
+ * Grant issuance and trusted execution were converged onto
+ * readMergeInputIdentity. Three consumers were not: actionQueryHash,
+ * requestTitle and openApprovalDecision each kept the older, narrower
+ * vocabulary. Execution was safe, but the OPERATOR CARD was not: a merge
+ * proposed with `pull_request` rendered "PR: #" — the Director could be asked
+ * to authorise a privileged merge whose core identity was blank.
+ *
+ * Every consumer now reads through here, so the approval display, the grant and
+ * the executor cannot describe different merges.
+ */
+function mergeIdentityFor(rec) {
+  return readMergeInputIdentity(rec?.inputs || {});
+}
+
+function proposalForRequest(rec) {
+  const mergeIdentity = mergeIdentityFor(rec);
+  return {
+    proposal_id: rec.request_id,
+    action_key: rec.action_key,
+    repository_id: rec.authority?.repository_id || null,
+    // Read through the SAME normalizer the executor uses. These two lines used
+    // to carry their own shorter spelling list, so a lane that wrote
+    // `pull_request` / `head_sha` — spellings the executor resolves fine — got a
+    // grant pinned to null and a `grant_pull_request_mismatch` it could never
+    // satisfy. See readMergeInputIdentity for the measured incident.
+    pull_request_number: mergeIdentity.pullRequestNumber,
+    expected_head_sha: mergeIdentity.expectedHeadSha,
+    // Normalized the way validateMergeInputs will normalize them, so the grant
+    // pins the values the action is actually built from. Comparing an unset
+    // merge_method against the action's defaulted "merge" would make every
+    // grant look stale.
+    target_branch: mergeIdentity.targetBranch || rec.target || "staging",
+    merge_method: mergeIdentity.mergeMethod,
+    // Present for a push or a promotion; null for a merge, whose identity is
+    // the pull request number rather than a branch name.
+    branch: rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || null,
+    run_id: rec.run_id || null,
+    lane_id: rec.lane_id || null,
+    requested_by: rec.requesting_worker || null,
+  };
+}
+
+/**
+ * A repository-authorized request needs a live grant at execute time.
+ *
+ * Approval mints one. Execution used to bounce `authorization_required` without presenting it,
+ * which left `awaiting_operator` with `operator_approval` already set — the UI then hid the
+ * button, so a second click was impossible. If that grant later expired, remint against the
+ * same proposal rather than asking the operator to decide again.
+ */
+function ensureRepositoryGrant(rec, { actor, nowMs, root } = {}) {
+  // Mission-authorized requests now carry an execution grant too, so they need
+  // the same remint-on-expiry path. Returning early here left them with an
+  // expired grant and no way to renew it short of a second Director decision —
+  // the same dead end the artifact was added to remove.
+  const proposal = proposalForRequest(rec);
+  const existing = rec.grant_id ? getGrant(rec.grant_id, root) : null;
+  if (existing && grantIsValidFor(existing, proposal, { nowMs }).ok) return { ok: true, grant: existing };
+  const minted = mintGrant({
+    proposal,
+    approvedBy: actor || rec.operator_approval?.actor || "operator",
+    nowMs,
+    root,
+  });
+  if (!minted.ok) return minted;
+  rec.grant_id = minted.grant.grant_id;
+  rec.grant_expires_at = minted.grant.expires_at;
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  return { ok: true, grant: minted.grant, reminted: true };
+}
+
+/**
+ * The approval a production migration executes under, read from the record.
+ *
+ * An OPERATOR approval is the real thing. A policy or delegated decision is
+ * carried through as what it IS rather than dropped, because proof 5 must be
+ * able to REFUSE it — silently omitting a delegated approval would make the
+ * request look unapproved instead of improperly approved, and those are
+ * different faults with different fixes.
+ */
+export function productionApprovalFromRecord(rec = {}) {
+  const operator = rec.operator_approval || null;
+  const director = rec.director_approval || null;
+  const source = operator || director;
+  if (!source) return null;
+  const delegated = !operator && Boolean(director);
+  const versions = Array.isArray(rec.inputs?.migrations)
+    ? rec.inputs.migrations.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean)
+    : [];
+  return {
+    decision: source.decision || null,
+    actor: source.actor || null,
+    decision_actor: delegated ? "policy" : (source.actor || null),
+    at: source.at || null,
+    delegated,
+    content_fingerprint: source.content_fingerprint || governedContentFingerprint(rec),
+    approved_versions: versions,
+    // Recorded at approval time when the card carried it. A null means the
+    // executor has no approved head to compare against and says so, rather
+    // than inventing one from the reading it is about to take.
+    hosted_head_at_approval: rec.proposal_snapshot?.hosted_head || null,
+  };
+}
+
+function defaultExecute(rec, { nowMs, actor, root } = {}) {
+  const scope = authorityScopeFor(rec);
+  // Execution authority for THIS exact request, whoever derived it.
+  //
+  // THE DELEGATED AUTHORIZATION WAS NEVER PRESENTED. This read only
+  // `director_approval`, so a delegated push arrived at the boundary with no
+  // authorization id at all and fell through to the lookup branch — the branch
+  // that was reconstructing the environment as a database default. The
+  // delegated path minted authority and then did not hand it over.
+  const authorizationId = rec.director_approval?.authorization_id
+    || rec.mission_delegation?.authorization_id
+    || null;
+  // Only the two facts that cannot be derived from inputs travel. Everything
+  // else the boundary needs, the boundary resolves from the action itself
+  // through the one resolver — which is exactly what stops this context and
+  // that resolution from describing different actions.
+  const exactContext = authorizationId ? {
+    requestId: rec.request_id,
+    contentFingerprint: governedContentFingerprint(rec),
+  } : null;
+  // Present only on the repository-authorized path. A mission-bound request is
+  // authorized exactly as before and never looks at this.
+  const grant = rec.grant_id ? getGrant(rec.grant_id, root) : null;
+
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return fulfillRepositoryMergeForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
+    return fulfillRepositoryPushForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
+    return fulfillRetireWorktreeForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      // The REQUESTING worktree comes from the record, never from inputs — a
+      // worker that could name its own requester could name someone else's and
+      // retire the tree it is running in.
+      inputs: { ...(rec.inputs || {}), requestingWorktree: rec.worktree_path || null },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
+    return fulfillExecuteRegisteredReconciliationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) {
+    return fulfillTransferFilesForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    return fulfillApplyReconciliationPlanForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    return fulfillClosePullRequestForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  /*
+   * THE MISSING BRANCH. capacity.set_provider_ceiling was registered, mode-mapped,
+   * policy-covered, capability-granted and operator-APPROVED — and still failed
+   * `action_unavailable`, because execution fell through to the guard below.
+   * fulfillSetProviderCeilingForMission already existed in trusted-host-actions;
+   * it was simply never imported or dispatched, so the action has never been
+   * executable since it shipped. This is the exact failure the comment on that
+   * fallthrough describes: the action existed everywhere except in this dispatch,
+   * and the error names the registry rather than the missing branch.
+   */
+  if (rec.action_key === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    return fulfillLaneDispatchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    return fulfillInstallToolkitForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) {
+    return fulfillRegisterDeveloperApplicationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return fulfillSetProviderCeilingForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    return fulfillDeleteRemoteBranchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return fulfillPromotionOpenPrForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    return fulfillDatabaseMigrationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  /*
+   * THE THIRD MISSING BRANCH. database.apply_promoted_migration was registered,
+   * validated, authority-bounded and operator-approvable — and had no dispatch,
+   * so an approved production migration fell through to `action_unavailable`.
+   * Same shape as capacity.set_provider_ceiling and the restore actions before
+   * it; development-governed-action-contract now fails CI for the next one.
+   *
+   * The worktree path is threaded exactly as the non-production sibling does,
+   * because the migration artifacts are resolved out of the approved worktree's
+   * git object store rather than any working copy.
+   */
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) {
+    return fulfillRepositoryMetadataPromotionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return fulfillLedgerRepairForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
+    return fulfillPromotedMigrationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+      // THE APPROVAL TRAVELS. Proof 5 of assertProductionApplyPreconditions
+      // refuses without it, and the trusted host cannot re-derive it from
+      // inputs — it lives only on this record.
+      approval: productionApprovalFromRecord(rec),
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    return fulfillAssignQaAccessForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    return fulfillProvisionQaIdentityForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    return fulfillRestoreDeployedQaSessionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}) },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    return fulfillRestoreQaSessionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  /*
+   * Anything without a branch above lands here. That fallthrough is why a registered, mode-mapped,
+   * operator-APPROVED restore still failed `action_unavailable`: the action existed everywhere
+   * except in this dispatch, and the error names the registry rather than the missing branch.
+   */
+  if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return { ok: false, error: "action_unavailable" };
+  }
+  // THE LIVE DEFECT. Every other fulfill*ForMission call below presents the grant and
+  // Director authorization. Census did not. A repository-authorized census therefore
+  // bounced `authorization_required` on every approval: the operator's click minted a
+  // grant, execution never saw it, and the request returned to awaiting_operator with
+  // operator_approval already recorded. The UI then hid the button.
+  return fulfillDatabaseCensusForMission(scope, {
+    assignmentId: rec.run_id || null,
+    executionSessionId: rec.run_id || null,
+    queryArtifactPath: artifactPathFrom(rec.artifact_refs),
+    worktreePath: rec.worktree_path,
+    actor,
+    nowMs,
+    grant,
+    authorizationId,
+    exactContext,
+  });
+}
+
+function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
+  if (out?.error === "authorization_required") {
+    // The operator already decided. Bouncing here hid the button (laneAwaitingOperatorApproval
+    // skips any record with operator_approval) and left the census card stuck. Fail so the
+    // refusal is visible; tick recovery is for the already-stuck records, not a new loop.
+    if (rec.operator_approval?.decision === "approved") {
+      const refused = out.action?.grantRefusal || out.error;
+      return failRequest(
+        rec,
+        "authorization_required",
+        `Operator approved, but the trusted host still refused (${refused}).`,
+        { nowMs, root },
+      );
+    }
+    rec.status = "awaiting_operator";
+    rec.operator_approval_required = true;
+    rec.trusted_host_action_id = out.action?.id || rec.trusted_host_action_id;
+    rec.updated_at = iso(nowMs);
+    openApprovalDecision(rec, { nowMs, root });
+    saveRequest(rec, root);
+    attachRunWait(rec, { nowMs, root });
+    appendAudit(rec, "awaiting_operator", { nowMs }, root);
+    return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+  }
+  if (!out?.ok || out.action?.state !== "completed") {
+    const code = out?.error === "wrong_database_target"
+      ? "target_unavailable"
+      : (out?.error === "unknown_action_type" ? "action_unavailable" : "execution_failed");
+    return failRequest(rec, code, describeExecutionFailure(out), { nowMs, root });
+  }
+  const action = out.action;
+  if (containsSecret(action.result) || containsSecret(action.inputs)) {
+    return failRequest(rec, "result_validation_failed", "Result contained secrets and was not routed to the worker.", { nowMs, root });
+  }
+  rec.status = "complete";
+  rec.trusted_host_action_id = action.id;
+  rec.result = action.result || null;
+  rec.result_ref = action.result?.evidencePath || action.id;
+  rec.execution_ended_at = iso(nowMs);
+  stampDecisionTiming(rec, "execution_settled_at");
+  rec.updated_at = iso(nowMs);
+  rec.failure_code = null;
+  rec.failure_reason = null;
+  saveRequest(rec, root);
+  appendAudit(rec, "complete", { nowMs, detail: { result_ref: rec.result_ref } }, root);
+  // A RESOLVED WAIT IS NOT A LIVE WAIT. The failure path already released the
+  // run; success did not, so a completed governed action left "Waiting on
+  // Director" sitting on the record as though it were still true. Seventeen
+  // terminal runs were carrying wait text for work that had long since landed.
+  /*
+   * BUT A LIVE WAIT IS NOT A RESOLVED ONE EITHER.
+   *
+   * Clearing unconditionally strands the run: the transition back to EXECUTING
+   * happens later, in resumeLaneAfterGovernedAction, and between these two
+   * moments the run sits in WAITING_RESOURCE with no wait at all.
+   * `waitReasonFor` reads `resource_wait.reason`, finds nothing, and the
+   * Governor fails the run `missing_wait_reason`.
+   *
+   * MEASURED TWICE. erun_f4f9ff73ca8144ce and erun_02e4ebd11a33fead both died
+   * exactly here, on a worktree retirement, ten seconds after entering the wait
+   * — the second one after the wait envelope itself had been repaired, which is
+   * how this half became visible. Push, open_pr and merge survive the same race
+   * only because their resume follows quickly enough.
+   *
+   * So the wait is cleared only once the run is no longer IN it. The resume
+   * path already clears it as part of the transition, which is the one place
+   * that can do both without a window in between.
+   */
+  if (rec.run_id) {
+    try {
+      const run = getExecutionRun(rec.run_id, root);
+      if (!run || run.state !== "WAITING_RESOURCE") patchRunResourceWait(rec.run_id, null, root);
+      /*
+       * THE PROJECTION IS WRITTEN WHERE THE TRUTH IS, NOT ONLY WHERE A RUN
+       * HAPPENS TO BE WAITING.
+       *
+       * `run.governed_action` was patched in exactly two places — attachRunWait
+       * and the resume — so a completion that did not resume a waiting run
+       * never reached the run at all. MEASURED: 18 runs projected a governed
+       * action that was not their most recent one, and 89 of 157 completed
+       * actions attached to a run carried no `projection_visible_at` at all.
+       * An operator reading those runs saw an older action's state than reality,
+       * and the platform's own convergence metric could not see it either.
+       *
+       * This is the authoritative terminal write, so it is the honest place to
+       * say the outcome is readable. The resume still stamps when it resumes,
+       * and the field records the FIRST of the two — the question is when this
+       * became readable, not when it was last touched.
+       */
+      if (run) {
+        patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
+        stampDecisionTimingOnce(rec, "projection_visible_at");
+        saveRequest(rec, root);
+      }
+    } catch { /* the run may be gone */ }
+  }
+  emitNotification("governed_action_complete", rec, {
+    title: `${rec.title || rec.action_key} complete`,
+    body: "Director finished the trusted-host action and is resuming the originating lane.",
+    root,
+  });
+  try {
+    attachEvidence({
+      missionId: rec.mission_id,
+      type: "database",
+      title: rec.title || rec.action_key,
+      description: `${rec.action_key} against ${rec.target}`,
+      fileUri: rec.result_ref,
+      createdBy: actor || "director",
+      nowMs,
+    });
+  } catch { /* evidence optional */ }
+  try {
+    appendTimelineEvent(rec.mission_id, {
+      type: "progress",
+      headline: "Governed action complete",
+      summary: `${rec.action_key} finished. Resuming ${rec.lane_id}.`,
+      visibility: "summary",
+      actor: actor || "director",
+      detail: { requestId: rec.request_id, actionId: action.id, laneId: rec.lane_id },
+      nowMs,
+    });
+  } catch { /* */ }
+  enqueuePromotionContinuation(rec, { nowMs, root });
+  return { ok: true, request: publicGovernedAction(rec), action };
+}
+
+function defaultContinuationPlan(actionKey, inputs = {}) {
+  if (actionKey !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  const n = Number(inputs.pull_request_number || inputs.pullRequestNumber || 0);
+  if (n !== 475) return null;
+  return {
+    kind: "staging_schema_promotion",
+    migrations: ACCESS_IDENTITY_STAGING_MIGRATIONS,
+    purpose: "Apply committed Access & Identity staging migrations",
+  };
+}
+
+function enqueuePromotionContinuation(rec, { nowMs, root } = {}) {
+  if (rec.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  const plan = rec.continuation_plan || defaultContinuationPlan(rec.action_key, rec.inputs || {});
+  if (!plan) return null;
+  if (plan.kind && !/promotion/i.test(String(plan.kind))) return null;
+  const mergeSha = rec.result?.merge_sha || rec.result?.staging_sha || rec.result?.mergeSha || null;
+  const migrations = Array.isArray(plan.migrations) && plan.migrations.length
+    ? plan.migrations
+    : ACCESS_IDENTITY_STAGING_MIGRATIONS;
+  return requestGovernedAction({
+    mission_id: rec.mission_id,
+    lane_id: rec.lane_id,
+    run_id: rec.run_id,
+    action_key: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
+    target: "staging",
+    purpose: plan.purpose || "Apply committed Access & Identity staging migrations",
+    reason_worker_cannot_execute: rec.reason_worker_cannot_execute,
+    worktree_path: rec.worktree_path,
+    inputs: {
+      environment: "staging",
+      repository: plan.repository || rec.inputs?.repository,
+      expected_sha: mergeSha || rec.inputs?.expected_head_sha,
+      worktree_path: rec.worktree_path,
+      worktreePath: rec.worktree_path,
+      migrations,
+    },
+    title: "Apply Access & Identity staging migrations",
+    continuation_intent: "Schema promotion complete. Begin staging runtime/browser certification.",
+  }, { nowMs, root, processNow: true });
+}
+
+/**
+ * Has this execution outlived any possibility that someone is still running it?
+ *
+ * The window comes from the action's own `timeoutMs`, doubled, with a floor —
+ * `database.apply_promoted_migration` declares 600 s, so it gets 20 minutes
+ * before anyone is entitled to call it abandoned. Deriving it rather than
+ * choosing it means a future action with a longer timeout is covered the day it
+ * is registered, instead of being declared dead by a constant nobody revisited.
+ */
+function abandonedExecution(rec, nowMs = Date.now()) {
+  if (!rec?.execution_started_at) return false;
+  const started = Date.parse(rec.execution_started_at);
+  if (!Number.isFinite(started)) return false;
+  const declared = Number(getActionDefinition(rec.action_key)?.timeoutMs || 180_000);
+  const window = Math.max(10 * 60_000, declared * 2);
+  return (nowMs - started) > window;
+}
+
+/**
+ * AN EXECUTION THE GATEWAY DIED IN THE MIDDLE OF IS SETTLED, NEVER REPLAYED.
+ *
+ * A record that is `executing`, carries an async acceptance, and has an
+ * `execution_started_at` is one whose executor was running when the process
+ * holding it stopped — a Gateway restart, a toolkit convergence, a crash. The
+ * tempting recovery is to run it again. That is exactly wrong for the actions
+ * this matters most for: a migration that may have half-applied, a merge that
+ * may have landed, a push that may have completed. Nothing in the record can
+ * distinguish "never ran" from "ran and we did not see the result", and the
+ * registry says so itself — both migration actions declare maxAttempts 1.
+ *
+ * So the ambiguity is reported rather than resolved by guessing. The request
+ * fails with a named cause, the audit carries what was known, and a human reads
+ * the outcome and decides. That is a worse-looking recovery and a better one:
+ * the alternative silently applies a migration twice.
+ *
+ * The grant makes this belt-and-braces. It is single-use and was consumed at the
+ * execution boundary, so even a replay would be refused `authorization_required`
+ * — this turns that refusal into an honest explanation instead of a puzzle.
+ */
+function settleInterruptedAcceptedExecution(rec, { nowMs, root } = {}) {
+  return failRequest(
+    rec,
+    "execution_interrupted",
+    "Execution was in progress when the Gateway stopped. Whether the trusted host "
+    + "completed it cannot be determined from here, so it is not retried automatically. "
+    + "Check the action's own outcome before deciding to run it again.",
+    { nowMs, root },
+  );
+}
+
+export function processGovernedAction(requestId, {
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  actor = "director",
+} = {}) {
+  const rec = getGovernedAction(requestId, root);
+  if (!rec) return { ok: false, error: "request_not_found" };
+  if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
+  if (rec.status === "failed") {
+    if (isRecoverableStaleRegistryFailure(rec) && getActionDefinition(rec.action_key)) {
+      rec.status = "requested";
+      rec.failure_code = null;
+      rec.failure_reason = null;
+      rec.revived_from_stale_registry = true;
+      rec.updated_at = iso(nowMs);
+      saveRequest(rec, root);
+      appendAudit(rec, "revived_after_director_refresh", { nowMs }, root);
+    } else if (isRecoverableStaleRegistryFailure(rec)) {
+      return enterControlPlaneRefresh(rec, { nowMs, root });
+    } else {
+      return { ok: false, error: rec.failure_code || "failed", request: publicGovernedAction(rec) };
+    }
+  }
+  if (rec.status === "awaiting_operator") {
+    // THE LIVE DEFECT, SECOND HALF. Approval records operator_approval and then executes.
+    // If execution bounced, status stayed awaiting_operator with a decision already made.
+    // Tick ignored that status, and the UI hid the button. Resume execution; do not re-ask.
+    if (rec.operator_approval?.decision === "approved") {
+      if (!getActionDefinition(rec.action_key)) {
+        attachRunWait(rec, { nowMs, root });
+        return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+      }
+      // Census is the live bounce: execution never saw the grant, the button hid, and
+      // tick ignored awaiting_operator. Resume that. Do not silently execute a
+      // destructive already-approved action (worktree retirement) that may have
+      // inherited the census button label.
+      if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
+        attachRunWait(rec, { nowMs, root });
+        return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+      }
+      const grant = ensureRepositoryGrant(rec, {
+        actor: rec.operator_approval.actor || actor,
+        nowMs,
+        root,
+      });
+      if (!grant.ok) {
+        return failRequest(rec, grant.error || "grant_missing", grant.error || "Could not remint the operator grant.", { nowMs, root });
+      }
+      return executeGovernedAction(rec.request_id, { nowMs, root, actor });
+    }
+    attachRunWait(rec, { nowMs, root });
+    return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+  }
+  // AN ACCEPTED ACTION IS EXECUTED HERE, AND NOWHERE ELSE RE-DECIDED.
+  //
+  // The decision was taken when the operator pressed. Falling through to the
+  // policy evaluation below would re-ask a question that already has an answer,
+  // and could escalate an action the operator has already authorised — so this
+  // returns before any of that, carrying only the work.
+  if (rec.status === "executing" && rec.async_execution) {
+    if (rec.execution_started_at) {
+      // Started and did not finish. Only reachable when the process holding it
+      // died mid-action, because nothing else leaves this shape behind.
+      return settleInterruptedAcceptedExecution(rec, { nowMs, root });
+    }
+    if (!getActionDefinition(rec.action_key)) {
+      // The registry is not currently carrying this action. Wait rather than
+      // fail: the convergence path exists precisely for this, and the record
+      // keeps its claim so the next tick looks again.
+      attachRunWait(rec, { nowMs, root });
+      return { ok: true, request: publicGovernedAction(rec), accepted: true, waiting: "action_unavailable" };
+    }
+    rec.async_execution = {
+      ...rec.async_execution,
+      attempts: Number(rec.async_execution.attempts || 0) + 1,
+      last_attempt_at: observedNow(),
+    };
+    saveRequest(rec, root);
+    return executeGovernedAction(rec.request_id, { nowMs, root, actor });
+  }
+  if (rec.status === "awaiting_control_plane_refresh") {
+    if (!getActionDefinition(rec.action_key)) {
+      attachRunWait(rec, { nowMs, root });
+      return { ok: true, refreshing: true, request: publicGovernedAction(rec) };
+    }
+  }
+
+  rec.status = "awaiting_director";
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  attachRunWait(rec, { nowMs, root });
+
+  const validated = validateAgainstRegistry(
+    rec.action_key,
+    rec.target,
+    rec.artifact_refs,
+    rec.requested_mode,
+    { worktreePath: rec.worktree_path, inputs: rec.inputs },
+  );
+  if (!validated.ok) {
+    if (validated.stale || validated.error === "director_registry_stale") {
+      return enterControlPlaneRefresh(rec, { nowMs, root });
+    }
+    return failRequest(rec, validated.failure_code || validated.error, validated.validation?.detail || validated.error, { nowMs, root });
+  }
+
+  const policy = policyDecision(rec, { nowMs });
+  rec.policy_decision = policy.reason;
+  rec.operator_approval_required = Boolean(policy.operator_approval_required);
+  // WHY VACILANDO DID NOT ASK, RECORDED WHERE THE OPERATOR CAN READ IT.
+  //
+  // A delegated authorisation is spent HERE, at the moment it satisfies this
+  // one request, so it can never be replayed for another PR or another head.
+  // The mission's own words travel with it: the operator inspects the sentence
+  // the Director actually wrote, not the runtime's paraphrase of it.
+  if (policy.authorized_by === "mission_delegation" && policy.delegation_id) {
+    // RESERVE FIRST, CONSUME ONLY ONCE THE AUTHORITY IS USABLE.
+    //
+    // S15 spent the delegation the instant policy selected it. The
+    // exact-request authorization was then minted into one partition and
+    // searched for in another, the run escalated to awaiting_operator, nothing
+    // was pushed — and the authority was gone anyway. A failure BEFORE
+    // privileged execution begins must not permanently spend a delegation.
+    //
+    // Reservation keeps single-use intact throughout: while this request holds
+    // it, no other request can reserve or use it.
+    const held = reserveMissionDelegation(policy.delegation_id, {
+      requestId: rec.request_id,
+      nowMs,
+      root: runtimeRoot(),
+    });
+    if (!held.ok) {
+      rec.policy_decision = "policy_default_requires_operator";
+      rec.operator_approval_required = true;
+      rec.delegation_declined = held.error;
+      policy.operator_approval_required = true;
+    } else {
+      rec.mission_delegation = {
+        delegation_id: policy.delegation_id,
+        action_key: policy.delegation_action_key,
+        target_branch: policy.delegation_target_branch,
+        authorized_by: "mission_delegation",
+        at: iso(nowMs),
+      };
+      // ONE IDENTITY, DERIVED ONCE, FOR MINT AND FOR PROOF.
+      //
+      // This block used to build the identity by hand: `readMergeInputIdentity`
+      // for the SHA, `authorityScopeFor` for the scope, and — the part that
+      // failed S15 — `policy.delegation_target_branch || rec.target` for the
+      // environment, which named the branch a push was PROPOSED at rather than
+      // what the push actually writes. The boundary derived something else
+      // again, so nothing could resolve what this minted.
+      const identity = authorizationIdentityFor(rec, { normalized: validated.normalized });
+      const scopeKey = identity.scope;
+      const gGranted = identity.ok
+        ? grantExactRequestAuthorization({
+          ...identity.mint,
+          decisionActor: "mission_delegation",
+          policyId: "mission_delegation_v2",
+          nowMs: nowMs ?? Date.now(),
+        })
+        : { ok: false, error: `unresolved_action_identity:${identity.reason || "unknown"}` };
+      // MINTED IS NOT ENOUGH — IT MUST BE RESOLVABLE BY THE BOUNDARY ITSELF.
+      //
+      // The previous proof called findAuthorization directly with a policy-side
+      // `environment` argument. The real boundary passed none, so the proof
+      // answered a question nobody asks at execution: it passed, the delegation
+      // was consumed, and the push then stopped at awaiting_operator with the
+      // authority already spent. This calls the SAME function execution calls,
+      // against the same normalized action shape, so "provably usable" means it.
+      const proof = gGranted?.ok && gGranted.authorization
+        ? previewTrustedHostAuthorization({
+          missionId: scopeKey,
+          actionType: rec.action_key,
+          normalizedInputs: validated.normalized,
+          requestId: rec.request_id,
+          contentFingerprint: governedContentFingerprint(rec),
+          nowMs: nowMs ?? Date.now(),
+        })
+        : null;
+      const resolvable = proof?.ok
+        && proof.authorization?.authorizationId === gGranted?.authorization?.authorizationId;
+      if (gGranted?.ok && resolvable) {
+        const spent = consumeMissionDelegation(policy.delegation_id, {
+          requestId: rec.request_id,
+          nowMs,
+          root: runtimeRoot(),
+        });
+        rec.mission_delegation.authorization_id = gGranted.authorization.authorizationId;
+        rec.mission_delegation.authorization_scope = scopeKey;
+        // The identity the boundary will re-derive, recorded where the operator
+        // can read it. A future divergence is then visible in the ledger rather
+        // than only in a refusal.
+        rec.mission_delegation.authorization_identity = {
+          environment: identity.environment,
+          repository: identity.repository,
+          target_ref: identity.targetRef,
+          source_sha: identity.sourceSha,
+        };
+        rec.mission_delegation.consumed = Boolean(spent.ok);
+        if (!spent.ok) {
+          rec.mission_delegation.consume_error = spent.error;
+          rec.policy_decision = "policy_default_requires_operator";
+          rec.operator_approval_required = true;
+          policy.operator_approval_required = true;
+        }
+      } else {
+        // AND TAKE THE AUTHORITY BACK. A mint that the boundary cannot resolve
+        // still leaves an ACTIVE exact-request authorization in the store,
+        // bound to this request and waiting for a retry to find it. Failing
+        // closed means nothing usable is left behind either.
+        if (gGranted?.ok && gGranted.authorization) {
+          revokeAuthorization(scopeKey, gGranted.authorization.authorizationId, {
+            actor: "mission_delegation",
+            nowMs: nowMs ?? Date.now(),
+          });
+        }
+        // Hand the reservation back: nothing privileged happened.
+        releaseMissionDelegation(policy.delegation_id, {
+          requestId: rec.request_id,
+          reason: gGranted?.ok ? "authorization_not_resolvable" : (gGranted?.error || "authorization_not_derived"),
+          nowMs,
+          root: runtimeRoot(),
+        });
+        rec.mission_delegation.authorization_error = gGranted?.ok
+          ? "authorization_not_resolvable"
+          : (gGranted?.error || "authorization_not_derived");
+        // Name the real mismatch. "Denied" taught nobody anything; four
+        // iterations of this defect were each found by hand instead.
+        if (gGranted?.ok) {
+          rec.mission_delegation.identity_at_mint = {
+            environment: identity.environment,
+            repository: identity.repository,
+            target_ref: identity.targetRef,
+            source_sha: identity.sourceSha,
+          };
+          rec.mission_delegation.identity_at_boundary = proof?.identity
+            ? {
+              environment: proof.identity.environment,
+              repository: proof.identity.repository,
+              target_ref: proof.identity.targetRef,
+              source_sha: proof.identity.sourceSha,
+            }
+            : null;
+        }
+        rec.mission_delegation.released = true;
+        rec.policy_decision = "policy_default_requires_operator";
+        rec.operator_approval_required = true;
+        policy.operator_approval_required = true;
+      }
+    }
+  } else if (policy.delegation_declined) {
+    // Say why the mission did NOT cover this, so "it asked me again" has an
+    // answer that is not "unknown".
+    rec.delegation_declined = policy.delegation_declined;
+  }
+  // A DIRECTOR APPROVAL IS NEVER DRESSED UP AS THE OPERATOR'S. It is recorded
+  // in its own field, naming the policy and the evidence that authorised it,
+  // so the ledger can always answer WHO decided and on what grounds. The
+  // escalation verdict is kept too, so an approval that reached the operator
+  // can say why it had to.
+  if (policy.director_decision) {
+    rec.director_decision = policy.director_decision;
+    if (policy.director_decision.decision === "director_approved") {
+      rec.director_approval = {
+        decision: "approved",
+        actor: "director",
+        policy: policy.director_decision.matched_policy,
+        policy_version: policy.director_decision.policy_version,
+        content_fingerprint: policy.director_decision.content_fingerprint,
+        at: policy.director_decision.evaluated_at,
+      };
+      // THE DECISION IS FINAL, SO EXECUTION AUTHORITY MAY NOW BE DERIVED.
+      //
+      // V1 authorised the decision and not the execution, so a Director-
+      // approved push still stopped at the trusted host and interrupted the
+      // operator anyway. This mints authority for ONE exact content identity:
+      // request id, content fingerprint, action, normalised environment,
+      // repository, source SHA and deciding policy. It expires, it is refused
+      // outright for operator-only environments, and it is VERIFIED again at
+      // the execution boundary rather than merely presented.
+      // THE SAME IDENTITY THE DELEGATED PATH MINTS, AND THE BOUNDARY RESOLVES.
+      //
+      // This site had two derivations of its own: `policy.director_decision
+      // .environment` — which is the POLICY environment, the question of which
+      // delegated policy may decide at all — and a short alias list for the
+      // SHA that did not include `head_sha`, so a merge proposed that way was
+      // pinned to null. Both are gone; policy environment stays recorded on
+      // `director_decision`, where it belongs, and is no longer mistaken for
+      // the environment an authorization is bound to.
+      const dIdentity = authorizationIdentityFor(rec, { normalized: validated.normalized });
+      const dGranted = dIdentity.ok
+        ? grantExactRequestAuthorization({
+          ...dIdentity.mint,
+          contentFingerprint: policy.director_decision.content_fingerprint,
+          decisionId: rec.decision_id || null,
+          decisionActor: "director",
+          policyId: policy.director_decision.matched_policy,
+          policyVersion: policy.director_decision.policy_version,
+          nowMs: nowMs ?? Date.now(),
+        })
+        : { ok: false, error: `unresolved_action_identity:${dIdentity.reason || "unknown"}` };
+      if (dGranted && dGranted.ok && dGranted.authorization) {
+        rec.director_approval.authorization_id = dGranted.authorization.authorizationId;
+      } else if (dGranted && dGranted.error) {
+        // Failing to derive authority is the safe direction: the action simply
+        // escalates at the execution boundary, exactly as it did before.
+        rec.director_approval.authorization_error = dGranted.error;
+      }
+    } else {
+      rec.escalation_reason = policy.director_decision.escalation_reason || null;
+    }
+  }
+  // EVERY DECISION STATES ITS BASIS, IN BOTH DIRECTIONS.
+  //
+  // Two questions have to be answerable from the record alone: "why did
+  // Vacilando do this without asking me" and "why is it asking me". Only the
+  // first half was written down, and only on the paths that happened to run the
+  // director evaluator. MEASURED on the retained window of 2026-09-11: 53 of the
+  // 103 operator-facing requests carried no escalation reason at all — every
+  // census, and every request that escalated before the evaluator ran or after
+  // it threw. A prompt that cannot say why it exists is exactly the prompt
+  // nobody can remove, because there is nothing to argue with.
+  //
+  // These are derived from the decision already taken, never a second opinion:
+  // if the two disagreed, the text would be the lie and the decision the truth.
+  if (!rec.escalation_reason && policy.operator_approval_required) {
+    rec.escalation_reason = ESCALATION_REASON_TEXT[policy.reason]
+      || `${rec.action_key} requires an operator decision (${policy.reason || "unstated"}).`;
+  }
+  if (!policy.operator_approval_required) {
+    rec.authorization_basis = {
+      reason: policy.reason || null,
+      authorized_by: policy.authorized_by || policy.reason || null,
+      authorization_id: policy.authorization_id || null,
+      delegation_id: policy.delegation_id || null,
+      policy_id: policy.director_decision?.matched_policy || null,
+      policy_version: policy.director_decision?.policy_version || null,
+      environment: rec.target || null,
+      at: iso(nowMs),
+    };
+  }
+  saveRequest(rec, root);
+
+  if (policy.operator_approval_required) {
+    // Wait for CI before waking a human, when waiting is the whole answer.
+    const wait = checkWaitDecision(rec, { nowMs });
+    if (wait.wait) return enterCheckWait(rec, { nowMs, root, detail: wait.detail });
+    rec.status = "awaiting_operator";
+    // THE RECORD MUST AGREE WITH ITSELF ABOUT WHO IS BEING ASKED.
+    //
+    // `publicGovernedAction` exposes `operator_approval_required`, and this —
+    // the ordinary path into awaiting_operator — never set it, while the
+    // `authorization_required` retry path did. So the canonical record showed a
+    // request genuinely waiting on a person with the field reading false.
+    //
+    // That is not cosmetic. It is exactly the field a reader would reach for to
+    // answer "does this need the Director", and reading it that way is wrong in
+    // BOTH directions: false on requests that are truly waiting, and false
+    // again after approval, because approveGovernedAction clears it. An earlier
+    // analysis in this lane concluded from that single field that 29 approvals
+    // had never required a Director at all; the audit trail says every one of
+    // them reached `operator_approved` after a median of 102 seconds of real
+    // operator latency. The field was unreliable, not the approvals.
+    //
+    // Setting it here changes no behaviour today — `laneAwaitingOperatorApproval`
+    // matches on `status` first — it makes the exposed field true so the next
+    // reader is not misled the same way.
+    rec.operator_approval_required = true;
+    rec.updated_at = iso(nowMs);
+    openApprovalDecision(rec, { nowMs, root });
+    saveRequest(rec, root);
+    attachRunWait(rec, { nowMs, root });
+    appendAudit(rec, "awaiting_operator", { nowMs }, root);
+    return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+  }
+
+  return executeGovernedAction(rec.request_id, { nowMs, root, actor });
+}
+
+/**
+ * Should this escalation be a WAIT instead?
+ *
+ * Only when every gate that stopped it is one CI answers, and CI has not
+ * answered yet. A single failing check, a gate outside that set, or an
+ * exhausted budget all fall through to the operator exactly as before — this
+ * narrows when a human is woken, never whether one can be.
+ */
+export function checkWaitDecision(rec, { nowMs = Date.now(), measure = null } = {}) {
+  if (rec?.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return { wait: false };
+  const reason = String(rec.escalation_reason || "");
+  const named = reason.match(/Required gates did not pass:\s*(.+?)\.?$/);
+  if (!named) return { wait: false, why: "the escalation does not name gates" };
+  const gates = named[1].split(",").map((g) => g.trim()).filter(Boolean);
+  if (!gates.length || !gates.every((g) => CHECK_AVAILABILITY_GATES.includes(g))) {
+    return { wait: false, why: "a gate outside CI availability also failed" };
+  }
+  const attempts = Number(rec.check_wait?.attempts || 0);
+  const firstAt = rec.check_wait?.started_at ? Date.parse(rec.check_wait.started_at) : nowMs;
+  if (attempts >= MAX_CHECK_WAIT_ATTEMPTS) return { wait: false, why: "check wait exhausted its attempts" };
+  if (nowMs - firstAt > MAX_CHECK_WAIT_MS) return { wait: false, why: "check wait exceeded its window" };
+
+  // A RED CHECK IS NOT A SLOW ONE. Waiting is only right while the answer is
+  // absent; once CI has failed something, the operator is the correct audience
+  // and delaying that helps nobody.
+  const ev = typeof measure === "function" ? measure(rec) : mergeCheckState(rec);
+  if (ev == null) return { wait: true, detail: "pull-request checks could not be read yet" };
+  if (Number(ev.required_checks_failing || 0) > 0) {
+    return { wait: false, why: `${ev.required_checks_failing} required check(s) are failing` };
+  }
+  const total = ev.required_checks_total;
+  const pending = Number(ev.required_checks_pending || 0);
+  if (total == null || total === 0) return { wait: true, detail: "no checks have been reported yet" };
+  if (pending > 0) return { wait: true, detail: `${pending} check(s) still running` };
+  if (ev.certification_suite_passed == null) return { wait: true, detail: "no certification check has reported yet" };
+  // Everything CI owes has arrived. Re-processing will now measure the gates.
+  return { wait: true, detail: "checks have reported; re-measuring" };
+}
+
+/*
+ * Read the pull request's own check state, through the module that already
+ * owns that measurement. `trusted-host-repository-housekeeping` imports nothing
+ * from here, so the dependency runs one way and a static import is safe.
+ */
+function mergeCheckState(rec) {
+  try {
+    const inputs = rec?.inputs || {};
+    const n = Number(inputs.pullRequestNumber ?? inputs.pull_request_number);
+    if (!Number.isFinite(n)) return null;
+    return measureMergePullRequestGates({
+      repository: inputs.repository,
+      pullRequestNumber: n,
+      expectedHeadSha: inputs.expectedHeadSha || inputs.expected_head_sha || null,
+    });
+  } catch { return null; }
+}
+
+/**
+ * Park a merge until CI reports, and re-measure on the tick.
+ *
+ * This is NOT a softer approval. The request stays pending, no grant is minted,
+ * nothing executes, and when the budget runs out it escalates to the operator
+ * with the same question it would have asked immediately. What changes is that
+ * the question is asked once CI has actually answered, instead of two seconds
+ * after the pull request was opened when it could not have.
+ */
+export function enterCheckWait(rec, { nowMs = Date.now(), root = runtimeRoot(), detail = null } = {}) {
+  const attempts = Number(rec.check_wait?.attempts || 0) + 1;
+  rec.status = "awaiting_checks";
+  rec.check_wait = {
+    attempts,
+    started_at: rec.check_wait?.started_at || iso(nowMs),
+    last_attempt_at: iso(nowMs),
+    detail,
+    attempts_allowed: MAX_CHECK_WAIT_ATTEMPTS,
+    window_ms: MAX_CHECK_WAIT_MS,
+  };
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  attachRunWait(rec, { nowMs, root });
+  appendAudit(rec, "awaiting_checks", { nowMs, extra: { attempts, detail } }, root);
+  return { ok: true, request: publicGovernedAction(rec), awaiting_checks: true, detail };
+}
+
+export function executeGovernedAction(requestId, {
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  actor = "director",
+} = {}) {
+  const rec = getGovernedAction(requestId, root);
+  if (!rec) return { ok: false, error: "request_not_found" };
+
+  // THE OTHER HALF: A GRANT HAS TO EXIST ON EVERY PATH TO THE EXECUTOR.
+  //
+  // Minting the capability artifact inside approveGovernedAction fixed only the
+  // path that goes through an operator approval. When policy decides no operator
+  // approval is required — a mission whose director authorization already
+  // carries the authority — requestGovernedAction calls executeGovernedAction
+  // DIRECTLY, so approveGovernedAction never runs and nothing is minted.
+  //
+  // MEASURED: gar_8976f7ca4bc9c5, environment.restore_qa_session, authority.kind
+  // "mission", audit trail requested -> executing -> failed with NO `approved`
+  // event at all, grant_id null, refused `grant_missing` by prepareRestore. The
+  // approval-path fix could not have helped it, because it was never approved.
+  //
+  // The mint belongs at the execution boundary, which every path crosses.
+  // Authority is still decided upstream and is not created here: this only
+  // materialises the narrow artifact the executor consumes — the same
+  // proposal-pinned, fingerprint-bound, expiring, single-use grant, never a
+  // reusable mission-wide one.
+  //
+  // A mint failure does not block: executors that validate a grant still refuse
+  // `grant_missing` on their own, and executors that never needed one must not
+  // start failing because of a mint. The error is recorded rather than thrown.
+  if (!rec.grant_id) {
+    const boundaryGrant = mintGrant({
+      proposal: proposalForRequest(rec),
+      approvedBy: actor,
+      nowMs,
+      root,
+    });
+    if (boundaryGrant.ok) {
+      rec.grant_id = boundaryGrant.grant.grant_id;
+      rec.grant_expires_at = boundaryGrant.grant.expires_at;
+      rec.grant_minted_at_execution = true;
+    } else {
+      rec.grant_mint_error = boundaryGrant.error;
+    }
+  }
+
+  rec.status = "executing";
+  rec.execution_started_at = rec.execution_started_at || iso(nowMs);
+  // `execution_started_at` above is the AUTHORIZATION stamp and stays on nowMs,
+  // because tests pin it and a grant window is reasoned about from it. This is
+  // the observed one, and the two differing is the whole point.
+  stampDecisionTiming(rec, "execution_started_at");
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  attachRunWait(rec, { nowMs, root });
+  appendAudit(rec, "executing", { nowMs }, root);
+
+  const runExecute = executeImpl || defaultExecute;
+  let out;
+  try {
+    out = runExecute(rec, { nowMs, actor, root });
+  } catch (e) {
+    out = { ok: false, error: "execution_threw", detail: String(e && e.message || e) };
+  }
+  // Spend the grant the moment it is used for anything other than a refusal.
+  // Single-use is the property that makes this an authorization for ONE merge
+  // rather than standing permission: a retry, a replay, or a second tap needs a
+  // fresh Director decision. `already` covers the double-click, so consuming
+  // twice reads as done rather than as a second execution.
+  if (rec.grant_id && out?.error !== "authorization_required") {
+    const spent = consumeGrant(rec.grant_id, { by: actor || "director", nowMs, root });
+    appendAudit(rec, "grant_consumed", { nowMs, grant_id: rec.grant_id, already: Boolean(spent.already) }, root);
+  }
+  const applied = applyExecuteResult(rec, out, { nowMs, root, actor });
+  if (applied.ok && rec.status === "complete") {
+    applied.resumePromise = resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor });
+  }
+  return applied;
+}
+
+/**
+ * Repair approval records that reality or a mislabelled decision has stranded.
+ *
+ * TWO THINGS STRAND A GOVERNED MERGE.
+ *
+ * The first is that the merge already happened. A request pinned to a PR that
+ * is now merged at the expected head has nothing left to authorize — the state
+ * the Director would be approving already exists. Leaving it `awaiting_operator`
+ * is not caution, it is a queue entry that can never be satisfied, and while it
+ * shares a decision it blocks the requests behind it. It is resolved here as
+ * complete/idempotent, WITHOUT minting a grant: no privileged mutation is
+ * performed, so no authorization is created.
+ *
+ * The second is a decision that names a different subject, from the reuse bug
+ * openApprovalDecision now prevents. Records already written that way are
+ * detached and given a decision that names what they actually are.
+ *
+ * Deliberately NOT done here: denying anything. A merge that already landed is
+ * satisfied, not refused, and recording it as denied would be false.
+ */
+export async function reconcileGovernedApprovals({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  inspect = null,
+  laneId = null,
+} = {}) {
+  const store = readGovernedActionStore(root);
+  const pending = store.requests.filter((r) => {
+    if (r.status !== "awaiting_operator" && r.status !== "awaiting_director") return false;
+    if (laneId && canonicalLaneStoreId(r.lane_id, root) !== canonicalLaneStoreId(laneId, root)) return false;
+    return true;
+  });
+
+  const satisfied = [];
+  const rebound = [];
+  const unchanged = [];
+
+  let inspectFn = inspect;
+  if (!inspectFn) {
+    const mod = await import("./trusted-host-merge.mjs");
+    inspectFn = (inputs) => {
+      const seen = mod.inspectPullRequest(inputs);
+      return mod.evaluateMergeReadiness(seen);
+    };
+  }
+
+  for (const rec of pending) {
+    if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+      let verdict = null;
+      try {
+        verdict = inspectFn(rec.inputs || {});
+      } catch (err) {
+        // An unreachable remote is not evidence of anything; leave the record be.
+        unchanged.push({ request_id: rec.request_id, reason: "inspect_failed", detail: String(err?.message || err) });
+        continue;
+      }
+      if (verdict?.ok && verdict.idempotent && verdict.code === "already_merged") {
+        rec.status = "complete";
+        rec.operator_approval_required = false;
+        rec.policy_decision = "already_satisfied";
+        rec.result = {
+          ...(rec.result || {}),
+          idempotent: true,
+          code: "already_merged",
+          merge_sha: verdict.mergeSha || null,
+          staging_sha: verdict.stagingSha || null,
+        };
+        rec.updated_at = iso(nowMs);
+        // Close the decision only when it actually described THIS request.
+        if (rec.decision_id && rec.mission_id) {
+          const d = listDecisions(rec.mission_id, { status: "open" })
+            .find((x) => x.decisionId === rec.decision_id);
+          if (d && subjectsMatch(d, rec)) {
+            try {
+              answerDecision({
+                missionId: rec.mission_id,
+                decisionId: rec.decision_id,
+                chosenOptionId: "authorize_staging_merge",
+                response: `Already merged as ${verdict.mergeSha || "the recorded merge commit"}; no action was required.`,
+                actor: "system",
+                nowMs,
+              });
+            } catch { /* decision close is best-effort */ }
+          } else if (d) {
+            // The decision belongs to a different subject. Releasing it is the
+            // whole point; closing it would answer someone else's question.
+            rec.decision_id = null;
+          }
+        }
+        saveRequest(rec, root);
+        appendAudit(rec, "reconciled_already_merged", { nowMs, merge_sha: verdict.mergeSha || null }, root);
+        satisfied.push({ request_id: rec.request_id, merge_sha: verdict.mergeSha || null });
+        continue;
+      }
+    }
+
+    // Still live: make sure the decision bound to it names the right subject.
+    //
+    // Searched across ALL decisions, not just open ones: reconciling an earlier
+    // request in this same pass can close the very decision this one is wrongly
+    // bound to, and a binding to a CLOSED decision that was never about this
+    // request is no better than a binding to an open one.
+    if (rec.decision_id && rec.mission_id) {
+      const d = listDecisions(rec.mission_id)
+        .find((x) => x.decisionId === rec.decision_id);
+      if (!d || !subjectsMatch(d, rec)) {
+        const wrong = rec.decision_id;
+        rec.decision_id = null;
+        const opened = openApprovalDecision(rec, { nowMs, root });
+        rec.updated_at = iso(nowMs);
+        saveRequest(rec, root);
+        appendAudit(rec, "reconciled_decision_rebound", {
+          nowMs,
+          from_decision_id: wrong,
+          to_decision_id: opened?.decisionId || rec.decision_id || null,
+          subject: governedActionSubjectKey(rec),
+        }, root);
+        rebound.push({
+          request_id: rec.request_id,
+          from_decision_id: wrong,
+          to_decision_id: opened?.decisionId || rec.decision_id || null,
+        });
+        continue;
+      }
+    }
+    unchanged.push({ request_id: rec.request_id, reason: "no_repair_needed" });
+  }
+
+  return { ok: true, satisfied, rebound, unchanged };
+}
+
+/**
+ * TERMINAL EXECUTION TRUTH IS IMMUTABLE.
+ *
+ * MEASURED. gar_f9e6b6cfd1143b was approved by the operator and EXECUTED
+ * successfully. Three minutes later a deny arrived — issued from a card that
+ * had been rendered before the approval — and it rewrote the materialized
+ * record from complete/approved to failed/denied. The append-only audit still
+ * held the real history, so the ledger and the record disagreed about whether a
+ * privileged action had happened.
+ *
+ * An approve or a deny is a decision about work that has NOT happened yet. Once
+ * the work has run, there is no decision left to make: the outcome is a fact,
+ * and a late command can only misdescribe it. Refuse, by name, and hand back the
+ * current request so the caller can redraw from the truth.
+ *
+ * A request that failed BEFORE it executed — a validation or policy refusal —
+ * never ran, so it stays reopenable exactly as it was. `execution_started_at` is
+ * what separates the two, because it is written when execution begins.
+ */
+function terminalByExecution(rec) {
+  if (!rec) return null;
+  if (rec.status === "complete") return "complete";
+  if (rec.status === "cancelled" || rec.status === "withdrawn") return rec.status;
+  if (rec.status === "failed" && rec.execution_started_at) return "failed_after_execution";
+  return null;
+}
+
+export const GOVERNED_TERMINAL_ERROR = "governed_action_terminal";
+
+function refuseTerminalDecision(rec, command, root) {
+  // RE-READ IMMEDIATELY BEFORE DECIDING. The caller resolved this request when
+  // it rendered a card; seconds or minutes may have passed, and the whole point
+  // of this guard is that the state can have moved underneath a stale
+  // instruction. Deciding on the record we were handed would re-open the hole.
+  const current = getGovernedAction(rec?.request_id, root) || rec;
+  const terminal = terminalByExecution(current);
+  if (!terminal) return { ok: true, rec: current };
+  return {
+    ok: false,
+    refusal: {
+      ok: false,
+      error: GOVERNED_TERMINAL_ERROR,
+      terminal_state: current.status,
+      terminal_reason: terminal,
+      detail: `This governed action is already ${current.status} because it executed. A late ${command} cannot rewrite an execution outcome; the append-only audit is the historical authority.`,
+      request: publicGovernedAction(current),
+    },
+  };
+}
+
+export async function approveGovernedAction(requestId, {
+  actor = "operator",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  expectedFingerprint = null,
+  // When the operator actually pressed, as reported by the client. Observability
+  // only — nothing authorises on it, and a caller that omits it loses one stamp
+  // rather than one guarantee.
+  submittedAt = null,
+  // DEFAULTS TO THE OLD BEHAVIOUR ON PURPOSE. Every existing caller — the tick,
+  // the CLI, the certification fixtures, the conversation path — keeps waiting
+  // for the result it has always waited for. Only the HTTP route, which is the
+  // one with a browser on the end of it, asks for acceptance.
+  awaitExecution = true,
+  // Test seam. The durable owner is what must be proven to execute the work, so
+  // the tests turn the immediate kick off and drive the tick instead.
+  schedule = true,
+} = {}) {
+  const rec = getGovernedAction(requestId, root);
+  if (!rec) return { ok: false, error: "request_not_found" };
+  // STALE CONTENT. The operator approved what the card showed them. If the
+  // content moved since, the id still matches and approving would authorise
+  // something they never saw — so the decision is refused and the current
+  // request is returned so the card can redraw with the truth.
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
+  if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
+  const guard = refuseTerminalDecision(rec, "approval", root);
+  if (!guard.ok) return guard.refusal;
+  // ONE CLICK IS ONE APPROVAL, HOWEVER MANY TIMES THE BUTTON IS PRESSED.
+  //
+  // `refuseTerminalDecision` only catches a request that has already REACHED a
+  // terminal state. The gap it leaves is the one the operator actually falls
+  // into: a request that is approved and still EXECUTING, or parked awaiting a
+  // control-plane refresh. A second press walked straight past both guards,
+  // minted a second single-use grant — which is what defeated single-use, since
+  // the replay was not reusing the old grant but buying a new one — recorded a
+  // second `operator_approved`, and re-entered executeGovernedAction, which has
+  // no re-entry guard of its own.
+  //
+  // MEASURED over the 23 days to 2026-09-11: 111 duplicate approval events
+  // across 20 requests, and 141 executions beyond the first across 48. The worst
+  // single request, gar_9084b7b5fbbc7c (vacilando.retire_worktree), was approved
+  // 30 times over roughly 45 minutes, at intervals from 1 second to 10 minutes.
+  // That operator was not changing their mind thirty times; they were pressing a
+  // button that never said it had heard them.
+  //
+  // Returning `already` rather than an error is the point: the second press must
+  // converge the caller onto the authoritative current state, not hand them a
+  // failure for a decision that did in fact take effect.
+  //
+  // `awaiting_operator` and `failed` are deliberately NOT short-circuited. An
+  // approved record does not return to awaiting_operator any more, so finding
+  // one that has is a genuine re-ask from a stranded shape; and the block below
+  // exists precisely to let a pre-execution failure be decided again.
+  const settled = guard.rec || rec;
+  if (settled.operator_approval?.decision === "approved"
+    && settled.status !== "awaiting_operator"
+    && settled.status !== "failed") {
+    appendAudit(settled, "duplicate_approval_ignored", {
+      nowMs,
+      detail: { first_approved_at: settled.operator_approval.at || null, status: settled.status },
+    }, root);
+    return {
+      ok: true,
+      request: publicGovernedAction(settled),
+      already: true,
+      duplicate: true,
+    };
+  }
+  // THE OPERATOR'S PRESS, TIMED FROM THE PRESS AND NOT FROM THE OUTCOME.
+  //
+  // Recorded before any minting or execution so that `accepted_at` means what it
+  // says: the moment the server took responsibility for this decision. See
+  // `decision_timing` on the record for why every other stamp is taken live.
+  rec.decision_timing = {
+    ...(rec.decision_timing || {}),
+    // The press itself, when the client could tell us. Falls back to acceptance
+    // rather than to nothing, so the series is never ragged — and the two being
+    // equal is itself readable as "the client did not report a press time".
+    submitted_at: submittedAt || rec.decision_timing?.submitted_at || observedNow(),
+    accepted_at: observedNow(),
+  };
+  if (rec.status === "failed") {
+    // Only reachable for a request that never executed — the guard above holds
+    // everything that did.
+    rec.status = "awaiting_director";
+    rec.failure_code = null;
+    rec.failure_reason = null;
+  }
+
+  /*
+   * INFRASTRUCTURE PREFLIGHT, BEFORE ANYTHING IS MINTED OR SPENT.
+   *
+   * The managed QA actions resolve slot, port, worktree and identity from the
+   * registries at execution time, so the lane must hold a Development Slot
+   * before the governed mutation begins. Acquiring one is infrastructure
+   * scheduling — the same judgement the promoted dev-server path already makes
+   * without asking — and `ensureLaneSlot` remains the sole allocator, with
+   * every safety rule it enforces left exactly where it is.
+   *
+   * Placed HERE, ahead of the grant mint and the approval record, for one
+   * reason: if no safe slot exists, nothing may have been spent. The request
+   * stays `awaiting_operator` with no grant, no consumed delegation and no
+   * recorded decision, so the operator can approve it again once capacity
+   * frees up. A refusal that burned the approval would make waiting — the
+   * correct outcome — indistinguishable from failing.
+   */
+  if (qaActionNeedsDevelopmentSlot(rec.action_key)) {
+    const { ensureQaDevelopmentSlot } = await import("./qa-slot-preflight.mjs");
+    const pre = await ensureQaDevelopmentSlot(rec.lane_id, { actionKey: rec.action_key, root });
+    if (!pre.ok) {
+      appendAudit(rec, "development_slot_unavailable", { nowMs, error: pre.error, detail: pre.detail }, root);
+      return {
+        ok: false,
+        error: pre.error,
+        detail: pre.detail,
+        slot_preflight: pre,
+        request: publicGovernedAction(rec),
+      };
+    }
+    if (pre.moved) {
+      rec.slot_preflight = { acquired: pre.acquired, ...pre.movement };
+      saveRequest(rec, root);
+      appendAudit(rec, "development_slot_acquired", { nowMs, ...rec.slot_preflight }, root);
+    }
+  }
+
+  // WHICH AUTHORIZATION THIS APPROVAL CREATES.
+  //
+  // A mission-bound request keeps grantMissionAuthorization exactly as it was:
+  // mission scoped, reusable within the mission, unchanged behaviour.
+  //
+  // A repository-authorized request must NOT get that. A mission authorization
+  // is keyed only by action type and target, so approving one merge would leave
+  // standing permission to merge that branch again — including a head SHA the
+  // Director never saw. It gets a single-use grant pinned to this exact
+  // proposal instead: this PR, this head SHA, this target, this method, this
+  // run. A different SHA is a different decision.
+  // A STANDING GRANT FOR A NARROW ALLOWLIST — the reason the operator was asked
+  // 153 redundant times in 17 hours.
+  //
+  // Approving a bounded, repeatable capability granted authority over ONE
+  // content fingerprint, so the next identical push, PR or session restore
+  // asked again. The authorization model already had MISSION_STANDING with an
+  // explicit subject scope and nothing ever minted one. This routes it, for the
+  // three capabilities STANDING_ELIGIBLE_ACTIONS justifies and no others.
+  //
+  // The grant is scoped to the SAME identity the lookup uses — capability,
+  // repository, environment, and the lane or mission that owns it — so it
+  // cannot reach another lane, another repository or another environment. It
+  // expires, it is auditable, and it is revocable. Everything not on that
+  // allowlist keeps the single-use grant pinned to this exact proposal.
+  const standingScope = standingScopeFor(rec);
+  const sIdentity = authorizationIdentityFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: sIdentity.environment })) {
+    grantMissionAuthorization({
+      // The LANE. Never the mission and never the repository: a grant filed
+      // under a shared resource is inheritable by everything sharing it.
+      missionId: standingScope,
+      actionType: rec.action_key,
+      databaseTarget: sIdentity.databaseTarget || rec.target,
+      actor,
+      // Explicitly reusable for any subject of THIS capability inside THIS
+      // scope. Declared, never inferred: absence is not a wildcard.
+      subjectScope: SUBJECT_SCOPES.ANY_WITHIN_MISSION,
+      repository: sIdentity.repository || null,
+      environment: sIdentity.environment || null,
+      sourceDecisionId: rec.decision_id,
+      note: `Operator approved ${rec.action_key}; standing for this lane, repository and environment.`,
+      nowMs,
+    });
+  }
+
+  if (rec.mission_id) {
+    // Subject and target from the SAME resolver the lookup uses. This site kept
+    // `actionQueryHash` and `rec.target`, a fourth spelling of a subject key
+    // that findAuthorization no longer asks for in those words.
+    const oIdentity = authorizationIdentityFor(rec);
+    grantMissionAuthorization({
+      missionId: rec.mission_id,
+      actionType: rec.action_key,
+      databaseTarget: oIdentity.databaseTarget || rec.target,
+      actor,
+      queryHash: oIdentity.subjectKey,
+      sourceDecisionId: rec.decision_id,
+      note: `Operator approved governed action ${rec.action_key}.`,
+      nowMs,
+    });
+    // AUTHORITY IS NOT CAPABILITY, AND THE EXECUTOR NEEDS BOTH.
+    //
+    // THE DEFECT. Mission approval recorded a mission authorization and stopped.
+    // Repository approval minted a grnt_ artifact. Trusted-host executors
+    // validate the ARTIFACT — executeRestoreQaSessionTrustedHostAction passes
+    // `grant` to prepareRestore, whose first check refuses `grant_missing` — so
+    // a mission-authorized action could never satisfy the contract. Measured:
+    // the QA restores for lane_73a897409906 and lane_faacca6079ad were
+    // repository-authorized, got grants, and succeeded; both attempts on this
+    // mission-bound lane had grant_id null, zero grants minted, and failed. Not
+    // a slot-5 defect — every mission-bound lane was locked out of every
+    // grant-validating executor.
+    //
+    // The mission stays the AUTHORITY: the mission authorization above is
+    // untouched, still keyed by action type and target, still reusable within
+    // the mission. What is added is the CAPABILITY the executor consumes, and it
+    // is deliberately the same narrow artifact repository approval mints —
+    // pinned to this exact proposal's fingerprint, single-use, expiring. A
+    // reusable mission-wide grant would hand back exactly the standing
+    // permission the comment above refuses to create.
+    const missionGrant = mintGrant({
+      proposal: proposalForRequest(rec),
+      approvedBy: actor,
+      nowMs,
+      root,
+    });
+    if (!missionGrant.ok) {
+      appendAudit(rec, "approval_refused", { nowMs, error: missionGrant.error }, root);
+      return { ok: false, error: missionGrant.error, request: publicGovernedAction(rec) };
+    }
+    rec.grant_id = missionGrant.grant.grant_id;
+    rec.grant_expires_at = missionGrant.grant.expires_at;
+  } else {
+    const minted = mintGrant({
+      proposal: proposalForRequest(rec),
+      approvedBy: actor,
+      nowMs,
+      root,
+    });
+    if (!minted.ok) {
+      // Refuse loudly rather than executing unauthorized. self_approval_refused
+      // lands here: the provider that asked cannot be the identity that approves.
+      appendAudit(rec, "approval_refused", { nowMs, error: minted.error }, root);
+      return { ok: false, error: minted.error, request: publicGovernedAction(rec) };
+    }
+    rec.grant_id = minted.grant.grant_id;
+    rec.grant_expires_at = minted.grant.expires_at;
+  }
+  rec.operator_approval = {
+    decision: "approved",
+    actor,
+    at: iso(nowMs),
+  };
+  rec.operator_approval_required = false;
+  rec.policy_decision = "operator_approved";
+  // The authority now exists and is durable — the grant is minted and the
+  // decision is about to be written. Everything after this is execution.
+  stampDecisionTiming(rec, "authorization_persisted_at");
+  rec.updated_at = iso(nowMs);
+  if (rec.decision_id) {
+    try {
+      answerDecision({
+        missionId: rec.mission_id,
+        decisionId: rec.decision_id,
+        chosenOptionId: rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
+          ? "authorize_staging_merge"
+          : rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+            ? "authorize_staging_migrations"
+            : "authorize_mission_census",
+        response: rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS
+          ? "Operator approved read-only census."
+          : `Operator approved ${rec.action_key}.`,
+        actor,
+        nowMs,
+      });
+    } catch { /* decision close is best-effort */ }
+  }
+  saveRequest(rec, root);
+  appendAudit(rec, "operator_approved", { nowMs }, root);
+
+  // ACCEPTANCE AND EXECUTION ARE TWO EVENTS. THE BROWSER ONLY NEEDS THE FIRST.
+  //
+  // THE DEFECT. Everything above this line is the decision: the request is
+  // validated, the authorization is checked, the grant is minted and the
+  // approval is written to disk. Everything below it was the WORK — the
+  // trusted-host action, then the lane resume and its continuation message —
+  // and the HTTP response waited for all of it. `database.read_census` carries a
+  // 180 s timeout and `database.apply_promoted_migration` carries 600 s, so the
+  // browser could not distinguish "my approval was accepted" from "the action
+  // has finished", because one request lifetime carried both.
+  //
+  // MEASURED with an executor that blocks for 1200 ms the way execFileSync
+  // really does: 1230 ms to answer, against 3 ms once the answer is the
+  // acceptance. That difference is the whole mission.
+  //
+  // WHY THIS IS SAFE TO RETURN ON. Acceptance is durable BEFORE the answer is
+  // given: `saveRequest` above has already written the operator decision, the
+  // grant the executor consumes, and the execution ownership recorded below. If
+  // the process died on the next line, every one of those survives.
+  //
+  // AND WHY IT IS NOT FIRE-AND-FORGET. `async_execution` is a durable claim, not
+  // a Promise. A record carrying it with no `execution_started_at` is
+  // unambiguously "accepted, never started", which is a shape only this path can
+  // produce — that matters, because processGovernedAction deliberately refuses
+  // to resume an `awaiting_operator` record that merely LOOKS approved, and it
+  // is right to. `tickGovernedActions` owns this shape and the Gateway's
+  // recovery timer drives the tick, so the work survives client disconnect,
+  // route completion and Gateway restart. The immediate kick below is an
+  // optimisation on top of that owner, never a substitute for it.
+  if (awaitExecution === false) {
+    rec.async_execution = {
+      accepted_at: observedNow(),
+      accepted_by: actor,
+      attempts: 0,
+    };
+    // `executing` is the canonical status for "decided, now the machine's
+    // problem", and it is what executeGovernedAction sets anyway one moment
+    // later. Inventing an `accepted` status would add governance vocabulary for
+    // a state the projection already renders, and every consumer that reasons
+    // about pending work would have to learn it.
+    rec.status = "executing";
+    rec.updated_at = iso(nowMs);
+    saveRequest(rec, root);
+    appendAudit(rec, "accepted", {
+      nowMs,
+      detail: { accepted_at: rec.async_execution.accepted_at, execution: "deferred_to_owner" },
+    }, root);
+    const accepted = {
+      ok: true,
+      accepted: true,
+      request: publicGovernedAction(rec),
+    };
+    if (schedule !== false) scheduleAcceptedExecution(rec.request_id, { root, actor: "director" });
+    return accepted;
+  }
+
+  const out = executeGovernedAction(rec.request_id, { nowMs, root, actor: "director" });
+  if (out?.resumePromise) {
+    const resume = await out.resumePromise;
+    const { resumePromise: _p, ...rest } = out;
+    return { ...rest, resume };
+  }
+  return out;
+}
+
+/**
+ * Start an accepted action promptly, without the durable owner depending on it.
+ *
+ * The tick runs on the Gateway's recovery cadence, which is measured in tens of
+ * seconds — correct for recovery and far too slow to be the only thing that
+ * starts work the operator just authorised. This closes that gap.
+ *
+ * It is deliberately written so that losing it costs nothing: it runs on the
+ * next macrotask, it swallows everything, and the record it acts on is already
+ * durably claimed. If the process dies before it runs, if it throws, or if it is
+ * never scheduled at all (`schedule: false`, which the tests use), the tick
+ * finds exactly the same record in exactly the same shape and executes it. That
+ * is the difference between an optimisation and an unowned Promise.
+ */
+function scheduleAcceptedExecution(requestId, { root, actor = "director" } = {}) {
+  setTimeout(() => {
+    try {
+      const out = executeGovernedAction(requestId, { root, actor });
+      // The resume is part of the downstream work, not part of acceptance.
+      if (out?.resumePromise) Promise.resolve(out.resumePromise).catch(() => {});
+    } catch { /* the tick is the owner and will find it */ }
+  }, 0).unref?.();
+}
+
+export function denyGovernedAction(requestId, {
+  actor = "operator",
+  reason = "approval_denied",
+  code = "approval_denied",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  expectedFingerprint = null,
+} = {}) {
+  const rec = getGovernedAction(requestId, root);
+  if (!rec) return { ok: false, error: "request_not_found" };
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
+  // THE SITE OF THE MEASURED DEFECT. This wrote operator_approval and then
+  // failed the request with no terminal check at all, so a deny arriving after
+  // a successful execution rewrote complete/approved into failed/denied.
+  const guard = refuseTerminalDecision(rec, "denial", root);
+  if (!guard.ok) return guard.refusal;
+  rec.operator_approval = {
+    decision: "denied",
+    actor,
+    at: iso(nowMs),
+    reason,
+  };
+  if (rec.decision_id) {
+    try {
+      answerDecision({
+        missionId: rec.mission_id,
+        decisionId: rec.decision_id,
+        chosenOptionId: code === "policy_denied" ? "use_cert_only" : "deny_production_reads",
+        response: reason,
+        actor,
+        nowMs,
+      });
+    } catch { /* */ }
+  }
+  const out = failRequest(rec, code, reason, { nowMs, root, skipResume: true });
+  if (rec.run_id) {
+    // A DENIED GOVERNED ACTION IS A BLOCKER, NOT AN EXECUTION FAILURE.
+    //
+    // This transitioned the run to FAILED and reused the governed request's own
+    // reason as the failure reason — so a run went
+    // QUEUED -> EXECUTING -> NEEDS_INPUT -> FAILED and reported the mission as
+    // failed by quoting the question it was waiting on. A denial is the
+    // operator declining ONE way forward; the work is still there, and the
+    // decision can still change.
+    //
+    // The run therefore parks in NEEDS_INPUT with the blocker attached, where
+    // it can report a checkpoint, be resumed and complete normally. FAILED is
+    // reserved for genuine execution failure.
+    const run = getExecutionRun(rec.run_id, root);
+    if (run && !isTerminalRunState(run.state) && ["WAITING_RESOURCE", "NEEDS_INPUT", "EXECUTING"].includes(run.state)) {
+      const blocker = rec.failure_reason || rec.failure_code || "The governed action was not approved.";
+      transitionExecutionRun(rec.run_id, "NEEDS_INPUT", {
+        reason: blocker,
+        origin: "system",
+        nowMs,
+        root,
+        progress: blocker,
+      });
+      patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
+      patchRunResourceWait(rec.run_id, null, root);
+    }
+  }
+  return { ok: true, denied: true, request: out.request, error: code };
+}
+
+export function recoverMisclassifiedStaleGovernedRequests({
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const store = readGovernedActionStore(root);
+  const out = [];
+  for (const rec of store.requests) {
+    if (!isRecoverableStaleRegistryFailure(rec)) continue;
+    if (getActionDefinition(rec.action_key)) {
+      rec.status = "requested";
+      rec.failure_code = null;
+      rec.failure_reason = null;
+      rec.revived_from_stale_registry = true;
+      rec.updated_at = iso(nowMs);
+      saveRequest(rec, root);
+      appendAudit(rec, "revived_after_director_refresh", { nowMs }, root);
+      out.push(processGovernedAction(rec.request_id, { nowMs, root, actor: "director" }));
+      continue;
+    }
+    if (rec.status === "awaiting_control_plane_refresh") continue;
+    out.push(enterControlPlaneRefresh(rec, { nowMs, root }));
+  }
+  return out;
+}
+
+export function tickGovernedActions({
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const drift = directorRegistryFreshness();
+  const stored = readDirectorCapabilityStatus(root);
+  if (drift.stale && stored.state !== "refreshing") {
+    Promise.resolve(refreshDirectorCapabilities({
+      reason: "registry_drift",
+      root,
+      nowMs,
+    })).catch(() => {});
+  } else if (!drift.stale) {
+    markDirectorCapabilitiesCurrent({ root, nowMs, reason: "tick" });
+  }
+  const recovered = recoverMisclassifiedStaleGovernedRequests({ nowMs, root });
+  const pending = readGovernedActionStore(root).requests.filter((r) =>
+    r.status === "requested"
+    || r.status === "awaiting_director"
+    || (r.status === "awaiting_operator"
+      && r.operator_approval?.decision === "approved"
+      && r.action_key === ACTION_TYPES.DATABASE_READ_CENSUS)
+    || (r.status === "awaiting_control_plane_refresh" && Boolean(getActionDefinition(r.action_key)))
+    // The whole point of the wait: look again. Without this line the status is
+    // a nicer name for the same silence.
+    || r.status === "awaiting_checks"
+    // ACCEPTED, NEVER STARTED — THE SHAPE THAT MAKES EARLY RETURN SAFE.
+    //
+    // This is the durable owner of everything `approveGovernedAction` answered
+    // "accepted" to. `async_execution` is written by exactly one path, so unlike
+    // an `awaiting_operator` record that merely looks approved, this shape is
+    // never ambiguous: the operator decided, the grant exists, and the executor
+    // has not run. `execution_started_at` is written by executeGovernedAction
+    // before it calls the executor, so its absence is the claim.
+    //
+    || (r.status === "executing" && Boolean(r.async_execution) && !r.execution_started_at)
+    // AND THE ORPHANS OF AN EXECUTION THAT DIED HALFWAY.
+    //
+    // A record that started executing and never settled is either running right
+    // now or was abandoned by a process that no longer exists, and from the
+    // store those look identical. Time is the only honest discriminator, so it
+    // is taken from the action's OWN declared timeout rather than a number
+    // chosen here — doubled, because a timeout is when the executor gives up,
+    // not when it is safe to conclude nobody is there.
+    //
+    // Picking it up does NOT mean re-running it. processGovernedAction settles
+    // it as `execution_interrupted`: the ambiguity is reported, never guessed.
+    // Leaving it out entirely was the alternative, and it produces a request
+    // stuck in `executing` for ever with a lane waiting behind it.
+    || (r.status === "executing" && Boolean(r.async_execution) && abandonedExecution(r, nowMs))
+  );
+  const out = [...recovered];
+  const seen = new Set(recovered.map((r) => r?.request?.request_id).filter(Boolean));
+  for (const rec of pending) {
+    if (seen.has(rec.request_id)) continue;
+    out.push(processGovernedAction(rec.request_id, { nowMs, root, actor: "director" }));
+  }
+
+  /*
+   * AND THE RESUME, WHICH HAD NO OWNER AT ALL.
+   *
+   * `executeGovernedAction` assigns `applied.resumePromise` and nothing durable
+   * holds it: one caller awaits it in-process, the other calls `.catch(() => {})`.
+   * When the action executes inside a short-lived `vac` process — which is how a
+   * worktree retirement runs — the process exits and the run is never taken out
+   * of WAITING_RESOURCE. It does not die, because `needs_operator_input` is
+   * human_indefinite by design; it rests there for ever.
+   *
+   * MEASURED on erun_828e075e3c1ed70a: the retirement completed and the run sat
+   * waiting for over four minutes, until a worker resumed it by hand.
+   *
+   * `scheduleAcceptedExecution` states the rule this restores, a few hundred
+   * lines up: the tick is the owner and the immediate call is an optimisation
+   * "written so that losing it costs nothing". The completed record is durable
+   * and the waiting run is durable, so the shape is still here on the next tick.
+   * Re-running it is safe: a run that has already resumed is no longer
+   * WAITING_RESOURCE and is skipped.
+   */
+  const stranded = readGovernedActionStore(root).requests.filter((r) => {
+    if (r.status !== "complete" || !r.run_id) return false;
+    const run = getExecutionRun(r.run_id, root);
+    if (!run || run.state !== "WAITING_RESOURCE") return false;
+    const waitingOn = run.resource_wait?.governed_request_id;
+    return !waitingOn || waitingOn === r.request_id;
+  });
+  for (const rec of stranded) {
+    // Fire-and-forget HERE is honest: if it is lost, the next tick finds the
+    // identical shape. That is what makes this an owner rather than a promise.
+    out.push({ ok: true, resuming: rec.request_id });
+    Promise.resolve(resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor: "director" }))
+      .catch(() => { /* the tick is the owner and will find it again */ });
+  }
+  return out;
+}
+
+/**
+ * The result envelope for ONE action type.
+ *
+ * THE DEFECT THIS REPLACES. This was hardcoded to the census shape: it read
+ * `action.result.census` whatever the action was, so a completed
+ * `repository.push` reported itself back to the lane as
+ *
+ *   { census_run_at: null, org_count: null, question_ids: null, keys: [] }
+ *
+ * — a null-filled census envelope for an action that had just published a
+ * commit, under the instruction "Do not retry the census from this lane". Every
+ * field the lane needed (the ref, the SHA, whether it was already there) was
+ * absent, and every field present was meaningless.
+ *
+ * A MISMATCH IS AN ERROR, NOT A BLANK. When the result does not carry the shape
+ * its action type requires, this says so. Rendering nulls turns a wiring fault
+ * into something that merely looks like nothing happened, which is how the
+ * original defect survived a successful push.
+ */
+export function governedResultEnvelope(actionKey, result = {}) {
+  const r = result && typeof result === "object" ? result : {};
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) {
+    const sha = r.pushedSha || r.pushed_sha || null;
+    const ref = r.remoteRef || r.remote_ref || (r.branch ? `refs/heads/${r.branch}` : null);
+    if (!sha || !ref) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "repository.push", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        remote_ref: ref,
+        pushed_sha: sha,
+        state: r.idempotent ? "already_present" : "pushed",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const n = r.pullRequestNumber ?? r.pull_request_number ?? null;
+    if (!n) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "promotion.open_pr", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        pull_request_number: n,
+        url: r.url || null,
+        base: r.base || null,
+        head_branch: r.headBranch || r.head_branch || null,
+        state: r.reused ? "already_open" : "opened",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const sha = r.merge_sha || r.mergeSha || null;
+    if (!sha) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "repository.merge_pull_request", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        pull_request_number: r.pull_request_number ?? r.pullRequestNumber ?? null,
+        merge_sha: sha,
+        staging_sha: r.staging_sha || r.stagingSha || null,
+        state: r.idempotent ? "already_merged" : "merged",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    const census = r.census && typeof r.census === "object" ? r.census : null;
+    if (!census) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "database.read_census", got: Object.keys(r).slice(0, 12) };
+    }
+    const questions = census.questions && typeof census.questions === "object" ? census.questions : null;
+    return {
+      ok: true,
+      summary: {
+        census_run_at: census.census_run_at || null,
+        format: census.format || null,
+        org_count: census.org_count ?? null,
+        database: census.database || null,
+        question_ids: census.question_ids || null,
+        question_row_counts: questions
+          ? Object.fromEntries(Object.entries(questions).map(([id, q]) => [id, q?.row_count ?? null]))
+          : null,
+        keys: Object.keys(census).slice(0, 20),
+      },
+    };
+  }
+  return { ok: true, summary: { note: "completed", keys: Object.keys(r).slice(0, 12) } };
+}
+
+/**
+ * Which credentials the lane did NOT receive, named for the action that ran.
+ *
+ * A push never involves database credentials, and saying so is not merely
+ * imprecise — the sentence exists to tell the lane exactly what it still does
+ * not hold, so naming the wrong secret weakens it.
+ */
+function credentialIsolationLine(actionKey) {
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH
+    || actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
+    || actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return "You did NOT receive GitHub credentials or any privileged secret.";
+  }
+  return "You did NOT receive hosted database credentials or any privileged secret.";
+}
+
+/** What a lane must NOT do again, phrased for the action that actually ran. */
+function doNotRetryLine(actionKey) {
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) {
+    return "Do not push from this lane. The commit is already on the remote.";
+  }
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return "Do not open another pull request from this lane. The one below is the promotion.";
+  }
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return "Do not retry the merge from this lane. It already landed.";
+  }
+  if (actionKey === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return "Do not retry the census from this lane. Read the result file and continue.";
+  }
+  // SAME DEFECT, SMALLER BLAST RADIUS. The census sentence was the fallback for
+  // every action without a branch, so a completed toolkit install told the lane
+  // "Do not retry the census". Naming the wrong action is the same failure as
+  // claiming the wrong outcome; the default now describes no action in
+  // particular, which is the only honest thing a default can do.
+  return "Do not retry this action from this lane. It already executed; read the result and continue.";
+}
+
+/**
+ * WHAT A LANE MAY DO ABOUT ITS RUN — READ OFF THE RUN, NEVER ASSUMED.
+ *
+ * THE DEFECT THIS CLOSES. Two notification builders below spoke about the
+ * Execution Run without ever looking at it. The success notice appended
+ * `vac run-status <run> complete` whenever the record carried a run id, and the
+ * failure notice asserted "The current Execution Run is still open" on every
+ * failure, unconditionally.
+ *
+ * MEASURED, on lane_db3431e755a8. Run erun_0ef763c4a6a8e491 went
+ * QUEUED -> EXECUTING (admission_delivered) -> FAILED
+ * (delivery_unacknowledged, origin governor) in 30 seconds, and the lane's
+ * `current_run_id` was left null. THREE notifications then arrived: one
+ * asserting the run was still open, and two instructing a completion report.
+ * Every attempt was refused `illegal_transition (FAILED -> COMPLETE)`, which is
+ * the state machine being RIGHT. The instruction was the thing that was wrong.
+ *
+ * An operator handed an impossible cleanup step cannot tell "I did this wrong"
+ * from "the system asked for something that cannot exist", and the second is
+ * corrosive: it teaches the reader to distrust the instructions that ARE
+ * actionable.
+ *
+ * So: FAILED -> COMPLETE stays illegal. Nothing here mutates a run, and nothing
+ * here invents a transition to make a sentence true. What changes is that the
+ * sentence is derived from two facts the store already holds — the run's state,
+ * and whether the lane still owns it as its current run.
+ */
+export function runClosureGuidance(rec, {
+  root = runtimeRoot(),
+  getRun = null,
+  laneRun = null,
+} = {}) {
+  const runId = rec?.run_id || null;
+  const laneId = rec?.lane_id || null;
+  const none = { run_id: runId, lane_id: laneId, state: null, lane_owns_run: false, may_report_complete: false, lines: [] };
+  if (!runId) return none;
+
+  const lookup = getRun || ((id) => getExecutionRun(id, root) || findExecutionRun(id));
+  let run = null;
+  try { run = lookup(runId); } catch { run = null; }
+  const state = run ? String(run.state || "").toUpperCase() : null;
+
+  const laneLookup = laneRun || ((id) => activeRunForLane(id, root));
+  let active = null;
+  try { active = laneId ? laneLookup(laneId) : null; } catch { active = null; }
+  const laneOwnsRun = Boolean(active && active.run_id === runId);
+  const laneFlag = laneId ? ` --lane ${laneId}` : "";
+
+  /*
+   * A run the canonical owner has never heard of. Naming a close command for it
+   * would be the run_not_found substitution one layer up, in prose.
+   */
+  if (!run) {
+    return {
+      ...none,
+      lines: [`Execution Run ${runId} is not in the canonical run store, so nothing can be filed against it. Do not report a state for it.`],
+    };
+  }
+
+  if (state === "COMPLETE") {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun,
+      lines: [`Execution Run ${runId} is already COMPLETE. It needs no closing report; do not report it again.`],
+    };
+  }
+
+  // WHY it ended, from the transition the governor actually wrote. "It failed"
+  // without a cause is what sends someone looking for their own mistake.
+  const last = Array.isArray(run.transitions) && run.transitions.length
+    ? run.transitions[run.transitions.length - 1]
+    : null;
+  const cause = last?.reason ? ` (${last.reason}${last.origin ? `, ${last.origin}` : ""})` : "";
+
+  /*
+   * TERMINAL FOR SCHEDULING IS NOT THE SAME AS TERMINAL FOR REPORTING, and
+   * conflating them strands exactly the lane this whole change exists to help.
+   *
+   * `TERMINAL_RUN_STATES` holds COMPLETE, FAILED **and ABANDONED**, but only
+   * COMPLETE and FAILED are irreversible. ABANDONED has a documented recovery:
+   * `reportExecutionRunState` treats a worker reporting on an abandoned run as
+   * proof the abandonment was wrong, hops it through RECOVERING, and lets it
+   * reach COMPLETE — "rather than answering illegal_transition and stranding a
+   * live sprint with no way to reach COMPLETE".
+   *
+   * MEASURED, on this lane. Run erun_05f2787e4a3cb02c was abandoned by the
+   * governor as `needs_input_without_operator_input` while its worker was
+   * mid-turn, and a `vac run-status … complete` filed against it SUCCEEDED via
+   * that recovery. A guidance that had called ABANDONED unreportable would have
+   * told the worker to abandon a turn it could still legitimately close — the
+   * same defect as the one above, pointing the other way.
+   *
+   * So the rule is keyed to irreversibility, never to the scheduling flag.
+   */
+  if (isIrreversibleRunState(state)) {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun,
+      lines: [
+        `Execution Run ${runId} already terminated as ${state}${cause}. ${state} to COMPLETE is not a legal transition — do not report this run complete and do not try to close it.`,
+        laneOwnsRun
+          ? `Nothing can be filed against it. Continue only when a new Execution Run is delivered to this lane.`
+          : `This lane no longer owns an open Execution Run, so it has nothing to close. Recovery is the operator's: a new Execution Run carries the work forward.`,
+      ],
+    };
+  }
+
+  if (state === "ABANDONED") {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun, may_report_complete: true,
+      lines: [
+        `Execution Run ${runId} was abandoned${cause}. Reporting on it is itself proof the abandonment was wrong: the report recovers the run rather than being refused.`,
+        `When this assignment is finished, report: vac run-status ${runId} complete --summary "..."${laneFlag}`,
+      ],
+    };
+  }
+
+  /*
+   * Non-terminal, and the lane's CURRENT run. Only here is a completion
+   * instruction the truth. A non-terminal run the lane no longer owns is
+   * somebody else's to report, and telling this lane to close it would hand it
+   * the same impossible step by a different route.
+   */
+  if (laneOwnsRun) {
+    return {
+      ...none, state, lane_owns_run: true, may_report_complete: true,
+      lines: [`When this assignment is finished, report: vac run-status ${runId} complete --summary "..."${laneFlag}`],
+    };
+  }
+  return {
+    ...none, state, lane_owns_run: false,
+    lines: active
+      ? [`Execution Run ${runId} is ${state}, but this lane's current run is ${active.run_id}. Report against the run the lane owns, not this one.`]
+      : [`Execution Run ${runId} is ${state} and is not this lane's current run, so do not report a state for it.`],
+  };
+}
+
+export function continuationTextForGovernedAction(rec, action = null, { root = runtimeRoot() } = {}) {
+  const evidencePath = rec.result_ref || action?.result?.evidencePath || null;
+  const envelope = governedResultEnvelope(rec.action_key, action?.result || rec.result || {});
+  return redact([
+    "[VACILANDO GOVERNED ACTION COMPLETE]",
+    `Request: ${rec.request_id}`,
+    `Action: ${rec.action_key}`,
+    `Target: ${rec.target}`,
+    action?.id ? `Trusted host action: ${action.id}` : null,
+    evidencePath ? `Result file (read this in the current worktree): ${evidencePath}` : null,
+    "",
+    "Director executed this on the trusted host.",
+    credentialIsolationLine(rec.action_key),
+    doNotRetryLine(rec.action_key),
+    // Derived from the run, never from the mere presence of a run id. A lane
+    // whose run already terminated is told that, not told to close it.
+    ...runClosureGuidance(rec, { root }).lines,
+    "",
+    envelope.ok ? "Bounded result summary:" : "RESULT ENVELOPE MISMATCH — the trusted-host result did not carry the shape this action produces. Report this rather than acting on it:",
+    JSON.stringify(envelope.ok ? envelope.summary : envelope, null, 2),
+    "",
+    rec.continuation_intent || "Continue the current assignment using this evidence.",
+  ].filter((line) => line != null).join("\n"));
+}
+
+export function continuationTextForFailedGovernedAction(rec, { root = runtimeRoot() } = {}) {
+  return redact([
+    "[VACILANDO GOVERNED ACTION FAILED]",
+    `Request: ${rec.request_id}`,
+    `Action: ${rec.action_key}`,
+    `Target: ${rec.target}`,
+    rec.failure_code ? `Failure: ${rec.failure_code}` : null,
+    rec.failure_reason || null,
+    "",
+    "Director could not complete this trusted-host action.",
+    /*
+     * THIS LINE USED TO SAY "The merge into staging already succeeded."
+     *
+     * Unconditionally, on EVERY failed action, whatever it was. Observed on a
+     * failed repository.close_pull_request and a failed host.install_toolkit in
+     * the same session: neither involved a merge, and no merge had occurred.
+     * A failure notice that asserts a success is worse than a silent one — it
+     * invites a lane to move on from work that did not happen, and it teaches
+     * the reader to distrust the notices that ARE true.
+     *
+     * Nothing here claims an outcome. The repository and the action record are
+     * authoritative about what happened; this says only that this action did
+     * not complete.
+     */
+    "This action did NOT complete, and nothing it would have changed has changed.",
+    "Repository and database state remain whatever they were before this attempt — check them rather than inferring from this message.",
+    /*
+     * THIS LINE USED TO SAY "The current Execution Run is still open."
+     *
+     * Unconditionally, on every failed action — including one delivered to a
+     * lane whose run the governor had already failed and whose current_run_id
+     * was null. A notice that asserts a state it never read is the same class
+     * of defect as the merge claim above it, and it stranded the operator with
+     * a cleanup step the state machine correctly refuses.
+     */
+    ...runClosureGuidance(rec, { root }).lines,
+    "Wait for the next operator instruction in this lane, then continue the assignment.",
+  ].filter((line) => line != null).join("\n"));
+}
+
+/**
+ * REDELIVER WHAT THE LANE IS STILL OWED.
+ *
+ * Called when a lane's run reaches a terminal state — the canonical "I have
+ * yielded", and the only moment its pane is expected to become pastable — and
+ * again from the conductor tick, for turns that end without a clean transition.
+ *
+ * This rebuilds the SAME message the original attempt would have sent, from the
+ * same record, so a redelivery is the delivery that was deferred and never a
+ * second notification about the same action.
+ */
+export async function drainGovernedNotificationsForLane(laneId, {
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+} = {}) {
+  const {
+    drainGovernedNotifications,
+  } = await import("./governed-notification-delivery.mjs");
+  const { sendLaneInstruction, getDevelopmentLane } = await import("./lanes.mjs");
+  const { getTrustedHostAction } = await import("./trusted-host-actions.mjs");
+  const send = sendImpl || sendLaneInstruction;
+  return drainGovernedNotifications({
+    root,
+    laneId: laneId || null,
+    nowMs,
+    send,
+    getLane: (id) => getDevelopmentLane(id, { includeGitFacts: false }),
+    /*
+     * A notification held behind another action is skipped, not attempted.
+     *
+     * The attempt budget is sized for a busy pane, which clears in seconds. A
+     * notification waiting on an `awaiting_operator` action is waiting on a
+     * person — one on this host waited an hour and three quarters — and
+     * spending an attempt per conductor tick would expire it as UNDELIVERABLE
+     * long before it was ever undeliverable.
+     */
+    isBlocked: (rec) => {
+      const next = pendingGovernedActionForLane(rec.lane_id, root);
+      return next && next.request_id !== rec.request_id ? next.request_id : null;
+    },
+    buildText: async (rec) => {
+      if (rec.notification_delivery?.kind === "governed_action_failed") {
+        return continuationTextForFailedGovernedAction(rec, { root });
+      }
+      const action = rec.trusted_host_action_id
+        ? await getTrustedHostAction(rec.trusted_host_action_id)
+        : null;
+      return continuationTextForGovernedAction(rec, action, { root });
+    },
+  });
+}
+
+/**
+ * A DEFERRED NOTIFICATION IS OWED, NOT DROPPED.
+ *
+ * Both resume paths hold a notification back while another action on the same
+ * lane is still pending, which is right: pasting a second instruction into a
+ * lane that is mid-decision interleaves two conversations. What was wrong is
+ * that they returned `{ deferred: true }` and told nobody, so the notification
+ * left no trace and the drain — which exists, and works — had nothing to find.
+ *
+ * MEASURED: 83 of 200 governed actions on this host, 77 of them SUCCESSFUL,
+ * resolved with no delivery record at all, and every single one had a
+ * co-pending action on its lane at that moment. From inside the lane that is
+ * indistinguishable from an action that was approved and never executed.
+ *
+ * Registering the deferral with the delivery owner is the whole fix: the record
+ * enters PENDING, the drain finds it when the lane clears, and if it can never
+ * be delivered it becomes UNDELIVERABLE with a reason. Silence stops being one
+ * of the outcomes.
+ */
+async function oweNotification(rec, { kind, waitingOn, nowMs, root }) {
+  try {
+    const { recordDeliveryAttempt } = await import("./governed-notification-delivery.mjs");
+    recordDeliveryAttempt(rec, { ok: false, error: "deferred_behind_pending_action" }, {
+      kind,
+      nowMs,
+      save: (r) => saveRequest(r, root),
+    });
+    appendAudit(rec, "notification_deferred", { nowMs, extra: { waiting_on: waitingOn, kind } }, root);
+  } catch (err) {
+    // Failing to RECORD the debt must not also hide it. The audit line is the
+    // last thing standing between a deferral and silence.
+    try {
+      appendAudit(rec, "notification_deferral_unrecorded", {
+        nowMs,
+        extra: { waiting_on: waitingOn, error: String(err?.message || err) },
+      }, root);
+    } catch { /* nothing further is available */ }
+  }
+}
+
+export async function resumeLaneAfterFailedGovernedAction(requestId, {
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  actor = "director",
+} = {}) {
+  const rec = getGovernedAction(requestId, root);
+  if (!rec || rec.status !== "failed") {
+    return { ok: false, error: "request_not_failed" };
+  }
+  const pendingNext = pendingGovernedActionForLane(rec.lane_id, root);
+  if (pendingNext && pendingNext.request_id !== rec.request_id) {
+    attachRunWait(pendingNext, { nowMs, root });
+    await oweNotification(rec, {
+      kind: "governed_action_failed",
+      waitingOn: pendingNext.request_id,
+      nowMs,
+      root,
+    });
+    return { ok: true, deferred: true, waiting_on: pendingNext.request_id, notification_owed: true };
+  }
+  releaseRunAfterGovernedFailure(rec, { nowMs, root });
+  const { sendLaneInstruction } = await import("./lanes.mjs");
+  const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+  const text = continuationTextForFailedGovernedAction(rec, { root });
+  const send = sendImpl || sendLaneInstruction;
+  const start = startSessionImpl || startLaneAgentSession;
+  let delivered = await send(rec.lane_id, text, {
+    origin: "director",
+    source: "governed_action_failed",
+    runId: rec.run_id,
+  });
+  let startedSession = null;
+  if (!delivered?.ok) {
+    startedSession = await start({ laneId: rec.lane_id, nowMs, root });
+    delivered = await send(rec.lane_id, text, {
+      origin: "director",
+      source: "governed_action_failed",
+      runId: rec.run_id,
+      fresh_session: true,
+    });
+  }
+  rec.failure_notified_at = iso(nowMs);
+  rec.resume_delivery = {
+    ok: Boolean(delivered?.ok),
+    error: delivered?.error || null,
+    fresh_session: Boolean(startedSession?.ok),
+    failed: true,
+  };
+  // A busy pane is not a dead letter. Classify the outcome and, when the lane is
+  // merely mid-turn, leave the notification owed rather than discarded — this is
+  // the field that used to end here as `provider_prompt_not_ready` and never be
+  // looked at again.
+  const { recordDeliveryAttempt } = await import("./governed-notification-delivery.mjs");
+  recordDeliveryAttempt(rec, delivered, {
+    kind: "governed_action_failed",
+    nowMs,
+    save: (r) => saveRequest(r, root),
+  });
+  appendAudit(rec, "failed_notified", { nowMs, detail: { ...rec.resume_delivery, delivery: rec.notification_delivery } }, root);
+  const drained = await drainOwedAfterResolution(rec, { nowMs, root });
+  return {
+    ok: Boolean(delivered?.ok),
+    request: publicGovernedAction(rec),
+    delivered,
+    startedSession,
+    same_lane: true,
+    drained,
+  };
+}
+
+/**
+ * THE MOMENT THE QUEUE CLEARS IS THE MOMENT TO PAY THE DEBT.
+ *
+ * A deferral is registered when another action on the lane is still pending, so
+ * the natural time to redeliver is when an action resolves — right here, rather
+ * than waiting for the lane's run to end or for the next conductor tick thirty
+ * seconds later. Those remain the safety net; this is the direct path.
+ *
+ * Best-effort by construction: the action itself has already succeeded or
+ * failed, and a redelivery problem must not rewrite that outcome.
+ */
+async function drainOwedAfterResolution(rec, { nowMs, root }) {
+  try {
+    return await drainGovernedNotificationsForLane(rec.lane_id, { root, nowMs });
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}
+
+export async function resumeLaneAfterGovernedAction(requestId, {
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+  actor = "director",
+} = {}) {
+  if (resumeImpl) return resumeImpl(requestId, { nowMs, root, actor });
+  const rec = getGovernedAction(requestId, root);
+  if (!rec || rec.status !== "complete") {
+    return { ok: false, error: "request_not_complete" };
+  }
+  const pendingNext = pendingGovernedActionForLane(rec.lane_id, root);
+  if (pendingNext && pendingNext.request_id !== rec.request_id) {
+    attachRunWait(pendingNext, { nowMs, root });
+    await oweNotification(rec, {
+      kind: "governed_action_resume",
+      waitingOn: pendingNext.request_id,
+      nowMs,
+      root,
+    });
+    return { ok: true, deferred: true, waiting_on: pendingNext.request_id, notification_owed: true };
+  }
+  const { sendLaneInstruction } = await import("./lanes.mjs");
+  const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+  const { getTrustedHostAction } = await import("./trusted-host-actions.mjs");
+  const action = rec.trusted_host_action_id ? getTrustedHostAction(rec.trusted_host_action_id) : null;
+  const text = continuationTextForGovernedAction(rec, action, { root });
+
+  if (rec.run_id) {
+    const run = getExecutionRun(rec.run_id, root);
+    /*
+     * THE RUN MUST BE WAITING ON *THIS* ACTION.
+     *
+     * `WAITING_RESOURCE` alone is not the same question. A completion that
+     * arrives late — a slow executor, a retried tick, a duplicate delivery —
+     * would otherwise resume a run that has since begun waiting on something
+     * else entirely, and the second wait would vanish with nobody to satisfy
+     * it. The wait names the request it belongs to; an unrelated one is left
+     * exactly where it is.
+     */
+    const waitingOnThis = !run?.resource_wait?.governed_request_id
+      || run.resource_wait.governed_request_id === rec.request_id;
+    if (run && run.state === "WAITING_RESOURCE" && !waitingOnThis) {
+      return { ok: true, stale: true, run_waiting_on: run.resource_wait.governed_request_id };
+    }
+    if (run && run.state === "WAITING_RESOURCE") {
+      transitionExecutionRun(rec.run_id, "EXECUTING", {
+        reason: "governed_action_complete",
+        origin: "system",
+        nowMs,
+        root,
+        progress: `${rec.action_key} complete — resuming worker`,
+      });
+      // THE LAST STAMP THE SERVER CAN HONESTLY TAKE.
+      //
+      // The run has left WAITING_RESOURCE and the completed action is patched
+      // onto it, so this is the moment the outcome becomes visible to anything
+      // reading the projection. It is not the moment a pixel changed in the
+      // operator's browser — the server cannot observe that, and inventing a
+      // stamp for it would be worse than admitting the series ends here.
+      stampDecisionTimingOnce(rec, "projection_visible_at");
+      saveRequest(rec, root);
+      patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
+      patchRunResourceWait(rec.run_id, null, root);
+    }
+  }
+
+  const send = sendImpl || sendLaneInstruction;
+  const start = startSessionImpl || startLaneAgentSession;
+  let delivered = await send(rec.lane_id, text, {
+    origin: "director",
+    source: "governed_action_resume",
+    runId: rec.run_id,
+  });
+  let startedSession = null;
+  if (!delivered?.ok) {
+    startedSession = await start({ laneId: rec.lane_id, nowMs, root });
+    delivered = await send(rec.lane_id, text, {
+      origin: "director",
+      source: "governed_action_resume",
+      runId: rec.run_id,
+      fresh_session: true,
+    });
+  }
+  rec.resumed_at = iso(nowMs);
+  rec.resume_delivery = {
+    ok: Boolean(delivered?.ok),
+    error: delivered?.error || null,
+    fresh_session: Boolean(startedSession?.ok),
+  };
+  // The success path had the same hole: a lane could miss the result of an
+  // action that WORKED, for exactly the same reason.
+  const { recordDeliveryAttempt: recordResumeAttempt } = await import("./governed-notification-delivery.mjs");
+  recordResumeAttempt(rec, delivered, {
+    kind: "governed_action_resume",
+    nowMs,
+    save: (r) => saveRequest(r, root),
+  });
+  appendAudit(rec, "resumed", { nowMs, detail: { ...rec.resume_delivery, delivery: rec.notification_delivery } }, root);
+  emitNotification("governed_action_worker_resumed", rec, {
+    title: "Worker resumed",
+    body: `Continuing ${rec.lane_id} with governed-action results.`,
+    root,
+  });
+  const drained = await drainOwedAfterResolution(rec, { nowMs, root });
+  return {
+    ok: Boolean(delivered?.ok),
+    request: publicGovernedAction(rec),
+    delivered,
+    startedSession,
+    same_lane: true,
+    same_worktree: true,
+    drained,
+  };
+}
+
+export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  if (!list.length) return list;
+  return list.map((lane) => {
+    const hydrated = {
+      ...lane,
+      execution_run: hydrateGovernedOnRun(lane.execution_run, root),
+      previous_run: hydrateGovernedOnRun(lane.previous_run, root),
+    };
+    const pending = pendingGovernedActionForLane(hydrated?.lane_id, root)
+      || pendingGovernedActionForRun(hydrated?.execution_run?.run_id, root);
+    if (!pending) {
+      // A resolved approval must not keep advertising itself from the run
+      // snapshot. Runtime Performance's push completed; previous_run still
+      // said awaiting_operator, so Authorize push stayed on screen and the
+      // click looked like a no-op (already complete + "Census authorized").
+      // Hiding the resolved card stops a stale button; it does not tell the
+      // operator what happened. Report the last resolved decision alongside it,
+      // so an approval that has just vanished from the screen still has an
+      // answer on the screen.
+      //
+      // THE COMMUNICATIONS FOLLOW-ON. The 200-request store evicted
+      // gar_260730c554bcc9 after PR #510 merged. hydrate then found no record
+      // and kept the frozen awaiting_operator snapshot, so a closed lane kept
+      // saying "Needs approval" for a merge that had already landed.
+      const outcome = governedOutcomeFor(lastResolvedGovernedActionForLane(hydrated?.lane_id, root));
+      const next = {
+        ...hydrated,
+        governed_action: null,
+        execution_run: dropOrphanPendingGoverned(hydrated.execution_run),
+        previous_run: dropOrphanPendingGoverned(hydrated.previous_run),
+      };
+      return outcome ? { ...next, last_governed_outcome: outcome } : next;
+    }
+    const pub = publicGovernedAction(pending);
+    const withAction = (r) => (r
+      ? {
+        ...r,
+        governed_action: pub,
+        resource_wait: {
+          ...(r.resource_wait || {}),
+          ...waitProjection(pending),
+        },
+      }
+      : null);
+    // AN APPROVAL OUTLIVES THE TURN THAT ASKED FOR IT.
+    //
+    // A lane whose run has finished has `execution_run: null` — attachLaneRuns
+    // only reports a non-terminal run as active. Attaching the pending request
+    // to the active run alone left an `awaiting_operator` approval reachable
+    // nowhere: Communications filed a merge request for PR #510, closed its
+    // turn, and the Director had a decision to make with no card to make it on.
+    // The request is the LANE's, so it is attached wherever the lane's run is.
+    return {
+      ...hydrated,
+      governed_action: pub,
+      execution_run: withAction(hydrated.execution_run),
+      previous_run: hydrated.execution_run ? hydrated.previous_run : withAction(hydrated.previous_run),
+    };
+  });
+}
+
+function dropOrphanPendingGoverned(run) {
+  if (!run?.governed_action) return run || null;
+  if (!isPendingGovernedStatus(run.governed_action.status)) return run;
+  return { ...run, governed_action: null };
+}
+
+function hydrateGovernedOnRun(run, root) {
+  if (!run?.governed_action?.request_id) return run || null;
+  const rec = getGovernedAction(run.governed_action.request_id, root);
+  if (!rec) return dropOrphanPendingGoverned(run);
+  return { ...run, governed_action: publicGovernedAction(rec) };
+}
+
+export function applyGovernedActionToPublicRun(run, root = runtimeRoot()) {
+  if (!run?.run_id && !run?.lane_id) return run;
+  const hydrated = hydrateGovernedOnRun(run, root);
+  const pending = pendingGovernedActionForRun(hydrated?.run_id, root)
+    || pendingGovernedActionForLane(hydrated?.lane_id, root);
+  if (!pending) {
+    if (hydrated?.governed_action) {
+      return { ...hydrated, governed_action: null };
+    }
+    return hydrated;
+  }
+  return {
+    ...hydrated,
+    governed_action: publicGovernedAction(pending),
+    resource_wait: {
+      ...(hydrated.resource_wait || {}),
+      ...waitProjection(pending),
+    },
+  };
+}
+
+export function handleGovernedDecisionAnswer(missionId, chosenOptionId, {
+  actor = "operator",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const pending = pendingGovernedActionForMission(missionId, root);
+  if (!pending) return { ok: false, error: "no_pending_governed_action" };
+  if (chosenOptionId === "authorize_mission_census" || chosenOptionId === "approve_read_only_census") {
+    return approveGovernedAction(pending.request_id, { actor, nowMs, root });
+  }
+  if (chosenOptionId === "use_cert_only") {
+    return denyGovernedAction(pending.request_id, {
+      actor,
+      code: "policy_denied",
+      reason: "Operator required certification-only; deployed primary read denied.",
+      nowMs,
+      root,
+    });
+  }
+  if (chosenOptionId === "deny_production_reads") {
+    return denyGovernedAction(pending.request_id, {
+      actor,
+      code: "approval_denied",
+      reason: "Operator denied production reads.",
+      nowMs,
+      root,
+    });
+  }
+  return { ok: false, error: "unhandled_option", chosenOptionId };
+}
+
+export { publicExecutionRun, redact as redactGovernedSecrets, containsSecret as governedPayloadHasSecrets, describeExecutionFailure };

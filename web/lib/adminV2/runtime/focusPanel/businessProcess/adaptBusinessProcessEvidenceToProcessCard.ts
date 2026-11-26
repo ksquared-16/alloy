@@ -1,0 +1,257 @@
+/**
+ * CANONICAL EVIDENCE → THE LOCKED PROCESS CARD'S INPUT.
+ *
+ * ── WHY AN ADAPTER AND NOT A SECOND CARD ──
+ *
+ * There were two implementations of one approved card: the locked specimen in the design lab and a
+ * production approximation that drifted from it. QA failed the difference, correctly — "same
+ * information" is not fidelity. There is now ONE presentation
+ * (`components/operationalCards/ProcessCard.tsx`), rendered by both the lab and the real Focus
+ * Panel, and this is the only thing that differs between them: the lab supplies fixture evidence,
+ * production supplies canonical evidence, and both arrive in the same shape.
+ *
+ * The mapping is deliberately DUMB. It renames and formats; it decides nothing. Every judgement —
+ * which stage is current, where a participant sits, whether participants are aligned, what the work
+ * line says — was already made by `buildBusinessProcessCardEvidence` from canonical truth. A mapper
+ * that re-decided any of that would be a second answer, which is exactly how the two drifted apart.
+ */
+
+import type { ActivityRowSubject } from "@/lib/admin/collapseBusinessEventMechanics";
+import type {
+    BusinessProcessCardEvidence,
+    BusinessProcessParticipant,
+} from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
+import type {
+    ProcessAction,
+    ProcessActivityRow,
+    ProcessChildState,
+    ProcessEvidence,
+    ProcessLastAction,
+    ProcessStage,
+} from "@/lib/cardLab/cardLabTypes";
+
+export type ProcessCardActivityItem = {
+    id?: string | null;
+    label: string;
+    when: string;
+    kind?: string | null;
+    detail?: string | null;
+    /** A delivery state or a notification sent because of another action — not what anyone did. */
+    notAnAction?: boolean;
+    /** The child the row is about; null = family activity; absent = unknown. */
+    subject?: ActivityRowSubject | null;
+};
+
+/** The child a child-grain panel is about: every id that can name it, and its name as a fallback. */
+export type LastActionChildScope = { ids: readonly string[]; name: string | null };
+
+/**
+ * LAST ACTION — the newest row of the canonical activity timeline that records something an operator
+ * (or the system on their behalf) DID: a message sent, an outcome recorded, a tour booked, a stage
+ * moved. Record bookkeeping (created / updated), notes and preparatory steps are not actions.
+ * The rows are already newest-first and de-duplicated by the timeline owner; this only chooses one.
+ */
+const LAST_ACTION_KINDS = new Set(["communication", "task", "activity"]);
+const NOT_AN_ACTION = /^(tour invitation prepared|tour time selected|action completed)$/i;
+
+export function selectLastAction(
+    activity: readonly ProcessCardActivityItem[],
+    childScope?: LastActionChildScope | null,
+): ProcessLastAction | null {
+    const ids = new Set((childScope?.ids ?? []).filter(Boolean));
+    const name = childScope?.name?.trim().toLowerCase() || null;
+    for (const row of activity) {
+        if (!row.label?.trim()) continue;
+        // "SMS queued" after a cancellation is the system reporting delivery, not the operator's act.
+        if (row.notAnAction) continue;
+        if (row.kind && !LAST_ACTION_KINDS.has(row.kind)) continue;
+        if (NOT_AN_ACTION.test(row.label.trim())) continue;
+        const picked = { label: row.label.trim(), detail: row.detail?.trim() || null, when: row.when };
+        /*
+         * A CHILD'S PANEL SHOWS THE CHILD'S LAST ACTION. The feed is the family's (staging: Ben's panel
+         * read "Ava … moved to Enrolling"). A row about another child is skipped; a row that names no
+         * child (a tour, a family message — or a producer that cannot say) is shown labelled as family
+         * activity, never as the child's own.
+         */
+        if (childScope) {
+            if (!row.subject) return { ...picked, scope: "family" };
+            const mine = row.subject.childIds.some((id) => ids.has(id))
+                || Boolean(name && row.subject.childName && row.subject.childName.trim().toLowerCase() === name);
+            if (!mine) continue;
+        }
+        return picked;
+    }
+    return null;
+}
+
+/**
+ * One command as the published Business Process configured it, already resolved through the
+ * registered action spine. Emphasis, order and availability all arrive decided — see
+ * `projectProcessCardCommands`, which is the only sanctioned producer of this shape.
+ */
+export type ProcessCardActionInput = {
+    key: string;
+    label: string;
+    /** Configuration's lead command. Exactly one command carries it. */
+    primary?: boolean;
+    /** Configured but not currently executable, per the action system. */
+    disabled?: boolean;
+    disabledReason?: string | null;
+    /** Executes through the shared command host. */
+    onInvoke?: () => void;
+    /**
+     * Operator intent, ahead of the click — hover, keyboard focus, or opening the group this
+     * command sits in. The card reports the gesture; the runtime decides what (if anything) is
+     * worth warming for it. Never a side effect the operator can see.
+     */
+    onIntent?: () => void;
+    /** Secondary operations on the same operational concept (see `ProcessAction.menu`). */
+    menu?: ProcessCardActionInput[];
+};
+
+function childState(p: BusinessProcessParticipant): ProcessChildState {
+    return {
+        name: p.name,
+        // The participant's own state label, which may legitimately differ from the stage's.
+        stage: p.stageLabel ?? p.stageKey,
+        /*
+         * `stageKey` here must match a rendered stage LABEL, because that is what the locked card
+         * places markers against. The evidence already resolved the participant onto a real stage,
+         * so its label is carried rather than the key — "Waitlisted" and "Waitlist" are different
+         * vocabularies and matching one to the other would silently drop a marker.
+         */
+        stageKey: p.stageLabel ?? p.stageKey,
+        since: null,
+        scoped: p.scoped,
+        imageUrl: p.imageUrl,
+        actions: [],
+        outcomeAction: null,
+    } as ProcessChildState;
+}
+
+/**
+ * The command that resolves the stage's open work, named once.
+ *
+ * The runtime already speaks this identity (`buildCurrentWorkSurfaceVM` projects it, and the
+ * command projection asks for it by name); this constant keeps the Process Card's copy of that
+ * knowledge in one place instead of a literal buried in a filter.
+ */
+const RECORD_OUTCOME_COMMAND_KEY = "record_outcome";
+
+export function adaptBusinessProcessEvidenceToProcessCard(input: {
+    evidence: BusinessProcessCardEvidence;
+    subjectLabel: string | null;
+    activity: readonly ProcessCardActivityItem[];
+    actions: readonly ProcessCardActionInput[];
+    /** Set on a child-grain panel: Last action is that child's, or labelled family activity. */
+    childScope?: LastActionChildScope | null;
+}): ProcessEvidence {
+    const { evidence } = input;
+
+    const stages: ProcessStage[] = evidence.stages.map((s) => ({
+        label: s.label,
+        state: s.state,
+        ...(s.detail ? { detail: s.detail } : {}),
+        // The two bounded annotation slots, exactly as configuration filled them. Empty is a real
+        // answer: a process that declares no annotations renders none.
+        primarySupport: s.primarySupport,
+        secondarySupport: s.secondarySupport,
+    }));
+
+    /*
+     * PARTICIPANTS ARE ALWAYS CARRIED, and the card decides how to show them.
+     *
+     * The locked component collapses markers to the aligned summary when every participant sits at
+     * the case's stage, and renders individual markers when they diverge. Filtering here would take
+     * that decision away from the presentation and is why the aligned summary never rendered.
+     */
+    const childStates: ProcessChildState[] = evidence.participants.map(childState);
+
+    const activity: ProcessActivityRow[] = input.activity.map((a) => ({
+        id: a.id ?? null,
+        label: a.label,
+        when: a.when,
+        kind: a.kind ?? null,
+        detail: a.detail ?? null,
+    }));
+    const lastAction = selectLastAction(input.activity, input.childScope ?? null);
+
+    /*
+     * IDENTITY IS CARRIED, NOT REBUILT. The command's `key` is what execution and the shared
+     * workspace's intent match key on; dropping it here would leave the card matching commands by
+     * their label, which configuration is free to rename.
+     */
+    /*
+     * RESOLVING THE CURRENT WORK IS NOT A PEER OF THE COMMANDS THAT START IT.
+     *
+     * `record_outcome` closes what the stage already says is open, so the card reads it under the
+     * stage's own line rather than as one more button in the row. The split happens HERE because
+     * the card is forbidden from filtering by key — it renders the set configuration gave it, in
+     * the order configuration gave it — and because this layer already speaks the command's
+     * canonical identity.
+     *
+     * Matched on `key`, never on label: configuration is free to rename "Record outcome".
+     */
+    const toProcessAction = (a: ProcessCardActionInput): ProcessAction => ({
+        key: a.key,
+        label: a.label,
+        primary: a.primary,
+        disabled: a.disabled,
+        disabledReason: a.disabledReason ?? null,
+        onInvoke: a.onInvoke,
+        // Intent travels with the command. Dropping it here is invisible — the card still renders
+        // and still executes — and the only symptom is that every command opens cold.
+        onIntent: a.onIntent,
+        ...(a.menu?.length
+            ? {
+                  menu: a.menu.map((m) => ({
+                      key: m.key,
+                      label: m.label,
+                      primary: m.primary,
+                      disabled: m.disabled,
+                      disabledReason: m.disabledReason ?? null,
+                      onInvoke: m.onInvoke,
+                      onIntent: m.onIntent,
+                  })),
+              }
+            : {}),
+    });
+
+    const isOutcomeCommand = (a: ProcessCardActionInput) => a.key === RECORD_OUTCOME_COMMAND_KEY;
+    const actions: ProcessAction[] = input.actions.filter((a) => !isOutcomeCommand(a)).map(toProcessAction);
+    const outcomeInput = input.actions.find(isOutcomeCommand) ?? null;
+    const outcomeAction: ProcessAction | null = outcomeInput ? toProcessAction(outcomeInput) : null;
+
+    return {
+        // Lab-only specimen label; never rendered inside the card.
+        caseLabel: "",
+        subjectLabel: input.subjectLabel ?? "",
+        // The lens is deliberately not carried: it renders as a chip and nothing else, and it must
+        // never reach the stage.
+        sourceWorkView: null,
+        childStates,
+        /*
+         * THE PROCESS NAME — and emphatically not `evidence.processLabel`.
+         *
+         * `processLabel` is sourced from `context.businessProcess.label`, which is the current
+         * STAGE. Passing it titled the card "WAITLIST" directly above a rail whose current column
+         * already said Waitlist. The name is now carried separately, resolved from the department's
+         * configured lifecycle process — the same record the rail's stages come from — so the card
+         * titles itself "ENROLLMENT", as the approved specimen does.
+         *
+         * Still falls back to the registered card identity when a department declares no process:
+         * an unnamed process is a real state, and the card must not assert a name it does not have.
+         */
+        processLabel: evidence.processName ?? "",
+        stages,
+        currentStageLabel: evidence.caseStageLabel ?? "",
+        workLine: evidence.currentWork?.answerLine ?? "",
+        dueLine: evidence.currentWork?.supportingLine ?? null,
+        actions,
+        outcomeAction,
+        stillNeeded: evidence.currentWork?.stillNeeded ?? [],
+        activity,
+        lastAction,
+        participantsLabel: evidence.participantsLabel,
+    };
+}

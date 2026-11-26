@@ -1,0 +1,63 @@
+{
+  "build": "4ade23c23",
+  "date": "2027-04-01",
+  "steps": [
+    {
+      "name": "mounted",
+      "state": "ready",
+      "date": "2027-04-01"
+    },
+    {
+      "name": "lane",
+      "state": "short",
+      "summary": "Infant AShort1 expected · needs 1 · 1 planned1 short stretch",
+      "segments": [
+        {
+          "iv": "08:30-09:00",
+          "state": "sufficient",
+          "gap": "false"
+        },
+        {
+          "iv": "09:00-16:00",
+          "state": "sufficient",
+          "gap": "false"
+        },
+        {
+          "iv": "16:00-17:30",
+          "state": "short",
+          "gap": "true"
+        }
+      ]
+    },
+    {
+      "name": "gap_detail",
+      "segment": "16:00-17:30",
+      "explanation": [
+        "Expected children: 1",
+        "Required staff: 1",
+        "Planned staff: none",
+        "Short 1 staff",
+        "Nothing has been observed for this date yet"
+      ],
+      "candidates": [
+        {
+          "a": "unknown",
+          "t": "Plan Certified Active-Bare hereAvailability not recorded"
+        },
+        {
+          "a": "unknown",
+          "t": "Plan Certified Active-Located hereAvailability not recorded"
+        },
+        {
+          "a": "unknown",
+          "t": "Plan Certified Starting-Soon hereAvailability not recorded"
+        }
+      ]
+    },
+    {
+      "name": "console_errors",
+      "count": 0,
+      "sample": []
+    }
+  ]
+}

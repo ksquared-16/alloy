@@ -46,17 +46,14 @@ describe("Opportunity VM family contacts", () => {
         expect(sorted[0]?.name).toBe("Blair Guardian");
     });
 
-    it("OpportunityDrawerInquiryWorkflowOverview treats VM first paint as family contacts ready", () => {
-        const overview = read("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        expect(overview).toContain("vmFamilyContactsReady");
-        expect(overview).toContain("opportunityFullHydrateApplied={vmFamilyContactsReady}");
-        expect(overview).not.toContain('_record_surface ?? "").trim() === "full"');
-    });
-
-    it("compose attaches household customer persons for drawer VM", () => {
+    it("shared canonical deps attach household customer persons + resolve the queue definition", () => {
+        // S4.2 — the household attach + queue-definition resolution live in the shared-canonical-deps
+        // module (Module C); the composer delegates to it via `resolveSharedCanonicalDeps`.
+        const shared = read("lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps.ts");
+        expect(shared).toContain("attachOpportunityHouseholdCustomerPersonsForDrawer");
+        expect(shared).toContain("resolveWorkUnitQueueDefinitionForDrawer");
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("attachOpportunityHouseholdCustomerPersonsForDrawer");
-        expect(compose).toContain("resolveWorkUnitQueueDefinitionForDrawer");
+        expect(compose).toContain("resolveSharedCanonicalDeps");
     });
 });
 
@@ -68,10 +65,4 @@ describe("Opportunity VM progressive status options", () => {
         expect(header).not.toContain('renderAs: "dropdown"');
     });
 
-    it("VmProgressiveStatusDropdown reads options from readonly_pill VM status", () => {
-        const dropdown = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(dropdown).toContain("optionsFromVmStatus");
-        expect(dropdown).toContain('status.renderAs === "readonly_pill"');
-        expect(dropdown).not.toContain("if (!canMutate || mode === \"dropdown\"");
-    });
 });

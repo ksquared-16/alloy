@@ -1,0 +1,218 @@
+{
+  "trusted_host_action_id": "tha_b2bd9ce8225911",
+  "query_hash": "12f569d65d9871ce472b0f70fbab79def80f98f013ad644b510e8b1d27c7e62b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T23:30:52.292Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b2bd9ce8225911",
+    "query_hash": "12f569d65d9871ce472b0f70fbab79def80f98f013ad644b510e8b1d27c7e62b",
+    "authorization_id": "grnt_63ba7e15a14c400c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T23:30:57.511Z",
+    "question_ids": [
+      "q1",
+      "q2"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "external_source": "(null)",
+            "customer_type": "(null)",
+            "status_key": "(null)",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": true,
+            "name_looks_synthetic": false,
+            "id_prefix": "29944d3e",
+            "id_is_structured_fixture": false,
+            "charges_total": 86,
+            "draft_charges": 21,
+            "payments": 0,
+            "reductions": 7,
+            "active_agreements": 4,
+            "locations": 2,
+            "has_customer_calendar": true,
+            "location_calendar_cadences": [
+              "monthly",
+              "weekly"
+            ]
+          },
+          {
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "external_source": "(null)",
+            "customer_type": "(null)",
+            "status_key": "(null)",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": true,
+            "name_looks_synthetic": false,
+            "id_prefix": "fcaa839f",
+            "id_is_structured_fixture": false,
+            "charges_total": 3,
+            "draft_charges": 0,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 1,
+            "locations": 1,
+            "has_customer_calendar": false,
+            "location_calendar_cadences": [
+              "monthly"
+            ]
+          },
+          {
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "external_source": "(null)",
+            "customer_type": "(null)",
+            "status_key": "(null)",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": false,
+            "name_looks_synthetic": false,
+            "id_prefix": "e1c9afe0",
+            "id_is_structured_fixture": false,
+            "charges_total": 14,
+            "draft_charges": 14,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 3,
+            "locations": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadences": [
+              "monthly"
+            ]
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "external_source": "(null)",
+            "customer_type": "(null)",
+            "status_key": "(null)",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": false,
+            "name_looks_synthetic": false,
+            "id_prefix": "50b19065",
+            "id_is_structured_fixture": false,
+            "charges_total": 0,
+            "draft_charges": 0,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 2,
+            "locations": 2,
+            "has_customer_calendar": false,
+            "location_calendar_cadences": [
+              "monthly",
+              "weekly"
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0001",
+            "external_source": "(null)",
+            "customer_type": "residential",
+            "status_key": "active",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": true,
+            "name_looks_synthetic": true,
+            "id_prefix": "fd000000",
+            "id_is_structured_fixture": true,
+            "charges_total": 1,
+            "draft_charges": 0,
+            "payments": 17,
+            "reductions": 0,
+            "active_agreements": 1,
+            "locations": 1,
+            "has_customer_calendar": false,
+            "location_calendar_cadences": [
+              "monthly"
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "external_source": "(null)",
+            "customer_type": "residential",
+            "status_key": "active",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": false,
+            "name_looks_synthetic": true,
+            "id_prefix": "fd000000",
+            "id_is_structured_fixture": true,
+            "charges_total": 0,
+            "draft_charges": 0,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 1,
+            "locations": 1,
+            "has_customer_calendar": false,
+            "location_calendar_cadences": [
+              "weekly"
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "external_source": "(null)",
+            "customer_type": "residential",
+            "status_key": "active",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": false,
+            "name_looks_synthetic": true,
+            "id_prefix": "fd000000",
+            "id_is_structured_fixture": true,
+            "charges_total": 0,
+            "draft_charges": 0,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 1,
+            "locations": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadences": [
+              "monthly"
+            ]
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "external_source": "(null)",
+            "customer_type": "residential",
+            "status_key": "active",
+            "metadata_keys": [],
+            "name_matches_reserved_fixture": false,
+            "name_looks_synthetic": true,
+            "id_prefix": "fd000000",
+            "id_is_structured_fixture": true,
+            "charges_total": 0,
+            "draft_charges": 0,
+            "payments": 0,
+            "reductions": 0,
+            "active_agreements": 1,
+            "locations": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadences": [
+              "weekly"
+            ]
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "site_locations": 3,
+            "site_locations_with_monthly_calendar": 3,
+            "financial_charge_templates": 8,
+            "posting_review_policies": 0,
+            "accepted_pricing_terms": 7,
+            "scheduled_work_rows": 3,
+            "scheduled_work_occurrences": 20
+          }
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}

@@ -1,0 +1,557 @@
+/**
+ * Bounded trusted-host branch push. No generic shell. No worker tokens.
+ *
+ * WHAT THIS IS FOR. A lane can commit but cannot push — pushing is a
+ * Director-owned capability, and until now it did not exist as a governed
+ * action at all, so a lane with reviewed work had no route to the remote except
+ * someone running `git push` by hand. That is the gap this closes.
+ *
+ * WHAT IT PUSHES. Exactly one commit object to exactly one branch:
+ * `<expectedHeadSha>:refs/heads/<branch>`. Pushing the SHA rather than the
+ * local branch name is deliberate — the reviewed thing is a commit, and if the
+ * lane's branch has moved on since the Director approved it, the approved
+ * commit is still what goes, or nothing does.
+ *
+ * WHAT IT REFUSES.
+ *  - A repository that is not allowlisted.
+ *  - A protected target ref. staging, main, master and production are promoted
+ *    by merging a reviewed pull request, never by a branch push.
+ *  - Any force, lease, delete, mirror, tag or multi-refspec form. Non-fast-
+ *    forward is refused by Git itself and asserted here as well, so the refusal
+ *    does not depend on a default staying the default.
+ *  - Head drift: the local branch must actually be at the SHA that was approved.
+ *  - Commit-scope expansion: when the proposal names the commits it reviewed,
+ *    the push must contain those and no others.
+ *
+ * IDEMPOTENT. If the remote branch is already at that exact SHA there is
+ * nothing to do, and that is a success, not an error — a retry after a dropped
+ * connection must not look like a failure.
+ */
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+
+import { isAllowlistedRepository, normalizeRepositorySlug, repositoryRefusalDetail } from "./trusted-host-merge.mjs";
+import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
+import { canonicalRemoteFor, listRepositories, promotionPolicyFor } from "./repository-registry.mjs";
+
+/** Refs a branch push may never target. Promotion is a merge, not a push. */
+/**
+ * The refs no project may be branch-pushed to, as a FLOOR for a target the
+ * registry does not know. A registered project's own policy decides its own.
+ */
+/** The registered record whose canonical remote is this target, or null. */
+function repositoryRecordForRemote(remote) {
+  const want = String(remote || "").trim().toLowerCase();
+  try {
+    for (const rec of listRepositories({ includeRetired: false })) {
+      if (canonicalRemoteFor(rec) === want) return rec;
+    }
+  } catch { /* an unreadable registry yields the floor, not a bypass */ }
+  return null;
+}
+
+export const PROTECTED_REFS = Object.freeze(["staging", "main", "master", "production", "prod", "HEAD"]);
+
+/**
+ * What a branch push may not target, FOR THIS REPOSITORY.
+ *
+ * The frozen list above is Alloy's branch policy, and applying it to every
+ * project is the same defect the allowlist had one layer up: `prj_vacilando`
+ * declares `promotion_branch: main` with no protected branches, and was refused
+ * its own promotion trunk with "main is promoted by merging a reviewed pull
+ * request" -- a sentence true of Alloy and false of it.
+ *
+ * TWO SOURCES, AND NEITHER WEAKENS THE INCUMBENT. A project's declared
+ * protected branches are protected. Its PROMOTION branch is protected too when
+ * it has governed promotion, because a governed trunk moves by reviewed merge
+ * and never by a branch push -- that is what makes Alloy's `staging` stay
+ * refused even though `staging` is not in Alloy's protected list. `HEAD` and
+ * any `refs/` spelling are always refused.
+ *
+ * An unregistered target gets the full floor, which is the safe direction.
+ */
+export function protectedRefsFor(repositoryRecord) {
+  if (!repositoryRecord) return PROTECTED_REFS;
+  const policy = promotionPolicyFor(repositoryRecord);
+  const out = new Set([...(policy.protected_branches || [])]);
+  if (policy.governed_promotion && policy.promotion_branch) out.add(policy.promotion_branch);
+  out.add("HEAD");
+  return Object.freeze([...out]);
+}
+export const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,180}$/;
+export const SHA_RE = /^[a-f0-9]{7,40}$/;
+
+/**
+ * PROMOTION IS THE DEFAULT, AND THAT IS THE WHOLE POINT.
+ *
+ * A promotion candidate must declare what it owns: the baseline it was cut from
+ * and the exact commits created since. The guard that compares them has existed
+ * all along - it simply never ran, because it is skipped when nothing is
+ * declared, so an undeclared candidate was trusted by default. Two promotions
+ * carried another agent's commits through that hole.
+ *
+ * Requiring the declaration only when a caller SAYS it is promoting would leave
+ * the hole open: the mode is asserted by the caller, so omitting it would skip
+ * the check again. So the ABSENCE of a mode means promotion. A push that wants
+ * the permissive path must say so explicitly, which makes the unsafe case the
+ * one that requires an argument.
+ *
+ * This matches reality rather than widening a contract: all 71 repository.push
+ * requests on this host are mode "promotion", and the action already refuses
+ * every protected ref - a branch push exists in order to become a pull request.
+ */
+const PROMOTION_MODE = "promotion";
+
+const FORCE_KEYS = [
+  "force", "forceWithLease", "force_with_lease", "delete", "mirror", "prune",
+  "tags", "followTags", "follow_tags", "refspec", "argv", "shell", "command",
+];
+
+// One normal form for repository identity, owned next to the allowlist it is
+// compared against. See normalizeRepositorySlug: case is not identity.
+const normRepo = normalizeRepositorySlug;
+
+function normSha(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
+/**
+ * `env` IS HONOURED. It used to be destructured away and `process.env` passed
+ * verbatim, so a caller that asked for a different environment silently got the
+ * ambient one.
+ *
+ * That is not a cosmetic gap. The main-write executor builds its tree through
+ * `git(args, cwd, { env: { GIT_INDEX_FILE: <temp> } })` precisely so it never
+ * touches the index of the worktree it was pointed at - and that intent was
+ * being dropped right here, so `read-tree`/`update-index`/`write-tree` ran
+ * against the real index of the operator-named worktree and discarded whatever
+ * was staged in it. Measured: the temp index file was never created.
+ *
+ * Merged over `process.env` rather than replacing it, because git still needs
+ * PATH, HOME and the credential environment to function.
+ */
+export function defaultGit(args, cwd, { timeout = 60_000, env = null } = {}) {
+  return spawnSync("git", ["-C", cwd, ...args], {
+    encoding: "utf8",
+    timeout,
+    env: env ? { ...process.env, ...env } : process.env,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+}
+
+/**
+ * The first line of git's complaint that actually says something.
+ *
+ * `err.split("\n")[0]` looks equivalent and is not. A refusal written for a
+ * human to read starts with a blank line so it stands off from the command, and
+ * the push guard does exactly that: it printf's a leading newline before
+ * "PUSH BLOCKED — archive/recovery refs may not be pushed...". Line zero is
+ * therefore the empty string, which is falsy, so the caller's
+ * `detail || "Push failed"` discarded 554 bytes of precise, actionable
+ * diagnosis and reported a generic sentence instead.
+ *
+ * That cost two missions. The refusal was correct every time — a namespace
+ * policy protecting the deployable remote — and it was unreadable, so it looked
+ * like a broken durability mechanism rather than a working guard.
+ *
+ * ANSI colour is stripped because it is presentation, and a stored failure
+ * reason is data: escape codes in a JSON record are noise a reader has to
+ * decode before they can see the sentence.
+ */
+export function firstMeaningfulLine(text, fallback = "git push failed") {
+  const lines = String(text ?? "")
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines[0] || fallback;
+}
+
+export function validatePushInputs(inputs = {}) {
+  for (const k of FORCE_KEYS) {
+    if (inputs[k]) {
+      return {
+        ok: false,
+        code: "force_push_rejected",
+        detail: `A governed push is non-force and single-ref only; ${k} is not accepted.`,
+      };
+    }
+  }
+  const repository = normRepo(inputs.repository || inputs.repo);
+  if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
+  if (!isAllowlistedRepository(repository)) {
+    return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
+  }
+
+  const branch = String(inputs.branch || inputs.head_branch || inputs.headBranch || "").trim();
+  if (!BRANCH_RE.test(branch)) {
+    return { ok: false, code: "invalid_branch", detail: "branch must be a plain ref name" };
+  }
+  const targetRecord = repositoryRecordForRemote(repository);
+  if (protectedRefsFor(targetRecord).includes(branch) || branch.startsWith("refs/")) {
+    return {
+      ok: false,
+      code: "protected_ref_rejected",
+      detail: `${branch} is promoted by merging a reviewed pull request, never by a branch push.`,
+    };
+  }
+
+  const expectedHeadSha = normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);
+  if (!SHA_RE.test(expectedHeadSha)) {
+    return { ok: false, code: "missing_expected_head_sha", detail: "expected_head_sha is required" };
+  }
+
+  const worktreePath = String(inputs.worktree_path || inputs.worktreePath || "").trim();
+  if (!worktreePath || worktreePath.includes("..") || /[;|&]/.test(worktreePath)) {
+    return { ok: false, code: "invalid_worktree_path", detail: "a repository-local worktree path is required" };
+  }
+
+  // Optional, and load-bearing when present: the exact commits the proposal
+  // reviewed. With it, a push that would carry anything else is refused.
+  /*
+   * DECLARED-EMPTY IS NOT UNDECLARED, and `null` is what keeps them apart.
+   * Collapsing both to `[]` is exactly how the hole would reopen: a caller that
+   * said nothing would look identical to one that said "I own no commits".
+   */
+  const rawCommits = inputs.expected_commits ?? inputs.expectedCommits;
+  const candidateDeclared = Array.isArray(rawCommits);
+  const expectedCommits = candidateDeclared
+    ? rawCommits.map(normSha).filter((c) => SHA_RE.test(c))
+    : null;
+  const baseRefRaw = String(inputs.base_ref || inputs.baseRef || "").trim();
+  const mode = String(inputs.requested_mode || inputs.requestedMode || inputs.mode || PROMOTION_MODE).trim();
+  const isPromotion = mode === PROMOTION_MODE;
+
+
+  return {
+    ok: true,
+    normalized: {
+      actionType: "repository.push",
+      repository,
+      branch,
+      expectedHeadSha,
+      worktreePath,
+      expectedCommits,
+      baseRef: baseRefRaw || "origin/staging",
+      baseRefDeclared: Boolean(baseRefRaw),
+      candidateDeclared,
+      mode,
+      isPromotion,
+      remote: "origin",
+      dedupeKey: `push:${repository}#${branch}#${expectedHeadSha.slice(0, 12)}`,
+    },
+  };
+}
+
+/** What the remote currently has for this branch. Read-only. */
+export function remoteBranchSha(normalized, { gitImpl = defaultGit } = {}) {
+  const out = gitImpl(["ls-remote", normalized.remote, `refs/heads/${normalized.branch}`], normalized.worktreePath, { timeout: 45_000 });
+  if (out.status !== 0) {
+    return { ok: false, code: "remote_unreadable", detail: firstMeaningfulLine(String(out.stderr || ""), "ls-remote failed").slice(0, 200) };
+  }
+  const line = String(out.stdout || "").trim().split("\n").find(Boolean);
+  if (!line) return { ok: true, sha: null };
+  return { ok: true, sha: normSha(line.split(/\s+/)[0]) };
+}
+
+/**
+ * Everything that must be true before a single byte leaves this machine.
+ *
+ * Returns `{ ok:true, idempotent:true }` when the remote already carries the
+ * exact approved SHA.
+ */
+/**
+ * A REFUSAL MUST NAME THE INVARIANT THAT ACTUALLY FAILED.
+ *
+ * MEASURED INCIDENT. A push proposed against an explicit promotion worktree was
+ * executed against a DIFFERENT worktree (the resolver ignored the advertised
+ * `inputs.worktreePath` and fell back to the run's own). The HEAD there was a
+ * different commit, so the drift check below fired and reported "the branch
+ * moved after this push was proposed" — for a branch that had not moved at all.
+ * The operator was told a false cause and the real one, "the requested worktree
+ * was not the one used", was invisible.
+ *
+ * The resolver is fixed at its owner. This is the second half: when the path we
+ * were given cannot serve, say so specifically instead of letting a wrong HEAD
+ * masquerade as drift. Checks are ordered cheapest-and-most-fundamental first,
+ * and each one that cannot be positively determined is skipped rather than
+ * guessed — an unreadable remote must not invent a mismatch.
+ */
+export function evaluateWorktreeForPush(normalized, { gitImpl = defaultGit } = {}) {
+  const cwd = normalized.worktreePath;
+  if (!cwd) {
+    return { ok: false, code: "worktree_path_missing", detail: "no worktree path was resolved for this push" };
+  }
+  if (!existsSync(cwd)) {
+    return {
+      ok: false,
+      code: "worktree_missing",
+      detail: `the requested worktree does not exist: ${cwd}`,
+      worktreePath: cwd,
+    };
+  }
+  const inside = gitImpl(["rev-parse", "--is-inside-work-tree"], cwd);
+  if (inside.status !== 0 || String(inside.stdout || "").trim() !== "true") {
+    return {
+      ok: false,
+      code: "worktree_not_a_git_worktree",
+      detail: `the requested path is not a git worktree: ${cwd}`,
+      worktreePath: cwd,
+    };
+  }
+  // Positive mismatch only. A remote we cannot read is not evidence of the
+  // wrong repository, and the push itself would fail on it anyway.
+  const remote = gitImpl(["remote", "get-url", normalized.remote || "origin"], cwd);
+  if (remote.status === 0) {
+    const actual = normRepo(String(remote.stdout || "").trim().replace(/^git@github\.com:/i, ""));
+    const want = normRepo(normalized.repository);
+    if (actual && want && actual !== want) {
+      return {
+        ok: false,
+        code: "worktree_repository_mismatch",
+        detail: `the requested worktree belongs to ${actual}, not ${want}`,
+        expected: want,
+        actual,
+        worktreePath: cwd,
+      };
+    }
+  }
+  return { ok: true, worktreePath: cwd };
+}
+
+export function evaluatePushReadiness(normalized, { gitImpl = defaultGit } = {}) {
+  const cwd = normalized.worktreePath;
+
+  // IDEMPOTENCY IS SETTLED FIRST, BEFORE DRIFT.
+  //
+  // Found in live acceptance: the approved commit was already on the remote,
+  // the lane had since committed again, and a retry was refused as `head_drift`
+  // — a refusal for work that was already done. Drift exists to stop a STALE
+  // commit being published; when the approved commit is already there, there is
+  // nothing to publish and nothing to be stale about. Asking the remote first
+  // is what makes a retry safe.
+  const already = remoteBranchSha(normalized, { gitImpl });
+  if (already.ok && already.sha
+    && (already.sha === normalized.expectedHeadSha
+      || already.sha.startsWith(normalized.expectedHeadSha)
+      || normalized.expectedHeadSha.startsWith(already.sha))) {
+    return { ok: true, idempotent: true, code: "already_pushed", remoteSha: already.sha };
+  }
+
+  // The worktree we were handed must be usable BEFORE its HEAD is allowed to
+  // mean anything. Otherwise a wrong-but-valid worktree reads as head drift.
+  const worktree = evaluateWorktreeForPush(normalized, { gitImpl });
+  if (!worktree.ok) return worktree;
+
+  const head = gitImpl(["rev-parse", "HEAD"], cwd);
+  if (head.status !== 0) {
+    return { ok: false, code: "worktree_unreadable", detail: "could not read HEAD" };
+  }
+  const localHead = normSha(head.stdout);
+
+  const branchOut = gitImpl(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+  const localBranch = String(branchOut.stdout || "").trim();
+
+  // HEAD DRIFT. The approval named a commit; if the worktree has moved past it
+  // the Director approved something that is no longer what would be sent.
+  if (!localHead.startsWith(normalized.expectedHeadSha) && !normalized.expectedHeadSha.startsWith(localHead)) {
+    return {
+      ok: false,
+      code: "head_drift",
+      detail: "the branch moved after this push was proposed; a fresh decision is required",
+      expected: normalized.expectedHeadSha,
+      actual: localHead,
+    };
+  }
+  if (localBranch && localBranch !== "HEAD" && localBranch !== normalized.branch) {
+    return {
+      ok: false,
+      code: "branch_mismatch",
+      detail: `the worktree is on ${localBranch}, not ${normalized.branch}`,
+    };
+  }
+
+  // COMMIT-SCOPE EXPANSION. When the proposal listed what it reviewed, the push
+  // must carry those commits and no others.
+  /*
+   * ENFORCED AT THE BOUNDARY THAT MUTATES THE REMOTE, not in input parsing.
+   *
+   * `validatePushInputs` is a pure normaliser called by fixtures, previews and
+   * contract checks that never push anything; requiring a candidate declaration
+   * there refuses work that was never going to reach a remote. The thing that
+   * must be protected is the push itself, so the requirement lives with the
+   * other pre-mutation refusals - drift, branch mismatch, protected ref.
+   */
+  if (normalized.isPromotion && (!normalized.candidateDeclared || !normalized.baseRefDeclared)) {
+    const missing = [];
+    if (!normalized.baseRefDeclared) missing.push("base_ref");
+    if (!normalized.candidateDeclared) missing.push("expected_commits");
+    return {
+      ok: false,
+      code: "candidate_scope_undeclared",
+      detail: `a promotion candidate must declare what it owns; missing ${missing.join(" and ")}`,
+      mode: normalized.mode,
+      candidate: normalized.expectedHeadSha,
+      branch: normalized.branch,
+      missing,
+      required: ["base_ref", "expected_commits"],
+      remedy: "pass base_ref (the commit the branch was cut from) and expected_commits "
+        + "(git rev-list <base_ref>..<candidate>). Declare an empty array only if the "
+        + "candidate deliberately owns no commits.",
+    };
+  }
+
+  /*
+   * Gated on DECLARED, not on non-empty. `expectedCommits.length` skipped a
+   * declared-empty candidate, which is the same hole one layer in: a caller
+   * that says "I own no commits" would have had every commit in the range
+   * accepted without comparison.
+   */
+  if (normalized.candidateDeclared) {
+    const range = gitImpl(["rev-list", `${normalized.baseRef}..${normalized.expectedHeadSha}`], cwd);
+    if (range.status !== 0) {
+      /*
+       * DECLARED BUT UNVERIFIABLE IS NOT VERIFIED.
+       *
+       * Skipping here would let any base_ref that git cannot resolve satisfy
+       * the declaration while checking nothing - the same hole one layer down,
+       * reachable by a typo. A candidate whose baseline cannot be resolved is
+       * refused, and says which ref failed.
+       */
+      return {
+        ok: false,
+        code: "candidate_base_unresolvable",
+        detail: `the declared baseline ${normalized.baseRef} could not be resolved in this worktree`,
+        base: normalized.baseRef,
+        candidate: normalized.expectedHeadSha,
+      };
+    }
+    {
+      const actual = String(range.stdout || "").split("\n").map(normSha).filter(Boolean);
+      const short = (c) => c.slice(0, 12);
+      const want = new Set(normalized.expectedCommits.map(short));
+      const have = new Set(actual.map(short));
+      const extra = actual.filter((c) => !want.has(short(c)));
+      if (extra.length) {
+        return {
+          ok: false,
+          code: "commit_scope_expanded",
+          detail: `${extra.length} commit(s) beyond what was reviewed would be pushed`,
+          unexpected: extra.slice(0, 10),
+          declared: normalized.expectedCommits.slice(0, 10),
+          base: normalized.baseRef,
+        };
+      }
+      /*
+       * The other direction. A declared commit that is NOT in the candidate
+       * means the thing reviewed is not the thing being pushed - a rebase, an
+       * amend, or the wrong worktree - and it is just as wrong as an extra one.
+       */
+      const absent = normalized.expectedCommits.filter((c) => !have.has(short(c)));
+      if (absent.length) {
+        return {
+          ok: false,
+          code: "commit_scope_missing",
+          detail: `${absent.length} declared commit(s) are not in the candidate`,
+          missing: absent.slice(0, 10),
+          actual: actual.slice(0, 10),
+          base: normalized.baseRef,
+        };
+      }
+    }
+  }
+
+  const remote = already.ok ? already : remoteBranchSha(normalized, { gitImpl });
+  if (!remote.ok) return { ok: false, code: remote.code, detail: remote.detail };
+
+  // NON-FAST-FORWARD. Git refuses this by default; asserted here so the refusal
+  // does not depend on a default staying the default, and so the reason names
+  // what actually happened instead of surfacing a raw git error.
+  if (remote.sha) {
+    const anc = gitImpl(["merge-base", "--is-ancestor", remote.sha, normalized.expectedHeadSha], cwd);
+    if (anc.status !== 0) {
+      return {
+        ok: false,
+        code: "non_fast_forward",
+        detail: "the remote branch has commits this push would discard; a governed push is never a force push",
+        remote: remote.sha,
+      };
+    }
+  }
+  return { ok: true, remoteSha: remote.sha, localHead };
+}
+
+export function publicPushResult(out) {
+  return {
+    repository: out.repository,
+    branch: out.branch,
+    pushedSha: out.pushedSha,
+    remoteRef: `refs/heads/${out.branch}`,
+    idempotent: Boolean(out.idempotent),
+    credentialsExposed: false,
+  };
+}
+
+/**
+ * Push the approved commit. The only mutation in this module.
+ */
+export function pushBranch(inputs, { git = defaultGit } = {}) {
+  const v = validatePushInputs(inputs);
+  if (!v.ok) return v;
+  const n = v.normalized;
+
+  const ready = evaluatePushReadiness(n, { gitImpl: git });
+  if (!ready.ok) return ready;
+  if (ready.idempotent) {
+    return {
+      ok: true,
+      idempotent: true,
+      repository: n.repository,
+      branch: n.branch,
+      pushedSha: ready.remoteSha,
+      credentialsExposed: false,
+    };
+  }
+
+  // Everything above only READ. This is the first statement that leaves the
+  // machine, so this is where the guard belongs.
+  const permitted = liveRemoteMutationPermitted({ injectedGh: git !== defaultGit, operation: "push" });
+  if (!permitted.ok) return { ok: false, code: permitted.code, detail: permitted.detail };
+
+  // One commit, one ref, no force. The SHA is the source so a branch that moved
+  // after approval cannot smuggle later commits along.
+  const out = git([
+    "push", n.remote, `${n.expectedHeadSha}:refs/heads/${n.branch}`,
+  ], n.worktreePath, { timeout: 180_000 });
+
+  if (out.status !== 0) {
+    const err = String(out.stderr || out.stdout || "git push failed");
+    if (/\[rejected\]|non-fast-forward|fetch first/i.test(err)) {
+      return { ok: false, code: "non_fast_forward", detail: firstMeaningfulLine(err).slice(0, 240) };
+    }
+    return { ok: false, code: "push_failed", detail: firstMeaningfulLine(err).slice(0, 240) };
+  }
+
+  // VERIFY WHAT LANDED. A push that succeeded is not a push that put the right
+  // commit there.
+  const after = remoteBranchSha(n, { gitImpl: git });
+  if (!after.ok || !after.sha
+    || !(after.sha === n.expectedHeadSha || after.sha.startsWith(n.expectedHeadSha) || n.expectedHeadSha.startsWith(after.sha))) {
+    return {
+      ok: false,
+      code: "push_verification_failed",
+      detail: "the push reported success but the remote is not at the approved commit",
+      expected: n.expectedHeadSha,
+      actual: after.sha || null,
+    };
+  }
+
+  return {
+    ok: true,
+    repository: n.repository,
+    branch: n.branch,
+    pushedSha: after.sha,
+    credentialsExposed: false,
+  };
+}

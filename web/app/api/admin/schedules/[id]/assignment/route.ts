@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAuthCached } from "@/lib/adminAuth";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import { OPS_JOBS_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 
+/*
+ * AUTHORITY: `ops.jobs.write`. Setting the assignment status (accepted, declined) is the vendor's answer to the offer the assignment above created. Same row, same business truth, same owner.
+ */
 /** PATCH: set assignment status (e.g. accepted, declined). Body: { status_key }. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireSchedulingJobsCapability(ctx, OPS_JOBS_WRITE);
+    if (denied) return denied;
     const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: scheduleId } = await context.params;

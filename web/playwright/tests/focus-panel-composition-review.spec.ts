@@ -22,7 +22,7 @@ const WORK_UNIT_SLUGS = (process.env.COMPOSITION_REVIEW_SLUGS || "lifecycle-lead
     .filter(Boolean);
 const outDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/focus-panel-composition-review",
+    "../../../docs/sprints/archive/06_2026/focus-panel-composition-review",
 );
 
 const ROW_SELECTOR = "[data-alloy-os-compressed-row='true']";

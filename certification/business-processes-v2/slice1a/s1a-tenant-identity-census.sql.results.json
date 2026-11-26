@@ -1,0 +1,192 @@
+{
+  "trusted_host_action_id": "tha_d2e6e51f98504c",
+  "query_hash": "4d540232f172d9aa3d558eafa45ce564af43dea07b9da902d911ab3f284c9365",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-20T20:01:02.464Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d2e6e51f98504c",
+    "query_hash": "4d540232f172d9aa3d558eafa45ce564af43dea07b9da902d911ab3f284c9365",
+    "authorization_id": "grnt_3a771034759e475c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-20T20:01:11.270Z",
+    "question_ids": [
+      "bp_v2_s1a_tenant_identity"
+    ],
+    "questions": {
+      "bp_v2_s1a_tenant_identity": {
+        "question_id": "bp_v2_s1a_tenant_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "orgs": [
+              {
+                "id": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "name": "Alloy Bend",
+                "slug": "alloy-bend",
+                "status": "retired",
+                "created_at": "2026-01-27T18:10:28.566709+00:00",
+                "departments": 0,
+                "builder_departments": 0,
+                "user_roles": 2,
+                "opportunities": 0,
+                "customers": 0,
+                "org_locations": 0
+              },
+              {
+                "id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "name": "Firefly Early Learning",
+                "slug": "demo-childcare-co-c144769f",
+                "status": "active",
+                "created_at": "2026-04-22T22:44:08.814053+00:00",
+                "departments": 5,
+                "builder_departments": 1,
+                "user_roles": 13,
+                "opportunities": 67,
+                "customers": 74,
+                "org_locations": 37
+              },
+              {
+                "id": "0bbaad43-1235-401e-88ea-62e0881e950a",
+                "name": "W-17 self-test",
+                "slug": "_w17_selftest_0bbaad43",
+                "status": "active",
+                "created_at": "2026-09-12T01:13:41.07008+00:00",
+                "departments": 0,
+                "builder_departments": 0,
+                "user_roles": 0,
+                "opportunities": 0,
+                "customers": 0,
+                "org_locations": 0
+              }
+            ],
+            "qa_identities": [
+              {
+                "email": "qa-slot1-product@example.com",
+                "roles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "role": "admin"
+                  }
+                ],
+                "access_profiles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "department_scope": "all",
+                    "site_scope": "all"
+                  }
+                ],
+                "department_access": null,
+                "site_access": null
+              },
+              {
+                "email": "qa-slot12-work-items@example.com",
+                "roles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "role": "admin"
+                  }
+                ],
+                "access_profiles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "department_scope": "all",
+                    "site_scope": "all"
+                  }
+                ],
+                "department_access": null,
+                "site_access": null
+              },
+              {
+                "email": "qa-slot2-architecture@example.com",
+                "roles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "role": "admin"
+                  }
+                ],
+                "access_profiles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "department_scope": "all",
+                    "site_scope": "all"
+                  }
+                ],
+                "department_access": null,
+                "site_access": null
+              },
+              {
+                "email": "qa-slot4-ui@example.com",
+                "roles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "role": "admin"
+                  }
+                ],
+                "access_profiles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "department_scope": "all",
+                    "site_scope": "all"
+                  }
+                ],
+                "department_access": null,
+                "site_access": null
+              },
+              {
+                "email": "qa-slot5-refactor@example.com",
+                "roles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "role": "admin"
+                  }
+                ],
+                "access_profiles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "department_scope": "all",
+                    "site_scope": "all"
+                  }
+                ],
+                "department_access": null,
+                "site_access": null
+              },
+              {
+                "email": "qa-slot6-experimental@example.com",
+                "roles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "role": "admin"
+                  }
+                ],
+                "access_profiles": [
+                  {
+                    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                    "department_scope": "all",
+                    "site_scope": "all"
+                  }
+                ],
+                "department_access": null,
+                "site_access": null
+              },
+              {
+                "email": "qa-slot8-product@example.com",
+                "roles": null,
+                "access_profiles": null,
+                "department_access": null,
+                "site_access": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

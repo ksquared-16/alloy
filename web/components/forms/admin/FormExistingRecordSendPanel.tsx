@@ -175,7 +175,7 @@ export function FormExistingRecordSendPanel({
                                         type="button"
                                         className={clsx(
                                             "w-full px-2.5 py-2 text-left text-sm hover:bg-alloy-stone/10",
-                                            selected?.id === row.id && "bg-alloy-blue/10"
+                                            selected?.id === row.id && "bg-alloy-bend-pine/[0.10]"
                                         )}
                                         data-testid={`existing-record-opportunity-option-${row.id}`}
                                         onClick={() => setSelected(row)}

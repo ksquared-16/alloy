@@ -20,8 +20,13 @@ import type {
 
 export const CLASSIFIER_VERSION = "fp9.1";
 
-/** Max confidence a deterministic heuristic may claim — never absolute certainty. */
-const MAX_CONFIDENCE = 0.95;
+/**
+ * Max confidence a deterministic heuristic may claim — never absolute certainty.
+ *
+ * Exported so the governed-classification schema can state the real confidence
+ * contract by reference instead of restating the literal. Value unchanged.
+ */
+export const MAX_CONFIDENCE = 0.95;
 
 interface KeywordRule {
     /** Substring to look for (already lowercased). Matched against the combined haystack. */
@@ -109,6 +114,27 @@ function metadataStrings(metadata: Record<string, unknown> | null | undefined): 
     return out;
 }
 
+/**
+ * A keyword matches at the START of a word, not anywhere inside one.
+ *
+ * Several tokens here are deliberate PREFIXES — `immun` must catch "immunisation", `enroll` must
+ * catch "enrollment" — so the end of the token stays open. The start must not be: a raw substring
+ * match reads "form" inside "in-form-ation" and classifies an ACH authorization as a form-like
+ * document, and "era" inside "operations". Anchoring only the start keeps every intended prefix and
+ * drops the mid-word coincidences.
+ */
+function matchesToken(text: string, token: string): boolean {
+    if (!token) return false;
+    let from = 0;
+    for (;;) {
+        const at = text.indexOf(token, from);
+        if (at < 0) return false;
+        const before = at === 0 ? "" : text[at - 1]!;
+        if (!/[a-z0-9]/i.test(before)) return true;
+        from = at + 1;
+    }
+}
+
 interface Field {
     source: string;
     text: string;
@@ -147,7 +173,7 @@ export function classifyNonFormSource(input: ClassifyNonFormSourceInput): Proces
         const signals: ClassificationSignal[] = [];
         for (const kw of rule.keywords) {
             for (const field of fields) {
-                if (field.text.includes(kw.token)) {
+                if (matchesToken(field.text, kw.token)) {
                     score += kw.weight;
                     signals.push({ source: field.source, value: kw.token, weight: kw.weight });
                 }

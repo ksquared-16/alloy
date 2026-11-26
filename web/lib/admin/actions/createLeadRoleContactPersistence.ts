@@ -181,7 +181,7 @@ export async function persistCreateLeadRoleContacts(
                 orgId: input.orgId,
                 opportunityId: input.opportunityId,
                 personId,
-                roleType: "family_member",
+                roleType: "guardian",
                 metadata: { source: "create_lead", role: "secondary_guardian" },
             });
         }

@@ -45,7 +45,7 @@ function oppRecord(metadata: Record<string, unknown>) {
                 id: "ocm-1",
                 person_id: "child-1",
                 first_name: "Kid",
-                desired_program_type: null,
+                program_category_id: null,
             },
         ],
     };
@@ -309,7 +309,7 @@ describe("readinessConsumerWiring", () => {
                 _inquiry_children: [
                     {
                         id: "ocm-1",
-                        desired_program_type: "infant",
+                        program_category_id: "cat-infant",
                         program_room_cohort_key: "",
                     },
                 ],

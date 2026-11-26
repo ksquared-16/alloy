@@ -1,0 +1,18 @@
+{
+  "dom": {
+    "children": [
+      "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+    ],
+    "tuition": {
+      "count": "0",
+      "text": "TUITION\n\nNo assignment to price\n\nNo assignment on this record to price."
+    },
+    "assignments": []
+  },
+  "api": {
+    "status": 200,
+    "assignments": 0,
+    "enrollments": 0
+  }
+}

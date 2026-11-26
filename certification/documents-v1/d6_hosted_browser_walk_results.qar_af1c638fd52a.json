@@ -1,0 +1,66 @@
+{
+  "run": "qar_af1c638fd52a",
+  "at": "2026-10-27T16:33:10.588Z",
+  "results": [
+    {
+      "id": "W1",
+      "goal": "Processing → Documents → Missing documents lists the run's unmet requirement",
+      "pass": true,
+      "actual": "kid2=true kid1(satisfied, absent)=true",
+      "screenshot": "d6-human-qa/01-missing-documents.png"
+    },
+    {
+      "id": "W2",
+      "goal": "a satisfied requirement is not listed as work",
+      "pass": true,
+      "actual": "Kid One absent",
+      "screenshot": "d6-human-qa/01-missing-documents.png"
+    },
+    {
+      "id": "W3",
+      "goal": "the row detail names the action, due date and offers waive / open record",
+      "pass": true,
+      "actual": "collect=true waive=true due=true",
+      "screenshot": "d6-human-qa/02-missing-row-detail.png"
+    },
+    {
+      "id": "W4",
+      "goal": "Studio → Documents → Requirements lists the run's requirement with its published version",
+      "pass": true,
+      "actual": "listed=true",
+      "screenshot": "d6-human-qa/03-studio-requirements.png"
+    },
+    {
+      "id": "W5a",
+      "goal": "the work row's 'Open the record's documents' reaches the record's Documents card",
+      "pass": false,
+      "actual": "child view shows documents=false",
+      "screenshot": "d6-human-qa/05a-open-record-child-view.png"
+    },
+    {
+      "id": "W5",
+      "goal": "Focus Panel Documents shows readiness from the same evaluator (required / missing counts, the requirement)",
+      "pass": false,
+      "actual": "required=false missing=false req=false",
+      "screenshot": "d6-human-qa/05-focus-readiness.png"
+    },
+    {
+      "id": "W5b",
+      "goal": "readiness shows the satisfied child and the missing child separately",
+      "pass": false,
+      "actual": "satisfied=false",
+      "screenshot": "d6-human-qa/05-focus-readiness.png"
+    },
+    {
+      "id": "W6",
+      "goal": "the surfaces read only the canonical D6 routes",
+      "pass": true,
+      "actual": "[\"200 GET /api/admin/documents/requirements/work\",\"200 GET /api/admin/documents/configuration/requirements\"]",
+      "screenshot": null
+    }
+  ],
+  "api": [
+    "200 GET /api/admin/documents/requirements/work",
+    "200 GET /api/admin/documents/configuration/requirements"
+  ]
+}

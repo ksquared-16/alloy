@@ -1,0 +1,53 @@
+{
+  "purge_imm": {
+    "status": 200,
+    "purged": true
+  },
+  "purge_phy": {
+    "status": 200,
+    "purged": true
+  },
+  "purge_hcp": {
+    "status": 200,
+    "purged": true
+  },
+  "purge_med": {
+    "status": 200,
+    "purged": true
+  },
+  "lead_delete": 200,
+  "type_delete_birthday": {
+    "status": 200,
+    "code": null
+  },
+  "type_delete_enrollment_start": {
+    "status": 200,
+    "code": null
+  },
+  "type_delete_program_year_start": {
+    "status": 200,
+    "code": null
+  },
+  "after": {
+    "requirement_imm": 404,
+    "requirement_phy": 404,
+    "requirement_hcp": 404,
+    "requirement_med": 404,
+    "doc_imm-c1": 404,
+    "doc_subsidy-c2": 404,
+    "doc_subsidy-c3-pending": 404,
+    "doc_fi09-phy-c3": 404,
+    "doc_fi09-hcp-c3": 404,
+    "doc_fi09-med-c3": 404,
+    "doc_fi09-imm-c3": 404,
+    "doc_bday-c1": 404,
+    "doc_bday-c2": 404,
+    "doc_enr-c1": 404,
+    "doc_py-c1": 404,
+    "type_birthday": 404,
+    "type_enrollment_start": 404,
+    "type_program_year_start": 404,
+    "household_library": 404
+  },
+  "all_gone": true
+}

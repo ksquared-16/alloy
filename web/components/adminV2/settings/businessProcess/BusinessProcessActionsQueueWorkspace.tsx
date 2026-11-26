@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS,
+    LIFECYCLE_MANAGE_PLACEMENT_ID,
     type LifecycleBaseActionKey,
 } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import {
@@ -46,16 +47,23 @@ function draftToSaveRow(row: LifecycleActionsMatrixDraftRow, displayOrder: numbe
         base_action_key: row.base_action_key,
         enabled: row.enabled,
         label: row.label.trim() || row.default_label,
-        placement_ids: [...row.placement_ids],
+        // Manage lists every enabled command — an enabled row always carries the Manage placement.
+        placement_ids: row.enabled
+            ? [...new Set([LIFECYCLE_MANAGE_PLACEMENT_ID, ...row.placement_ids])]
+            : [...row.placement_ids],
         stage_restrictions: row.enabled && row.restrictStages ? [...row.stage_restrictions] : [],
         display_order: displayOrder,
     };
 }
 
+/** True when an enabled command is not yet in Manage in saved data (fixed by the next save). */
+function managePlacementPending(row: LifecycleActionsMatrixDraftRow): boolean {
+    return row.enabled && !row.placement_ids.has(LIFECYCLE_MANAGE_PLACEMENT_ID);
+}
+
 function placementSummary(row: LifecycleActionsMatrixDraftRow): string {
     if (!row.enabled) return "Disabled";
-    if (!row.placement_ids.size) return "No placements";
-    return [...row.placement_ids]
+    return [...new Set([LIFECYCLE_MANAGE_PLACEMENT_ID, ...row.placement_ids])]
         .map((id) => LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS.find((p) => p.id === id)?.label ?? id)
         .join(", ");
 }
@@ -147,9 +155,6 @@ export function useProcessActionsMatrixDraft(departmentId: string, builderStageK
             try {
                 for (const row of rows) {
                     if (!row.enabled) continue;
-                    if (!row.placement_ids.size) {
-                        throw new Error(`Select at least one placement for ${row.default_label}.`);
-                    }
                     if (row.restrictStages && !row.stage_restrictions.size) {
                         throw new Error(
                             `Select stages to restrict ${row.default_label}, or allow all stages.`,
@@ -167,11 +172,18 @@ export function useProcessActionsMatrixDraft(departmentId: string, builderStageK
                         }),
                     },
                 );
-                const j = (await res.json().catch(() => ({}))) as { error?: string; rows?: LifecycleActionsMatrixRow[] };
+                const j = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    rows?: LifecycleActionsMatrixRow[];
+                    publication_required?: boolean;
+                };
                 if (!res.ok) throw new Error(j.error ?? "Save failed");
                 if (j.rows) setRows(j.rows.map(draftFromRow));
-                setSuccess("Process actions saved.");
-                await onSaved?.();
+                setSuccess(
+                    j.publication_required
+                        ? "Process commands saved and in Manage. Publish Business Process configuration before adding them to Stage commands on the Process Card."
+                        : "Process commands saved.",
+                );                await onSaved?.();
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Save failed");
             } finally {
@@ -269,8 +281,11 @@ const ACTION_HELP: Partial<Record<LifecycleBaseActionKey, string>> = {
     add_child: "Adds a child profile and associates them with the family record.",
     send_form: "Sends a configured form link and tracks completion on the record.",
     schedule_tour: "Books a tour slot and writes scheduling context to the record timeline.",
-    change_status: "Updates enrollment or pipeline status with audit and workflow side effects.",
-    create_task: "Creates an operator task tied to the record with due date and assignee.",
+    waitlist_child:
+        "Moves a child to Waitlist. Enabling here adds it to Focus Panel Manage immediately and makes Move to Waitlist available to Stages → Stage commands (the Process Card) once the process is published.",
+    enroll_child: "Confirms a child's enrollment with audit and workflow side effects.",
+    close_lead: "Closes or loses this lead with audit and workflow side effects.",
+    create_task: "Creates a Work Item tied to the record with due date and assignee.",
     quick_message: "Opens a quick message composer prefilled with record context.",
 };
 
@@ -330,9 +345,7 @@ export function BusinessProcessActionsSetupWorkspace({
                         onUpdate({
                             enabled: e.target.checked,
                             placement_ids: e.target.checked
-                                ? row.placement_ids.size
-                                    ? row.placement_ids
-                                    : new Set(["overflow"])
+                                ? new Set([LIFECYCLE_MANAGE_PLACEMENT_ID, ...row.placement_ids])
                                 : new Set(),
                         })
                     }
@@ -360,6 +373,18 @@ export function BusinessProcessActionsSetupWorkspace({
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
                     Where it appears
                 </p>
+                <p className="text-xs text-alloy-midnight/55">
+                    Every enabled command is in Focus Panel Manage. Choose which commands lead on the
+                    Process Card per stage, under Stages → Stage commands.
+                </p>
+                {managePlacementPending(row) ?
+                    <p
+                        className="text-xs text-amber-800"
+                        data-testid={`business-process-action-manage-pending-${row.base_action_key}`}
+                    >
+                        Not in Manage yet — save to add it.
+                    </p>
+                :   null}
                 <div className="flex flex-wrap gap-2">
                     {LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS.map((p) => (
                         <label
@@ -368,8 +393,12 @@ export function BusinessProcessActionsSetupWorkspace({
                         >
                             <input
                                 type="checkbox"
-                                checked={row.placement_ids.has(p.id)}
-                                disabled={!row.enabled || !row.saveable}
+                                checked={
+                                    p.id === LIFECYCLE_MANAGE_PLACEMENT_ID
+                                        ? row.enabled
+                                        : row.placement_ids.has(p.id)
+                                }
+                                disabled={!row.enabled || !row.saveable || p.id === LIFECYCLE_MANAGE_PLACEMENT_ID}
                                 onChange={() => onTogglePlacement(p.id)}
                                 className="h-4 w-4 rounded border-alloy-stone/40 config-mode-control"
                                 data-testid={`business-process-action-placement-${row.base_action_key}-${p.id}`}

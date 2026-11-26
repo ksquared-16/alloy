@@ -85,7 +85,7 @@ describe("Command Surface — Create Lead reference", () => {
         for (const mi of surface.body.missingInputs) {
             expect(mi.label).not.toMatch(/_/); // no snake_case leaks
         }
-        expect(humanizeFieldKey("desired_start_date")).toBe("Desired Start Date");
+        expect(humanizeFieldKey("start_date")).toBe("Desired Start Date");
     });
 
     it("exposes raw payload keys only in debug mode", () => {

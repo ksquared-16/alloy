@@ -1,6 +1,6 @@
 /**
  * Configuration Runtime QA fix — drift prevention.
- * @see docs/sprints/06_2026/configuration-runtime-qa-fix/
+ * @see docs/sprints/archive/06_2026/configuration-runtime-qa-fix/
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -31,8 +31,8 @@ describe("Configuration Runtime QA fix", () => {
         expect(page).not.toContain("SettingsIndexRedirect");
         const hub = read("app/adminV2/settings/SettingsConfigurationHub.tsx");
         expect(hub).toContain('data-testid="settings-configuration-hub"');
-        expect(hub).toContain('data-testid="settings-configuration-tiles"');
-        expect(CONFIGURATION_MODE_NAV_ITEMS.length).toBe(9);
+        expect(hub).toContain('data-testid="settings-configuration-sections"');
+        expect(CONFIGURATION_MODE_NAV_ITEMS.length).toBe(11);
     });
 
     it("settings mode rail uses Lucide icons, not letter placeholders", () => {
@@ -48,6 +48,16 @@ describe("Configuration Runtime QA fix", () => {
         expect(sidebar).toContain("{homeLink}");
         expect(sidebar).toContain("SidebarConfigurationModeNav");
         expect(sidebar).not.toMatch(/onSettings\s*\?\s*null\s*:\s*\{homeLink\}/);
+    });
+
+    it("Configuration Mode rail stays mounted on /organization/* product paths", () => {
+        const sidebar = read("app/adminV2/components/Sidebar.tsx");
+        expect(sidebar).toContain("path.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`)");
+        expect(sidebar).toContain("SidebarConfigurationModeNav");
+        const providers = read("app/adminV2/settings/AdminV2SettingsClientProviders.tsx");
+        expect(providers).toContain('path === "/organization/processes"');
+        const lastSurface = read("lib/adminV2/configurationModeLastSurface.ts");
+        expect(lastSurface).toContain('path.startsWith("/organization/")');
     });
 
     it("configuration surfaces avoid blue/slate selected-state classes", () => {

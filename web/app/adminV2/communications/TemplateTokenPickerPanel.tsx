@@ -20,8 +20,8 @@ export default function TemplateTokenPickerPanel({ onInsert }: Props) {
     );
 
     return (
-        <div data-template-token-picker="true" className={COMMS_CARD_CLASS}>
-            <div className="mb-2">
+        <div data-template-token-picker="true" className={`${COMMS_CARD_CLASS} !p-2.5`}>
+            <div className="mb-2 border-b border-alloy-stone/22 pb-1.5">
                 <div className={COMMS_SECTION_TITLE_CLASS}>Insert token</div>
             </div>
             <input
@@ -31,9 +31,9 @@ export default function TemplateTokenPickerPanel({ onInsert }: Props) {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search tokens…"
                 aria-label="Search tokens"
-                className={`${COMMS_INPUT_CLASS} mb-3`}
+                className={`${COMMS_INPUT_CLASS} mb-2`}
             />
-            <div className="flex max-h-[min(18rem,42vh)] flex-col gap-3 overflow-y-auto pr-1">
+            <div className="flex max-h-[min(18rem,42vh)] flex-col gap-3 overflow-y-auto overscroll-contain pr-1">
                 {groups.map(({ group, tokens }) => (
                     <div key={group}>
                         <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">

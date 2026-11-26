@@ -1,0 +1,194 @@
+[
+  {
+    "seq": 0,
+    "t": 0,
+    "at": 1784755232544,
+    "phase": "provisioning.prefetch.warm-reuse",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer",
+    "cache": "hit",
+    "preloadSource": "prefetch"
+  },
+  {
+    "seq": 1,
+    "t": 2,
+    "at": 1784755232546,
+    "phase": "provisioning.prefetch.warm-reuse",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer",
+    "cache": "hit",
+    "preloadSource": "prefetch"
+  },
+  {
+    "seq": 2,
+    "t": 4,
+    "at": 1784755232548,
+    "phase": "provisioning.prefetch.warm-reuse",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer",
+    "cache": "hit",
+    "preloadSource": "prefetch"
+  },
+  {
+    "seq": 3,
+    "t": 8,
+    "at": 1784755232552,
+    "phase": "provisioning.client.warm-hit",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer",
+    "cache": "hit",
+    "preloadSource": "prefetch"
+  },
+  {
+    "seq": 4,
+    "t": 102,
+    "at": 1784755232646,
+    "phase": "currentWorkCard.compose",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "note": "content"
+  },
+  {
+    "seq": 5,
+    "t": 107,
+    "at": 1784755232651,
+    "phase": "recordRuntime.fetch.start",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 1,
+    "cacheKey": "opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "preloadSource": "live",
+    "cache": "miss",
+    "note": "cold"
+  },
+  {
+    "seq": 6,
+    "t": 125,
+    "at": 1784755232669,
+    "phase": "focusPanel.mount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 7,
+    "t": 126,
+    "at": 1784755232670,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "commit-critical-seed",
+    "cache": "seed"
+  },
+  {
+    "seq": 8,
+    "t": 129,
+    "at": 1784755232673,
+    "phase": "surfaceHost.render",
+    "subjectId": "new-leads",
+    "note": "provisioned"
+  },
+  {
+    "seq": 9,
+    "t": 130,
+    "at": 1784755232674,
+    "phase": "focusPanel.unmount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 10,
+    "t": 131,
+    "at": 1784755232675,
+    "phase": "currentWorkCard.compose",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "note": "content"
+  },
+  {
+    "seq": 11,
+    "t": 131,
+    "at": 1784755232675,
+    "phase": "recordRuntime.fetch.start",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 2,
+    "cacheKey": "opportunity:b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "preloadSource": "live",
+    "cache": "miss",
+    "note": "cold"
+  },
+  {
+    "seq": 12,
+    "t": 133,
+    "at": 1784755232677,
+    "phase": "focusPanel.mount",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1"
+  },
+  {
+    "seq": 13,
+    "t": 133,
+    "at": 1784755232677,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "commit-critical-seed",
+    "cache": "seed"
+  },
+  {
+    "seq": 14,
+    "t": 160,
+    "at": 1784755232704,
+    "phase": "recordRuntime.fetch.apply",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 2,
+    "preloadSource": "live",
+    "cache": "live",
+    "note": "atomic complete reveal (stage-work pre-resolved)"
+  },
+  {
+    "seq": 15,
+    "t": 224,
+    "at": 1784755232768,
+    "phase": "recordRuntime.fetch.skip",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "runtimeId": "recordRuntime-2",
+    "reqGen": 2,
+    "cache": "hit",
+    "note": "displayVm already matches subject — no refetch"
+  },
+  {
+    "seq": 16,
+    "t": 225,
+    "at": 1784755232769,
+    "phase": "focusPanel.body",
+    "subjectId": "b13ecce9-74d4-442d-9891-7c88f587bc23",
+    "componentId": "focusPanel-1",
+    "note": "enriched:resolved",
+    "cache": "live"
+  },
+  {
+    "seq": 17,
+    "t": 278,
+    "at": 1784755232822,
+    "phase": "provisioning.prefetch.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?subject_id=df771481-841f-4329-b7bb-c0a03d9fb621",
+    "cache": "miss",
+    "preloadSource": "prefetch",
+    "note": "intent-warm network fetch"
+  },
+  {
+    "seq": 18,
+    "t": 325,
+    "at": 1784755232869,
+    "phase": "provisioning.prefetch.warm-reuse",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?subject_id=df771481-841f-4329-b7bb-c0a03d9fb621",
+    "cache": "hit",
+    "preloadSource": "prefetch"
+  },
+  {
+    "seq": 19,
+    "t": 325,
+    "at": 1784755232869,
+    "phase": "provisioning.prefetch.fetch",
+    "cacheKey": "/api/admin/work-units/new-leads/provisioning-answer?subject_id=c78a8e14-4e4f-4a17-acd4-0ad3245cc81a",
+    "cache": "miss",
+    "preloadSource": "prefetch",
+    "note": "intent-warm network fetch"
+  }
+]

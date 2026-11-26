@@ -9,7 +9,6 @@
  */
 import {
     ADMIN_AI_ACTIVITY_HREF,
-    ADMIN_FORMS_HREF,
     ADMIN_SETTINGS_SUBPATH_PREFIX,
     ADMIN_WORKFLOWS_HREF,
     CANONICAL_ADMIN_WORKSPACE,
@@ -23,12 +22,10 @@ const HEAVY_ROUTE_PREFIXES = [
     ADMIN_WORKFLOWS_HREF,
     ADMIN_AI_ACTIVITY_HREF,
     ADMIN_SETTINGS_SUBPATH_PREFIX,
-    ADMIN_FORMS_HREF,
     "/adminV2/workspace",
     "/adminV2/workflows",
     "/adminV2/ai-activity",
     "/adminV2/settings",
-    "/adminV2/forms",
     "/admin/v2",
     "/adminv2",
     "/admin/opportunities",

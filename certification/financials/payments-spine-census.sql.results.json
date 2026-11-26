@@ -1,0 +1,94 @@
+{
+  "trusted_host_action_id": "tha_be923375ea3595",
+  "query_hash": "63453e0cfe58a86597f62d0dd5767db3569a161e05948635c0f7728ce3360026",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-03T19:09:29.920Z",
+    "question_ids": [
+      "money_table_constraints",
+      "money_table_unique_indexes",
+      "payment_allocations_columns",
+      "payments_column_nullability",
+      "payments_population"
+    ],
+    "questions": {
+      "money_table_constraints": {
+        "question_id": "money_table_constraints",
+        "row_count": null,
+        "rows": [
+          "c",
+          "c",
+          "p",
+          "c",
+          "c",
+          "c",
+          "c",
+          "c",
+          "c",
+          "c",
+          "c",
+          "c",
+          "p",
+          "c",
+          "c",
+          "c"
+        ]
+      },
+      "money_table_unique_indexes": {
+        "question_id": "money_table_unique_indexes",
+        "row_count": null,
+        "rows": [
+          "unique",
+          "unique"
+        ]
+      },
+      "payment_allocations_columns": {
+        "question_id": "payment_allocations_columns",
+        "row_count": null,
+        "rows": [
+          "NO:bigint",
+          "NO:text",
+          "YES:uuid",
+          "YES:uuid",
+          "YES:timestamp with time zone",
+          "NO:text",
+          "NO:uuid",
+          "NO:text"
+        ]
+      },
+      "payments_column_nullability": {
+        "question_id": "payments_column_nullability",
+        "row_count": null,
+        "rows": [
+          "NO:bigint",
+          "YES:uuid",
+          "NO:text",
+          "YES:uuid",
+          "NO:text",
+          "YES:uuid",
+          "NO:uuid",
+          "YES:uuid",
+          "YES:text",
+          "NO:text",
+          "YES:timestamp with time zone",
+          "YES:text",
+          "YES:text",
+          "NO:timestamp with time zone",
+          "NO:text"
+        ]
+      },
+      "payments_population": {
+        "question_id": "payments_population",
+        "row_count": null,
+        "rows": [
+          0,
+          0,
+          2,
+          0,
+          0
+        ]
+      }
+    },
+    "row_count": 46
+  }
+}

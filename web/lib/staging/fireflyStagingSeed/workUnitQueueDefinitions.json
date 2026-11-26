@@ -1,0 +1,795 @@
+{
+  "new_leads": {
+    "version": 2,
+    "entity_type": "opportunity",
+    "ui": {
+      "layout": "domain_with_attention",
+      "primary_total_label": "New Leads",
+      "primary_total_queue": "pipeline_total",
+      "suppress_other_pill": true,
+      "suppress_lifecycle_panel": true,
+      "suppress_active_queue_description": true,
+      "sections": [
+        {
+          "key": "new_leads",
+          "label": "New Leads",
+          "queue_keys": [
+            "new_leads"
+          ]
+        },
+        {
+          "key": "needs_attention",
+          "label": "Needs Attention",
+          "tone": "critical",
+          "queue_keys": [
+            "needs_attention"
+          ]
+        }
+      ],
+      "row_preview": {
+        "variant": "crm_compact",
+        "fields": [
+          "title",
+          "status",
+          "primary_contact",
+          "phone",
+          "email",
+          "child_name",
+          "program",
+          "start_date",
+          "tour_date"
+        ],
+        "actions": [
+          "open"
+        ]
+      }
+    },
+    "queues": [
+      {
+        "key": "pipeline_total",
+        "label": "Pipeline total",
+        "description": "Total count for pipeline scope (internal KPI lane).",
+        "domain": "pipeline",
+        "grain": "case",
+        "filters": [],
+        "filters_compat_v1": [],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "new_leads",
+        "label": "New Leads",
+        "icon": "user-plus",
+        "description": "New families \u2014 first touch not yet completed.",
+        "domain": "new_leads",
+        "grain": "case",
+        "aliases": [
+          "new_inquiry"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "new_inquiry",
+              "open",
+              "new"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "new_inquiry",
+              "open",
+              "new"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "needs_attention",
+        "label": "Needs attention",
+        "description": "Operational intervention overlay \u2014 not a separate lifecycle pipeline.",
+        "domain": "needs_attention",
+        "grain": "case",
+        "overlay": true,
+        "filters": [
+          {
+            "type": "exception",
+            "operator": "exists"
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "exception",
+            "operator": "exists"
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "asc"
+          }
+        ],
+        "limit": 50,
+        "priority": "critical",
+        "display": "list"
+      }
+    ]
+  },
+  "enrollment_pipeline": {
+    "version": 2,
+    "entity_type": "opportunity",
+    "ui": {
+      "layout": "domain_with_attention",
+      "primary_total_label": "Work Units",
+      "primary_total_queue": "pipeline_total",
+      "suppress_other_pill": true,
+      "suppress_lifecycle_panel": true,
+      "suppress_active_queue_description": true,
+      "sections": [
+        {
+          "key": "new_leads",
+          "label": "New Leads",
+          "queue_keys": [
+            "new_leads"
+          ]
+        },
+        {
+          "key": "tours",
+          "label": "Tours",
+          "queue_keys": [
+            "tours"
+          ]
+        },
+        {
+          "key": "communications_followup",
+          "label": "Follow Up",
+          "queue_keys": [
+            "communications_followup"
+          ]
+        },
+        {
+          "key": "waitlist",
+          "label": "Waitlist",
+          "queue_keys": [
+            "waitlist"
+          ]
+        },
+        {
+          "key": "enrolling",
+          "label": "Enrolling",
+          "queue_keys": [
+            "enrollment_offers"
+          ]
+        },
+        {
+          "key": "enrolled",
+          "label": "Enrolled",
+          "queue_keys": [
+            "enrollment_completed"
+          ]
+        },
+        {
+          "key": "needs_attention",
+          "label": "Needs Attention",
+          "tone": "critical",
+          "queue_keys": [
+            "needs_attention"
+          ]
+        }
+      ],
+      "row_preview": {
+        "variant": "crm_compact",
+        "fields": [
+          "title",
+          "status",
+          "primary_contact",
+          "phone",
+          "email",
+          "child_name",
+          "program",
+          "start_date",
+          "tour_date"
+        ],
+        "actions": [
+          "open"
+        ]
+      }
+    },
+    "queues": [
+      {
+        "key": "pipeline_total",
+        "label": "Pipeline total",
+        "description": "Total count for pipeline scope (internal KPI lane).",
+        "domain": "pipeline",
+        "grain": "case",
+        "filters": [],
+        "filters_compat_v1": [],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "new_leads",
+        "label": "New Leads",
+        "icon": "user-plus",
+        "description": "New families \u2014 first touch not yet completed.",
+        "domain": "new_leads",
+        "grain": "case",
+        "aliases": [
+          "new_inquiry"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "new_inquiry",
+              "open",
+              "new"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "new_inquiry",
+              "open",
+              "new"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "communications_followup",
+        "label": "Follow Up",
+        "icon": "phone",
+        "description": "Qualification and follow-up \u2014 gathering fit before tour or waitlist.",
+        "domain": "communications_followup",
+        "grain": "case",
+        "aliases": [
+          "contacted",
+          "contact_attempted",
+          "qualification"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "contact_attempted",
+              "contacted",
+              "qualification"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "contact_attempted",
+              "contacted",
+              "qualification"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "tours",
+        "label": "Tours",
+        "icon": "calendar",
+        "description": "A tour is on the calendar.",
+        "domain": "tours",
+        "grain": "case",
+        "aliases": [
+          "tour_scheduled"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "tour_scheduled"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "tour_scheduled"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "asc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "tours_follow_up",
+        "label": "Tours",
+        "icon": "clipboard-check",
+        "description": "Post-tour decision window \u2014 completed tour, follow-up attempts, or tour no-show.",
+        "domain": "tours",
+        "grain": "case",
+        "aliases": [
+          "tour_completed_follow_up"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "tour_completed",
+              "follow_up_attempted",
+              "tour_no_show"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "tour_completed",
+              "follow_up_attempted",
+              "tour_no_show"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "asc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "forms_documents",
+        "label": "Forms / Documents",
+        "domain": "forms_documents",
+        "grain": "case",
+        "filters": [],
+        "filters_compat_v1": [],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "waitlist",
+        "label": "Waitlist",
+        "icon": "clock-3",
+        "domain": "waitlist",
+        "grain": "candidate",
+        "count_unit": "children",
+        "aliases": [
+          "waitlisted"
+        ],
+        "filters": [
+          {
+            "type": "candidate_status",
+            "operator": "in",
+            "values": [
+              "active",
+              "paused"
+            ]
+          },
+          {
+            "type": "child_lifecycle_status",
+            "operator": "in",
+            "values": [
+              "waitlisted",
+              "offer_pending"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "waitlisted"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "enrollment_offers",
+        "label": "Enrolling",
+        "icon": "file-text",
+        "description": "Paperwork or decision in motion toward a start date.",
+        "domain": "enrollment_offers",
+        "grain": "child",
+        "count_unit": "children",
+        "aliases": [
+          "ready_to_enroll",
+          "enrolling"
+        ],
+        "filters": [
+          {
+            "type": "child_lifecycle_status",
+            "operator": "in",
+            "values": [
+              "offer_pending",
+              "enrolling"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "enrolling",
+              "ready_to_enroll"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "enrollment_completed",
+        "label": "Enrolled",
+        "icon": "check-circle-2",
+        "description": "Confirmed enrollment (child completion view).",
+        "domain": "enrollment_offers",
+        "grain": "child",
+        "count_unit": "children",
+        "aliases": [
+          "enrolled"
+        ],
+        "filters": [
+          {
+            "type": "child_lifecycle_status",
+            "operator": "in",
+            "values": [
+              "enrolled"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "enrolled"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "case_closed",
+        "label": "Lost",
+        "icon": "x-circle",
+        "description": "Closed \u2014 not enrolling.",
+        "domain": "archive",
+        "grain": "case",
+        "aliases": [
+          "lost"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "closed",
+              "lost"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "lost"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "needs_attention",
+        "label": "Needs attention",
+        "description": "Operational intervention overlay \u2014 not a separate lifecycle pipeline.",
+        "domain": "needs_attention",
+        "grain": "case",
+        "overlay": true,
+        "filters": [
+          {
+            "type": "exception",
+            "operator": "exists"
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "exception",
+            "operator": "exists"
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "asc"
+          }
+        ],
+        "limit": 50,
+        "priority": "critical",
+        "display": "list"
+      }
+    ]
+  },
+  "tours": {
+    "version": 2,
+    "entity_type": "opportunity",
+    "ui": {
+      "layout": "domain_with_attention",
+      "primary_total_label": "Tours",
+      "primary_total_queue": "pipeline_total",
+      "suppress_other_pill": true,
+      "suppress_lifecycle_panel": true,
+      "suppress_active_queue_description": true,
+      "sections": [
+        {
+          "key": "tours",
+          "label": "Tours",
+          "queue_keys": [
+            "tours",
+            "tours_follow_up"
+          ]
+        },
+        {
+          "key": "needs_attention",
+          "label": "Needs Attention",
+          "tone": "critical",
+          "queue_keys": [
+            "needs_attention"
+          ]
+        }
+      ],
+      "row_preview": {
+        "variant": "crm_compact",
+        "fields": [
+          "title",
+          "status",
+          "primary_contact",
+          "phone",
+          "email",
+          "child_name",
+          "program",
+          "start_date",
+          "tour_date"
+        ],
+        "actions": [
+          "open"
+        ]
+      }
+    },
+    "queues": [
+      {
+        "key": "pipeline_total",
+        "label": "Pipeline total",
+        "description": "Total count for pipeline scope (internal KPI lane).",
+        "domain": "pipeline",
+        "grain": "case",
+        "filters": [],
+        "filters_compat_v1": [],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "tours",
+        "label": "Tours",
+        "icon": "calendar",
+        "description": "A tour is on the calendar.",
+        "domain": "tours",
+        "grain": "case",
+        "aliases": [
+          "tour_scheduled"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "tour_scheduled"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "tour_scheduled"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "asc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "tours_follow_up",
+        "label": "Tours",
+        "icon": "clipboard-check",
+        "description": "Post-tour decision window \u2014 completed tour, follow-up attempts, or tour no-show.",
+        "domain": "tours",
+        "grain": "case",
+        "aliases": [
+          "tour_completed_follow_up"
+        ],
+        "filters": [
+          {
+            "type": "case_status",
+            "operator": "in",
+            "values": [
+              "tour_completed",
+              "follow_up_attempted",
+              "tour_no_show"
+            ]
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "status",
+            "operator": "in",
+            "values": [
+              "tour_completed",
+              "follow_up_attempted",
+              "tour_no_show"
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "asc"
+          }
+        ],
+        "limit": 50,
+        "priority": "standard",
+        "display": "list"
+      },
+      {
+        "key": "needs_attention",
+        "label": "Needs attention",
+        "description": "Operational intervention overlay \u2014 not a separate lifecycle pipeline.",
+        "domain": "needs_attention",
+        "grain": "case",
+        "overlay": true,
+        "filters": [
+          {
+            "type": "exception",
+            "operator": "exists"
+          }
+        ],
+        "filters_compat_v1": [
+          {
+            "type": "exception",
+            "operator": "exists"
+          }
+        ],
+        "sort": [
+          {
+            "field": "updated_at",
+            "direction": "asc"
+          }
+        ],
+        "limit": 50,
+        "priority": "critical",
+        "display": "list"
+      }
+    ]
+  }
+}

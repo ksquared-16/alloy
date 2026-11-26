@@ -1,0 +1,58 @@
+[
+  {
+    "proof": "accounts-details",
+    "chargeId": "6ccb9225-8c21-4fb4-b414-9b6a1afb993a",
+    "openers": 7,
+    "details": {
+      "label": "Field trip",
+      "attribution": "Household",
+      "attributionState": "household",
+      "status": "posted",
+      "rows": {
+        "Billing period": "November 2026",
+        "Invoice date": "Nov 1, 2026",
+        "Due date": "Nov 11, 2026",
+        "Accounting period": "October 2026 · Open",
+        "GL account": "4090 · Other Income",
+        "Gross charge": "$40.00",
+        "Net obligation": "$40.00",
+        "Ada Certfree": "$40.00",
+        "Charge is for": "Oct 7, 2026",
+        "Posted": "Oct 2, 2026 at 5:41 PM",
+        "Raised": "Created by a person whose name is not on file",
+        "Created": "Oct 2, 2026 at 5:41 PM",
+        "Outstanding": "$40.00"
+      },
+      "uuidsInBody": 0,
+      "text": "ONE_TIME Field trip Household Posted · Service Oct 7, 2026 · Posted Oct 2, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → RESPONSIBILITY ARRANGEMENT Ada Certfree 100% Expected funding — none. Manage expected funding → RESPONSIBILITY Ada Certfree $40.00 HISTORY Charge is for Oct 7, 2026 Posted Oct 2, 2026 ORIGIN Raised Created by a person whose name is not on file Created Oct 2, 2026 at 5:41 PM Posted Oct 2, 2026 "
+    }
+  },
+  {
+    "proof": "focus-details",
+    "chargeId": "362146e2-dea9-4573-ae23-da8c1bd2c2ba",
+    "openers": 89,
+    "details": {
+      "label": "Field trip",
+      "attribution": "Certb Certhouse · Certhouse Family",
+      "attributionState": "child",
+      "status": "draft",
+      "rows": {
+        "Billing period": "December 2026",
+        "Invoice date": "Dec 1, 2026",
+        "Due date": "No configured terms",
+        "Accounting period": "Not posted to a period yet",
+        "GL account": "4090 · Other Income",
+        "Gross charge": "$40.00",
+        "Net obligation": "$40.00",
+        "Certt Certhouse": "100%",
+        "Charge is for": "Nov 20, 2026",
+        "Raised": "Raised from a charge template",
+        "Created": "Aug 27, 2026 at 4:05 PM",
+        "Outstanding": "$0.00"
+      },
+      "uuidsInBody": 0,
+      "text": "ONE_TIME Field trip Certb Certhouse · Certhouse Family Draft · Service Nov 20, 2026 POSTING Billing period December 2026 Invoice date Dec 1, 2026 Due date No configured terms Accounting period Not posted to a period yet GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → 1 responsible party from Sep 21, 2026. This charge is not divided under it yet. RESPONSIBILITY ARRANGEMENT Certt Certhouse 100% Expected funding — none. Manage expected funding → HISTORY Charge is for Nov 20, 2026 ORIGIN Raised Raised from a charge template Created Aug 27, 20"
+    },
+    "commandCalls": 0
+  }
+]

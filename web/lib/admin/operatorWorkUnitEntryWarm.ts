@@ -8,15 +8,21 @@ import {
     putWorkUnitSlugRouteCache,
     type WorkUnitSlugRouteCacheEntry,
 } from "@/lib/admin/workUnitSlugRouteCache";
-import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 import {
     fetchWorkUnitOperationalBootstrapSession,
     type WorkUnitBootstrapOwnership,
 } from "@/lib/adminV2/workUnitBootstrapClientSession";
 import { tracePlatformPrefetch, tracePlatformRouteLoad } from "@/lib/perf/platformSurfacePerfTrace";
 
+// Blank-time removal: workspace tiles warm the exact K2 provisioning answer on hover/focus intent.
+// Re-exported here so all entry points share one warm-helpers import surface.
+export {
+    prefetchWorkUnitProvisioning,
+    prefetchWorkUnitProvisioningFromHref,
+} from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+
 type SlugResolvedPayload = {
-    kind: "work_unit_key" | "queue_lane_key";
+    kind: "work_unit_key" | "work_view" | "queue_lane_key";
     route_slug: string;
     work_unit_id: string;
     department_id: string;
@@ -24,6 +30,7 @@ type SlugResolvedPayload = {
     work_unit_key: string;
     work_unit_name: string;
     initial_queue_key: string | null;
+    initial_work_view_id?: string | null;
 };
 
 export type WorkUnitSlugRouteResolveResult = {
@@ -42,6 +49,7 @@ function cacheEntryFromPayload(json: SlugResolvedPayload): WorkUnitSlugRouteCach
         workUnitKey: json.work_unit_key,
         workUnitName: json.work_unit_name,
         initialQueueKey: json.initial_queue_key,
+        initialWorkViewId: json.initial_work_view_id ?? null,
     };
 }
 
@@ -54,16 +62,6 @@ export function parseOperatorWorkUnitEntryHref(href: string): { workUnitSlug: st
     } catch {
         return { workUnitSlug: null };
     }
-}
-
-export function humanizeWorkUnitRouteSlug(slug: string): string {
-    const key = workUnitRouteSlugToKey(slug);
-    if (!key) return "Work unit";
-    return key
-        .split("_")
-        .filter(Boolean)
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
 }
 
 /** Deduped slug resolution — shared by route host and lifecycle prewarm. */
@@ -170,7 +168,7 @@ export function warmDefaultOperatorLifecycleEntries(
     selectedSiteId: string | null,
     cap: number = OPERATOR_LIFECYCLE_ENTRY_WARM_CAP,
 ): void {
-    const hrefs = [...new Set(cards.map((card) => card.entryHref.trim()).filter(Boolean))].slice(0, cap);
+    const hrefs = [...new Set(cards.map((card) => (card.entryHref ?? "").trim()).filter(Boolean))].slice(0, cap);
     for (const href of hrefs) {
         warmOperatorWorkUnitEntryFromHref(href, selectedSiteId, "workspace_idle_default");
     }

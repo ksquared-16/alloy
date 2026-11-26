@@ -3,6 +3,7 @@
  */
 
 import type { LifecyclePrimaryEntityKey } from "@/lib/lifecycle/lifecycleConfiguration";
+import type { ProcessModelV1 } from "@/lib/lifecycle/processModelV1";
 import { lifecycleWorkspaceTileDescription, slugifyLifecycleKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { newBuilderOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderOwned";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -17,6 +18,8 @@ export async function createLifecycleViaBuilderPath(params: {
     lifecycleName: string;
     lifecycleDescription?: string;
     primaryEntity: LifecyclePrimaryEntityKey;
+    /** Absent → staged lifecycle. A domain projection ignores `primaryEntity`. */
+    processModel?: ProcessModelV1;
     createdByUserId: string;
 }): Promise<CreateLifecycleViaBuilderResult> {
     const trimmed = params.lifecycleName.trim();
@@ -52,6 +55,7 @@ export async function createLifecycleViaBuilderPath(params: {
                 name: trimmed,
                 description: params.lifecycleDescription?.trim() || undefined,
                 primary_entity: params.primaryEntity,
+                ...(params.processModel ? { process_model: params.processModel } : {}),
             }),
         }
     );

@@ -1,0 +1,52 @@
+{
+  "run": "qar_b74d93c3d853",
+  "at": "2026-11-06T17:19:20.770Z",
+  "results": [
+    {
+      "id": "W1",
+      "goal": "Processing → Documents → Missing documents lists the run's unmet requirement",
+      "pass": false,
+      "actual": "kid2=false kid1(satisfied, absent)=true",
+      "screenshot": "d6-human-qa/01-missing-documents.png"
+    },
+    {
+      "id": "W2",
+      "goal": "a satisfied requirement is not listed as work",
+      "pass": true,
+      "actual": "Kid One absent",
+      "screenshot": "d6-human-qa/01-missing-documents.png"
+    },
+    {
+      "id": "W1",
+      "goal": "Processing → Documents → Missing documents reachable",
+      "pass": false,
+      "actual": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByText('QA D6 Kid Two b74d93c3d853').first()\u001b[22m\n",
+      "screenshot": "d6-human-qa/01-missing-documents-error.png"
+    },
+    {
+      "id": "W4",
+      "goal": "Studio → Documents → Requirements lists the run's requirement with its published version",
+      "pass": false,
+      "actual": "listed=false",
+      "screenshot": "d6-human-qa/03-studio-requirements.png"
+    },
+    {
+      "id": "W5",
+      "goal": "Focus Panel readiness reachable",
+      "pass": false,
+      "actual": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=dialog] button').filter({ hasText: 'QA D6 Kid Two b74d93c3d853' }).first()\u001b[22m\n",
+      "screenshot": "d6-human-qa/05-focus-readiness-error.png"
+    },
+    {
+      "id": "W6",
+      "goal": "the surfaces read only the canonical D6 routes",
+      "pass": true,
+      "actual": "[\"200 GET /api/admin/documents/requirements/work\",\"200 GET /api/admin/documents/configuration/requirements\"]",
+      "screenshot": null
+    }
+  ],
+  "api": [
+    "200 GET /api/admin/documents/requirements/work",
+    "200 GET /api/admin/documents/configuration/requirements"
+  ]
+}

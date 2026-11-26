@@ -1,0 +1,51 @@
+{
+  "governed_request_id": "gar_1344ea127f1c6b",
+  "database_target": "alloy_deployed_primary",
+  "staging_merge_sha": "1492a2dd9fdbb36cde05db1e734e71b550e875dd",
+  "candidate_sha": "dfa2fc79837a318dd7ce338843950020ee3a2e29",
+  "result": {
+    "databaseTarget": "alloy_deployed_primary",
+    "queryHash": "790400aae9d2b106b7c6636b9018cbb2897f1be65b982356dfd710aba3437cef",
+    "rowCount": 1,
+    "census": {
+      "format": "q15_labeled_rows",
+      "census_run_at": "2026-10-27T15:32:38.026Z",
+      "question_ids": [
+        "m090000"
+      ],
+      "questions": {
+        "m090000": {
+          "question_id": "m090000",
+          "row_count": null,
+          "rows": [
+            "schema_migrations ~ ledger_row ~ 20261212090000 ~ true",
+            "document_requirements ~ exists_rls ~ true",
+            "document_requirements ~ no_client_privilege ~ true",
+            "document_requirements ~ guard_trigger ~ true",
+            "document_requirement_versions ~ exists_rls ~ true",
+            "document_requirement_versions ~ no_client_privilege ~ true",
+            "document_requirement_versions ~ guard_trigger ~ true",
+            "document_requirement_waivers ~ exists_rls ~ true",
+            "document_requirement_waivers ~ no_client_privilege ~ true",
+            "document_requirement_waivers ~ guard_trigger ~ true",
+            "document_requirement_version_problems ~ service_role_only ~ true",
+            "document_requirement_validate ~ service_role_only ~ true",
+            "document_requirement_publish ~ service_role_only ~ true",
+            "document_requirement_waiver_grant ~ service_role_only ~ true",
+            "document_requirement_waiver_revoke ~ service_role_only ~ true",
+            "document_requirement_purge ~ service_role_only ~ true",
+            "document_requirement_purge_active ~ service_role_only ~ true",
+            "document_requirement_purge ~ unbound_two_arg_absent ~ true",
+            "document_requirement_purge ~ security_definer_org_run_bound ~ true",
+            "document_requirement_purge_active ~ owner_bound ~ true",
+            "documents ~ rows ~ 378",
+            "document_versions ~ rows ~ 378",
+            "document_subjects ~ rows ~ 172"
+          ]
+        }
+      },
+      "row_count": 23
+    },
+    "evidencePath": "certification/documents-v1/d6-requirements-physical-state-census.sql.results.json"
+  }
+}

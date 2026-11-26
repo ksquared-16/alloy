@@ -12,7 +12,7 @@
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import {
-    PACK_TO_BUSINESS_PROCESS,
+    businessProcessForMetricPack,
     type OperationalCalculation,
     type OperationalCalculationGovernance,
 } from "@/lib/analytics/calculations/types";
@@ -30,7 +30,7 @@ function defineCalculation(
         ...governance,
         key,
         label: def.label,
-        businessProcess: PACK_TO_BUSINESS_PROCESS[def.pack],
+        businessProcess: businessProcessForMetricPack(def.pack),
         format: def.format,
         snapshotStrategy: def.computationKind,
         bounded: def.snapshotSemantics ?? false,
@@ -40,6 +40,211 @@ function defineCalculation(
 }
 
 const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
+    "attendance.correction_rate": defineCalculation("attendance.correction_rate", {
+        questionAnswered: "How often do we have to correct what we recorded?",
+        grains: ["org", "site"],
+        aggregation: "rate",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.unmapped_event_count": defineCalculation("attendance.unmapped_event_count", {
+        questionAnswered: "What did another system send that we could not use?",
+        grains: ["org"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.consequence_review_count": defineCalculation("attendance.consequence_review_count", {
+        questionAnswered: "What followed from attendance and is still waiting on a person?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.occupancy_count": defineCalculation("attendance.occupancy_count", {
+        questionAnswered: "How many children are physically on site right now, and where are they?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / occupancyAt point-in-time whereabouts fold",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Occupancy is asserted through occupancyAt against movement fixtures: a child who moves " +
+            "changes location without changing the total, and placement is never consulted.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.expected_count": defineCalculation("attendance.expected_count", {
+        questionAnswered: "How many children are expected at this site today?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.here_now_count": defineCalculation("attendance.here_now_count", {
+        questionAnswered: "How many children are physically in the building right now?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.not_arrived_count": defineCalculation("attendance.not_arrived_count", {
+        questionAnswered: "How many expected children have not arrived and nobody has explained why?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.checked_out_count": defineCalculation("attendance.checked_out_count", {
+        questionAnswered: "How many children have already been collected today?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.known_away_count": defineCalculation("attendance.known_away_count", {
+        questionAnswered: "How many children are away today for a reason somebody recorded?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.unknown_state_count": defineCalculation("attendance.unknown_state_count", {
+        questionAnswered: "For how many children can we not resolve what today was supposed to be?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
     "enrollment.time_to_schedule_tour": defineCalculation("enrollment.time_to_schedule_tour", {
         questionAnswered: "How long does it take to get a new family onto a confirmed tour?",
         grains: ["org", "site"],
@@ -75,10 +280,66 @@ const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
         dependencies: [],
         logicOwner: "OIP / enrollment resolvers",
         refreshStrategy: "snapshot",
-        consumers: ["analytics", "business_process_tile"],
+        consumers: ["analytics", "work_unit_header", "business_process_tile"],
         accessScope: "department",
         version: 1,
         testingStrategy: "Count parity vs evaluateMetricDefinition; stage/status dimension fixtures.",
+        status: "active",
+        drillContractId: "enrollment.leads",
+    }),
+    "enrollment.active_leads": defineCalculation("enrollment.active_leads", {
+        questionAnswered: "How many active enrollment participants (children) are in this work unit?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Enrollment Definition (projection + semantics)",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics", "business_process_tile"],
+        accessScope: "department",
+        version: 1,
+        testingStrategy: "Participant count parity via enrollmentProjection + enrollmentSemantics.",
+        status: "active",
+        drillContractId: "enrollment.leads",
+    }),
+    "enrollment.active_families": defineCalculation("enrollment.active_families", {
+        questionAnswered: "How many live enrollment opportunities (families/cases) are in this work unit?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Enrollment Definition (projection + semantics)",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics", "business_process_tile"],
+        accessScope: "department",
+        version: 1,
+        testingStrategy: "Distinct context_id parity for isActiveLeadParticipant via enrollmentProjection.",
+        status: "active",
+        drillContractId: "enrollment.leads",
+    }),
+    "enrollment.new_leads": defineCalculation("enrollment.new_leads", {
+        questionAnswered: "How many participants are in the Lead stage right now?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Enrollment Definition (projection + semantics)",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics", "business_process_tile"],
+        accessScope: "department",
+        version: 1,
+        testingStrategy: "Participant count parity; effective-stage coalesce fixtures.",
+        status: "active",
+        drillContractId: "enrollment.leads",
+    }),
+    "enrollment.waitlisted": defineCalculation("enrollment.waitlisted", {
+        questionAnswered: "How many participants are waitlisted?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Enrollment Definition (projection + semantics)",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics", "business_process_tile"],
+        accessScope: "department",
+        version: 1,
+        testingStrategy: "Participant count parity; waitlist stage/state fixtures.",
         status: "active",
         drillContractId: "enrollment.leads",
     }),
@@ -89,7 +350,7 @@ const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
         dependencies: [],
         logicOwner: "OIP / enrollment resolvers",
         refreshStrategy: "snapshot",
-        consumers: ["analytics"],
+        consumers: ["analytics", "work_unit_header"],
         accessScope: "department",
         version: 1,
         testingStrategy: "Count parity vs evaluateMetricDefinition.",
@@ -146,7 +407,7 @@ const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
         dependencies: [],
         logicOwner: "OIP / forms resolvers",
         refreshStrategy: "snapshot",
-        consumers: ["analytics", "workspace_header"],
+        consumers: ["analytics", "work_unit_header", "workspace_header"],
         accessScope: "department",
         version: 1,
         testingStrategy: "Rate parity vs form_submissions fixture.",
@@ -202,7 +463,7 @@ const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
         dependencies: [],
         logicOwner: "OIP / operational health resolvers",
         refreshStrategy: "live",
-        consumers: ["analytics", "workspace_header", "business_process_tile"],
+        consumers: ["analytics", "work_unit_header", "workspace_header", "business_process_tile"],
         accessScope: "department",
         version: 1,
         testingStrategy: "Bounded-scan parity vs resolveOpportunityAttention (cap 2000).",
@@ -222,6 +483,277 @@ const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
         testingStrategy: "Bounded-scan parity vs evaluateOperationalReadiness (cap 500).",
         status: "active",
         drillContractId: "ops.readiness",
+    }),
+
+    // ---- Trust: governed reasoning execution --------------------------------
+    // `accessScope: "org"` and `grains: ["org"]` on every entry \u2014 no Trust table
+    // carries site, location or department linkage, so org is the only grain
+    // that can be answered honestly.
+    //
+    // `exploratoryOnly` because no Trust drill contract exists yet: the drill
+    // target would be a Decision Package surface, and Phase 3 owns that.
+    "trust.governed_decisions_created": defineCalculation("trust.governed_decisions_created", {
+        questionAnswered: "How much governed reasoning is the platform being asked to do?",
+        grains: ["org"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Window-boundary and org-isolation cases in tests/metrics/trustMetrics.test.ts.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.governed_decisions_completed": defineCalculation("trust.governed_decisions_completed", {
+        questionAnswered: "How much governed reasoning actually completed?",
+        grains: ["org"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Asserted distinct from decisions requested; a contract without a package is not counted.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.recommendation_rate": defineCalculation("trust.recommendation_rate", {
+        questionAnswered: "How often does governed reasoning produce a usable recommendation?",
+        grains: ["org"],
+        aggregation: "rate",
+        dependencies: ["trust.governed_decisions_completed"],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Numerator and denominator asserted separately; null on an empty cohort.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.governed_refusal_rate": defineCalculation("trust.governed_refusal_rate", {
+        questionAnswered: "How often does the platform deliberately decline to recommend?",
+        grains: ["org"],
+        aggregation: "rate",
+        dependencies: ["trust.governed_decisions_completed"],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Governed refusals asserted disjoint from reasoning failures.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.reasoning_failure_rate": defineCalculation("trust.reasoning_failure_rate", {
+        questionAnswered: "How often does governed reasoning break rather than decline?",
+        grains: ["org"],
+        aggregation: "rate",
+        dependencies: ["trust.governed_decisions_completed"],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Failure outcomes asserted disjoint from governed refusal outcomes.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.deterministic_resolution_rate": defineCalculation("trust.deterministic_resolution_rate", {
+        questionAnswered: "How much reasoning resolves without escalating beyond deterministic rules?",
+        grains: ["org"],
+        aggregation: "rate",
+        dependencies: [],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Classified only from persisted escalation_level; local models are not inferred.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.escalated_decision_count": defineCalculation("trust.escalated_decision_count", {
+        questionAnswered: "How many decisions needed reasoning beyond deterministic rules?",
+        grains: ["org"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Counts escalation depth; asserted not to imply provider usage.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.reasoning_latency_p50": defineCalculation("trust.reasoning_latency_p50", {
+        questionAnswered: "Is governance fast enough to sit in an operator's path?",
+        grains: ["org"],
+        aggregation: "median",
+        dependencies: [],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Median asserted for odd and even sample sizes; null on an empty cohort.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.provider_cost_units": defineCalculation("trust.provider_cost_units", {
+        questionAnswered: "What did governed reasoning cost?",
+        grains: ["org"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Decimal precision preserved; read only from the usage record (ADR-2).",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "trust.executions_committed_count": defineCalculation("trust.executions_committed_count", {
+        questionAnswered: "How many governed recommendations actually changed operational truth?",
+        grains: ["org"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Trust Runtime / trustMetrics resolver",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy: "Accepted asserted distinct from executed; duplicate observations deduplicated by package.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+
+    /*
+     * ── FINANCIALS ────────────────────────────────────────────────────────────────────────
+     *
+     * `logicOwner` names the THREAD, not this file, because that is the accountable owner: the
+     * metric resolvers read a scoped cohort and take a figure out of it, and every figure comes
+     * from `computeCollectiblePosition` — the same arithmetic a family's account card renders.
+     *
+     * ALL SEVEN ARE `exploratoryOnly`, AND NOT BECAUSE THEY DEAD-END.
+     *
+     * The drill vocabulary has exactly one kind: a queue drill that resolves a logical
+     * `workUnitKey` to a real work unit id. Financials is a modal workspace, not a work-unit
+     * queue, so there is no key to resolve — and inventing one would make DrillResolver return
+     * a fabricated target instead of an honest `unavailable`. The destination exists (the
+     * Financials workspace section that owns each figure); the contract type cannot yet
+     * express it. Declaring that plainly is the alternative to faking it.
+     *
+     * `accessScope: "site"` on the position and flow metrics is load-bearing: their projections
+     * intersect the requested site with the operator's own rights under Thread 4's contract, so
+     * a site filter narrows and can never widen.
+     */
+    "financials.outstanding_amount": defineCalculation("financials.outstanding_amount", {
+        questionAnswered: "How much do posted childcare charges still owe, in this scope?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 8 (payments/applications) via resolveFinancialPositionCohort",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Pure arithmetic pinned in collectiblePosition.test.ts; projection agreement with "
+            + "resolveFamilyCollectible proven live. NOT Accounts Receivable — no receivables model exists.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.currently_collectible_amount": defineCalculation("financials.currently_collectible_amount", {
+        questionAnswered: "How much may we actually collect from families right now?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: ["financials.outstanding_amount"],
+        logicOwner: "Financials Thread 9 (subsidy suppression, Director decision B)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Three suppression bounds and the settled-claim release pinned hermetically.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.gross_charges_posted_amount": defineCalculation("financials.gross_charges_posted_amount", {
+        questionAnswered: "How much did we bill in this window?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 1 (charge spine)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Windowed on posted_at, not service_date. A billed amount, NOT recognised revenue — "
+            + "the platform has no revenue-recognition model.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.payments_received_amount": defineCalculation("financials.payments_received_amount", {
+        questionAnswered: "How much money arrived in this window?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 8 (payments)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Posted inbound only; refunds reported beside it and never netted in.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.unapplied_payments_amount": defineCalculation("financials.unapplied_payments_amount", {
+        questionAnswered: "How much money is sitting on accounts without settling anything?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 8 (payment applications)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "amount − active allocations, the account card's own definition. Never windowed.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.unresolved_subsidy_variance_amount": defineCalculation("financials.unresolved_subsidy_variance_amount", {
+        questionAnswered: "How far apart are what we claimed and what agencies paid, undecided?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 9 (claims, remittances, variances)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Signed; open variances only. Reported beside collectible, never folded into it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.charges_awaiting_post_count": defineCalculation("financials.charges_awaiting_post_count", {
+        questionAnswered: "How many draft charges is an operator able to post right now?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Financials Thread 4 (work queue projection); `charge.post` owns eligibility",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Counted from the SAME projection the queue lists, so tile and list cannot disagree.",
+        status: "active",
+        exploratoryOnly: true,
     }),
 };
 

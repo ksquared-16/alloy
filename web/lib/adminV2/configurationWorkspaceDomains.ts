@@ -8,8 +8,11 @@
 
 import {
     adminSettingsSubpathHref,
+    CANONICAL_ORGANIZATION_BASE,
+    CANONICAL_ORGANIZATION_DATA_MODEL_HREF,
     CANONICAL_SETTINGS_BASE,
 } from "@/lib/admin/canonicalAdminRoutes";
+import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
 
 const settings = adminSettingsSubpathHref;
 
@@ -26,7 +29,7 @@ export const CONFIGURATION_RUNTIME_OWNERSHIP_COPY = {
     layoutsPresentation:
         "Queue rows, Focus Panel presentation, and where actions appear on each surface.",
     fieldsCanonical:
-        "Canonical field catalog and formats — owned by the Fields & Field Formats sprint.",
+        "Canonical data model — entities, fields, relationships, and computed signals.",
     statusesCanonical:
         "Status vocabulary and transitions — owned by the Statuses sprint; stage assignment lives in Business Processes.",
     perspectivesMetadata:
@@ -65,14 +68,14 @@ export const CONFIGURATION_JOURNEY_STEPS = [
     {
         step: 1,
         label: "Organization",
-        summary: "Locations, access, and communications.",
-        href: settings("locations"),
+        summary: "Shared configuration, locations, access, and communications.",
+        href: settings("organization"),
     },
     {
         step: 2,
         label: "Data Model",
         summary: "Fields and statuses define operator vocabulary.",
-        href: settings("fields"),
+        href: CANONICAL_ORGANIZATION_DATA_MODEL_HREF,
     },
     {
         step: 3,
@@ -95,9 +98,9 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Who uses the system and where.",
         items: [
             {
-                href: settings("locations"),
-                label: "Locations",
-                description: "Sites, rooms, programs, and schedules per location.",
+                href: "/organization/programs-locations",
+                label: "Programs & Locations",
+                description: "Reusable services and the places that deliver them.",
             },
             {
                 href: settings("users-roles"),
@@ -110,40 +113,40 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: "Email and messaging setup.",
             },
             {
-                href: settings("departments"),
-                label: "Departments",
-                description: "Teams and organizational structure.",
-                advanced: true,
+                href: settings("attendance-devices"),
+                label: "Attendance devices",
+                description: "Tablets that record attendance at a site.",
             },
         ],
     },
     {
         id: "data_model",
         label: "Data Model",
-        description: "Canonical field catalog and formats (Fields sprint).",
+        description: "Entities, fields, relationships, and runtime signals.",
         items: [
             {
-                href: settings("fields"),
-                label: "Fields",
+                href: CANONICAL_ORGANIZATION_DATA_MODEL_HREF,
+                label: "Data Model",
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.fieldsCanonical,
+                emphasis: true,
             },
             {
-                href: settings("statuses"),
+                href: dataModelSectionHref("statuses"),
                 label: "Statuses",
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.statusesCanonical,
             },
             {
-                href: settings("option-sets"),
+                href: dataModelSectionHref("option-sets"),
                 label: "Option sets",
                 description: "Static and reference-backed dropdown vocabulary for fields.",
             },
             {
-                href: settings("relationships"),
+                href: dataModelSectionHref("relationships"),
                 label: "Relationships",
                 description: "Person and family relationship types.",
             },
             {
-                href: settings("entity-labels"),
+                href: dataModelSectionHref("entities"),
                 label: "Record labels",
                 description: "Singular names for record types.",
                 advanced: true,
@@ -153,18 +156,23 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     {
         id: "operations",
         label: "Operations",
-        description: "Processes owns when operators use actions.",
+        description: "Automation, Processes, and related operational configuration.",
         items: [
-            {
-                href: settings("processes"),
-                label: "Processes",
-                description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.businessProcessesSpine,
-                emphasis: true,
-            },
             {
                 href: "/admin/workflows",
                 label: "Automation",
                 description: "Workflow triggers and automated changes.",
+                emphasis: true,
+            },
+            {
+                href: settings("processes"),
+                label: "Processes",
+                description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.businessProcessesSpine,
+            },
+            {
+                href: settings("attendance-expectations"),
+                label: "Expected absence and closures",
+                description: "Where planned absence, holidays and closures are recorded.",
             },
             {
                 href: settings("placement-priority"),
@@ -191,20 +199,9 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.layoutsPresentation,
             },
             {
-                href: "/admin/forms",
-                label: "Forms & packets",
-                description: "Intake forms and enrollment packets.",
-            },
-            {
                 href: settings("analytics"),
                 label: "Operational Intelligence",
                 description: "Performance packs, targets, and where indicators appear.",
-            },
-            {
-                href: settings("documents/document-fields"),
-                label: "Document fields",
-                description: "Fields on enrollment documents.",
-                advanced: true,
             },
             {
                 href: settings("config-proposals"),
@@ -216,18 +213,13 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     },
     {
         id: "commercial",
-        label: "Commercial",
-        description: "Programs, tuition, and business rates.",
+        label: "Business",
+        description: "Business configuration modules.",
         items: [
             {
-                href: "/admin/commercial/programs",
-                label: "Programs",
-                description: "Programs offered at each location.",
-            },
-            {
-                href: "/admin/commercial/tuition",
-                label: "Tuition",
-                description: "Rate grid by program and schedule type.",
+                href: "/organization/financials",
+                label: "Financials",
+                description: "Tuition, fees, catalog, policies, accounting, and commercial simulation.",
             },
         ],
     },
@@ -259,6 +251,7 @@ export const CONFIGURATION_WORKSPACE_ADVANCED_ITEMS: readonly ConfigurationWorks
 
 export function configurationWorkspaceDomainForPath(pathname: string): ConfigurationWorkspaceDomainId | null {
     const normalized = pathname.replace(/\/$/, "") || CANONICAL_SETTINGS_BASE;
+    if (normalized === CANONICAL_ORGANIZATION_BASE) return "organization";
     const canonical =
         normalized === "/admin" || normalized === "/admin/settings"
             ? CANONICAL_SETTINGS_BASE

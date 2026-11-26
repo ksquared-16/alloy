@@ -1,0 +1,12 @@
+sidebar-ready
+modal=true
+SHOT 02-scheduling-modal
+SHOT 03-category-landing
+landing=1 cards=0
+SHOT 04-assignments-roster
+rosterList=0 subjects=0
+SHOT 05-room-board
+weekPicker=1 metrics=0 board=0
+SHOT 06-week-picker-open
+weekOptions=25
+SHOT 07-week-jumped

@@ -41,6 +41,11 @@ export type BuildChildGrainQueueRowContextInput = {
     /** Composed runtime record for this OCM row. */
     record: Record<string, unknown>;
     canMutate?: boolean;
+    /**
+     * When the published Waitlist variant exposes placement adjustment and a
+     * placement_candidate is attached, allow the existing manual-position command.
+     */
+    canOverridePlacement?: boolean;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -108,8 +113,16 @@ export function buildChildGrainQueueRowOperationalContext(
         candidateStatus: null,
     };
 
+    const hasPlacementCandidate =
+        Boolean(trimOrNull(record["_placement_candidate_id"])) ||
+        Boolean(trimOrNull(record["placementCandidateId"])) ||
+        (record["_placement_waitlist_row"] != null &&
+            typeof record["_placement_waitlist_row"] === "object");
+
     const capabilities: QueueRowCapabilities = {
-        canOverridePlacement: false, // placement override is candidate-grain, not child-grain
+        // Placement override is Placement-System owned. Child Waitlist rows with an attached
+        // placement_candidate may use the existing manual-position admin command.
+        canOverridePlacement: input.canOverridePlacement ?? hasPlacementCandidate,
         canMutate: input.canMutate ?? false,
     };
 

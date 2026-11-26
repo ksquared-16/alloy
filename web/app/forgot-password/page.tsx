@@ -1,120 +1,152 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useEffect, useRef, useState, FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
-import PrimaryButton from "@/components/PrimaryButton";
+import CTAButton from "@/components/marketing/CTAButton";
+import AuthShell, { AUTH_INPUT_CLASS, AUTH_LABEL_CLASS, AUTH_LINK_CLASS, AuthAlert } from "@/components/auth/AuthShell";
+import {
+    createSingleFlight,
+    passwordRecoveryFailureMessage,
+    passwordRecoveryRequestOutcome,
+} from "@/lib/auth/passwordRecoveryRequest";
 
 function getResetRedirectUrl(): string {
-  const base = process.env.NEXT_PUBLIC_APP_URL;
-  if (base) return `${base.replace(/\/$/, "")}/reset-password`;
-  if (typeof window !== "undefined") return `${window.location.origin}/reset-password`;
-  return "";
+    const base = process.env.NEXT_PUBLIC_APP_URL;
+    if (base) return `${base.replace(/\/$/, "")}/reset-password`;
+    if (typeof window !== "undefined") return `${window.location.origin}/reset-password`;
+    return "";
 }
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    const [email, setEmail] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const flight = useRef(createSingleFlight());
+    const mounted = useRef(true);
+    const confirmationHeading = useRef<HTMLHeadingElement>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsLoading(true);
-    setSuccess(false);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
 
-    try {
-      const redirectTo = getResetRedirectUrl();
-      if (!redirectTo) {
-        setError("Configuration error: NEXT_PUBLIC_APP_URL is not set.");
-        setIsLoading(false);
-        return;
-      }
+    // Move focus to the confirmation so a screen reader announces the page change.
+    useEffect(() => {
+        if (success) confirmationHeading.current?.focus();
+    }, [success]);
 
-      const supabase = createClient();
-      await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-    } catch (_) {
-      // Do not surface error details (prevent enumeration)
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        // One request at a time: a second email would invalidate the first link (see createSingleFlight).
+        await flight.current.run(async () => {
+            setError(null);
+            setIsLoading(true);
+            try {
+                const redirectTo = getResetRedirectUrl();
+                if (!redirectTo) {
+                    setError("Configuration error: NEXT_PUBLIC_APP_URL is not set.");
+                    return;
+                }
+
+                let providerError: unknown = null;
+                try {
+                    const { error: resetError } = await createClient().auth.resetPasswordForEmail(email.trim(), { redirectTo });
+                    providerError = resetError;
+                } catch (thrown) {
+                    providerError = thrown;
+                }
+                if (!mounted.current) return;
+
+                // F-1 — only failures that are true of every caller are reported; account state never is.
+                const failure = passwordRecoveryFailureMessage(passwordRecoveryRequestOutcome(providerError));
+                if (failure) {
+                    setError(failure);
+                    return;
+                }
+                setSuccess(true);
+            } finally {
+                if (mounted.current) setIsLoading(false);
+            }
+        });
+    };
+
+    if (success) {
+        return (
+            <AuthShell>
+                <h1
+                    ref={confirmationHeading}
+                    tabIndex={-1}
+                    className="text-2xl font-bold tracking-tight text-alloy-forge outline-none md:text-3xl"
+                >
+                    Check your email
+                </h1>
+                <div role="status" className="mt-4 space-y-3 text-sm leading-relaxed text-alloy-forge/70">
+                    <p>
+                        If an account exists for that email, we&rsquo;ve sent a link to reset your password. Check your
+                        inbox and spam folder.
+                    </p>
+                    <p>Only the most recent link works. If you asked more than once, use the newest email.</p>
+                </div>
+                <div className="mt-8 flex flex-col gap-3">
+                    <CTAButton href="/login" className="w-full">
+                        Back to sign in
+                    </CTAButton>
+                    <CTAButton
+                        variant="ghost"
+                        className="w-full"
+                        onClick={() => {
+                            setSuccess(false);
+                            setError(null);
+                        }}
+                    >
+                        Use a different email
+                    </CTAButton>
+                </div>
+            </AuthShell>
+        );
     }
 
-    setSuccess(true);
-    setIsLoading(false);
-  };
-
-  if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-alloy-stone/30">
-          <h1 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
-            Check your email
-          </h1>
-          <p className="text-alloy-midnight/80 text-sm mb-6 text-center">
-            If an account exists for that email, we’ve sent a link to reset your password. Please check your inbox and spam folder.
-          </p>
-          <div className="text-center">
-            <Link
-              href="/login"
-              className="text-alloy-blue hover:underline text-sm font-medium"
-            >
-              Back to sign in
-            </Link>
-          </div>
-        </div>
-      </div>
+        <AuthShell>
+            <h1 className="text-2xl font-bold tracking-tight text-alloy-forge md:text-3xl">Reset your password</h1>
+            <p className="mt-2 text-sm text-alloy-forge/60">
+                Enter the email you sign in with and we&rsquo;ll send you a link to choose a new password.
+            </p>
+
+            {error && <AuthAlert id="forgot-password-error">{error}</AuthAlert>}
+
+            <form onSubmit={handleSubmit} className="mt-8 space-y-5" aria-busy={isLoading}>
+                <div>
+                    <label htmlFor="email" className={AUTH_LABEL_CLASS}>
+                        Email
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className={AUTH_INPUT_CLASS}
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        aria-describedby={error ? "forgot-password-error" : undefined}
+                    />
+                </div>
+
+                <CTAButton type="submit" disabled={isLoading} className="w-full">
+                    {isLoading ? "Sending…" : "Send reset link"}
+                </CTAButton>
+
+                <p className="text-center text-sm text-alloy-forge/60">
+                    <Link href="/login" className={AUTH_LINK_CLASS}>
+                        Back to sign in
+                    </Link>
+                </p>
+            </form>
+        </AuthShell>
     );
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-alloy-stone/30">
-        <h1 className="text-2xl font-bold text-alloy-midnight mb-2 text-center">
-          Forgot password
-        </h1>
-        <p className="text-alloy-midnight/70 text-sm text-center mb-6">
-          Enter your email and we’ll send you a link to reset your password.
-        </p>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70"
-            >
-              Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full rounded-md px-3 py-2 text-sm border border-alloy-stone/80 bg-white focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div className="pt-2">
-            <PrimaryButton
-              type="submit"
-              disabled={isLoading}
-              className="w-full"
-            >
-              {isLoading ? "Sending…" : "Send reset link"}
-            </PrimaryButton>
-          </div>
-        </form>
-        <p className="mt-4 text-center text-sm text-alloy-midnight/70">
-          <Link href="/login" className="text-alloy-blue hover:underline">
-            Back to sign in
-          </Link>
-        </p>
-      </div>
-    </div>
-  );
 }

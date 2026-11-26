@@ -1,0 +1,70 @@
+{
+  "focus": [
+    {
+      "step": "as opened",
+      "scopeControlValue": "Everyone▾",
+      "balance": "$1,412.87",
+      "pastDue": "$1,450.00",
+      "responsibility": "$1,487.87",
+      "ledgerRows": 116
+    },
+    {
+      "step": "Certa Certhouse",
+      "scopeControlValue": "Certa Certhouse▾",
+      "balance": "$1,412.87",
+      "pastDue": "$1,450.00",
+      "responsibility": "$1,487.87",
+      "ledgerRows": 64
+    },
+    {
+      "step": "Certb Certhouse",
+      "scopeControlValue": "Certb Certhouse▾",
+      "balance": "$1,412.87",
+      "pastDue": "$1,450.00",
+      "responsibility": "$1,487.87",
+      "ledgerRows": 95
+    },
+    {
+      "step": "Everyone",
+      "scopeControlValue": "Everyone▾",
+      "balance": "$1,412.87",
+      "pastDue": "$1,450.00",
+      "responsibility": "$1,487.87",
+      "ledgerRows": 116
+    }
+  ],
+  "accounts": [
+    {
+      "step": "as opened",
+      "scopeControlValue": "Everyone▾",
+      "balance": "$2,023.87",
+      "pastDue": "$1,525.00",
+      "responsibility": "$2,098.87",
+      "ledgerRows": 116
+    },
+    {
+      "step": "Certa Certhouse",
+      "scopeControlValue": "Certa Certhouse▾",
+      "balance": "$2,023.87",
+      "pastDue": "$1,525.00",
+      "responsibility": "$2,098.87",
+      "ledgerRows": 64
+    },
+    {
+      "step": "Certb Certhouse",
+      "scopeControlValue": "Certb Certhouse▾",
+      "balance": "$2,023.87",
+      "pastDue": "$1,525.00",
+      "responsibility": "$2,098.87",
+      "ledgerRows": 95
+    },
+    {
+      "step": "Everyone",
+      "scopeControlValue": "Everyone▾",
+      "balance": "$2,023.87",
+      "pastDue": "$1,525.00",
+      "responsibility": "$2,098.87",
+      "ledgerRows": 116
+    }
+  ]
+}

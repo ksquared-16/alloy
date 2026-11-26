@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Communications API
 
 **Domain size:** ~39 route handlers. Full list: [`api-index.md` → Communications](api-index.md#communications).

@@ -1,0 +1,44 @@
+[
+  {
+    "dwell": 0,
+    "headStart": 3,
+    "postClickUsable": 911,
+    "requests": 1,
+    "account": "0658832a-48d6-4b80-beae-0b12d573fdf2"
+  },
+  {
+    "dwell": 400,
+    "headStart": 402,
+    "postClickUsable": 420,
+    "requests": 1,
+    "account": "fd000000-0000-4000-8000-0000000c0001"
+  },
+  {
+    "dwell": 900,
+    "headStart": 904,
+    "postClickUsable": 1153,
+    "requests": 2,
+    "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+  },
+  {
+    "dwell": 0,
+    "headStart": 2,
+    "postClickUsable": 878,
+    "requests": 1,
+    "account": "fd000000-0000-4000-8000-0000000c0002"
+  },
+  {
+    "dwell": 400,
+    "headStart": 403,
+    "postClickUsable": 550,
+    "requests": 1,
+    "account": "7796a568-3b5f-4606-80f9-fee2dae2a419"
+  },
+  {
+    "dwell": 900,
+    "headStart": 903,
+    "postClickUsable": 932,
+    "requests": 2,
+    "account": "fcaa839f-6960-4b09-b663-b247b99ea9d9"
+  }
+]

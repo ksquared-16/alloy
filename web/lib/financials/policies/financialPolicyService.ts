@@ -47,6 +47,7 @@ type ScopeColumns = {
     location_id: string | null;
     service_id: string | null;
     rate_plan_id: string | null;
+    customer_id: string | null;
 };
 
 export type PolicyScopeInput = {
@@ -54,6 +55,7 @@ export type PolicyScopeInput = {
     locationId?: string | null;
     serviceId?: string | null;
     ratePlanId?: string | null;
+    customerId?: string | null;
 };
 
 function buildScope(input: PolicyScopeInput): ScopeColumns {
@@ -64,16 +66,24 @@ function buildScope(input: PolicyScopeInput): ScopeColumns {
     const location = trimOrNull(input.locationId);
     const service = trimOrNull(input.serviceId);
     const ratePlan = trimOrNull(input.ratePlanId);
+    const customer = trimOrNull(input.customerId);
+    /*
+     * Every branch names its own target and nulls the rest, which is the shape the database enforces
+     * in `financial_policies_scope_shape`. The `customer` row is the ACCOUNT scope: it answers which
+     * commercial calendar governs a combined account, and asserts nothing about a location.
+     */
     const shape: Record<FinancialPolicyScopeType, ScopeColumns> = {
-        org: { scope_type: "org", location_id: null, service_id: null, rate_plan_id: null },
-        location: { scope_type: "location", location_id: location, service_id: null, rate_plan_id: null },
-        service: { scope_type: "service", location_id: null, service_id: service, rate_plan_id: null },
-        rate_plan: { scope_type: "rate_plan", location_id: null, service_id: null, rate_plan_id: ratePlan },
+        org: { scope_type: "org", location_id: null, service_id: null, rate_plan_id: null, customer_id: null },
+        location: { scope_type: "location", location_id: location, service_id: null, rate_plan_id: null, customer_id: null },
+        service: { scope_type: "service", location_id: null, service_id: service, rate_plan_id: null, customer_id: null },
+        rate_plan: { scope_type: "rate_plan", location_id: null, service_id: null, rate_plan_id: ratePlan, customer_id: null },
+        customer: { scope_type: "customer", location_id: null, service_id: null, rate_plan_id: null, customer_id: customer },
     };
     const cols = shape[scopeType];
     if (scopeType === "location" && !cols.location_id) fail("invalid_input", "location scope requires a location");
     if (scopeType === "service" && !cols.service_id) fail("invalid_input", "service scope requires a service");
     if (scopeType === "rate_plan" && !cols.rate_plan_id) fail("invalid_input", "rate_plan scope requires a rate plan");
+    if (scopeType === "customer" && !cols.customer_id) fail("invalid_input", "customer scope requires a customer");
     return cols;
 }
 
@@ -204,6 +214,13 @@ export async function createFinancialPolicyVersion(
             location_id: prior.location_id,
             service_id: prior.service_id,
             rate_plan_id: prior.rate_plan_id,
+            /*
+             * The ACCOUNT dimension. Omitted, a new version of a customer-scoped rule (an account's
+             * own billing calendar) inserted `scope_type: 'customer'` with no customer and failed
+             * `financial_policies_scope_shape` — an account-level rule could be created and never
+             * changed.
+             */
+            customer_id: prior.customer_id ?? null,
             policy_type: prior.policy_type,
             label: input.label !== undefined ? trimOrNull(input.label) : prior.label,
             description: input.description !== undefined ? trimOrNull(input.description) : prior.description,
@@ -247,8 +264,12 @@ export async function retireFinancialPolicy(
     if (rangeError) fail("validation_failed", rangeError.message);
     const actor = trimOrNull(input.actorUserId);
 
+    /*
+     * Retiring records the rule's last day and nothing else. It stays `is_active`: a retired rule
+     * decided every date in its window, and the resolver must keep answering for those dates. The
+     * end date alone takes it out of present and future resolution.
+     */
     const update: Record<string, unknown> = { effective_end: end, updated_by: actor };
-    if (compareIsoDates(end, input.todayYmd) <= 0) update.is_active = false;
 
     const { data, error } = await supabase
         .from(TABLE)
@@ -269,7 +290,8 @@ function sameLineage(a: FinancialPolicyRow, b: FinancialPolicyRow): boolean {
         a.scope_type === b.scope_type &&
         (a.location_id ?? null) === (b.location_id ?? null) &&
         (a.service_id ?? null) === (b.service_id ?? null) &&
-        (a.rate_plan_id ?? null) === (b.rate_plan_id ?? null)
+        (a.rate_plan_id ?? null) === (b.rate_plan_id ?? null) &&
+        (a.customer_id ?? null) === (b.customer_id ?? null)
     );
 }
 
@@ -287,6 +309,43 @@ export async function voidScheduledFinancialPolicy(
         (p) => p.id !== policy.id && sameLineage(p, policy) && compareIsoDates(p.effective_start, policy.effective_start) > 0,
     );
     if (hasLater) fail("invalid_state", "Cannot void a version that has a later version");
+
+    /*
+     * A POLICY THAT ALREADY DECIDED MONEY CANNOT BE DELETED.
+     *
+     * `financial_reduction_applications.financial_policy_id` records which policy
+     * authorised a historical reduction, and it is declared ON DELETE RESTRICT —
+     * so the database would refuse this delete anyway. It would refuse it as a
+     * foreign-key violation naming a constraint, which is an accurate answer to a
+     * question the operator did not ask.
+     *
+     * So the refusal is made here, in the domain's own words, BEFORE the delete
+     * is attempted. The FK stays exactly as it is: this preflight is the useful
+     * answer, and the constraint is the invariant for any caller that arrives by
+     * another route. Removing one because the other exists is how a guard becomes
+     * the only guard.
+     *
+     * Only REFERENCED policies are affected. An unused policy voids exactly as it
+     * always has — this adds a refusal, not a lifecycle.
+     */
+    const { data: usedBy, error: usedByError } = await supabase
+        .from("financial_reduction_applications")
+        .select("id")
+        .eq("org_id", input.orgId)
+        .eq("financial_policy_id", input.id)
+        .limit(1);
+    // A failed check is not permission to proceed: it is an unknown answer to
+    // "has this policy moved money", and deleting on an unknown is the one
+    // outcome that cannot be undone.
+    if (usedByError) fail("db_error", usedByError.message);
+    if ((usedBy ?? []).length > 0) {
+        fail(
+            "invalid_state",
+            "This policy has already been used for a financial reduction and cannot be deleted, "
+            + "because the record of why that money moved has to survive. Retire it instead — "
+            + "retiring ends it going forward and leaves the history intact.",
+        );
+    }
     const actor = trimOrNull(input.actorUserId);
 
     const supersedesId = asMetadata(policy.metadata).supersedes_id;

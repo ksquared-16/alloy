@@ -1,0 +1,14 @@
+{
+  "lane_id": "lane_2cea84351d90",
+  "action_key": "product.activate_candidate_preview",
+  "purpose": "Serve Human QA V2 candidate b84a37a3d7e392f483d035dbc460a5ca3db4e2bd (Marketing consent Forms Studio question + /dev/tours-qa guide) on this lane's isolated preview for the Director's QA and for the browser-verified guide URL.",
+  "reason_worker_cannot_execute": "Activating a candidate preview starts a trusted-host served process bound to an isolated certification environment and requires governed authorization.",
+  "inputs": {
+    "target": "alloy.candidate.enrollment",
+    "candidateSha": "b84a37a3d7e392f483d035dbc460a5ca3db4e2bd",
+    "environmentId": "certenv-7048d30add",
+    "databaseMode": "isolated",
+    "previewMode": "production",
+    "reason": "Director Human QA V2: the Marketing consent question exists only on this candidate; isolated database certenv-7048d30add (staging b30914e34, 550 migrations), no hosted data or providers."
+  }
+}

@@ -35,7 +35,7 @@ function post(body: unknown): NextRequest {
 beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdminOrOps.mockResolvedValue(null);
-    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin" });
+    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin", permissionKeys: ["fin.read", "fin.write"] });
     mockCreateAdminClient.mockReturnValue({ from: vi.fn() });
     mockToday.mockResolvedValue("2026-06-29");
     svc.previewConsumption.mockResolvedValue({ eventType: { eventKey: "enrollment.registration" }, resolution: { obligations: [] } });
@@ -89,5 +89,13 @@ describe("operational consumption simulate route", () => {
             expect.objectContaining({ attendanceFactType: "check_out", checkOutTime: "17:18", sourceFamily: "attendance", agreementId: "a1" }),
             "2026-06-29",
         );
+    });
+
+    /* W7-F010: reading Financials admits a preview; writing a draft consumption charge takes fin.write. */
+    it("lets a read-only principal preview but not draft", async () => {
+        mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin", permissionKeys: ["fin.read"] });
+        expect((await route.POST(post({ action: "preview", event_key: "enrollment.registration", source_entity_id: "a1" }))).status).toBe(200);
+        expect((await route.POST(post({ action: "draft", event_key: "enrollment.registration", source_entity_id: "a1" }))).status).toBe(403);
+        expect(svc.draftConsumption).not.toHaveBeenCalled();
     });
 });

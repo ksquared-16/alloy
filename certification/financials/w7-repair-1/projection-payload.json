@@ -1,0 +1,69 @@
+{
+  "interesting": [
+    {
+      "url": "/api/admin/work-units",
+      "status": 200,
+      "topKeys": [
+        "items"
+      ],
+      "cardsPresent": false,
+      "cardKeys": null,
+      "financials": "undefined"
+    },
+    {
+      "url": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries",
+      "status": 200,
+      "topKeys": [
+        "work_units"
+      ],
+      "cardsPresent": false,
+      "cardKeys": null,
+      "financials": "undefined"
+    }
+  ],
+  "siblings": {
+    "financials": "absent",
+    "attendanceSkeleton": 0,
+    "healthSkeleton": 0,
+    "cardKeys": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ]
+  },
+  "paths": [
+    "/api/admin/entity-labels",
+    "/api/admin/work-units",
+    "/api/admin/ai/config-layout-assist/capabilities",
+    "/api/admin/communications/unread-count",
+    "/api/admin/workspace/site-filter",
+    "/api/admin/departments",
+    "/api/admin/ai/workflow-assist/capabilities",
+    "/api/admin/verticals",
+    "/api/admin/lifecycle-catalog",
+    "/api/admin/location-program-categories",
+    "/api/admin/actions/right-rail-bundle",
+    "/api/admin/queues/stage-membership-ack",
+    "/api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-8aed48d80413-42be9074-443f-4047-bece-d68cd1d22788",
+    "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "/api/admin/locations",
+    "/api/admin/option-sets/person_gender",
+    "/api/admin/financials/card",
+    "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/lifecycle-builder",
+    "/api/admin/operational-tasks",
+    "/api/admin/status-options",
+    "/api/admin/option-sets/childcare_program_type",
+    "/api/admin/entity-layouts/focus-panel-summary",
+    "/api/admin/communications/conversations",
+    "/api/admin/related/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "/api/admin/activity",
+    "/api/admin/communications/bindings",
+    "/api/admin/communications/threads",
+    "/api/admin/communications/family-workspace",
+    "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries",
+    "/api/admin/communications/drawer-recipients"
+  ]
+}

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
 
@@ -9,11 +9,17 @@ vi.mock("@/lib/tours/availability/computeAvailableTourSlots", () => ({
             endAt: "2026-05-11T15:00:00.000Z",
             timezone: "UTC",
             remainingCapacity: 1,
+            capacity: 1,
             ruleId: "rule-1",
             locationId: "loc-1",
             userId: null,
         },
     ]),
+}));
+
+const { mockCalendarCheck } = vi.hoisted(() => ({ mockCalendarCheck: vi.fn() }));
+vi.mock("@/lib/operatingCalendar/operatingCalendarServer", () => ({
+    assertTourIntervalOperating: (...args: unknown[]) => mockCalendarCheck(...args),
 }));
 
 vi.mock("@/lib/tours/events/tourLifecycleEvents", () => ({
@@ -45,6 +51,16 @@ import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvail
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
 import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
 
+// The service refuses a tour before the site's tomorrow (tourEarliestDate); these fixtures book fixed
+// dates, so the clock is pinned before them. Only Date is faked — timers and promises run normally.
+beforeAll(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-01T12:00:00Z"));
+});
+afterAll(() => {
+    vi.useRealTimers();
+});
+
 describe("createTourBooking", () => {
     beforeEach(() => {
         vi.mocked(emitTourBookingLifecycleEvent).mockClear();
@@ -73,6 +89,76 @@ describe("createTourBooking", () => {
             })),
         } as never;
     }
+
+    it("ATOMICITY: a post-insert failure compensates (deletes the booking) — no ghost booking", async () => {
+        const row = {
+            id: "b-ghost",
+            org_id: "org-1",
+            opportunity_id: "opp-1",
+            location_id: "loc-1",
+            primary_person_id: null,
+            primary_contact_id: null,
+            requested_by_user_id: null,
+            start_at: "2026-05-11T14:00:00.000Z",
+            end_at: "2026-05-11T15:00:00.000Z",
+            timezone: "UTC",
+            status_key: "confirmed",
+            source: "admin",
+            form_submission_id: null,
+            form_public_link_id: null,
+            canceled_at: null,
+            canceled_by: null,
+            cancel_reason: null,
+            rescheduled_from_booking_id: null,
+            metadata: {},
+            created_at: "2026-05-11T12:00:00.000Z",
+            updated_at: "2026-05-11T12:00:00.000Z",
+        };
+        const deleted: { id: string | null } = { id: null };
+        const idChain = {
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+        const insertChain = {
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: row, error: null }),
+        };
+        const deleteChain: Record<string, unknown> = {
+            eq: vi.fn((col: string, val: string) => {
+                if (col === "id") deleted.id = val;
+                return deleteChain;
+            }),
+            then: (resolve: (v: { error: null }) => unknown) => resolve({ error: null }),
+        };
+        const supabase = {
+            from: vi.fn(() => ({
+                select: vi.fn((cols?: string) => (cols === "id" ? idChain : insertChain)),
+                insert: vi.fn(() => insertChain),
+                delete: vi.fn(() => deleteChain),
+            })),
+        } as never;
+
+        // The opportunity mirror fails AFTER the booking row is committed.
+        vi.mocked(applyTourBookingOpportunityIntegration).mockRejectedValueOnce(new Error("mirror exploded"));
+
+        const input: CreateTourBookingInput = {
+            orgId: "org-1",
+            opportunityId: "opp-1",
+            locationId: "loc-1",
+            startAt: new Date("2026-05-11T14:00:00.000Z"),
+            endAt: new Date("2026-05-11T15:00:00.000Z"),
+            timezone: "UTC",
+            source: "admin",
+            approvalRequired: false,
+        };
+
+        await expect(createTourBooking(supabase, input)).rejects.toThrow("mirror exploded");
+        // Before == After: the committed booking is rolled back, so the operator's error is truthful.
+        expect(deleted.id).toBe("b-ghost");
+        // And no confirmation comms go out for a booking that no longer exists.
+        expect(mockOrchestrateConfirmed).not.toHaveBeenCalled();
+    });
 
     it("inserts confirmed booking and emits tour_confirmed when approval not required", async () => {
         const row = {
@@ -169,6 +255,8 @@ describe("createTourBooking", () => {
             initialStatus: "requested",
         });
         expect(computeAvailableTourSlots).not.toHaveBeenCalled();
+        // …but the Operating Calendar is still asked: a request may not name a closed time.
+        expect(mockCalendarCheck).toHaveBeenCalledWith(supabase, expect.objectContaining({ orgId: "org-1", locationId: "loc-1", timezone: "UTC" }));
         expect(emitTourBookingLifecycleEvent).toHaveBeenCalledWith(
             supabase,
             "tour_requested",
@@ -178,5 +266,31 @@ describe("createTourBooking", () => {
         );
         expect(applyTourBookingOpportunityIntegration).not.toHaveBeenCalled();
         expect(mockOrchestrateConfirmed).not.toHaveBeenCalled();
+    });
+
+    it("a requested booking for a time the Operating Calendar closes is refused before any write", async () => {
+        mockCalendarCheck.mockRejectedValueOnce(new Error("tour_bookings: the location is not operating at that time (operating calendar)"));
+        const inserts: unknown[] = [];
+        const supabase = {
+            from: vi.fn(() => ({
+                select: vi.fn(() => ({ eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(), limit: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+                insert: vi.fn((r: unknown) => (inserts.push(r), { select: vi.fn().mockReturnThis(), single: vi.fn() })),
+            })),
+        } as never;
+        await expect(
+            createTourBooking(supabase, {
+                orgId: "org-1",
+                opportunityId: "opp-closed",
+                locationId: "loc-1",
+                startAt: new Date("2026-05-12T14:00:00.000Z"),
+                endAt: new Date("2026-05-12T15:00:00.000Z"),
+                timezone: "UTC",
+                source: "public_link",
+                approvalRequired: true,
+                initialStatus: "requested",
+            }),
+        ).rejects.toThrow(/not operating at that time/);
+        expect(inserts).toEqual([]);
+        expect(emitTourBookingLifecycleEvent).not.toHaveBeenCalledWith(supabase, "tour_requested", expect.anything(), expect.anything(), expect.anything());
     });
 });

@@ -1,0 +1,78 @@
+{
+  "trusted_host_action_id": "tha_8edeca29560093",
+  "query_hash": "29f03dbcfbd02d3742f61bed56d6d8bfe657b840be01d43c82de573f2258d6a4",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T18:36:14.707Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8edeca29560093",
+    "query_hash": "29f03dbcfbd02d3742f61bed56d6d8bfe657b840be01d43c82de573f2258d6a4",
+    "authorization_id": "grnt_595508223a7d4fab",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T18:36:16.053Z",
+    "question_ids": [
+      "departments",
+      "per_org",
+      "keys",
+      "structural_use",
+      "optional_use",
+      "access_scope"
+    ],
+    "questions": {
+      "departments": {
+        "question_id": "departments",
+        "row_count": null,
+        "rows": [
+          "rows=5 active=4 orgs=1 first=2026-04-22 last_created=2026-06-02 last_updated=2026-09-12"
+        ]
+      },
+      "per_org": {
+        "question_id": "per_org",
+        "row_count": null,
+        "rows": [
+          "orgs_with_departments=1 min_per_org=5 max_per_org=5"
+        ]
+      },
+      "keys": {
+        "question_id": "keys",
+        "row_count": null,
+        "rows": [
+          "enrollment x1",
+          "finance x1",
+          "lead_management x1",
+          "operations x1",
+          "system x1"
+        ]
+      },
+      "structural_use": {
+        "question_id": "structural_use",
+        "row_count": null,
+        "rows": [
+          "work_units=9 bp_drafts=1 bp_revisions=31 user_department_access=1"
+        ]
+      },
+      "optional_use": {
+        "question_id": "optional_use",
+        "row_count": null,
+        "rows": [
+          "action_placements_with_dept=4 kpi_placements_with_dept=3 status_rules_with_dept=0"
+        ]
+      },
+      "access_scope": {
+        "question_id": "access_scope",
+        "row_count": null,
+        "rows": [
+          "all x5",
+          "restricted x1"
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

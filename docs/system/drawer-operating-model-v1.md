@@ -1,18 +1,37 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Drawer Operating Model v1
+
+> **Product status (August 2026): the modal record product is deleted.** Operators work in
+> the **Focus Panel**; there is no drawer router and no record overlay. `AdminEntityDrawer`,
+> `OpportunityDrawerVmRuntime` and `PersonsDrawerVmRuntime` no longer exist — their absence is
+> asserted by `web/tests/operator/drawerProductEradication.test.ts` and certified by
+> `certification/playwright/drawer-eradication.cert.spec.ts`.
+>
+> What survives is **infrastructure**: the drawer ViewModel compose/payload layer, which now
+> feeds the Focus Panel (`web/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm.ts`).
+> Read this document for that layer only. For the operator model see
+> [`../platform/operator/drawer-system.md`](../platform/operator/drawer-system.md) and
+> [`../platform/operator/focus-panel-architecture-vocabulary.md`](../platform/operator/focus-panel-architecture-vocabulary.md).
 
 **Path:** `docs/system/drawer-operating-model-v1.md`  
 **Status:** Active — **locked at v1 closeout (June 2026)**  
 **Canonical index:** **`drawer-doctrine.md`** — read first for ownership and navigation semantics; this doc retains shell/layout detail.  
 **Audience:** Platform convergence, AdminV2 drawer runtime, `/admin/settings/layouts`  
-**Closeout:** [`../sprints/06_2026/completed/drawer_operating_model_v1_closeout.md`](../sprints/06_2026/completed/drawer_operating_model_v1_closeout.md)  
+**Closeout:** `../sprints/archive/06_2026/completed/drawer_operating_model_v1_closeout.md` (historical: `../sprints/archive/06_2026/completed/drawer_operating_model_v1_closeout.md`)  
 **Supersedes:** Nothing — extends and operationalizes existing contracts below.
 
 **Governing contracts (must not regress):**
 
 - [`adminv2-runtime-performance-doctrine.md`](./adminv2-runtime-performance-doctrine.md) — composed reveal, no partial above-fold pop-in
 - [`drawer-view-model-runtime-contract.md`](./drawer-view-model-runtime-contract.md) — VM compose → preload → apply → pin
-- [`../platform_convergence/layout_contract_v1.md`](../platform_convergence/layout_contract_v1.md) — LayoutDoc ownership boundaries
-- [`../platform_convergence/layout_runtime_cutover_plan.md`](../platform_convergence/layout_runtime_cutover_plan.md) — entity cutover order and flags
+- [`../../archive/2026-06-runtime-convergence/layout_contract_v1.md`](../archive/2026-06-runtime-convergence/layout_contract_v1.md) — LayoutDoc ownership boundaries
+- [`../../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md) — entity cutover order and flags
 
 ---
 
@@ -677,6 +696,6 @@ Queue rows inherit **date formatting**, **empty-collapse**, **child merge**, and
 
 - VM runtime: [`drawer-view-model-runtime-contract.md`](./drawer-view-model-runtime-contract.md)
 - Performance: [`adminv2-runtime-performance-doctrine.md`](./adminv2-runtime-performance-doctrine.md)
-- Layout cutover: [`../platform_convergence/layout_runtime_cutover_plan.md`](../platform_convergence/layout_runtime_cutover_plan.md)
-- Record truth vs previews: [`record-system.md`](./record-system.md)
+- Layout cutover: [`../../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md)
+- Record truth vs previews: [`record-system.md`](../platform/core/record-system.md)
 - Settings layouts plane: [`configuration-system.md`](./configuration-system.md)

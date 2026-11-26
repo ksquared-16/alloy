@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 import { fetchEffectiveStatusDefinitionsDirect } from "@/lib/admin/statusDefinitionsResolve";
 import { runStatusDefinitionsInventory } from "@/lib/admin/statusDefinitionsInventory";
 import {
     OPPORTUNITY_LEGACY_STATUS_BACKFILL_TO_OPEN,
     PERSON_LEGACY_STATUS_BACKFILL_TO_PRE_ENROLLED,
+    STATUS_RESEED_OCM_ENROLLMENT_LEGACY_KEYS,
     STATUS_RESEED_OCM_ENROLLMENT_STATUSES,
     STATUS_RESEED_OPPORTUNITY_CASE_STATUSES,
     STATUS_RESEED_OPPORTUNITY_LEGACY_KEYS,
@@ -114,6 +116,11 @@ async function upsertApprovedStatuses(
         }
     }
 
+    if (inserted > 0 || updated > 0) {
+        // A reseed rewrites org status definitions wholesale; without a bump the process LRU and the
+        // Next Data Cache keep answering with the pre-reseed set.
+        revalidateEffectiveStatusDefinitionsCache(orgId);
+    }
     return { upserted: approved.length, inserted, updated };
 }
 
@@ -313,10 +320,20 @@ export async function runStatusDefinitionsReseed(
         STATUS_RESEED_OCM_ENROLLMENT_STATUSES,
         execute
     );
+    const ocmDeactivate =
+        deactivateLegacy ?
+            await deactivateLegacyKeys(
+                supabase,
+                orgId,
+                "opportunity_customer_members",
+                STATUS_RESEED_OCM_ENROLLMENT_LEGACY_KEYS,
+                execute
+            )
+        :   0;
     layers.push({
         entity_type: "opportunity_customer_members",
         ...ocmUpsert,
-        deactivated: 0,
+        deactivated: ocmDeactivate,
     });
 
     let backfillResult: StatusReseedResult["backfill"] = null;

@@ -14,6 +14,15 @@ export type DrawerViewModelCacheContext = {
     orgId?: string | null;
     departmentId?: string | null;
     workUnitId?: string | null;
+    /**
+     * THE SUBJECT OF ATTENTION — part of the cache identity, not decoration.
+     *
+     * One family record viewed under Child A is not the same operational answer as the same record
+     * under Child B: the settled frame now projects child-scoped truth, so reusing A's view model
+     * for B would attribute one child's data to another. Keying on the record alone is how that
+     * would happen silently.
+     */
+    attentionSubjectId?: string | null;
 };
 
 export type DrawerViewModelCacheEntry =
@@ -63,7 +72,8 @@ export function buildDrawerViewModelCacheKey(params: {
     const orgId = trim(params.context?.orgId) || "_";
     const deptId = trim(params.context?.departmentId) || "_";
     const wuId = trim(params.context?.workUnitId) || "_";
-    return `drawerVm:${params.entityType}:${params.entityId.trim()}:${params.surface}:${orgId}:${deptId}:${wuId}`;
+    const attention = trim(params.context?.attentionSubjectId) || "_";
+    return `drawerVm:${params.entityType}:${params.entityId.trim()}:${params.surface}:${orgId}:${deptId}:${wuId}:${attention}`;
 }
 
 export function putDrawerViewModelCacheEntry(entry: DrawerViewModelCacheEntry, context?: DrawerViewModelCacheContext | null): void {
@@ -137,14 +147,27 @@ export function invalidateDrawerViewModelCacheForEntity(
     context?: DrawerViewModelCacheContext | null,
     surface: DrawerViewModelCacheSurface = "opportunity",
 ): void {
-    const key = buildDrawerViewModelCacheKey({
+    /*
+     * EVERY ATTENTION VARIANT OF THIS RECORD, not only the caller's.
+     *
+     * The subject of attention is part of the key, so one record can hold several live entries — the
+     * same family under Child A and under Child B. An invalidation names a RECORD that changed, and
+     * that change is equally true for every child it was viewed under. Deleting only the caller's
+     * exact key would leave the other children serving the pre-mutation answer, which is precisely
+     * the staleness this cache exists to avoid.
+     *
+     * Attention is the LAST key segment, so the scope prefix is the key with it removed. The trailing
+     * separator is kept, so a work-unit id can never prefix-match a longer one.
+     */
+    const exact = buildDrawerViewModelCacheKey({
         entityType,
         entityId: entityId.trim(),
         surface,
-        context,
+        context: { ...(context ?? {}), attentionSubjectId: null },
     });
-    cache.delete(key);
-    shellPinCache.delete(key);
+    const scopePrefix = exact.slice(0, -1);
+    for (const key of [...cache.keys()]) if (key.startsWith(scopePrefix)) cache.delete(key);
+    for (const key of [...shellPinCache.keys()]) if (key.startsWith(scopePrefix)) shellPinCache.delete(key);
 }
 
 export function putDrawerShellPinSnapshot(

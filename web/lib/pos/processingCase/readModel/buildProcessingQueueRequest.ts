@@ -31,6 +31,7 @@ const SOURCE_KIND_VALUES: ProcessingCaseSourceKind[] = [
     "email_attachment",
     "import",
     "recreated_document",
+    "participant_child_request",
 ];
 const SORT_KEYS: ProcessingCaseQueueSortKey[] = ["created_at", "status_changed_at"];
 
@@ -66,6 +67,9 @@ export function buildProcessingQueueRequest(
     orgId: string
 ): ParsedProcessingQueueRequest {
     const statuses = parseCsvEnum(params.get("status"), STATUS_VALUES);
+    const caseIds = parseCsv(params.get("case_ids"));
+    // `subject=removed` reads the evidence-only cases (family or child no longer exists); default is active work.
+    const subjectRemoved = params.get("subject") === "removed";
     const sourceKinds = parseCsvEnum(params.get("source_kind"), SOURCE_KIND_VALUES);
     const caseTypes = parseCsv(params.get("case_type"));
     const receivedFrom = params.get("received_from") ?? undefined;
@@ -77,10 +81,18 @@ export function buildProcessingQueueRequest(
     const sortDir: "asc" | "desc" = params.get("dir") === "asc" ? "asc" : "desc";
 
     const limitRaw = Number(params.get("limit"));
-    const limit =
+    const requestedLimit =
         Number.isFinite(limitRaw) && limitRaw > 0
             ? Math.min(Math.floor(limitRaw), MAX_QUEUE_LIMIT)
             : DEFAULT_QUEUE_LIMIT;
+    /*
+     * A request that NAMES its cases is not a recency page, so the page size must not silently drop
+     * the very rows that were asked for. `case_ids=a,b,c` with the default limit of 25 is fine, but
+     * the general rule matters: the limit floors at the number of ids requested (still capped by
+     * MAX_QUEUE_LIMIT) so an explicit ask is answered in full rather than truncated by an ordering
+     * the caller never chose.
+     */
+    const limit = caseIds ? Math.min(Math.max(requestedLimit, caseIds.length), MAX_QUEUE_LIMIT) : requestedLimit;
 
     const cursorSort = params.get("cursor_sort");
     const cursorId = params.get("cursor_id");
@@ -88,6 +100,8 @@ export function buildProcessingQueueRequest(
 
     const query: ProcessingCaseQueueQuery = {
         orgId,
+        caseIds,
+        subjectRemoved,
         statuses,
         sourceKinds,
         caseTypes,

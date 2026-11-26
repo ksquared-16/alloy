@@ -1,0 +1,134 @@
+## server
+version
+PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 13.2.0, 64-bit
+(1 row)
+## extensions
+extname|extversion|schema
+pg_stat_statements|1.11|extensions
+pgcrypto|1.3|extensions
+plpgsql|1.0|pg_catalog
+supabase_vault|0.3.1|vault
+uuid-ossp|1.1|extensions
+(5 rows)
+## database settings (non-default, visible to walden_readonly; names matching secret/key/password/token excluded)
+name|setting|unit|source
+archive_command|/usr/bin/admin-mgr wal-push %p >> /var/log/wal-g/wal-push.log 2>&1||configuration file
+archive_mode|on||configuration file
+archive_timeout|120|s|configuration file
+authentication_timeout|60|s|configuration file
+auto_explain.log_min_duration|10000|ms|configuration file
+checkpoint_completion_target|0.9||configuration file
+checkpoint_flush_after|32|8kB|configuration file
+cluster_name|main||configuration file
+default_statistics_target|100||configuration file
+default_text_search_config|pg_catalog.english||configuration file
+default_transaction_read_only|on||user
+effective_cache_size|49152|8kB|configuration file
+effective_io_concurrency|200||configuration file
+extra_float_digits|0||configuration file
+hot_standby|off||configuration file
+jit|off||configuration file
+lc_messages|en_US.UTF-8||configuration file
+lc_monetary|en_US.UTF-8||configuration file
+lc_numeric|en_US.UTF-8||configuration file
+lc_time|en_US.UTF-8||configuration file
+listen_addresses|*||configuration file
+log_connections|off||configuration file
+log_destination|csvlog||configuration file
+log_file_mode|0640||configuration file
+log_line_prefix|%h %m [%p] %q%u@%d ||configuration file
+log_lock_waits|on||configuration file
+log_rotation_age|0|min|configuration file
+log_rotation_size|0|kB|configuration file
+log_statement|ddl||configuration file
+log_timezone|UTC||configuration file
+logging_collector|on||configuration file
+maintenance_work_mem|32768|kB|configuration file
+max_connections|60||configuration file
+max_parallel_maintenance_workers|1||configuration file
+max_parallel_workers|2||configuration file
+max_parallel_workers_per_gather|1||configuration file
+max_replication_slots|5||configuration file
+max_slot_wal_keep_size|4096|MB|configuration file
+max_wal_senders|5||configuration file
+max_wal_size|4096|MB|configuration file
+max_worker_processes|6||configuration file
+min_wal_size|1024|MB|configuration file
+random_page_cost|1.1||configuration file
+row_security|on||configuration file
+shared_buffers|28672|8kB|configuration file
+ssl|on||configuration file
+statement_timeout|120000|ms|configuration file
+supautils.drop_trigger_grants|{"postgres":["auth.audit_log_entries","auth.flow_state","auth.identities","auth.instances","auth.mfa_amr_claims","auth.mfa_challenges","auth.mfa_factors","auth.oauth_clients","auth.one_time_tokens","auth.refresh_tokens","auth.saml_providers","auth.saml_relay_states","auth.sessions","auth.sso_domains","auth.sso_providers","auth.users","realtime.messages","realtime.subscription","storage.buckets","storage.buckets_analytics","storage.objects","storage.prefixes","storage.s3_multipart_uploads","storage.s3_multipart_uploads_parts"]}||configuration file
+supautils.extension_custom_scripts_path|/etc/postgresql-custom/extension-custom-scripts||configuration file
+supautils.extensions_parameter_overrides|{"pg_cron":{"schema":"pg_catalog"},"amcheck":{"schema":"pg_catalog"}}||configuration file
+supautils.hint_roles|anon, authenticated, service_role||configuration file
+supautils.policy_grants|{"postgres":["auth.audit_log_entries","auth.flow_state","auth.identities","auth.instances","auth.mfa_amr_claims","auth.mfa_challenges","auth.mfa_factors","auth.oauth_clients","auth.one_time_tokens","auth.refresh_tokens","auth.saml_providers","auth.saml_relay_states","auth.sessions","auth.sso_domains","auth.sso_providers","auth.users","realtime.messages","realtime.subscription","storage.buckets","storage.buckets_analytics","storage.objects","storage.prefixes","storage.s3_multipart_uploads","storage.s3_multipart_uploads_parts"]}||configuration file
+supautils.privileged_extensions|address_standardizer, address_standardizer_data_us, amcheck, autoinc, bloom, btree_gin, btree_gist, citext, cube, dblink, dict_int, dict_xsyn, earthdistance, fuzzystrmatch, hstore, http, hypopg, index_advisor, insert_username, intarray, isn, ltree, moddatetime, orioledb, pg_buffercache, pg_cron, pg_graphql, pg_hashids, pg_jsonschema, pg_net, pg_prewarm, pg_repack, pg_stat_monitor, pg_stat_statements, pg_tle, pg_trgm, pg_walinspect, pgaudit, pgcrypto, pgjwt, pgroonga, pgroonga_database, pgrouting, pgrowlocks, pgsodium, pgstattuple, pgtap, plcoffee, pljava, plls, plpgsql_check, plv8, postgis, postgis_raster, postgis_sfcgal, postgis_tiger_geocoder, postgis_topology, postgres_fdw, refint, rum, seg, sslinfo, supabase_vault, supautils, tablefunc, tcn, timescaledb, tsm_system_rows, tsm_system_time, unaccent, uuid-ossp, vector, wrappers||configuration file
+supautils.privileged_extensions_superuser|supabase_admin||configuration file
+supautils.privileged_role|supabase_privileged_role||configuration file
+supautils.privileged_role_allowed_configs|auto_explain.*, deadlock_timeout, log_duration, log_lock_waits, log_min_duration_statement, log_min_error_statement, log_min_messages, log_parameter_max_length, log_replication_commands, log_statement, log_temp_files, pg_net.batch_size, pg_net.ttl, pg_stat_statements.*, pgaudit.log, pgaudit.log_catalog, pgaudit.log_client, pgaudit.log_level, pgaudit.log_relation, pgaudit.log_rows, pgaudit.log_statement, pgaudit.log_statement_once, pgaudit.role, pgrst.*, plan_filter.*, safeupdate.enabled, session_replication_role, track_functions, track_io_timing, wal_compression||configuration file
+supautils.reserved_memberships|pg_read_server_files, pg_write_server_files, pg_execute_server_program, supabase_admin, supabase_auth_admin, supabase_storage_admin, supabase_read_only_user, supabase_realtime_admin, supabase_replication_admin, supabase_etl_admin, dashboard_user, pgbouncer, authenticator, pg_write_all_data||configuration file
+supautils.reserved_roles|supabase_admin, supabase_auth_admin, supabase_storage_admin, supabase_read_only_user, supabase_realtime_admin, supabase_replication_admin, supabase_etl_admin, dashboard_user, pgbouncer, service_role*, authenticator*, authenticated*, anon*, supabase_privileged_role||configuration file
+supautils.restrict_extension_versions|warn||configuration file
+TimeZone|UTC||configuration file
+wal_buffers|492|8kB|configuration file
+wal_compression|zstd||configuration file
+wal_level|logical||configuration file
+work_mem|2184|kB|configuration file
+(64 rows)
+## role-level settings
+role|db|n_settings
+(all)|postgres|1
+anon|(all)|1
+authenticated|(all)|1
+authenticator|(all)|3
+postgres|(all)|1
+supabase_admin|(all)|2
+supabase_auth_admin|(all)|3
+supabase_read_only_user|(all)|1
+supabase_storage_admin|(all)|2
+walden_readonly|(all)|1
+(10 rows)
+## roles (attributes only)
+rolname|rolsuper|rolinherit|rolcreaterole|rolcreatedb|rolcanlogin|rolreplication|rolbypassrls
+anon|f|t|f|f|f|f|f
+authenticated|f|t|f|f|f|f|f
+authenticator|f|f|f|f|t|f|f
+cli_login_postgres|f|f|f|f|t|f|f
+dashboard_user|f|t|t|t|f|t|f
+pgbouncer|f|t|f|f|t|f|f
+postgres|f|t|t|t|t|t|t
+service_role|f|t|f|f|f|f|t
+supabase_admin|t|t|t|t|t|t|t
+supabase_auth_admin|f|f|t|f|t|f|f
+supabase_etl_admin|f|t|f|f|t|t|t
+supabase_privileged_role|f|t|f|f|f|f|f
+supabase_read_only_user|f|t|f|f|t|f|t
+supabase_realtime_admin|f|f|f|f|f|f|f
+supabase_replication_admin|f|t|f|f|t|t|f
+supabase_storage_admin|f|f|t|f|t|f|f
+walden_readonly|f|t|f|f|t|f|f
+(17 rows)
+## publications
+pubname|puballtables|pubinsert|pubupdate|pubdelete|pubtruncate
+supabase_realtime|f|t|t|t|t
+(1 row)
+pubname|schemaname|tablename
+(0 rows)
+## schemas
+nspname|owner
+admin|postgres
+auth|supabase_admin
+extensions|postgres
+graphql|supabase_admin
+graphql_public|supabase_admin
+information_schema|supabase_admin
+pg_catalog|supabase_admin
+pgbouncer|pgbouncer
+public|pg_database_owner
+realtime|supabase_admin
+storage|supabase_admin
+supabase_migrations|postgres
+vault|supabase_admin
+(13 rows)

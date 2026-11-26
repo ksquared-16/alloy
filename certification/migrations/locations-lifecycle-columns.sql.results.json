@@ -1,0 +1,270 @@
+{
+  "trusted_host_action_id": "tha_1ef29e9190d4e3",
+  "query_hash": "f531dbff027823818dc8ea85dd0f0e72666ba426856469b280f954ab86bd8a50",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-23T18:38:09.183Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1ef29e9190d4e3",
+    "query_hash": "f531dbff027823818dc8ea85dd0f0e72666ba426856469b280f954ab86bd8a50",
+    "authorization_id": "grnt_ed93da9dc9a54d9b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-23T18:38:11.721Z",
+    "question_ids": [
+      "locations_lifecycle_columns"
+    ],
+    "questions": {
+      "locations_lifecycle_columns": {
+        "question_id": "locations_lifecycle_columns",
+        "row_count": null,
+        "rows": [
+          {
+            "locations_columns": [
+              {
+                "column": "id",
+                "type": "uuid",
+                "nullable": "NO",
+                "default": "gen_random_uuid()"
+              },
+              {
+                "column": "customer_id",
+                "type": "uuid",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "label",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "is_primary",
+                "type": "boolean",
+                "nullable": "NO",
+                "default": "false"
+              },
+              {
+                "column": "is_active",
+                "type": "boolean",
+                "nullable": "NO",
+                "default": "true"
+              },
+              {
+                "column": "address1",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "address2",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "city",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "state",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "postal_code",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "country",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "lat",
+                "type": "numeric",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "lng",
+                "type": "numeric",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "access_method_id",
+                "type": "uuid",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "access_notes",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "external_source",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "external_id",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "metadata",
+                "type": "jsonb",
+                "nullable": "NO",
+                "default": "'{}'::jsonb"
+              },
+              {
+                "column": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO",
+                "default": "now()"
+              },
+              {
+                "column": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "org_id",
+                "type": "uuid",
+                "nullable": "NO",
+                "default": null
+              },
+              {
+                "column": "vendor_id",
+                "type": "uuid",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "location_type",
+                "type": "text",
+                "nullable": "NO",
+                "default": "'address'::text"
+              },
+              {
+                "column": "parent_location_id",
+                "type": "uuid",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "location_type_id",
+                "type": "uuid",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "status_key",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "access_code",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "has_pets",
+                "type": "boolean",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "location_number",
+                "type": "bigint",
+                "nullable": "NO",
+                "default": null
+              },
+              {
+                "column": "beds",
+                "type": "numeric",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "baths",
+                "type": "numeric",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "home_type_key",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "access_method_key",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "square_footage_tier_key",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              },
+              {
+                "column": "unit_role",
+                "type": "text",
+                "nullable": "YES",
+                "default": null
+              }
+            ],
+            "status_key_values": [
+              {
+                "status_key": null,
+                "rows": 33
+              }
+            ],
+            "archived_at_tables": [
+              "announcements",
+              "communication_threads",
+              "contacts",
+              "jobs",
+              "persons",
+              "processing_cases"
+            ],
+            "location_status_catalog": [
+              "assignment_statuses",
+              "job_statuses",
+              "payment_statuses",
+              "schedule_statuses",
+              "status_definitions",
+              "status_transition_rules",
+              "vendor_statuses"
+            ],
+            "observed_at": "2026-09-23 18:38:11.529886+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "width": 1440,
+  "position": {
+    "present": true,
+    "box": "796x74",
+    "clipped": false,
+    "overflowBy": 0,
+    "insideViewport": true,
+    "offRight": -94
+  },
+  "positionText": "DISCOUNTS\n\nSibling discount (QA specimen)\n\nCerta Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00\n\nCertb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00",
+  "positionPage": {
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "horizontalOverflow": false
+  },
+  "management": {
+    "present": true,
+    "box": "796x202",
+    "clipped": false,
+    "overflowBy": 0,
+    "insideViewport": true,
+    "offRight": -94
+  },
+  "managementText": "Manage discounts\n\nWhich policies reach this family, and whether a relationship is excepted from one. Rates and eligibility are organization configuration.\n\nSibling discount (QA specimen)\n\nCerta Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00\n\nAdd exception\n\nCertb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00\n\nAdd exception\nClose",
+  "managementPage": {
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "horizontalOverflow": false
+  },
+  "assignments": [
+    {
+      "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "who": "Certa Certhouse",
+      "surface": {
+        "present": true,
+        "box": "686x751",
+        "clipped": false,
+        "overflowBy": 0,
+        "insideViewport": true,
+        "offRight": -149
+      },
+      "forecast": {
+        "present": true,
+        "box": "658x87",
+        "clipped": false,
+        "overflowBy": 0,
+        "insideViewport": true,
+        "offRight": -164
+      },
+      "forecastText": "DISCOUNTS\nSibling discount (QA specimen) · $18.50 expected to apply\nAdd exception\nSibling discount (QA specimen) · ended 2026-08-31 — Retired: certification scaffolding, superseded so the walkthrough starts clean\nEnded",
+      "page": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "who": "Certb Certhouse",
+      "surface": {
+        "present": true,
+        "box": "686x710",
+        "clipped": false,
+        "overflowBy": 0,
+        "insideViewport": true,
+        "offRight": -149
+      },
+      "forecast": {
+        "present": true,
+        "box": "658x48",
+        "clipped": false,
+        "overflowBy": 0,
+        "insideViewport": true,
+        "offRight": -164
+      },
+      "forecastText": "DISCOUNTS\nSibling discount (QA specimen) · $145.00 expected to apply\nAdd exception\nSibling discount (QA specimen) · ended 2026-08-31 — Retired: certification scaffolding dated into a future period\nEnded",
+      "page": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": false
+      }
+    }
+  ],
+  "policies": {
+    "present": true,
+    "box": "1305x1276",
+    "clipped": false,
+    "overflowBy": 0,
+    "insideViewport": true,
+    "offRight": -39
+  },
+  "policiesPage": {
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "horizontalOverflow": false
+  },
+  "policiesNamesPolicy": true,
+  "billing": {
+    "present": true,
+    "box": "1266x704",
+    "clipped": false,
+    "overflowBy": 0,
+    "insideViewport": true,
+    "offRight": -59
+  },
+  "billingTable": {
+    "present": true,
+    "box": "1264x601",
+    "clipped": false,
+    "overflowBy": 0,
+    "insideViewport": true,
+    "offRight": -60
+  },
+  "billingPage": {
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "horizontalOverflow": false
+  }
+}

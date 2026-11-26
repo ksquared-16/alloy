@@ -9,6 +9,11 @@ import {
     canonicalWorkViewConditionFieldKey,
     WORK_VIEW_CONDITION_FIELD_DEFS,
 } from "@/lib/lifecycle/workViewConditionFieldRegistry";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import { isCanonicalWorkViewConditionFieldKey } from "@/lib/lifecycle/workViewCanonicalOperands";
+import { resolveItemValue } from "@/lib/layout/resolveItemValue";
+import { parseRelativeDateToken } from "@/lib/lifecycle/workViewFilterValueControls";
+import { contextBelongsToEffectiveStage } from "@/lib/process/engine/effectiveProcessPosition";
 
 export type WorkViewFilterEvaluationNote = {
     field_key: string;
@@ -23,9 +28,17 @@ export type WorkViewFilterEvaluationResult = {
 };
 
 /** Canonical runtime keys the evaluator can apply (legacy keys canonicalize into these). */
-const SUPPORTED_FIELD_KEYS = new Set<string>(
+const OPERATIONAL_SUPPORTED_FIELD_KEYS = new Set<string>(
     WORK_VIEW_CONDITION_FIELD_DEFS.filter((def) => def.runtimeSupported).map((def) => def.runtimeField),
 );
+
+function isSupportedWorkViewFieldKey(
+    fieldKey: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): boolean {
+    if (OPERATIONAL_SUPPORTED_FIELD_KEYS.has(fieldKey)) return true;
+    return isCanonicalWorkViewConditionFieldKey(fieldKey, tenantFieldDefinitions);
+}
 
 function norm(value: unknown): string {
     return String(value ?? "")
@@ -39,8 +52,37 @@ function readRowString(row: Record<string, unknown>, key: string): string | null
     return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+function canonicalRefKeyRowValue(row: Record<string, unknown>, refKey: string): string | null {
+    if (row[refKey] != null) {
+        const direct = readRowString(row, refKey);
+        if (direct) return direct;
+    }
+    const resolved = resolveItemValue(row, { id: refKey, kind: "field", refKey });
+    if (resolved.raw != null && String(resolved.raw).trim()) return String(resolved.raw).trim();
+    if (resolved.display && resolved.display !== "—") return resolved.display.trim();
+
+    const fieldKey = refKey.includes(".") ? refKey.slice(refKey.indexOf(".") + 1) : refKey;
+    const directField = readRowString(row, fieldKey);
+    if (directField) return directField;
+
+    const md = row.metadata;
+    if (md && typeof md === "object" && !Array.isArray(md)) {
+        const fieldValues = (md as Record<string, unknown>).field_values;
+        if (fieldValues && typeof fieldValues === "object" && !Array.isArray(fieldValues)) {
+            const value = (fieldValues as Record<string, unknown>)[fieldKey];
+            if (typeof value === "string" && value.trim()) return value.trim();
+            if (value != null && typeof value !== "object") return String(value);
+        }
+    }
+    return null;
+}
+
 /** Resolve a row value for a canonical runtime field key (legacy keys are canonicalized by callers). */
-function fieldValue(row: Record<string, unknown>, fieldKey: string): string | null {
+function fieldValue(
+    row: Record<string, unknown>,
+    fieldKey: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): string | null {
     const enrichment = buildQueueRowLayoutRuntimeEnrichment(row);
     switch (fieldKey) {
         case "opportunity_status":
@@ -72,15 +114,15 @@ function fieldValue(row: Record<string, unknown>, fieldKey: string): string | nu
                 readRowString(row, "room") ??
                 readRowString(row, "_room")
             );
-        case "desired_start_date": {
+        case "start_date": {
             const direct =
-                readRowString(row, "desired_start_date") ??
+                readRowString(row, "start_date") ??
                 readRowString(row, "requested_start_date") ??
                 readRowString(row, "desired_start");
             if (direct) return direct;
             const md = row.metadata;
             if (md && typeof md === "object" && !Array.isArray(md)) {
-                const v = (md as Record<string, unknown>).desired_start_date ?? (md as Record<string, unknown>).desired_start;
+                const v = (md as Record<string, unknown>).start_date ?? (md as Record<string, unknown>).desired_start;
                 if (typeof v === "string" && v.trim()) return v.trim();
             }
             return null;
@@ -105,6 +147,10 @@ function fieldValue(row: Record<string, unknown>, fieldKey: string): string | nu
             }
             return enrichment.tourDisplay ?? null;
         }
+        case "has_active_tour":
+            if (row._has_active_tour === true || row.has_active_tour === true) return "true";
+            if (row._has_active_tour === false || row.has_active_tour === false) return "false";
+            return "false";
         case "updated_at":
             return readRowString(row, "updated_at");
         case "needs_follow_up":
@@ -112,6 +158,9 @@ function fieldValue(row: Record<string, unknown>, fieldKey: string): string | nu
             if (enrichment.attentionReason) return "true";
             return "false";
         default:
+            if (isCanonicalWorkViewConditionFieldKey(fieldKey, tenantFieldDefinitions)) {
+                return canonicalRefKeyRowValue(row, fieldKey);
+            }
             return null;
     }
 }
@@ -158,7 +207,7 @@ function utcWeekRange(reference: Date, offsetWeeks: number): { start: Date; end:
     return { start, end };
 }
 
-const DATE_FIELD_KEYS = new Set(["tour_date", "updated_at", "desired_start_date"]);
+const DATE_FIELD_KEYS = new Set(["tour_date", "updated_at", "start_date"]);
 
 function isDateFieldKey(fieldKey: string): boolean {
     return DATE_FIELD_KEYS.has(fieldKey);
@@ -205,14 +254,23 @@ function addUtcMonths(d: Date, months: number): Date {
     return next;
 }
 
+/**
+ * A relative date token (`prev:14:days`, `next:1:months`) as a span test.
+ *
+ * The token GRAMMAR is not restated here. It used to be: an independently written copy of the same
+ * regex lived in this file while the builder's copy lived in `workViewFilterValueControls`, with
+ * nothing tying them together. Two hand-written parsers for one saved format is a drift waiting to
+ * happen — widen one and conditions authored in the builder quietly stop matching, or match something
+ * else. The builder owns what a token IS; this owns what it MEANS against a date.
+ */
 function parseRelativeDateTokenForEvaluation(
     raw: string,
 ): ((actualDate: Date, now: Date) => boolean) | null {
-    const match = raw.trim().match(/^(next|prev):(\d+):(days|weeks|months)$/);
-    if (!match) return null;
-    const direction = match[1];
-    const amount = Math.max(1, Number(match[2]));
-    const unit = match[3];
+    const parsed = parseRelativeDateToken(raw);
+    if (!parsed) return null;
+    const direction = parsed.direction;
+    const amount = Math.max(1, parsed.amount);
+    const unit = parsed.unit;
     return (actualDate, now) => {
         const todayStart = startOfUtcDay(now);
         const todayEnd = endOfUtcDay(now);
@@ -266,11 +324,12 @@ function sameUtcDay(a: Date, b: Date): boolean {
 function evaluateOneFilter(
     row: Record<string, unknown>,
     filter: WorkViewFilterV1,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): WorkViewFilterEvaluationResult {
     // Canonicalize legacy keys (`stage`/`status`/`location`) so runtime resolves them identically to
     // the typed keys, even if a saved view has not yet been re-persisted with canonical keys.
     const fieldKey = canonicalWorkViewConditionFieldKey(filter.field_key.trim());
-    if (!SUPPORTED_FIELD_KEYS.has(fieldKey)) {
+    if (!isSupportedWorkViewFieldKey(fieldKey, tenantFieldDefinitions)) {
         return {
             pass: true,
             notes: [{ field_key: fieldKey, operator: filter.operator, supported: false, reason: "unsupported_field" }],
@@ -284,8 +343,37 @@ function evaluateOneFilter(
         };
     }
 
-    const actual = fieldValue(row, fieldKey);
     const expectedParts = parseFilterValues(filter.value);
+
+    // Case/context-grain stage membership via Effective Process Position when the row carries
+    // authorized participant effective stages. Missing key → legacy lifecycle_stage_key equality.
+    if (
+        fieldKey === "opportunity_stage"
+        && (filter.operator === "equals" || filter.operator === "not_equals" || filter.operator === "is_any_of")
+        && Array.isArray(row._effective_participant_stage_keys)
+    ) {
+        const contextStage =
+            readRowString(row, "stage_key")
+            ?? readRowString(row, "lifecycle_stage_key")
+            ?? readRowString(row, "_lifecycle_stage_key");
+        const participantKeys = (row._effective_participant_stage_keys as unknown[]).map((k) =>
+            typeof k === "string" ? k : null,
+        );
+        const belongs = expectedParts.some((part) =>
+            contextBelongsToEffectiveStage({
+                contextStageKey: contextStage,
+                participantEffectiveStageKeys: participantKeys,
+                stageKey: part,
+            }),
+        );
+        const pass = filter.operator === "not_equals" ? !belongs : belongs;
+        return {
+            pass,
+            notes: [{ field_key: fieldKey, operator: filter.operator, supported: true }],
+        };
+    }
+
+    const actual = fieldValue(row, fieldKey, tenantFieldDefinitions);
 
     if (isDateFieldKey(fieldKey) && (filter.operator === "equals" || filter.operator === "not_equals" || filter.operator === "date_is")) {
         return {
@@ -368,6 +456,7 @@ export function evaluateWorkViewFiltersForRow(
     row: Record<string, unknown>,
     filters: readonly WorkViewFilterV1[] | null | undefined,
     match: WorkViewFilterMatch = "all",
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): WorkViewFilterEvaluationResult {
     if (!filters?.length) return { pass: true, notes: [] };
     const notes: WorkViewFilterEvaluationNote[] = [];
@@ -375,7 +464,7 @@ export function evaluateWorkViewFiltersForRow(
     if (match === "any") {
         let anySupported = false;
         for (const filter of filters) {
-            const result = evaluateOneFilter(row, filter);
+            const result = evaluateOneFilter(row, filter, tenantFieldDefinitions);
             notes.push(...result.notes);
             const supported = result.notes.every((n) => n.supported);
             if (supported) {
@@ -388,7 +477,7 @@ export function evaluateWorkViewFiltersForRow(
     }
 
     for (const filter of filters) {
-        const result = evaluateOneFilter(row, filter);
+        const result = evaluateOneFilter(row, filter, tenantFieldDefinitions);
         notes.push(...result.notes);
         if (!result.pass) return { pass: false, notes };
     }
@@ -399,7 +488,8 @@ export function filterQueueRowsByWorkViewFilters<T extends Record<string, unknow
     rows: readonly T[],
     filters: readonly WorkViewFilterV1[] | null | undefined,
     match: WorkViewFilterMatch = "all",
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): T[] {
     if (!filters?.length) return [...rows];
-    return rows.filter((row) => evaluateWorkViewFiltersForRow(row, filters, match).pass);
+    return rows.filter((row) => evaluateWorkViewFiltersForRow(row, filters, match, tenantFieldDefinitions).pass);
 }

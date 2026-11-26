@@ -1,3 +1,6 @@
+import { allowedDevOriginsFor } from "./lib/http/devOrigins";
+import { localSupabaseRewrite } from "./lib/supabase/browserTransport";
+import { execSync } from "node:child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -6,78 +9,438 @@ import type { NextConfig } from "next";
 /** App lives in `web/` while Alloy repo root also has package-lock.json; Turbopack must use this dir as root so chunks/runtime resolve correctly. */
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 
+// Loud, unmissable announcement when the in-build typecheck is skipped — a skipped typecheck must
+// never pass silently. See `typescript.ignoreBuildErrors` below. Off by default.
+if (process.env.SKIP_BUILD_TYPECHECK === "1") {
+  console.warn(
+    "\n⚠️  SKIP_BUILD_TYPECHECK=1 — next build's in-build typecheck is DISABLED for this build.\n" +
+      "   Types are NOT gated by this build. Validate out-of-band: `tsc --noEmit`. Never use for CI/promotion/certification.\n",
+  );
+}
+
+/**
+ * The commit this bundle was built from — inlined at build time so the RUNNING deploy can prove its
+ * own SHA (data-build-sha in the DOM, GET /api/runtime-info, a console line). Prefers the host's git
+ * env (Vercel/CI), falls back to `git rev-parse`. This is the single answer to "is staging actually
+ * running the committed fix?" — no more guessing between code and deploy.
+ */
+function resolveBuildSha(): string {
+  const fromEnv =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.GIT_COMMIT_SHA ||
+    process.env.NEXT_PUBLIC_BUILD_SHA;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim().slice(0, 12);
+  try {
+    return execSync("git rev-parse --short=12 HEAD", { cwd: webRoot }).toString().trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+const BUILD_SHA = resolveBuildSha();
+
 const nextConfig: NextConfig = {
+  /**
+   * Production-cert build isolation: when `ALLOY_PROD_CERT_DIST` is set, build/serve from a SEPARATE
+   * output dir so a `next build` for performance certification never clobbers the running `next dev`
+   * server's `.next` (the one the operator's browser is on). Unset → default `.next` (dev unaffected).
+   */
+  ...(process.env.ALLOY_PROD_CERT_DIST ? { distDir: ".next-prodcert" } : {}),
+  /**
+   * Duplicate-request certification lever. React StrictMode double-invokes effects in DEV ONLY, so an
+   * on-mount ×2 request is an artifact until it is re-observed with StrictMode off (defect register M-1).
+   * Set `ALLOY_DEV_STRICT_MODE=0` on the measuring server only. Unset → key absent → Next's own default
+   * (on), so committed behaviour is unchanged and no manual restore step can be forgotten.
+   */
+  ...(process.env.ALLOY_DEV_STRICT_MODE === "0" ? { reactStrictMode: false } : {}),
+  /**
+   * Next 16 blocks cross-origin `/_next/*` in dev. Operators often open 127.0.0.1 while
+   * NEXT_PUBLIC_APP_URL is localhost (or the reverse) — allow both so assets can load.
+   * A lane published on the tailnet also allows that ONE configured host, or its HMR socket
+   * is refused and Next reloads the page every ~40 s. See lib/http/devOrigins.ts.
+   */
+  allowedDevOrigins: allowedDevOriginsFor({
+    appUrl: process.env.NEXT_PUBLIC_APP_URL,
+    nodeEnv: process.env.NODE_ENV,
+  }),
+  /** Build SHA inlined for client + server (see resolveBuildSha) — proves the deployed commit. */
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: BUILD_SHA,
+  },
   /** Align with turbopack.root — avoids monorepo parent lockfile overriding trace root. */
   outputFileTracingRoot: webRoot,
-  /** Load `unpdf` (server-only, text-only PDF extraction) from node_modules at runtime
-   *  rather than bundling it — see lib/pos/processingCase/structure/pdfTextExtract.ts. */
-  serverExternalPackages: ["unpdf"],
+  /**
+   * OCR ships an English model at `ocr-data/eng.traineddata`, loaded at RUNTIME by a path string
+   * (`process.cwd()/ocr-data` — see ocrExtract.ts). Next's file tracer cannot detect a dynamic path,
+   * so on serverless (Vercel) the model would be missing from the function bundle → OCR fails with an
+   * honest "couldn't read" state. Force-include it (and the tesseract.js WASM core + node worker
+   * script, which are likewise loaded by path) for the upload route that performs OCR.
+   */
+  outputFileTracingIncludes: {
+    "/api/admin/documents/upload": [
+      "./ocr-data/**",
+      "./node_modules/tesseract.js/src/worker-script/**",
+      "./node_modules/tesseract.js-core/**",
+      // mupdf loads its WASM binary by path at runtime — the tracer can't see a dynamic path.
+      "./node_modules/mupdf/dist/*.wasm",
+    ],
+  },
+  /**
+   * Server-only packages loaded from node_modules at runtime rather than bundled:
+   *  - `unpdf`      — text-only PDF text extraction (pdfTextExtract.ts).
+   *  - `tesseract.js` — OCR engine. MUST be external: it spawns a Node worker thread that loads a
+   *    sibling `worker-script/node/index.js` by path; bundling breaks that path (`/ROOT/node_modules/...`
+   *    not found → worker hangs the upload). External keeps the on-disk layout intact.
+   *  - `mupdf`      — scanned-PDF page rasterization (WASM). MUST be external: its `mupdf-wasm.wasm`
+   *    is loaded by path at runtime, and (unlike pdf.js, which throws "Cannot transfer object of
+   *    unsupported type" once bundled in the Next server) it renders reliably in-server.
+   *  See lib/pos/processingCase/structure/{pdfTextExtract,ocrExtract}.ts.
+   */
+  serverExternalPackages: ["unpdf", "tesseract.js", "mupdf"],
+  /**
+   * BUILD MEMORY OPT-1 (experimental, isolated branch).
+   *
+   * Next 16.0.8 defaults `experimental.cpus` to `max(1, os.cpus().length - 1)` (11 on this host).
+   * That value sizes the *static worker pool* used after webpack compile for
+   * "Collecting page data" and "Generating static pages" (`getNumberOfWorkers` in
+   * `next/dist/build/index.js`). It does **not** cap webpack compilation threads.
+   *
+   * Cap at 4 to reduce concurrent page-data / prerender RSS. Do not enable
+   * `memoryBasedWorkersCount` here (OPT-2 held). `staticGenerationMaxConcurrency`
+   * left at Next default (8): it limits in-worker page export concurrency, not the
+   * worker count observed in build logs.
+   */
+  experimental: {
+    cpus: 4,
+  },
   typescript: {
     /** Production build typecheck — app + API routes only (excludes tests/scripts). */
     tsconfigPath: "./tsconfig.build.json",
+    /**
+     * Opt-in escape hatch for the local certification loop, which rebuilds the production bundle
+     * repeatedly and validates types out-of-band via `tsc --noEmit`. Setting SKIP_BUILD_TYPECHECK=1
+     * skips `next build`'s redundant in-build typecheck to shave minutes per iteration.
+     *
+     * STRICT + OFF BY DEFAULT: only the exact string "1" enables it, so a stray "true"/"yes"/"0" does
+     * NOT. It is set nowhere in CI, scripts, .env, or the toolkit config — a promotion/release build
+     * cannot inherit it. When it IS active the build announces it loudly (below), so a skipped
+     * typecheck can never pass silently. The final certification build must run WITHOUT this set.
+     */
+    ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === "1",
   },
   turbopack: {
     root: webRoot,
   },
   async redirects() {
     return [
+      /**
+       * CORE FINANCIALS DIRECTOR QA — one room, and this is not it.
+       *
+       * Two Director QA surfaces were built for Financials on 2026-09-14. The authenticated one
+       * inside the operator shell (`cd5e8ca54`) was superseded the same day by the walkthrough
+       * beside the product (`333e11b09`), because a QA script wearing the product's own chrome is
+       * neither the script nor the product. The integration of the Payments scenarios then landed
+       * on the abandoned one, which is how it came to look canonical: it was deployed, it rendered,
+       * and it was the one under `/workspace`.
+       *
+       * A redirect rather than a 404, because this path was a working URL that people and a
+       * certification spec have both pointed at, and there is exactly one place it can mean. It is
+       * permanent: there is no plan under which an operator-shell Financials QA comes back.
+       */
+      { source: "/workspace/qa/core-financials", destination: "/dev/core-financials-qa", permanent: true },
+      /*
+       * RETIRED — the legacy public home-cleaning product.
+       *
+       * `ea3eaf377` (2026-07-31) retired the cleaning product and deleted its API, including
+       * `/api/book-v2/quote-start` and `/api/book-v2/specialty-quote-start`. It did not remove the
+       * public pages that post to them, so those forms have been submitting to endpoints that do not
+       * exist. Redirecting is what stops a visitor reaching a form that cannot succeed; the dead
+       * components are removed in a follow-up scoped to the marketing site, because the quote modal
+       * they share still serves the live gutters vertical.
+       *
+       * `/quote` chose between cleaning and gutters. Only gutters remains, so it goes there.
+       */
+      { source: "/services/cleaning", destination: "/services", permanent: false },
+      { source: "/services/cleaning/:path*", destination: "/services", permanent: false },
+      { source: "/quote", destination: "/gutters", permanent: false },
+      { source: "/offers/firstfree4x120", destination: "/", permanent: false },
+      { source: "/offers/firstfree4x60", destination: "/", permanent: false },
       /** Phase H1: transitional public routes → canonical `/admin`. */
-      { source: "/adminV2", destination: "/settings", permanent: false },
+      { source: "/adminV2", destination: "/organization", permanent: false },
       { source: "/adminV2/:path*", destination: "/admin/:path*", permanent: false },
-      { source: "/admin/v2", destination: "/settings", permanent: false },
+      { source: "/admin/v2", destination: "/organization", permanent: false },
       { source: "/admin/v2/:path*", destination: "/admin/:path*", permanent: false },
-      { source: "/adminv2", destination: "/settings", permanent: false },
+      { source: "/adminv2", destination: "/organization", permanent: false },
       { source: "/adminv2/:path*", destination: "/admin/:path*", permanent: false },
-      /** Configuration Runtime Phase 2A — canonical Settings at `/settings`. */
-      { source: "/admin", destination: "/settings", permanent: false },
-      { source: "/admin/settings", destination: "/settings", permanent: false },
+      /** Organization is the canonical configuration landing; Settings remains the sub-surface namespace. */
+      { source: "/admin", destination: "/organization", permanent: false },
+      { source: "/admin/settings", destination: "/organization", permanent: false },
       { source: "/admin/settings/:path*", destination: "/settings/:path*", permanent: false },
+      { source: "/settings", destination: "/organization", permanent: false },
+      { source: "/settings/organization", destination: "/organization", permanent: false },
       /**
-       * Surfaces rename — `/settings/layouts` is no longer product IA. Canonical
-       * user-facing route is `/settings/surfaces`. Storage terms (entity_layouts,
-       * LayoutDoc, surface, layout_key) are unchanged implementation details.
+       * Organization Financials — canonical under `/organization/financials`.
+       * Legacy Commercial tool chapters redirect here. Programs catalog stays on `/organization/programs`.
        */
-      { source: "/settings/layouts", destination: "/settings/surfaces", permanent: false },
-      { source: "/settings/layouts/:path*", destination: "/settings/surfaces/:path*", permanent: false },
+      { source: "/settings/commercial", destination: "/organization/financials", permanent: false },
+      { source: "/settings/commercial/tuition", destination: "/organization/financials?chapter=tuition", permanent: false },
+      { source: "/settings/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/settings/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
+      { source: "/admin/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/admin/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/settings/commercial/programs", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/settings/commercial/programs/:path*", destination: "/organization/programs", permanent: false },
+      { source: "/adminV2/settings/commercial", destination: "/organization/financials", permanent: false },
+      { source: "/adminV2/settings/commercial/tuition", destination: "/organization/financials?chapter=tuition", permanent: false },
       /**
-       * Operational Calculations rename — the canonical route is `/settings/calculations`.
-       * `/settings/analytics` aliases to it for compatibility. (`analytics` remains the
-       * storage/route folder; the visible product path is calculations.)
+       * Organization productization — completed domains under `/organization/{name}`.
+       * Legacy `/settings/…` bookmarks redirect here.
        */
-      { source: "/settings/analytics", destination: "/settings/calculations", permanent: false },
-      { source: "/settings/analytics/:path*", destination: "/settings/calculations/:path*", permanent: false },
+      { source: "/settings/surfaces", destination: "/organization/surfaces", permanent: false },
+      { source: "/settings/surfaces/:path*", destination: "/organization/surfaces", permanent: false },
+      { source: "/settings/layouts", destination: "/organization/surfaces", permanent: false },
+      { source: "/settings/layouts/:path*", destination: "/organization/surfaces", permanent: false },
+      { source: "/settings/users-roles", destination: "/organization/access", permanent: false },
+      { source: "/settings/users-roles/:path*", destination: "/organization/access", permanent: false },
+      { source: "/settings/user-access", destination: "/organization/access", permanent: false },
+      { source: "/settings/user-access/:path*", destination: "/organization/access", permanent: false },
+      { source: "/settings/processes", destination: "/organization/processes", permanent: false },
+      { source: "/settings/processes/:path*", destination: "/organization/processes", permanent: false },
+      { source: "/settings/business-processes", destination: "/organization/processes", permanent: false },
+      { source: "/settings/business-processes/:path*", destination: "/organization/processes", permanent: false },
+      /**
+       * Action Buttons developer CRUD — do not redirect to the rejected operator Commands product.
+       * `/organization/commands` remains an internal capability diagnostics route only.
+       */
+      { source: "/settings/actions", destination: "/adminV2/settings/actions", permanent: false },
+      { source: "/settings/actions/:path*", destination: "/adminV2/settings/actions", permanent: false },
+      { source: "/configuration/commands", destination: "/organization/commands", permanent: false },
+      { source: "/configuration/commands/:path*", destination: "/organization/commands", permanent: false },
+      /**
+       * Communications converged onto `/organization/communications`. These are
+       * compatibility redirects for links and bookmarks that predate the move;
+       * there is no second implementation behind them. Retire once no traffic
+       * arrives here.
+       */
+      { source: "/settings/communications", destination: "/organization/communications", permanent: false },
+      { source: "/settings/communications/:path*", destination: "/organization/communications", permanent: false },
+      { source: "/adminV2/settings/communications", destination: "/organization/communications", permanent: false },
+      {
+        source: "/adminV2/settings/communications/:path*",
+        destination: "/organization/communications",
+        permanent: false,
+      },
+      { source: "/settings/financials", destination: "/organization/financials", permanent: false },
+      { source: "/settings/financials/:path*", destination: "/organization/financials", permanent: false },
+      { source: "/settings/locations", destination: "/organization/locations", permanent: false },
+      { source: "/settings/locations/:path*", destination: "/organization/locations", permanent: false },
+      /**
+       * Data Model productization — canonical `/organization/data-model?section=…`.
+       * List pages redirect into the shell; option-set detail `[setKey]` stays until embedded.
+       */
+      { source: "/settings/entities", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/fields", destination: "/organization/data-model?section=fields", permanent: false },
+      { source: "/settings/statuses", destination: "/organization/data-model?section=statuses", permanent: false },
+      { source: "/settings/option-sets", destination: "/organization/data-model?section=option-sets", permanent: false },
+      { source: "/settings/relationships", destination: "/organization/data-model?section=relationships", permanent: false },
+      { source: "/settings/calculations", destination: "/organization/operational-intelligence", permanent: false },
+      { source: "/settings/data-model", destination: "/organization/data-model", permanent: false },
+      { source: "/settings/data-model/:path*", destination: "/organization/data-model", permanent: false },
+      /**
+       * Operational Calculations rename — analytics aliases into Data Model Calculations.
+       */
+      { source: "/settings/analytics", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/analytics/:path*", destination: "/organization/data-model?section=calculations", permanent: false },
+      /** Legacy Settings aliases → canonical Platform Configuration routes. */
+      { source: "/settings/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/entity-labels/:path*", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/label-entities", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/label-entities/:path*", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/settings/kpis", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/kpis/:path*", destination: "/organization/data-model?section=calculations", permanent: false },
+      /** Legacy admin system hub → Platform Configuration equivalents. */
+      { source: "/legacy-admin/system/person-fields", destination: "/organization/data-model?section=fields&entity=person", permanent: false },
+      { source: "/legacy-admin/system/location-fields", destination: "/organization/data-model?section=fields&entity=location", permanent: false },
+      { source: "/legacy-admin/system/customer-fields", destination: "/organization/data-model?section=fields&entity=customer", permanent: false },
+      { source: "/legacy-admin/system/job-fields", destination: "/organization/data-model?section=fields&entity=opportunity", permanent: false },
+      { source: "/legacy-admin/system/opportunity-fields", destination: "/organization/data-model?section=fields&entity=opportunity", permanent: false },
+      { source: "/legacy-admin/system/vendor-fields", destination: "/organization/data-model?section=fields", permanent: false },
+      { source: "/legacy-admin/system/schedule-fields", destination: "/organization/data-model?section=fields", permanent: false },
+      { source: "/legacy-admin/system/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/legacy-admin/system/statuses", destination: "/settings/statuses", permanent: false },
+      { source: "/legacy-admin/system/option-sets", destination: "/settings/option-sets", permanent: false },
+      { source: "/legacy-admin/system/option-sets/:setKey", destination: "/settings/option-sets/:setKey", permanent: false },
+      { source: "/legacy-admin/system/field-sections", destination: "/settings/field-sections", permanent: false },
+      { source: "/legacy-admin/system/layouts", destination: "/organization/surfaces", permanent: false },
+      { source: "/legacy-admin/system/layouts/:path*", destination: "/organization/surfaces", permanent: false },
+      { source: "/legacy-admin/system", destination: "/organization", permanent: false },
+      { source: "/legacy-admin/system/access-control", destination: "/organization/access", permanent: false },
+      { source: "/legacy-admin/system/roles", destination: "/organization/access", permanent: false },
+      // W-59. `/legacy-admin/users` reached the canonical chapter in TWO hops: its own page.tsx
+      // redirected to `/legacy-admin/system/access-control`, which this table then redirected to
+      // `/organization/access`. That page is deleted with the surface, so the first hop has to move
+      // here or the path 404s — and `components/admin/AdminLayout.tsx` still links to it. Same
+      // destination, one hop instead of two; no URL changes where it lands.
+      { source: "/legacy-admin/users", destination: "/organization/access", permanent: false },
+      { source: "/legacy-admin/system/departments", destination: "/organization/processes", permanent: false },
+      { source: "/legacy-admin/system/work-units", destination: "/settings/work-units", permanent: false },
+      { source: "/legacy-admin/system/pipelines", destination: "/organization/processes", permanent: false },
+      { source: "/legacy-admin/system/customer-person-roles", destination: "/settings/relationships", permanent: false },
+      { source: "/legacy-admin/system/person-relationship-types", destination: "/settings/relationships?tab=person-relationships", permanent: false },
+      /** Broken legacy hub links under /admin/system → Platform Configuration. */
+      { source: "/admin/system", destination: "/organization", permanent: false },
+      { source: "/admin/system/person-fields", destination: "/settings/fields?entity=person", permanent: false },
+      { source: "/admin/system/location-fields", destination: "/settings/fields?entity=location", permanent: false },
+      { source: "/admin/system/customer-fields", destination: "/settings/fields?entity=customer", permanent: false },
+      { source: "/admin/system/job-fields", destination: "/settings/fields?entity=opportunity", permanent: false },
+      { source: "/admin/system/opportunity-fields", destination: "/settings/fields?entity=opportunity", permanent: false },
+      { source: "/admin/system/vendor-fields", destination: "/settings/fields", permanent: false },
+      { source: "/admin/system/schedule-fields", destination: "/settings/fields", permanent: false },
+      { source: "/admin/system/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
+      { source: "/admin/system/statuses", destination: "/settings/statuses", permanent: false },
+      { source: "/admin/system/option-sets", destination: "/settings/option-sets", permanent: false },
+      { source: "/admin/system/option-sets/:setKey", destination: "/settings/option-sets/:setKey", permanent: false },
+      { source: "/admin/system/field-sections", destination: "/settings/field-sections", permanent: false },
+      { source: "/admin/system/layouts", destination: "/organization/surfaces", permanent: false },
+      { source: "/admin/system/access-control", destination: "/organization/access", permanent: false },
+      { source: "/admin/system/roles", destination: "/organization/access", permanent: false },
+      { source: "/admin/system/departments", destination: "/organization/processes", permanent: false },
+      { source: "/admin/system/work-units", destination: "/settings/work-units", permanent: false },
+      { source: "/admin/system/pipelines", destination: "/organization/processes", permanent: false },
+      { source: "/admin/system/customer-person-roles", destination: "/settings/relationships", permanent: false },
+      { source: "/admin/system/person-relationship-types", destination: "/settings/relationships?tab=person-relationships", permanent: false },
     ];
   },
   async rewrites() {
+    /*
+     * THE LOCAL SUPABASE, REACHED THROUGH THE APP'S OWN ORIGIN.
+     *
+     * A loopback NEXT_PUBLIC_SUPABASE_URL is resolved by whichever machine runs
+     * the BROWSER, so a Director on the tailnet was sending sign-in to their own
+     * laptop. This forwards it from the Next server, which really is on the host.
+     * Returns nothing at all unless the configured URL is loopback, so hosted
+     * runtimes are untouched. See lib/supabase/browserTransport.ts.
+     */
+    const localSupabase = localSupabaseRewrite(process.env.NEXT_PUBLIC_SUPABASE_URL);
+
     return [
+      ...(localSupabase ? [localSupabase] : []),
       /** Drawer VM routes live under /api/admin/view-models (not /api/admin/v2) — Turbopack dev mis-resolves nested v2 API segments. */
       {
         source: "/api/admin/v2/view-models/:path*",
         destination: "/api/admin/view-models/:path*",
       },
       /**
-       * Configuration Runtime Phase 2A — canonical Settings URLs.
-       *
-       * Surfaces workspace: the canonical user-facing route `/settings/surfaces`
-       * serves the Surfaces Configuration page (Context → Queue → Workspace).
-       * Must precede the generic `/settings/:path*` rewrite so it matches first.
-       * URL stays `/settings/surfaces` (rewrite, not redirect), so `usePathname()`
-       * sees it. The legacy `/adminV2/settings/layouts` tree remains as
-       * compatibility for queue/drawer layout authoring, but is no longer product IA.
+       * Organization Surfaces / Access / Processes — browser URLs under `/organization/*`.
+       * Must precede the exact `/organization` rewrite.
        */
-      { source: "/settings/surfaces", destination: "/adminV2/settings/surfaces" },
-      { source: "/settings/surfaces/:path*", destination: "/adminV2/settings/surfaces/:path*" },
-      { source: "/settings", destination: "/adminV2/settings" },
+      { source: "/organization/surfaces", destination: "/adminV2/settings/organization/surfaces" },
+      { source: "/organization/surfaces/:path*", destination: "/adminV2/settings/organization/surfaces/:path*" },
+      { source: "/organization/communications", destination: "/adminV2/settings/organization/communications" },
+      {
+        source: "/organization/communications/:path*",
+        destination: "/adminV2/settings/organization/communications/:path*",
+      },
+      /**
+       * Organization Staff — employment, deliberately a sibling of Access rather
+       * than a section inside it. Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/staff", destination: "/adminV2/settings/organization/staff" },
+      { source: "/organization/staff/:path*", destination: "/adminV2/settings/organization/staff/:path*" },
+      /**
+       * Organization Integrations — approved external software and what it may
+       * access. The product noun is Organization; `/adminV2/settings/*` stays the
+       * implementation shell. Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/integrations", destination: "/adminV2/settings/organization/integrations" },
+      {
+        source: "/organization/integrations/:path*",
+        destination: "/adminV2/settings/organization/integrations/:path*",
+      },
+      { source: "/organization/access", destination: "/adminV2/settings/organization/access" },
+      { source: "/organization/access/:path*", destination: "/adminV2/settings/organization/access/:path*" },
+      { source: "/organization/processes", destination: "/adminV2/settings/organization/processes" },
+      { source: "/organization/processes/:path*", destination: "/adminV2/settings/organization/processes/:path*" },
+      { source: "/organization/commands", destination: "/adminV2/settings/organization/commands" },
+      { source: "/organization/commands/:path*", destination: "/adminV2/settings/organization/commands/:path*" },
+      { source: "/organization/data-model", destination: "/adminV2/settings/organization/data-model" },
+      { source: "/organization/data-model/:path*", destination: "/adminV2/settings/organization/data-model/:path*" },
+      { source: "/organization/operational-intelligence", destination: "/adminV2/settings/organization/operational-intelligence" },
+      {
+        source: "/organization/operational-intelligence/:path*",
+        destination: "/adminV2/settings/organization/operational-intelligence/:path*",
+      },
+      /** Organization Calculations — Path B authoring surface (not OI). */
+      { source: "/organization/calculations", destination: "/adminV2/settings/organization/calculations" },
+      {
+        source: "/organization/calculations/:path*",
+        destination: "/adminV2/settings/organization/calculations/:path*",
+      },
+
+      /**
+       * Organization Programs & Locations — relationship landing.
+       * Must precede exact `/organization` rewrite. Collections remain at
+       * `/organization/programs` and `/organization/locations`.
+       */
+      { source: "/organization/programs-locations", destination: "/adminV2/settings/organization/programs-locations" },
+      { source: "/organization/programs-locations/:path*", destination: "/adminV2/settings/organization/programs-locations/:path*" },
+      /**
+       * Organization Locations — browser URL `/organization/locations`.
+       * Must precede the exact `/organization` rewrite. Compatibility `/settings/locations`
+       * remains via the generic `/settings/:path*` rewrite.
+       */
+      /**
+       * Organization Tours — organization-wide tour schedules and the organization's booking brand
+       * (P1-A). Locations inherit these; each location's own schedules live in Locations › Tours.
+       * Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/tours", destination: "/adminV2/settings/tours/availability" },
+      { source: "/organization/locations", destination: "/adminV2/settings/locations" },
+      { source: "/organization/locations/:path*", destination: "/adminV2/settings/locations/:path*" },
+      /**
+       * Organization Programs — browser URL `/organization/programs` (and optional
+       * `?programId=` selection). Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/programs", destination: "/adminV2/settings/organization/programs" },
+      { source: "/organization/programs/:path*", destination: "/adminV2/settings/organization/programs/:path*" },
+      /**
+       * Organization Financials — browser URL `/organization/financials`.
+       * Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/financials", destination: "/adminV2/settings/organization/financials" },
+      { source: "/organization/financials/:path*", destination: "/adminV2/settings/organization/financials/:path*" },
+      { source: "/organization", destination: "/adminV2/settings/organization" },
       { source: "/settings/:path*", destination: "/adminV2/settings/:path*" },
       /**
        * Phase G: canonical operator workspace at `/workspace` (browser URL; serves AdminV2 tree).
        */
+      /**
+       * Staffing V1 Director QA — an internal operator surface.
+       *
+       * It lives under `/workspace` because that is `CANONICAL_OPERATOR_BASE`: the middleware's
+       * operator gate protects everything beneath it, and nothing redirects it away. The obvious
+       * choice, `/admin/system/qa/...`, does NOT work — the `/admin/*` family is retired, and
+       * `legacyAdminRedirectTarget` sends every path under it to a canonical surface, so a page
+       * there is unreachable no matter what it renders. That was proven on the hosted route, not
+       * guessed: `/admin/system` answered with `/organization` and `/admin/roster` with
+       * `/workspace`.
+       *
+       * Core Financials had a surface here too, and it is gone — see the redirect above. Financials
+       * human QA is walked beside the product, not inside it.
+       *
+       * The implementation stays under `/adminV2/*`, like every other operator surface here.
+       */
+      { source: "/workspace/qa/staffing-v1", destination: "/adminV2/system/qa/staffing-v1" },
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
-      {
-        source: "/workspace/work-unit/:workUnitSlug/:recordId",
-        destination: "/adminV2/workspace/work-unit/:workUnitSlug/:recordId",
-      },
+      /**
+       * Durable record attention — a record attended SUBJECT-FIRST, with no queue holding it.
+       * Must precede the base `/workspace` rewrite. @see lib/runtime/focus/durableRecordRoute.ts
+       */
+      { source: "/workspace/record/:subjectType/:subjectId", destination: "/adminV2/workspace/record/:subjectType/:subjectId" },
+      // RA-2: the legacy `/:recordId` path form is retired — a selected record is the `?subject_id`
+      // query, which rides along the base rewrite above. No path-recordId rewrite.
       /**
        * Legacy `/admin/*` (non-settings) rewrites to `app/adminV2/*`.
        * Settings hub is served via `/settings` rewrite above.

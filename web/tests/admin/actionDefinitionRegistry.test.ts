@@ -15,9 +15,8 @@ describe("actionDefinitionRegistry", () => {
             { id: "5", key: "custom_org_action", label: "Custom", action_type: "ui_intent", entity_type: "opportunity", org_id: "org-1" },
         ];
         const filtered = filterSettingsActionCatalogDefinitions(defs);
-        expect(filtered.map((d) => d.key).sort()).toEqual(
-            ["custom_org_action", "open_record", "update_status_add_note"].sort()
-        );
+        // Legacy update_status_add_note is settingsConfigurable:false and capability catalogVisibility:hidden.
+        expect(filtered.map((d) => d.key).sort()).toEqual(["custom_org_action", "open_record"].sort());
     });
 
     it("includes ask_bos and quick_message in library", () => {

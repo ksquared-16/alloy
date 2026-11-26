@@ -1,0 +1,146 @@
+{
+ "replay": {
+  "status": 200,
+  "keys": [
+   "caseId",
+   "status",
+   "operationalResult",
+   "alreadyDone",
+   "marketingConsent",
+   "tourRequest"
+  ],
+  "tourRequest": {
+   "kind": "booked",
+   "bookingId": "4d5a1f61-851d-4ec6-8206-33421b0d773e",
+   "bookingStatus": "pending_approval",
+   "replay": true,
+   "comms": {
+    "detail": "booking_pending_approval",
+    "status": "not_applicable"
+   }
+  },
+  "marketingConsent": {
+   "kind": "committed",
+   "personId": "c7a5d90c-907f-472c-989d-5c7981b3783f",
+   "outcomes": [
+    {
+     "channel": "email",
+     "outcome": "opted_in"
+    },
+    {
+     "channel": "sms",
+     "outcome": "skipped_unset"
+    }
+   ],
+   "replayed": true
+  },
+  "opReplays": []
+ },
+ "prefs": {
+  "status": 200,
+  "body": {
+   "data": {
+    "personId": "c7a5d90c-907f-472c-989d-5c7981b3783f",
+    "preferredChannel": null,
+    "preferredChannelOptions": [
+     {
+      "value": "sms",
+      "label": "Text message"
+     },
+     {
+      "value": "email",
+      "label": "Email"
+     },
+     {
+      "value": "phone",
+      "label": "Phone call"
+     }
+    ],
+    "preferences": [
+     {
+      "key": "email_transactional",
+      "label": "Essential email",
+      "description": "Required service and process communications. Always allowed.",
+      "channel": "email",
+      "control": "always_allowed",
+      "state": "unset",
+      "allowedChanges": [],
+      "lockedReason": "Essential messages are always allowed by policy.",
+      "lastChange": null
+     },
+     {
+      "key": "email_operational",
+      "label": "Routine email",
+      "description": "Day-to-day operational communication.",
+      "channel": "email",
+      "control": "opt_out",
+      "state": "unset",
+      "allowedChanges": [
+       "Blocked"
+      ],
+      "lockedReason": null,
+      "lastChange": null
+     },
+     {
+      "key": "email_marketing",
+      "label": "Marketing & promotional email",
+      "description": "Requires explicit opt-in.",
+      "channel": "email",
+      "control": "opt_in",
+      "state": "opted_in",
+      "allowedChanges": [
+       "Blocked"
+      ],
+      "lockedReason": "Marketing needs the person's own opt-in; staff can only turn it off.",
+      "lastChange": {
+       "source": "public_intake",
+       "method": "form_checkbox",
+       "at": "2026-10-28T04:36:05.320566+00:00",
+       "actorUserId": "00000000-0000-4000-8000-000000000002"
+      }
+     },
+     {
+      "key": "sms_transactional",
+      "label": "Essential text messages",
+      "description": "Required service and process communications. Always allowed unless the recipient texts STOP.",
+      "channel": "sms",
+      "control": "always_allowed",
+      "state": "unset",
+      "allowedChanges": [],
+      "lockedReason": "Essential messages are always allowed by policy.",
+      "lastChange": null
+     },
+     {
+      "key": "sms_operational",
+      "label": "Routine text messages",
+      "description": "Day-to-day operational communication.",
+      "channel": "sms",
+      "control": "opt_out",
+      "state": "unset",
+      "allowedChanges": [
+       "Blocked"
+      ],
+      "lockedReason": null,
+      "lastChange": null
+     },
+     {
+      "key": "sms_marketing",
+      "label": "Marketing & promotional texts",
+      "description": "Requires explicit opt-in.",
+      "channel": "sms",
+      "control": "opt_in",
+      "state": "unset",
+      "allowedChanges": [
+       "Blocked"
+      ],
+      "lockedReason": "Marketing needs the person's own opt-in; staff can only turn it off.",
+      "lastChange": null
+     }
+    ]
+   }
+  }
+ },
+ "fridayAfter": [
+  "1:30 PM"
+ ]
+}

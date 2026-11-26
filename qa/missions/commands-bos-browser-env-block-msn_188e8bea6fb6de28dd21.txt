@@ -1,0 +1,107 @@
+=== 2026-07-28T17:25:16Z promotion-readiness env snapshot ===
+--- vm_stat ---
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                3547.
+Pages active:                            456628.
+Pages inactive:                          451152.
+Pages speculative:                         4638.
+Pages throttled:                              0.
+Pages wired down:                        188099.
+Pages purgeable:                           2222.
+"Translation faults":               57564875263.
+Pages copy-on-write:                 6289756448.
+--- worker status ---
+root: /Users/Kelly/Alloy
+base: origin/staging @ 1e13fcd96 (fetched 13m ago)
+A/B is relative to the base above; alloy-worker-status --refresh fetches first.
+
+SLOT SPRINT               PROV    STAGE         POSTURE            WORKTREE                 GIT     A/B      AGENT     SERVER   PORT  HEALTH 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+1    commands-system-inve cursor  unknown       unknown            wt1-commands-system-inve dirty   46/0     active    stale    3011  unhealthy
+2    org-calcs-integratio cursor  unknown       unknown            wt2-org-calcs-integratio clean   22/122   active    running  3012  ok     
+3    runtime-v1-polish    claude  unknown       unknown            wt3-runtime-v1-polish    dirty   0/3      paused    stopped  3013  ok     
+4    phase7-slice3-partic claude  unknown       unknown            wt4-phase7-slice3-partic dirty   5/90     paused    stopped  3014  ok     
+5    runtime-v1-placement claude  unknown       unknown            wt5-runtime-v1-placement clean   0/0      active    stopped  3015  ok     
+6    -                    -       -             -                  (free)                   -       -        -         stopped  3016  ok     
+--- port 3011 ---
+no listener
+--- pid file ---
+54085
+--- last 25 log lines ---
+> web@0.1.0 dev
+> next dev
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+   ▲ Next.js 16.0.8 (Turbopack)
+   - Local:         http://localhost:3011
+   - Network:       http://192.168.4.38:3011
+
+ ✓ Starting...
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ ✓ Ready in 1362ms
+
+> web@0.1.0 dev
+> next dev
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+   ▲ Next.js 16.0.8 (Turbopack)
+   - Local:         http://localhost:3011
+   - Network:       http://192.168.4.38:3011
+
+ ✓ Starting...
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ ✓ Ready in 1325ms
+ ○ Compiling /login ...
+ GET /login 200 in 11.7s (compile: 9.9s, proxy.ts: 50ms, render: 1737ms)
+--- next processes ---
+58904 node /Users/Kelly/Code/alloy-worktrees/wt2-org-calcs-integration/web/node_modules/.bin/next dev
+58912 next-server (v16.0.8) ALLOY_MEMORY_PRESSURE_THRESHOLD=warn
+--- free pages interpretation ---
+approx free RAM from earlier sample: 75.0 MiB
+=== 2026-07-28T17:28:58Z final promotion env snapshot ===
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               10932.
+Pages active:                            474453.
+Pages inactive:                          460990.
+Pages speculative:                        12759.
+Pages throttled:                              0.
+Pages wired down:                        184144.
+Pages purgeable:                           3453.
+root: /Users/Kelly/Alloy
+base: origin/staging @ 1e13fcd96 (fetched 2m ago)
+A/B is relative to the base above; alloy-worker-status --refresh fetches first.
+
+SLOT SPRINT               PROV    STAGE         POSTURE            WORKTREE                 GIT     A/B      AGENT     SERVER   PORT  HEALTH 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+1    commands-system-inve cursor  unknown       unknown            wt1-commands-system-inve dirty   46/0     active    stale    3011  unhealthy
+2    org-calcs-integratio cursor  unknown       unknown            wt2-org-calcs-integratio clean   22/122   paused    running  3012  ok     
+3    runtime-v1-polish    claude  unknown       unknown            wt3-runtime-v1-polish    dirty   0/3      paused    stopped  3013  ok     
+4    phase7-slice3-partic claude  unknown       unknown            wt4-phase7-slice3-partic dirty   5/90     paused    stopped  3014  ok     
+5    -                    -       -             -                  (free)                   -       -        -         stopped  3015  ok     
+6    -                    -       -             -                  (free)                   -       -        -         stopped  3016  ok     
+--- 3011 ---
+no listener
+--- next ---
+91884 node /Users/Kelly/Code/alloy-worktrees/wt2-org-calcs-integration/web/node_modules/.bin/next dev
+91926 next-server (v16.0.8) ALLOY_MEMORY_PRESSURE_THRESHOLD=warn
+--- last log ---
+ ✓ Starting...
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ ✓ Ready in 3.4s
+ ○ Compiling /login ...
+ GET /login 200 in 27.9s (compile: 26.5s, proxy.ts: 100ms, render: 1336ms)
+ GET /login 200 in 66ms (compile: 17ms, proxy.ts: 9ms, render: 39ms)
+
+> web@0.1.0 dev
+> next dev
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+   ▲ Next.js 16.0.8 (Turbopack)
+   - Local:         http://localhost:3011
+   - Network:       http://192.168.4.38:3011
+
+ ✓ Starting...
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ ✓ Ready in 1221ms
+ ○ Compiling /login ...
+ GET /login 200 in 4.8s (compile: 4.6s, proxy.ts: 56ms, render: 107ms)

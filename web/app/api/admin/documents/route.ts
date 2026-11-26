@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { accessScopeRestrictsData, assertDocumentDrawerReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
+import { filterDocumentRowsInActorScope, requireDocumentRead } from "@/lib/documents/assertDocumentAccess";
+import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import {
     fetchEffectiveStatusDefinitions,
@@ -130,7 +133,15 @@ async function attachRelatedLabels(
     return out;
 }
 
-/** GET: list documents for current org (admin + ops). */
+/**
+ * GET: list documents for the current org.
+ *
+ * Admission is `documents.read` (or a real role key the documents RLS admits) — the same
+ * `requireDocumentRead` every document byte/link/text route uses. Before D1a this checked only that a
+ * session existed, so any portal member could list every document's title, file name, type and
+ * linked record, including children's. Rows are then narrowed by the actor's scope with the same
+ * predicate the signer applies to a single id.
+ */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
@@ -139,6 +150,8 @@ export async function GET(request: NextRequest) {
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
+    const denied = requireDocumentRead(access);
+    if (denied) return denied;
     const dim = scopeDimensionsFromAccess(access);
 
     const { searchParams } = new URL(request.url);
@@ -169,19 +182,17 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = (rawRows ?? []) as DocRow[];
+    // D1c-1: quarantined (and deleted/restricted) documents are not listed. Reviewers use the screening queue.
+    const rows = ((rawRows ?? []) as DocRow[]).filter((r) => !isDocumentUnavailable(r.status));
 
-    let scopedRows = rows;
-    if (accessScopeRestrictsData(dim)) {
-        scopedRows = [];
-        for (const row of rows) {
-            const ok = await assertDocumentDrawerReadable(supabase, ctx.orgId, dim, {
-                entity_type: row.entity_type,
-                entity_id: row.entity_id,
-            });
-            if (ok) scopedRows.push(row);
-        }
-    }
+    // D1b.6: scope first, then sensitive classes (medical → health.view, safeguarding evidence →
+    // safeguarding view), the same two filters the single-document decision applies.
+    const scopedRows = await filterDocumentRowsBySensitivity(
+        supabase,
+        ctx.orgId,
+        access,
+        await filterDocumentRowsInActorScope(supabase, ctx.orgId, dim, rows),
+    );
 
     const labelMap = await attachRelatedLabels(supabase, ctx.orgId, scopedRows);
     const docDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "documents", { activeOnly: true });

@@ -28,7 +28,7 @@ describe("enrollmentGridPresentation", () => {
         expect(
             enrollmentGridColumnIsEditable({ refKey: "child.program", label: "Program", editable: true }),
         ).toBe(true);
-        expect(enrollmentGridColumnIsEditable({ refKey: "child.desired_start_date", label: "Start" })).toBe(false);
+        expect(enrollmentGridColumnIsEditable({ refKey: "child.start_date", label: "Start" })).toBe(false);
     });
 
     it("defaults roster to read-first under composition hint", () => {

@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": false,
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "files": [
+    "lib/lifecycle/executeGovernedFamilyClose.ts",
+    "lib/lifecycle/planGovernedFamilyClose.ts",
+    "lib/lifecycle/applyParticipantDecisionInputs.ts",
+    "lib/lifecycle/resolveChildTrackTransition.ts",
+    "lib/lifecycle/assertSingleParticipantWrite.ts",
+    "lib/lifecycle/resolveParticipantDecisionContext.ts",
+    "lib/lifecycle/projectParticipantDecisionRows.ts",
+    "lib/lifecycle/executeParticipantDecisionForChild.ts"
+  ]
+}

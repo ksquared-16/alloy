@@ -1,0 +1,28 @@
+{
+  "notes": [
+    "landingVisible=true",
+    "filterTag=SELECT",
+    "filterValue=active",
+    "sortValue=name:asc",
+    "searchWidth=298",
+    "filterWidth=131",
+    "sortWidth=160",
+    "searchY=297 filterY=339 sortY=339",
+    "twoRow=true",
+    "sideBySide=true",
+    "screenshot:01-programs-landing.png",
+    "hasPrograms=true",
+    "selectedVisible=true",
+    "scheduleAbsent=true",
+    "url=http://127.0.0.1:3014/organization/programs?programId=64adf957-537f-4ce9-b2b4-9f6def7ebf6a",
+    "screenshot:02-programs-selected.png",
+    "backToLanding=false",
+    "urlLanding=http://127.0.0.1:3014/organization/programs?status=active",
+    "screenshot:03-programs-landing-return.png",
+    "afterFilter=all afterSort=age:asc",
+    "urlAfter=http://127.0.0.1:3014/organization/programs?programId=64adf957-537f-4ce9-b2b4-9f6def7ebf6a&status=all&sort=age",
+    "screenshot:04-programs-filter-sort.png",
+    "idleFilterShadow=none"
+  ],
+  "at": "2026-07-22T18:33:40.443Z"
+}

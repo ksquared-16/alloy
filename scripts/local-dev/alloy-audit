@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Read-only workstation audit for Alloy parallel-agent development.
+# Must not modify the machine.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/lock.sh
+source "${SCRIPT_DIR}/lib/lock.sh"
+
+section() {
+  printf '\n======== %s ========\n' "$1"
+}
+
+safe() {
+  "$@" 2>/dev/null || echo "(unavailable)"
+}
+
+dir_size_or_na() {
+  local p="$1"
+  if [[ -d "$p" ]]; then
+    du -sh "$p" 2>/dev/null | awk '{print $1"\t"$2}'
+  else
+    echo "missing	$p"
+  fi
+}
+
+main() {
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+
+  section "Mac hardware summary"
+  safe sysctl -n machdep.cpu.brand_string
+  safe sysctl -n hw.ncpu
+  safe sysctl -n hw.memsize
+  safe system_profiler SPHardwareDataType
+
+  section "RAM / memory pressure"
+  if alloy_have_cmd memory_pressure; then
+    memory_pressure 2>/dev/null || true
+  else
+    echo "memory_pressure unavailable"
+  fi
+  safe vm_stat
+
+  section "Storage"
+  safe df -h /
+  safe diskutil info /
+
+  section "Top CPU processes"
+  ps -arco pid,pcpu,pmem,etime,comm 2>/dev/null | head -n 25 || \
+    ps -axo pid,pcpu,pmem,etime,comm 2>/dev/null | sort -nrk2 | head -n 25 || true
+
+  section "Git worktrees"
+  if [[ -d "${ALLOY_REPO:-}" ]]; then
+    git -C "$ALLOY_REPO" worktree list 2>/dev/null || true
+  else
+    echo "ALLOY_REPO missing: ${ALLOY_REPO:-}"
+  fi
+
+  section "Listening development ports"
+  local ports=("$ALLOY_CANONICAL_PORT") i p listener
+  for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
+    ports+=("$((ALLOY_FIRST_AGENT_PORT + i - 1))")
+  done
+  for p in "${ports[@]}"; do
+    if listener="$(alloy_port_listener_pid "$p" 2>/dev/null)"; then
+      printf 'port %s PID %s %s\n' "$p" "$listener" "$(alloy_process_command "$listener")"
+    else
+      printf 'port %s free\n' "$p"
+    fi
+  done
+
+  section "Node / TypeScript / Vitest / Next / Playwright"
+  ps aux 2>/dev/null | awk 'BEGIN{IGNORECASE=1}
+    /node|tsc|typescript|vitest|next|playwright/ && !/awk/ {print}' | head -n 60 || true
+
+  section "Cursor processes"
+  ps aux 2>/dev/null | awk '/[Cc]ursor/ && !/awk/ {print}' | head -n 40 || true
+
+  section "Claude processes"
+  ps aux 2>/dev/null | awk '/[Cc]laude/ && !/awk/ {print}' | head -n 40 || true
+
+  section "Cache sizes (read-only)"
+  dir_size_or_na "$HOME/Library/Application Support/Cursor"
+  dir_size_or_na "$HOME/Library/Caches/Cursor"
+  dir_size_or_na "$HOME/Library/Application Support/Claude"
+  dir_size_or_na "$HOME/Library/Caches/Claude"
+  dir_size_or_na "$HOME/Library/Caches/npm"
+  dir_size_or_na "$HOME/.npm"
+  echo "(use alloy-clean package-cache-verify for an explicit npm cache verify)"
+
+  section "Docker disk usage (read-only)"
+  if alloy_have_cmd docker; then
+    docker system df 2>/dev/null || echo "docker present but df unavailable"
+  else
+    echo "docker not installed"
+  fi
+
+  section "Spotlight status (read-only)"
+  if alloy_have_cmd mdutil; then
+    if [[ -d "${ALLOY_WORKTREE_ROOT:-}" ]]; then
+      mdutil -s "$ALLOY_WORKTREE_ROOT" 2>/dev/null || true
+    fi
+    if [[ -d "${ALLOY_REPO:-}" ]]; then
+      mdutil -s "$ALLOY_REPO" 2>/dev/null || true
+    fi
+    mdutil -s / 2>/dev/null | head -n 5 || true
+  else
+    echo "mdutil unavailable"
+  fi
+
+  section "Heavy validation lock"
+  if alloy_validate_lock_held; then
+    alloy_validate_print_owner
+  else
+    echo "free"
+  fi
+
+  section "Runtime roots"
+  echo "config:  ${ALLOY_CONFIG_FILE}"
+  echo "runtime: ${ALLOY_RUNTIME_ROOT}"
+  echo "repo:    ${ALLOY_REPO}"
+  echo "trees:   ${ALLOY_WORKTREE_ROOT}"
+}
+
+main "$@"

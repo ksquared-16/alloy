@@ -26,8 +26,17 @@ vi.mock("@/lib/lifecycle/reopenStageWorkWithDueDate", () => ({
     reopenStageWorkWithDueDate: vi.fn(async () => ({ ok: true, due_at: new Date().toISOString() })),
 }));
 
+const mockRecordContactOutcomeTrace = vi.fn(async () => ({ logged: true }) as { logged: boolean; error?: string });
+
+vi.mock("@/lib/lifecycle/recordStageWorkContactOutcomeTrace", () => ({
+    recordStageWorkContactOutcomeTrace: (...args: unknown[]) => mockRecordContactOutcomeTrace(...(args as [])),
+}));
+
+const mockRollbackStageOperatingOutcome = vi.fn(async () => [] as string[]);
+
 vi.mock("@/lib/lifecycle/executeStageOperatingOutcome", () => ({
     executeStageOperatingOutcome: (...args: unknown[]) => mockExecuteStageOperatingOutcome(...args),
+    rollbackStageOperatingOutcome: (...args: unknown[]) => mockRollbackStageOperatingOutcome(...(args as [])),
 }));
 
 function departmentMetadataWithPlan(plan: StageOperatingPlanV1): Record<string, unknown> {
@@ -59,15 +68,31 @@ function departmentMetadataWithPlan(plan: StageOperatingPlanV1): Record<string, 
     };
 }
 
+/**
+ * The work row the transaction snapshots before the persist step and restores on rollback.
+ */
+const workRowSnapshot = { status: "open", due_at: null, metadata: {} };
+
 function makeSupabase(metadata: Record<string, unknown>) {
     return {
         from: vi.fn((table: string) => {
-            if (table !== "departments") throw new Error(`unexpected table ${table}`);
-            return {
-                select: vi.fn().mockReturnThis(),
-                eq: vi.fn().mockReturnThis(),
-                maybeSingle: vi.fn(async () => ({ data: { metadata }, error: null })),
-            };
+            if (table === "departments") {
+                return {
+                    select: vi.fn().mockReturnThis(),
+                    eq: vi.fn().mockReturnThis(),
+                    maybeSingle: vi.fn(async () => ({ data: { metadata }, error: null })),
+                };
+            }
+            if (table === "operational_tasks") {
+                return {
+                    select: vi.fn().mockReturnThis(),
+                    update: vi.fn().mockReturnThis(),
+                    eq: vi.fn().mockReturnThis(),
+                    maybeSingle: vi.fn(async () => ({ data: { ...workRowSnapshot }, error: null })),
+                    then: undefined,
+                };
+            }
+            throw new Error(`unexpected table ${table}`);
         }),
     };
 }
@@ -90,6 +115,8 @@ describe("completeStageWorkWithOutcome", () => {
         vi.clearAllMocks();
         mockCompleteWorkInstance.mockResolvedValue({ ok: true, row: { id: workId, status: "completed" } });
         mockPatchAttemptMetadata.mockResolvedValue({ ok: true, attempt_count: 1 });
+        mockRecordContactOutcomeTrace.mockResolvedValue({ logged: true });
+        mockRollbackStageOperatingOutcome.mockResolvedValue([]);
         mockExecuteStageOperatingOutcome.mockResolvedValue({
             applied_targets: [],
             errors: [],
@@ -99,7 +126,7 @@ describe("completeStageWorkWithOutcome", () => {
         });
     });
 
-    it("successful outcome (qualified) closes work and executes outcome", async () => {
+    it("successful outcome (reached_family) closes work and executes outcome", async () => {
         mockExecuteStageOperatingOutcome.mockResolvedValue({
             applied_targets: [],
             errors: [],
@@ -110,7 +137,7 @@ describe("completeStageWorkWithOutcome", () => {
 
         const result = await completeStageWorkWithOutcome({
             ...baseInput,
-            outcomeKey: "qualified",
+            outcomeKey: "reached_family",
         });
 
         expect(result.ok).toBe(true);
@@ -122,7 +149,7 @@ describe("completeStageWorkWithOutcome", () => {
         });
         expect(mockPatchAttemptMetadata).not.toHaveBeenCalled();
         expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
-            expect.objectContaining({ outcomeKey: "qualified", attemptCount: null }),
+            expect.objectContaining({ outcomeKey: "reached_family", attemptCount: null }),
         );
     });
 
@@ -150,7 +177,7 @@ describe("completeStageWorkWithOutcome", () => {
         );
     });
 
-    it("terminal outcome (closed_lost) closes work and executes outcome", async () => {
+    it("terminal outcome (not_interested) closes work and executes outcome", async () => {
         mockExecuteStageOperatingOutcome.mockResolvedValue({
             applied_targets: [],
             errors: [],
@@ -161,7 +188,7 @@ describe("completeStageWorkWithOutcome", () => {
 
         const result = await completeStageWorkWithOutcome({
             ...baseInput,
-            outcomeKey: "closed_lost",
+            outcomeKey: "not_interested",
         });
 
         expect(result.ok).toBe(true);
@@ -169,7 +196,7 @@ describe("completeStageWorkWithOutcome", () => {
         expect(mockCompleteWorkInstance).toHaveBeenCalled();
         expect(mockPatchAttemptMetadata).not.toHaveBeenCalled();
         expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
-            expect.objectContaining({ outcomeKey: "closed_lost" }),
+            expect.objectContaining({ outcomeKey: "not_interested" }),
         );
     });
 });

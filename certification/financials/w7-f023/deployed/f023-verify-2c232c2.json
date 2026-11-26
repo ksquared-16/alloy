@@ -1,0 +1,12 @@
+{
+ "strip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+ "rows": [
+  "ACTIONS | DATE | TYPE | CHILD | GL ACCOUNT | AMOUNT | STATUS | RESPONSIBLE PARTY | DESCRIPTION",
+  "Oct 25, 2026 | Tuition | Tilly Tuition | 4000 · Tuition Revenue | $1,200.00 | Upcoming | Tess Tuition | Monthly tuition"
+ ],
+ "rowActions": [
+  "post",
+  "reallocateResponsibility"
+ ],
+ "chargeDetail": "CHARGE DETAILS ⏎ Monthly tuition ⏎ Draft charge · W7 QA · Tuition Family ⏎ APPLIES TO ⏎ Tilly Tuition ⏎ RESPONSIBILITY ⏎ Tess Tuition · 100% ⏎ AMOUNT ⏎ Charge ⏎ $1,200.00 ⏎ DATES ⏎ SERVICE DATE ⏎ Nov 1, 2026 ⏎ BILLING PERIOD ⏎ November 2026 ⏎ INVOICE DATE ⏎ Oct 25, 2026 ⏎ DUE DATE ⏎ Nov 6, 2026 ⏎ POSTINGDraft · Posts Nov 1, 2026 ⏎ RESPONSIBILITY & FUNDING ⏎ Tess Tuition ⏎ 100% responsible · $1,200.00 ⏎ Expected funding · None ⏎ Manage funding ⏎ Manage responsibility ⏎ HISTORY ⏎ Created by ⏎ QA Operator · Slot 1 ⏎ Created ⏎ Oct 16, 2026 at 1:57 PM ⏎ COLLECTION ⏎ Outstanding ⏎ $0.00 ⏎ Edit draft ⏎ Cancel draft ⏎ Close"
+}

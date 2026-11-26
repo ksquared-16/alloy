@@ -1,0 +1,47 @@
+BEGIN
+SET
+              set_config              |       set_config       
+--------------------------------------+------------------------
+ 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 | Firefly Early Learning
+(1 row)
+
+psql:<stdin>:105: NOTICE:  holds rows: business_process_drafts 1
+psql:<stdin>:105: NOTICE:  holds rows: business_process_revisions 1
+psql:<stdin>:105: NOTICE:  holds rows: configuration_publications 1
+psql:<stdin>:105: NOTICE:  holds rows: customer_person_role_types 6
+psql:<stdin>:105: NOTICE:  holds rows: departments 1
+psql:<stdin>:105: NOTICE:  holds rows: document_categories 10
+psql:<stdin>:105: NOTICE:  holds rows: document_type_versions 13
+psql:<stdin>:105: NOTICE:  holds rows: document_types 13
+psql:<stdin>:105: NOTICE:  holds rows: field_definitions 9
+psql:<stdin>:105: NOTICE:  holds rows: field_section_definitions 1
+psql:<stdin>:105: NOTICE:  holds rows: locations 20
+psql:<stdin>:105: NOTICE:  holds rows: option_sets 1
+psql:<stdin>:105: NOTICE:  holds rows: record_drawer_layouts 1
+psql:<stdin>:105: NOTICE:  holds rows: role_definitions 4
+psql:<stdin>:105: NOTICE:  holds rows: role_permission_grants 160
+psql:<stdin>:105: NOTICE:  holds rows: user_access_profiles 1
+psql:<stdin>:105: NOTICE:  holds rows: user_roles 1
+psql:<stdin>:105: NOTICE:  holds rows: workflow_events 1
+psql:<stdin>:105: NOTICE:  lifted 23 trigger(s)
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from business_process_drafts
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from business_process_revisions
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from configuration_publications
+psql:<stdin>:105: NOTICE:  pass 1: deleted 6 from customer_person_role_types
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from departments
+psql:<stdin>:105: NOTICE:  pass 1: deleted 13 from document_type_versions
+psql:<stdin>:105: NOTICE:  pass 1: deleted 13 from document_types
+psql:<stdin>:105: NOTICE:  pass 1: deleted 9 from field_definitions
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from field_section_definitions
+psql:<stdin>:105: NOTICE:  pass 1: deleted 20 from locations
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from option_sets
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from record_drawer_layouts
+psql:<stdin>:105: NOTICE:  pass 1: deleted 160 from role_permission_grants
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from user_access_profiles
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from user_roles
+psql:<stdin>:105: NOTICE:  pass 1: deleted 1 from workflow_events
+psql:<stdin>:105: NOTICE:  pass 2: deleted 10 from document_categories
+psql:<stdin>:105: NOTICE:  pass 2: deleted 4 from role_definitions
+psql:<stdin>:105: NOTICE:  removed org 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 ("Firefly Early Learning") from 18 table(s) in 2 pass(es); 23 trigger(s) restored
+DO
+COMMIT

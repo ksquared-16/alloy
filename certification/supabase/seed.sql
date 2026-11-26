@@ -1,0 +1,3 @@
+-- Intentionally empty. Seeding is done by `alloy-certify seed` via psql, because
+-- the canonical representative seed uses psql meta-commands (\ir / \set / \echo)
+-- that supabase's raw-SQL [db.seed] runner cannot execute. [db.seed] is disabled.

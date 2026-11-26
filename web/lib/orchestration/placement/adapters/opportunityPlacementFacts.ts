@@ -5,7 +5,7 @@
 
 import type { FactBag, FactValue } from "@/lib/orchestration/placement/placementPriorityTypes";
 import {
-    CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE,
+    CHILDCARE_PLACEMENT_FACT_START_DATE,
     CHILDCARE_PLACEMENT_FACT_FLAG_COMMUNITY_PRIORITY,
     CHILDCARE_PLACEMENT_FACT_FLAG_EMPLOYEE_HOUSEHOLD,
     CHILDCARE_PLACEMENT_FACT_FLAG_SIBLING_ENROLLED,
@@ -119,7 +119,8 @@ function extractWaitSince(
     return { presence: "absent", source: "no_wait_since" };
 }
 
-function extractDesiredStartDate(md: Record<string, unknown>): FactValue {
+function extractStartDate(md: Record<string, unknown>): FactValue {
+    // `desired_start_date` here is the opportunity-level legacy metadata key — not the OCM column.
     const ds = parseIsoInstant(md.desired_start_date);
     if (ds) {
         return { presence: "present", value: ds, source: "metadata.desired_start_date" };
@@ -128,7 +129,7 @@ function extractDesiredStartDate(md: Record<string, unknown>): FactValue {
     if (nested) {
         return { presence: "present", value: nested, source: "metadata.placement_fact_inputs_v1.desired_start_date" };
     }
-    return { presence: "absent", source: "no_desired_start_date" };
+    return { presence: "absent", source: "no_start_date" };
 }
 
 /**
@@ -204,7 +205,7 @@ export function buildOpportunityPlacementFacts(
 
     return {
         [CHILDCARE_PLACEMENT_FACT_WAIT_SINCE]: extractWaitSince(md, row.created_at ?? null, options),
-        [CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE]: extractDesiredStartDate(md),
+        [CHILDCARE_PLACEMENT_FACT_START_DATE]: extractStartDate(md),
         [CHILDCARE_PLACEMENT_FACT_FLAG_EMPLOYEE_HOUSEHOLD]: readBooleanPlacementFact(md, CHILDCARE_PLACEMENT_FACT_FLAG_EMPLOYEE_HOUSEHOLD),
         [CHILDCARE_PLACEMENT_FACT_FLAG_STAFF_HOUSEHOLD]: readBooleanPlacementFact(md, CHILDCARE_PLACEMENT_FACT_FLAG_STAFF_HOUSEHOLD),
         [CHILDCARE_PLACEMENT_FACT_FLAG_COMMUNITY_PRIORITY]: readBooleanPlacementFact(md, CHILDCARE_PLACEMENT_FACT_FLAG_COMMUNITY_PRIORITY),

@@ -1,0 +1,173 @@
+{
+  "before": {
+    "mounted": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition"
+    ],
+    "tuitionCount": "2",
+    "assignments": [
+      {
+        "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+        "member": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "state": "recommended",
+        "accepted": "none",
+        "resolution": "b2e43fd1",
+        "child": "Certb Certhouse",
+        "amount": "$1,450.00/monthly",
+        "facts": [
+          "Program · preschool",
+          "Attendance · full_time",
+          "Schedule · — days a week",
+          "Effective · 2026-09-01"
+        ],
+        "why": [
+          "Program · Preschool",
+          "Attendance · full_time",
+          "Schedule · any",
+          "Billed · monthly",
+          "Organisation default",
+          "Effective 2026-07-01"
+        ],
+        "controls": [
+          "Accept tuition"
+        ]
+      },
+      {
+        "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+        "member": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "state": "recommended",
+        "accepted": "none",
+        "resolution": "2f92ec30",
+        "child": "Certa Certhouse",
+        "amount": "$185.00/weekly",
+        "facts": [
+          "Program · school_age",
+          "Attendance · custom",
+          "Schedule · — days a week",
+          "Effective · 2026-09-01"
+        ],
+        "why": [
+          "Program · Before & After",
+          "Attendance · custom",
+          "Schedule · any",
+          "Billed · weekly",
+          "Organisation default",
+          "Effective 2026-09-01"
+        ],
+        "controls": [
+          "Accept tuition"
+        ]
+      }
+    ],
+    "text": "TUITION\n\n0 of 2 agreed\n\nCertb Certhouse\nProgram · preschool\nAttendance · full_time\nSchedule · — days a week\nEffective · 2026-09-01\n\nRecommended\n\n$1,450.00/monthly\nProgram · Preschool\nAttendance · full_time\nSchedule · any\nBilled · monthly\nOrganisation default\nEffective 2026-07-01\nAccept tuition\nCerta Certhouse\nProgram · school_age\nAttendance · custom\nSchedule · — days a week\nEffective · 2026-09-01\n\nRecommended\n\n$185.00/weekly\nProgram · Before & After\nAttendance · custom\nSchedule · any\nBilled · weekly\nOrganisation default\nEffective 2026-09-01\nAccept tuition\nDetails →"
+  },
+  "wire": [
+    {
+      "dir": "request",
+      "body": {
+        "action_key": "enrollment.pricing.accept",
+        "entity_type": "opportunity_customer_member",
+        "entity_id": "79f8011d-a236-4054-bee7-af10f1dbc632",
+        "mode": "execute",
+        "confirmation": {
+          "confirmed": true
+        },
+        "payload": {
+          "opportunity_customer_member_id": "79f8011d-a236-4054-bee7-af10f1dbc632",
+          "resolution_key": "2f92ec30",
+          "selected_source_id": "5532489d-eed3-4080-9477-f47a94fde1c6",
+          "as_of": "2026-09-01"
+        }
+      }
+    },
+    {
+      "dir": "response",
+      "status": 200,
+      "body": {
+        "ok": true,
+        "data": {
+          "execution_result": {
+            "state": "accepted",
+            "amount_cents": 18500,
+            "currency_code": "USD",
+            "cadence_key": "weekly",
+            "effective_start": "2026-09-01",
+            "source_id": "5532489d-eed3-4080-9477-f47a94fde1c6",
+            "config_version": "ae79d05d",
+            "idempotent": false
+          },
+          "affected_id": "19baf6ca-aded-4afa-afcf-9a14f4f8273f"
+        },
+        "correlation_id": "1bf11d67-e48b-4453-9c19-97dd4286b20c"
+      }
+    },
+    {
+      "dir": "request",
+      "body": {
+        "action_key": "enrollment.pricing.accept",
+        "entity_type": "opportunity_customer_member",
+        "entity_id": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+        "mode": "execute",
+        "confirmation": {
+          "confirmed": true
+        },
+        "payload": {
+          "opportunity_customer_member_id": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+          "resolution_key": "b2e43fd1",
+          "selected_source_id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+          "as_of": "2026-09-01"
+        }
+      }
+    },
+    {
+      "dir": "response",
+      "status": 200,
+      "body": {
+        "ok": true,
+        "data": {
+          "execution_result": {
+            "state": "accepted",
+            "amount_cents": 145000,
+            "currency_code": "USD",
+            "cadence_key": "monthly",
+            "effective_start": "2026-09-01",
+            "source_id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+            "config_version": "ae79d05d",
+            "idempotent": false
+          },
+          "affected_id": "2a23f980-26d3-499a-b5bb-394e5c657499"
+        },
+        "correlation_id": "9f4d872b-7104-4265-b2b0-16610d2561a0"
+      }
+    }
+  ],
+  "after": {
+    "assignments": [
+      {
+        "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+        "state": "recommended",
+        "accepted": "none",
+        "stale": "false",
+        "term": null,
+        "acceptedAmount": null,
+        "acceptedLine": null
+      },
+      {
+        "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+        "state": "recommended",
+        "accepted": "none",
+        "stale": "false",
+        "term": null,
+        "acceptedAmount": null,
+        "acceptedLine": null
+      }
+    ],
+    "error": null,
+    "text": "TUITION\n\n0 of 2 agreed\n\nCertb Certhouse\nProgram · preschool\nAttendance · full_time\nSchedule · — days a week\nEffective · 2026-09-01\n\nRecommended\n\n$1,450.00/monthly\nProgram · Preschool\nAttendance · full_time\nSchedule · any\nBilled · monthly\nOrganisation default\nEffective 2026-07-01\nAccept tuition\nCerta Certhouse\nProgram · school_age\nAttendance · custom\nSchedule · — days a week\nEffective · 2026-09-01\n\nRecommended\n\n$185.00/weekly\nProgram · Before & After\nAttendance · custom\nSchedule · any\nBilled · weekly\nOrganisation default\nEffective 2026-09-01\nAccept tuition\nDetails →"
+  }
+}

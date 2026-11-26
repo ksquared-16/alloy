@@ -6,6 +6,7 @@ import {
     effectivePriorityRuleEnabledSet,
     expandOperatorPriorityRuleOrderForProfile,
     normalizePriorityRuleOrderForProfile,
+    reorderPriorityRuleByDrag,
     reorderPriorityRuleMoveDownEnabled,
     reorderPriorityRuleMoveUpEnabled,
     validatePriorityRuleEnabledKeysForProfile,
@@ -70,7 +71,7 @@ describe("validatePriorityRuleEnabledKeysForProfile", () => {
     });
 });
 
-describe("reorderPriorityRuleMoveUpEnabled / MoveDownEnabled", () => {
+describe("keyboard-accessible priority factor reordering", () => {
     const base = [...orderFull];
     const allOn = new Set(orderFull);
 
@@ -93,6 +94,34 @@ describe("reorderPriorityRuleMoveUpEnabled / MoveDownEnabled", () => {
 
     it("move down blocked when would displace standard", () => {
         expect(reorderPriorityRuleMoveDownEnabled(base, allOn, fb, base.length - 2)).toBeNull();
+    });
+});
+
+describe("drag-and-drop priority factor reordering", () => {
+    const base = [...orderFull];
+
+    it("moves a dragged active factor before the drop target", () => {
+        const next = reorderPriorityRuleByDrag(
+            base,
+            new Set(base),
+            fb,
+            "tier_sister_center",
+            "tier_employee_family",
+        );
+        expect(next).toEqual(["tier_sister_center", "tier_employee_family", "tier_sibling_enrolled", fb]);
+    });
+
+    it("drops before fallback while preserving inactive catalog positions", () => {
+        const enabled = new Set(["tier_employee_family", "tier_sister_center", fb]);
+        const next = reorderPriorityRuleByDrag(base, enabled, fb, "tier_employee_family", fb);
+        expect(next).toEqual(["tier_sister_center", "tier_sibling_enrolled", "tier_employee_family", fb]);
+    });
+
+    it("rejects disabled, fallback, and unknown drag sources", () => {
+        const enabled = new Set(["tier_employee_family", "tier_sister_center", fb]);
+        expect(reorderPriorityRuleByDrag(base, enabled, fb, "tier_sibling_enrolled", "tier_sister_center")).toBeNull();
+        expect(reorderPriorityRuleByDrag(base, enabled, fb, fb, "tier_employee_family")).toBeNull();
+        expect(reorderPriorityRuleByDrag(base, enabled, fb, "unsupported", "tier_employee_family")).toBeNull();
     });
 });
 

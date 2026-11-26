@@ -180,7 +180,7 @@ function HouseholdReviewBody({
             :   null}
 
             {(review.program_interest ||
-                review.desired_start_date ||
+                review.start_date ||
                 review.source ||
                 review.notes ||
                 review.location_label) ?
@@ -200,9 +200,9 @@ function HouseholdReviewBody({
                             <span className="font-medium">Program:</span> {review.program_interest}
                         </p>
                     :   null}
-                    {review.desired_start_date ?
+                    {review.start_date ?
                         <p className="text-[12px] text-alloy-midnight/70">
-                            <span className="font-medium">Start date:</span> {review.desired_start_date}
+                            <span className="font-medium">Start date:</span> {review.start_date}
                         </p>
                     :   null}
                     {review.source ?

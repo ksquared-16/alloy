@@ -1,0 +1,41 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "at": "2026-10-21T17:07:02.518Z",
+  "cost": {
+    "departments": 3,
+    "count_queries": 7,
+    "warm_ms": [
+      4,
+      5,
+      5,
+      6,
+      11
+    ],
+    "median_ms": 5
+  },
+  "org_scope": {
+    "enrollment": {
+      "open": 3,
+      "overdue": 2
+    },
+    "other_department": {
+      "open": 1,
+      "overdue": 1
+    },
+    "unattributed_open": 251
+  },
+  "restricted_riverside": {
+    "open": 1,
+    "overdue": 1
+  },
+  "selected_lakeside": {
+    "open": 1,
+    "overdue": 0
+  },
+  "department_restricted_keys": [
+    "00000000-0000-4000-8000-000000000020"
+  ],
+  "independent_sql_agrees": true,
+  "reads_wrote_nothing": true,
+  "fixtures_remaining": 0
+}

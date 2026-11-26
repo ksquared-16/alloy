@@ -1,0 +1,407 @@
+[
+ {
+  "i": 0,
+  "mw": {
+   "t0": "1789673254643",
+   "auth_ms": "33",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789673255553,
+   "route_meta_ms": 1725,
+   "layout_total_ms": 1726,
+   "route_compose_spans": {
+    "route_identity_ms": 1704,
+    "admin_client_ms": 1,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 3935,
+    "card_producers_ms": 2963
+   },
+   "page_entry_epoch_ms": 1789673255571,
+   "compose_wall_ms": 8603,
+   "seeded": true,
+   "compose_total_ms": 3933,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 141,
+    "configuration_ms": 298,
+    "presentation_ms": 2977,
+    "records_ms": 0,
+    "projection_ms": 1477,
+    "composition_ms": 2006,
+    "total_ms": 3933,
+    "spans": {
+     "child_grain_members": 1477,
+     "child_grain_waitlist": 1104,
+     "child_grain_inquiry": 388,
+     "child_grain_avatar": 1493,
+     "composition_ready": 3922,
+     "focus_panel_operational_projection": 11
+    }
+   },
+   "composition_ready_ms": 3922,
+   "page_total_ms": 8604
+  },
+  "spans": {
+   "route_identity_ms": 1704,
+   "admin_client_ms": 1,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 3935,
+   "card_producers_ms": 2963
+  },
+  "document": {
+   "ttfb": 2915,
+   "duration": 9962
+  },
+  "outer_unattributed": 0,
+  "phases": {
+   "destination_shell": 3538,
+   "published_structure": 10056,
+   "first_critical": 10056,
+   "last_critical": 10056,
+   "final": 29938
+  },
+  "coherence": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "provisioning_reqs": 0
+ },
+ {
+  "i": 1,
+  "mw": {
+   "t0": "1789673284734",
+   "auth_ms": "5",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789673284835,
+   "route_meta_ms": 198,
+   "layout_total_ms": 198,
+   "route_compose_spans": {
+    "route_identity_ms": 197,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 2031,
+    "card_producers_ms": 3317
+   },
+   "page_entry_epoch_ms": 1789673284835,
+   "compose_wall_ms": 5546,
+   "seeded": true,
+   "compose_total_ms": 2031,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1777,
+    "records_ms": 128,
+    "projection_ms": 621,
+    "composition_ms": 1275,
+    "total_ms": 2031,
+    "spans": {
+     "child_grain_members": 621,
+     "child_grain_waitlist": 631,
+     "child_grain_inquiry": 395,
+     "child_grain_avatar": 1027,
+     "composition_ready": 2028,
+     "focus_panel_operational_projection": 3
+    }
+   },
+   "composition_ready_ms": 2028,
+   "page_total_ms": 5546
+  },
+  "spans": {
+   "route_identity_ms": 197,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 2031,
+   "card_producers_ms": 3317
+  },
+  "document": {
+   "ttfb": 541,
+   "duration": 6035
+  },
+  "outer_unattributed": 1,
+  "phases": {
+   "destination_shell": 789,
+   "published_structure": 6135,
+   "first_critical": 6135,
+   "last_critical": 6135,
+   "final": 29953
+  },
+  "coherence": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "provisioning_reqs": 0
+ },
+ {
+  "i": 2,
+  "mw": {
+   "t0": "1789673314942",
+   "auth_ms": "5",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789673315050,
+   "route_meta_ms": 174,
+   "layout_total_ms": 174,
+   "route_compose_spans": {
+    "route_identity_ms": 173,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 1584,
+    "card_producers_ms": 2791
+   },
+   "page_entry_epoch_ms": 1789673315050,
+   "compose_wall_ms": 4549,
+   "seeded": true,
+   "compose_total_ms": 1584,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1342,
+    "records_ms": 108,
+    "projection_ms": 525,
+    "composition_ms": 943,
+    "total_ms": 1584,
+    "spans": {
+     "child_grain_members": 525,
+     "child_grain_waitlist": 428,
+     "child_grain_inquiry": 238,
+     "child_grain_avatar": 707,
+     "composition_ready": 1576,
+     "focus_panel_operational_projection": 9
+    }
+   },
+   "composition_ready_ms": 1576,
+   "page_total_ms": 4549
+  },
+  "spans": {
+   "route_identity_ms": 173,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 1584,
+   "card_producers_ms": 2791
+  },
+  "document": {
+   "ttfb": 638,
+   "duration": 5065
+  },
+  "outer_unattributed": 1,
+  "phases": {
+   "destination_shell": 879,
+   "published_structure": 5080,
+   "first_critical": 5080,
+   "last_critical": 5080,
+   "final": 29935
+  },
+  "coherence": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "provisioning_reqs": 0
+ },
+ {
+  "i": 3,
+  "mw": {
+   "t0": "1789673357722",
+   "auth_ms": "5",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789673357895,
+   "route_meta_ms": 235,
+   "layout_total_ms": 235,
+   "route_compose_spans": {
+    "route_identity_ms": 234,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 1984,
+    "card_producers_ms": 2290
+   },
+   "page_entry_epoch_ms": 1789673357895,
+   "compose_wall_ms": 4509,
+   "seeded": true,
+   "compose_total_ms": 1984,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1768,
+    "records_ms": 115,
+    "projection_ms": 494,
+    "composition_ms": 1368,
+    "total_ms": 1984,
+    "spans": {
+     "child_grain_members": 494,
+     "child_grain_waitlist": 661,
+     "child_grain_inquiry": 222,
+     "child_grain_avatar": 1158,
+     "composition_ready": 1982,
+     "focus_panel_operational_projection": 2
+    }
+   },
+   "composition_ready_ms": 1982,
+   "page_total_ms": 4509
+  },
+  "spans": {
+   "route_identity_ms": 234,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 1984,
+   "card_producers_ms": 2290
+  },
+  "document": {
+   "ttfb": 625,
+   "duration": 4993
+  },
+  "outer_unattributed": 1,
+  "phases": {
+   "destination_shell": 877,
+   "published_structure": 5061,
+   "first_critical": 5061,
+   "last_critical": 5061,
+   "final": 29943
+  },
+  "coherence": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "provisioning_reqs": 0
+ },
+ {
+  "i": 4,
+  "mw": {
+   "t0": "1789673387903",
+   "auth_ms": "4",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789673388068,
+   "route_meta_ms": 785,
+   "layout_total_ms": 785,
+   "route_compose_spans": {
+    "route_identity_ms": 785,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 1734,
+    "card_producers_ms": 2486
+   },
+   "page_entry_epoch_ms": 1789673388068,
+   "compose_wall_ms": 5005,
+   "seeded": true,
+   "compose_total_ms": 1734,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1482,
+    "records_ms": 150,
+    "projection_ms": 574,
+    "composition_ms": 1004,
+    "total_ms": 1734,
+    "spans": {
+     "child_grain_members": 574,
+     "child_grain_waitlist": 496,
+     "child_grain_inquiry": 261,
+     "child_grain_avatar": 757,
+     "composition_ready": 1731,
+     "focus_panel_operational_projection": 2
+    }
+   },
+   "composition_ready_ms": 1731,
+   "page_total_ms": 5005
+  },
+  "spans": {
+   "route_identity_ms": 785,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 1734,
+   "card_producers_ms": 2486
+  },
+  "document": {
+   "ttfb": 1095,
+   "duration": 5501
+  },
+  "outer_unattributed": 0,
+  "phases": {
+   "destination_shell": 1334,
+   "published_structure": 5566,
+   "first_critical": 5566,
+   "last_critical": 5566,
+   "final": 29955
+  },
+  "coherence": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "provisioning_reqs": 0
+ }
+]

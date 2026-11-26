@@ -1,0 +1,562 @@
+{
+  "run": "qar_4246ac22ece0",
+  "summary": {
+    "passed": 75,
+    "total": 75
+  },
+  "results": [
+    {
+      "case": "no pre-existing live child requirement for the run's types",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "clash": []
+    },
+    {
+      "case": "requirement configuration unreadable without documents.read / documents.manage",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "requirement configuration unreadable without documents.read / documents.manage",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "creating a requirement needs processing.documents.manage",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "creating a requirement needs processing.documents.manage",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "creating a requirement needs processing.documents.manage",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "creating a requirement needs processing.documents.manage",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "creating a requirement needs processing.documents.manage",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "draft created (nothing applies yet)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "database validation: a child-only type does not accept the household grain",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": [
+        "subject_type_not_accepted_by_type"
+      ]
+    },
+    {
+      "case": "a never-published requirement can be deleted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "an invalid key is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "KEY_INVALID"
+    },
+    {
+      "case": "publishing an unvalidated draft is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_VALIDATED"
+    },
+    {
+      "case": "valid draft validates",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "case": "publish is compare-and-swap (stale expected version refused)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "PUBLISH_CONFLICT"
+    },
+    {
+      "case": "validated version publishes",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a published requirement cannot be deleted (history kept)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "REQUIREMENT_IN_USE"
+    },
+    {
+      "case": "one live definition per (type, grain, scope)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": [
+        "requirement_duplicate"
+      ]
+    },
+    {
+      "case": "readiness: the requirement is missing and blocking for both children",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "states": [
+        "missing",
+        "missing"
+      ]
+    },
+    {
+      "case": "work: one derived row per unmet child, stable id, never a stored task",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "readiness anchored on a child resolves its household graph",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "enrollment form uploaded for child 1",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "satisfied by a document that needs no review",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied"
+    },
+    {
+      "case": "work row disappears once satisfied; the other child's remains",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "medical requirement published",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "reader without health.view: the medical requirement is not shown at all",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "reader without health.view: no medical work row is listed or counted",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "cleared admin: medical requirement missing for child 1",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a review-required document on file is pending review, not satisfied",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "pending_review"
+    },
+    {
+      "case": "work row moves to pending review and names the document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "review needs documents.write",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "review needs documents.write",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "cross-organization review is not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "a rejection needs a reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "case": "rejection recorded",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "rejected evidence blocks (evidence_rejected)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "blocked"
+    },
+    {
+      "case": "changing a review without a reason is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "case": "authorized re-review accepts the current version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "accepted evidence satisfies",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "satisfied"
+    },
+    {
+      "case": "history records the reviews",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "actions": [
+        "Review accepted (was rejected)",
+        "Review rejected"
+      ]
+    },
+    {
+      "case": "a non-waivable requirement is refused by the database",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_WAIVABLE"
+    },
+    {
+      "case": "a waiver needs a reason",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "case": "a waiver on the wrong grain is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "WAIVER_SUBJECT_GRAIN"
+    },
+    {
+      "case": "waiving needs processing.documents.manage",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "waiving needs processing.documents.manage",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "another organization cannot waive (not found)",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "waiver granted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a second active waiver is refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "WAIVER_EXISTS"
+    },
+    {
+      "case": "waived: not blocking",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "waived"
+    },
+    {
+      "case": "waived requirement leaves the work queue",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "waiver history lists the waiver",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "waiver history hides a medical requirement's waiver from a reader without clearance",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "waiver revoked",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a revoked waiver cannot be revoked again",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "WAIVER_NOT_ACTIVE"
+    },
+    {
+      "case": "after revocation the work reappears",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "scripted PDF upload is quarantined",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "screening": "quarantine"
+    },
+    {
+      "case": "only quarantined evidence: blocked (evidence_quarantined), id never disclosed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "blocked"
+    },
+    {
+      "case": "a quarantined document cannot be reviewed into evidence",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "department-restricted actor: household readiness not found",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "department-restricted actor: the run's children are not in its work",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "another organization: readiness not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "another organization: none of the run's requirements in its work",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "another organization cannot read the requirement",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "readiness needs documents.read",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "a published requirement revises as a new draft",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "revision publishes over the opened version and supersedes it",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "history keeps the superseded version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "statuses": {
+        "82b8c53d-4367-4a9e-8bd8-32768ba8ef5d": "published",
+        "06851636-f038-40cc-8e78-9ebd359a36dc": "superseded"
+      }
+    },
+    {
+      "case": "an optional requirement never blocks",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "state": "missing"
+    },
+    {
+      "case": "an optional requirement makes no work",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "archive",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "an archived requirement no longer applies",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "an archived requirement makes no work",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "an archived requirement cannot be waived",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "REQUIREMENT_NOT_LIVE"
+    },
+    {
+      "case": "without the run's qa_run_id an archived, waived requirement is never deleted",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "REQUIREMENT_IN_USE"
+    },
+    {
+      "case": "another run's id does not purge this run's requirement",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "REQUIREMENT_IN_USE"
+    }
+  ]
+}

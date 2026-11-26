@@ -1,0 +1,123 @@
+{
+  "trusted_host_action_id": "tha_ad16ba8197ca5d",
+  "query_hash": "a11a66f43ad478e3db8969afa80c98534308244dffc4de30afb4b1b30a11978a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T17:37:29.893Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ad16ba8197ca5d",
+    "query_hash": "a11a66f43ad478e3db8969afa80c98534308244dffc4de30afb4b1b30a11978a",
+    "authorization_id": "grnt_62f1ff23922c426b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T17:37:36.002Z",
+    "question_ids": [
+      "cols"
+    ],
+    "questions": {
+      "cols": {
+        "question_id": "cols",
+        "row_count": null,
+        "rows": [
+          {
+            "tables": [
+              {
+                "table": "charges",
+                "columns": [
+                  "amount_cents",
+                  "billable_on",
+                  "billable_source_id",
+                  "billable_source_type",
+                  "charge_category",
+                  "charge_template_id",
+                  "charge_type",
+                  "created_at",
+                  "created_by",
+                  "currency_code",
+                  "description",
+                  "due_date",
+                  "id",
+                  "job_id",
+                  "metadata",
+                  "occurs_on",
+                  "org_id",
+                  "posted_at",
+                  "posted_by",
+                  "schedule_id",
+                  "service_date",
+                  "service_id",
+                  "source_charge_id",
+                  "status",
+                  "subscription_id",
+                  "updated_at",
+                  "updated_by",
+                  "voided_at"
+                ]
+              },
+              {
+                "table": "financial_responsibility_allocations",
+                "columns": [
+                  "arrangement_id",
+                  "assigned_amount_cents",
+                  "basis",
+                  "basis_value",
+                  "charge_id",
+                  "created_at",
+                  "created_by",
+                  "currency_code",
+                  "explanation",
+                  "gross_snapshot_cents",
+                  "id",
+                  "idempotency_key",
+                  "is_unassigned",
+                  "net_snapshot_cents",
+                  "org_id",
+                  "period_key",
+                  "reductions_snapshot_cents",
+                  "responsible_party_id",
+                  "responsible_party_type",
+                  "service_date",
+                  "share_id",
+                  "state",
+                  "superseded_by_id",
+                  "supersedes_id",
+                  "updated_at",
+                  "updated_by"
+                ]
+              },
+              {
+                "table": "qa_director_acceptance_results",
+                "columns": [
+                  "classification",
+                  "completed_at",
+                  "created_at",
+                  "deployed_revision",
+                  "environment",
+                  "evidence_reference",
+                  "expected_result",
+                  "id",
+                  "observation",
+                  "org_id",
+                  "result",
+                  "scenario_definition_version",
+                  "scenario_key",
+                  "started_at",
+                  "suite_key",
+                  "tester_email",
+                  "tester_user_id",
+                  "updated_at"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

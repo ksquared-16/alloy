@@ -1,23 +1,109 @@
 import { NextRequest, NextResponse } from "next/server";
+import { emitEvent } from "@/lib/emitEvent";
+import { summarizeLeadCommitRecords } from "@/lib/pos/leadCommitRecords";
+import { emitLeadCreatedEvent } from "@/lib/opportunities/emitLeadCreatedEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbCompleteProcessingCaseWithResult } from "@/lib/pos/processingCase/processingCaseDb";
 import { runMinimalDestinationHandoff } from "@/lib/pos/processingCase/approveHandoff";
+import {
+    commitApprovedLeadForCase,
+} from "@/lib/pos/processingIdentity/operator";
+import { operatorErrorResponse, resolveOperatorRoute } from "@/lib/pos/processingIdentity/operator/operatorRouteContext";
+import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
+import { persistIntakePersonAddressFieldValues } from "@/lib/pos/processingIdentity/operator/persistIntakePersonAddress";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import {
+    isProcessingCaseSubjectRemoved,
+    PROCESSING_SUBJECT_REMOVED_FIELD,
+    processingSubjectRemovedResponse,
+} from "@/lib/pos/processingCase/processingCaseSubjectRemoved";
+import { fetchDepartmentMetadataForWorkUnit } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { resolveCreateLeadWorkViewForHandoff } from "@/lib/platform/commands/createLead/resolveCreateLeadWorkViewForHandoff";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { documentActorForRequest } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_SOURCE_KINDS } from "@/lib/pos/documentFiling/documentFilingModel";
+import { caseRequiresFiling, fileDocumentCase } from "@/lib/pos/documentFiling/documentFilingService";
+import {
+    materializeRequestedTourForCase,
+    type RequestedTourHandoffOutcome,
+} from "@/lib/tours/publicCalendar/materializeRequestedTour";
+import { readRequestedTour } from "@/lib/tours/publicCalendar/requestedTour";
+import {
+    commitIntakeMarketingConsentForCase,
+    type IntakeMarketingConsentHandoff,
+} from "@/lib/pos/processingCase/commitIntakeMarketingConsentForCase";
+import { readIntakeMarketingConsent } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+
+/*
+ * S7 × C1 — the family's intake marketing-consent answer is committed for the person the lead belongs
+ * to, AFTER the lead commits and BEFORE the requested tour (whose confirmation reads preferences). A
+ * failure is reported, never thrown: it cannot undo the lead, and a retried Approve tries again.
+ */
+async function commitMarketingConsentSafe(
+    supabase: ReturnType<typeof createAdminClient>,
+    args: Parameters<typeof commitIntakeMarketingConsentForCase>[1]
+): Promise<IntakeMarketingConsentHandoff> {
+    try {
+        return await commitIntakeMarketingConsentForCase(supabase, args);
+    } catch (error) {
+        console.warn("[processing approve] marketing consent handoff failed", error);
+        return { kind: "failed", error: error instanceof Error ? error.message : String(error) };
+    }
+}
+
+/**
+ * S7 — the requested tour is a SEPARATE consequence of acceptance. It runs after the lead is
+ * committed and the case completed, and nothing it does (an unavailable time, an error) can undo
+ * that approval. Re-running Approve on a completed case retries it; the handoff is idempotent.
+ */
+async function resolveRequestedTourSafe(
+    supabase: ReturnType<typeof createAdminClient>,
+    args: { orgId: string; caseId: string; opportunityId: string | null; actorUserId: string | null }
+): Promise<RequestedTourHandoffOutcome | { kind: "failed"; error: string }> {
+    try {
+        return await materializeRequestedTourForCase(supabase, args);
+    } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        console.warn("[processing approve] requested tour handoff failed", error);
+        return { kind: "failed", error };
+    }
+}
 
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/admin/processing/cases/[caseId]/approve — POS-FP5 validation slice.
+ * POST /api/admin/processing/cases/[caseId]/approve
  *
- * Approving a Processing Case performs the minimal destination handoff (records
- * own truth — see approveHandoff) and flips the case to `completed`. Idempotent:
- * an already-completed/archived case returns its prior result without re-writing.
- * Org-scoped via the admin context; service-role client for the canonical write.
+ * Approving a Processing Case commits its recommendation and flips the case to
+ * `completed`. Idempotent: an already-completed/archived case returns its prior
+ * result without re-writing.
+ *
+ * For a **form_submission** (lead intake) case, approval runs the *complete*
+ * identity commit — build → approve → execute — producing the full record set
+ * (household + child + person + link + lead + enrollment participation), so a
+ * committed public lead is immediately enrollable. Review gates are inherited from
+ * the identity services: a plausible existing-record match throws
+ * `identity_review_required` and does NOT auto-commit (the operator resolves it in
+ * the identity review panel), preserving duplicate prevention.
+ *
+ * For a **document** case whose purpose is a customer document (D5: intent store/process, or a filing proposal),
+ * approval FILES it through the Documents filing command and completes the case only when the filing committed. A
+ * refused or failed filing leaves the case open with the error on its proposal; a retry is idempotent.
+ *
+ * For any other source (including a document uploaded to generate a form), approval performs the minimal destination
+ * handoff (records own truth — see approveHandoff).
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    /*
+     * PROCESSING AUTHORITY FOR EVERY CASE, not only lead intake. The check used to sit inside the
+     * form-submission branch, so a packet case — every Enrollment paperwork case — could be completed by
+     * any admin session without `processing.operate` (the commit, preview and reject routes all require it).
+     */
+    const deniedForCase = requireProcessingCapability(ctx, PROCESSING_OPERATE);
+    if (deniedForCase) return deniedForCase;
 
     const { caseId: rawCaseId } = await params;
     const caseId = parseUuidParam(rawCaseId, "caseId");
@@ -28,23 +114,231 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     try {
         const { data: caseRow, error: caseErr } = await supabase
             .from("processing_cases")
-            .select("id, status, metadata")
+            .select(`id, status, case_type, metadata, ${PROCESSING_SUBJECT_REMOVED_FIELD}`)
             .eq("org_id", ctx.orgId)
             .eq("id", caseId)
             .maybeSingle();
         if (caseErr) throw new Error(caseErr.message);
         if (!caseRow) return jsonError("Not found", 404);
 
-        const row = caseRow as { status: string; metadata?: Record<string, unknown> };
+        const row = caseRow as { status: string; case_type?: string | null; metadata?: Record<string, unknown> };
         if (row.status === "completed" || row.status === "archived") {
+            const prior = (row.metadata?.operational_result ?? null) as {
+                kind?: unknown;
+                recordId?: unknown;
+                records?: { person?: unknown } | null;
+            } | null;
+            // A replay commits consent only if it never committed; a committed record writes nothing again.
+            const marketingConsent =
+                row.status === "completed" && prior?.kind === "lead" && readIntakeMarketingConsent(row.metadata)
+                    ? await commitMarketingConsentSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          personId: typeof prior.records?.person === "string" ? prior.records.person : null,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
+            // A retry of an ACCEPTED lead with a requested tour finishes the tour step (idempotent).
+            // A rejected or archived case is never booked: only a lead result carries an Opportunity.
+            const tourRequest =
+                row.status === "completed" && prior?.kind === "lead" && readRequestedTour(row.metadata)
+                    ? await resolveRequestedTourSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          opportunityId: typeof prior.recordId === "string" ? prior.recordId : null,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
             return jsonData({
                 caseId,
                 status: row.status,
                 operationalResult: row.metadata?.operational_result ?? null,
                 alreadyDone: true,
+                ...(marketingConsent ? { marketingConsent } : {}),
+                ...(tourRequest ? { tourRequest } : {}),
             });
         }
+        // Evidence only: there is no family to hand this case's outcome to, so nothing is "approved".
+        if (isProcessingCaseSubjectRemoved(caseRow)) return processingSubjectRemovedResponse();
 
+        // Lead intake: run the complete identity commit (full lead → enrollment participation).
+        if (row.case_type === "form_submission") {
+            const resolved = await resolveOperatorRoute(caseId);
+            if (resolved instanceof NextResponse) return resolved;
+            const denied = requireProcessingCapability(resolved.ctx, PROCESSING_OPERATE);
+            if (denied) return denied;
+            try {
+                const { attempt } = await commitApprovedLeadForCase(resolved.deps, { caseId: resolved.caseId });
+                if (attempt.outcome !== "committed") {
+                    // Partial / failed / preflight-rejected — leave the case open; the executor
+                    // has already recorded the exception. Surface it rather than completing.
+                    return jsonData({ caseId, status: row.status, attempt, blocked: true });
+                }
+
+                const committedRecord = (...commandKeys: string[]): string | null =>
+                    attempt.operations.find((o) => commandKeys.includes(o.commandKey) && o.status === "committed")
+                        ?.recordId ?? null;
+                const leadId = committedRecord("create_lead") ?? committedRecord("update_lead");
+
+                // The canonical lead as committed — the same row BOS → Create Lead hands off from. Its
+                // owner (work unit), stage and status decide the Work View the record lands in; its person
+                // and household are the records the operator can open, whether they were created here or
+                // an existing family was linked.
+                const { data: leadRowData } = leadId
+                    ? await supabase
+                          .from("opportunities")
+                          .select("id, customer_id, primary_person_id, location_id, work_unit_id, status_key, stage_key")
+                          .eq("org_id", ctx.orgId)
+                          .eq("id", leadId)
+                          .maybeSingle()
+                    : { data: null };
+                const leadRow = leadRowData as {
+                    customer_id?: string | null;
+                    primary_person_id?: string | null;
+                    location_id?: string | null;
+                    work_unit_id?: string | null;
+                    status_key?: string | null;
+                    stage_key?: string | null;
+                } | null;
+
+                // Created vs reused, per record, from the PLANNED kind of each committed operation.
+                const { records, createdRecords, matchedExisting } = summarizeLeadCommitRecords(attempt.operations, leadRow);
+                const personId = createdRecords.person ? records.person : null;
+
+                // Phase 1 — populate the committed Person's canonical address (incl. ZIP) through the
+                // canonical field system. ZIP is identity, not intake: this reuses the same writer as the
+                // manual Create-Lead path. Never blocks the commit.
+                //
+                // The address goes onto the person the lead actually belongs to — the newly created
+                // person, or (on a LINK decision, where there is no create_person op) the existing
+                // person the lead was linked to, read back from the committed opportunity's
+                // primary_person_id. Without this fallback, linking an existing parent silently dropped
+                // the submitted ZIP.
+                const addressPersonId: string | null = personId ?? leadRow?.primary_person_id ?? null;
+                if (addressPersonId) {
+                    try {
+                        await persistIntakePersonAddressFieldValues(supabase, {
+                            orgId: ctx.orgId,
+                            personId: addressPersonId,
+                            caseMetadata: row.metadata ?? null,
+                        });
+                    } catch {
+                        /* canonical-field population is best-effort — the lead is already committed */
+                    }
+                }
+                // WHERE THE OPERATOR GOES NEXT — the Work View BOS → Create Lead hands off to, resolved the
+                // same way from the same lead. Best-effort: the commit has already succeeded.
+                const workUnitId = leadRow?.work_unit_id?.trim() || null;
+                const statusKey = leadRow?.status_key?.trim() || null;
+                const stageKey = leadRow?.stage_key?.trim() || "lead";
+                let workViewId: string | null = null;
+                let workViewRouteKey: string | null = null;
+                if (workUnitId) {
+                    try {
+                        const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(supabase, ctx.orgId, workUnitId);
+                        const handoff = resolveCreateLeadWorkViewForHandoff({ departmentMetadata, statusKey, stageKey });
+                        workViewId = handoff?.workViewId ?? null;
+                        workViewRouteKey = handoff?.workViewRouteKey ?? null;
+                    } catch {
+                        /* routing enrichment is best-effort */
+                    }
+                }
+
+                const operationalResult = {
+                    kind: "lead",
+                    recordType: "opportunity",
+                    recordId: leadId,
+                    // `created` is the LEAD. Whether the family was new or an existing one was linked is
+                    // stated per record — a matched family must never read as created.
+                    created: createdRecords.lead,
+                    records,
+                    createdRecords,
+                    matchedExisting,
+                    handoff: { workUnitId, workViewId, workViewRouteKey, statusKey, stageKey },
+                    attemptId: attempt.attemptId,
+                };
+
+                await dbCompleteProcessingCaseWithResult(supabase, { orgId: ctx.orgId, caseId, result: operationalResult });
+
+                // The same `action_executed` activity BOS → Create Lead records on the lead, carrying where
+                // this one came from: the public form submission and the Processing case that accepted it.
+                if (leadId && createdRecords.lead) {
+                    try {
+                        const meta = row.metadata ?? {};
+                        await emitEvent({
+                            org_id: ctx.orgId,
+                            event_type: "action_executed",
+                            entity_type: "opportunities",
+                            entity_id: leadId,
+                            payload: {
+                                action_key: "create_lead",
+                                actor_user_id: ctx.userId ?? null,
+                                source: "public_form",
+                                processing_case_id: caseId,
+                                form_submission_id: typeof meta.form_submission_id === "string" ? meta.form_submission_id : null,
+                                form_definition_id: typeof meta.form_definition_id === "string" ? meta.form_definition_id : null,
+                                matched_existing: operationalResult.matchedExisting,
+                            },
+                        });
+                    } catch {
+                        /* activity is best-effort — the lead is already committed */
+                    }
+                }
+
+                // `lead_created` — what an org's automations trigger on (welcome message, …). Emitted only
+                // for a genuinely created lead, once per lead; never fails the approval.
+                if (leadId) {
+                    try {
+                        const meta = row.metadata ?? {};
+                        await emitLeadCreatedEvent({
+                            supabase,
+                            orgId: ctx.orgId,
+                            operations: attempt.operations,
+                            lead: { id: leadId, ...(leadRow ?? {}) },
+                            source: "public_form",
+                            actorUserId: ctx.userId ?? null,
+                            provenance: {
+                                processing_case_id: caseId,
+                                form_submission_id: typeof meta.form_submission_id === "string" ? meta.form_submission_id : null,
+                                form_definition_id: typeof meta.form_definition_id === "string" ? meta.form_definition_id : null,
+                            },
+                        });
+                    } catch (e) {
+                        console.warn("[processing approve] lead_created emit failed", e instanceof Error ? e.message : e);
+                    }
+                }
+                const marketingConsent = readIntakeMarketingConsent(row.metadata)
+                    ? await commitMarketingConsentSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          personId: records.person ?? null,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
+                const tourRequest = readRequestedTour(row.metadata)
+                    ? await resolveRequestedTourSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          opportunityId: leadId,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
+                return jsonData({
+                    caseId,
+                    status: "completed",
+                    operationalResult,
+                    attempt,
+                    ...(marketingConsent ? { marketingConsent } : {}),
+                    ...(tourRequest ? { tourRequest } : {}),
+                });
+            } catch (e) {
+                // identity_review_required (plausible match needs an operator decision), stale
+                // plan, unauthorized, etc. — surface with the operator error mapping.
+                return operatorErrorResponse(e);
+            }
+        }
+
+        // Non-form source: minimal destination handoff.
         const { data: src, error: srcErr } = await supabase
             .from("processing_case_sources")
             .select("source_kind, source_id")
@@ -55,6 +349,20 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         if (srcErr) throw new Error(srcErr.message);
 
         const source = (src as { source_kind: string; source_id: string } | null) ?? null;
+
+        // D5: a customer document is FILED. Completion follows a committed filing, never precedes it.
+        if (source && DOCUMENT_SOURCE_KINDS.includes(source.source_kind) && caseRequiresFiling({ metadata: row.metadata ?? null })) {
+            const access = await getAdminAccessContextCached();
+            const filed = await fileDocumentCase(supabase, documentActorForRequest(ctx, access), caseId);
+            if (!filed.ok) {
+                return NextResponse.json(
+                    { ok: false, error: filed.message, code: filed.code, problems: filed.problems ?? [], data: { caseId, status: filed.caseStatus, blocked: true } },
+                    { status: filed.status },
+                );
+            }
+            return jsonData({ caseId, status: "completed", operationalResult: filed.operationalResult });
+        }
+
         const operationalResult = await runMinimalDestinationHandoff(supabase, ctx.orgId, source);
 
         // FP7: a case whose form lacks the required mapping (no person.email binding,

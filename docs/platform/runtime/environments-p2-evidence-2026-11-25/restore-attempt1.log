@@ -1,0 +1,24 @@
+## 2026-11-25T22:21:54Z create database
+CREATE DATABASE
+## 2026-11-25T22:21:54Z platform prerequisites
+CREATE ROLE
+CREATE ROLE
+CREATE ROLE
+CREATE SCHEMA
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE SCHEMA
+CREATE EXTENSION
+CREATE EXTENSION
+## 2026-11-25T22:21:54Z pg_restore (schema public, --no-owner --no-privileges, --exit-on-error, single transaction)
+pg_restore: connecting to database for restore
+pg_restore: creating SCHEMA "public"
+pg_restore: while PROCESSING TOC:
+pg_restore: from TOC entry 119; 2615 2200 SCHEMA public pg_database_owner
+pg_restore: error: could not execute query: ERROR:  schema "public" already exists
+Command was: CREATE SCHEMA public;
+
+
+pg_restore_rc=1
+## 2026-11-25T22:21:54Z done

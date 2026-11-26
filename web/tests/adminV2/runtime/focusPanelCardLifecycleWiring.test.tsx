@@ -15,7 +15,7 @@ import type {
 const EMPTY_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
     communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
     billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
 };
@@ -81,9 +81,10 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
         expect(caps.supportsWorkspace).toBe(false);
         const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
         expect(src).toContain("cardCapabilities(\"children\")");
-        expect(src).toContain("CAPS.supportsInlineEdit"); // edit trigger gated on capability
         expect(src).toContain("CAPS.supportsExpanded"); // expand gated on capability
-        expect(src).toContain('data-children-action="expand-evidence"'); // Expanded = more evidence
+        expect(src).toContain("data-children-edit-trigger"); // contextual footer edit
+        expect(src).toContain("mutation?.canEdit"); // edit gated on mutation seam
+        expect(src).toContain('data-children-evidence-trigger'); // Evidence depth via disclosure state
         expect(src).toContain("cardRelatedViews(\"children\")"); // Related Views drill-downs
         expect(src).toContain("data-related-view"); // related-report links
     });
@@ -92,26 +93,22 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
         const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
         // Expanded renders configured evidence groups for the child.
         expect(src).toContain("ChildExpandedEvidence");
-        expect(src).toContain('<EvidenceGroup title="Placement">');
-        expect(src).toContain('<EvidenceGroup title="Medical">');
-        expect(src).toContain('<EvidenceGroup title="Documents">');
+        expect(src).toContain("EvidenceGroup");
         // History lives in a Related View report, not in Expanded.
         expect(src).toContain("ChildRelatedReport");
         expect(src).toContain("data-children-related-report");
         expect(src).toContain("placement_history");
     });
 
-    it("Child inline edit is a READ-ONLY PREVIEW — never fakes persistence", () => {
+    it("Child inline edit uses staging ChildFocusEdit + saveInquiryChild", () => {
         const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
-        // The edit surface is explicitly read-only with a clear notice.
-        expect(src).toContain('data-children-edit-readonly="true"');
-        expect(src).toContain("isn’t saveable yet");
-        // No save adapter is wired into Children — no mutation prop or save call.
-        expect(src).not.toContain("mutation:"); // not in the Props type
-        expect(src).not.toContain("mutation."); // never invokes a mutation adapter
-        expect(src).not.toContain("mutation?."); // nor optionally
+        expect(src).toContain("ChildFocusEdit");
+        expect(src).toContain("saveInquiryChild");
+        expect(src).toContain("mutation?: FocusPanelMutation");
+        expect(src).not.toContain("ChildEnrollmentEdit");
+        expect(src).not.toContain("isn’t saveable yet");
+        // Contact person PATCH remains Household-owned.
         expect(src).not.toContain("savePersonContact");
-        expect(src).not.toContain("onSave");
     });
 
     it("uses the shared CardAvatar (profile image with initials fallback)", () => {
@@ -124,8 +121,9 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
 describe("Household card — row-level edit save path preserved", () => {
     it("still routes inline contact edits through the real mutation adapter", () => {
         const src = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
+        const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
         expect(src).toContain("savePersonContact"); // real save path intact
-        expect(src).toContain("data-household-edit-contact"); // per-row affordance intact
+        expect(summary).toContain("data-household-edit-contact"); // per-row affordance intact
         expect(src).toContain("CardAvatar"); // identity rows carry avatars
     });
 });

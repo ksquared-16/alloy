@@ -26,8 +26,8 @@ const DOCTRINE_DOCS = [
     "../docs/system/configuration-mode-doctrine.md",
     "../docs/system/configuration-runtime-design-alignment.md",
     "../docs/system/configuration-workspace-v1-doctrine.md",
-    "../docs/sprints/06_2026/configuration_runtime_final_ui_review.md",
-    "../docs/sprints/06_2026/configuration_runtime_business_processes_ux_redesign.md",
+    "../docs/sprints/archive/06_2026/configuration_runtime_final_ui_review.md",
+    "../docs/sprints/archive/06_2026/configuration_runtime_business_processes_ux_redesign.md",
 ];
 
 describe("Configuration Mode doctrine", () => {
@@ -43,7 +43,7 @@ describe("Configuration Mode doctrine", () => {
         expect(CONFIGURATION_MODE_BRAND_TOKENS).toContain("rgba(0, 162, 131, 0.08)");
     });
 
-    it("process queue excludes Presentation as a top-level nav item", () => {
+    it("process queue excludes Presentation and Participation as top-level nav items", () => {
         expect(CONFIGURATION_PROCESS_QUEUE_SECTIONS).toEqual([
             "stages",
             "work-views",
@@ -52,11 +52,14 @@ describe("Configuration Mode doctrine", () => {
             "health",
         ]);
         expect(CONFIGURATION_PROCESS_QUEUE_SECTIONS).not.toContain("presentation");
+        // Participation is a compact card at the top of Stages, not a nav section.
+        expect(CONFIGURATION_PROCESS_QUEUE_SECTIONS).not.toContain("participation");
 
         const nav = read("components/adminV2/settings/businessProcess/BusinessProcessConfigurationNav.tsx");
         expect(nav).toContain("CONFIGURATION_PROCESS_QUEUE_GROUPS");
         expect(nav).not.toContain("business-process-nav-presentation");
         expect(nav).not.toContain('id: "presentation"');
+        expect(nav).not.toContain("business-process-nav-participation");
     });
 
     it("uses Processes title and Work Views label", () => {

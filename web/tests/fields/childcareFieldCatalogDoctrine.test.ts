@@ -46,16 +46,15 @@ describe("childcareFieldCatalogDoctrine", () => {
         }
     });
 
-    it("includes inquiry child desired program category canonical field", () => {
-        expect(CHILDCARE_CANONICAL_OPERATOR_FIELDS.inquiry_child).toContain("desired_program_category_id");
-        expect(isChildcareOperatorPickerVisible("inquiry_child", "desired_program_category_id", { is_system: true })).toBe(
+    it("includes inquiry child program category canonical field", () => {
+        expect(CHILDCARE_CANONICAL_OPERATOR_FIELDS.inquiry_child).toContain("program_category_id");
+        expect(isChildcareOperatorPickerVisible("inquiry_child", "program_category_id", { is_system: true })).toBe(
             true
         );
-        expect(isChildcareLegacyOrSystemField("inquiry_child", "desired_program_type")).toBe(true);
     });
 
-    it("program field model points at OCM desired_program_category_id with location-scoped options", () => {
-        expect(CHILDCARE_PROGRAM_FIELD_MODEL.canonical_field_key).toBe("desired_program_category_id");
+    it("program field model points at OCM program_category_id with location-scoped options", () => {
+        expect(CHILDCARE_PROGRAM_FIELD_MODEL.canonical_field_key).toBe("program_category_id");
         expect(CHILDCARE_PROGRAM_FIELD_MODEL.storage_table).toBe("opportunity_customer_members");
         expect(CHILDCARE_PROGRAM_FIELD_MODEL.option_source).toBe("programs_for_location");
         expect(CHILDCARE_PROGRAM_FIELD_MODEL.depends_on_field_key).toBe("location_id");
@@ -75,14 +74,14 @@ describe("childcareFieldCatalogDoctrine", () => {
 
     it("canonical fields appear in layout picker merge", () => {
         const row = {
-            field_key: "desired_program_category_id",
+            field_key: "program_category_id",
             label: "Program",
             field_type: "select",
         };
         const catalog = fieldDefToCatalog("inquiry_child", row);
-        expect(catalog.refKey).toBe("inquiry_child.desired_program_category_id");
+        expect(catalog.refKey).toBe("inquiry_child.program_category_id");
         const merged = mergeCatalogWithCuratedFallback("inquiry_child", [catalog]);
-        expect(merged.some((f) => f.fieldKey === "desired_program_category_id")).toBe(true);
+        expect(merged.some((f) => f.fieldKey === "program_category_id")).toBe(true);
     });
 
     it("canonical fields appear in forms picker", () => {
@@ -90,7 +89,7 @@ describe("childcareFieldCatalogDoctrine", () => {
             [
                 {
                     entity_type: "inquiry_child",
-                    field_key: "desired_program_category_id",
+                    field_key: "program_category_id",
                     field_type: "select",
                     label: "Program",
                     is_system: true,
@@ -98,7 +97,7 @@ describe("childcareFieldCatalogDoctrine", () => {
                 },
                 {
                     entity_type: "inquiry_child",
-                    field_key: "desired_start_date",
+                    field_key: "start_date",
                     field_type: "date",
                     label: "Desired start date",
                     is_system: true,
@@ -107,7 +106,7 @@ describe("childcareFieldCatalogDoctrine", () => {
             ],
             []
         );
-        expect(picker.some((e) => e.field_key === "desired_program_category_id")).toBe(true);
+        expect(picker.some((e) => e.field_key === "program_category_id")).toBe(true);
         expect(picker.some((e) => e.default_label === "Desired start date")).toBe(true);
         expect(picker.some((e) => e.field_key === "access_method")).toBe(false);
     });
@@ -116,14 +115,14 @@ describe("childcareFieldCatalogDoctrine", () => {
         const palette = mergeLifecycleFieldPaletteForStage("waitlist", {
             child: [
                 {
-                    field_key: "desired_program_category_id",
+                    field_key: "program_category_id",
                     label: "Program",
                     entity_type: "inquiry_child",
                     is_system: true,
                     is_active: true,
                 },
                 {
-                    field_key: "desired_start_date",
+                    field_key: "start_date",
                     label: "Desired start date",
                     entity_type: "inquiry_child",
                     is_system: true,
@@ -131,7 +130,7 @@ describe("childcareFieldCatalogDoctrine", () => {
                 },
             ],
         });
-        expect(palette.some((f) => f.field_key === "desired_program_category_id")).toBe(true);
+        expect(palette.some((f) => f.field_key === "program_category_id")).toBe(true);
         expect(palette.some((f) => f.field_key === "access_method")).toBe(false);
     });
 
@@ -190,7 +189,7 @@ describe("childcareFieldCatalogDoctrine", () => {
         );
         expect(sql).toContain("WHERE NOT EXISTS");
         expect(sql).not.toMatch(/DELETE FROM public\.field_definitions/i);
-        expect(sql).toContain("desired_program_category_id");
+        expect(sql).toContain("program_category_id");
         expect(sql).toContain("legacy_home_services");
     });
 });

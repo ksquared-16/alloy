@@ -1,0 +1,115 @@
+{
+  "statuses": [
+    {
+      "key": "waitlisted",
+      "status": 200,
+      "id": "ef7cac04-4811-4548-b7c5-199dba121d4a",
+      "error": null
+    },
+    {
+      "key": "enrolling",
+      "status": 200,
+      "id": "f84a2370-fb1c-4831-b945-62d6c2c63cdc",
+      "error": null
+    },
+    {
+      "key": "enrolled",
+      "status": 200,
+      "id": "8ac13c17-cad0-4dc2-97bf-9bdc48985d06",
+      "error": null
+    },
+    {
+      "key": "withdrawn",
+      "status": 200,
+      "id": "6fd6d1d0-d56e-45a6-878e-743e122d0d81",
+      "error": null
+    },
+    {
+      "key": "not_enrolling",
+      "status": 200,
+      "id": "3a50bbfd-fb5d-4edb-90e5-1389026b512a",
+      "error": null
+    }
+  ],
+  "work_units": [
+    {
+      "stage": "tour",
+      "status_keys": [
+        "open"
+      ],
+      "status": 200,
+      "id": "b908f1f6-c000-4bde-b428-77acabc3890d",
+      "key": "lifecycle_wu_tour",
+      "error": null,
+      "code": null
+    },
+    {
+      "stage": "decision",
+      "status_keys": [
+        "open"
+      ],
+      "status": 200,
+      "id": "b351aeb6-b8d1-414f-94b2-03f4f266bfa2",
+      "key": "lifecycle_wu_decision",
+      "error": null,
+      "code": null
+    },
+    {
+      "stage": "closed",
+      "status_keys": [
+        "closed"
+      ],
+      "status": 200,
+      "id": "4b437da3-67c7-446e-a76d-875869043889",
+      "key": "lifecycle_wu_closed",
+      "error": null,
+      "code": null
+    },
+    {
+      "stage": "waitlist",
+      "status_keys": [
+        "waitlisted"
+      ],
+      "status": 200,
+      "id": "1a590730-9e45-4bf9-8d4c-469fe3fd43c2",
+      "key": "lifecycle_wu_waitlist",
+      "error": null,
+      "code": null
+    },
+    {
+      "stage": "enrolling",
+      "status_keys": [
+        "enrolling"
+      ],
+      "status": 200,
+      "id": "2a255df2-c932-4424-9cfa-309df0027470",
+      "key": "lifecycle_wu_enrolling",
+      "error": null,
+      "code": null
+    },
+    {
+      "stage": "enrolled",
+      "status_keys": [
+        "enrolled"
+      ],
+      "status": 200,
+      "id": "05dbab6c-0416-4b4d-a63f-9d7820954044",
+      "key": "lifecycle_wu_enrolled",
+      "error": null,
+      "code": null
+    },
+    {
+      "stage": "closed_withdrawn",
+      "status_keys": [
+        "withdrawn",
+        "not_enrolling"
+      ],
+      "status": 200,
+      "id": "a88b77eb-d6c0-4cc2-85ee-40ec5a3f98a5",
+      "key": "lifecycle_wu_closed_withdrawn",
+      "error": null,
+      "code": null
+    }
+  ],
+  "child_statuses_after": []
+}

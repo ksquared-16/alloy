@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
+import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
+import { assertFinancialsReadAllowed, assertFinancialsWriteAllowed } from "@/lib/financials/financialsPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,18 @@ export async function GET(request: NextRequest) {
     }
     const supabase = createAdminClient();
     const orgId = ctx.orgId;
+
+    const allowedRead = await assertFinancialsReadAllowed({
+        supabase,
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
 
     const { data, error } = await supabase
         .from("gl_accounts")
@@ -38,9 +52,33 @@ export async function POST(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const allowedWrite = await assertFinancialsWriteAllowed({
+        supabase: createAdminClient(),
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+    if (!allowedWrite.ok) {
+        return NextResponse.json(
+            { error: allowedWrite.message, required_permission: allowedWrite.requiredPermission },
+            { status: 403 },
+        );
     }
+    /*
+     * THE ROLE TITLE THAT STOOD HERE MADE `fin.write` DECORATIVE.
+     *
+     * `assertFinancialsWriteAllowed` above already answers the question this route asks —
+     * may this principal manage financial account state — and this handler is DECLARED
+     * `fin.write` in the route inventory. Running `ctx.role !== "admin"` immediately after it
+     * meant the declaration was false in the one direction that matters: a custom Financial
+     * Writer holding the key was refused, while an admin whose package withholds it was
+     * admitted by the capability check and then waved through by the title.
+     *
+     * Measured before removing it: `fin.write` is granted to admin in 3 of 3 organizations and
+     * to ops in 2 of 3. So creating a financial account opens to ops exactly where the
+     * organization already granted the key — the title was withholding what the package
+     * declares — and nobody loses authority they were granted.
+     */
     let body: Record<string, unknown> = {};
     try {
         body = (await request.json()) as Record<string, unknown>;
@@ -85,7 +123,12 @@ export async function POST(request: NextRequest) {
         .single();
 
     if (insertErr) {
-        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+        return NextResponse.json(
+            {
+                error: operatorFriendlyCommercialError(insertErr.message, "Could not create GL code."),
+            },
+            { status: insertErr.code === "23505" ? 409 : 500 },
+        );
     }
     const row = inserted as { id: string; code: string; name: string };
     try {

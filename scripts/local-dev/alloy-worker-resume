@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Resume managed worker(s) from pause state: restore slot/worktree/port and prior resources.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worker-resume <slot|--all> [--no-provider]
+
+Restores the exact slot/worktree/branch/port/auth/environment.
+Restarts only resources that were active before pause.
+Resumes the provider session when a session id was recorded; otherwise uses
+the continuation brief at <worktree>/.alloy-continuation.md.
+
+Detects port/worktree conflicts before restarting.
+
+Examples:
+  alloy-worker-resume 3
+  alloy-worker-resume --all
+  alloy-worker-resume 3 --no-provider
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local target="" open_provider=1
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --all)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="--all"
+        shift
+        ;;
+      --no-provider) open_provider=0; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="$1"
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$target" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_sprint_ops_dirs
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  if [[ "$target" == "--all" ]]; then
+    local i found
+    for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
+      if found="$(alloy_find_metadata_by_slot "$i" 2>/dev/null)"; then
+        if [[ -f "$(alloy_pause_state_path "$found")" ]]; then
+          alloy_worker_resume_one "$found" "$open_provider"
+        else
+          alloy_info "slot ${i} (${found}): no pause state — skipped"
+        fi
+      fi
+    done
+    exit 0
+  fi
+
+  alloy_worker_resume_one "$target" "$open_provider"
+}
+
+main "$@"

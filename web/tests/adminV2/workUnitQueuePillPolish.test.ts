@@ -39,6 +39,9 @@ describe("workUnitQueuePillPolish", () => {
     it("needs-attention URL selection uses synthetic pill active key", () => {
         const selection = workUnitQueueSelectionFromLocation("wu-1", {
             queue: "needs_attention",
+            workViewId: "",
+            queueLayoutId: "",
+            focusLayoutId: "",
             unmapped: false,
             attentionBucket: "follow_up_due",
             statusKeys: "",

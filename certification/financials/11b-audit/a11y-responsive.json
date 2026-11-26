@@ -1,0 +1,67 @@
+{
+  "panel_1280": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuition": false,
+    "prepaidNamed": true,
+    "cardClipped": false,
+    "horizontalOverflow": false
+  },
+  "org_1280": {
+    "horizontalOverflow": false,
+    "policiesTileNamesDiscount": true
+  },
+  "panel_1440": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuition": false,
+    "prepaidNamed": true,
+    "cardClipped": false,
+    "horizontalOverflow": false
+  },
+  "org_1440": {
+    "horizontalOverflow": false,
+    "policiesTileNamesDiscount": true
+  },
+  "panel_1680": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuition": false,
+    "prepaidNamed": true,
+    "cardClipped": false,
+    "horizontalOverflow": false
+  },
+  "org_1680": {
+    "horizontalOverflow": false,
+    "policiesTileNamesDiscount": true
+  },
+  "keyboard": {
+    "reachedByKeyboard": true,
+    "control": {
+      "name": "Open Accounting",
+      "tag": "BUTTON",
+      "visibleFocus": true
+    },
+    "activatedWithEnter": true,
+    "landedOn": "http://127.0.0.1:3012/organization/financials?chapter=accounting",
+    "calendarPanel": true
+  }
+}

@@ -133,20 +133,6 @@ describe("person drawer hardening — linked prefetch and household open", () =>
 });
 
 describe("person drawer hardening — shell and placement wiring", () => {
-    it("AdminEntityDrawer prefetches linked persons after parent/child hydrate", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("prefetchLinkedPersonsFromPersonRecord");
-        expect(drawer).toContain("personLinkedPersonsPrefetchedRef");
-        expect(drawer).toContain("openLinkedPersonFromHousehold");
-    });
-
-    it("cold person load uses typed child/parent skeletons when chrome hint is active", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("personDrawerShowLoadingShell && personChildLifecycleChrome");
-        expect(drawer).toContain("PersonDrawerChildOverviewSkeleton");
-        expect(drawer).toContain("personDrawerShowLoadingShell && personParentGuardianChrome");
-        expect(drawer).toContain("PersonDrawerParentOverviewSkeleton");
-    });
 
     it("child chrome activates from household child open source before hydrate", () => {
         expect(
@@ -177,14 +163,4 @@ describe("person drawer hardening — shell and placement wiring", () => {
         expect(placement.source).toBe("enrollment_mirror");
     });
 
-    it("household primary contact change propagates to open person drawers", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("onHouseholdPrimarySaved");
-        expect(drawer).toContain("applyHouseholdPrimaryContactToRecord");
-    });
-
-    it("household section uses typed linked-person open when provided", () => {
-        const section = read("components/admin/entity/PersonDrawerHouseholdSection.tsx");
-        expect(section).toContain("onOpenLinkedPerson");
-    });
 });

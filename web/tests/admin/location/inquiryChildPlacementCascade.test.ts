@@ -7,6 +7,7 @@ import {
 } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
 import {
     resolveDefaultInquiryChildSiteId,
+    resolveProgramCategoryOptionsForSite,
     resolveProgramsOfferedForSite,
     resolveRoomsForSiteAndProgram,
     type InquiryChildPlacementHierarchyRow,
@@ -101,7 +102,7 @@ describe("inquiryChildPlacementOptions", () => {
     it("location field keys are recognized as placement roles", () => {
         expect(inquiryChildPlacementRoleForFieldKey("location_id")).toBe("location");
         expect(inquiryChildPlacementRoleForFieldKey("child_location_id")).toBe("location");
-        expect(inquiryChildPlacementRoleForFieldKey("desired_program_type")).toBe("program");
+        expect(inquiryChildPlacementRoleForFieldKey("program_category_id")).toBe("program");
         expect(inquiryChildPlacementRoleForFieldKey("child_program")).toBe("program");
         expect(inquiryChildPlacementRoleForFieldKey("program_room_cohort_key")).toBe("room");
     });
@@ -126,6 +127,16 @@ describe("inquiryChildPlacementOptions", () => {
         );
         expect(options.map((o) => o.value)).toEqual(["infant", "preschool"]);
         expect(options[0]?.label).toBe("Infant");
+    });
+
+    it("OCM-persisting program options are category-id valued (the stored FK)", () => {
+        const options = resolveProgramCategoryOptionsForSite("site-north", LOCATION_CATEGORIES);
+        expect(options.map((o) => o.value)).toEqual(["cat-infant", "cat-preschool"]);
+        expect(options[0]?.label).toBe("Infant");
+    });
+
+    it("OCM-persisting program options are empty when no categories are configured (no storable FK)", () => {
+        expect(resolveProgramCategoryOptionsForSite("site-north", [])).toEqual([]);
     });
 
     it("duplicate room categories produce one program option", () => {
@@ -170,21 +181,21 @@ describe("inquiryChildPlacementOptions", () => {
     it("changing location resets program and room", () => {
         const next = applyInquiryChildPlacementFieldChange("location_id", "site-north", {
             location_id: "",
-            desired_program_type: "infant",
+            program_category_id: "cat-infant",
             program_room_cohort_key: "room-infant-a",
         });
         expect(next.location_id).toBe("site-north");
-        expect(next.desired_program_type).toBe("");
+        expect(next.program_category_id).toBe("");
         expect(next.program_room_cohort_key).toBe("");
     });
 
     it("changing program resets room", () => {
-        const next = applyInquiryChildPlacementFieldChange("desired_program_type", "preschool", {
+        const next = applyInquiryChildPlacementFieldChange("program_category_id", "cat-preschool", {
             location_id: "site-north",
-            desired_program_type: "infant",
+            program_category_id: "cat-infant",
             program_room_cohort_key: "room-infant-a",
         });
-        expect(next.desired_program_type).toBe("preschool");
+        expect(next.program_category_id).toBe("cat-preschool");
         expect(next.program_room_cohort_key).toBe("");
     });
 
@@ -243,7 +254,8 @@ describe("inquiry child placement UI wiring", () => {
             resolve(__dirname, "../../../components/admin/entity/OpportunityInquiryChildrenSection.tsx"),
             "utf8",
         );
-        expect(src).toContain("resolveProgramsOfferedForSite");
+        expect(src).toContain('resolveProgramSelectOptionsForSite(');
+        expect(src).toContain('"category_id"');
         expect(src).toContain("applyInquiryChildPlacementFieldChange");
         expect(src).toContain("applyOcmPlacementCascade");
         expect(src).toContain("rowProgramOptions");

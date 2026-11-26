@@ -1,9 +1,12 @@
+import { withholdMedicalAnswersFromSubmissions } from "@/lib/health/withholdMedicalSubmissionAnswers";
 import { NextRequest, NextResponse } from "next/server";
+import { filterFormsRowsInActorScope, formsReadScope, formsSubjectInActorScope } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
 import { dbGetVersion, dbInsertSubmission, dbListSubmissions } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, jsonValidationErrors, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 function readFilter(searchParams: URLSearchParams, key: string): string | undefined {
     const v = searchParams.get(key)?.trim();
@@ -80,7 +83,12 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const { data, error } = await dbListSubmissions(supabase, ctx.orgId, filters);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const response = jsonData(data ?? []);
+    // R2: only submissions whose subject is inside the caller's department/site scope (a filter by an out-of-scope
+    // child, household or person returns nothing — not a refusal that would confirm the subject exists).
+    const scoped = await filterFormsRowsInActorScope(supabase, ctx.orgId, await formsReadScope(), (data ?? []) as Array<Record<string, unknown> & { opportunity_id?: string | null }>);
+    // A child's medical answers only for a caller with Medical access (FI-01 visibility).
+    const rows = await withholdMedicalAnswersFromSubmissions(supabase, ctx.orgId, scoped as { payload?: unknown; form_definition_version_id?: string | null }[], { permissionKeys: ctx.permissionKeys });
+    const response = jsonData(rows);
     response.headers.set("X-Admin-Org-Id", ctx.orgId);
     return response;
 }
@@ -89,7 +97,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+    if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {
@@ -150,6 +159,10 @@ export async function POST(request: NextRequest) {
     if (!memberFk.ok) return memberFk.response;
     const oppFk = optionalFk(body, "opportunity_id");
     if (!oppFk.ok) return oppFk.response;
+    // R2: a submission may only be created about a subject inside the caller's department/site scope (the same rule
+    // that will decide who can read it). Out of scope reads as not found, never as "exists but forbidden".
+    const subject = { person_id: personFk.value, customer_id: customerFk.value, customer_member_id: memberFk.value, opportunity_id: oppFk.value };
+    if (!(await formsSubjectInActorScope(supabase, ctx.orgId, await formsReadScope(), subject))) return jsonError("Not found", 404);
 
     const { data, error } = await dbInsertSubmission(supabase, {
         org_id: ctx.orgId,

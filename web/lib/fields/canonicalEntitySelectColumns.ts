@@ -6,7 +6,7 @@
 
 /** Full opportunity row for admin drawer hydrate (excludes legacy opportunities.status). */
 export const OPPORTUNITY_CANONICAL_ADMIN_SELECT =
-    "id, org_id, vertical_id, customer_id, primary_contact_id, primary_person_id, location_id, name, title, pipeline_id, pipeline_stage_id, status_key, source, lost_reason, assigned_to, job_date, job_time_window, appointment_id, customer_notes, monetary_value_cents, estimated_price_cents, recurring_price_cents, price_breakdown, external_source, external_id, metadata, created_at, updated_at, discount_code_id, discount_code, quote_subtotal, discount_amount, quote_total, discount_validated_at, discount_program_id, opportunity_number, quote_is_overridden, quote_override_total, quote_override_reason, work_unit_id";
+    "id, org_id, vertical_id, customer_id, primary_contact_id, primary_person_id, location_id, name, title, pipeline_id, pipeline_stage_id, status_key, stage_key, source, lost_reason, assigned_to, job_date, job_time_window, appointment_id, customer_notes, monetary_value_cents, estimated_price_cents, recurring_price_cents, price_breakdown, external_source, external_id, metadata, created_at, updated_at, discount_code_id, discount_code, quote_subtotal, discount_amount, quote_total, discount_validated_at, discount_program_id, opportunity_number, quote_is_overridden, quote_override_total, quote_override_reason, work_unit_id";
 
 /** Legacy-admin opportunity list (excludes legacy status text). */
 export const OPPORTUNITY_CANONICAL_LEGACY_ADMIN_LIST_SELECT =

@@ -22,7 +22,7 @@ export type IntakeReviewPresentation = {
     location_resolved_label: string | null;
     address_lines: string[];
     program_interest: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     source: string | null;
     notes: string | null;
     review_warnings: string[];
@@ -82,7 +82,7 @@ export function buildIntakeReviewPresentation(
         location_resolved_label: household.location?.resolved_label ?? null,
         address_lines: household.address?.lines ?? [],
         program_interest: household.program_interest,
-        desired_start_date: household.desired_start_date,
+        start_date: household.start_date,
         source: household.source,
         notes: household.notes,
         review_warnings: formatIntakeReviewWarnings(household.review_warnings),

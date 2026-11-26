@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Workspace / Queue / Focus Panel API
 
 **Domain size:** ~48 route handlers. Full list: [`api-index.md` → Workspace / Queue / Focus Panel](api-index.md#workspace--queue--focus-panel).

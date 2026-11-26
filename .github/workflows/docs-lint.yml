@@ -1,0 +1,42 @@
+name: Documentation lint
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "scripts/docs-lint.mjs"
+      - "scripts/docs-lint-baseline.json"
+      - "scripts/docs-lint-fixtures/**"
+      - ".github/workflows/docs-lint.yml"
+      - "web/tests/scripts/docsLint.test.ts"
+
+jobs:
+  docs-lint:
+    name: Docs lint (narrow blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+      - name: Run documentation lint (CI mode)
+        run: node scripts/docs-lint.mjs --ci --base origin/${{ github.base_ref }}
+
+  docs-lint-tests:
+    name: Docs lint fixtures
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run test -- tests/scripts/docsLint.test.ts

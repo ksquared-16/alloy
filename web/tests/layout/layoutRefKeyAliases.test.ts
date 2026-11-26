@@ -36,15 +36,22 @@ describe("layoutRefKeyAliases — canonical namespaces", () => {
 
 describe("layoutRefKeyAliases — alias-on-read", () => {
     it("maps deprecated child_inquiry.* to inquiry_child.*", () => {
-        expect(normalizeRefKeyOnRead("child_inquiry.desired_start_date")).toBe("inquiry_child.desired_start_date");
-        expect(normalizeRefKeyOnRead("child_inquiry.program")).toBe("inquiry_child.desired_program_type");
+        expect(normalizeRefKeyOnRead("child_inquiry.start_date")).toBe("inquiry_child.start_date");
+        expect(normalizeRefKeyOnRead("child_inquiry.program")).toBe("inquiry_child.program_category_id");
         expect(normalizeRefKeyOnRead("child_inquiry.status")).toBe("inquiry_child.outcome_status_key");
     });
 
     it("maps child participation keys to inquiry_child.*", () => {
-        expect(normalizeRefKeyOnRead("child.program")).toBe("inquiry_child.desired_program_type");
-        expect(normalizeRefKeyOnRead("child.desired_start_date")).toBe("inquiry_child.desired_start_date");
+        expect(normalizeRefKeyOnRead("child.program")).toBe("inquiry_child.program_category_id");
+        expect(normalizeRefKeyOnRead("child.start_date")).toBe("inquiry_child.start_date");
         expect(normalizeRefKeyOnRead("child.room")).toBe("inquiry_child.program_room_cohort_key");
+    });
+
+    it("maps legacy desired_* participation keys to canonical inquiry_child.* keys (S2 migration aliases)", () => {
+        expect(normalizeRefKeyOnRead("inquiry_child.desired_start_date")).toBe("inquiry_child.start_date");
+        expect(normalizeRefKeyOnRead("inquiry_child.desired_schedule_type")).toBe("inquiry_child.schedule_type");
+        expect(normalizeRefKeyOnRead("inquiry_child.desired_program_category_id")).toBe("inquiry_child.program_category_id");
+        expect(normalizeRefKeyOnRead("inquiry_child.desired_program_type")).toBe("inquiry_child.program_category_id");
     });
 
     it("maps person primary_* curated keys to registry keys", () => {
@@ -55,7 +62,7 @@ describe("layoutRefKeyAliases — alias-on-read", () => {
     it("parseRefKey applies alias-on-read via fieldCatalog", () => {
         expect(parseRefKey("child_inquiry.program")).toEqual({
             entityKey: "inquiry_child",
-            fieldKey: "desired_program_type",
+            fieldKey: "program_category_id",
         });
         expect(parseRefKey("person.primary_phone")).toEqual({ entityKey: "person", fieldKey: "phone" });
     });
@@ -83,7 +90,7 @@ describe("layoutRefKeyAliases — deprecate-on-write", () => {
 
     it("makeFieldItem rejects deprecated refKeys", () => {
         expect(() => ops.makeFieldItem("child_inquiry.program", "Program", "text")).toThrow(/Deprecated refKey/);
-        expect(() => ops.makeFieldItem("inquiry_child.desired_program_type", "Program", "text")).not.toThrow();
+        expect(() => ops.makeFieldItem("inquiry_child.program_category_id", "Program", "text")).not.toThrow();
     });
 
     it("parseLayoutDoc warns on legacy child_inquiry refKeys without failing", () => {
@@ -149,7 +156,7 @@ describe("field catalog — FC-1 canonical groups", () => {
     it("curated child uses durable keys only (no participation fields)", () => {
         const refKeys = CURATED_FIELDS.child.map((f) => f.refKey);
         expect(refKeys).not.toContain("child.program");
-        expect(refKeys).not.toContain("child.desired_start_date");
+        expect(refKeys).not.toContain("child.start_date");
         expect(refKeys.every((k) => k.startsWith("child."))).toBe(true);
     });
 
@@ -161,7 +168,7 @@ describe("field catalog — FC-1 canonical groups", () => {
         const legacyKeys = [
             "child_inquiry.child_name",
             "child_inquiry.program",
-            "child_inquiry.desired_start_date",
+            "child_inquiry.start_date",
             "child_inquiry.status",
         ];
         for (const key of legacyKeys) {

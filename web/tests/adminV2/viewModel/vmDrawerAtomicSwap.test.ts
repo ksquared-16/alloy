@@ -72,19 +72,4 @@ describe("atomic swap wiring", () => {
         expect(ctx).toContain("peekDrawerViewModelPreloadSync");
     });
 
-    it("PersonsDrawerVmRuntime gates title on committedVisible", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const src = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        expect(src).toContain("committedVisible");
-        expect(src).toContain("vmMatchesRender");
-        expect(src).toContain("overviewLayoutShellReady");
-        expect(src).not.toMatch(/overviewLayoutShellReady[\s\S]*phase === "loading"/);
-        expect(src).toContain("peekPersonsDrawerDisplayVm");
-    });
 });

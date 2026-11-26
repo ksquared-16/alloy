@@ -1,0 +1,12 @@
+K1 permission_definitions | 99
+K2 fn seed_default_role_definitions | 1
+K3 action_definitions | 62
+K3 action_placements | 40
+K4 metric_definitions | 7
+K4 metric_placements | 0
+K4 metric_visualizations | 9
+K5 status_definitions | 2
+K6 industry_default_entity_labels | 8
+K6 entity_layouts (org_id null) | 0
+K6 record_layouts | 4
+K7 customer_person_role_types | 0

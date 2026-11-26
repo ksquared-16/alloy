@@ -1,0 +1,581 @@
+import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
+import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
+import {
+    capacityCoverageCohort,
+    resolveRoomCapacityStanding,
+    summarizeSiteCapacityCoverage,
+    type SiteCapacityCoverage,
+} from "@/lib/locations/capacityAdoptionState";
+import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+
+export const LOCATION_WORKSPACE_TABS = [
+    { key: "overview", label: "Overview" },
+    { key: "programs", label: "Programs" },
+    { key: "rooms", label: "Spaces" },
+    { key: "schedule", label: "Scheduling" },
+    /*
+     * "operational-rules" is deliberately ABSENT from the primary tabs.
+     *
+     * Ordinary operating facts belong to the space they describe: capacity and
+     * staffing ratio are authored on the object, and an operator should never
+     * have to decide whether a fact lives under Spaces or under a rules page.
+     * Measured before removing it: of its four families, capacity and ratio had
+     * moved to the object, and operating windows and schedule rules had zero
+     * rows in the entire deployed database.
+     *
+     * The KEY REMAINS VALID. `locationWorkspaceHref(site, "operational-rules")`
+     * still resolves, every existing deep link still opens, and the canonical
+     * rule APIs, history and resolver are untouched — the page is now reached
+     * as an advanced affordance from the object whose facts it governs.
+     */
+    { key: "tours", label: "Tours" },
+    { key: "placement", label: "Placement" },
+    { key: "access", label: "Access" },
+] as const;
+
+export const US_LOCATION_TIMEZONE_OPTIONS = [
+    { label: "Eastern Time", value: "America/New_York" },
+    { label: "Central Time", value: "America/Chicago" },
+    { label: "Mountain Time", value: "America/Denver" },
+    { label: "Arizona", value: "America/Phoenix" },
+    { label: "Pacific Time", value: "America/Los_Angeles" },
+    { label: "Alaska Time", value: "America/Anchorage" },
+    { label: "Hawaii Time", value: "Pacific/Honolulu" },
+] as const;
+
+export type UsLocationTimezone = (typeof US_LOCATION_TIMEZONE_OPTIONS)[number]["value"];
+
+export function normalizeUsLocationTimezone(value: unknown): UsLocationTimezone | null {
+    const normalized = String(value ?? "").trim();
+    return US_LOCATION_TIMEZONE_OPTIONS.some((option) => option.value === normalized) ?
+            (normalized as UsLocationTimezone)
+        :   null;
+}
+
+/**
+ * Reachable, but not offered as a primary destination.
+ *
+ * Keeping the key in the routable union is what makes "the page is demoted, not
+ * deleted" true rather than aspirational: existing deep links resolve, the
+ * advanced affordance on a space resolves, and the rule history stays readable.
+ */
+export const LOCATION_WORKSPACE_ADVANCED_TABS = [
+    { key: "operational-rules", label: "Operational Rules" },
+] as const;
+
+export type LocationWorkspacePrimaryTab = (typeof LOCATION_WORKSPACE_TABS)[number]["key"];
+
+export type LocationWorkspaceTab =
+    | LocationWorkspacePrimaryTab
+    | (typeof LOCATION_WORKSPACE_ADVANCED_TABS)[number]["key"];
+
+export type LocationWorkspaceSetupItem = {
+    key: "general" | "programs" | "rooms" | "schedule" | "tours" | "placement" | "access";
+    label: string;
+    tab: LocationWorkspaceTab | "general";
+    complete: boolean | null;
+};
+
+export type LocationWorkspaceAttentionItem = {
+    key: string;
+    grade: "fix" | "improve" | "good";
+    /** What is wrong. */
+    label: string;
+    /** What happens because of it. */
+    consequence?: string;
+    /** Where the operator goes next. */
+    nextLabel?: string;
+    tab: LocationWorkspaceTab | "general";
+};
+
+export type LocationWorkspaceModel = {
+    displayName: string;
+    address: string | null;
+    phone: string | null;
+    timezone: string | null;
+    activeRoomCount: number;
+    activeProgramCount: number;
+    /**
+     * How far this site's rooms have got with canonical capacity. NOT a seat
+     * total — canonical doctrine defines no site aggregate, and the legacy sum it
+     * replaces added a physical room's seats to the seats of the classrooms
+     * inside it.
+     */
+    capacityCoverage: SiteCapacityCoverage;
+    roomsNeedingCapacity: number;
+    setupPercent: number;
+    setupComplete: boolean;
+    setupItems: LocationWorkspaceSetupItem[];
+    attention: LocationWorkspaceAttentionItem[];
+    criticalCount: number;
+    recommendedCount: number;
+};
+
+export type StaffingThreshold = {
+    requiredStaff: number;
+    maxChildren: number;
+};
+
+export type LocationProgramOperationalSummary = {
+    id: string;
+    label: string;
+    roomCount: number;
+    configuredCapacity: number | null;
+    ageRange: string;
+    isActive: boolean;
+};
+
+export function parseLocationWorkspaceTab(raw: string | string[] | null | undefined): LocationWorkspaceTab {
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return LOCATION_WORKSPACE_TABS.some((tab) => tab.key === value) ? (value as LocationWorkspaceTab) : "overview";
+}
+
+/** Organization-level Locations landing — no location selected. */
+export function locationsLandingHref(): string {
+    return "/organization/locations";
+}
+
+export function locationWorkspaceHref(
+    locationId: string,
+    tab: LocationWorkspaceTab = "overview",
+    itemId?: string | null,
+): string {
+    const params = new URLSearchParams();
+    const normalizedLocationId = String(locationId ?? "").trim();
+    const normalizedItemId = String(itemId ?? "").trim();
+    if (normalizedLocationId) params.set("locationId", normalizedLocationId);
+    if (tab !== "overview") params.set("tab", tab);
+    if (normalizedItemId) params.set("itemId", normalizedItemId);
+    const search = params.toString();
+    return `/organization/locations${search ? `?${search}` : ""}`;
+}
+
+export type LocationsCollectionLocationSummary = {
+    id: string;
+    displayName: string;
+    isActive: boolean;
+    locality: string | null;
+    criticalCount: number;
+    improveCount: number;
+    setupPercent: number;
+    setupComplete: boolean;
+    activeRoomCount: number;
+    activeProgramCount: number;
+    capacityCoverage: SiteCapacityCoverage;
+    topAttention: LocationWorkspaceAttentionItem | null;
+};
+
+export type LocationsCollectionAttentionHighlight = {
+    locationId: string;
+    locationName: string;
+    item: LocationWorkspaceAttentionItem;
+};
+
+export type LocationsCollectionModel = {
+    locationCount: number;
+    activeLocationCount: number;
+    inactiveLocationCount: number;
+    locationsNeedingAttention: number;
+    locationsSetupComplete: number;
+    averageSetupPercent: number;
+    totalCritical: number;
+    totalImprove: number;
+    /** Coverage across every location's cohort. Still never a seat total. */
+    totalCapacityCoverage: SiteCapacityCoverage;
+    totalRooms: number;
+    totalPrograms: number;
+    locations: LocationsCollectionLocationSummary[];
+    attentionHighlights: LocationsCollectionAttentionHighlight[];
+};
+
+const LOCATION_ATTENTION_ISSUE_PRIORITY = new Map([
+    ["timezone", 0],
+    ["rooms", 1],
+    ["room-capacity", 1],
+    ["programs", 2],
+    ["schedule", 3],
+]);
+
+function compareLocationAttentionItems(
+    a: LocationWorkspaceAttentionItem,
+    b: LocationWorkspaceAttentionItem,
+): number {
+    const gradePriority = (item: LocationWorkspaceAttentionItem) =>
+        item.grade === "fix" ? 0
+        : item.grade === "improve" ? 1
+        : 2;
+    const gradeDelta = gradePriority(a) - gradePriority(b);
+    if (gradeDelta !== 0) return gradeDelta;
+    return (
+        (LOCATION_ATTENTION_ISSUE_PRIORITY.get(a.key) ?? 99) -
+        (LOCATION_ATTENTION_ISSUE_PRIORITY.get(b.key) ?? 99)
+    );
+}
+
+/**
+ * Collection rollups use only known-complete dimensions (general, programs, rooms, schedule).
+ * Tours / Placement / Access stay unknown until a location workspace loads them — they must
+ * not depress org rollups as incomplete (doctrine: unknown is never zero / fabricated).
+ */
+function collectionSetupFromWorkspace(model: LocationWorkspaceModel): {
+    setupPercent: number;
+    setupComplete: boolean;
+} {
+    const known = model.setupItems.filter((item) =>
+        item.key === "general" || item.key === "programs" || item.key === "rooms" || item.key === "schedule",
+    );
+    const completed = known.filter((item) => item.complete === true).length;
+    const setupPercent = known.length === 0 ? 0 : Math.round((completed / known.length) * 100);
+    return { setupPercent, setupComplete: setupPercent === 100 };
+}
+
+export function buildLocationsCollectionModel(params: {
+    /** Canonical capacity rules, for coverage. Absent means none are configured. */
+    capacityRules?: readonly ChildcareCapacityRuleRow[];
+    sites: LocationHierarchyRow[];
+    rooms: LocationHierarchyRow[];
+    programs: LocationProgramCategoryRow[];
+    schedules: { id: string; site_location_id: string; is_active: boolean }[];
+}): LocationsCollectionModel {
+    const actionableAttentionByLocation = new Map<string, LocationWorkspaceAttentionItem[]>();
+    const locations: LocationsCollectionLocationSummary[] = params.sites.map((site) => {
+        const siteSchedules = params.schedules.filter((schedule) => schedule.site_location_id === site.id);
+        const workspace = buildLocationWorkspaceModel({
+            site,
+            rooms: params.rooms,
+            programs: params.programs,
+            schedules: siteSchedules,
+            capacityRules: params.capacityRules,
+        });
+        actionableAttentionByLocation.set(
+            site.id,
+            workspace.attention.filter((item) => item.grade !== "good"),
+        );
+        const collectionSetup = collectionSetupFromWorkspace(workspace);
+        const topAttention =
+            [...workspace.attention]
+                .filter((item) => item.grade !== "good")
+                .sort(compareLocationAttentionItems)[0] ?? null;
+        const locality =
+            [site.city, site.state]
+                .map((part) => String(part ?? "").trim())
+                .filter(Boolean)
+                .join(", ") || null;
+        return {
+            id: site.id,
+            displayName: workspace.displayName,
+            isActive: site.is_active !== false,
+            locality,
+            criticalCount: workspace.criticalCount,
+            improveCount: workspace.attention.filter((item) => item.grade === "improve").length,
+            setupPercent: collectionSetup.setupPercent,
+            setupComplete: collectionSetup.setupComplete,
+            activeRoomCount: workspace.activeRoomCount,
+            activeProgramCount: workspace.activeProgramCount,
+            capacityCoverage: workspace.capacityCoverage,
+            topAttention,
+        };
+    });
+
+    locations.sort((a, b) => {
+        if (a.criticalCount !== b.criticalCount) return b.criticalCount - a.criticalCount;
+        if (a.improveCount !== b.improveCount) return b.improveCount - a.improveCount;
+        if (a.setupPercent !== b.setupPercent) return a.setupPercent - b.setupPercent;
+        return a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id);
+    });
+
+    const active = locations.filter((location) => location.isActive);
+    // Coverage ADDS COUNTS OF ROOMS, never capacities. Summing seats across
+    // locations is the defect this convergence exists to remove.
+    const totalCapacityCoverage = locations.reduce<SiteCapacityCoverage>(
+        (acc, location) => ({
+            total: acc.total + location.capacityCoverage.total,
+            confirmed: acc.confirmed + location.capacityCoverage.confirmed,
+            needsReview: acc.needsReview + location.capacityCoverage.needsReview,
+            unset: acc.unset + location.capacityCoverage.unset,
+        }),
+        { total: 0, confirmed: 0, needsReview: 0, unset: 0 },
+    );
+    const locationPriority = new Map(locations.map((location, index) => [location.id, index]));
+    const seenAttention = new Set<string>();
+    const attentionHighlights = locations
+        .flatMap((location) =>
+            (actionableAttentionByLocation.get(location.id) ?? []).map((item) => ({
+                locationId: location.id,
+                locationName: location.displayName,
+                item,
+            })),
+        )
+        .filter((highlight) => {
+            const identity = `${highlight.locationId}:${highlight.item.key}`;
+            if (seenAttention.has(identity)) return false;
+            seenAttention.add(identity);
+            return true;
+        })
+        .sort((a, b) => {
+            const issueDelta = compareLocationAttentionItems(a.item, b.item);
+            if (issueDelta !== 0) return issueDelta;
+            return (locationPriority.get(a.locationId) ?? 999) - (locationPriority.get(b.locationId) ?? 999);
+        });
+
+    const setupPercents = locations.map((location) => location.setupPercent);
+    const averageSetupPercent =
+        setupPercents.length === 0 ?
+            0
+        :   Math.round(setupPercents.reduce((sum, value) => sum + value, 0) / setupPercents.length);
+
+    return {
+        locationCount: locations.length,
+        activeLocationCount: active.length,
+        inactiveLocationCount: locations.length - active.length,
+        locationsNeedingAttention: locations.filter((location) => location.criticalCount > 0 || location.improveCount > 0)
+            .length,
+        locationsSetupComplete: locations.filter((location) => location.setupComplete).length,
+        averageSetupPercent,
+        totalCritical: locations.reduce((sum, location) => sum + location.criticalCount, 0),
+        totalImprove: locations.reduce((sum, location) => sum + location.improveCount, 0),
+        totalCapacityCoverage,
+        totalRooms: locations.reduce((sum, location) => sum + location.activeRoomCount, 0),
+        totalPrograms: locations.reduce((sum, location) => sum + location.activeProgramCount, 0),
+        locations,
+        attentionHighlights,
+    };
+}
+
+export function readLocationMetadataString(metadata: unknown, key: string): string | null {
+    if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const value = (metadata as Record<string, unknown>)[key];
+    const normalized = String(value ?? "").trim();
+    return normalized || null;
+}
+
+export function parseStaffingThresholds(raw: unknown): StaffingThreshold[] {
+    const value = String(raw ?? "").trim();
+    if (!value) return [];
+    const thresholds: StaffingThreshold[] = [];
+    for (const segment of value.split(/[\n,;]+/)) {
+        const match = segment.trim().match(/^(\d+)\s*(?::|[-–—])\s*(\d+)$/);
+        if (!match) continue;
+        const requiredStaff = Number(match[1]);
+        const maxChildren = Number(match[2]);
+        if (requiredStaff > 0 && maxChildren > 0) thresholds.push({ requiredStaff, maxChildren });
+    }
+    return thresholds.sort((a, b) => a.requiredStaff - b.requiredStaff || a.maxChildren - b.maxChildren);
+}
+
+export function serializeStaffingThresholds(thresholds: StaffingThreshold[]): string {
+    return thresholds
+        .filter(
+            (threshold) =>
+                Number.isInteger(threshold.requiredStaff) &&
+                threshold.requiredStaff > 0 &&
+                Number.isInteger(threshold.maxChildren) &&
+                threshold.maxChildren > 0,
+        )
+        .sort((a, b) => a.requiredStaff - b.requiredStaff || a.maxChildren - b.maxChildren)
+        .map((threshold) => `${threshold.requiredStaff}:${threshold.maxChildren}`)
+        .join(",");
+}
+
+export function formatStaffingThreshold(threshold: StaffingThreshold): string {
+    return `${threshold.requiredStaff}–${threshold.maxChildren}`;
+}
+
+function formatProgramAgeRange(program: LocationProgramCategoryRow): string {
+    const from = readLocationMetadataString(program.metadata, "age_range_from");
+    const to = readLocationMetadataString(program.metadata, "age_range_to");
+    const unit = readLocationMetadataString(program.metadata, "age_range_unit");
+    if (!from && !to) return "Age range not set";
+    const range = from && to ? `${from}–${to}` : (from ?? to ?? "");
+    return unit ? `${range} ${unit}` : range;
+}
+
+export function buildLocationProgramOperationalSummaries(params: {
+    programs: LocationProgramCategoryRow[];
+    rooms: LocationHierarchyRow[];
+}): LocationProgramOperationalSummary[] {
+    return params.programs.map((program) => {
+        const programRooms = params.rooms.filter(
+            (room) => room.is_active !== false && readLocationMetadataString(room.metadata, "category") === program.key,
+        );
+        const capacities = programRooms
+            .map((room) => {
+                const rawCapacity = readLocationMetadataString(room.metadata, "capacity");
+                return rawCapacity == null ? null : Number(rawCapacity);
+            })
+            .filter((capacity): capacity is number => capacity != null && Number.isFinite(capacity) && capacity >= 0);
+        return {
+            id: program.id,
+            label: program.label,
+            roomCount: programRooms.length,
+            configuredCapacity: capacities.length > 0 ? capacities.reduce((sum, capacity) => sum + capacity, 0) : null,
+            ageRange: formatProgramAgeRange(program),
+            isActive: program.is_active !== false,
+        };
+    });
+}
+
+export function formatLocationAddress(
+    site: Pick<LocationHierarchyRow, "address1" | "city" | "state" | "postal_code">,
+): string | null {
+    const locality = [site.city, site.state, site.postal_code]
+        .map((part) => String(part ?? "").trim())
+        .filter(Boolean)
+        .join(" ");
+    return [String(site.address1 ?? "").trim(), locality].filter(Boolean).join(", ") || null;
+}
+
+export function buildLocationWorkspaceModel(params: {
+    /** Canonical capacity rules, for coverage. Absent means none are configured. */
+    capacityRules?: readonly ChildcareCapacityRuleRow[];
+    site: LocationHierarchyRow;
+    rooms: LocationHierarchyRow[];
+    programs: LocationProgramCategoryRow[];
+    schedules: { id: string; is_active: boolean }[];
+    ownedConcernSetup?: Partial<Record<"tours" | "placement" | "access", boolean>>;
+}): LocationWorkspaceModel {
+    const { site } = params;
+    // By ancestry. The workspace summarises a SITE, and a classroom nested inside
+    // one of its physical spaces is part of that site — the direct-parent filter
+    // dropped it from every room count, capacity total and list on this screen.
+    const rooms = rowsBelongingToSite(params.rooms, site.id).filter((room) => room.is_active !== false);
+    const programs = params.programs.filter(
+        (program) => program.location_id === site.id && program.is_active !== false,
+    );
+    const schedules = params.schedules.filter((schedule) => schedule.is_active);
+    const roomPresentations = rooms.map((room) => readLocationMetadataPresentation(room.metadata));
+    // Capacity readiness is about whether the MEANING is settled, not whether a
+    // number is present. An untyped legacy value used to count as complete; it is
+    // now "needs review", because nobody has said what it measures.
+    const capacityCohort = capacityCoverageCohort(rooms);
+    const capacityCoverage = summarizeSiteCapacityCoverage(capacityCohort, params.capacityRules ?? []);
+    const roomsNeedingCapacity = capacityCoverage.needsReview + capacityCoverage.unset;
+
+    const address = formatLocationAddress(site);
+    const phone = readLocationMetadataString(site.metadata, "site_phone");
+    const timezone = readLocationMetadataString(site.metadata, "timezone");
+    const generalComplete = Boolean(String(site.label ?? "").trim() && address && timezone);
+    const roomsComplete =
+        rooms.length > 0 &&
+        capacityCoverage.needsReview === 0 &&
+        capacityCoverage.unset === 0 &&
+        roomPresentations.every((room) => Boolean(room.student_teacher_ratio && room.category));
+    const setupItems: LocationWorkspaceSetupItem[] = [
+        {
+            key: "general",
+            label: "Location details",
+            tab: "general",
+            complete: generalComplete,
+        },
+        {
+            key: "programs",
+            label: "Programs",
+            tab: "programs",
+            complete: programs.length > 0,
+        },
+        { key: "rooms", label: "Rooms", tab: "rooms", complete: roomsComplete },
+        {
+            key: "schedule",
+            label: "Schedule",
+            tab: "schedule",
+            complete: schedules.length > 0,
+        },
+        {
+            key: "tours",
+            label: "Tours",
+            tab: "tours",
+            complete: params.ownedConcernSetup?.tours ?? null,
+        },
+        {
+            key: "placement",
+            label: "Placement",
+            tab: "placement",
+            complete: params.ownedConcernSetup?.placement ?? null,
+        },
+        {
+            key: "access",
+            label: "Access",
+            tab: "access",
+            complete: params.ownedConcernSetup?.access ?? null,
+        },
+    ];
+    // Unknown (null) areas are excluded from the denominator — never treated as incomplete.
+    const knownSetupItems = setupItems.filter((item) => item.complete !== null);
+    const completedSetupItems = knownSetupItems.filter((item) => item.complete === true).length;
+    const setupPercent =
+        knownSetupItems.length === 0 ? 0 : Math.round((completedSetupItems / knownSetupItems.length) * 100);
+
+    const attention: LocationWorkspaceAttentionItem[] = [];
+    if (!timezone) {
+        attention.push({
+            key: "timezone",
+            grade: "fix",
+            label: "Time zone is not set",
+            consequence: "Hours and tours cannot run in local time.",
+            nextLabel: "Set time zone",
+            tab: "general",
+        });
+    }
+    if (rooms.length === 0) {
+        attention.push({
+            key: "rooms",
+            grade: "fix",
+            label: "No rooms are operating yet",
+            consequence: "Capacity and placement have nowhere to land.",
+            nextLabel: "Add a room",
+            tab: "rooms",
+        });
+    } else if (roomsNeedingCapacity > 0) {
+        attention.push({
+            key: "room-capacity",
+            grade: "fix",
+            label: `${roomsNeedingCapacity} ${roomsNeedingCapacity === 1 ? "room needs" : "rooms need"} capacity`,
+            consequence: "Those rooms cannot count toward location inventory.",
+            nextLabel: "Set capacity",
+            tab: "rooms",
+        });
+    }
+    if (programs.length === 0) {
+        attention.push({
+            key: "programs",
+            grade: "fix",
+            label: "No programs are offered yet",
+            consequence: "Families cannot be placed into an offering here.",
+            nextLabel: "Offer a program",
+            tab: "programs",
+        });
+    }
+    if (schedules.length === 0) {
+        attention.push({
+            key: "schedule",
+            grade: "improve",
+            label: "Weekly hours are not set",
+            consequence: "Operating days stay unclear for tours and staffing.",
+            nextLabel: "Set hours",
+            tab: "schedule",
+        });
+    }
+    // Healthy locations have an empty attention list — UI collapses the section (no filler).
+    const criticalCount = attention.filter((item) => item.grade === "fix").length;
+    const incompleteSetupCount = setupItems.filter((item) => item.complete === false).length;
+    const recommendedCount = incompleteSetupCount + attention.filter((item) => item.grade === "improve").length;
+
+    return {
+        displayName: String(site.label ?? "").trim() || "Untitled location",
+        address,
+        phone,
+        timezone,
+        activeRoomCount: rooms.length,
+        activeProgramCount: programs.length,
+        capacityCoverage,
+        roomsNeedingCapacity,
+        setupPercent,
+        setupComplete: setupPercent === 100,
+        setupItems,
+        attention,
+        criticalCount,
+        recommendedCount,
+    };
+}

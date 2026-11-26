@@ -1,0 +1,65 @@
+{
+  "trusted_host_action_id": "tha_02abf84c88298f",
+  "query_hash": "6bcf45c869a3a6664a78a217e00dd4bf9ea3917041a32b6b1faba8b62b3b7fe1",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T16:31:31.645Z",
+    "question_ids": [
+      "departments_by_org",
+      "journeys_by_org",
+      "members_by_org",
+      "orgs"
+    ],
+    "questions": {
+      "departments_by_org": {
+        "question_id": "departments_by_org",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "departments": 5
+          }
+        ]
+      },
+      "journeys_by_org": {
+        "question_id": "journeys_by_org",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "journeys": 25
+          }
+        ]
+      },
+      "members_by_org": {
+        "question_id": "members_by_org",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "7803388d-cdee-4afb-89cf-23a137f39423",
+            "user_roles": 2
+          },
+          {
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "user_roles": 10
+          }
+        ]
+      },
+      "orgs": {
+        "question_id": "orgs",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "7803388d-cdee-4afb-89cf-23a137f39423",
+            "name": "Alloy Bend"
+          },
+          {
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "name": "Firefly Early Learning"
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

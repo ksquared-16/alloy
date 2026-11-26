@@ -1,0 +1,67 @@
+{
+  "count": 4,
+  "boxes": [
+    {
+      "child": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "card": "add_charge",
+      "cardClass": "alloy-os-ucard alloy-os-ucard--expanded alloy-os-ucard--tier-work allo",
+      "rect": {
+        "w": 13,
+        "h": 13,
+        "top": 533
+      },
+      "offsetParentNull": false,
+      "pointerEvents": "auto",
+      "disabled": false,
+      "hiddenBy": null,
+      "path": "alloy-os-addcharge__child < alloy-os-addcharge__children < alloy-os-addcharge__field-value < alloy-os-addcharge__field < alloy-os-addcharge < alloy-os-ucard__body < add_charge < alloy-os-addcharge-host"
+    },
+    {
+      "child": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "card": "add_charge",
+      "cardClass": "alloy-os-ucard alloy-os-ucard--expanded alloy-os-ucard--tier-work allo",
+      "rect": {
+        "w": 13,
+        "h": 13,
+        "top": 556
+      },
+      "offsetParentNull": false,
+      "pointerEvents": "auto",
+      "disabled": false,
+      "hiddenBy": null,
+      "path": "alloy-os-addcharge__child < alloy-os-addcharge__children < alloy-os-addcharge__field-value < alloy-os-addcharge__field < alloy-os-addcharge < alloy-os-ucard__body < add_charge < alloy-os-addcharge-host"
+    },
+    {
+      "child": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "card": "add_charge",
+      "cardClass": "alloy-os-ucard alloy-os-ucard--expanded alloy-os-ucard--tier-work allo",
+      "rect": {
+        "w": 13,
+        "h": 13,
+        "top": 579
+      },
+      "offsetParentNull": false,
+      "pointerEvents": "auto",
+      "disabled": false,
+      "hiddenBy": null,
+      "path": "alloy-os-addcharge__child < alloy-os-addcharge__children < alloy-os-addcharge__field-value < alloy-os-addcharge__field < alloy-os-addcharge < alloy-os-ucard__body < add_charge < alloy-os-addcharge-host"
+    },
+    {
+      "child": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "card": "add_charge",
+      "cardClass": "alloy-os-ucard alloy-os-ucard--expanded alloy-os-ucard--tier-work allo",
+      "rect": {
+        "w": 13,
+        "h": 13,
+        "top": 602
+      },
+      "offsetParentNull": false,
+      "pointerEvents": "auto",
+      "disabled": false,
+      "hiddenBy": null,
+      "path": "alloy-os-addcharge__child < alloy-os-addcharge__children < alloy-os-addcharge__field-value < alloy-os-addcharge__field < alloy-os-addcharge < alloy-os-ucard__body < add_charge < alloy-os-addcharge-host"
+    }
+  ],
+  "addCards": 0,
+  "commandHosts": 1
+}

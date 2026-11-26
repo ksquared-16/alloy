@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import DrawerLayoutRuntimeOverviewBody from "@/components/admin/vmDrawer/DrawerLayoutRuntimeOverviewBody";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
-import LayoutRuntimeQueueRowHold from "@/components/layout/LayoutRuntimeQueueRowHold";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildOpportunityLayoutRuntimeRecordFromVm } from "@/lib/layout/runtime/buildOpportunityLayoutRuntimeRecordFromVm";
@@ -164,14 +163,6 @@ describe("LayoutRuntimeDrawerBodyView blank configured fields", () => {
         expect(html).toContain("Notes");
         expect(html).toContain("Recent communication");
         expect(html.toLowerCase()).toMatch(/no actions yet/);
-    });
-});
-
-describe("LayoutRuntimeQueueRowHold", () => {
-    it("renders hold skeleton without VM preview markers", () => {
-        const html = renderToStaticMarkup(<LayoutRuntimeQueueRowHold />);
-        expect(html).toContain('data-layout-runtime-queue-row-hold="true"');
-        expect(html).not.toContain("adminv2-ws-enrollment-crm-compact");
     });
 });
 

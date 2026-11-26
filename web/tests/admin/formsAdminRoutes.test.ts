@@ -15,6 +15,19 @@ import { GET as getSubmission } from "@/app/api/admin/forms/submissions/[submiss
 import { POST as confirmLinkage } from "@/app/api/admin/forms/submissions/[submissionId]/confirm-linkage/route";
 import { POST as manualLink } from "@/app/api/admin/forms/submissions/[submissionId]/manual-link/route";
 
+/**
+ * What the seeded roles actually hold, since Forms authority became a capability.
+ *
+ * These routes read `ctx.permissionKeys`, not `ctx.role`. A mock that carries only a role therefore
+ * describes a principal the product cannot authorize — which made the `admin` cases 403 and, worse,
+ * made the `ops` cases pass for the wrong reason: they were refused because the mock held NO
+ * capability, not because ops lacks `forms.author`.
+ */
+/** The default admin also holds Medical's health.view (a child's medical answers are visible to it). */
+const ADMIN_FORMS_KEYS = ["forms.author", "forms.submissions", "forms.submissions.confirm", "health.view"];
+/** ops holds exactly one Forms write — confirming a linkage the system proposed. */
+const OPS_FORMS_KEYS = ["forms.submissions.confirm"];
+
 const ORG = "11111111-1111-4111-8111-111111111111";
 const OTHER_ORG = "99999999-9999-4999-8999-999999999999";
 const USER = "22222222-2222-4222-8222-222222222222";
@@ -40,6 +53,17 @@ const { mockGetAdminContext, storeRef } = vi.hoisted(() => {
         opportunities: {},
     };
     return { mockGetAdminContext: vi.fn(), storeRef };
+});
+
+// R2: Forms submission routes consult the caller's department/site scope. These route tests act as an unrestricted
+// organization administrator (both dimensions "all"); the scope boundary itself is proven in formsSubmissionScope.test.ts.
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>("@/lib/admin/getAdminAccessContext");
+    const unrestricted = async () => ({
+        ok: true, userId: "unrestricted", orgId: "unrestricted", roleKeys: ["admin"], permissionKeys: [],
+        departmentScope: "all", allowedDepartmentIds: [], siteScope: "all", allowedSiteLocationIds: [],
+    });
+    return { ...actual, getAdminAccessContextCached: unrestricted, getAdminAccessContext: unrestricted };
 });
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -472,6 +496,7 @@ beforeEach(() => {
         orgId: ORG,
         userId: USER,
         role: "admin",
+        permissionKeys: ADMIN_FORMS_KEYS,
     });
 });
 
@@ -904,6 +929,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const res = await createForm(
             new NextRequest("http://x", {
@@ -921,7 +947,12 @@ describe("Admin forms routes", () => {
         expect(res.status).toBe(401);
     });
 
-    it("POST public link returns plaintext_token once and embed_path", async () => {
+    it("POST public link returns plaintext_token once and embed_path, on the CONFIGURED origin", async () => {
+        // The embed origin used to be derived from the request's own Host /
+        // X-Forwarded-Host headers. Those are caller-supplied, and this link is copied
+        // into messages that leave the building — so the hostile Host below must have no
+        // effect at all, and the configured public origin must win.
+        vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://staging.workwithalloy.com");
         const fid = crypto.randomUUID();
         storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
         const res = await createPublicLink(
@@ -929,7 +960,8 @@ describe("Admin forms routes", () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Host: "localhost:3000",
+                    Host: "attacker.example.com",
+                    "x-forwarded-host": "attacker.example.com",
                     "x-forwarded-proto": "http",
                 },
                 body: JSON.stringify({ label: "Camp", allowed_embed_origins: ["http://localhost:3000"] }),
@@ -948,9 +980,11 @@ describe("Admin forms routes", () => {
         };
         expect(j.data.plaintext_token.length).toBeGreaterThan(20);
         expect(j.data.embed_path).toContain("/forms/embed/");
-        expect(j.data.embed_url?.startsWith("http://localhost:3000/forms/embed/")).toBe(true);
+        expect(j.data.embed_url?.startsWith("https://staging.workwithalloy.com/forms/embed/")).toBe(true);
+        expect(j.data.embed_url).not.toContain("attacker.example.com");
         expect(j.data.token_hash).toBeUndefined();
         expect(j.data.metadata.label).toBe("Camp");
+        vi.unstubAllEnvs();
     });
 
     it("POST public link launch_from_entity stamps existing_record metadata", async () => {
@@ -1238,6 +1272,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const fid = crypto.randomUUID();
         storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
@@ -1250,6 +1285,78 @@ describe("Admin forms routes", () => {
             { params: Promise.resolve({ formId: fid }) }
         );
         expect(res.status).toBe(403);
+    });
+
+    it("distribution create never pins — a website embed must follow the latest published version", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        const res = await createPublicLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    distribution: true,
+                    metadata: { form_context_mode: "processing_intake" },
+                    pinned_form_definition_version_id: vid,
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { id: string; pinned_form_definition_version_id: string | null } };
+        expect(j.data.pinned_form_definition_version_id).toBeNull();
+        expect(storeRef.publicLinks[j.data.id]?.pinned_form_definition_version_id).toBeNull();
+    });
+
+    it("distribution create reusing a pinned link un-pins it and keeps the same URL", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const lid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.publicLinks[lid] = {
+            id: lid,
+            org_id: ORG,
+            form_definition_id: fid,
+            token_hash: "h",
+            token_prefix: "tok",
+            pinned_form_definition_version_id: vid,
+            is_active: true,
+            expires_at: null,
+            allowed_embed_origins: null,
+            metadata: { form_context_mode: "processing_intake", share_embed_path: "/forms/embed/campusTok" },
+            created_at: "2026-10-15T19:50:00.000Z",
+            updated_at: null,
+            last_used_at: null,
+        };
+        const res = await createPublicLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ distribution: true, metadata: { form_context_mode: "processing_intake" } }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+            data: { id: string; reused: boolean; plaintext_token: string; pinned_form_definition_version_id: string | null };
+        };
+        expect(j.data.reused).toBe(true);
+        expect(j.data.id).toBe(lid);
+        expect(j.data.plaintext_token).toBe("campusTok");
+        expect(j.data.pinned_form_definition_version_id).toBeNull();
+        expect(storeRef.publicLinks[lid]?.pinned_form_definition_version_id).toBeNull();
+        expect(storeRef.publicLinks[lid]?.is_active).toBe(true);
     });
 
     it("POST confirm-linkage clears intake_needs_review and stamps reviewer", async () => {
@@ -1307,6 +1414,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const fid = crypto.randomUUID();
         const vid = crypto.randomUUID();
@@ -1452,6 +1560,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const fid = crypto.randomUUID();
         const vid = crypto.randomUUID();

@@ -1,0 +1,5 @@
+document_categories 10
+document_type_versions 13
+document_types 13
+role_definitions 4
+role_permission_grants 160

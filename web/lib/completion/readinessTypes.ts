@@ -1,7 +1,7 @@
 /**
  * Readiness Engine — canonical contract types (v1.0).
- * @see docs/sprints/06_2026/readiness_engine_architecture_and_runtime_contract.md
- * @see docs/sprints/06_2026/required_information_v2_operational_readiness_framework.md
+ * @see docs/sprints/archive/06_2026/readiness_engine_architecture_and_runtime_contract.md
+ * @see docs/sprints/archive/06_2026/required_information_v2_operational_readiness_framework.md
  */
 
 import type { EffectiveRequirementsResult } from "@/lib/completion/effectiveRequirementsTypes";

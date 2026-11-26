@@ -26,19 +26,4 @@ describe("record drawer premium primitives", () => {
         expect(oppPanel).toContain("RecordDrawerActionRail");
     });
 
-    it("AdminEntityDrawer still uses OpportunityDrawerHeaderActionButton for inquiry workflow", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("OpportunityDrawerHeaderActionButton");
-        expect(drawer).toContain("OpportunityDrawerHeaderActionsPanel");
-    });
-
-    it("Person drawer uses context panel above overview; Location keeps shared context panel", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerContextPanel");
-        const person = read("components/admin/entity/PersonDrawerContextPanel.tsx");
-        const location = read("components/admin/entity/LocationDrawerContextPanel.tsx");
-        expect(person).toContain("RecordDrawerContextPanel");
-        expect(location).toContain("RecordDrawerContextPanel");
-        expect(drawer).toContain("LocationDrawerContextPanel");
-    });
 });

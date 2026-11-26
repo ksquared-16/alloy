@@ -295,17 +295,3 @@ describe("executeOpportunityLeadDeletionGraph order", () => {
         expect(personsDeleteIdx).toBeGreaterThan(schedIdx);
     });
 });
-
-describe("global search invalidate on delete success", () => {
-    it("OpportunityDrawerVmRuntime dispatches global search invalidate after delete", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const runtime = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        expect(runtime).toContain("dispatchGlobalRecordSearchInvalidate");
-    });
-});

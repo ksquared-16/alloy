@@ -1,0 +1,37 @@
+{
+  "trusted_host_action_id": "tha_fd5987d4e0ef87",
+  "query_hash": "13fe228b80faf9363e088d9f744ff368255b5f4efafb4a83bf0e95e10058e0d4",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T20:25:27.760Z",
+    "question_ids": [
+      "address_collisions",
+      "operator_identities"
+    ],
+    "questions": {
+      "address_collisions": {
+        "question_id": "address_collisions",
+        "row_count": null,
+        "rows": [
+          {
+            "accounts_exact": 1,
+            "accounts_case_insensitive": 1,
+            "accounts_trimmed_match": 1,
+            "accounts_like_kelly": 2
+          }
+        ]
+      },
+      "operator_identities": {
+        "question_id": "operator_identities",
+        "row_count": null,
+        "rows": [
+          {
+            "provider": "email",
+            "rows": 1
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

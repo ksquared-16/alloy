@@ -1,0 +1,24 @@
+{
+  "detailsGearName": "Manage responsibility",
+  "detailsScopes": [
+    "Household — the whole account",
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "detailsCopy": null,
+  "detailsFocusBack": "BODY",
+  "accountsFilter": 5,
+  "accountsGearName": "Manage responsibility",
+  "accountsScopes": [
+    "Household — the whole account",
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "accountsRowsWhileOpen": 11,
+  "accountsAfterEscape": {
+    "panel": 0,
+    "rows": 0,
+    "focus": "BODY"
+  },
+  "parity": true
+}

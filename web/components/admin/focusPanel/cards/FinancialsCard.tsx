@@ -1,0 +1,8465 @@
+"use client";
+
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
+import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
+import { executeDetailFrom } from "@/lib/adminV2/actions/executeEnvelope";
+import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
+import {
+    parseAdjustmentMagnitudeCents,
+    type AdjustmentDirection,
+} from "@/lib/financials/corrections/correctionIntent";
+import { hostRunsCardProducers } from "@/lib/adminV2/runtime/focusPanel/hostRunsCardProducers";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
+import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
+import type { AccountLens } from "@/lib/financials/workspace/accountLenses";
+import { FOCUS_PANEL_RESERVED_MIN_HEIGHT } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
+
+import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import {
+    collectionLifecycle,
+    lifecycleLabel,
+    type CollectionRail,
+} from "@/lib/financials/payments/collectionLifecycle";
+import ApprovedFinancialsCard, { AccountSummaryPending } from "@/components/operationalCards/FinancialsCard";
+import {
+    useRegisterFinancialCommandHost,
+    type FinancialCommandRequest,
+} from "@/components/financials/FinancialCommandChannel";
+import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
+import { operatorRefusal } from "@/lib/financials/commands/operatorRefusal";
+import { chargeDisplayLabel } from "@/lib/financials/chargeCategories";
+import { catalogChargeRefusalFor, HOUSEHOLD_CHARGE_SUBJECT } from "@/lib/financials/catalogCharges/chargeSubjectSite";
+import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
+import FinancialsDiscountPanel, { type FamilyPosition } from "@/app/adminV2/financials/FinancialsDiscountPanel";
+import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsSection";
+import AutopaySection from "@/components/operationalCards/AutopaySection";
+import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { humanDay } from "@/lib/financials/dates/humanDates";
+import { PAYMENT_METHOD_LABELS } from "@/lib/financials/payments/paymentLedgerFacts";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
+import CardCollectionField from "./CardCollectionField";
+import {
+    useDismissSignal,
+    useReportPerspective,
+} from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
+import {
+    categoryPermitsChildGrain,
+    categoryPermitsHouseholdGrain,
+} from "@/lib/financials/chargeCategorySemantics";
+import {
+    adaptAddChargeSpecimen,
+    adaptChargeTemplateOption,
+    addChargeTypeChoices,
+    adaptFinancialsVmToFinancialsCard,
+    adaptFinancialsVmToLedgerPeriods,
+    hydratingFinancialsEvidence,
+} from "@/lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    presentPayments,
+    unappliedTotalCents,
+} from "@/lib/adminV2/runtime/focusPanel/financials/paymentPresentation";
+import type { FinancialsCardVM,
+    FinancialsLedgerRow,
+} from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
+import {
+    compactPayableRows as selectCompactPayableRows,
+    financialsRowsInSubjectScope,
+    rowInFinancialsSubjectScope,
+} from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
+
+import FinancialsChargeDetail, { type ChargeDetailFacts, type ChargeDetailSeed } from "@/app/adminV2/financials/FinancialsChargeDetail";
+import { resolveDraftEditIdentity } from "@/lib/financials/catalogCharges/draftEditIdentity";
+import { CATALOG_AMOUNT_OVERRIDE_PERMISSION, centsFromAmountInput } from "@/lib/financials/catalogCharges/catalogAmountOverride";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+type Props = {
+    model: FocusPanelCardModel;
+    context: OperationalContext;
+    receded?: boolean;
+    coordination?: FocusPanelCoordination;
+    /**
+     * Whether this placement offers the `Details →` drill-down.
+     *
+     * True in the Focus Panel, where the card is financial context beside another subject. False in
+     * Financials → Accounts, where the account's own activity is already on screen beneath it.
+     */
+    showDetailsAction?: boolean;
+    /**
+     * Which summary this placement wants — see `summaryVariant` on the approved card.
+     *
+     * The Focus Panel keeps the period reconciliation. Financials → Accounts takes the account
+     * summary: balance, due, past due, `Payment`, `Add charge`, and nothing else in the header.
+     */
+    summaryVariant?: "period" | "account";
+    /**
+     * ── THE ACCOUNT WORKSPACE OPENS ON DETAILS ────────────────────────────────────────────────
+     *
+     * The Focus Panel shows a compact card and reaches Details through an action, because there
+     * Financials is context beside other work. A workspace whose whole subject IS the account has
+     * nothing to reach FROM — the operator selected the account; Details is what they asked for.
+     *
+     * Accounts passed `showDetailsAction={false}`, which left `onDetails` undefined and the
+     * `detail` surface unreachable. And the compact relationship row, the discount gear, Manage
+     * payments and the responsibility gear all live on that surface — so the workspace had no way
+     * to any of them, and grew its own ledger composition underneath to compensate.
+     *
+     * This is not a second mode. It is the same surface, entered at open rather than on request.
+     */
+    detailsAreTheSurface?: boolean;
+    /**
+     * ── OPEN ON ONE CHARGE (W7-F021) ──────────────────────────────────────────────────────────
+     *
+     * The Charges workspace finds a charge across the organization and opens it in THIS card's
+     * Charge Details — the certified modal, with its Edit / Cancel draft and Correct commands —
+     * rather than a second detail design of its own. The card starts with that surface already on
+     * its stack, so nothing compact renders first.
+     */
+    openCharge?: { chargeId: string; label: string; seed?: ChargeDetailSeed | null } | null;
+    /**
+     * ── OPEN ON ONE COLLECTION (BP V2 S6) ─────────────────────────────────────────────────────
+     *
+     * A Billing "payment exception" names a collection the provider confirmed and Financials has not
+     * recorded. The card already lists those, read-only, on its Payment surface in the shared lifecycle
+     * words (never as a payment). This starts the card on that surface with the named attempt marked —
+     * nothing else changes, and recognition stays where it is owned (Payments · Needs recognition).
+     */
+    openCollection?: { attemptId: string } | null;
+    /** Called once the operator has closed every surface the card was opened with. */
+    onSurfacesClosed?: () => void;
+};
+
+/**
+ * THE FINANCIALS CARD — what is owed, what happened, and what can be done about it.
+ *
+ * Three densities, ONE read model. Compact, summary and expanded differ in how much of the same
+ * composed truth they show, never in what they compute — this component performs no financial
+ * arithmetic at all. Every cents value, every period placement and every GL code arrives decided by
+ * `buildFinancialsCardVM`, because a card that recomputed a balance would be a second answer to a
+ * question the ledger already answers.
+ *
+ * ── WHAT IT REFUSES TO SHOW ──
+ *
+ * The read model reports facts the platform does not own — payments, autopay, payer splits — as
+ * named unavailabilities rather than as zeroes. This card renders that absence as absence. A
+ * "$0.00 paid" line would state something the platform cannot know, and a disabled payer filter
+ * would advertise a model Financials does not have.
+ *
+ * ── SUBJECT, NOT HOUSEHOLD ──
+ *
+ * Attribution is `billable_source_type` → subject. An enrolled child's charge hangs off their
+ * agreement (agreement → child), so the subject filter offers All plus each child. A pre-enrolment
+ * fee hangs off the HOUSEHOLD (`customer`) and belongs to the account rather than to any one child —
+ * it is never faked onto a sibling, which would put a family expense on one child's ledger.
+ *
+ * ── THE LIFECYCLE IS OPERABLE FROM HERE ──
+ *
+ * Add charge creates a DRAFT, and a draft is not owed. Posting is a separate authoritative step and
+ * a posted charge is immutable, so each ledger row offers exactly the transition its lifecycle
+ * admits: `Post` on a draft, `Reverse` on posted money that still stands. Both run registered
+ * actions; this card decides nothing about money and refreshes from the read model rather than
+ * patching a row it just changed.
+ *
+ * A charge is reversed ONCE. A reversed row reads `reversed` and offers nothing, and a correction
+ * row is never itself reversed — the bound is the database's (`20260902140000`) and the read model
+ * projects it, so this card renders the answer rather than deciding it.
+ */
+/**
+ * ── TURNING TWO CANONICAL READS INTO TWO ROWS ────────────────────────────────────────────────
+ *
+ * Both of these are PRESENTATION. They choose words for answers the server already gave, per
+ * child, and neither computes money, resolves specificity, or decides what applies to whom. Every
+ * number they render was carried through from the read that produced it.
+ *
+ * They live at module scope so it is obvious they hold no state and can see no other source: a
+ * summariser that could reach the view model is a summariser that can quietly substitute one
+ * child's answer for another's, which is the exact defect the child grain exists to prevent.
+ */
+
+
+/**
+ * WHO OWES, AND WHERE THAT ANSWER COMES FROM — in that order.
+ *
+ * This read "The account's arrangement: Cert Certhouse $18.00", which leads with the model and
+ * makes the operator step over it to reach the people. `Charge to` asks who owes; the parties are
+ * the answer, and that the answer is the account's standing one is CONTEXT — true, worth saying,
+ * and said second.
+ *
+ * "2 responsible parties" when there are too many to name: the card has one line, and a truthful
+ * count beats a truncated list of people.
+ */
+/**
+ * THE STANDING ARRANGEMENT, AS SHARES THE DOMAIN CAN BE GIVEN.
+ *
+ * `summariseHouseholdArrangement` turns the same facts into a sentence for the operator. This
+ * returns them in the shape `billing.configure_responsibility` accepts, so a charge can be created
+ * UNDER the arrangement already in force rather than with no allocation at all.
+ *
+ * ── THE DEFECT THIS CLOSES ─────────────────────────────────────────────────────────────────────
+ *
+ * Add Charge wrote responsibility only when the operator opened the Charge-to editor and changed
+ * it (`chargeToChanging && chargeShares.length > 0`). An operator who read the preview — "Dana
+ * Alvarez 50% · Rosa Alvarez 50% · household responsibility" — had no reason to open an editor
+ * that already said the right thing, so nothing was written, and the posted charge carried no
+ * allocation. The ledger then said "Not allocated", which was TRUE of the charge and flatly
+ * contradicted what the operator had just been shown.
+ *
+ * Both statements were about different subjects: one the household's standing arrangement, the
+ * other this charge's allocation. The repair is not to relabel either — it is to make the charge
+ * inherit the arrangement, which is what "divide it under the arrangement in force" already means
+ * everywhere else in this surface.
+ */
+export function standingArrangementShares(body: unknown): Array<{
+    responsible_party_id: string;
+    method: string;
+    percent_basis_points: number | null;
+    amount_cents: number | null;
+}> {
+    const household = (body as {
+        household?: {
+            shares?: Array<{
+                personId?: string | null;
+                responsiblePartyId?: string | null;
+                method?: string | null;
+                amountCents?: number | null;
+                percentBasisPoints?: number | null;
+            }>;
+        } | null;
+    } | null)?.household;
+    return (household?.shares ?? [])
+        .map((share) => ({
+            responsible_party_id: String(share.responsiblePartyId ?? share.personId ?? "").trim(),
+            method: String(share.method ?? ""),
+            percent_basis_points: share.method === "percentage" ? (share.percentBasisPoints ?? null) : null,
+            amount_cents: share.method === "fixed" ? (share.amountCents ?? null) : null,
+        }))
+        /* A share with no party is not a share this card may act on. */
+        .filter((share) => share.responsible_party_id.length > 0 && share.method.length > 0);
+}
+
+function summariseHouseholdArrangement(body: unknown): string {
+    const household = (body as {
+        household?: {
+            shares?: Array<{
+                name?: string | null;
+                method?: string | null;
+                amountCents?: number | null;
+                percentBasisPoints?: number | null;
+            }>;
+        } | null;
+    } | null)?.household;
+    const shares = household?.shares ?? [];
+    if (shares.length === 0) return "No standing responsibility on record";
+    /* Beyond two, naming everybody costs more room than the row has and says less. */
+    if (shares.length > 2) return `${shares.length} responsible parties · household responsibility`;
+    return `${shares
+        .map((share) => {
+            const who = (share.name ?? "").trim() || "Unnamed";
+            if (share.method === "percentage" && share.percentBasisPoints != null) {
+                return `${who} ${share.percentBasisPoints / 100}%`;
+            }
+            if (share.method === "fixed" && share.amountCents != null) {
+                return `${who} $${(share.amountCents / 100).toFixed(2)}`;
+            }
+            if (share.method === "remainder") return `${who} remainder`;
+            return who;
+        })
+        .join(" · ")} · household responsibility`;
+}
+
+/**
+ * THE FAMILY'S DISCOUNT POSITION IN ONE PHRASE — for the relationship row, which has one line.
+ *
+ * This replaced a per-child list. The list was right about grain and wrong about weight: naming
+ * every child needed a permanent full-width row of its own, and two children on one policy at one
+ * rate produced two lines saying the same thing.
+ *
+ * Three honest answers, and the rule that picks between them is about AGREEMENT, not counting:
+ *
+ *   every child resolves the same policies at the same authored rate  →  "Sibling discount · 10%"
+ *   the children disagree                                             →  "2 discount arrangements"
+ *   no policy reaches any child                                       →  "No discount"
+ *
+ * Collapsing is only truthful when the answers are identical, which is why the AUTHORED RATE has
+ * to travel from the resolver rather than be inferred. One sibling policy produced -$18.50 for one
+ * child and -$145.00 for the other: the same 10% on two different tuitions. Comparing expected
+ * AMOUNTS would call that a disagreement and print "2 discount arrangements" for a family that has
+ * one discount — the row would be lying about the simplest case there is.
+ *
+ * A child the policies never mention counts as a child with no discount. A family where one child
+ * is covered and one is not has NOT agreed, however few policies are in play.
+ */
+function summariseFamilyDiscount(
+    body: unknown,
+    allChildren: readonly { customerMemberId: string }[],
+): string {
+    const parsed = body as {
+        policies?: Array<{
+            policyId?: string | null;
+            label?: string | null;
+            subjects?: Array<{
+                customerMemberId?: string | null;
+                currencyCode?: string | null;
+                basis?: "percentage" | "amount" | null;
+                basisValue?: number | null;
+            }>;
+        }>;
+    } | null;
+    const policies = parsed?.policies;
+    if (!Array.isArray(policies)) return "No discount";
+
+    /* What each child resolves: the policies reaching them, each with its authored rate. */
+    const byChild = new Map<string, Array<{ policyId: string; label: string; rate: string }>>();
+    for (const child of allChildren) byChild.set(child.customerMemberId, []);
+    for (const policy of policies) {
+        for (const subject of policy.subjects ?? []) {
+            const key = (subject.customerMemberId ?? "").trim();
+            if (!key) continue;
+            const rate =
+                subject.basis === "percentage" && subject.basisValue != null
+                    ? `${subject.basisValue}%`
+                    : subject.basis === "amount" && subject.basisValue != null
+                      ? money(subject.basisValue, subject.currencyCode ?? "USD")
+                      : "";
+            const entry = byChild.get(key) ?? [];
+            entry.push({ policyId: (policy.policyId ?? "").trim(), label: (policy.label ?? "Discount").trim(), rate });
+            byChild.set(key, entry);
+        }
+    }
+
+    const reached = [...byChild.values()].filter((list) => list.length > 0);
+    if (reached.length === 0) return "No discount";
+
+    /* One child's whole position as a stable fingerprint — policy AND rate, order-independent. */
+    const fingerprint = (list: Array<{ policyId: string; rate: string }>) =>
+        list.map((l) => `${l.policyId}@${l.rate}`).sort().join("|");
+    const fingerprints = new Set([...byChild.values()].map(fingerprint));
+
+    if (fingerprints.size === 1) {
+        return reached[0]!.map((l) => (l.rate ? `${l.label} · ${l.rate}` : l.label)).join(" · ");
+    }
+
+    /*
+     * THEY DISAGREE, AND THE ROW SAYS SO RATHER THAN CHOOSING ONE CHILD'S ANSWER. Enumerating
+     * every child here is exactly what made this a second permanent row; the gear opens the card
+     * that can afford the breakdown.
+     */
+    const count = reached.length;
+    return `${count} discount ${count === 1 ? "arrangement" : "arrangements"}`;
+}
+
+/** A command that cannot be aimed yet. Rendered inert rather than omitted, so geometry holds. */
+const NO_COMMAND = () => undefined;
+
+/**
+ * A stored method as an operator says it: brand, last four, and the expiry when it is useful.
+ * Never a provider id, and never anything that is not already safe to print.
+ */
+function storedMethodLabel(m: {
+    brand: string | null;
+    last4: string | null;
+    rail: "card" | "ach";
+    expMonth: number | null;
+    expYear: number | null;
+    isDefault: boolean;
+}): string {
+    const name = m.brand?.trim() || (m.rail === "ach" ? "Bank account" : "Card");
+    const tail = m.last4 ? ` •••• ${m.last4}` : "";
+    const expiry =
+        m.rail === "card" && m.expMonth && m.expYear
+            ? ` · Expires ${String(m.expMonth).padStart(2, "0")}/${String(m.expYear).slice(-2)}`
+            : "";
+    return `${name}${tail}${expiry}${m.isDefault ? " · Default" : ""}`;
+}
+
+export default function FinancialsCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    showDetailsAction = true,
+    summaryVariant = "period",
+    detailsAreTheSurface = false,
+    openCharge = null,
+    openCollection = null,
+    onSurfacesClosed,
+}: Props) {
+    const scope = context.participantScope ?? null;
+    const scopedMemberId = scope?.customerMemberId ?? null;
+    const customerId = householdIdFrom(context);
+    /*
+     * ── "NOT YET" IS NOT "NEVER" ────────────────────────────────────────────────────────────────
+     *
+     * The card had one way of having no subject, and said the same terminal sentence for both of
+     * them: "No financial record." One is a household whose account genuinely cannot be resolved.
+     * The other is the ordinary window while the panel's own truth is still composing — during which
+     * the card holds no id, is not loading anything (there is nothing to load yet), and therefore
+     * printed a verdict about an account it had not looked for.
+     *
+     * The context already answers this: `status` is `composing` until the subject is settled. So the
+     * card asks the question it actually means — is the subject resolved yet — instead of inferring
+     * it from the absence of an id.
+     */
+    const subjectStillResolving = context.status === "composing";
+    /** Settled, and there is no account to ask about — the only state that may speak terminally. */
+    const noFinancialSubject = !subjectStillResolving && !customerId && !scopedMemberId;
+
+    const [vm, setVm] = useState<FinancialsCardVM | null>(null);
+    /*
+     * A REFUSAL IS NOT AN EMPTY ACCOUNT.
+     *
+     * The endpoint answers 403 with `required_permission` when the caller lacks `fin.read`, and this
+     * card used to discard that and fall through to its empty state — telling an operator who may not
+     * see the ledger that there is nothing to see. The root producer reports the refusal explicitly,
+     * so the card can say what is actually true.
+     */
+    const [deniedRead, setDeniedRead] = useState(false);
+    /**
+     * WHICH ACCOUNT'S FULL MODEL IS LOADED — null while the card holds the root's bounded summary.
+     *
+     * The initial projection carries the account summary without `payments` or `ledgerPeriods`:
+     * 16.6 KB of receipts and placed ledger that the summary never reads. Every surface that DOES
+     * read them is an interaction, so opening one loads the full model from the endpoint that was
+     * always its owner.
+     */
+    const deepLoadedForRef = useRef<string | null>(null);
+    /**
+     * WHICH SUBJECT A READ HAS ANSWERED FOR — not which one produced an account.
+     *
+     * `deepLoadedForRef` records a SUCCESSFUL deep read, so it cannot answer "has anyone asked about
+     * this subject yet". That difference is what put a terminal sentence on a healthy account: see
+     * `awaitingFirstAnswer` below.
+     */
+    const answeredKeyRef = useRef<string | null>(null);
+    /** The account a FULL read is in flight for, so a late projection cannot restart it. */
+    const deepReadInFlightForRef = useRef<string | null>(null);
+    /**
+     * The one read currently in the air, keyed by the composed query. A second caller for the same
+     * query awaits this instead of issuing its own. Cleared on settle — it is a coalescing slot,
+     * not a cache, and never outlives the operation.
+     */
+    const [loading, setLoading] = useState(false);
+    /*
+     * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
+     *
+     * `useReportPerspective(..., "focused")` is what raises this card into the centered, scrimmed
+     * position the approved detail and command cards are drawn in — the same machinery Scheduling
+     * already uses. Neither of these is a new page or a second modal system, and the scrim click /
+     * ESC path comes back through `useDismissSignal` rather than a close button this card owns.
+     */
+    /*
+     * ── FINANCIALS NAVIGATION IS A STACK, AND THE STACK IS WRITTEN DOWN ───────────────────────
+     *
+     * It used to be one `overlay` string plus a single-slot memory of where a command had been
+     * raised from. That memory could hold exactly one answer, so it could only be right about the
+     * simplest journey, and it recorded a KIND rather than a destination: dismissing a command
+     * restored "detail", which remounted Details from scratch — a different Details, at the top of
+     * an unfiltered ledger, with every disclosure closed.
+     *
+     * Worse, the row-level Adjust had no surface of its own and borrowed the Add command in
+     * adjustment mode. Cancelling it therefore landed on the Add selector, a destination the
+     * operator had never asked for. That is the wrong-return defect, and no amount of remembering
+     * "the previous kind" fixes it, because the previous kind was never the problem: the previous
+     * STATE was.
+     *
+     * So the stack is explicit and each entry carries what its surface needs. `push` goes deeper,
+     * `pop` goes back exactly one level, and what "back" means is never inferred from whichever
+     * component happened to render last.
+     */
+    /*
+     * ── MULTI-CHILD ADD IS AN OPERATION, AND THIS IS THE SELECTION ────────────────────────────
+     *
+     * `subjectFilter` remains the ONE subject the command is anchored to — the attention context,
+     * and the child a single Add bills. This holds the ADDITIONAL children the operator ticked.
+     *
+     * Kept separate rather than folded into one array because the two mean different things: the
+     * anchor is where the operator already was, and these are a deliberate widening of it. Merging
+     * them would make "which child is this panel about" unanswerable the moment the last checkbox
+     * was cleared.
+     */
+    const [extraChildIds, setExtraChildIds] = useState<string[]>([]);
+    const [stack, setStack] = useState<FinancialsSurface[]>(
+        /*
+         * The workspace host starts ON Details; the Focus Panel starts compact and pushes it. Same
+         * stack either way, so every depth card, every dismissal and the whole escape-ownership
+         * doctrine behave identically in both hosts.
+         */
+        detailsAreTheSurface
+            ? [{ kind: "detail" }]
+            : openCharge
+              ? [{ kind: "charge_detail", chargeId: openCharge.chargeId, label: openCharge.label, seed: openCharge.seed ?? null }]
+              : openCollection
+                ? [{ kind: "payment" }]
+                : [],
+    );
+    /*
+     * A card opened ON a charge has no resting surface of its own in that host: when the operator
+     * closes back past what it was opened with, the host is told, and unmounts it.
+     */
+    const openedOnCharge = useRef((Boolean(openCharge) || Boolean(openCollection)) && !detailsAreTheSurface);
+    useEffect(() => {
+        if (openedOnCharge.current && stack.length === 0) onSurfacesClosed?.();
+    }, [stack.length, onSurfacesClosed]);
+    const surface = stack.length ? stack[stack.length - 1] : null;
+    const overlay = surface?.kind ?? null;
+    const push = useCallback((next: FinancialsSurface) => setStack((st) => [...st, next]), []);
+    const pop = useCallback(
+        () =>
+            setStack((st) => {
+                /*
+                 * ── DETAILS IS A FLOOR IN THE WORKSPACE, NOT A LAYER ─────────────────────────
+                 *
+                 * Dismissing a depth card must return the operator to the account they were
+                 * working, and in the workspace that account IS Details — popping past it would
+                 * strand them on a compact summary they never asked for and cannot leave, because
+                 * the workspace has no Details action to get back.
+                 *
+                 * In the Focus Panel there is one, so Details stays an ordinary layer there.
+                 */
+                if (detailsAreTheSurface && st.length <= 1) return st;
+                return st.slice(0, -1);
+            }),
+        [detailsAreTheSurface],
+    );
+
+    /*
+     * ── FOCUS RETURNS TO THE CONTROL THAT OPENED THE DEPTH CARD ───────────────────────────────
+     *
+     * The ownership doctrine says a dismissed depth card hands focus back to the control that
+     * opened it; without that, Escape drops a keyboard operator on <body> and they restart from
+     * the top of the page. The Accounts host keeps a ref, because there the gear and the card
+     * live in one component. Here they do not: opening a depth card returns early, Details
+     * unmounts, and the gear element is removed from the document — a ref would hold a node that
+     * is no longer anywhere.
+     *
+     * So the opener records WHAT it opened from, as a selector, and the restore runs after
+     * Details is back in the document. Same rule as Accounts, expressed the only way that
+     * survives an unmount.
+     */
+    const adminFocusSelector = useRef<string | null>(null);
+    const openAdmin = useCallback(
+        (kind: "responsibility_admin" | "discount_admin" | "payments_admin", selector: string) => {
+            adminFocusSelector.current = selector;
+            push({ kind });
+        },
+        [push],
+    );
+    useEffect(() => {
+        const selector = adminFocusSelector.current;
+        /* Only once the depth card is actually gone, and only for the card that set it. */
+        if (!selector || overlay === "responsibility_admin" || overlay === "discount_admin" || overlay === "payments_admin") {
+            return;
+        }
+        adminFocusSelector.current = null;
+        /* One frame, so the restored Details subtree exists to be queried. */
+        const frame = requestAnimationFrame(() => {
+            const gear = document.querySelector<HTMLElement>(selector);
+            gear?.focus();
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [overlay]);
+    const resetStack = useCallback(() => setStack([]), []);
+    /*
+     * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────────────────
+     *
+     * A charge and an adjustment are different financial objects and the operator's job is the
+     * same one: put a financial fact on this account. They had two unrelated entry points — one a
+     * command, one a link under the ledger — so raising a credit meant knowing which of the two
+     * Alloy files it under. The mode lives on the command, not on the surface.
+     *
+     * `adjustSource` binds a ledger row when the operator arrived from one, so a correction does
+     * not make them rediscover the transaction they were just looking at.
+     */
+    const [entryMode, setEntryMode] = useState<"charge" | "adjustment">("charge");
+
+    const expanded = overlay === "detail";
+
+    /*
+     * ── WHAT THE RELATIONSHIP ROW SAYS ───────────────────────────────────────────────────────
+     *
+     * One phrase, read from the authority that owns the grain and collapsed here for a surface
+     * that has one line. It is deliberately NOT built from `vm.payers`: that field means
+     * responsibility and names the parties on the ACCOUNT, so composing a child-grain answer out
+     * of it would assert one child's position for a sibling who may have their own.
+     *
+     * Responsibility no longer appears on this row at all — it has a first-class KPI at the top
+     * of the card, and its gear sits with the responsible-party filter. The per-child breakdown
+     * of both lives in the depth cards, which are the surfaces that can afford it.
+     */
+    const [adminDiscountSummary, setAdminDiscountSummary] = useState("No discount");
+    const [adminPositionsLoading, setAdminPositionsLoading] = useState(false);
+    /*
+     * THE POLICIES THEMSELVES, kept from the same read rather than fetched again for Add Charge —
+     * which needs their IDS to offer waiving one. Two fetches of one canonical answer would be two
+     * answers the moment configuration changed between them.
+     */
+    const [expectedPolicies, setExpectedPolicies] = useState<Array<{ id: string; label: string }>>([]);
+    /* What the ACCOUNT's standing arrangement says, so Add Charge can show what it would override. */
+    const [standingResponsibilitySummary, setStandingResponsibilitySummary] = useState("Not on record");
+    /*
+     * THE RAW BODY OF THE DISCOUNT READ, kept so the depth card can paint real content on its
+     * first frame. The compact row and the depth card ask the identical question of the identical
+     * route; making the card ask again meant the operator pressed a gear and waited out a second
+     * round trip for an answer this component was already holding.
+     */
+    const [discountPositionBody, setDiscountPositionBody] = useState<FamilyPosition | null>(null);
+    /* Kept so the discount row can be RE-LABELLED when the subjects land, without re-reading. */
+    const [responsibilityPositionBody, setResponsibilityPositionBody] = useState<Record<string, unknown> | null>(null);
+
+    /* Who may be named on THIS charge: allocation payers, plus the standing household shares. */
+    const chargeResponsibilityParties = useMemo(() => {
+        const out = new Map<string, string>();
+        for (const party of vm?.payers ?? []) {
+            if (party.name.trim().length > 0) out.set(party.personId, party.name);
+        }
+        const standing = (responsibilityPositionBody as {
+            household?: { shares?: Array<{ responsiblePartyId?: string | null; name?: string | null }> } | null;
+        } | null)?.household?.shares ?? [];
+        for (const share of standing) {
+            const id = (share.responsiblePartyId ?? "").trim();
+            const name = (share.name ?? "").trim();
+            if (id && name && !out.has(id)) out.set(id, name);
+        }
+        return [...out].map(([id, label]) => ({ id, label }));
+    }, [vm?.payers, responsibilityPositionBody]);
+
+    useEffect(() => {
+        /*
+         * ── ONLY WHEN THE SURFACE THAT USES IT IS IN PLAY ────────────────────────────────────
+         *
+         * The compact card does not render the relationship row, so reading each child's
+         * responsibility and discount position for it was two round trips whose answers nothing
+         * displayed — issued for every Financials card on the panel, including the ones an
+         * operator never opens.
+         *
+         * Caught by the root lifecycle's stale guarantee, which asserts the compact card issues
+         * NO request for the initial account: the reads made it fail, and the reason it failed was
+         * the reason they should not have been there.
+         */
+        /*
+         * W7-F011: Add Charge states the standing responsibility beside the subject, so the
+         * household arrangement is read when that command is open too — not only for Details.
+         */
+        const detailInPlay = overlay === "detail" || overlay === "add_charge" || detailsAreTheSurface;
+        if (!customerId || !detailInPlay) return;
+        let cancelled = false;
+        setAdminPositionsLoading(true);
+        /*
+         * CONCURRENT. Two independent questions of two independent authorities; asking them in
+         * series doubles the time the rows say "Reading…" and buys nothing.
+         */
+        void Promise.all([
+            fetch(`/api/admin/financials/responsibility-positions?customer_id=${encodeURIComponent(customerId)}`, {
+                credentials: "include",
+            })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+            fetch(`/api/admin/financials/family-discount-position?customer_id=${encodeURIComponent(customerId)}`, {
+                credentials: "include",
+            })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+        ]).then(([positionsBody, discountBody]) => {
+            if (cancelled) return;
+            setAdminPositionsLoading(false);
+
+            /*
+             * THE HOUSEHOLD'S ROSTER decides who counts as a child with no discount. It comes from
+             * the responsibility read because that is the reader that owns "which children does
+             * this household have" — the discount route only knows the children its policies
+             * happened to reach, and a child no policy mentions is exactly the one the collapse
+             * rule must not overlook.
+             */
+            const roster = ((positionsBody as { positions?: Array<{ customerMemberId?: string }> } | null)
+                ?.positions ?? [])
+                .map((position) => ({ customerMemberId: position.customerMemberId ?? "" }))
+                .filter((child) => child.customerMemberId.length > 0);
+            const discountSummary = summariseFamilyDiscount(discountBody, roster);
+            /*
+             * A FAILED READ IS NOT AN ANSWER. The row keeps its last truthful value rather than
+             * falling back to "No discount", which an operator would act on.
+             */
+            if (discountBody) setAdminDiscountSummary(discountSummary);
+
+            if (discountBody) {
+                setDiscountPositionBody(discountBody as FamilyPosition);
+                const policies = (discountBody as { policies?: Array<{ policyId?: string | null; label?: string | null }> })
+                    .policies ?? [];
+                setExpectedPolicies(
+                    policies
+                        .map((policy) => ({ id: (policy.policyId ?? "").trim(), label: (policy.label ?? "Discount").trim() }))
+                        .filter((policy) => policy.id.length > 0),
+                );
+            }
+            if (positionsBody) {
+                setResponsibilityPositionBody(positionsBody as Record<string, unknown>);
+                setStandingResponsibilitySummary(summariseHouseholdArrangement(positionsBody));
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+        /*
+         * ── THE RE-LABEL MUST NOT BE A RE-FETCH ──────────────────────────────────────────────
+         *
+         * `vm?.subjects` used to be in this list, so that a card resolving its subjects after this
+         * read would re-label the discount row rather than leave it naming ids. It re-labelled —
+         * and it also issued both requests a second time. Measured on deployed staging, opening
+         * Accounts fired `responsibility-positions` and `family-discount-position` at +1,414 ms and
+         * again at +2,436 ms, the second pair taking 2,099 ms and 2,255 ms.
+         *
+         * The naming is a rendering concern and belongs downstream of the answer, not to its
+         * acquisition. The bodies are kept and re-derived by the effect below when the subjects
+         * arrive, so the row still stops naming ids and the network is asked once.
+         */
+    }, [customerId, detailsAreTheSurface, overlay]);
+
+    /*
+     * ── RE-LABEL WHEN THE SUBJECTS ARRIVE, WITHOUT ASKING AGAIN ────────────────────────────────
+     *
+     * The discount route identifies a child by id; the card's subjects are what turn that into a
+     * name. When they resolve after the read, the row must stop naming ids — but that is a
+     * rendering concern over an answer already in hand, not a reason to issue the two requests a
+     * second time. This derives from the bodies the effect above kept.
+     */
+    useEffect(() => {
+        if (!discountPositionBody && !responsibilityPositionBody) return;
+        const roster = ((responsibilityPositionBody as { positions?: Array<{ customerMemberId?: string }> } | null)
+            ?.positions ?? [])
+            .map((position) => ({ customerMemberId: position.customerMemberId ?? "" }))
+            .filter((child) => child.customerMemberId.length > 0);
+        if (discountPositionBody) setAdminDiscountSummary(summariseFamilyDiscount(discountPositionBody, roster));
+        if (responsibilityPositionBody) {
+            setStandingResponsibilitySummary(summariseHouseholdArrangement(responsibilityPositionBody));
+        }
+    }, [discountPositionBody, responsibilityPositionBody, vm?.subjects]);
+
+    /*
+     * ── EVERY CHILD THE ACCOUNT MAY ARRANGE FOR ───────────────────────────────────────────────
+     *
+     * Read when the responsibility depth card opens, not on every card open: the ledger does not
+     * need it. This fetch used to live in Details, next to the editor it fed. The editor moved to
+     * depth and the fetch has to follow it — a panel handed no member options can only arrange at
+     * household grain, which silently retires child-scoped responsibility rather than declaring it.
+     */
+    const [responsibilityScopeMembers, setResponsibilityScopeMembers] = useState<
+        { customerMemberId: string; label: string }[]
+    >([]);
+    useEffect(() => {
+        if (overlay !== "responsibility_admin" || !customerId || responsibilityScopeMembers.length > 0) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/responsibility-scopes?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: { members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (!cancelled && body?.members) setResponsibilityScopeMembers(body.members);
+            })
+            .catch(() => {
+                /* The card still arranges the household; it simply cannot offer a child. */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [overlay, customerId, responsibilityScopeMembers.length]);
+
+    /*
+     * ── THE DETAILS VIEW BELONGS TO THE CARD, NOT TO THE DETAILS COMPONENT ────────────────────
+     *
+     * Lens, period disclosure and scroll position lived inside the surface that displays them, so
+     * they died with it every time a command took the screen. Held here, they outlive any number
+     * of command round trips, which is what "Details exactly as it was" has to mean.
+     */
+    const [detailLens, setDetailLens] = useState<AccountLens | null>(null);
+    const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
+    const detailScrollRef = useRef(0);
+    const [subjectFilter, setSubjectFilter] = useState<string>("all");
+    const [running, setRunning] = useState(false);
+    const [commandError, setCommandError] = useState<string | null>(null);
+
+
+    const [chargeAmount, setChargeAmount] = useState("");
+    const [chargeNote, setChargeNote] = useState("");
+    const [chargeEventDate, setChargeEventDate] = useState("");
+    /*
+     * ── THIS CHARGE'S AMOUNT, WHEN IT IS NOT THE CATALOG PRICE ────────────────────────────────
+     *
+     * Offered only to a user whose grants include the adjustment authority (shell grants decide what
+     * to OFFER; `charge.add` authorizes). On, `chargeAmount` holds the typed amount — so the preview,
+     * the per-child total and the discount lookup all price what will be charged — and the payload
+     * carries `amount_override` with the reason. Off, the Catalog price is the price.
+     */
+    const adminAuth = useAdminAuthOptional();
+    const canOverrideAmount = Boolean(adminAuth?.permissionKeys?.includes(CATALOG_AMOUNT_OVERRIDE_PERMISSION));
+    const [overrideOn, setOverrideOn] = useState(false);
+    const [overrideReason, setOverrideReason] = useState("");
+    const overrideCents = overrideOn ? centsFromAmountInput(chargeAmount) : null;
+    const overrideError = !overrideOn
+        ? null
+        : overrideCents == null
+            ? "Enter the amount in dollars and cents, like 30.00."
+            : overrideCents === 0
+                ? "A charge cannot be $0.00. To forgive this fee, add it and then waive or adjust it."
+                : overrideReason.trim().length < 3
+                    ? "Say why this charge differs from the Catalog price."
+                    : null;
+    /* What preview AND commit send — the same question, so the preview prices what is committed. */
+    const amountOverrideFields = (source: "catalog" | "template") =>
+        overrideOn && source === "catalog"
+            ? { amount_override: { amount_cents: overrideCents, reason: overrideReason.trim() } }
+            : {};
+    const resetAmountOverride = () => {
+        setOverrideOn(false);
+        setOverrideReason("");
+    };
+    const [pending, setPending] = useState<{
+        templateId: string;
+        /*
+         * WHICH AUTHORITY `templateId` NAMES. New charges are always `catalog`. `template` exists only
+         * while an existing template draft is being edited: it keeps that draft's template identity,
+         * and is sent as `template_id`, exactly as the draft was written.
+         */
+        source: "catalog" | "template";
+        label: string;
+        summary: string;
+        changes: string[];
+    } | null>(null);
+
+    /*
+     * ── W7-F016: THE DRAFT LIFECYCLE, FROM THE CHARGE'S OWN RECORD ─────────────────────────────
+     *
+     * `chargeDetailFacts` is what the open record reported about itself (status, template, amount,
+     * service date, subject) — the projection's answer, not the ledger row's. A draft offers Edit
+     * and Cancel draft; a posted charge offers only the correction path. `replacingDraftId` is set
+     * while Add Charge is open as an EDIT of a draft: on a successful save the new draft stands and
+     * the old one is withdrawn through `charge.cancel_draft`, retained as replaced.
+     */
+    const [chargeDetailFacts, setChargeDetailFacts] = useState<ChargeDetailFacts | null>(null);
+    const [replacingDraftId, setReplacingDraftId] = useState<string | null>(null);
+    const [cancelDraftConfirm, setCancelDraftConfirm] = useState(false);
+    const [draftActionError, setDraftActionError] = useState<string | null>(null);
+    const [chargeDetailRefresh, setChargeDetailRefresh] = useState(0);
+    /*
+     * The account's child filter as it stood before Edit draft scoped the form to the draft's
+     * subject. Measured on deployed 5d74f41e: after an edit the strip stayed scoped to that child
+     * (Current balance $18.00 instead of the household's $98.00). Restored when the edit ends.
+     */
+    const [filterBeforeEdit, setFilterBeforeEdit] = useState<string | null>(null);
+
+    /*
+     * THE CHARGE A PAYMENT IS BEING RECORDED AGAINST.
+     *
+     * `payment.record` records money AND applies it in one act, so it needs the obligation it
+     * settles. The amount starts at what that row still owes — the read model's own
+     * `outstandingCents`, not arithmetic done here — and the operator may reduce it for a partial
+     * payment. The service and the allocation bounds trigger remain the authority on what is
+     * acceptable; this only opens the conversation.
+     */
+    const [payTarget, setPayTarget] = useState<{
+        chargeId: string;
+        label: string;
+        outstandingCents: number;
+        /** The charge's own child, when it has one. A household charge has none. */
+        subjectMemberId: string | null;
+    } | null>(null);
+    const [payAmount, setPayAmount] = useState<string>("");
+    const [payMethod, setPayMethod] = useState<string>("cash");
+    /*
+     * WHOSE MONEY THIS IS — asked, never inferred.
+     *
+     * The record path wrote no payer at all, so every cash payment on every account was money from
+     * nobody. `payments.payer_entity_type` / `payer_entity_id` have existed since Thread 6 and
+     * `payment.record` already accepts them; the operator was simply never given a way to say. The
+     * empty string means "not stated", which stays a legitimate answer: a cheque arriving in the
+     * post with no name on it is better recorded as unattributed than as a guess.
+     */
+    const [payPayerPersonId, setPayPayerPersonId] = useState<string>("");
+    /*
+     * WHICH STORED METHOD, or none. "" means collect a NEW instrument through the provider's own
+     * fields — the only thing this surface could do before, which made an operator re-enter a card
+     * the account already had on file.
+     */
+    const [payStoredMethodId, setPayStoredMethodId] = useState<string>("");
+
+    /*
+     * W7-F045: "NOT KNOWN" IS AN ANSWER, NEVER A DEFAULT. With several possible payers the operator
+     * must say who paid — or say explicitly that it is not known, which records the money to the
+     * household. This sentinel is that explicit answer; "" is "not yet answered".
+     */
+    const HOUSEHOLD_PAYER = "__household";
+    const namedPayerId = payPayerPersonId && payPayerPersonId !== HOUSEHOLD_PAYER ? payPayerPersonId : "";
+    /* W7-F045: the check number or reference the tender carries — `payments.reference_number`. */
+    const [payReference, setPayReference] = useState<string>("");
+    /*
+     * W7-F047: THE METHODS THIS ORGANIZATION ACCEPTS, read when the Payment command opens. A method
+     * turned off in Organization → Financials → Payments is not offered; the record and collect
+     * actions refuse it too, so this is a courtesy, not the guard. Unread means everything offered.
+     */
+    const [disabledMethods, setDisabledMethods] = useState<ReadonlySet<string>>(new Set());
+    useEffect(() => {
+        if (surface?.kind !== "payment") return;
+        let live = true;
+        void fetch("/api/admin/financials/accepted-payment-methods", { credentials: "include", cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { methods?: Array<{ method: string; accepted: boolean }> } | null) => {
+                if (!live || !j?.methods) return;
+                setDisabledMethods(new Set(j.methods.filter((m) => !m.accepted).map((m) => m.method)));
+            })
+            .catch(() => {});
+        return () => {
+            live = false;
+        };
+    }, [surface?.kind]);
+    /* A method turned off while selected falls back to the first one still accepted. */
+    useEffect(() => {
+        if (!disabledMethods.has(payMethod)) return;
+        const next = ["cash", "check", "money_order", "manual", "other", "card", "ach"].find((m) => !disabledMethods.has(m));
+        if (next) {
+            setPayStoredMethodId("");
+            setPayMethod(next);
+        }
+    }, [disabledMethods, payMethod]);
+    /* W7-F045: the Payment command takes money; refunds are its secondary tab, chosen one at a time. */
+    const [paymentTab, setPaymentTab] = useState<"payment" | "refunds">("payment");
+    /*
+     * W7-F050: APPLICATION IS AUTOMATIC. Ordinary money settles the payer's eligible outstanding
+     * responsibility by the organization's rule (`planSettlement`); "charge" is the explicit
+     * exception — Change allocation — for a payer who directs money to one obligation.
+     */
+    const [payAllocation, setPayAllocation] = useState<"automatic" | "charge">("automatic");
+    const [chargeFilter, setChargeFilter] = useState<string>("");
+    const [payAmountTouched, setPayAmountTouched] = useState(false);
+    /* One command identity per opened form: two identical cash payments on one day are two payments. */
+    const [payIdemKey, setPayIdemKey] = useState<string>("");
+    const [settlePreview, setSettlePreview] = useState<{
+        summary: string;
+        appliedCents: number;
+        unappliedCents: number;
+        eligibleCents: number;
+        heldForPayerCents: number;
+        /* W7-F053: why this payer's amount can be lower than the account's past due. */
+        fundingPendingCents: number;
+        othersShareCents: number;
+        lines: Array<{ chargeId: string; label: string; dueOn: string; pastDue: boolean; cents: number }>;
+        unappliedNote: string | null;
+    } | null>(null);
+    const [settlePreviewState, setSettlePreviewState] = useState<"idle" | "loading" | "error">("idle");
+    const [refundPickId, setRefundPickId] = useState<string>("");
+
+    /*
+     * ── W7-F045: EVERY USABLE METHOD ON FILE, IN THE METHOD CHOOSER ITSELF ──────────────────────
+     *
+     * Stored cards and bank accounts used to appear only after the operator first chose the rail,
+     * which hid the family's own methods behind a second step. They are now options of the Method
+     * chooser, beside the tenders that need no instrument. Every usable method is listed regardless
+     * of the payer named; choosing one NAMES its owner as the payer, because a stored method belongs
+     * to one payer and `collectionAttempt` refuses a mismatch.
+     */
+    const storedMethodsOnFile = useMemo(
+        () =>
+            (vm?.paymentCapabilities?.methodsOnFile ?? []).filter(
+                (m) => m.usabilityState === "usable" && (m.rail === "card" || (m.rail === "ach" && vm?.achAvailable))
+                    && !disabledMethods.has(m.rail),
+            ),
+        [vm?.paymentCapabilities?.methodsOnFile, vm?.achAvailable, disabledMethods],
+    );
+    /* A stored method that no longer belongs to the payer now named is dropped, never sent. */
+    useEffect(() => {
+        if (!payStoredMethodId) return;
+        const m = storedMethodsOnFile.find((x) => x.id === payStoredMethodId);
+        if (!m) {
+            setPayStoredMethodId("");
+            return;
+        }
+        if (m.payerEntityId && namedPayerId && m.payerEntityId !== namedPayerId) setPayStoredMethodId("");
+        if (!m.payerEntityId && namedPayerId) setPayStoredMethodId("");
+    }, [payStoredMethodId, storedMethodsOnFile, namedPayerId]);
+    /*
+     * W7-F045: ONE ELIGIBLE PAYER IS THE ANSWER — default it, so the operator is not asked a
+     * question with one possible reply. Several stay unanswered until chosen.
+     */
+    const payerCandidateCount = vm?.payerCandidates?.length ?? 0;
+    const onlyPayerId = payerCandidateCount === 1 ? vm!.payerCandidates[0]!.personId : "";
+    useEffect(() => {
+        if (onlyPayerId && !payPayerPersonId) setPayPayerPersonId(onlyPayerId);
+    }, [onlyPayerId, payPayerPersonId]);
+    /*
+     * W7-F050: WHAT WILL BE APPLIED, CALCULATED AS THE OPERATOR TYPES. The action's own preview runs
+     * `planSettlement` — the authority Confirm reruns — so nothing here re-derives an allocation.
+     * Until the operator edits the amount, it is the payer's eligible amount (what they owe now).
+     */
+    const settleAccountId = vm?.account?.customerId ?? null;
+    useEffect(() => {
+        if (surface?.kind !== "payment" || payAllocation !== "automatic" || !settleAccountId) return;
+        if (payerCandidateCount > 0 && !payPayerPersonId) {
+            setSettlePreview(null);
+            return;
+        }
+        const typed = Math.round(Number(payAmount) * 100);
+        const amountCents = payAmountTouched ? typed : 1_000_000_000;
+        if (payAmountTouched && (!Number.isInteger(typed) || typed <= 0)) {
+            setSettlePreview(null);
+            return;
+        }
+        let live = true;
+        setSettlePreviewState("loading");
+        const timer = window.setTimeout(() => {
+            void fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "payment.record",
+                    entity_type: "customer",
+                    entity_id: settleAccountId,
+                    mode: "preview",
+                    payload: {
+                        customer_id: settleAccountId,
+                        amount_cents: amountCents,
+                        payment_method: payMethod,
+                        ...(namedPayerId ? { payer_entity_type: "person", payer_entity_id: namedPayerId } : {}),
+                    },
+                }),
+            })
+                .then((r) => r.json())
+                .then((json: { ok?: boolean; data?: { execution_result?: { preview?: { summary?: string; changes?: string[]; after?: Record<string, unknown> } } } }) => {
+                    if (!live) return;
+                    const pv = json?.data?.execution_result?.preview;
+                    const after = (pv?.after ?? null) as Record<string, unknown> | null;
+                    if (!json?.ok || !pv || !after) {
+                        setSettlePreviewState("error");
+                        return;
+                    }
+                    const eligible = Number(after.eligible_cents) || 0;
+                    const applied = Number(after.applied_cents) || 0;
+                    if (!payAmountTouched) setPayAmount(eligible > 0 ? (eligible / 100).toFixed(2) : "");
+                    setSettlePreview({
+                        summary: String(pv.summary ?? ""),
+                        appliedCents: applied,
+                        unappliedCents: payAmountTouched ? Number(after.unapplied_cents) || 0 : 0,
+                        eligibleCents: eligible,
+                        heldForPayerCents: Number(after.held_for_payer_cents) || 0,
+                        fundingPendingCents: Number(after.funding_pending_cents) || 0,
+                        othersShareCents: Number(after.others_share_cents) || 0,
+                        lines: ((after.lines ?? []) as Array<Record<string, unknown>>).map((l) => ({
+                            chargeId: String(l.charge_id),
+                            label: String(l.label),
+                            dueOn: String(l.due_on),
+                            pastDue: Boolean(l.past_due),
+                            cents: Number(l.cents) || 0,
+                        })),
+                        unappliedNote: (pv.changes ?? []).find((c) => c.startsWith("Stays unapplied")) ?? null,
+                    });
+                    setSettlePreviewState("idle");
+                })
+                .catch(() => live && setSettlePreviewState("error"));
+        }, 350);
+        return () => {
+            live = false;
+            window.clearTimeout(timer);
+        };
+    }, [surface?.kind, payAllocation, settleAccountId, payAmount, payAmountTouched, payPayerPersonId, namedPayerId, payMethod, payerCandidateCount]);
+    /**
+     * THE REFUND THE OPERATOR IS COMPOSING.
+     *
+     * One canonical capability with an amount intent, not two actions: full and partial both commit
+     * `payment.refund`, and the amount is the only thing that differs. It opens at the full
+     * remaining refundable figure so the common case is one click, and the operator may reduce it.
+     */
+    const [refundTarget, setRefundTarget] = useState<{
+        paymentId: string;
+        label: string;
+        receivedCents: number;
+        refundedCents: number;
+        refundableCents: number;
+        currencyCode: string;
+        /*
+         * The held lot being refunded, when the refund was raised from one.
+         *
+         * It narrows the CEILING as well as naming the lot: the refundable figure above is the
+         * receipt's, and a $500 refundable receipt holding a $175 lot may not refund $500 of that
+         * lot. The action re-derives both bounds and refuses a non-refundable lot before any
+         * provider call; this only avoids asking for something that cannot be granted.
+         */
+        hold?: { holdId: string; remainingCents: number };
+    } | null>(null);
+    const [refundAmount, setRefundAmount] = useState<string>("");
+    const [refundError, setRefundError] = useState<string | null>(null);
+    /*
+     * CARD IS COLLECTED, NOT RECORDED — and that distinction is the whole of this state.
+     *
+     * `payment.record` writes down money that already arrived. Choosing Card used to call it, which
+     * recorded a payment nobody had collected: the balance fell and no card was ever charged. Card
+     * now runs `payment.collect_card`, and everything below tracks the interval between asking and
+     * being paid, which `payment.record` has never had because cash has no such interval.
+     */
+    const [cardStage, setCardStage] = useState<
+        "idle" | "blocked" | "entry" | "finalizing" | "recognized" | "failed"
+    >("idle");
+    const [cardMessage, setCardMessage] = useState<string | null>(null);
+    const [cardCollection, setCardCollection] = useState<{
+        clientSecret: string;
+        connectedAccount: string;
+        attemptId: string;
+        amountCents: number;
+    } | null>(null);
+
+    /*
+     * The card asks for the WHOLE account and filters in the client.
+     *
+     * Scoping the request to one child would make the subject filter a network round trip per
+     * selection and — worse — would make "All" unanswerable without a second shape of request. The
+     * account is small (one household's charges), the filter is presentation, and the totals below
+     * are still the server's.
+     */
+    /*
+     * THE ANSWER TO THE QUESTION STILL BEING ASKED.
+     *
+     * Attendance and Health each bind a returning response to the child it was requested for, and
+     * this card had no equivalent: it applied whichever response arrived LAST BY WALL CLOCK. Clearing
+     * `vm` on subject change stops the previous balance from lingering, but it cannot stop a slow
+     * earlier response from landing on top of a newer one afterwards.
+     *
+     * Reproduced in the browser by holding one in-flight request, letting a later one resolve, then
+     * releasing the first: the stale body replaced the current one.
+     *
+     * A SEQUENCE, not an account comparison. The sibling cards compare a participant id because their
+     * responses are scoped to one child. This account is the HOUSEHOLD's — the same `customer_id`
+     * legitimately serves several queue rows, so an account check would admit exactly the stale
+     * overwrite reproduced above. Comparing the request's own ordinal answers the real question —
+     * "is this still the request whose answer we are waiting for" — and covers the cross-household
+     * case as a consequence rather than as a second rule.
+     *
+     * Local to the card: a ref and a comparison. No shared coordinator, no cancellation plumbing, and
+     * a superseded response is simply dropped rather than cancelled, so nothing else changes.
+     */
+    const requestSeq = useRef(0);
+    /*
+     * ── THE REQUEST'S OWN IDENTITY, WHICH IS NOT THE SAME AS ITS INPUTS ──────────────────────────
+     *
+     * Measured on Firefly: this card issued `financials/card?customer_id=50b19065…` TWICE per Work
+     * Unit entry, and they were the two slowest requests in the sample. One mounted instance, no
+     * remount — proven with a mount counter and a per-request correlation header, because the DOM
+     * card-role counts that suggested a second instance were three roles across six cards.
+     *
+     * The cause is that `load` depended on `[customerId, scopedMemberId]` while the request it
+     * builds depends on the FIRST of them that is present. The participant resolves after the
+     * household, so `scopedMemberId` went `null → a227e460…`, `load`'s identity changed, the mount
+     * effect re-ran — and produced a byte-identical request, because `customerId` had won the
+     * ternary both times.
+     *
+     * Keying on the composed query is therefore not a cache and not a dedupe layer: it is this
+     * effect depending on what it actually sends. An input change that cannot change the request no
+     * longer re-issues it, and a change that CAN (the member-scoped branch, when no household is
+     * present) still does.
+     */
+    const requestQuery = useMemo(() => {
+        if (customerId) return `customer_id=${encodeURIComponent(customerId)}`;
+        if (scopedMemberId) return `customer_member_id=${encodeURIComponent(scopedMemberId)}`;
+        return null;
+    }, [customerId, scopedMemberId]);
+
+    const load = useCallback(async (): Promise<void> => {
+        if (!requestQuery) {
+            requestSeq.current += 1;
+            setVm(null);
+            return;
+        }
+        const answeringKey = customerId ?? scopedMemberId ?? null;
+        /*
+         * ── ONE OPERATION, ONE REQUEST, HOWEVER MANY CALLERS ASK FOR IT ───────────────────────
+         *
+         * MEASURED at the fetch boundary on deployed staging, not inferred: opening Details issued
+         * two identical `financials/card` requests 48ms apart, for the same account, overlapping —
+         * the second reported `identicalInFlight: 1`. Their stacks name two different legitimate
+         * callers of this same `load()`:
+         *
+         *   #1  requestIdleCallback.timeout   the prewarm, which predicted the operator's ask
+         *   #2  the React commit path         the same effect's "asked for: now" branch, once the
+         *                                     overlay opened
+         *
+         * Neither is wrong to ask. The prewarm exists so the operator never waits for what was
+         * predictable, and the click must not depend on a prediction having already landed. What
+         * was wrong is that asking twice ISSUED twice: two ~2.4s server reads racing each other,
+         * each slower for the contention, and the ledger waiting on the later one.
+         *
+         * So the second caller CONSUMES THE FIRST'S RESULT. This is request-scoped coalescing, not
+         * a cache: one entry, keyed by the composed query, cleared the moment it settles. It holds
+         * no financial truth between operations, survives no navigation, and answers no question a
+         * second way — the single response still flows through the same `setVm` and the same
+         * `requestSeq` supersession that keeps one family's balance off another's screen.
+         */
+        /*
+         * The coalescer now lives in `financialsCardRead`, MODULE-SCOPED rather than on this
+         * instance's ref. In the Accounts workspace the card is keyed by account, so a switch
+         * mounts a new instance with a new ref — there was no shared ownership for a prewarm to
+         * hand its in-flight read to, which is why that host never received the read-ahead its
+         * Details guard assumes. Same mechanism, same one-request guarantee, wider scope.
+         */
+        const seq = (requestSeq.current += 1);
+        const current = () => seq === requestSeq.current;
+        /*
+         * WHICH ACCOUNT A FULL READ IS CURRENTLY IN FLIGHT FOR.
+         *
+         * `deepLoadedForRef` records a read that has LANDED, which is one instant too late to stop
+         * the duplicate: measured on deployed staging, the settlement projection almost always
+         * arrives while the read is still in the air, so the guard below found no completed read
+         * and cleared everything — and the second request went out. Recording the read at its
+         * START closes that window. Cleared in `finally`, so a superseded or failed read leaves
+         * nothing latched.
+         */
+        deepReadInFlightForRef.current = answeringKey;
+        setLoading(true);
+        const query = requestQuery;
+            try {
+                /* Starts the read, or joins the one a prewarm already has in the air for this account. */
+                const fresh = await readFinancialsCardVm(query);
+                if (!current()) return;
+                // The endpoint's answer is the FULL model; record which account now has it.
+                if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
+                setVm(fresh);
+            } catch {
+                if (!current()) return;
+                setVm(null);
+            } finally {
+                // A superseded request must not clear the spinner belonging to the one that replaced it.
+                if (current()) {
+                    /*
+                     * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before
+                     * the spinner clears, because the frame after `setLoading(false)` is exactly the
+                     * one that decides between "still reading" and "no account".
+                     */
+                    answeredKeyRef.current = answeringKey;
+                    deepReadInFlightForRef.current = null;
+                    setLoading(false);
+                }
+            }
+    }, [customerId, requestQuery, scopedMemberId]);
+
+    /*
+     * ── MOVING MONEY BETWEEN OBLIGATIONS ─────────────────────────────────────────────────────────
+     *
+     * A Move is deliberately TWO governed actions: reverse the application, then apply the freed
+     * money to the chosen charge. It is not atomic and is not pretended to be — if the second step
+     * refuses, the first stays committed and the money is genuinely unapplied, which is a true state
+     * the operator can act on. `moveNotice` exists to say exactly that rather than "Move failed",
+     * which would imply the original application survived.
+     */
+    type MoveTarget = { chargeId: string; label: string; serviceDate: string | null; outstandingCents: number };
+    const [movePending, setMovePending] = useState<{ paymentId: string; allocationId: string } | null>(null);
+    /*
+     * APPLYING HELD MONEY REUSES THIS PANEL, because it is the same act.
+     *
+     * `deposit.apply` was never minted, on the stated grounds that applying held money is an
+     * ORDINARY allocation and a second authority over money that already has one would have to be
+     * kept in agreement forever. So the hold is carried as an INPUT to applying: same chooser, same
+     * preview, same confirm, and the panel only changes what it calls the act.
+     */
+    const [applyPending, setApplyPending] = useState<
+        { paymentId: string; hold?: { holdId: string; remainingCents: number } } | null
+    >(null);
+    /*
+     * RELEASING IS ITS OWN PANEL AND NOT A MODE OF THE ONE ABOVE. It names no charge — there is
+     * nothing to choose — and its consequence is the opposite: the money becomes spendable rather
+     * than spent. One panel doing both would need the chooser hidden and the copy swapped, which is
+     * how "Apply" and "Move" already share a panel and why that one needs a comment to be read.
+     */
+    const [releasePending, setReleasePending] = useState<
+        { holdId: string; paymentId: string; remainingCents: number } | null
+    >(null);
+    const [releaseReason, setReleaseReason] = useState("");
+    const [releaseError, setReleaseError] = useState<string | null>(null);
+    /*
+     * ── HOLDING IS AN ACT ON A RECEIPT, so it is composed from the receipt ───────────────────────
+     *
+     * `deposit.hold` had been registered and executable since W4 with NO mounted caller, which made
+     * the whole held-money lifecycle unreachable in production: nothing could create a hold, so the
+     * position, its provenance and its two acts could never appear on a real account.
+     *
+     * It belongs on the receipt and not on the account: holding restricts part of ONE payment, the
+     * invariant is bounded by THAT payment's unapplied remainder, and the operator's question is
+     * "how much of this money is a deposit" — which is a question about the receipt in front of them.
+     *
+     * The terms are chosen at creation and never again. That is the whole reason the hold stores a
+     * snapshot rather than a policy pointer, so the panel asks plainly and does not default silently.
+     */
+    const [holdPending, setHoldPending] = useState<
+        { paymentId: string; label: string; holdableCents: number; currencyCode: string } | null
+    >(null);
+    const [holdAmount, setHoldAmount] = useState("");
+    const [holdReason, setHoldReason] = useState("");
+    /*
+     * NO DEFAULT, DELIBERATELY.
+     *
+     * A checkbox stood here and the operator-vocabulary suite refused it: a native control must not
+     * express a financial decision on this surface. It was right for a second reason. "Refundable"
+     * is a promise about a family's money, snapshot at creation and never revisited — so an
+     * unchecked box quietly deciding it, or a pre-selected value the operator never read, is the one
+     * outcome this field must not allow. Empty until chosen, and Hold funds stays disabled.
+     */
+    const [holdRefundable, setHoldRefundable] = useState<"" | "yes" | "no">("");
+    const [holdError, setHoldError] = useState<string | null>(null);
+    const [moveTargets, setMoveTargets] = useState<MoveTarget[]>([]);
+    const [moveTargetId, setMoveTargetId] = useState("");
+    const [moveReason, setMoveReason] = useState("");
+
+    /*
+     * MANUAL ADJUSTMENTS.
+     *
+     * `billing.adjust_account` is scoped to an ENROLMENT AGREEMENT, not to the account, so the panel
+     * carries the agreement it is about rather than letting the operator believe this is
+     * account-wide. `adjustAgreementId` is that scope.
+     */
+    const [adjustOpen, setAdjustOpen] = useState(false);
+    const [adjustAgreementId, setAdjustAgreementId] = useState("");
+    /* WHICH OBLIGATION this reduces. A credit that names nothing reduces nothing — see below. */
+    const [adjustSourceChargeId, setAdjustSourceChargeId] = useState("");
+    /*
+     * ── ONE DECISION: WHICH WAY DOES THE FAMILY'S BALANCE MOVE ──────────────────────────────
+     *
+     * This was two controls — a "Type" of `credit` or `adjustment`, and a direction shown only for
+     * `adjustment` — encoding one decision twice. They disagreed about which half won: the sign
+     * was `category === "adjustment" && direction === "increase"`, so choosing `credit` and then
+     * `increase` produced a REDUCTION and discarded the direction the operator had just stated.
+     *
+     * The category is now derived by the canonical conversion, not asked for. It was never the
+     * operator's question — a reduction IS a credit — and asking it taught them the storage
+     * taxonomy before they could give money back.
+     */
+    const [adjustDirection, setAdjustDirection] = useState<AdjustmentDirection>("reduce");
+    /*
+     * W7-F036: WHAT THE OPERATOR IS DOING, not only which way the balance moves. "correction" lowers
+     * or raises the chosen charge's own amount (accounted under that charge's account); "credit" is a
+     * goodwill credit. Empty is an account-level increase, which is neither.
+     */
+    const [adjustPurpose, setAdjustPurpose] = useState<"correction" | "credit" | "">("credit");
+    const [adjustAmount, setAdjustAmount] = useState("");
+    const [adjustReason, setAdjustReason] = useState("");
+    /*
+     * Seeded empty and set to the organisation's business date by whichever opener runs — see
+     * `openAddAdjustment` and `openAdjustForCharge`. It cannot be seeded here because the VM that
+     * carries the date has not loaded when this state is created, and seeding it from the browser
+     * would be the UTC default this slice removes.
+     */
+    const [adjustEffectiveDate, setAdjustEffectiveDate] = useState("");
+    const [adjustPreview, setAdjustPreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [adjustError, setAdjustError] = useState<string | null>(null);
+    const [reversePending, setReversePending] = useState<{ applicationId: string } | null>(null);
+    const [reverseReason, setReverseReason] = useState("");
+    const [reversePreview, setReversePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [reverseError, setReverseError] = useState<string | null>(null);
+    const [adjustNotice, setAdjustNotice] = useState<string | null>(null);
+
+    /* Reversing a posted charge is a correction to money already told to a family: it previews first. */
+    const [reverseCharge, setReverseCharge] = useState<{ chargeId: string; label: string } | null>(null);
+    const [reverseChargePreview, setReverseChargePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [responsibilityPreview, setResponsibilityPreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [responsibilityError, setResponsibilityError] = useState<string | null>(null);
+    /* Reallocation moves what one person owes another, so the authority demands a stated reason. */
+    const [reallocationReason, setReallocationReason] = useState("");
+    const [reverseChargeError, setReverseChargeError] = useState<string | null>(null);
+
+    const [movePreview, setMovePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [moveError, setMoveError] = useState<string | null>(null);
+    const [moveNotice, setMoveNotice] = useState<string | null>(null);
+    /*
+     * A TRUE OUTCOME THAT IS NOT A FAILURE. `commandError` is for refusals; this is for a command
+     * that ran, was correct, and did nothing — the idempotent duplicate charge. Reporting that as
+     * an error would be as untrue as reporting it as a new write.
+     */
+    const [commandNotice, setCommandNotice] = useState<string | null>(null);
+
+    const closeMovePanels = useCallback(() => {
+        setMovePending(null);
+        setApplyPending(null);
+        setMoveTargets([]);
+        setMoveTargetId("");
+        setMoveReason("");
+        setMovePreview(null);
+        setMoveError(null);
+        setReleasePending(null);
+        setReleaseReason("");
+        setReleaseError(null);
+        setHoldPending(null);
+        setHoldAmount("");
+        setHoldReason("");
+        setHoldRefundable("");
+        setHoldError(null);
+    }, []);
+
+    /** Targets come from the server resolver; the panel never assembles charges itself. */
+    const loadMoveTargets = useCallback(async (paymentId: string, excludeChargeId?: string | null) => {
+        setMoveTargets([]);
+        try {
+            const q = new URLSearchParams({ payment_id: paymentId });
+            if (excludeChargeId) q.append("exclude_charge_id", excludeChargeId);
+            const res = await fetch(`/api/admin/financials/eligible-target-charges?${q.toString()}`, {
+                credentials: "include",
+            });
+            const json = (await res.json()) as { ok?: boolean; charges?: MoveTarget[]; error?: string };
+            if (!json?.ok) {
+                setMoveError(json?.error || "Charges to apply this payment to could not be loaded.");
+                return;
+            }
+            setMoveTargets(json.charges ?? []);
+        } catch {
+            setMoveError("Charges to apply this payment to could not be loaded.");
+        }
+    }, []);
+
+    const openMovePayment = useCallback(
+        (args: { paymentId: string; allocationId: string }) => {
+            closeMovePanels();
+            setMovePending(args);
+            push({ kind: "payment_application" });
+            const source = vm?.payments
+                .find((p) => p.paymentId === args.paymentId)
+                ?.applications.find((a) => a.allocationId === args.allocationId);
+            void loadMoveTargets(args.paymentId, source?.chargeId ?? null);
+        },
+        [closeMovePanels, loadMoveTargets, push, vm],
+    );
+
+    const openApplyPayment = useCallback(
+        (args: { paymentId: string }) => {
+            closeMovePanels();
+            setApplyPending(args);
+            push({ kind: "payment_application" });
+            void loadMoveTargets(args.paymentId, null);
+        },
+        [closeMovePanels, loadMoveTargets, push],
+    );
+
+    const actionEntity = useCallback(
+        () => ({
+            entity_type: context.subject?.type ?? "opportunity",
+            entity_id: context.subject?.id ?? "",
+        }),
+        [context.subject?.id, context.subject?.type],
+    );
+
+    /* The preview is the ACTION's. Nothing about the consequence is reconstructed here. */
+    const previewMove = useCallback(async () => {
+        if (!movePending || running) return;
+        setRunning(true);
+        setMoveError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "payment.reverse_application",
+                    ...actionEntity(),
+                    mode: "preview",
+                    payload: { allocation_id: movePending.allocationId, reason: moveReason },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setMoveError(err || "This move could not be previewed.");
+                return;
+            }
+            setMovePreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch {
+            setMoveError("The preview could not be requested.");
+        } finally {
+            setRunning(false);
+        }
+    }, [actionEntity, movePending, moveReason, running]);
+
+    /*
+     * What `/api/admin/actions/execute` answers. `detail` is the registered action's own result
+     * payload, so the fields below are only the ones this card reads — not a claim about its shape.
+     */
+    /*
+     * What `/api/admin/actions/execute` answers. The envelope's interior is read through
+     * `executeDetailFrom` rather than typed here, because the depth differs by route and encoding
+     * one guess in a type is how a surface ends up reading past the answer it was given.
+     */
+    type ActionExecuteAnswer = {
+        ok?: boolean;
+        error?: string | { message?: string };
+        data?: { execution_result?: unknown };
+    };
+
+    const runAction = useCallback(
+        async (actionKey: string, payload: Record<string, unknown>) => {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: actionKey,
+                    ...actionEntity(),
+                    mode: "execute",
+                    confirmation: { confirmed: true },
+                    payload,
+                }),
+            });
+            /*
+             * ── THE RESULT IS RETURNED, NOT DISCARDED ──────────────────────────────────────────
+             *
+             * This read the body only to decide whether to throw, and dropped everything else. So
+             * a caller could not distinguish the two TRUE successes an idempotent command has:
+             * "I wrote this" and "this was already recorded and I wrote nothing". §18 requires the
+             * surface to be able to say which, and the service has always answered it — the answer
+             * simply had nowhere to go.
+             *
+             * Callers that do not care keep ignoring it; a refusal still throws exactly as before.
+             */
+            const json = (await res.json()) as ActionExecuteAnswer;
+            if (!json?.ok) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                throw new Error(err || "The action was refused.");
+            }
+            return json;
+        },
+        [actionEntity],
+    );
+
+    const confirmMove = useCallback(async () => {
+        if (!movePending || !moveTargetId || running) return;
+        setRunning(true);
+        setMoveError(null);
+        setMoveNotice(null);
+        const target = moveTargets.find((t) => t.chargeId === moveTargetId);
+        try {
+            await runAction("payment.reverse_application", {
+                allocation_id: movePending.allocationId,
+                reason: moveReason,
+            });
+        } catch (e) {
+            // Nothing has changed yet; the original application is untouched.
+            setMoveError(e instanceof Error ? e.message : String(e));
+            setRunning(false);
+            return;
+        }
+        /*
+         * THE REVERSAL IS COMMITTED FROM HERE ON. If the apply refuses, the money is unapplied and
+         * stays that way; saying "Move failed" would tell the operator the opposite of what is true.
+         */
+        try {
+            await runAction("payment.apply_to_charge", {
+                payment_id: movePending.paymentId,
+                charge_id: moveTargetId,
+            });
+            setMoveNotice(
+                `Moved to ${target?.label ?? "the selected charge"}. The payment itself is unchanged.`,
+            );
+            closeMovePanels();
+        } catch (e) {
+            setMovePending(null);
+            setMovePreview(null);
+            setMoveNotice(
+                "The original application was reversed, so that money is now unapplied and can be applied to another charge. "
+                + `It was not applied to ${target?.label ?? "the selected charge"}: `
+                + (e instanceof Error ? e.message : String(e)),
+            );
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeMovePanels, load, movePending, moveReason, moveTargetId, moveTargets, runAction, running]);
+
+    const confirmApply = useCallback(async () => {
+        if (!applyPending || !moveTargetId || running) return;
+        setRunning(true);
+        setMoveError(null);
+        setMoveNotice(null);
+        const target = moveTargets.find((t) => t.chargeId === moveTargetId);
+        try {
+            /*
+             * A HELD LOT IS BOUNDED BY TWO THINGS, and the smaller wins.
+             *
+             * The action REQUIRES an amount when a hold is named, because its own default is drawn
+             * from the whole receipt — which would apply more of the payment than the hold covers.
+             * The charge's outstanding is the second bound: without it, applying a $500 deposit to a
+             * $200 charge would ask for an over-payment the engine refuses, and the operator would
+             * read a refusal instead of a $200 application.
+             *
+             * Both figures are re-derived server-side; this only avoids asking for the impossible.
+             */
+            const heldAmountCents = applyPending.hold
+                ? Math.min(applyPending.hold.remainingCents, target?.outstandingCents ?? applyPending.hold.remainingCents)
+                : null;
+            await runAction("payment.apply_to_charge", {
+                payment_id: applyPending.paymentId,
+                charge_id: moveTargetId,
+                ...(applyPending.hold
+                    ? { hold_id: applyPending.hold.holdId, amount_cents: heldAmountCents }
+                    : {}),
+            });
+            setMoveNotice(
+                applyPending.hold
+                    ? `Applied the held deposit to ${target?.label ?? "the selected charge"}. It is no longer held.`
+                    : `Applied to ${target?.label ?? "the selected charge"}.`,
+            );
+            closeMovePanels();
+        } catch (e) {
+            setMoveError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [applyPending, closeMovePanels, load, moveTargetId, moveTargets, runAction, running]);
+
+    /*
+     * ── THE ONE PLACE A SIGN IS DECIDED ──────────────────────────────────────────────────────────
+     *
+     * The canonical amount is SIGNED: negative lowers what the family owes. Operators do not think
+     * in signed cents, and asking them to would make a typo into a charge. So the panel takes an
+     * unsigned amount plus an intent, and the conversion happens here, once. Nothing else in this
+     * component multiplies by −1, and nothing infers the category from the sign.
+     *
+     * A CREDIT only ever lowers an obligation — that is what the word means — so it has no direction
+     * control and cannot be used to raise one. An ADJUSTMENT is the category that goes either way,
+     * and it must say which out loud.
+     */
+    /*
+     * THE ABSOLUTE AMOUNT, PARSED BY THE CANONICAL PARSER. It never gains a sign here: the
+     * direction and the magnitude travel to the action as what the operator stated, and the one
+     * canonical conversion turns them into signed cents server-side. A component that signed them
+     * would be a second place for the convention to be read backwards.
+     */
+    const adjustMagnitudeCents = useCallback(
+        (): number | null => parseAdjustmentMagnitudeCents(adjustAmount),
+        [adjustAmount],
+    );
+
+    const closeAdjustPanels = useCallback(() => {
+        setAdjustOpen(false);
+        setReversePending(null);
+        setAdjustPreview(null);
+        setReversePreview(null);
+        setAdjustError(null);
+        setReverseError(null);
+        setAdjustAmount("");
+        setAdjustReason("");
+        setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
+        setReverseReason("");
+    }, []);
+
+    /** The agreements this account's money can be adjusted against, named for the operator. */
+    const adjustableSubjects = useMemo(
+        () => (vm?.subjects ?? []).filter((sub) => sub.agreementId),
+        [vm],
+    );
+
+    /*
+     * THE GRAIN RESPONSIBILITY IS ASKED AT, derived from the enrolment already chosen rather than
+     * held as a second piece of state that could fall out of step with it.
+     *
+     * `readAccountArrangement` answers a DIFFERENT question for the household and for a child —
+     * most specific wins — so a preview that omits the child tells an operator correcting one
+     * child's charge that the household bears it while a child-scoped arrangement governs.
+     */
+    /*
+     * ── THE ORGANISATION'S TODAY, RESOLVED SERVER-SIDE ────────────────────────────────────────
+     *
+     * Every economic date this card defaults means "today for the organisation whose money this
+     * is". It cannot be computed here: `new Date().toISOString().slice(0, 10)` is the UTC day,
+     * which rolls over during the local working afternoon for any organisation west of UTC, and
+     * the browser's own zone is the OPERATOR's — an operator may sit in a different zone from the
+     * site whose money they are recording.
+     *
+     * So the value comes from the VM, where the server resolved it through the same operational
+     * timezone authority commercial close uses, and it is the same day the server reconciled this
+     * account against. No timezone arithmetic is done in React.
+     *
+     * The UTC day remains only as a last resort for a VM that has not loaded, which degrades to
+     * exactly the behaviour this card had before rather than to a blank date.
+     */
+    const businessToday = vm?.businessDateYmd || new Date().toISOString().slice(0, 10);
+
+    const adjustMemberId = useMemo(
+        () => adjustableSubjects.find((sub) => sub.agreementId === adjustAgreementId)?.customerMemberId ?? "",
+        [adjustAgreementId, adjustableSubjects],
+    );
+
+    /**
+     * The obligations this reduction could be against.
+     *
+     * A reduction attaches to what it reduces through `source_charge_id`, and every authority that
+     * asks what a charge still owes nets it that way. A credit written without one appears on the
+     * ledger's signed total — so the family looks like they owe less — while the obligation it was
+     * meant to reduce is untouched and remains fully collectible. Two readings of the same
+     * household, one of them wrong, which is what the representative-household oracle found.
+     *
+     * Only the selected child's own posted obligations are offered: a reduction is netted against an
+     * enrolment-backed charge, and a correction or a credit is not an obligation to reduce.
+     */
+    const adjustableCharges = useMemo(() => {
+        const member = adjustableSubjects.find((sub) => sub.agreementId === adjustAgreementId)?.customerMemberId;
+
+        /*
+         * HOW MUCH OF EACH OBLIGATION IS STILL THERE TO REDUCE.
+         *
+         * A reduction may not take more than the charge holds: the service refuses it, because an
+         * obligation netted below zero is one `resolveAllocatableNet` will not read. Offering a
+         * charge with nothing left would be offering a choice that can only be refused, so what is
+         * already reduced is subtracted here — from the reductions the account read already carries,
+         * not from a second sum of our own.
+         */
+        const reducedBySource = new Map<string, number>();
+        for (const r of vm?.reductions ?? []) {
+            if (!r.sourceChargeId) continue;
+            reducedBySource.set(r.sourceChargeId, (reducedBySource.get(r.sourceChargeId) ?? 0) + r.amountCents);
+        }
+
+        return (vm?.rows ?? []).filter(
+            (r) =>
+                r.status === "posted"
+                && r.amountCents > 0
+                && !r.correctsChargeId
+                && !r.reversedByChargeId
+                && r.subjectMemberId != null
+                && r.subjectMemberId === member
+                && r.amountCents + (reducedBySource.get(r.chargeId) ?? 0) > 0,
+        );
+    }, [adjustAgreementId, adjustableSubjects, vm]);
+
+    const openAddAdjustment = useCallback(() => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setAdjustNotice(null);
+        /*
+         * Default to the enrolment already in view. When the card is narrowed to one child that is
+         * unambiguous; with the account as a whole it is only a default, and the panel still shows
+         * which agreement is about to be adjusted.
+         */
+        const scoped = adjustableSubjects.find((sub) => sub.customerMemberId === subjectFilter);
+        setAdjustAgreementId(scoped?.agreementId ?? adjustableSubjects[0]?.agreementId ?? "");
+        setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
+        /*
+         * THE ORGANISATION'S BUSINESS DATE, shown and editable — never the source charge's date and
+         * never the UTC day. Set on open rather than seeded in state, because the VM that carries it
+         * is loaded by the time an operator can reach this command.
+         */
+        setAdjustEffectiveDate(businessToday);
+        setAdjustOpen(true);
+    }, [adjustableSubjects, businessToday, closeAdjustPanels, closeMovePanels, subjectFilter]);
+
+    /**
+     * ── ADJUST, FROM THE ROW IT IS ABOUT ────────────────────────────────────────────────────────
+     *
+     * The operator is already looking at the transaction. Sending them to Add, then to the
+     * Adjustment mode, then to an enrolment select, then to a charge select to find the SAME row
+     * again is asking them to re-enter a context they never left — and every one of those steps is
+     * a chance to bind the reduction to the wrong obligation, which is the failure that makes a
+     * household read as owing less while the obligation stays fully collectible.
+     *
+     * So this is not a second adjustment surface and not a second writer. It opens the one unified
+     * command in Adjustment mode with the source transaction ALREADY BOUND; `billing.adjust_account`
+     * remains the only thing that writes. The enrolment is derived from the charge rather than
+     * defaulted, because a charge knows which child it belongs to and the operator should not have
+     * to tell us something the row already says.
+     */
+    const openAdjustForCharge = useCallback((args: { chargeId: string }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setAdjustNotice(null);
+        const row = (vm?.rows ?? []).find((r) => r.chargeId === args.chargeId);
+        const agreementId =
+            adjustableSubjects.find((sub) => sub.customerMemberId === row?.subjectMemberId)?.agreementId
+            ?? adjustableSubjects[0]?.agreementId
+            ?? "";
+        setAdjustAgreementId(agreementId);
+        setAdjustSourceChargeId(args.chargeId);
+        /* Correcting a named charge is the ordinary meaning of "adjust this charge". */
+        setAdjustPurpose("correction");
+        /*
+         * STILL TODAY, even though a source charge is bound. §7 of the Adjustment doctrine: a
+         * correction must not silently inherit the source's historical date — that is how a
+         * correction lands in a period it was not decided in, and how it reaches a closed one.
+         */
+        setAdjustEffectiveDate(businessToday);
+        setAdjustOpen(true);
+        setEntryMode("adjustment");
+        push({ kind: "adjust_charge", chargeId: args.chargeId });
+    }, [adjustableSubjects, businessToday, closeAdjustPanels, closeMovePanels, vm]);
+
+    const openReverseAdjustment = useCallback((args: { applicationId: string }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setAdjustNotice(null);
+        setReversePending(args);
+        push({ kind: "reverse_adjustment" });
+    }, [closeAdjustPanels, closeMovePanels, push]);
+
+    /*
+     * ── THE THREE ACTS ON HELD MONEY ─────────────────────────────────────────────────────────────
+     *
+     * Each opens the surface that OWNS the act rather than a panel of its own invention:
+     *
+     *   apply    the existing apply panel, with the hold carried — it is an ordinary allocation
+     *   release  its own panel, because there is nothing to choose and the consequence is inverse
+     *   refund   the receipt's refund composer, because a refund belongs to the receipt it reverses
+     *
+     * Applying loads the charge chooser exactly as applying unapplied money does; nothing about the
+     * target list changes because the money is held.
+     */
+    const openApplyHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setApplyPending({ paymentId: args.paymentId, hold: { holdId: args.holdId, remainingCents: args.remainingCents } });
+        push({ kind: "payment_application" });
+        void loadMoveTargets(args.paymentId);
+    }, [closeAdjustPanels, closeMovePanels, loadMoveTargets, push]);
+
+    const openReleaseHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setReleasePending(args);
+        push({ kind: "release_held" });
+    }, [closeAdjustPanels, closeMovePanels, push]);
+
+    const confirmHold = useCallback(async () => {
+        if (!holdPending || running) return;
+        const cents = Math.round(Number(holdAmount.replace(/[$,\s]/g, "")) * 100);
+        if (!Number.isFinite(cents) || cents <= 0) {
+            setHoldError("Enter an amount greater than zero.");
+            return;
+        }
+        /*
+         * For the operator's sake, not the ledger's: the hold invariant re-derives this bound with
+         * the payment row locked and its refusal is what decides. This only avoids asking for
+         * something that cannot be granted.
+         */
+        /*
+         * The action reads `refundable !== false`, so an unanswered field would arrive as
+         * REFUNDABLE without anybody having said so. Refused here rather than defaulted.
+         */
+        if (holdRefundable !== "yes" && holdRefundable !== "no") {
+            setHoldError("Say whether this deposit is refundable before holding it.");
+            return;
+        }
+        if (cents > holdPending.holdableCents) {
+            setHoldError(
+                `Only ${money(holdPending.holdableCents, holdPending.currencyCode)} of this payment is available to hold.`,
+            );
+            return;
+        }
+        setRunning(true);
+        setHoldError(null);
+        try {
+            await runAction("deposit.hold", {
+                payment_id: holdPending.paymentId,
+                amount_cents: cents,
+                refundable: holdRefundable === "yes",
+                reason: holdReason.trim() || null,
+            });
+            setMoveNotice(
+                `Held ${money(cents, holdPending.currencyCode)}. It is no longer available prepaid and what the family owes is unchanged.`,
+            );
+            closeMovePanels();
+        } catch (e) {
+            setHoldError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeMovePanels, holdAmount, holdPending, holdReason, holdRefundable, load, runAction, running]);
+
+    /*
+     * REFUND BELONGS TO THE RECEIPT, so this opens the receipt's own composer rather than a second
+     * refund form on the held row. One refund surface, told which lot it is discharging.
+     */
+    const openRefundHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setCommandError(null);
+        setRefundError(null);
+        const receipt = presentPayments(
+            vm?.payments ?? [],
+            Object.fromEntries((vm?.payments ?? []).map((r) => [r.paymentId, r.heldCents ?? 0])),
+        ).find((p) => p.paymentId === args.paymentId);
+        if (!receipt) {
+            setCommandError("That deposit's receipt could not be read, so it cannot be refunded yet.");
+            return;
+        }
+        /* The smaller of the two ceilings: what the lot holds, and what the receipt can still give back. */
+        const ceiling = Math.min(args.remainingCents, receipt.refundableCents);
+        setRefundTarget({
+            paymentId: receipt.paymentId,
+            label: `${money(receipt.receivedCents, receipt.currencyCode)} ${receipt.methodLabel}`,
+            receivedCents: receipt.receivedCents,
+            refundedCents: receipt.refundedCents,
+            refundableCents: ceiling,
+            currencyCode: receipt.currencyCode,
+            hold: { holdId: args.holdId, remainingCents: args.remainingCents },
+        });
+        setRefundAmount((ceiling / 100).toFixed(2));
+        /*
+         * W7-F045: and SHOW it. This set the composer's state and opened nothing, and on the Details
+         * floor no payment band is mounted — so the click changed no pixel. The receipt's own
+         * Payment Details is where its refund composer renders.
+         */
+        push({ kind: "payment_detail", paymentId: receipt.paymentId });
+    }, [closeAdjustPanels, closeMovePanels, vm?.payments, push]);
+
+    const confirmRelease = useCallback(async () => {
+        if (!releasePending || running) return;
+        setRunning(true);
+        setReleaseError(null);
+        try {
+            await runAction("deposit.release", {
+                hold_id: releasePending.holdId,
+                amount_cents: releasePending.remainingCents,
+                reason: releaseReason.trim() || null,
+            });
+            setMoveNotice("Released. The money is now available prepaid and still belongs to the family.");
+            closeMovePanels();
+        } catch (e) {
+            setReleaseError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeMovePanels, load, releasePending, releaseReason, runAction, running]);
+
+    /** The preview is the ACTION's. Nothing about the consequence is reconstructed here. */
+    const previewAdjustment = useCallback(async () => {
+        const magnitudeCents = adjustMagnitudeCents();
+        if (!adjustOpen || running || magnitudeCents === null) return;
+        setRunning(true);
+        setAdjustError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "billing.adjust_account",
+                    ...actionEntity(),
+                    mode: "preview",
+                    payload: {
+                        enrollment_agreement_id: adjustAgreementId,
+                        /* Empty is a TRUE answer: an account-level adjustment corrects no one charge. */
+                        source_charge_id: adjustSourceChargeId || null,
+                        /*
+                         * THE INTENT SHAPE. Direction plus a positive magnitude; the action's
+                         * normalizer owns the sign and derives the category. `charge_category` is
+                         * deliberately not sent — sending it would restore the conflict.
+                         */
+                        direction: adjustDirection,
+                        ...(adjustPurpose && (adjustPurpose === "credit" || adjustSourceChargeId) ? { purpose: adjustPurpose } : {}),
+                        magnitude_cents: magnitudeCents,
+                        /* The grain responsibility is asked at, so a child's arrangement governs. */
+                        customer_member_id: adjustMemberId || null,
+                        reason: adjustReason,
+                        effective_date: adjustEffectiveDate,
+                    },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setAdjustError(err || "This adjustment could not be previewed.");
+                return;
+            }
+            setAdjustPreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch (e) {
+            setAdjustError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+        }
+    }, [actionEntity, adjustAgreementId, adjustDirection, adjustPurpose, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, running]);
+
+    const confirmAdjustment = useCallback(async () => {
+        const magnitudeCents = adjustMagnitudeCents();
+        /*
+         * W7-F035: PREVIEW IS OPTIONAL. Confirm is available once the form is valid; execute runs the
+         * same normalizer, obligation bound and period resolution the preview does, so nothing is
+         * committed that preview would have refused — and a refusal is surfaced here, as itself.
+         */
+        if (!adjustOpen || running || magnitudeCents === null || !adjustReason.trim() || !adjustAgreementId) return;
+        setRunning(true);
+        setAdjustError(null);
+        try {
+            const result = await runAction("billing.adjust_account", {
+                enrollment_agreement_id: adjustAgreementId,
+                source_charge_id: adjustSourceChargeId || null,
+                direction: adjustDirection,
+                ...(adjustPurpose && (adjustPurpose === "credit" || adjustSourceChargeId) ? { purpose: adjustPurpose } : {}),
+                magnitude_cents: magnitudeCents,
+                customer_member_id: adjustMemberId || null,
+                reason: adjustReason,
+                effective_date: adjustEffectiveDate,
+            });
+            /*
+             * ── A REPEAT SUBMIT IS ONE CREDIT, AND THE OPERATOR IS TOLD SO ──────────────────
+             *
+             * §18. The service has always answered this honestly — `idempotent` says it found the
+             * reduction already recorded and wrote nothing — and every caller discarded it, so a
+             * double submit reported "Recorded" twice and an operator had no way to tell whether
+             * they had just credited the family again. That is the Add Charge defect this slice is
+             * forbidden to repeat.
+             *
+             * This is a TRUE OUTCOME, not a failure: it goes to the notice, never to the error.
+             */
+            /*
+             * READ THROUGH THE CANONICAL ENVELOPE READER, not by hand.
+             *
+             * This route emits `execution_result: result.actionResult.result.detail` DIRECTLY, so
+             * `execution_result.detail` is undefined forever — a notice that silently never fires,
+             * which is the exact shape of a false green. Three Payments modules had already been
+             * caught one level too deep on this same envelope. `executeDetailFrom` encodes the
+             * rule — prefer a nested `detail` where a route genuinely nests one, otherwise treat
+             * `execution_result` as the detail — so no surface has to know which kind this is.
+             */
+            const detail = executeDetailFrom(result) as { idempotent?: boolean };
+            if (detail.idempotent === true) {
+                setAdjustNotice(
+                    adjustDirection === "reduce"
+                        ? "This credit was already recorded, so nothing new was created. The family has been credited once."
+                        : "This adjustment was already recorded, so nothing new was created. The account has been adjusted once.",
+                );
+            } else {
+                /*
+                 * W7-F027: A CREDIT IS NOT A DRAFT THE OPERATOR POSTS. `applyManualReduction` makes
+                 * the contra charge real through the same automatic posting as any charge — in its
+                 * billing period, or held where a review policy is configured. The notice states that
+                 * rule and claims no outcome; the ledger row beneath shows the state it actually has.
+                 */
+                setAdjustNotice(
+                    adjustDirection === "reduce"
+                        ? "Credit recorded. It lowers what the family owes from its billing period, by itself — after review where your organization requires one."
+                        : "Adjustment recorded. It raises what the family owes from its billing period, by itself — after review where your organization requires one.",
+                );
+            }
+            closeAdjustPanels();
+        } catch (e) {
+            setAdjustError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [adjustAgreementId, adjustDirection, adjustPurpose, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
+
+    const previewReversal = useCallback(async () => {
+        if (!reversePending || running) return;
+        setRunning(true);
+        setReverseError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "billing.reverse_adjustment",
+                    ...actionEntity(),
+                    mode: "preview",
+                    payload: { application_id: reversePending.applicationId, reason: reverseReason },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setReverseError(err || "This reversal could not be previewed.");
+                return;
+            }
+            setReversePreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch (e) {
+            setReverseError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+        }
+    }, [actionEntity, reversePending, reverseReason, running]);
+
+    const confirmReversal = useCallback(async () => {
+        if (!reversePending || running || !reversePreview) return;
+        setRunning(true);
+        setReverseError(null);
+        try {
+            await runAction("billing.reverse_adjustment", {
+                application_id: reversePending.applicationId,
+                reason: reverseReason,
+            });
+            // The original is untouched on purpose; what changed is that its opposite now exists.
+            setAdjustNotice("Reversed. The original adjustment stays on the record, with its opposite beside it.");
+            closeAdjustPanels();
+        } catch (e) {
+            setReverseError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeAdjustPanels, load, reversePending, reversePreview, reverseReason, runAction, running]);
+
+
+
+
+    /*
+     * THE ROOT PROVISIONED THIS ACCOUNT. The card renders it.
+     *
+     * This used to `fetch(/api/admin/financials/card)` on mount. The financials producer now runs
+     * inside the root provisioning lifecycle, under the SAME `fin.read` gate the endpoint applies,
+     * so the projection arrives already refused if this operator may not see the ledger.
+     *
+     * ── THE STALE GUARANTEE IS STRONGER HERE, NOT WEAKER ──
+     *
+     * `requestSeq` exists because a slow earlier response could land on top of a newer one — A → B
+     * → C with A resolving last, reproduced in the browser. The initial read no longer has a request
+     * of its own to lose that race with: the projection arrives WITH the answer whose subject it
+     * belongs to, and the root lifecycle already drops superseded answers wholesale.
+     *
+     * `requestSeq` stays for `load()`, which is the RELOAD after a financial action — an interaction,
+     * not a bootstrap, and still capable of racing itself.
+     */
+    const provisioned = context.operationalProjection?.cards?.financials ?? null;
+
+    /*
+     * Missing projection is PROVISIONING — but only where a projection is actually coming. A host
+     * that supplies none is answered by the self-bootstrap below, and calling that state
+     * "provisioning" is what kept the workspace summary pending forever.
+     */
+    const provisioningAccount =
+        /*
+         * The same correction as the bootstrap gate, for the same reason: a path that runs no
+         * producers is not a path that is "still provisioning". Reading `operationalProjection
+         * != null` here kept the pending frame up forever on exactly the hosts whose producers
+         * are never going to run.
+         */
+        hostRunsCardProducers(context.operationalProjection)
+        && (customerId != null || scopedMemberId != null)
+        && provisioned == null;
+
+    /*
+     * ── S3-2: CLEAR THE DATA, KEEP THE FOOTPRINT ────────────────────────────────────────────────
+     *
+     * Clearing below is correct and stays: a previous household's balance must never linger under
+     * the next subject's name. What was wrong was the GEOMETRY of that clear. Frame-sampled on
+     * Firefly across one subject switch, this card went 409px → 69px → 409px — it was the only
+     * audited card that collapsed, and the ~340px round trip shoved every card beneath it down and
+     * back while the account loaded.
+     *
+     * The Focus Panel already has a reserved-geometry contract for exactly this transition
+     * (`FOCUS_PANEL_RESERVED_MIN_HEIGHT`, the floor `ReservedSettlementRegion` reserves). This card
+     * adopts it, and reserves its OWN last loaded footprint when it has one — geometry is not data,
+     * so remembering how much room the card occupied leaks nothing about the previous account, and
+     * it adapts per subject instead of freezing one height for every account. The shared token is
+     * the floor for the first load, where there is nothing to remember yet.
+     *
+     * A genuinely different next subject still resizes the card once, on arrival. That is honest;
+     * the artificial collapse to a one-line loader in between is what this removes.
+     */
+    const shellRef = useRef<HTMLDivElement | null>(null);
+    const loadedHeightRef = useRef<number | null>(null);
+    useEffect(() => {
+        if (!vm || !shellRef.current) return;
+        const h = Math.round(shellRef.current.getBoundingClientRect().height);
+        if (h > 0) loadedHeightRef.current = h;
+    }, [vm]);
+
+    /*
+     * ── RECONCILIATION: WHAT THE RESERVE IS FOR ─────────────────────────────────────────────────
+     *
+     * The reserve was written as `!vm`, when the only way to have no vm was to be loading one. The
+     * root lifecycle gave this card three further answers that also carry no vm — a permission
+     * refusal, no resolvable subject, and no account — and each of those is a SETTLED sentence the
+     * card is entitled to render at its own size. Reserving through them would pad a card that has
+     * finished, which is the failure the sibling cards were corrected for in the same programme.
+     *
+     * So the reserve tracks exactly the condition under which this card says "Loading the account…",
+     * and nothing else. Both intents survive: the collapse is still removed while the account
+     * resolves, and staging's new answers are still allowed to be answers.
+     */
+    /*
+     * ── A SUBJECT NOBODY HAS ANSWERED FOR IS NOT AN ABSENT ACCOUNT ─────────────────────────────
+     *
+     * Measured on the deployed build, Financials → Accounts, a healthy household:
+     *
+     *   +4452ms  h=93  stats=3  "CURRENT BALANCE — Reading the account…"
+     *   +4687ms  h=67  stats=0  "Financial account unavailable"        ← for 235ms
+     *   +4707ms  h=93  stats=3  "… Reading the account…"
+     *   +7035ms  h=93  stats=3  "$0.00  DUE $0.00  PAST DUE None  Payment Add"
+     *
+     * The card told an operator the account was unavailable, took it back a fifth of a second
+     * later, and then showed them the account. On a financial surface that sentence is a verdict,
+     * and it was wrong.
+     *
+     * The cause is a gap, not a race in the read: "no account" was inferred from `!vm && !loading`,
+     * and on a host that bootstraps its own read there is a paint where the subject is chosen, `vm`
+     * is cleared, and `load()` has not started yet — so `loading` is still false. Nobody has asked
+     * about this subject; that is not the same as having asked and been told there is nothing.
+     *
+     * `answeredKeyRef` is what closes it: set in `load()`'s `finally`, for the key that was
+     * requested, whatever the answer was. Before an answer the card waits; after an answer with no
+     * account, "unavailable" is still reached and still correct.
+     */
+    const subjectKey = customerId ?? scopedMemberId ?? null;
+    const awaitingFirstAnswer = subjectKey != null && answeredKeyRef.current !== subjectKey;
+
+    const reservingAccount =
+        !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount || awaitingFirstAnswer);
+
+    /*
+     * ── A FLOOR IS FOR A COLLAPSE, AND THE ACCOUNT VARIANT NO LONGER COLLAPSES ──────────────────
+     *
+     * Measured in Financials → Accounts → selected account: the pane committed at 120px and then
+     * SHRANK to 93px 1.4 seconds later, when the read landed. 120px is `FOCUS_PANEL_RESERVED_MIN_
+     * HEIGHT` exactly — 7.5rem — so the shift was not the data arriving. It was this floor, held
+     * under a frame that did not need one and was 27px shorter than the floor reserving for it.
+     *
+     * The floor was introduced for the Focus Panel's subject switch, where the card genuinely went
+     * 409px → 69px → 409px because its loading state was a one-line loader. The account variant's
+     * loading state is `AccountSummaryPending` — the SAME three metrics over the same two commands
+     * as the resolved summary — so its pending frame is already the right shape and already the
+     * right height. Reserving a different one is how a stable anatomy acquires a visible jump.
+     *
+     * So the floor now applies where a collapse is actually possible, and the variant that commits
+     * its anatomy up front is trusted to hold its own geometry. The Focus Panel path is untouched.
+     */
+    const reservesFootprint = reservingAccount && summaryVariant !== "account";
+
+    /*
+     * ── A BOUNDED SUMMARY IS NOT A LEDGER ──────────────────────────────────────────────────────
+     *
+     * The card is seeded from the operational projection, which is the BOUNDED summary by
+     * construction — enough rows to state a position, not the account's history. Details rendered
+     * those same rows, so opening it on a subject whose projection carried two rows showed a
+     * complete-looking ledger of two transactions, which the deep read then replaced with fifty-six.
+     * Two real-looking rows presented as the whole truth, and then a different whole truth.
+     *
+     * `deepLoadedForRef` already records which account has been read IN FULL. Until that is this
+     * account the ledger is PENDING: the shell, the metrics, the lenses and the filters commit
+     * immediately — they are the same whatever the rows say — and the ledger region reserves itself
+     * rather than showing a partial cohort as if it were complete.
+     */
+    const ledgerComplete = deepLoadedForRef.current === (customerId ?? scopedMemberId);
+
+    /*
+     * ── DETAILS COMMITS ONCE, OR IT DOES NOT COMMIT ───────────────────────────────────────────
+     *
+     * The previous two attempts both left a visible intermediate. The first replaced the compact
+     * card with a Details skeleton the instant it was clicked; the second kept the skeleton out of
+     * the metrics but reserved the ledger region, so Details still arrived with an empty body that
+     * filled in afterwards. Both are the same lie told at different volumes: the operator is shown
+     * the destination before the destination exists.
+     *
+     * The rule here is simpler and has no tuning knob. Details is not ENTERED until the deep read
+     * its ledger depends on has resolved. Clicking it records a request; the request becomes the
+     * surface when — and only when — the account has actually been read in full. Until then the
+     * compact card stays on screen, unchanged, with its Details control marked busy.
+     *
+     * If the read takes 500ms the operator looks at the compact card for 500ms. That is the whole
+     * cost, and it buys the thing Kelly has been asking for since 5H: one commit, no double load.
+     */
+    const [detailPending, setDetailPending] = useState(false);
+
+    /*
+     * ── THE LEDGER'S SCROLL POSITION SURVIVES A COMMAND ───────────────────────────────────────
+     *
+     * The last thing an operator loses on a command round trip, and the most disorienting: they
+     * were two thirds of the way down a fifty-six row ledger. Written on every scroll and put back
+     * before paint, so returning to Details does not start from the top.
+     */
+    useLayoutEffect(() => {
+        if (overlay !== "detail") return;
+        const el = document.querySelector("[data-financials-detail-scroll]") as HTMLElement | null;
+        if (!el) return;
+        if (detailScrollRef.current > 0) el.scrollTop = detailScrollRef.current;
+        const remember = () => { detailScrollRef.current = el.scrollTop; };
+        el.addEventListener("scroll", remember, { passive: true });
+        return () => el.removeEventListener("scroll", remember);
+    }, [overlay]);
+
+    useEffect(() => {
+        /*
+         * ── A BOUNDED SUMMARY MUST NOT DISCARD A FULL READ OF THE SAME ACCOUNT ─────────────────
+         *
+         * Measured on deployed staging: opening Details issued `financials/card` TWICE, ~3.2s each,
+         * 218,680 bytes each, the second starting the instant the first returned — so the operator
+         * waited 7.3 seconds for an answer that arrived at 3.5.
+         *
+         * The cause is here. The settlement projection lands AFTER the deep read the click started.
+         * This effect then superseded that read, replaced the full model with the bounded summary,
+         * and cleared `deepLoadedForRef` — which is exactly the condition the prewarm effect below
+         * treats as "this account has not been read", so it read it again. Identical request,
+         * identical bytes, identical answer.
+         *
+         * The projection is a SUBSET of what a full read holds for the same account. So when that
+         * account has been read in full — or is being read right now — the summary carries nothing
+         * and the deeper answer stands. Covering the IN-FLIGHT case is what actually closes the
+         * duplicate: the projection usually lands mid-read, not after it.
+         *
+         * SUBJECT SAFETY IS UNCHANGED, and it is the reason this is scoped so tightly: the guard
+         * applies only when the projection is READY for the account this card has already read.
+         * A projection for a DIFFERENT subject still clears everything, still supersedes any
+         * in-flight read, and still prevents one family's balance appearing under another's name.
+         */
+        const readKey = customerId ?? scopedMemberId;
+        const fullReadCoversThisAccount =
+            provisioned?.state === "ready"
+            && readKey != null
+            && (deepLoadedForRef.current === readKey || deepReadInFlightForRef.current === readKey);
+        if (fullReadCoversThisAccount) return;
+
+        // Clear FIRST: the previous household's balance must not linger while the next resolves.
+        // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
+        requestSeq.current += 1;
+        setVm(provisioned?.state === "ready" ? provisioned.data : null);
+        setDeniedRead(provisioned?.state === "forbidden");
+        // A new projection is the BOUNDED summary by construction, whichever account it is for.
+        deepLoadedForRef.current = null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the identity guard reads this
+        // render's account; adding it as a dependency would re-run the clear on every subject echo.
+    }, [provisioned]);
+
+    /*
+     * DEPTH IS AN INTERACTION. Opening any of the account's deep surfaces — the ledger, the payment
+     * flow, add-charge — loads the full model once per account. The initial panel still issues no
+     * request at all, which is the invariant; this is the operator asking.
+     */
+
+    /*
+     * ── A HOST THAT SUPPLIES NO PROJECTION IS NOT A HOST THAT IS STILL PROVISIONING ────────────
+     *
+     * The card's bootstrap moved to `context.operationalProjection.cards.financials`: the Focus
+     * Panel hands the summary down with the subject it belongs to, and the card issues no request
+     * of its own. That is right for the Focus Panel and it silently broke the FINANCIALS WORKSPACE,
+     * which composes this card directly and builds its own context. No projection is supplied
+     * there, so `provisioned` was null, `provisioningAccount` was true, and the account summary sat
+     * in its pending frame FOREVER — three metric labels over three placeholders — while the ledger
+     * body beside it, which does its own read, hydrated normally. Measured: body hydrated with 56
+     * rows, summary still pending after 18 seconds, the card endpoint answering 200 throughout.
+     *
+     * The two states are different and were being conflated. `provisioned == null` means one of:
+     *   · the host HAS a projection pipeline and this subject has not arrived yet → wait;
+     *   · the host has no projection pipeline at all → nobody is going to send one, ever.
+     *
+     * A host declares the second by not supplying `operationalProjection`. In that case the card
+     * bootstraps itself once per subject, which is what it did before the projection existed. The
+     * Focus Panel is untouched: it supplies the object, so this never runs there.
+     */
+    /*
+     * ── NOT "IS THERE A PROJECTION", BUT "DOES IT CARRY MINE" ────────────────────────────────
+     *
+     * This asked a HOST-level question on behalf of a card that fetches for itself, and the two
+     * came apart on the drawer-VM path: `projectFocusPanelOperational` composes
+     * `{ businessProcess, currentWork }` and no `cards` key at all, so the projection was present,
+     * this read true, BOTH effects below returned early, and the card pulsed forever having issued
+     * no request. Measured four mounts of four on deployed staging, with Enrollment, Household and
+     * Children hydrating beside it.
+     *
+     * `hostRunsCardProducers` carries the reasoning and the three states it separates.
+     */
+    const hostSuppliesProjection = hostRunsCardProducers(context.operationalProjection);
+    useEffect(() => {
+        if (hostSuppliesProjection) return;
+        const key = customerId ?? scopedMemberId;
+        if (!key || deepLoadedForRef.current === key) return;
+        void load();
+    }, [hostSuppliesProjection, customerId, scopedMemberId, load]);
+
+    /*
+     * ── THE LIKELY NEXT SURFACE IS RESOLVED BEFORE IT IS ASKED FOR ────────────────────────────
+     *
+     * Details opened instantly and then said "Reading this account's activity…" for two seconds,
+     * because the deep read only STARTED on the click. The account is known while the compact card
+     * is on screen, so the read can be in flight long before anyone asks — the same doctrine
+     * `focusPanelActivityPrewarm` already states for mode switching: sanctioned idle prefetch,
+     * never a reveal gate, so the operator never waits for what was predictable.
+     *
+     * No second authority and no new cache: this is the SAME `load()` filling the SAME `vm` and
+     * `deepLoadedForRef` that Details already consumes. Only its timing moved.
+     *
+     * Subject safety is not an extra mechanism either. `requestSeq` makes a superseded response
+     * unable to land, and a new projection clears both `vm` and `deepLoadedForRef` — so a prewarm
+     * for household A cannot become household B's ledger; it can only be discarded.
+     */
+    useEffect(() => {
+        const key = customerId ?? scopedMemberId;
+        if (!key || deepLoadedForRef.current === key) return;
+        // Asked for: now. The operator is waiting, so idle is the wrong queue.
+        if (overlay || detailPending) {
+            void load();
+            return;
+        }
+        if (!hostSuppliesProjection || provisioned?.state !== "ready") return;
+        /*
+         * Otherwise it is a prediction, so it yields: queued at idle and cancelled if the subject
+         * changes first, which keeps a panel of cards from racing the surface's own first paint.
+         */
+        const w = window as unknown as {
+            requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+            cancelIdleCallback?: (h: number) => void;
+        };
+        if (typeof w.requestIdleCallback === "function") {
+            const handle = w.requestIdleCallback(() => void load(), { timeout: 1_200 });
+            return () => w.cancelIdleCallback?.(handle);
+        }
+        const t = setTimeout(() => void load(), 0);
+        return () => clearTimeout(t);
+    }, [overlay, detailPending, customerId, scopedMemberId, load, hostSuppliesProjection, provisioned]);
+
+    /*
+     * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
+     *
+     * When the panel is about one child, opening on "All" would answer about their siblings too. The
+     * operator can still widen it — the account is genuinely the household's — but the default
+     * matches what they are looking at.
+     */
+    useEffect(() => {
+        /*
+         * ── THE PRESELECT BELONGS TO THE COMPACT CARD, NOT TO THE ACCOUNT SURFACE ───────────────
+         *
+         * A panel about one child should summarise that child, and the compact card does. Details
+         * is a different object: it is the ACCOUNT, it lists every child's rows, and its own
+         * control says "Everyone". Carrying the preselect into it is what made the band answer for
+         * one child above a household ledger — a total that reconciles to no rows on screen.
+         *
+         * So the preselect applies while the account surface is not open. Opening Details resets
+         * the scope to the account below, and the operator can still narrow it there.
+         */
+        if (detailsAreTheSurface) return;
+        setSubjectFilter(scopedMemberId ?? "all");
+    }, [scopedMemberId, detailsAreTheSurface]);
+
+    const visibleRows = useMemo(() => {
+        if (!vm) return [];
+        // ONE rule for what a subject scope includes — household-grain rows stay visible. See
+        // `financialsRowScope`: a child-scoped panel does not make the account's charges disappear.
+        return financialsRowsInSubjectScope(vm.rows, subjectFilter);
+    }, [vm, subjectFilter]);
+
+    /*
+     * The charges that can actually take money, in the operator's current scope.
+     *
+     * `offersPayment` is the read model's answer — posted, not a correction, still owing something —
+     * exactly as `offersReverse` is for the other direction. Filtering the same `visibleRows` the
+     * ledger renders is what keeps the menu honest under the subject filter: a payment offered
+     * against a sibling's charge that is not on screen would be attributing money by accident.
+     */
+    const payableRows = useMemo(
+        () => visibleRows.filter((r) => r.offersPayment),
+        [visibleRows],
+    );
+
+    /** The child a charge would apply to — the filter's subject, else the panel's. */
+    const chargeTarget =
+        subjectFilter !== "all" ? subjectFilter : scopedMemberId ?? vm?.subjects[0]?.customerMemberId ?? null;
+
+    /**
+     * ── WHAT THE ACTION IS INVOKED AGAINST — a child when this card has one, the panel's own
+     * subject when it does not ──
+     *
+     * `resolveChargeSubject` already owns the whole question of what a charge is written against:
+     * the named child's agreement when there is one, the HOUSEHOLD when there is not, because "a
+     * pre-enrolment child's fee is the FAMILY's, and that is a real, chargeable subject". This card
+     * decides none of that and must not; its only job is to hand the resolver enough canonical
+     * identity to decide.
+     *
+     * It was handing over a child or nothing. `chargeTarget` derives from `vm.subjects`, which
+     * derives from `child_enrollment_agreements` — so for a family with no agreement it is null,
+     * and both `preview()` and `commit()` opened with a bare `return`. The overlay still showed an
+     * amount and an enabled confirmation, and the click issued no request at all: the exact family
+     * the resolver documents could never reach it. Proven on the certification tenant, where every
+     * New Leads family is pre-enrolment and `charges` stayed at 0.
+     *
+     * So when there is no child, the invocation travels at the grain the panel actually has. The
+     * household id goes in the payload as `customer_id` exactly as it always did, no
+     * `customer_member_id` is invented, and the resolver — not this card — decides the subject.
+     */
+    /*
+     * EVERY CHILD THIS OPERATION WILL BILL — the anchor plus whatever the operator ticked.
+     *
+     * De-duplicated and anchor-first, so the preview and the commit name the children in the same
+     * order the operator sees them, and a child cannot be billed twice by being both the anchor
+     * and a ticked sibling.
+     */
+
+    const chargeInvocation = useMemo((): {
+        entityType: string;
+        entityId: string;
+        customerMemberId: string | null;
+    } | null => {
+        if (chargeTarget) {
+            /*
+             * ── THE ENTITY IS ROUTING; THE MEMBER ID IS ATTRIBUTION ───────────────────────────
+             *
+             * "Applies to · Household" said Household on screen and wrote a CHILD. `chargeTarget`
+             * falls back to the panel's scoped child whenever the subject filter is `all`, and that
+             * fallback was being used for BOTH questions — so choosing Household still sent
+             * `customer_member_id: <a child>` and the charge was billed to that child. Measured on
+             * the mounted candidate: APPLIES TO read "Household", the payload carried Certb's member
+             * id, and the ledger row came back "Certb Certhouse".
+             *
+             * The route refuses a call with no entity, so the child still travels as CONTEXT. The
+             * member id is the ATTRIBUTION, and a deliberate household choice means there is no
+             * child to attribute to — `childIdsFrom` then reads the absent field as household grain,
+             * which is the doctrine the whole subject model rests on.
+             */
+            return {
+                entityType: "child",
+                entityId: chargeTarget,
+                customerMemberId: subjectFilter === "all" ? null : chargeTarget,
+            };
+        }
+        const subjectId = (context.subject?.id ?? "").trim();
+        if (customerId && subjectId) {
+            return {
+                entityType: (context.subject?.type ?? "").trim() || "opportunity",
+                entityId: subjectId,
+                customerMemberId: null,
+            };
+        }
+        // Genuinely unresolvable: no child, and no household to fall back to.
+        return null;
+    }, [chargeTarget, customerId, subjectFilter, context.subject?.id, context.subject?.type]);
+
+    /**
+     * Open the settle operation on the obligation most likely to be settled.
+     *
+     * The read model decides which that is — the first row it marks payable — and the operator may
+     * change both the charge and the amount once the panel is open. Undefined when nothing can take
+     * money, so the control stays inert rather than opening a panel with nothing to act on.
+     */
+    /** Open the settle form against the first charge in a given set. One body, two eligibilities. */
+    /**
+     * EVERY CHILD THIS OPERATION WILL BILL — the anchor, plus whatever the operator ticked.
+     *
+     * Anchor-first and de-duplicated, so the preview and the commit name children in the order the
+     * operator sees them, and a child cannot be billed twice by being both the anchor and a ticked
+     * sibling. Empty when the command is anchored at the household, which is how a household charge
+     * reaches the resolver: by naming no child at all, never by an empty array standing in for one.
+     */
+    const selectedChildIds = useMemo(() => {
+        const anchorId = chargeInvocation?.customerMemberId ?? null;
+        const ids = [anchorId, ...extraChildIds].filter((v): v is string => Boolean(v));
+        return [...new Set(ids)];
+    }, [chargeInvocation, extraChildIds]);
+
+    const selectedChildLabels = useMemo(
+        () => selectedChildIds.map(
+            (id) => vm?.subjects.find((sub) => sub.customerMemberId === id)?.displayName ?? "Child",
+        ),
+        [selectedChildIds, vm],
+    );
+
+    /*
+     * ── WHO THIS CHARGE IS FOR, AS THE COMMAND WILL READ IT ──────────────────────────────────────
+     *
+     * The same values the payload sends: the selected children, or — naming no child — the household.
+     * A catalog item is judged for each of them at the site THAT subject's charge is for
+     * (`unavailableForSubjects`), so the picker refuses exactly what the preview and the write refuse.
+     */
+    const chargeSubjects = useMemo(
+        () =>
+            selectedChildIds.length > 0
+                ? selectedChildIds.map((id, i) => ({ key: id, label: selectedChildLabels[i] ?? null }))
+                : [{ key: HOUSEHOLD_CHARGE_SUBJECT, label: "Household" }],
+        [selectedChildIds, selectedChildLabels],
+    );
+
+    /*
+     * ── A MOUNTED CONTROL IS NEVER SILENTLY INERT ───────────────────────────────────────────────
+     *
+     * This returned `undefined` with nothing to settle, and the Details header rendered
+     * `<Action primary onClick={undefined}>Payment</Action>` — a fully styled primary button that
+     * did nothing and said nothing when clicked. Measured on deployed staging against an account
+     * with no obligation: the click changed no pixel and produced no request.
+     *
+     * `Action` was built for exactly this and the caller simply never used it: "A configured
+     * command is never removed for being unavailable — an operator who cannot see a command cannot
+     * learn why it is unavailable." So the control stays, disabled, carrying the reason — the same
+     * grammar `chargeUnavailableReason` already uses for its neighbour.
+     */
+    const makeSettleOpener = useCallback(
+        (rows: readonly FinancialsLedgerRow[]) => {
+            if (!rows.length) return undefined;
+            return () => {
+                const row = rows[0]!;
+                setCommandError(null);
+                setPayTarget({
+                    chargeId: row.chargeId,
+                    /* The operator's name for it — a stored template key is not one. */
+                    label: chargeDisplayLabel(row.description, row.categoryKey, row.categoryLabel),
+                    outstandingCents: row.outstandingCents,
+                    subjectMemberId: row.subjectMemberId,
+                });
+                setPayAmount((row.outstandingCents / 100).toFixed(2));
+                setPaymentTab("payment");
+                setRefundPickId("");
+                setPayReference("");
+                setPayAllocation("automatic");
+                setChargeFilter("");
+                setPayAmountTouched(false);
+                setSettlePreview(null);
+                setPayIdemKey(`pay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
+                push({ kind: "payment" });
+            };
+        },
+        [],
+    );
+
+    /** Everything in scope that can take money — what the ledger's own menu offers, across periods. */
+    const openSettle = useMemo(() => makeSettleOpener(payableRows), [makeSettleOpener, payableRows]);
+
+    /*
+     * ── WHAT THE COMPACT CARD MAY OFFER TO SETTLE ───────────────────────────────────────────────
+     *
+     * Compact is a CURRENT-PERIOD summary. Its lines state this period's responsibility and balance,
+     * so its Payment control must settle this period — offering a prior period's charge from a card
+     * that never mentions it is a cross-period claim the summary cannot support.
+     *
+     * This is NOT a second grain rule. It is the same canonical scope (`financialsRowScope`:
+     * household-grain rows plus the selected child's), narrowed by the period Compact already
+     * declares. Deep and prior-period settlement stays where it is reachable and explained — the
+     * Details ledger and its `Record payment →` menu, which still read `payableRows` across periods.
+     *
+     * Found by the deployed regression: Wrigley's September is settled in full, yet Payment appeared,
+     * because eligibility was drawn from `visibleRows` — which is not period-scoped — and reached an
+     * August registration fee. The subject-filter defect had been masking that.
+     */
+    const compactPayableRows = useMemo(
+        () => (vm == null ? [] : selectCompactPayableRows(vm.rows, subjectFilter, vm.period.key)),
+        [vm, subjectFilter],
+    );
+    const openSettleCurrentPeriod = useMemo(
+        () => makeSettleOpener(compactPayableRows),
+        [makeSettleOpener, compactPayableRows],
+    );
+
+    /** Why Payment cannot be offered, when it cannot. Stated on the control, never silent. */
+    const paymentUnavailableReason =
+        payableRows.length
+            ? null
+            : "Nothing is currently owed on this account, so there is no payment to take or record.";
+
+    /** Why Add charge cannot be offered, when it cannot. Stated, never silent. */
+    const chargeUnavailableReason =
+        chargeInvocation ? null : (
+            "This record has no household or child in scope, so there is nothing to charge against."
+        );
+
+    /**
+     * PREVIEW FIRST, and the preview is the DOMAIN's.
+     *
+     * `mode: "preview"` runs `previewTemplateCharge` — the same resolver the write uses — so the
+     * amount, the dates and the scheduled-vs-draft verdict shown to the operator are the ones that
+     * will be persisted. Nothing is computed on this side, which is why the preview cannot drift from
+     * the commit that follows it.
+     */
+    const preview = useCallback(
+        async (templateId: string, label: string, source: "catalog" | "template" = "catalog") => {
+            if (running) return;
+            if (!chargeInvocation) {
+                // An absent target is an answer the operator is owed, not a reason to do nothing.
+                setCommandError(chargeUnavailableReason);
+                return;
+            }
+            setRunning(true);
+            setCommandError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: "charge.add",
+                        entity_type: chargeInvocation.entityType,
+                        entity_id: chargeInvocation.entityId,
+                        mode: "preview",
+                        payload: {
+                            // Omitted entirely when no child is named — the resolver reads that as
+                            // "no child", which is what sends it to the household.
+                            ...(chargeInvocation.customerMemberId
+                                ? { customer_member_id: chargeInvocation.customerMemberId }
+                                /* Deliberately household — stated, because omission means "no opinion". */
+                                : { subject_grain: "household" }),
+                            // The household, so a pre-enrolment family has a billable subject when
+                            // no child agreement exists. The resolver still prefers an agreement.
+                            customer_id: customerId,
+                            /*
+                             * Manual Add Charge offers the Catalog: the option id IS the catalog item.
+                             * Only an edit of an existing template draft names its template instead.
+                             */
+                            ...(source === "template" ? { template_id: templateId } : { catalog_product_id: templateId }),
+                            child_label: chargeInvocation.customerMemberId
+                                ? vm?.subjects.find(
+                                      (s) => s.customerMemberId === chargeInvocation.customerMemberId,
+                                  )?.displayName
+                                : undefined,
+                            /*
+                             * ONLY WHEN THE OPERATION IS ACTUALLY WIDER THAN ONE CHILD. Sending the
+                             * plural form for a single subject would route an ordinary Add through
+                             * the batch path and report it in batch language, which is a different
+                             * story told about the same act.
+                             */
+                            ...(selectedChildIds.length > 1
+                                ? { customer_member_ids: selectedChildIds, child_labels: selectedChildLabels }
+                                : {}),
+                            // An `event_date` template is REFUSED without one — the preview returns
+                            // `missing_event_date` — so the operator's date has to travel with the
+                            // preview, not only with the commit.
+                            /*
+                             * W7-F011: THE SERVICE DATE IS THE OPERATOR'S. Sent as `service_date` for
+                             * every template (and still as `event_date` for the templates that require
+                             * one), so the preview's date chain — period, invoice, due, posting — is
+                             * recomputed by the server from the date the operator chose.
+                             */
+                            ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
+                            ...(chargeNote ? { note: chargeNote } : {}),
+                            ...amountOverrideFields(source),
+                        },
+                    }),
+                });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    error?: string | { message?: string };
+                    data?: { execution_result?: { preview?: { summary?: string; changes?: string[]; blocked?: { reason?: string } | null } } };
+                };
+                const p = json?.data?.execution_result?.preview;
+                if (!json?.ok || !p) {
+                    const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                    setCommandError(err || "This charge cannot be previewed.");
+                    return;
+                }
+                /* The domain refused what was previewed: say so as the refusal it is, not as a summary. */
+                if (p.blocked?.reason) setCommandError(p.blocked.reason);
+                setPending({
+                    templateId,
+                    source,
+                    label,
+                    summary: p.summary ?? "",
+                    changes: Array.isArray(p.changes) ? p.changes : [],
+                });
+            } catch {
+                setCommandError("The preview could not be requested.");
+            } finally {
+                setRunning(false);
+            }
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- amountOverrideFields reads exactly these
+        [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm, overrideOn, overrideCents, overrideReason],
+    );
+
+    /*
+     * ── WHAT THE OPERATOR DECIDED ABOUT THIS CHARGE, BEFORE THE CHARGE EXISTS ─────────────────
+     *
+     * Responsibility and exclusions are both keyed by charge id, and there is no charge id until
+     * `charge.add` returns one. So the decisions are held here and applied afterwards, against the
+     * charges that were actually created — which is also why there is no durable charge-intent
+     * model: nothing is written that a later step has to reconcile or clean up. An operator who
+     * abandons the command leaves no trace, because these are React state and nothing else.
+     */
+    /*
+     * CHANGING, NOT SCOPING. The operator opens the Charge to editor or leaves it closed; whether
+     * an override becomes a charge-scoped arrangement is this host's problem and always was.
+     */
+    const [chargeToChanging, setChargeToChanging] = useState(false);
+    const [chargeShares, setChargeShares] = useState<
+        Array<{ partyId: string; method: "percentage" | "fixed" | "remainder"; value: string }>
+    >([]);
+    /*
+     * ONE DISCOUNT DECISION. `undefined` means "not yet answered — use what resolution says";
+     * a policy id means that one; `null` means No discount, which is an answer and not an absence.
+     */
+    const [chargeDiscountChoice, setChargeDiscountChoice] = useState<string | null | undefined>(undefined);
+    /*
+     * ── WHAT WOULD REDUCE THE CHARGE THE OPERATOR IS TYPING ──────────────────────────────────
+     *
+     * Asked of the ONE canonical resolver, about a charge that does not exist yet: the template's
+     * category, the amount entered, the child selected, the service date chosen. Re-asked when any
+     * of those change, because a discount that covered tuition may not cover a registration fee
+     * and a selection that was valid a keystroke ago must not survive into a charge it cannot
+     * reduce.
+     *
+     * `wouldApplyPolicyId` is the answer if the operator changes nothing — the canonical default —
+     * and it is also what tells "No discount" apart from a suppression: declining a discount that
+     * WOULD have applied is a decision, declining one that was never coming is the truth.
+     */
+    const [proposedDiscounts, setProposedDiscounts] = useState<{
+        /*
+         * `expectedCents` IS THE RESOLVER'S ANSWER, NOT A RATE TO MULTIPLY BY.
+         *
+         * The route already returns what each policy is worth against this proposed charge —
+         * `resolveFinancialReductions` priced it, through every gate a real charge passes. It was
+         * being dropped on the way in, which left the preview able to name a policy and its rate
+         * but not what it takes off, and left the card the only place a figure could come from.
+         * Carried, never recomputed: a second answer here would make this card a reduction
+         * authority, which is the one thing the selector exists not to be.
+         */
+        options: Array<{
+            policyId: string;
+            label: string;
+            basis: string | null;
+            basisValue: number | null;
+            expectedCents: number | null;
+        }>;
+        wouldApplyPolicyId: string | null;
+    }>({ options: [], wouldApplyPolicyId: null });
+    const chargeDiscountSuppresses = proposedDiscounts.wouldApplyPolicyId;
+
+    useEffect(() => {
+        if (overlay !== "add_charge" || !customerId) return;
+        const pool = pending?.source === "template" ? vm?.draftTemplates ?? [] : vm?.chargeTemplates ?? [];
+        const template = pool.find((tpl) => tpl.id === pending?.templateId)
+            ?? (vm?.chargeTemplates ?? []).find((tpl) => catalogChargeRefusalFor(tpl, chargeSubjects) === null);
+        const categoryKey = template?.categoryKey ?? "";
+        /* A household charge names no child, and a child's discounts are not the account's. */
+        const memberId = subjectFilter && subjectFilter !== "all" ? subjectFilter : "";
+        if (!categoryKey || !memberId) {
+            setProposedDiscounts({ options: [], wouldApplyPolicyId: null });
+            return;
+        }
+        const amountCents = Math.round(Number(chargeAmount || "0") * 100) || template?.amountCents || 0;
+        /* The organisation's today, not the browser's UTC day. An authored event date still wins. */
+        const serviceDate = chargeEventDate || businessToday;
+        let cancelled = false;
+        const query = new URLSearchParams({
+            customer_id: customerId,
+            customer_member_id: memberId,
+            category_key: categoryKey,
+            amount_cents: String(amountCents),
+            service_date: serviceDate,
+        });
+        void fetch(`/api/admin/financials/proposed-charge-discounts?${query.toString()}`, { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: {
+                options?: Array<{
+                    policyId: string;
+                    label: string;
+                    basis: string | null;
+                    basisValue: number | null;
+                    expectedCents?: number | null;
+                }>;
+                wouldApplyPolicyId?: string | null;
+            } | null) => {
+                if (cancelled) return;
+                setProposedDiscounts({
+                    options: (body?.options ?? []).map((o) => ({
+                        ...o,
+                        expectedCents: o.expectedCents ?? null,
+                    })),
+                    wouldApplyPolicyId: body?.wouldApplyPolicyId ?? null,
+                });
+            })
+            .catch(() => {
+                /* FAIL CLOSED: offer nothing rather than a discount nothing confirmed. */
+                if (!cancelled) setProposedDiscounts({ options: [], wouldApplyPolicyId: null });
+            });
+        return () => { cancelled = true; };
+        /*
+         * EVERY INPUT THE ANSWER DEPENDS ON. Charge type, child, amount and service date all move
+         * eligibility, and a selection that was valid a keystroke ago must not survive into a
+         * charge it cannot reduce.
+         */
+    }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates, chargeSubjects]);
+
+    /*
+     * ── WHICH DISCOUNT THIS CHARGE WILL GET, AND WHAT IT IS WORTH ────────────────────────────
+     *
+     * One selection rule, stated once. The card had it inline where the control is built, so the
+     * preview had no way to ask the same question without restating it — and two copies of
+     * "unanswered means the canonical default" is exactly how a preview comes to describe a
+     * different decision from the one the operator is about to make.
+     *
+     * The MONEY is looked up, never derived. `expectedCents` came from the resolver; this picks
+     * the row and hands it on.
+     */
+    const chargeDiscountSelectedPolicyId =
+        chargeDiscountChoice === undefined ? proposedDiscounts.wouldApplyPolicyId : chargeDiscountChoice;
+    const chargeDiscountCents =
+        chargeDiscountSelectedPolicyId
+            ? proposedDiscounts.options.find((o) => o.policyId === chargeDiscountSelectedPolicyId)?.expectedCents
+              ?? null
+            : null;
+
+    const [waiverReason, setWaiverReason] = useState("");
+    const resetChargeDecisions = useCallback(() => {
+        setChargeToChanging(false);
+        setChargeShares([]);
+        setChargeDiscountChoice(undefined);
+        setWaiverReason("");
+    }, []);
+
+    /*
+     * ── AFTER THE CHARGE EXISTS, THE DECISIONS ABOUT IT ──────────────────────────────────────
+     *
+     * Two registered actions, each per created charge: a charge-scoped arrangement when the
+     * operator divided this charge themselves, and a charge-level exclusion per waived policy.
+     * Both are keyed by a charge id that did not exist a moment ago, which is the entire reason
+     * this runs after the create rather than inside it.
+     *
+     * NOTHING IS ROLLED BACK. The charge is canonical the instant it is written, and reversing it
+     * because a waiver failed would destroy real money to tidy up a follow-up — so every refusal
+     * is COLLECTED and returned, and the caller reports them. Each step is independently
+     * retryable, which is what makes reporting rather than unwinding the honest answer.
+     */
+    const applyChargeDecisions = useCallback(
+        async (chargeIds: readonly string[]): Promise<string[]> => {
+            const failures: string[] = [];
+            if (chargeIds.length === 0) return failures;
+
+            const run = async (actionKey: string, payload: Record<string, unknown>): Promise<string | null> => {
+                try {
+                    const res = await fetch("/api/admin/actions/execute", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({
+                            action_key: actionKey,
+                            /*
+                             * THE SAME SUBJECT THE CHARGE WAS RAISED AGAINST. There is no `charge`
+                             * entity type in the action runtime; the charge these decisions are
+                             * about travels in the payload, where every other charge-scoped
+                             * financial action carries it.
+                             */
+                            entity_type: chargeInvocation?.entityType ?? "child",
+                            entity_id: chargeInvocation?.entityId ?? "",
+                            mode: "execute",
+                            confirmation: { confirmed: true },
+                            payload,
+                        }),
+                    });
+                    const body = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+                    if (body?.ok) return null;
+                    const message = typeof body?.error === "string" ? body.error : body?.error?.message;
+                    return message || "refused";
+                } catch {
+                    return "could not be sent";
+                }
+            };
+
+            /*
+             * THE ARRANGEMENT IN FORCE, when the operator has not departed from it. An override is
+             * still the operator's; this only stops a charge being created with no allocation under
+             * a household that has one on record.
+             */
+            const standingShares = standingArrangementShares(responsibilityPositionBody);
+
+            for (const chargeId of chargeIds) {
+                const applying = chargeToChanging && chargeShares.length > 0;
+                if (applying || standingShares.length > 0) {
+                    /*
+                     * THE SHARES ARE TRANSLATED, NOT COMPUTED. A percentage becomes basis points
+                     * and an amount becomes cents because that is how the domain stores them; what
+                     * a share is WORTH against this charge is the resolver's answer, and this card
+                     * never asks itself that question.
+                     */
+                    const shares = applying
+                        ? chargeShares
+                              .filter((share) => share.partyId.trim().length > 0)
+                              .map((share) => ({
+                                  responsible_party_id: share.partyId,
+                                  method: share.method,
+                                  percent_basis_points:
+                                      share.method === "percentage" ? Math.round(Number(share.value || 0) * 100) : null,
+                                  amount_cents:
+                                      share.method === "fixed" ? Math.round(Number(share.value || 0) * 100) : null,
+                              }))
+                        : standingShares;
+                    const error = await run("billing.configure_responsibility", {
+                        customer_id: customerId,
+                        charge_id: chargeId,
+                        /*
+                         * Today: the arrangement governs this charge from the moment it is made —
+                         * and "today" is the organisation's business date, not the UTC day.
+                         */
+                        effective_start: businessToday,
+                        shares,
+                    });
+                    if (error) {
+                        failures.push(`responsibility for this charge — ${error}`);
+                    } else {
+                        /*
+                         * ── CONFIGURING WHO OWES IT IS NOT DIVIDING IT ──────────────────────
+                         *
+                         * `billing.configure_responsibility` writes the arrangement and its
+                         * shares: who WOULD bear this charge. Dividing the posted net into
+                         * allocations is a different canonical act, and until it runs the ledger
+                         * truthfully reads "Not allocated" and Details truthfully says "This
+                         * posted charge is not divided under it" — measured on deployed staging
+                         * with the arrangement correctly in place.
+                         *
+                         * That is a valid intermediate state and a poor terminal one: the operator
+                         * reviewed "Ada Certfree 100%" and pressed Add charge. So the workflow
+                         * sequences the EXISTING authority rather than folding allocation into
+                         * either of the other two acts — three governed, independently auditable
+                         * writes, in the order the domain states them.
+                         *
+                         * Only after configure SUCCEEDS. Dividing a charge under an arrangement
+                         * that was not saved would divide it under the wrong answer.
+                         */
+                        const divideError = await run("billing.resolve_responsibility", {
+                            charge_id: chargeId,
+                        });
+                        if (divideError) {
+                            failures.push(`dividing this charge under its responsibility — ${divideError}`);
+                        }
+                    }
+                }
+
+                /*
+                 * ── "NO DISCOUNT" WRITES SOMETHING ONLY WHEN IT MEANS SOMETHING ──────────────
+                 *
+                 * Declining a discount that WOULD otherwise have applied is a decision about a
+                 * real family's money, and it is recorded as a charge-level exclusion with its
+                 * reason. Choosing No discount where canonical resolution already says none
+                 * applies is the truthful result and writes NOTHING — an exclusion row there
+                 * would be a decision nobody made, against a policy that was never going to
+                 * reduce this charge, sitting in the record forever for somebody to explain.
+                 */
+                if (chargeDiscountChoice === null && chargeDiscountSuppresses) {
+                    const error = await run("billing.waive_charge_discount", {
+                        charge_id: chargeId,
+                        policy_id: chargeDiscountSuppresses,
+                        reason: waiverReason,
+                    });
+                    if (error) failures.push(`recording no discount — ${error}`);
+                }
+            }
+            return failures;
+        },
+        [chargeDiscountChoice, chargeDiscountSuppresses, chargeInvocation, chargeShares, chargeToChanging, customerId, responsibilityPositionBody, waiverReason],
+    );
+
+    const commit = useCallback(async () => {
+        if (!pending || running) return;
+        if (!chargeInvocation) {
+            setCommandError(chargeUnavailableReason);
+            return;
+        }
+        setRunning(true);
+        setCommandError(null);
+        setCommandNotice(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "charge.add",
+                    entity_type: chargeInvocation.entityType,
+                    entity_id: chargeInvocation.entityId,
+                    mode: "execute",
+                    confirmation: { confirmed: true },
+                    /*
+                     * THE COMMIT MUST CARRY WHAT THE PREVIEW CARRIED.
+                     *
+                     * This payload was the bare pair while the preview had already learned to send
+                     * the event date, so an `occurs_on = event_date` template previewed cleanly and
+                     * then refused at commit with `missing_event_date` — after the operator had
+                     * entered the date. Preview and commit run the same resolver; they have to be
+                     * given the same inputs or the resolver is being asked two different questions.
+                     */
+                    payload: {
+                        ...(chargeInvocation.customerMemberId
+                            ? { customer_member_id: chargeInvocation.customerMemberId }
+                            : { subject_grain: "household" }),
+                        // Same subject inputs the preview was given — preview and commit run the
+                        // same resolver, so they must be asked the same question.
+                        customer_id: customerId,
+                        /* The same source the preview resolved — preview equals commit. */
+                        ...(pending.source === "template"
+                            ? { template_id: pending.templateId }
+                            : { catalog_product_id: pending.templateId }),
+                        // The same selection the preview was given — preview and commit run the
+                        // same resolver, so they must be asked the same question.
+                        ...(selectedChildIds.length > 1
+                            ? { customer_member_ids: selectedChildIds, child_labels: selectedChildLabels }
+                            : {}),
+                        // The same service date the preview was asked about — preview equals commit.
+                        ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
+                        ...(chargeNote ? { note: chargeNote } : {}),
+                        // The same amount and reason the preview priced.
+                        ...amountOverrideFields(pending.source),
+                    },
+                }),
+            });
+            /*
+             * ── THE WIRE SHAPE, NOT THE EXECUTOR'S ──────────────────────────────────────────
+             *
+             * `/api/admin/actions/execute` reshapes what the action returns before it reaches the
+             * browser:
+             *
+             *     apiOk({ execution_result: result.actionResult.result.detail,
+             *             affected_id:     result.actionResult.result.affectedId })
+             *
+             * so the wire carries `data.execution_result` and `data.affected_id`. This read
+             * `json.result.affectedId` and `json.result.detail` — the executor's INTERNAL shape,
+             * which never crosses the network. Captured verbatim from deployed staging:
+             *
+             *     {"ok":true,"data":{"execution_result":{"write_status":"created",…},
+             *                        "affected_id":"77b02ec2-…"},"correlation_id":"…"}
+             *
+             * Both reads were therefore always undefined, and two things silently never ran: the
+             * follow-up that makes a charge inherit the standing arrangement — which is the W7
+             * defect — and the idempotency check, which is why four consecutive clicks could each
+             * report success while creating nothing.
+             */
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: {
+                    affected_id?: string | null;
+                    execution_result?: {
+                        /*
+                         * `write_status` is the difference between a charge that now exists because
+                         * of this click and one that already existed. Reading only `charge_id` made
+                         * an idempotent duplicate indistinguishable from a new write — the card
+                         * closed and reported success for a `skipped_posted` that created nothing.
+                         */
+                        /* The single/household path states its own write status here; per_child states one each. */
+                        write_status?: string | null;
+                        per_child?: Array<{ charge_id?: string | null; error?: string | null; write_status?: string | null }>;
+                        charges_failed?: number;
+                    } | null;
+                } | null;
+            };
+            if (!json?.ok) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                /*
+                 * A refusal is the domain speaking — surfaced, never swallowed into a silent no-op,
+                 * and never in the domain's own shorthand. `resolveChargeFromTemplate` answers with
+                 * machine tokens, so "missing_service_period" reached operators verbatim; the
+                 * domain's real sentences pass through `operatorRefusal` untouched.
+                 */
+                setCommandError(operatorRefusal(err, "The charge was refused."));
+                return;
+            }
+
+            /*
+             * ── THE CHARGES THAT NOW EXIST ───────────────────────────────────────────────────
+             *
+             * One per billed child, or one for the household. `charge.add` reports a multi-child
+             * operation as SUCCESS carrying its failures, so the list below can be shorter than
+             * what the operator selected — and the follow-up work must run against the charges
+             * that exist rather than the ones that were asked for.
+             */
+            const detail = json.data?.execution_result ?? null;
+            /*
+             * ── FOLLOW-UP BELONGS TO CHARGES THIS SUBMISSION ACTUALLY WROTE ─────────────────
+             *
+             * `charge.add` is idempotent and answers `skipped_posted` carrying the EXISTING
+             * charge's id. Taking that id as "created" meant a duplicate click could reconfigure
+             * and re-divide responsibility on a historical charge that nobody touched — which
+             * happened: a repeat submission silently gave an older charge a new arrangement,
+             * observed on deployed staging.
+             *
+             * So the write status gates the id, not merely the notice. Only a charge this
+             * submission created or recalculated is eligible for the responsibility follow-up.
+             */
+            const WROTE = new Set(["created", "recalculated"]);
+            const wroteStatus = (detail?.write_status ?? "").trim();
+            const answeredChargeIds = detail?.per_child
+                ? detail.per_child.map((r) => (r.charge_id ?? "").trim()).filter(Boolean)
+                : [String(json.data?.affected_id ?? "").trim()].filter(Boolean);
+            const createdChargeIds = detail?.per_child
+                ? detail.per_child
+                      .filter((r) => WROTE.has((r.write_status ?? "").trim()))
+                      .map((r) => (r.charge_id ?? "").trim())
+                      .filter(Boolean)
+                : WROTE.has(wroteStatus) ? answeredChargeIds : [];
+
+            /*
+             * ── A NO-OP IS NOT A WRITE ───────────────────────────────────────────────────────
+             *
+             * `charge.add` is idempotent: asking twice for the same charge on the same day answers
+             * `skipped_posted` with the EXISTING charge's id, which is correct and must stay that
+             * way. What was wrong was the telling. The card read `charge_id`, found one, and closed
+             * reporting success — so an operator who clicked twice believed they had created two
+             * charges and the ledger disagreed with them.
+             *
+             * Measured on deployed staging: four consecutive Add charge clicks answered HTTP 200
+             * with `write_status: "skipped_posted"` and the same `affected_id`, and the surface
+             * reported success every time.
+             */
+            const wroteSomething = createdChargeIds.length > 0;
+            /*
+             * Fired for the household path as well. It used to require `per_child`, so a single
+             * idempotent charge reported success and the operator believed they had created one.
+             */
+            if (!wroteSomething && answeredChargeIds.length > 0) {
+                setPending(null);
+                resetChargeDecisions();
+                resetStack();
+                setChargeAmount("");
+                resetAmountOverride();
+                setChargeNote("");
+                setChargeEventDate("");
+                setCommandNotice(
+                    answeredChargeIds.length === 1
+                        ? "That charge already exists on this account. Nothing new was created."
+                        : "Those charges already exist on this account. Nothing new was created.",
+                );
+                return;
+            }
+
+            const followUpFailures = await applyChargeDecisions(createdChargeIds);
+
+            /*
+             * ── PARTIAL COMPLETION IS REPORTED, NOT ROUNDED ──────────────────────────────────
+             *
+             * The charge is written and cannot be un-written by a later step failing. An operator
+             * told only "done" would believe a waiver stands that does not, and would find out
+             * from an invoice. So a follow-up refusal keeps the command open, naming what DID
+             * happen first — the charge is real — and then exactly what did not.
+             */
+            if (followUpFailures.length > 0) {
+                const created = createdChargeIds.length;
+                setCommandError(
+                    `${created === 1 ? "The charge was created" : `${created} charges were created`}, `
+                    + `but ${followUpFailures.length === 1 ? "one step" : `${followUpFailures.length} steps`} `
+                    + `did not complete: ${followUpFailures.join("; ")}`,
+                );
+                /* Nothing is reset: the decisions stay on screen so the operator can retry them. */
+                return;
+            }
+
+            /*
+             * W7-F016: AN EDIT REPLACES THE DRAFT. The new draft is written first (above), so the
+             * charge is never lost; only then is the original withdrawn, retained as replaced by
+             * this one. Where the save re-resolved the SAME draft in place (an amount-only edit on
+             * the same service date recalculates it), there is nothing to withdraw.
+             */
+            if (replacingDraftId && createdChargeIds[0] && createdChargeIds[0] !== replacingDraftId) {
+                const withdrawn = await executeFinancialCommand({
+                    action: "cancelDraft",
+                    entity: { entityType: "customer", entityId: customerId ?? "" },
+                    mode: "execute",
+                    payload: { charge_id: replacingDraftId, replaced_by_charge_id: createdChargeIds[0] },
+                });
+                if (!withdrawn.ok) {
+                    setReplacingDraftId(null);
+                    setCommandError(`The edited charge was saved, but the original draft could not be withdrawn: ${withdrawn.error}`);
+                    return;
+                }
+            }
+            if (replacingDraftId && filterBeforeEdit !== null) setSubjectFilter(filterBeforeEdit);
+            setFilterBeforeEdit(null);
+            setReplacingDraftId(null);
+            setPending(null);
+            resetChargeDecisions();
+            // The command card closes on success only. A refusal keeps it open with the domain's
+            // own message, so the operator can correct the charge rather than re-open and retype it.
+            resetStack();
+            setChargeAmount("");
+            resetAmountOverride();
+            setChargeNote("");
+            setChargeEventDate("");
+        } catch {
+            setCommandError("The charge could not be sent.");
+        } finally {
+            setRunning(false);
+            // The card REFRESHES from the read model; it never inserts the row it just created.
+            await load();
+        }
+        // `chargeEventDate` and `chargeNote` are READ inside this callback and must be in its
+        // dependency list. Without them the commit closed over the empty initial values and the
+        // domain refused with `missing_event_date` — after the operator had entered a date, and
+        // after the PREVIEW had accepted it. A stale closure is invisible until the two disagree.
+    }, [
+        applyChargeDecisions,
+        replacingDraftId,
+        filterBeforeEdit,
+        customerId,
+        chargeEventDate,
+        chargeNote,
+        chargeInvocation,
+        chargeUnavailableReason,
+        load,
+        pending,
+        resetChargeDecisions,
+        running,
+        /* The override the commit sends must be the one on screen, not the one at first render. */
+        overrideOn,
+        overrideCents,
+        overrideReason,
+    ]);
+
+    /**
+     * A LEDGER ROW'S OWN TRANSITION — post a draft, reverse posted money.
+     *
+     * Both are registered actions (`charge.post`, `charge.reverse`), so every rule about what may
+     * happen to a charge stays in the domain. Immutability is a DB trigger, idempotent posting is the
+     * service's guarded update, and the reversal's amount is derived by the service — none of it is
+     * decided here. The card refreshes from the read model afterwards, so what it shows is what
+     * committed, never an optimistic guess about it.
+     */
+    const runRowAction = useCallback(
+        async (
+            actionKey: "post" | "reverse",
+            row: { chargeId: string; description: string | null; subjectMemberId: string | null },
+        ) => {
+            if (running) return;
+            setRunning(true);
+            setCommandError(null);
+            /*
+             * THROUGH THE SHARED AUTHORITY. This built its own request to
+             * `/api/admin/actions/execute`; so did the reverse preview below it, and so would the
+             * workspace ledger if it were given commands of its own. One executor means one idea of
+             * what a refusal looks like and one place a financial action is spelled.
+             *
+             * The entity rule that lives here is request CONTEXT, not attribution: the route refuses
+             * a call without an entity id, while `charge_id` in the payload is what decides which
+             * charge is acted on. A household charge therefore travels with the panel's subject and
+             * still stays on the household it was billed to.
+             */
+            const result = await executeFinancialCommand({
+                action: actionKey,
+                entity: {
+                    entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                    entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+                },
+                mode: "execute",
+                payload: {
+                    charge_id: row.chargeId,
+                    charge_label: row.description ?? row.chargeId,
+                    ...(actionKey === "reverse" ? { kind: "reversal" } : {}),
+                },
+            });
+            // The domain refusing is an answer. Surfaced, never swallowed.
+            if (!result.ok) setCommandError(result.error);
+            setRunning(false);
+            await load();
+        },
+        [load, running, chargeInvocation],
+    );
+
+
+    /*
+     * MONEY IN, AND MONEY BACK OUT — through the registered actions that already own both.
+     *
+     * `payment.record` and `payment.refund` have been registered, catalogued as executable and
+     * certified against real persistence since Thread 8; nothing on this card issued either of them,
+     * so a family could be charged and could not be recorded as having paid. This adds the call, not
+     * the capability: no amount is validated here beyond it being a positive integer of cents, no
+     * balance is computed, and the refusals — a draft charge, an over-application, a refund larger
+     * than the receipt — stay where they are enforced and are surfaced verbatim.
+     *
+     * Same shape as `runRowAction` deliberately: execute, surface a refusal, and refresh from the
+     * read model in `finally` so what the card shows afterwards is what committed rather than an
+     * optimistic guess about it.
+     */
+    /**
+     * WHAT A PAYMENT IS ATTRIBUTED TO.
+     *
+     * `/api/admin/actions/execute` refuses a call with no entity, and the payment path was handing
+     * it the panel's child — which a pre-enrolment household does not have. `vm.subjects` is empty
+     * for a New Leads family, so the attribution resolved to null, the route answered "action_key,
+     * entity_type, and entity_id are required", and the panel showed that sentence as a blocked
+     * card collection. Manual rails, card collection and refunds all failed the same way; only the
+     * chooser labels could be certified, which is why it survived this long.
+     *
+     * `chargeInvocation` already answers exactly this question for charges — the named child when
+     * there is one, the panel's own subject when there is not — so payments travel at the same
+     * grain rather than inventing a second answer. The charge_id or payment_id in the payload still
+     * decides where the money goes; this is attribution for the audit trail.
+     */
+    const paymentEntityFor = useCallback(
+        (subjectMemberId: string | null): { entityType: string; entityId: string } | null => {
+            if (subjectMemberId) return { entityType: "child", entityId: subjectMemberId };
+            if (chargeInvocation) {
+                return { entityType: chargeInvocation.entityType, entityId: chargeInvocation.entityId };
+            }
+            return null;
+        },
+        [chargeInvocation],
+    );
+
+    const runPaymentAction = useCallback(
+        async (
+            actionKey: "payment.record" | "payment.refund" | "payment.collect_card",
+            payload: Record<string, unknown>,
+            entity: { entityType: string; entityId: string } | null,
+        ) => {
+            if (running) return;
+            setRunning(true);
+            setCommandError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: actionKey,
+                        entity_type: entity?.entityType ?? "child",
+                        /*
+                         * THE ROUTE IS STRICTER THAN THE ACTION.
+                         *
+                         * `payment.record` declares `requiresEntityId: false` — the subject of a
+                         * payment is the charge it settles — but `/api/admin/actions/execute`
+                         * refuses any request without one ("action_key, entity_type, and entity_id
+                         * are required"). The certification found this by calling the route the way
+                         * the card does, which is the only way it could have been found: the action
+                         * definition alone says the call is legal.
+                         *
+                         * So the money carries the subject it concerns: the charge's own child where
+                         * it has one, else the panel's. The charge_id in the payload remains what
+                         * decides where the money goes; this is attribution for the audit trail.
+                         */
+                        entity_id: entity?.entityId ?? "",
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload,
+                    }),
+                });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    error?: string | { message?: string };
+                    data?: { execution_result?: Record<string, unknown> };
+                };
+                if (!json?.ok) {
+                    const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                    setCommandError(err || "That could not be done.");
+                    return { ok: false as const, error: err ?? "That could not be done." };
+                }
+                // A card collection keeps the panel open: the operator still has to enter a card.
+                if (actionKey !== "payment.collect_card") {
+                    setPayTarget(null);
+                    /* The next payment is a fresh question about who paid, not a carried answer. */
+                    setPayPayerPersonId("");
+                    setPayReference("");
+                }
+                /*
+                 * W7-F048: A RECORDED PAYMENT CLOSES THE PAYMENT COMMAND. The form is the command's
+                 * whole body now, so clearing it would leave an empty tab; the reloaded ledger row is
+                 * the confirmation, as it is for every other money-moving layer. Only the Payment
+                 * command closes — a refund composed elsewhere is not affected.
+                 */
+                if (actionKey === "payment.record") {
+                    setStack((st) => (st.length && st[st.length - 1]!.kind === "payment" ? st.slice(0, -1) : st));
+                }
+                /*
+                 * THE RESULT IS THE EXECUTION RESULT, not a `detail` inside it.
+                 *
+                 * `/api/admin/actions/execute` answers `data.execution_result: { client_secret,
+                 * connected_account, collection_attempt_id, … }`. Reading a `detail` wrapper that
+                 * the envelope does not have yielded `{}` for every field, so a card collection
+                 * handed Stripe Elements an empty client secret and the Payment Element refused to
+                 * mount: "clientSecret should be of the form ${id}_secret_${secret}. You specified:
+                 * .". The intent had been created on the connected account by then — the money side
+                 * was correct and only the browser's handle on it was lost.
+                 *
+                 * The nested shape is still honoured, so an action that does wrap its answer keeps
+                 * working.
+                 */
+                const executionResult = (json.data?.execution_result ?? {}) as Record<string, unknown>;
+                const detail = (executionResult.detail as Record<string, unknown> | undefined) ?? executionResult;
+                return { ok: true as const, detail };
+            } catch {
+                setCommandError("The request could not be sent.");
+                return { ok: false as const, error: "The request could not be sent." };
+            } finally {
+                setRunning(false);
+                // A collection has not changed any balance yet, but reloading is harmless and keeps
+                // the ledger honest if something else moved underneath.
+                await load();
+            }
+        },
+        [load, running],
+    );
+
+    const currency = vm?.rows[0]?.currencyCode ?? "USD";
+    /*
+     * THE TOTALS FOLLOW THE FILTER.
+     *
+     * The subject filter narrows the ledger, so the reconciliation above it must narrow too — a
+     * "$100.00" account total sitting over a filtered ledger showing $75 is precisely the "every
+     * total reconciles to authoritative rows" rule broken, and it is what the first browser pass
+     * found. The narrowed figures are the SERVER's, computed per subject in the same composition, so
+     * switching subjects costs nothing and cannot compute the rule a second way.
+     */
+    const reconciliation =
+        vm == null
+            ? null
+            : subjectFilter === "all"
+              ? vm.reconciliation
+              : vm.reconciliationBySubject[subjectFilter] ?? vm.reconciliation;
+    const pastDue =
+        vm == null
+            ? null
+            : subjectFilter === "all"
+              ? vm.pastDue
+              : vm.pastDueBySubject[subjectFilter] ?? null;
+
+    const detailReady = Boolean(vm && reconciliation && ledgerComplete);
+
+    const requestDetails = useCallback(() => {
+        /*
+         * ── THE SHELL IS NOT DATA-DEPENDENT ───────────────────────────────────────────────────
+         *
+         * Holding the request until the deep read resolved removed the false intermediate, and it
+         * bought that with a wait on the compact card — which is not how any other Focus Panel card
+         * behaves. Invoking a focused surface establishes the depth immediately; Financials now does
+         * the same, at final geometry, because its structure is known the moment it is asked for.
+         *
+         * What must NOT arrive with it is ledger content nobody has read. The header, metrics,
+         * lenses and filters commit from the account values the compact card is already authoritative
+         * for; the ledger REGION alone says it is still reading, and it says so without inventing a
+         * single row. That distinction — an honest empty region versus fabricated rows — is the whole
+         * difference between this and the skeleton that was rejected three passes running.
+         */
+        setDetailPending(true);
+        /* Details is the account. It opens at the account's own scope, which is what its control says. */
+        setSubjectFilter("all");
+        setStack([{ kind: "detail" }]);
+    }, []);
+
+    useEffect(() => {
+        if (!detailPending || !detailReady) return;
+        setDetailPending(false);
+    }, [detailPending, detailReady]);
+    /*
+     * DENSITY IS A REAL DISTINCTION, not a label.
+     *
+     * `compact` is supporting financial context inside another operating process — the balance, what
+     * is next, and the way in. It deliberately does NOT attempt the reconciliation: a half-stated
+     * breakdown is more misleading than none. `standard` is the V5 summary and states the period in
+     * full. Expanded is either of them plus the ledger.
+     */
+    const isCompact = model.density === "compact" && !expanded;
+    /*
+     * THE LEDGER IS THE EXPANDED REPRESENTATION, and only that.
+     *
+     * Summary and expanded rendered identically at first, which made `Details →` a no-op and left the
+     * summary carrying a ledger it has no room for. The summary states the period; the expanded view
+     * keeps a SHALLOW top — balance and past due in one line — and gives the rest of the surface to
+     * the ledger, because re-rendering a larger copy of the summary above it would spend the width
+     * the ledger exists to use.
+     */
+    const showBands = !expanded;
+    const showLedger = expanded;
+
+    /*
+     * ── THE SUMMARY IS THE APPROVED CARD, RENDERED BY THE APPROVED COMPONENT ──
+     *
+     * Everything above this line is the card's DATA work — loading the account, narrowing to a
+     * subject, running Add charge. None of it is presentation, and none of it changes here.
+     *
+     * What changes is that the summary no longer draws itself. It renders
+     * `components/operationalCards/FinancialsCard`, the same component the design lab renders, so
+     * there is one presentation of this card rather than a locked specimen and a production
+     * approximation of it. The approximation opened with a hero line the specimen does not have,
+     * showed two of the seven arithmetic lines, drew its actions as bordered buttons rather than
+     * quiet links, and left a band of empty white below the zones.
+     *
+     * The EXPANDED path below is untouched: the ledger is the expanded representation and is not
+     * part of the approved summary specimen.
+     */
+    /*
+     * The command card opens on the DOMAIN's answer, not on the template's raw configuration.
+     *
+     * Without this the card showed `event_date` as its service date — a stored strategy key on the
+     * one screen where an operator is about to commit money. Previewing on open (and whenever the
+     * template or subject changes) means every date, the amount and the subject on screen are what
+     * the resolver actually produced.
+     */
+    useEffect(() => {
+        if (overlay !== "add_charge" || !vm) return;
+        /* Only an item the command accepts is opened on; unsupported and blocked ones are shown, never chosen. */
+        const first = pending?.templateId
+            ?? vm.chargeTemplates.find((tpl) => catalogChargeRefusalFor(tpl, chargeSubjects) === null)?.id
+            ?? null;
+        if (!first) return;
+        const source = pending?.source ?? "catalog";
+        const pool = source === "template" ? vm.draftTemplates : vm.chargeTemplates;
+        void preview(first, pool.find((t) => t.id === first)?.label ?? pending?.label ?? "", source);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
+    }, [overlay, subjectFilter, chargeEventDate]);
+
+    /* An override re-previews once the operator pauses, so the preview is the server's answer for it. */
+    const overridePreviewKey = overrideOn ? `${overrideCents ?? "?"}|${overrideReason.trim()}` : "off";
+    const overridePreviewSeen = useRef(overridePreviewKey);
+    useEffect(() => {
+        if (overridePreviewSeen.current === overridePreviewKey) return;
+        overridePreviewSeen.current = overridePreviewKey;
+        if (overlay !== "add_charge" || !pending?.templateId || pending.source !== "catalog") return;
+        const timer = setTimeout(() => void preview(pending.templateId, pending.label, "catalog"), 400);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the override alone
+    }, [overridePreviewKey]);
+
+    /** The row as the read model knows it — the callback carries identity, not attribution. */
+    const rowForCharge = useCallback(
+        (chargeId: string) => {
+            const row = vm?.rows.find((r) => r.chargeId === chargeId);
+            return {
+                chargeId,
+                description: row?.description ?? null,
+                subjectMemberId: row?.subjectMemberId ?? null,
+            };
+        },
+        [vm],
+    );
+
+    /*
+     * ── REVERSE IS A COMMAND, SO IT GETS THE COMMAND SHELL ────────────────────────────────────
+     *
+     * It rendered as a band inside the Details tree: a full-width strip of unstyled controls laid
+     * horizontally across the ledger, sharing the Move-payment panel's classes because that is
+     * what it was copied from. Beside Add and Payment — which are focused command cards — it read
+     * as an unfinished part of the page rather than a deliberate operation, and it was the one
+     * money-destroying command on the surface.
+     *
+     * Nothing about the operation changes. `charge.reverse` is still the only writer and it is
+     * still reached through the shared command authority. What changes is that Reverse is now a
+     * destination on the stack like every other command, so it is drawn in the same shell, it is
+     * dismissed by the same three gestures, and dismissing it returns to Details.
+     */
+    const openReverseCharge = useCallback((args: { chargeId: string; label: string }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setReverseChargePreview(null);
+        setReverseChargeError(null);
+        setAdjustNotice(null);
+        setReverseCharge(args);
+        push({ kind: "reverse_charge", chargeId: args.chargeId, label: args.label });
+    }, [closeAdjustPanels, closeMovePanels, push]);
+
+    /*
+     * ── WHO OWES THIS OBLIGATION ──────────────────────────────────────────────────────────────
+     *
+     * Opened per row, in the mode the row's own state earned: a charge nobody owes yet is RESOLVED
+     * under the arrangement in force; a charge that already names a party is REALLOCATED, which is
+     * a different act and needs a reason. Nothing is decided here — the mode only chooses which
+     * canonical command the shell will raise.
+     */
+    const openResponsibility = useCallback(
+        (args: { chargeId: string; label: string; mode: "resolve" | "reallocate" }) => {
+            closeMovePanels();
+            closeAdjustPanels();
+            setResponsibilityPreview(null);
+            setResponsibilityError(null);
+            setReallocationReason("");
+            push({ kind: "responsibility", chargeId: args.chargeId, label: args.label, mode: args.mode });
+        },
+        [closeAdjustPanels, closeMovePanels, push],
+    );
+
+    /*
+     * THE PREVIEW IS THE ACTION'S. `buildPreview` reads the allocatable net from the charge itself
+     * — gross, then the Thread 10 reductions, then what is left to divide — so the number an
+     * operator confirms is the engine's, and this card never computes a responsibility base.
+     */
+    const runResponsibilityCommand = useCallback(
+        async (mode: "preview" | "execute", target: { chargeId: string; mode: "resolve" | "reallocate" }) => {
+            const row = rowForCharge(target.chargeId);
+            const result = await executeFinancialCommand({
+                action: target.mode === "resolve" ? "resolveResponsibility" : "reallocateResponsibility",
+                entity: {
+                    entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                    entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+                },
+                mode,
+                payload: {
+                    charge_id: target.chargeId,
+                    /* The authority refuses a reallocation with no reason; it is never defaulted here. */
+                    ...(target.mode === "reallocate" ? { reason: reallocationReason } : {}),
+                },
+            });
+            return result;
+        },
+        [chargeInvocation, reallocationReason, rowForCharge],
+    );
+
+    const previewResponsibility = useCallback(
+        async (target: { chargeId: string; mode: "resolve" | "reallocate" }) => {
+            if (running) return;
+            setRunning(true);
+            setResponsibilityError(null);
+            const result = await runResponsibilityCommand("preview", target);
+            if (result.ok) setResponsibilityPreview(result.preview ?? null);
+            else setResponsibilityError(result.error);
+            setRunning(false);
+        },
+        [runResponsibilityCommand, running],
+    );
+
+    const confirmResponsibility = useCallback(
+        async (target: { chargeId: string; mode: "resolve" | "reallocate" }) => {
+            if (running) return;
+            setRunning(true);
+            setResponsibilityError(null);
+            const result = await runResponsibilityCommand("execute", target);
+            /*
+             * A REFUSAL IS AN ANSWER AND STAYS ON SCREEN. `reallocation_required` in particular is
+             * the engine telling the operator that the arrangement in force would divide this
+             * posted charge differently — which is a decision for them, not a retry for us.
+             */
+            if (!result.ok) {
+                setResponsibilityError(result.error);
+                setRunning(false);
+                return;
+            }
+            setResponsibilityPreview(null);
+            setReallocationReason("");
+            setRunning(false);
+            pop();
+            await load();
+        },
+        [load, pop, runResponsibilityCommand, running],
+    );
+
+
+    /*
+     * ── THIS CARD IS THE COMMAND HOST ──────────────────────────────────────────────────────────
+     *
+     * Financials → Accounts renders this card above its own ledger, as siblings. The ledger's rows
+     * carry the same action icons as Details and must raise the same commands — so rather than the
+     * workspace growing a Reverse of its own, it asks, and this card performs. One command model,
+     * one eligibility model, one execution path, two presentation hosts.
+     *
+     * Registered only where a host actually provides the channel; in the Focus Panel there is none,
+     * and this is inert.
+     */
+    const handleCommandRequest = useCallback(
+        (request: FinancialCommandRequest) => {
+            if (request.kind === "adjust") openAdjustForCharge({ chargeId: request.chargeId });
+            else if (request.kind === "reverse") openReverseCharge({ chargeId: request.chargeId, label: request.label });
+            else if (request.kind === "post") void runRowAction("post", rowForCharge(request.chargeId));
+            /* The workspace asks for the same two commands; this card performs them. */
+            else if (request.kind === "resolveResponsibility") {
+                openResponsibility({ chargeId: request.chargeId, label: request.label, mode: "resolve" });
+            } else if (request.kind === "reallocateResponsibility") {
+                openResponsibility({ chargeId: request.chargeId, label: request.label, mode: "reallocate" });
+            }
+        },
+        [openAdjustForCharge, openReverseCharge, openResponsibility, rowForCharge, runRowAction],
+    );
+    useRegisterFinancialCommandHost(handleCommandRequest);
+
+    const previewReverseCharge = useCallback(async () => {
+        if (!reverseCharge || running) return;
+        setRunning(true);
+        setReverseChargeError(null);
+        const row = rowForCharge(reverseCharge.chargeId);
+        /* The preview is the ACTION's, fetched through the one executor. */
+        const result = await executeFinancialCommand({
+            action: "reverse",
+            entity: {
+                entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+            },
+            mode: "preview",
+            payload: { charge_id: reverseCharge.chargeId, charge_label: reverseCharge.label, kind: "reversal" },
+        });
+        if (!result.ok) setReverseChargeError(result.error);
+        else if (!result.preview) setReverseChargeError("This reversal could not be previewed.");
+        else setReverseChargePreview(result.preview);
+        setRunning(false);
+    }, [chargeInvocation, reverseCharge, rowForCharge, running]);
+
+    const confirmReverseCharge = useCallback(async () => {
+        if (!reverseCharge || running || !reverseChargePreview) return;
+        const target = reverseCharge;
+        setReverseCharge(null);
+        setReverseChargePreview(null);
+        await runRowAction("reverse", rowForCharge(target.chargeId));
+        // The original stays posted; what changed is that a corrective line now references it.
+        setAdjustNotice(`Reversed ${target.label}. The original charge stays on the record, with its correction beside it.`);
+    }, [reverseCharge, reverseChargePreview, rowForCharge, runRowAction, running]);
+
+    // Elevation reported from RENDER-adjacent state, so the depth layer and this card agree on the
+    // same frame. A card that reported after paint would flash its base surface first.
+    useReportPerspective(coordination, "financials", overlay ? "focused" : "base");
+    /*
+     * ── DISMISSAL POPS ONE LEVEL ───────────────────────────────────────────────────────────────
+     *
+     * COMPACT → DETAILS → COMMAND is a stack, and closing a command returned the operator all the
+     * way to the compact card: open Details, work the ledger, adjust a row, cancel — and the ledger,
+     * the lens and the expanded periods were gone, because dismissal cleared the overlay outright.
+     *
+     * Dismissal pops ONE level, whatever the level happens to be: a command returns to Details,
+     * Details returns to the compact card. Escape, the backdrop and every Cancel run through this
+     * one path, so the three cannot drift apart.
+     *
+     * ── ONE GESTURE, ONE LEVEL ────────────────────────────────────────────────────────────────
+     *
+     * Dismissal has more than one announcer — the grid's backdrop publishes a signal, and this card
+     * listens for Escape itself — and on some hosts both speak for the same keypress. Two pops for
+     * one Escape would take the operator from a command past Details to the compact card, which is
+     * the wrong-return defect wearing a different hat. So the pop is coalesced: whoever announces
+     * first moves the stack, and anything arriving in the same gesture window is the same gesture.
+     */
+    const lastDismissRef = useRef(0);
+    const [dismissNonce, setDismissNonce] = useState(0);
+    const dismissOneLevel = useCallback(() => {
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (now - lastDismissRef.current < 150) return;
+        lastDismissRef.current = now;
+        setDismissNonce((n) => n + 1);
+        pop();
+        setPending(null);
+        setCommandError(null);
+        if (replacingDraftId && filterBeforeEdit !== null) setSubjectFilter(filterBeforeEdit);
+        setFilterBeforeEdit(null);
+        setReplacingDraftId(null);
+        setCancelDraftConfirm(false);
+        setDraftActionError(null);
+        closeMovePanels();
+        closeAdjustPanels();
+        setReverseCharge(null);
+        setReverseChargePreview(null);
+        setReverseChargeError(null);
+    }, [closeAdjustPanels, closeMovePanels, pop, replacingDraftId, filterBeforeEdit]);
+
+    useDismissSignal(coordination, "financials", dismissOneLevel);
+
+    /*
+     * ── ESCAPE BELONGS TO THIS CARD'S OWN STACK ───────────────────────────────────────────────
+     *
+     * Measured on the mounted work-unit lane: Escape over an open Financials command did nothing
+     * at all — the grid that owns the backdrop on this route publishes no dismissal, so the card
+     * waited for a signal that never came while Cancel and the backdrop both worked. A stack whose
+     * three dismissal gestures do not agree is not a stack.
+     *
+     * The yield condition is the shared one rather than a second opinion about it: an open select
+     * menu or inline editor closes itself first, exactly as it does for the grid.
+     */
+    /*
+     * ── A DISMISSAL THAT LEAVES A SURFACE STANDING MUST RE-ASSERT DEPTH ───────────────────────
+     *
+     * The host clears its OWN depth layer when the backdrop is clicked — reasonably, since for
+     * every other card a dismissal means there is nothing left to elevate. This card has a stack,
+     * so dismissing a command leaves Details standing and still owed the depth layer.
+     *
+     * `useReportPerspective` reports only when the LEVEL changes, and the level does not change
+     * here: it was "focused" for the command and is "focused" for Details. So nothing re-reported,
+     * the host stayed collapsed, and everything from then on rendered un-elevated — measured as a
+     * Reverse command with no backdrop at all in the DOM, which is how an operator ends up with a
+     * money-destroying command open over a live, clickable page.
+     *
+     * Re-asserting is the whole fix: same value, said again, because the host has forgotten it.
+     */
+    useEffect(() => {
+        if (dismissNonce === 0 || !overlay) return;
+        coordination?.reportPerspective?.("financials", "focused");
+    }, [dismissNonce, overlay, coordination]);
+
+    useEffect(() => {
+        if (!overlay) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            if (hasInnerDismissibleLayer(document)) return;
+            event.preventDefault();
+            /*
+             * DELIBERATELY NOT stopPropagation.
+             *
+             * Swallowing the key kept the grid from seeing a dismissal it also tracks, and the two
+             * drifted apart: measured after one Escape-dismissed command, re-opening a command
+             * rendered the surface with NO backdrop in the DOM — the card thought it was elevated
+             * and the grid no longer did. An operator then has a money-destroying command open
+             * over an un-scrimmed page.
+             *
+             * The key is allowed to continue, so every listener keeps its own books straight, and
+             * `dismissOneLevel` makes the extra announcements harmless: one gesture still moves the
+             * stack exactly one level.
+             */
+            dismissOneLevel();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [overlay, dismissOneLevel]);
+
+    /*
+     * ── W7-F014: CHARGE DETAILS CLOSES ON AN OUTSIDE CLICK, IN EVERY HOST ─────────────────────
+     *
+     * Measured on deployed staging (Financials → Accounts → Alvarez): Escape and Close dismissed
+     * Charge Details, a click outside the card did nothing. That host draws the record over the
+     * account pane with no backdrop, so the grid's dismissal signal never fires there. A pointer-down
+     * outside the record's card — and outside any open menu or popover, which closes itself first —
+     * runs the same one-level dismissal Escape does. Where a backdrop also announces the click,
+     * `dismissOneLevel` coalesces the two into one gesture. Clicks inside the card never dismiss.
+     */
+    useEffect(() => {
+        if (
+            overlay !== "charge_detail" && overlay !== "payment_detail" && overlay !== "prepaid_detail"
+            /* W7-F033: the money-moving layers close on an outside click like every other layer. */
+            && overlay !== "payment_application" && overlay !== "release_held" && overlay !== "reverse_adjustment"
+        ) return;
+        const onPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target || typeof target.closest !== "function") return;
+            const card = document.querySelector(`[data-financials-overlay="${overlay}"] .alloy-os-ucard`);
+            if (!card || card.contains(target)) return;
+            if (target.closest('[role="listbox"], [role="menu"], [data-radix-popper-content-wrapper]')) return;
+            if (hasInnerDismissibleLayer(document)) return;
+            dismissOneLevel();
+        };
+        document.addEventListener("pointerdown", onPointerDown, true);
+        return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    }, [overlay, dismissOneLevel]);
+
+    /*
+     * W7-F033: A MONEY-MOVING LAYER LIVES EXACTLY AS LONG AS ITS PENDING ACT. Cancel, a completed
+     * confirm and a partial reallocation all clear that state through the functions that already
+     * owned it; this closes the layer when they do, so no confirm path had to learn about the stack.
+     */
+    useEffect(() => {
+        if (
+            (overlay === "payment_application" && !movePending && !applyPending)
+            || (overlay === "release_held" && !releasePending)
+            || (overlay === "reverse_adjustment" && !reversePending)
+        ) {
+            pop();
+        }
+    }, [overlay, movePending, applyPending, releasePending, reversePending, pop]);
+
+    /* The receipt a reallocation or apply acts on, named in the layer: amount, payer, method, current charge. */
+    const paymentApplicationFacts = useMemo(() => {
+        const paymentId = movePending?.paymentId ?? applyPending?.paymentId ?? null;
+        const row = paymentId ? vm?.payments.find((p) => p.paymentId === paymentId) ?? null : null;
+        if (!row) return null;
+        const who = row.payerName ?? row.payerLabel ?? null;
+        const how = row.methodDisplay ?? (row.method ? row.method.charAt(0).toUpperCase() + row.method.slice(1) : null);
+        const current = movePending ? row.applications.find((a) => a.allocationId === movePending.allocationId) ?? null : null;
+        return {
+            payment: [money(row.amountCents, row.currencyCode || currency), who, how].filter(Boolean).join(" · "),
+            currently: current ? `${current.chargeLabel} · ${money(current.appliedCents, row.currencyCode || currency)}` : null,
+        };
+    }, [movePending, applyPending, vm, currency]);
+
+    /*
+     * ── ADD CHARGE — the approved command card, over the domain's own preview ──
+     *
+     * The template catalog, the preview and the write are all unchanged: `mode: "preview"` runs the
+     * same resolver the write uses, so what the operator confirms is what gets persisted. Only the
+     * PRESENTATION moves — from a generic list-and-confirm into the approved command card.
+     */
+    /*
+     * ── THE PAYMENT BAND, HOISTED SO THE MOUNTED PANEL CAN ACTUALLY REACH IT ──
+     *
+     * Everything Slice H built — the rail chooser, the amount, the card collection and the
+     * finalizing/failed/recognized states — lived inside the band region below, which renders only
+     * when this card falls through to its own anatomy. The mounted Focus Panel never falls through:
+     * a healthy account returns the approved card above, and `Details →` returns the approved detail
+     * above that. So the payment operation was built, typechecked, and unreachable in the product —
+     * `Record payment →` did not exist in any representation an operator could open.
+     *
+     * Hoisting it costs nothing (every value it closes over is resolved by this point) and lets the
+     * detail representation — the density where an operator is actually working the ledger — carry
+     * the operation, which is where FinancialsDetailCard's own `Payment` action already pointed.
+     */
+    /*
+     * The band's own heading is suppressed inside the Payment COMMAND, where the command's title
+     * already says "Payment" one line above it. Two headings, one word, one surface.
+     */
+    /*
+     * THE CANONICAL ADJUSTMENT ENTRY, hoisted so the unified Add command can host it.
+     *
+     * Same state, same `billing.adjust_account` preview and commit, same enrolment scoping. What
+     * changed is only WHERE it renders: it was a band beneath the ledger reached by a footer link,
+     * and it is now the Adjustment mode of the one financial entry command.
+     */
+    /*
+     * ── AN EMPTY COMMAND IS NOT A COMMAND ─────────────────────────────────────────────────────
+     *
+     * `adjustmentBand` is null whenever `adjustOpen` is false, and the two could fall out of step:
+     * `closeAdjustPanels` clears `adjustOpen` while `entryMode` keeps saying "adjustment", so the
+     * next Add opened straight onto the Adjustment mode with nothing beneath the selector — a
+     * committed destination whose whole body was missing. Kelly screenshotted it.
+     *
+     * The band is the destination's body, so `adjustmentReady` below is what the render asks
+     * before committing to Adjustment at all, and the effect after it opens the band whenever the
+     * mode is selected. Neither alone is enough: the effect keeps them in step, and the guard
+     * makes the empty state unrenderable even if some future path breaks step again.
+     */
+    const adjustmentBand = adjustOpen ? (
+
+                    <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-panel">
+                        <div className="alloy-os-fdetail__moveheader">Add adjustment</div>
+                        <div className="alloy-os-fdetail__movefield">
+                            <span>Against enrolment</span>
+                            <AlloySelect
+                                testId="adjustment-agreement"
+                                aria-label="Against enrolment"
+                                allowEmpty={false}
+                                value={adjustAgreementId}
+                                options={adjustableSubjects.map((sub) => ({
+                                    value: sub.agreementId,
+                                    label: sub.displayName,
+                                }))}
+                                onChange={(next) => {
+                                    setAdjustAgreementId(next);
+                                    // The charges on offer belong to the enrolment; changing it changes them.
+                                    setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
+                                    setAdjustPreview(null);
+                                }}
+                            />
+                        </div>
+                        {/*
+                          * ── BOTH TRUTHFUL CASES, AND NEITHER PRETENDING TO BE THE OTHER ────────
+                          *
+                          * §5. The canonical reduction authority genuinely supports an adjustment
+                          * that names no source charge — `source_charge_id` is nullable and 40
+                          * deployed applications prove both shapes — so forcing every account
+                          * adjustment to nominate one historical charge would make the operator
+                          * invent a provenance the decision does not have.
+                          *
+                          * This control was REQUIRED: Preview stayed disabled until a charge was
+                          * chosen. It is now optional, and the empty answer is stated as a
+                          * decision ("The account as a whole") rather than left as a blank that
+                          * reads like an unfinished form.
+                          *
+                          * Raised from a row — `openAdjustForCharge` — it arrives already bound,
+                          * which is the other half of §5 and needs no second surface.
+                          */}
+                        <div className="alloy-os-fdetail__movefield">
+                            <span>What this is about</span>
+                            <AlloySelect
+                                testId="adjustment-source-charge"
+                                aria-label="What this is about"
+                                placeholder="The account as a whole — not one charge"
+                                value={adjustSourceChargeId}
+                                options={adjustableCharges.map((r) => ({
+                                    value: r.chargeId,
+                                    label:
+                                        `${r.description ?? r.categoryLabel}`
+                                        + (r.date ? ` · ${humanDay(r.date)}` : "")
+                                        + ` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`,
+                                }))}
+                                onChange={(next) => {
+                                    setAdjustSourceChargeId(next);
+                                    setAdjustPurpose(next ? "correction" : "credit");
+                                    if (!next && adjustDirection === "increase") setAdjustPurpose("");
+                                    setAdjustPreview(null);
+                                }}
+                            />
+                        </div>
+                        {/*
+                          * ── THE ONE DECISION, AND IT IS ALWAYS ASKED ───────────────────────────
+                          *
+                          * This replaces a "Type" select (credit / adjustment) plus a direction
+                          * shown only for `adjustment`. Two controls for one decision, and they
+                          * disagreed: the sign was `category === "adjustment" && direction ===
+                          * "increase"`, so credit + increase produced a reduction and threw the
+                          * stated direction away.
+                          *
+                          * The operator says which way the family's balance moves. Nothing here
+                          * mentions a credit, an adjustment, or a sign — the canonical conversion
+                          * derives the category, and the amount below is always absolute.
+                          */}
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>What needs to change</span>
+                            {/*
+                              * W7-F036: THE CHOICE NAMES THE ECONOMIC INTENT, and the accounting follows
+                              * it. Correcting a charge's amount is accounted under that charge's own
+                              * account; a goodwill credit is a credit. A discount is a policy, not a
+                              * manual write — it is managed from Discounts.
+                              */}
+                            <AlloySelect
+                                testId="adjustment-direction"
+                                aria-label="What needs to change"
+                                allowEmpty={false}
+                                value={`${adjustPurpose}:${adjustDirection}`}
+                                options={
+                                    adjustSourceChargeId
+                                        ? [
+                                              { value: "correction:reduce", label: "Correct the amount — lower this charge" },
+                                              { value: "correction:increase", label: "Correct the amount — raise this charge" },
+                                              { value: "credit:reduce", label: "Give a goodwill credit" },
+                                          ]
+                                        : [
+                                              { value: "credit:reduce", label: "Give a credit — lowers what the family owes" },
+                                              { value: ":increase", label: "Increase what the family owes" },
+                                          ]
+                                }
+                                onChange={(next) => {
+                                    const [purpose, direction] = next.split(":");
+                                    setAdjustPurpose((purpose || "") as "correction" | "credit" | "");
+                                    setAdjustDirection(((direction || "reduce") as AdjustmentDirection));
+                                    setAdjustPreview(null);
+                                }}
+                            />
+                            <span className="alloy-os-fdetail__heldnote" data-testid="adjustment-discount-note">
+                                A discount is a policy, not a one-off adjustment — set it from Manage discounts.
+                            </span>
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            {/* The label carries the direction, so the figure cannot be read the wrong way. */}
+                            <span>{adjustDirection === "reduce" ? "Reduce by" : "Increase by"}</span>
+                            <input
+                                data-testid="adjustment-amount"
+                                inputMode="decimal"
+                                value={adjustAmount}
+                                onChange={(e) => {
+                                    setAdjustAmount(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                                placeholder="25.00"
+                            />
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="adjustment-reason"
+                                value={adjustReason}
+                                onChange={(e) => {
+                                    setAdjustReason(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                                placeholder="Agreed goodwill credit"
+                            />
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Effective date</span>
+                            {/*
+                              * The canonical date control, for the same reason Add Charge and
+                              * Responsibility now carry it: an adjustment decides money, and the
+                              * one field on the card that asked the browser for its widget was the
+                              * one field that did not look like Alloy. Same stored `YYYY-MM-DD`,
+                              * same effective-date meaning.
+                              */}
+                            <AlloyDateInput
+                                value={adjustEffectiveDate}
+                                onChange={(next) => {
+                                    setAdjustEffectiveDate(next);
+                                    setAdjustPreview(null);
+                                }}
+                                aria-label="Effective date"
+                                testId="adjustment-effective-date"
+                            />
+                        </label>
+                        {adjustPreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-preview">
+                                <strong>{adjustPreview.summary}</strong>
+                                {adjustPreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                                {/*
+                                  * The action's own summary speaks in the present tense. It writes a
+                                  * draft, so the timing is stated here rather than left to be
+                                  * discovered when the balance does not move.
+                                  */}
+                                <span data-testid="adjustment-preview-timing">
+                                    Takes effect by itself in its billing period — after review where your organization requires one.
+                                </span>
+                            </div>
+                        ) : null}
+                        {adjustError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-error">
+                                {adjustError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            <button
+                                type="button"
+                                data-testid="adjustment-preview-button"
+                                /*
+                                 * NO LONGER GATED ON A SOURCE CHARGE. An account-level adjustment
+                                 * is a legitimate economic act and this button refused to let the
+                                 * operator even preview one.
+                                 */
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || adjustMagnitudeCents() === null}
+                                onClick={() => void previewAdjustment()}
+                            >
+                                Preview
+                            </button>
+                            {/* W7-F035: Preview is optional; Confirm needs only a valid form, and execute re-validates. */}
+                            <button
+                                type="button"
+                                data-testid="adjustment-confirm"
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || adjustMagnitudeCents() === null}
+                                onClick={() => void confirmAdjustment()}
+                            >
+                                Confirm
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="adjustment-cancel"
+                                onClick={() => {
+                                    closeAdjustPanels();
+                                    /* Cancel is a dismissal like any other: one level back. */
+                                    pop();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+    ) : null;
+
+    /** The Adjustment destination's body. Without it there is no destination to commit to. */
+    const adjustmentReady = adjustmentBand != null;
+
+    useEffect(() => {
+        if (entryMode !== "adjustment" || adjustOpen) return;
+        if (adjustableSubjects.length === 0) return;
+        openAddAdjustment();
+    }, [entryMode, adjustOpen, adjustableSubjects.length, openAddAdjustment]);
+
+    /*
+     * ── W7-F026: ONE RECEIPT IMPLEMENTATION, TWO PLACEMENTS ──────────────────────────────────
+     *
+     * `scopedTo` names one payment. The band then renders ONLY that receipt (and anything going back
+     * out against it) — the same per-receipt markup, figures and Hold / Refund acts the Payment
+     * surface has always had — and nothing account-wide: no setup note, no collections, no
+     * "received and not yet applied" total and no Take or record payment entry. That scoped form is
+     * the body of Payment Details, so there is one receipt presentation, not a second one.
+     */
+    const paymentBandFor = (labelled: boolean, scopedTo?: string, tabbed = false) => vm ? (
+            <section className="alloy-os-financials__band" data-financials-band={scopedTo ? "payment-detail" : "payment"} data-financials-payment-tab={tabbed ? paymentTab : undefined}>
+                {labelled ? <p className="alloy-os-financials__band-label">Payment</p> : null}
+                {/*
+                  * ── W7-F045: TWO JOBS, TWO TABS ─────────────────────────────────────────────────
+                  *
+                  * The Payment command opened on every prior receipt with a Refund beside each, and
+                  * the form to take money sat beneath them. Taking a payment is the command's job;
+                  * refunding one is a different act on a different object. Payment is the default
+                  * tab and shows only the collection form. Refunds lists nothing until the operator
+                  * picks ONE eligible payment, then shows that payment's refund — the same composer
+                  * and the same `payment.refund` authority as before.
+                  */}
+                {tabbed ? (
+                    <div className="alloy-os-financials__tabs" role="tablist" aria-label="Payment" data-financials-payment-tabs="true">
+                        {(["payment", "refunds"] as const).map((t) => (
+                            <button
+                                key={t}
+                                type="button"
+                                role="tab"
+                                aria-selected={paymentTab === t}
+                                data-financials-payment-tab-option={t}
+                                className={`alloy-os-financials__tab${paymentTab === t ? " alloy-os-financials__tab--on" : ""}`}
+                                onClick={() => setPaymentTab(t)}
+                            >
+                                {t === "payment" ? "Payment" : "Refunds"}
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+                {tabbed && paymentTab === "refunds" ? (() => {
+                    const eligible = presentPayments(vm.payments, Object.fromEntries(vm.payments.map((r) => [r.paymentId, r.heldCents ?? 0]))).filter((p) => p.kind === "receipt" && p.offersRefund);
+                    const byId = new Map(vm.payments.map((r) => [r.paymentId, r]));
+                    return eligible.length ? (
+                        <>
+                            <p className="alloy-os-financials__fieldlabel">Payment to refund</p>
+                            <AlloySelect
+                                value={refundPickId}
+                                aria-label="Payment to refund"
+                                testId="financials-refund-payment"
+                                placeholder="Choose a payment…"
+                                options={eligible.map((p) => {
+                                    const r = byId.get(p.paymentId);
+                                    return {
+                                        value: p.paymentId,
+                                        label: [
+                                            r?.receivedAt ? formatDisplayDate(r.receivedAt) : null,
+                                            money(p.receivedCents, p.currencyCode),
+                                            r?.methodDisplay ?? p.methodLabel,
+                                            r?.payerName ?? r?.payerLabel ?? null,
+                                        ].filter(Boolean).join(" · "),
+                                    };
+                                })}
+                                onChange={(next) => {
+                                    setRefundPickId(next);
+                                    setRefundError(null);
+                                    /*
+                                     * W7-F048: choosing the payment IS choosing to refund it — the
+                                     * composer opens at once, at the full refundable amount, exactly
+                                     * as the row's Refund button opens it. One more click on a
+                                     * compressed row was the tab's whole body.
+                                     */
+                                    const p = eligible.find((x) => x.paymentId === next);
+                                    if (!p) {
+                                        setRefundTarget(null);
+                                        return;
+                                    }
+                                    setRefundTarget({
+                                        paymentId: p.paymentId,
+                                        label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                        receivedCents: p.receivedCents,
+                                        refundedCents: p.refundedCents,
+                                        refundableCents: p.refundableCents,
+                                        currencyCode: p.currencyCode,
+                                    });
+                                    setRefundAmount((p.refundableCents / 100).toFixed(2));
+                                }}
+                            />
+                        </>
+                    ) : (
+                        <p className="alloy-os-financials__note" data-financials-refund-none="true">
+                            No payment on this account can be refunded.
+                        </p>
+                    );
+                })() : null}
+                {scopedTo || (tabbed && paymentTab !== "payment") ? null : (<>
+                {/*
+                    ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
+                    This region used to print the platform's own limitations at
+                    the operator — "payments are not recorded for enrollment
+                    accounts yet", "autopay is not configured in this platform",
+                    "responsibility splits are owned by Processing". Those are
+                    development findings; they belong in the ledger, not on a
+                    card someone uses to run a childcare centre. Where no
+                    canonical payment state exists, the region stays neutral and
+                    says nothing rather than explaining our architecture.
+                */}
+                {vm.paymentSetup && !tabbed ? (
+                    <p className="alloy-os-financials__note" data-financials-payment="state">
+                        {vm.paymentSetup}
+                    </p>
+                ) : null}
+
+                {/*
+                    WHAT IS STILL ON ITS WAY, read from the DATABASE.
+
+                    A card collection lasts seconds and could live happily in component state. A bank
+                    debit lasts days — the operator closes the tab and comes back tomorrow — so an
+                    in-flight collection is read from the view model and survives a reload. The words
+                    come from the shared lifecycle module, so nothing here can invent a state that
+                    means money.
+                */}
+                {vm.openCollections.length ? (
+                    <ul className="alloy-os-financials__payments" data-financials-collections="true">
+                        {vm.openCollections.map((c) => {
+                            const rail = (c.rail === "ach" ? "ach" : "card") as CollectionRail;
+                            const state = collectionLifecycle({
+                                rail,
+                                processorState: c.processorState,
+                                providerActionType: c.providerActionType,
+                                canonicallyRecognized: false,
+                            });
+                            return (
+                                <li
+                                    key={c.attemptId}
+                                    className="alloy-os-financials__payment"
+                                    data-financials-collection={c.attemptId}
+                                    data-financials-collection-rail={c.rail}
+                                    data-financials-collection-state={state}
+                                    data-financials-collection-focused={openCollection?.attemptId === c.attemptId ? "true" : undefined}
+                                    style={openCollection?.attemptId === c.attemptId ? { outline: "2px solid rgba(0,162,131,0.45)", borderRadius: 8 } : undefined}
+                                >
+                                    <span>{money(c.amountCents, c.currencyCode)}</span>
+                                    <span className="alloy-os-financials__note">
+                                        {lifecycleLabel(state, rail)}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                ) : null}
+                </>)}
+
+                {/*
+                    WHAT ARRIVED, AND WHAT IT IS DOING.
+                    `vm.payments` was composed by the read model and never
+                    rendered, so a family could send $500, have $300 applied, and
+                    the card showed neither number. Received and applied are
+                    separate facts; the difference between them is money sitting
+                    on the account, and it is called UNAPPLIED — never account
+                    credit, which in this platform is a charge-side ledger row.
+                */}
+                {vm.payments.length && (!tabbed || (paymentTab === "refunds" && refundPickId)) ? (
+                    <ul
+                        className="alloy-os-financials__payments"
+                        data-financials-payments="true"
+                    >
+                        {/*
+                          * The held figures come from the VM's own read of the lots, so a receipt's
+                          * "holdable" and the account's "Held deposit" total cannot disagree.
+                          */}
+                        {presentPayments(
+                            vm.payments,
+                            Object.fromEntries(vm.payments.map((r) => [r.paymentId, r.heldCents ?? 0])),
+                        ).filter((p) => !scopedTo || p.paymentId === scopedTo || p.refundsPaymentId === scopedTo)
+                            .filter((p) => !tabbed || p.paymentId === refundPickId || p.refundsPaymentId === refundPickId).map((p) => {
+                            const composing = refundTarget?.paymentId === p.paymentId;
+                            return (
+                                <li
+                                    key={p.paymentId}
+                                    className="alloy-os-financials__payment"
+                                    data-financials-payment-id={p.paymentId}
+                                    data-financials-payment-kind={p.kind}
+                                >
+                                    <span data-financials-payment-received="true">
+                                        {p.kind === "receipt" ? "" : "−"}
+                                        {money(p.receivedCents, p.currencyCode)}
+                                    </span>
+                                    <span
+                                        className="alloy-os-financials__note"
+                                        data-financials-payment-origin={p.reversalOrigin ?? undefined}
+                                    >
+                                        {p.statusLabel} · {p.methodLabel}
+                                        {/* A return says who did it, because "Returned" alone still
+                                            leaves an operator wondering which of them acted. */}
+                                        {p.kind === "return" ? " · reversed by the bank" : null}
+                                    </span>
+                                    {p.kind === "receipt" && p.isMoney ? (
+                                        <span
+                                            className="alloy-os-financials__note"
+                                            data-financials-payment-applied={p.appliedCents}
+                                        >
+                                            {money(p.appliedCents, p.currencyCode)} applied
+                                            {/*
+                                              * ── TWO SCOPES MUST NOT SHARE ONE WORD ──────────────
+                                              *
+                                              * `unappliedCents` is measured against what was
+                                              * RECEIVED, so on a partly refunded receipt it counts
+                                              * money that has already left the organisation.
+                                              * Measured on deployed staging: a $700 receipt with
+                                              * $140 refunded and $113 applied read "$587.00
+                                              * unapplied" beside an Available prepaid of $332.00.
+                                              * Both figures are true and they answer different
+                                              * questions, and the word "unapplied" was carrying
+                                              * whichever one the reader assumed.
+                                              *
+                                              * So the word is used only where nothing has gone
+                                              * back. Once some of it has, the row says what is left
+                                              * of what was KEPT, which is the quantity anything can
+                                              * still be done with — and the line below states the
+                                              * refunded and retained figures it derives from.
+                                              */}
+                                            {p.unappliedCents > 0 ? (
+                                                <>
+                                                    {" · "}
+                                                    <span data-financials-payment-unapplied={p.unappliedCents}>
+                                                        {p.refundedCents > 0
+                                                            ? `${money(Math.max(0, p.receivedCents - p.refundedCents - p.appliedCents), p.currencyCode)} of what was kept is unapplied`
+                                                            : `${money(p.unappliedCents, p.currencyCode)} unapplied`}
+                                                    </span>
+                                                </>
+                                            ) : null}
+                                        </span>
+                                    ) : null}
+                                    {/*
+                                        WHAT IS LEFT OF THIS RECEIPT, once some of it has gone back.
+                                        The original amount stays on the row above rather than being
+                                        replaced by a "Partially refunded" state that hides both
+                                        numbers; refunded and retained are stated beside it.
+                                    */}
+                                    {p.kind === "receipt" && p.isMoney && p.refundedCents > 0 ? (
+                                        <span
+                                            className="alloy-os-financials__note"
+                                            data-financials-payment-refunded={p.refundedCents}
+                                        >
+                                            {money(p.refundedCents, p.currencyCode)} returned or refunded ·{" "}
+                                            <span data-financials-payment-retained={p.receivedCents - p.refundedCents}>
+                                                {money(p.receivedCents - p.refundedCents, p.currencyCode)} net retained
+                                            </span>
+                                        </span>
+                                    ) : null}
+                                    {/*
+                                        WHAT OF THIS RECEIPT IS RESTRICTED. Held money is inside the
+                                        unapplied figure and cannot answer an obligation, so a
+                                        receipt that says only "unapplied" overstates what is
+                                        available by exactly the held amount. `holdableCents` is
+                                        that difference from the other side, and the account's own
+                                        Available prepaid is what remains once it is taken out.
+                                    */}
+                                    {p.kind === "receipt" && p.isMoney && (p.heldCents ?? 0) > 0 ? (
+                                        <span
+                                            className="alloy-os-financials__note"
+                                            data-financials-payment-held={p.heldCents ?? 0}
+                                        >
+                                            {money(p.heldCents ?? 0, p.currencyCode)} held ·{" "}
+                                            <span data-financials-payment-applicable={p.applicableCents}>
+                                                {money(p.applicableCents, p.currencyCode)} available to apply
+                                            </span>
+                                        </span>
+                                    ) : null}
+                                    {/*
+                                      * HOLD — the act that CREATES a restriction, on the receipt it
+                                      * restricts. Beside Refund because both are acts on this
+                                      * receipt; ahead of it because holding is the ordinary deposit
+                                      * flow and refunding is the exception.
+                                      *
+                                      * Absent once nothing is left to hold, rather than present and
+                                      * refused: `holdableCents` is unapplied minus already held,
+                                      * which is the bound the invariant enforces.
+                                      */}
+                                    {p.offersHold && !composing && holdPending?.paymentId !== p.paymentId ? (
+                                        <button
+                                            type="button"
+                                            className="alloy-os-financials__action alloy-os-financials__action--onrow"
+                                            data-financials-command="deposit.hold"
+                                            data-financials-hold-payment={p.paymentId}
+                                            data-financials-holdable={p.holdableCents}
+                                            disabled={running}
+                                            onClick={() => {
+                                                setCommandError(null);
+                                                setHoldError(null);
+                                                setHoldPending({
+                                                    paymentId: p.paymentId,
+                                                    label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                    holdableCents: p.holdableCents,
+                                                    currencyCode: p.currencyCode,
+                                                });
+                                                /*
+                                                 * Opens at everything available, because a deposit is
+                                                 * usually the whole of a receipt taken for one — and
+                                                 * the operator may reduce it.
+                                                 */
+                                                setHoldAmount((p.holdableCents / 100).toFixed(2));
+                                                setHoldReason("");
+                                                setHoldRefundable("");
+                                            }}
+                                        >
+                                            Hold
+                                        </button>
+                                    ) : null}
+                                    {holdPending?.paymentId === p.paymentId ? (
+                                        <div
+                                            className="alloy-os-financials__preview"
+                                            data-financials-hold-form="true"
+                                            data-financials-hold-for={p.paymentId}
+                                        >
+                                            <p className="alloy-os-financials__preview-summary">
+                                                Hold part of this receipt so it is not spent against what
+                                                the family owes. No money moves and the balance does not change.
+                                            </p>
+                                            <label className="alloy-os-fdetail__movefield">
+                                                <span>Amount</span>
+                                                <input
+                                                    data-testid="deposit-hold-amount"
+                                                    inputMode="decimal"
+                                                    value={holdAmount}
+                                                    onChange={(e) => setHoldAmount(e.target.value)}
+                                                />
+                                            </label>
+                                            <label className="alloy-os-fdetail__movefield">
+                                                <span>Reason</span>
+                                                <input
+                                                    data-testid="deposit-hold-reason"
+                                                    value={holdReason}
+                                                    onChange={(e) => setHoldReason(e.target.value)}
+                                                    placeholder="Security deposit"
+                                                />
+                                            </label>
+                                            {/*
+                                              * THE TERMS, ASKED ONCE AND NEVER AGAIN.
+                                              *
+                                              * Snapshot at creation: a later policy change must not
+                                              * retroactively alter what the family was promised. So
+                                              * this is a deliberate choice on the way in, not a
+                                              * default the operator can discover later — and the
+                                              * consequence is stated beside it, because
+                                              * "non-refundable" is a promise about someone's money.
+                                              */}
+                                            <div
+                                                className="alloy-os-fdetail__movefield"
+                                                data-financials-hold-refundable={holdRefundable || "unanswered"}
+                                            >
+                                                <span>Refundable</span>
+                                                <AlloySelect
+                                                    testId="deposit-hold-refundable"
+                                                    aria-label="Refundable"
+                                                    placeholder="Choose…"
+                                                    value={holdRefundable}
+                                                    options={[
+                                                        { value: "yes", label: "Refundable" },
+                                                        { value: "no", label: "Non-refundable" },
+                                                    ]}
+                                                    onChange={(next) => setHoldRefundable(next === "no" ? "no" : next === "yes" ? "yes" : "")}
+                                                />
+                                            </div>
+                                            {holdRefundable ? (
+                                                <p className="alloy-os-fdetail__heldnote">
+                                                    {holdRefundable === "yes"
+                                                        ? "Recorded as refundable on the terms in force today. A later policy change will not alter them."
+                                                        : "Recorded as NON-REFUNDABLE. This cannot be refunded later, whatever the policy becomes."}
+                                                </p>
+                                            ) : null}
+                                            {holdError ? (
+                                                <div
+                                                    className="alloy-os-fdetail__moveerror"
+                                                    data-testid="deposit-hold-error"
+                                                >
+                                                    {holdError}
+                                                </div>
+                                            ) : null}
+                                            <span className="alloy-os-financials__preview-actions">
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-testid="deposit-hold-confirm"
+                                                    disabled={running || !holdRefundable}
+                                                    onClick={() => void confirmHold()}
+                                                >
+                                                    Hold funds
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-testid="deposit-hold-cancel"
+                                                    disabled={running}
+                                                    onClick={() => {
+                                                        setHoldPending(null);
+                                                        setHoldError(null);
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </span>
+                                        </div>
+                                    ) : null}
+                                    {p.offersRefund && !composing ? (
+                                        <button
+                                            type="button"
+                                            /* Scoped to this receipt, so it is drawn as one. */
+                                            className="alloy-os-financials__action alloy-os-financials__action--onrow"
+                                            data-financials-command="payment.refund"
+                                            data-financials-refund-payment={p.paymentId}
+                                            disabled={running}
+                                            onClick={() => {
+                                                setCommandError(null);
+                                                setRefundError(null);
+                                                setRefundTarget({
+                                                    paymentId: p.paymentId,
+                                                    label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                    receivedCents: p.receivedCents,
+                                                    refundedCents: p.refundedCents,
+                                                    refundableCents: p.refundableCents,
+                                                    currencyCode: p.currencyCode,
+                                                });
+                                                // Opens at the full remaining refundable amount.
+                                                setRefundAmount((p.refundableCents / 100).toFixed(2));
+                                            }}
+                                        >
+                                            Refund
+                                        </button>
+                                    ) : null}
+                                    {composing ? (
+                                        <div
+                                            className="alloy-os-financials__preview"
+                                            data-financials-refund-form="true"
+                                            data-financials-refund-for={p.paymentId}
+                                        >
+                                            <p className="alloy-os-financials__preview-summary">
+                                                Refund {p.methodLabel} payment
+                                            </p>
+                                            {/* Every figure the decision needs, so nothing is worked
+                                                out in the operator's head. */}
+                                            <p className="alloy-os-financials__note">
+                                                <span data-financials-refund-original={p.receivedCents}>
+                                                    {money(p.receivedCents, p.currencyCode)} original
+                                                </span>
+                                                {" · "}
+                                                <span data-financials-refund-already={p.refundedCents}>
+                                                    {money(p.refundedCents, p.currencyCode)} already refunded
+                                                </span>
+                                                {" · "}
+                                                <span data-financials-refund-remaining={p.refundableCents}>
+                                                    {money(p.refundableCents, p.currencyCode)} refundable
+                                                </span>
+                                            </p>
+                                            <input
+                                                className="alloy-os-financials__input"
+                                                data-financials-refund-amount="true"
+                                                inputMode="decimal"
+                                                value={refundAmount}
+                                                onChange={(e) => {
+                                                    setRefundError(null);
+                                                    setRefundAmount(e.target.value);
+                                                }}
+                                                aria-label={`Refund amount in ${p.currencyCode}`}
+                                            />
+                                            {refundError ? (
+                                                <p
+                                                    className="alloy-os-financials__note"
+                                                    data-financials-refund-error="true"
+                                                >
+                                                    {refundError}
+                                                </p>
+                                            ) : null}
+                                            <span className="alloy-os-financials__preview-actions">
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-financials-refund-commit="true"
+                                                    disabled={running}
+                                                    onClick={() => {
+                                                        /*
+                                                         * Cents, as an integer, because money is not
+                                                         * a float — the same conversion the payment
+                                                         * amount already uses.
+                                                         *
+                                                         * These checks are for the operator's sake,
+                                                         * not the ledger's: the action re-derives
+                                                         * eligibility, the merchant, the currency and
+                                                         * the cumulative ceiling on the server, and
+                                                         * its refusal is what decides.
+                                                         */
+                                                        const cents = Math.round(Number(refundAmount) * 100);
+                                                        if (!Number.isFinite(cents) || cents <= 0) {
+                                                            setRefundError("Enter a refund amount greater than zero.");
+                                                            return;
+                                                        }
+                                                        /*
+                                                         * The CEILING IS THE COMPOSER'S, not the
+                                                         * row's. A refund raised from a held lot is
+                                                         * bounded by that lot, which is smaller than
+                                                         * what the receipt could give back — reading
+                                                         * the row here would let a $175 lot refund
+                                                         * the receipt's full $500.
+                                                         */
+                                                        const ceiling = refundTarget?.refundableCents ?? p.refundableCents;
+                                                        if (cents > ceiling) {
+                                                            setRefundError(
+                                                                refundTarget?.hold
+                                                                    ? `Only ${money(ceiling, p.currencyCode)} of this held deposit can be refunded.`
+                                                                    : `Refund amount exceeds the remaining refundable balance of ${money(ceiling, p.currencyCode)}.`,
+                                                            );
+                                                            return;
+                                                        }
+                                                        setRefundError(null);
+                                                        void runPaymentAction(
+                                                            "payment.refund",
+                                                            {
+                                                                payment_id: p.paymentId,
+                                                                amount_cents: cents,
+                                                                payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                                ...(refundTarget?.hold ? { hold_id: refundTarget.hold.holdId } : {}),
+                                                            },
+                                                            paymentEntityFor(chargeTarget),
+                                                        ).then((outcome) => {
+                                                            if (outcome?.ok) setRefundTarget(null);
+                                                        });
+                                                    }}
+                                                >
+                                                    Refund{" "}
+                                                    {money(
+                                                        Math.max(0, Math.round(Number(refundAmount) * 100) || 0),
+                                                        p.currencyCode,
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-financials-refund-cancel="true"
+                                                    disabled={running}
+                                                    onClick={() => {
+                                                        setRefundTarget(null);
+                                                        setRefundError(null);
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </span>
+                                        </div>
+                                    ) : null}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                ) : null}
+
+                {scopedTo || (tabbed && paymentTab !== "payment") ? null : (<>
+                {/* Cash on the account, stated as cash. Never subtracted from
+                    what is owed here — applying money is its own act with its
+                    own record, and the balance above stays the read model's. */}
+                {unappliedTotalCents(vm.payments) > 0 ? (
+                    <p
+                        className="alloy-os-financials__note"
+                        data-financials-unapplied-total={unappliedTotalCents(vm.payments)}
+                    >
+                        {money(unappliedTotalCents(vm.payments), currency)} received and not yet
+                        applied
+                    </p>
+                ) : null}
+
+                {/* TAKE OR RECORD PAYMENT — the charges that can actually take money.
+                    `offersPayment` is the read model's answer, the same way
+                    `offersReverse` is; this renders it and does not restate it.
+
+                    The label names BOTH acts because the form behind it performs both: a card or
+                    bank method collects through the provider, cash and cheque record money that
+                    already arrived. A single "Record payment" made provider collection sound like
+                    bookkeeping. The command key stays `payment.record` — that is the canonical
+                    action, not the operator's word for it. */}
+                {/*
+                  * W7-F048: in the Payment command the charge is chosen INSIDE the form ("Apply
+                  * toward"), so this standalone menu renders only on the compact summary band.
+                  */}
+                {payableRows.length && !tabbed ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-command="payment.record"
+                                disabled={running}
+                            >
+                                Take or record payment →
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" sideOffset={4} data-financials-payment-menu="true">
+                            {payableRows.map((r) => (
+                                <DropdownMenuItem
+                                    key={r.chargeId}
+                                    data-financials-payment-charge={r.chargeId}
+                                    onSelect={() => {
+                                        setCommandError(null);
+                                        setPayTarget({
+                                            chargeId: r.chargeId,
+                                            /* The operator's name for it — a stored template key is not one. */
+                                            label: chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel),
+                                            outstandingCents: r.outstandingCents,
+                                            subjectMemberId: r.subjectMemberId,
+                                        });
+                                        // The row's own outstanding amount, from
+                                        // the read model. The operator may lower
+                                        // it for a partial payment.
+                                        setPayAmount((r.outstandingCents / 100).toFixed(2));
+                                    }}
+                                >
+                                    {r.description ?? r.categoryLabel}
+                                    <span className="alloy-os-financials__menu-amount">
+                                        {money(r.outstandingCents, r.currencyCode)}
+                                    </span>
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
+
+                {payTarget ? (
+                    <div
+                        className="alloy-os-financials__preview"
+                        data-financials-payment-form="true"
+                    >
+                        {tabbed ? (
+                            <>
+                                {/*
+                                  * ── W7-F050: NO CHARGE TO CHOOSE ───────────────────────────────────
+                                  *
+                                  * Ordinary money settles the payer's eligible outstanding
+                                  * responsibility automatically (Application, below). Choosing one
+                                  * obligation is the EXCEPTION — Change allocation — for a payer who
+                                  * directs money to a particular charge. Only then does a list appear,
+                                  * filterable by charge, child, date or amount: a 33-row dropdown is
+                                  * exception tooling, never the way money is taken.
+                                  */}
+                                {payAllocation === "charge" ? (
+                                    <>
+                                        <p className="alloy-os-financials__fieldlabel">Apply to one charge</p>
+                                        <input
+                                            type="search"
+                                            value={chargeFilter}
+                                            placeholder="Filter by charge, child, date or amount"
+                                            aria-label="Filter charges"
+                                            data-financials-payment-charge-filter="true"
+                                            onChange={(e) => setChargeFilter(e.target.value)}
+                                        />
+                                        <AlloySelect
+                                            value={payTarget.chargeId}
+                                            aria-label="Apply to one charge"
+                                            testId="financials-payment-apply-toward"
+                                            allowEmpty={false}
+                                            options={payableRows
+                                                .map((r) => ({
+                                                    value: r.chargeId,
+                                                    label:
+                                                        chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel)
+                                                        + (r.subjectName ? ` · ${r.subjectName}` : "")
+                                                        + (r.date ? ` · ${humanDay(r.date)}` : "")
+                                                        + ` · ${money(r.outstandingCents, r.currencyCode)} outstanding`,
+                                                }))
+                                                .filter((o) => o.value === payTarget.chargeId || !chargeFilter.trim() || o.label.toLowerCase().includes(chargeFilter.trim().toLowerCase()))}
+                                            onChange={(next) => {
+                                                const r = payableRows.find((x) => x.chargeId === next);
+                                                if (!r) return;
+                                                setCommandError(null);
+                                                setPayTarget({
+                                                    chargeId: r.chargeId,
+                                                    label: chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel),
+                                                    outstandingCents: r.outstandingCents,
+                                                    subjectMemberId: r.subjectMemberId,
+                                                });
+                                                setPayAmount((r.outstandingCents / 100).toFixed(2));
+                                                setPayAmountTouched(true);
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="alloy-os-financials__linkaction"
+                                            data-financials-payment-allocation="automatic"
+                                            onClick={() => {
+                                                setPayAllocation("automatic");
+                                                setPayAmountTouched(false);
+                                            }}
+                                        >
+                                            Use automatic application
+                                        </button>
+                                    </>
+                                ) : null}
+                                {vm.responsibility?.parties?.length ? (
+                                    <p className="alloy-os-financials__note" data-financials-payment-responsible="true">
+                                        Responsible: {vm.responsibility.parties.map((p) => p.name).join(", ")}
+                                    </p>
+                                ) : null}
+                            </>
+                        ) : (
+                            <>
+                        <p className="alloy-os-financials__preview-summary">
+                            {payTarget.label}
+                        </p>
+                        <p className="alloy-os-financials__note">
+                            {money(payTarget.outstandingCents, currency)} outstanding
+                        </p>
+                        {/*
+                          * ── WHO OWES, SHOWN BUT NOT TOUCHED ────────────────────────────────────
+                          *
+                          * Responsibility is a different fact from who pays, and settling a charge
+                          * must never rewrite it. It is rendered here so the operator can SEE both
+                          * at the moment of collection — a grandparent may legitimately pay a bill
+                          * they owe nothing on — and it is read-only for exactly that reason.
+                          * Naming a payer below confers no responsibility.
+                          */}
+                        {vm.responsibility?.parties?.length ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-payment-responsible="true"
+                            >
+                                Responsible: {vm.responsibility.parties.map((p) => p.name).join(", ")}
+                            </p>
+                        ) : null}
+                        {/*
+                          * ── WHAT THIS MONEY WILL SETTLE ────────────────────────────────────────
+                          *
+                          * ONE charge, deliberately. The collection action targets a single charge
+                          * and the allocation follows it; saying so here makes an invariant visible
+                          * instead of leaving the operator to infer it from the heading. Broadening
+                          * it for UI convenience would change economics, which this does not.
+                          */}
+                        <p
+                            className="alloy-os-financials__note"
+                            data-financials-payment-application={payTarget.chargeId}
+                        >
+                            Applies to: {payTarget.label}
+                        </p>
+                            </>
+                        )}
+                        {/*
+                         * LABELLED, like every other Alloy command field. This was three bare
+                         * controls in a column — an amount, a method and a payer with nothing
+                         * saying which was which, which is what made the command read as a raw form
+                         * rather than a financial operation.
+                         */}
+                        <p className="alloy-os-financials__fieldlabel">Amount</p>
+                        <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={payAmount}
+                            aria-label="Payment amount"
+                            data-financials-payment-amount="true"
+                            onChange={(e) => {
+                                setPayAmount(e.target.value);
+                                setPayAmountTouched(true);
+                            }}
+                        />
+                        <p className="alloy-os-financials__fieldlabel">Method</p>
+                        {/*
+                            W7-F045: ONE CHOOSER — the family's methods on file first, then the tenders
+                            that need no instrument. Bank transfer without the merchant capability stays
+                            VISIBLE AND DISABLED: availability is the server's answer, carried on the view
+                            model, and offering a collection the provider refuses is the lie this avoids.
+                        */}
+                        <AlloySelect
+                            value={payStoredMethodId ? `stored:${payStoredMethodId}` : payMethod}
+                            aria-label="Payment method"
+                            testId="financials-payment-method"
+                            allowEmpty={false}
+                            options={[
+                                ...storedMethodsOnFile.map((m) => {
+                                    const owner = m.payerEntityId
+                                        ? vm.payerCandidates.find((c) => c.personId === m.payerEntityId)?.name ?? null
+                                        : null;
+                                    return {
+                                        value: `stored:${m.id}`,
+                                        /* Brand, last four and expiry — and whose it is. Never a provider id. */
+                                        label: `${storedMethodLabel(m)}${owner ? ` · ${owner}` : ""}`,
+                                    };
+                                }),
+                                { value: "card", label: storedMethodsOnFile.some((m) => m.rail === "card") ? "New card" : "Card" },
+                                {
+                                    value: "ach",
+                                    disabled: !vm.achAvailable,
+                                    label: vm.achAvailable
+                                        ? (storedMethodsOnFile.some((m) => m.rail === "ach") ? "New bank account" : "Bank account")
+                                        : "Bank account — not enabled for this organization",
+                                },
+                                { value: "cash", label: "Cash" },
+                                { value: "check", label: "Check" },
+                                { value: "money_order", label: "Money order" },
+                                { value: "manual", label: "External payment (taken outside Alloy)" },
+                                { value: "other", label: "Other" },
+                            ].filter((o) => o.value.startsWith("stored:") || !disabledMethods.has(o.value))}
+                            onChange={(next) => {
+                                if (next.startsWith("stored:")) {
+                                    const m = storedMethodsOnFile.find((x) => x.id === next.slice("stored:".length));
+                                    if (!m) return;
+                                    setPayMethod(m.rail);
+                                    /* The method's owner IS the payer; an un-owned legacy method pays for the household. */
+                                    setPayPayerPersonId(m.payerEntityId && m.payerEntityType !== "agency" ? m.payerEntityId : HOUSEHOLD_PAYER);
+                                    setPayStoredMethodId(m.id);
+                                    return;
+                                }
+                                setPayStoredMethodId("");
+                                setPayMethod(next);
+                            }}
+                        />
+                        {/*
+                          * W7-F045: THE TENDER'S OWN REFERENCE. A check is identified by its number,
+                          * and the ledger describes it that way ("Check #1234"); other recorded tenders
+                          * may carry a reference. Stored in `payments.reference_number`, which the
+                          * record action always accepted and this form never sent.
+                          */}
+                        {payMethod === "check" || payMethod === "money_order" || payMethod === "manual" || payMethod === "other" ? (
+                            <>
+                                <p className="alloy-os-financials__fieldlabel">
+                                    {payMethod === "check" ? "Check number (optional)" : "Reference (optional)"}
+                                </p>
+                                <input
+                                    type="text"
+                                    value={payReference}
+                                    maxLength={64}
+                                    aria-label={payMethod === "check" ? "Check number" : "Reference"}
+                                    data-financials-payment-reference="true"
+                                    onChange={(e) => setPayReference(e.target.value)}
+                                />
+                            </>
+                        ) : null}
+
+                        {/*
+                         * ── WHO ACTUALLY PAID — a different question from who owes it ───────────
+                         *
+                         * Candidates are household membership, not responsibility, ordered by primary
+                         * contact: ordering by responsibility is how an operator records the
+                         * responsible party as the payer without noticing.
+                         *
+                         * W7-F045: one candidate is defaulted; several must be answered — a person, or
+                         * explicitly "not known", which records to the household. Separate people
+                         * paying separately are separate payments, each with its own payer. Naming a
+                         * payer confers no responsibility.
+                         */}
+                        {payerCandidateCount ? (
+                            <>
+                            <p className="alloy-os-financials__fieldlabel">Who paid</p>
+                            <AlloySelect
+                                value={payPayerPersonId}
+                                aria-label="Who paid"
+                                testId="financials-payment-payer"
+                                placeholder="Choose who paid"
+                                allowEmpty={false}
+                                options={[
+                                    ...vm.payerCandidates.map((c) => ({
+                                        value: c.personId,
+                                        label:
+                                            `${c.name}`
+                                            + (c.roleType ? ` · ${c.roleType.replace(/_/g, " ")}` : "")
+                                            + (c.alsoResponsible ? " · also responsible" : ""),
+                                    })),
+                                    { value: HOUSEHOLD_PAYER, label: "Not known — record to the household" },
+                                ]}
+                                onChange={(next) => setPayPayerPersonId(next)}
+                            />
+                            {!payPayerPersonId ? (
+                                <p className="alloy-os-financials__note" data-financials-payment-payer-required="true">
+                                    Choose who paid. If several people are paying, record each person&apos;s payment separately.
+                                </p>
+                            ) : null}
+                            </>
+                        ) : (
+                            <p className="alloy-os-financials__note" data-financials-payment-payer-household="true">
+                                No payer is on file for this household — the payment is recorded to the household.
+                            </p>
+                        )}
+                        {tabbed && payAllocation === "automatic" ? (
+                            <div className="alloy-os-financials__settlement" data-financials-payment-application="automatic">
+                                <p className="alloy-os-financials__fieldlabel">Application</p>
+                                <p className="alloy-os-financials__settlement-mode">Automatic</p>
+                                <p className="alloy-os-financials__note">
+                                    Applies to {namedPayerId
+                                        ? `${vm.payerCandidates.find((c) => c.personId === namedPayerId)?.name ?? "this payer"}'s`
+                                        : "the household's"} eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.
+                                </p>
+                                {settlePreview ? (
+                                    <div data-financials-payment-settlement-preview="true">
+                                        {settlePreview.lines.length ? (
+                                            <>
+                                                <p className="alloy-os-financials__fieldlabel">Will apply</p>
+                                                <ul className="alloy-os-financials__settlement-lines">
+                                                    {settlePreview.lines.map((l) => (
+                                                        <li key={l.chargeId} data-financials-settlement-line={l.chargeId}>
+                                                            <span>{l.label} · {humanDay(l.dueOn)}{l.pastDue ? " · past due" : ""}</span>
+                                                            <span>{money(l.cents, currency)}</span>
+                                                        </li>
+                                                    ))}
+                                                    <li className="alloy-os-financials__settlement-total" data-financials-settlement-total="true">
+                                                        <span>Total applied</span>
+                                                        <span>{money(settlePreview.appliedCents, currency)}</span>
+                                                    </li>
+                                                </ul>
+                                            </>
+                                        ) : (
+                                            <p className="alloy-os-financials__note" data-financials-settlement-nothing="true">
+                                                Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).
+                                            </p>
+                                        )}
+                                        {/*
+                                          * W7-F053: NO OPERATOR REVERSE-ENGINEERS AN EXCLUSION. When the
+                                          * account owes more than this payer can settle, the form says
+                                          * which part is someone else's and which is expected from funding.
+                                          */}
+                                        {settlePreview.othersShareCents > 0 || settlePreview.fundingPendingCents > 0 || (!namedPayerId && settlePreview.heldForPayerCents > 0) ? (
+                                            <p className="alloy-os-financials__note" data-financials-settlement-excluded="true">
+                                                Not included:{" "}
+                                                {[
+                                                    namedPayerId && settlePreview.othersShareCents > 0
+                                                        ? `${money(settlePreview.othersShareCents, currency)} owed by other responsible people`
+                                                        : null,
+                                                    !namedPayerId && settlePreview.heldForPayerCents > 0
+                                                        ? `${money(settlePreview.heldForPayerCents, currency)} owed by named responsible people — choose who paid`
+                                                        : null,
+                                                    settlePreview.fundingPendingCents > 0
+                                                        ? `${money(settlePreview.fundingPendingCents, currency)} expected from funding (submitted claim)`
+                                                        : null,
+                                                ].filter(Boolean).join("; ")}.
+                                            </p>
+                                        ) : null}
+                                        {settlePreview.unappliedCents > 0 && settlePreview.unappliedNote ? (
+                                            <p className="alloy-os-financials__note" data-financials-settlement-unapplied="true">
+                                                {settlePreview.unappliedNote.replace(/^Stays unapplied · /, "Stays unapplied: ")}
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                ) : settlePreviewState === "loading" ? (
+                                    <p className="alloy-os-financials__note">Calculating…</p>
+                                ) : settlePreviewState === "error" ? (
+                                    <p className="alloy-os-financials__note">The application could not be calculated; Confirm still applies it by the same rules.</p>
+                                ) : null}
+                                {payableRows.length ? (
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__linkaction"
+                                        data-financials-payment-allocation="change"
+                                        onClick={() => setPayAllocation("charge")}
+                                    >
+                                        Change allocation
+                                    </button>
+                                ) : null}
+                            </div>
+                        ) : null}
+                        <span className="alloy-os-financials__preview-actions">
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-payment-commit="true"
+                                disabled={running || (payerCandidateCount > 0 && !payPayerPersonId)}
+                                onClick={() => {
+                                    // Cents, as an integer, because money is not
+                                    // a float. The action refuses anything that
+                                    // is not a positive integer of cents.
+                                    const cents = Math.round(Number(payAmount) * 100);
+                                    const subject = paymentEntityFor(payTarget.subjectMemberId ?? chargeTarget);
+
+                                    /*
+                                     * ── WHICH RAILS ASK, AND WHICH ONES WRITE DOWN ──
+                                     *
+                                     * Card and bank account both COLLECT: money has to be asked for
+                                     * and confirmed by the provider before any of it is real. Cash,
+                                     * check and money order RECORD money that already arrived.
+                                     *
+                                     * Sending a bank debit down the record path would write a
+                                     * receipt for money no bank has moved yet — the same defect Card
+                                     * had, on a rail where settlement takes days rather than
+                                     * seconds, so the lie would last longer.
+                                     */
+                                    const collects = payMethod === "card" || payMethod === "ach";
+                                    const automatic = tabbed && payAllocation === "automatic" && Boolean(settleAccountId);
+                                    if (!collects) {
+                                        void runPaymentAction(
+                                            "payment.record",
+                                            {
+                                                /*
+                                                 * W7-F050: the ACCOUNT, settled automatically — or,
+                                                 * by exception, the one charge the operator chose.
+                                                 */
+                                                ...(automatic
+                                                    ? {
+                                                          customer_id: settleAccountId,
+                                                          idempotency_key: payIdemKey || undefined,
+                                                          ...(settlePreview ? { expected_applied_cents: settlePreview.appliedCents } : {}),
+                                                      }
+                                                    : { charge_id: payTarget.chargeId, charge_label: payTarget.label }),
+                                                amount_cents: cents,
+                                                payment_method: payMethod,
+                                                /* Identity of the payer. Omitted entirely when the
+                                                   operator said it is not known — never defaulted to
+                                                   whoever happens to be responsible. */
+                                                ...(namedPayerId
+                                                    ? {
+                                                          payer_entity_type: "person",
+                                                          payer_entity_id: namedPayerId,
+                                                      }
+                                                    : {}),
+                                                ...(payReference.trim() ? { reference_number: payReference.trim() } : {}),
+                                            },
+                                            subject,
+                                        );
+                                        return;
+                                    }
+
+                                    /*
+                                     * CARD ASKS FOR THE MONEY. The server decides
+                                     * whether this organisation can collect at
+                                     * all — a merchant that has not finished
+                                     * onboarding is a blocked state with an
+                                     * explanation, never a generic failure and
+                                     * never a fallback to Alloy's own account.
+                                     */
+                                    setCardMessage(null);
+                                    void (async () => {
+                                        const outcome = await runPaymentAction(
+                                            "payment.collect_card",
+                                            {
+                                                ...(automatic
+                                                    ? { customer_id: settleAccountId }
+                                                    : { charge_id: payTarget.chargeId, charge_label: payTarget.label }),
+                                                amount_cents: cents,
+                                                // Intent only. The server resolves the merchant, its
+                                                // capability for this rail, and what may be taken.
+                                                rail: payMethod,
+                                                /*
+                                                 * The chosen stored method, or omitted to collect a
+                                                 * new one. The payer travels with it because the
+                                                 * server checks that the method's owner IS the
+                                                 * named payer and refuses a mismatch.
+                                                 */
+                                                ...(payStoredMethodId ? { payment_method_id: payStoredMethodId } : {}),
+                                                ...(namedPayerId ? { payer_person_id: namedPayerId } : {}),
+                                            },
+                                            subject,
+                                        );
+                                        if (!outcome?.ok) {
+                                            setCardStage("blocked");
+                                            setCardMessage(
+                                                outcome?.error
+                                                    ?? (payMethod === "ach"
+                                                        ? "Bank collection is unavailable."
+                                                        : "Card collection is unavailable."),
+                                            );
+                                            return;
+                                        }
+                                        const d = outcome.detail;
+                                        /*
+                                         * A STORED METHOD IS ALREADY CHARGED. The service confirms
+                                         * it off-session, so opening Stripe's fields here would ask
+                                         * the operator to enter a card that has just been used —
+                                         * and the ledger reload below is what actually reports the
+                                         * outcome. Only a NEW instrument needs the entry stage.
+                                         */
+                                        if (d.payment_method_id) {
+                                            /*
+                                             * Close and RE-READ rather than announce. The attempt
+                                             * is real but recognition is the server's to confirm,
+                                             * so the ledger reports what actually happened instead
+                                             * of this surface claiming a receipt it has not seen.
+                                             */
+                                            setCardCollection(null);
+                                            setCardStage("idle");
+                                            setPayTarget(null);
+                                            await load();
+                                            /* W7-F048: charged on file — the command is done. */
+                                            if (tabbed) pop();
+                                            return;
+                                        }
+                                        setCardCollection({
+                                            clientSecret: String(d.client_secret ?? ""),
+                                            connectedAccount: String(d.connected_account ?? ""),
+                                            attemptId: String(d.collection_attempt_id ?? ""),
+                                            amountCents: Number(d.amount_cents ?? cents),
+                                        });
+                                        setCardStage("entry");
+                                    })();
+                                }}
+                            >
+                                {/*
+                                  * THREE ACTS, THREE NAMES. Collecting by card or bank is Alloy
+                                  * taking money through a provider. Cash and cheque are money
+                                  * that already arrived somewhere else, and calling that "Record
+                                  * payment" made the two sound interchangeable — which is the
+                                  * ambiguity human QA reported.
+                                  */}
+                                {/*
+                                  * W7-F048: ONE VERB FOR THE ACT — Confirm payment — whether the money
+                                  * is recorded (cash, check, money order, external) or charged to a
+                                  * method on file. Only a NEW card or bank account says what happens
+                                  * next, because pressing it opens the provider's own entry fields
+                                  * rather than taking money.
+                                  */}
+                                {(payMethod === "card" || payMethod === "ach") && !payStoredMethodId
+                                    ? payMethod === "ach" ? "Continue to bank details" : "Continue to card details"
+                                    : "Confirm payment"}
+                            </button>
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-payment-cancel="true"
+                                disabled={running}
+                                onClick={() => {
+                                    setPayTarget(null);
+                                    /* W7-F048: the form IS the command now, so Cancel closes it. */
+                                    if (tabbed) pop();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </span>
+
+                        {/*
+                            THE INTERVAL BETWEEN ASKING AND BEING PAID.
+                            Cash has no such interval, which is why the panel
+                            never needed these states before. Every one of them
+                            is deliberately NOT "paid": the balance below does
+                            not move until Financials recognises the money.
+                        */}
+                        {cardStage === "blocked" ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-card-blocked="true"
+                            >
+                                {cardMessage ?? "Card collection is unavailable."}
+                            </p>
+                        ) : null}
+
+                        {cardStage === "entry" && cardCollection ? (
+                            <CardCollectionField
+                                clientSecret={cardCollection.clientSecret}
+                                connectedAccount={cardCollection.connectedAccount}
+                                amountLabel={money(cardCollection.amountCents, currency)}
+                                disabled={running}
+                                onCancel={() => {
+                                    setCardStage("idle");
+                                    setCardCollection(null);
+                                }}
+                                onResult={(r) => {
+                                    if (r.status === "failed") {
+                                        setCardStage("failed");
+                                        setCardMessage(r.message ?? "That card could not be charged.");
+                                        return;
+                                    }
+                                    /*
+                                     * The card went through at the processor.
+                                     * That is NOT a payment yet — Financials
+                                     * recognises it when provider confirmation
+                                     * reaches the canonical posting path — so the
+                                     * operator is told it is finalizing, and is
+                                     * never offered "charge again" as recovery.
+                                     */
+                                    setCardStage("finalizing");
+                                    setCardMessage(null);
+                                    void (async () => {
+                                        for (let i = 0; i < 12; i += 1) {
+                                            await new Promise((res) => setTimeout(res, 1000));
+                                            await load();
+                                            const check = await fetch(
+                                                `/api/admin/financials/collection-state?attempt_id=${cardCollection.attemptId}`,
+                                                { credentials: "include" },
+                                            );
+                                            if (!check.ok) continue;
+                                            const body = (await check.json()) as { recognized?: boolean };
+                                            if (body.recognized) {
+                                                setCardStage("recognized");
+                                                setCardCollection(null);
+                                                setPayTarget(null);
+                                                await load();
+                                                return;
+                                            }
+                                        }
+                                    })();
+                                }}
+                            />
+                        ) : null}
+
+                        {cardStage === "finalizing" ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-card-finalizing="true"
+                            >
+                                Payment received — finalizing. The balance updates when Financials records it.
+                            </p>
+                        ) : null}
+
+                        {cardStage === "failed" ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-card-failed="true"
+                            >
+                                {cardMessage ?? "That card could not be charged."} Nothing was collected and the balance is unchanged.
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {cardStage === "recognized" ? (
+                    <p
+                        className="alloy-os-financials__note"
+                        data-financials-card-recognized="true"
+                    >
+                        Payment received.
+                    </p>
+                ) : null}
+
+                {!vm.paymentSetup && !vm.payments.length && !payableRows.length ? (
+                    <p className="alloy-os-financials__note" data-financials-payment="none">
+                        No payments recorded
+                    </p>
+                ) : null}
+                </>)}
+            </section>
+    ) : null;
+
+    /*
+     * The mode control, declared once and rendered by whichever mode's host is on screen. Two
+     * inline copies would be two places for the modes to drift apart.
+     */
+    const entryModes = (
+        <div className="alloy-os-financials__entrymodes" role="tablist" aria-label="What to add">
+            {(["charge", "adjustment"] as const).map((mode) => (
+                <button
+                    key={mode}
+                    type="button"
+                    role="tab"
+                    aria-selected={entryMode === mode}
+                    data-financials-entry-mode-tab={mode}
+                    className={entryMode === mode ? "is-selected" : undefined}
+                    onClick={() => {
+                        setEntryMode(mode);
+                        if (mode === "adjustment" && !adjustOpen) openAddAdjustment();
+                    }}
+                >
+                    {mode === "charge" ? "Charge" : "Adjustment"}
+                </button>
+            ))}
+        </div>
+    );
+
+    /*
+     * ── COMMANDS ARE COLLECTED, NOT RETURNED ────────────────────────────────────────────────
+     *
+     * Each command below used to `return` straight out of the component. In the Focus Panel that
+     * is right. In Financials → Accounts it is not: Details is the FLOOR of that host, the right
+     * pane IS the account, and returning the command alone left that pane blank. Measured mounted
+     * on deployed staging — opening Add from an account drew the command over an empty pane, with
+     * `data-financials-detail-account` absent from the document and the ledger at zero rows.
+     */
+    /* W7-F016: open Add Charge as an EDIT of this draft, pre-filled from its own record. */
+    const openEditDraft = (facts: ChargeDetailFacts) => {
+        /*
+         * The CURRENT version of the charge type. A draft keeps the template version it was written
+         * under; if that version has since been superseded (W7-F017 moved Materials onto the
+         * organisation's timing), the edit is made under the version in force now.
+         */
+        /*
+         * ── A DRAFT IS EDITED UNDER ITS OWN IDENTITY, NEVER ITS NAME ──────────────────────────
+         *
+         * A template draft stays a template draft: its template by id, else the version of the same
+         * `template_key` in force now — the lineage it was written under. A catalog draft is its
+         * catalog item by id. Nothing matches by label: a catalog item and a template can share a
+         * name, and converting a historical draft into a same-name catalog product would change what
+         * the charge is without anyone deciding it.
+         */
+        const current = resolveDraftEditIdentity(facts, {
+            draftTemplates: vm?.draftTemplates ?? [],
+            catalogOptions: vm?.chargeTemplates ?? [],
+        });
+        if (!current) {
+            setDraftActionError("This charge type is no longer offered, so the draft cannot be edited. Cancel it and add a new charge.");
+            return;
+        }
+        setFilterBeforeEdit(subjectFilter);
+        setReplacingDraftId(facts.chargeId);
+        setCancelDraftConfirm(false);
+        setDraftActionError(null);
+        setChargeEventDate(facts.serviceDate ?? "");
+        setChargeAmount(facts.amountCents > 0 ? (facts.amountCents / 100).toFixed(2) : "");
+        setSubjectFilter(facts.customerMemberId ?? "all");
+        setPending({ templateId: current.id, source: current.source, label: current.label, summary: "", changes: [] });
+        push({ kind: "add_charge" });
+    };
+
+    /* W7-F016: withdraw a never-posted draft — retained as cancelled, never deleted. */
+    const cancelDraft = async (facts: ChargeDetailFacts) => {
+        setRunning(true);
+        setDraftActionError(null);
+        const result = await executeFinancialCommand({
+            action: "cancelDraft",
+            entity: { entityType: "customer", entityId: customerId ?? "" },
+            mode: "execute",
+            payload: { charge_id: facts.chargeId, charge_label: facts.label },
+        });
+        setRunning(false);
+        setCancelDraftConfirm(false);
+        if (!result.ok) {
+            setDraftActionError(result.error);
+            return;
+        }
+        setChargeDetailRefresh((n) => n + 1);
+        await load();
+    };
+
+    const commandSurface = (() => {
+        /*
+         * ── THE CHARGE'S OWN RECORD, FROM EITHER HOST ───────────────────────────────────────
+         *
+         * One presentation, `FinancialsChargeDetail`, over one projection, `resolveChargeDetail`.
+         * The Accounts Charges lens already rendered it; this is the same component, so there is
+         * no second resolver and no surface-specific reading of a charge. Whichever host mounted
+         * this card, clicking a ledger row's name opens the identical record.
+         *
+         * It is collected with the commands because that is how this host renders anything above
+         * the floor — and in the workspace the floor stays beneath it, so the account the operator
+         * was reading does not disappear behind its own detail.
+         */
+        if (overlay === "charge_detail" && surface?.kind === "charge_detail") {
+            /*
+             * W7-F029: THE FIRST PAINT COMES FROM WHAT THIS CARD ALREADY READ. A ledger row is a
+             * `vm.rows` entry — label, amount, state, period, due date, who owes it — so Charge
+             * Details opens with them; the authoritative projection then replaces them. A host that
+             * read the charge elsewhere (the Charges workspace) hands its own seed in.
+             */
+            const vmRow = vm?.rows.find((r) => r.chargeId === surface.chargeId) ?? null;
+            const detailSeed: ChargeDetailSeed | null =
+                surface.seed
+                ?? (vmRow
+                    ? {
+                          label: surface.label,
+                          status: vmRow.lifecycleStatus,
+                          awaiting: vmRow.awaiting
+                              ? { key: vmRow.awaiting.key, label: vmRow.awaiting.label, explanation: vmRow.awaiting.explanation, postsOn: vmRow.awaiting.postsOn }
+                              : null,
+                          childName: vmRow.subjectName,
+                          amountLabel: money(vmRow.amountCents, vmRow.currencyCode || currency),
+                          serviceDate: vmRow.date,
+                          billingPeriodLabel: vmRow.periodKey ? billingPeriodLabel(vmRow.periodKey) || null : null,
+                          dueDate: vmRow.dueDate,
+                          responsibleParty: vmRow.responsiblePartyName,
+                      }
+                    : null);
+            /*
+             * W7-F027: POST ONLY WHERE A PERSON IS NEEDED, AND SAY WHY. A Scheduled charge offers no
+             * Post — it activates when its period begins. Review, a failed post and a legacy draft
+             * are the three exceptions, each named on its own control. `charge.post` is unchanged.
+             */
+            const facts = chargeDetailFacts?.chargeId === surface.chargeId ? chargeDetailFacts : null;
+            const exceptionalPost =
+                facts?.status === "draft" && facts.awaiting
+                    ? facts.awaiting.key === "review_required" ? "Approve and post"
+                    : facts.awaiting.key === "post_failed" ? "Retry posting"
+                    : facts.awaiting.key === "unclassified" ? "Post legacy draft"
+                    : null
+                    : null;
+            /*
+             * W7-F030: REVERSE ADJUSTMENT LIVES ON THE ADJUSTMENT'S OWN RECORD. The separate
+             * adjustments table under the ledger existed to host this act; the record is reached
+             * from its ledger row like every other. Offered exactly where the table offered it: a
+             * manual reduction, not itself a reversal, not already reversed.
+             */
+            /* The reversal composer lives on the account's Details, so it is offered where Details is beneath. */
+            const detailsBeneath = detailsAreTheSurface || stack.some((x) => x.kind === "detail");
+            const reversibleReduction = !detailsBeneath ? null :
+                vm?.reductions.find(
+                    (r) => r.chargeId === surface.chargeId && r.kind === "manual" && !r.reversedByApplicationId && !r.reversesApplicationId,
+                ) ?? null;
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="charge_detail"
+                    data-financials-charge-detail-for={surface.chargeId}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Charge details"
+                >
+                    <UniversalCard
+                        title="Charge details"
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="charge_detail"
+                        footerAction={null}
+                    >
+                        <FinancialsChargeDetail
+                            chargeId={surface.chargeId}
+                            refreshKey={chargeDetailRefresh}
+                            seed={detailSeed}
+                            onLoaded={setChargeDetailFacts}
+                            bare
+                        />
+                        {/*
+                          * W7 Scenario 8 final presentation: lifecycle commands LOOK like commands —
+                          * Add Charge's own button grammar. Edit draft is the constructive primary,
+                          * Cancel draft is destructive but outlined (never the dominant control),
+                          * Close is neutral and sits at the end.
+                          */}
+                        <div className="alloy-os-depthcard__actions alloy-os-chargedetail__actions" data-financials-card-actions="true">
+                            {/*
+                              * ── CORRECT THIS, FROM THE RECORD OF THIS ──────────────────────
+                              *
+                              * §5. The operator is looking at the charge. Sending them back to
+                              * Add, then to the Adjustment mode, then to a charge select to find
+                              * the SAME row again is asking them to re-enter a context they never
+                              * left — and every one of those steps is a chance to bind the
+                              * correction to the wrong obligation.
+                              *
+                              * This is not a second surface and not a second writer: it opens the
+                              * one unified Adjustment command with the source already bound, the
+                              * same `openAdjustForCharge` the ledger row action uses.
+                              *
+                              * OFFERED ONLY WHERE IT CAN SUCCEED. `adjustableCharges` is the
+                              * ledger's own answer to "which obligations still have something to
+                              * reduce" — it already subtracts what has been reduced, because the
+                              * service refuses a reduction larger than the charge holds. Offering
+                              * this on a charge that answer excludes would be offering a control
+                              * that can only be refused, and asking a second authority whether it
+                              * is correctable would be a second opinion.
+                              */}
+                            {/*
+                              * W7-F016: A DRAFT IS EDITED OR CANCELLED; POSTED MONEY IS CORRECTED.
+                              * The two sets never appear together — the record's own status decides.
+                              */}
+                            {chargeDetailFacts?.chargeId === surface.chargeId && chargeDetailFacts.status === "draft" ? (
+                                cancelDraftConfirm ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--destructive-confirm"
+                                            data-financials-charge-detail-cancel-draft-confirm="true"
+                                            disabled={running}
+                                            onClick={() => void cancelDraft(chargeDetailFacts)}
+                                        >
+                                            {running ? "Cancelling…" : "Confirm cancel draft"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
+                                            data-financials-charge-detail-keep-draft="true"
+                                            onClick={() => setCancelDraftConfirm(false)}
+                                            disabled={running}
+                                        >
+                                            Keep draft
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--primary"
+                                            data-financials-charge-detail-edit-draft="true"
+                                            disabled={running}
+                                            onClick={() => openEditDraft(chargeDetailFacts)}
+                                        >
+                                            Edit draft
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--destructive"
+                                            data-financials-charge-detail-cancel-draft="true"
+                                            disabled={running}
+                                            onClick={() => setCancelDraftConfirm(true)}
+                                        >
+                                            Cancel draft
+                                        </button>
+                                    </>
+                                )
+                            ) : null}
+                            {draftActionError ? (
+                                <p className="alloy-os-addcharge__error" role="alert" data-financials-charge-detail-action-error="true">
+                                    {draftActionError}
+                                </p>
+                            ) : null}
+                            {exceptionalPost && facts ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--primary"
+                                    data-financials-charge-detail-post={facts.awaiting?.key}
+                                    data-charge-command="charge.post"
+                                    title={facts.awaiting?.explanation}
+                                    disabled={running}
+                                    onClick={() =>
+                                        void runRowAction("post", rowForCharge(surface.chargeId)).then(() =>
+                                            setChargeDetailRefresh((n) => n + 1),
+                                        )
+                                    }
+                                >
+                                    {exceptionalPost}
+                                </button>
+                            ) : null}
+                            {reversibleReduction ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
+                                    data-financials-charge-detail-reverse-adjustment={reversibleReduction.applicationId}
+                                    data-charge-command="billing.reverse_adjustment"
+                                    title="Reverse this adjustment — the original stays on the record, and its opposite is appended"
+                                    onClick={() => {
+                                        pop();
+                                        openReverseAdjustment({ applicationId: reversibleReduction.applicationId });
+                                    }}
+                                >
+                                    Reverse adjustment
+                                </button>
+                            ) : null}
+                            {chargeDetailFacts?.status !== "draft" && adjustableCharges.some((r) => r.chargeId === surface.chargeId) ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
+                                    data-financials-charge-detail-correct="true"
+                                    onClick={() => openAdjustForCharge({ chargeId: surface.chargeId })}
+                                >
+                                    Correct this charge
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close alloy-os-chargedetail__action alloy-os-chargedetail__action--neutral"
+                                data-financials-charge-detail-close="true"
+                                onClick={pop}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+
+        /*
+         * ── W7-F026: PAYMENT DETAILS — THE RECEIPT'S OWN RECORD ─────────────────────────────
+         *
+         * There was no canonical Payment Details: a receipt's facts and its Hold / Refund acts lived
+         * only in the payment band. This is that band's per-receipt markup, scoped to one payment
+         * (`paymentBandFor(false, id)`) — one implementation, not a second — with what a row cannot
+         * hold: when it arrived, who paid, and WHICH obligations it is answering. Each application
+         * opens its charge's record.
+         */
+        /*
+         * ── W7-F044: WHERE THE PREPAID FIGURE CAME FROM ────────────────────────────────────────
+         *
+         * "Prepaid available" is not a wallet. It is posted receipts whose money has not been
+         * applied to any charge (amount − applied − refunded − held), summed by the resolver. This
+         * layer lists exactly those receipts — the resolver's own positions, joined to the receipt
+         * rows for who, when and by what — so the number is never unexplained. Each opens its
+         * Payment Details, which is where applying, reallocating and refunding already live.
+         */
+        if (overlay === "prepaid_detail" && vm) {
+            const cur = currency;
+            const byId = new Map(vm.payments.map((p) => [p.paymentId, p]));
+            const sources = (vm.prepaid.positions ?? [])
+                .filter((pos) => pos.availability === "available" && pos.unappliedCents - pos.heldCents > 0)
+                .map((pos) => ({ pos, receipt: byId.get(pos.paymentId) ?? null }));
+            const pending = (vm.prepaid.positions ?? []).filter((pos) => pos.availability === "pending");
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="prepaid_detail"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Prepaid available"
+                >
+                    <UniversalCard
+                        title="Prepaid available"
+                        insight={money(vm.prepaid.availableCents, cur)}
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="prepaid_detail"
+                        footerAction={null}
+                    >
+                        <p className="alloy-os-financials__note" data-financials-prepaid-explainer="true">
+                            Money a payment brought in that is not yet applied to any charge. It stays on the
+                            household&apos;s account — usable for any child — until it is applied to a charge or
+                            refunded. It does not expire. Held deposits and payments still clearing are not
+                            included.
+                        </p>
+                        {sources.length ? (
+                            <ul className="alloy-os-financials__payments" data-financials-prepaid-sources="true">
+                                {sources.map(({ pos, receipt }) => {
+                                    const original = receipt?.amountCents ?? null;
+                                    const applied = receipt?.appliedCents ?? null;
+                                    const refunded = receipt ? Math.max(0, receipt.amountCents - receipt.appliedCents - receipt.unappliedCents) : 0;
+                                    const remaining = pos.unappliedCents - pos.heldCents;
+                                    const methodText = receipt
+                                        ? (receipt.methodDisplay ?? PAYMENT_METHOD_LABELS[receipt.method as keyof typeof PAYMENT_METHOD_LABELS] ?? receipt.method)
+                                        : null;
+                                    return (
+                                        <li
+                                            key={pos.paymentId}
+                                            className="alloy-os-financials__payment"
+                                            data-financials-prepaid-source={pos.paymentId}
+                                        >
+                                            <span className="grid w-full grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+                                                {[
+                                                    { k: "payer", label: "Payer", value: receipt ? (receipt.payerName ?? receipt.payerLabel ?? "Not named") : "—" },
+                                                    { k: "received", label: "Received", value: receipt?.receivedAt ? formatDisplayDate(receipt.receivedAt) || "—" : "—" },
+                                                    { k: "method", label: "Method", value: methodText ?? "—" },
+                                                    { k: "original", label: "Original amount", value: original != null ? money(original, cur) : "—" },
+                                                    { k: "applied", label: "Applied to charges", value: applied != null ? money(applied, cur) : "—" },
+                                                    ...(refunded > 0 ? [{ k: "refunded", label: "Refunded", value: money(refunded, cur) }] : []),
+                                                    ...(pos.heldCents > 0 ? [{ k: "held", label: "Held deposit", value: money(pos.heldCents, cur) }] : []),
+                                                    { k: "remaining", label: "Prepaid remaining", value: money(remaining, cur) },
+                                                ].map((f) => (
+                                                    <span key={f.k} className="flex min-w-0 flex-col" data-financials-prepaid-line={f.k}>
+                                                        <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{f.label}</span>
+                                                        <span className="truncate text-sm text-alloy-midnight/85">{f.value}</span>
+                                                    </span>
+                                                ))}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="alloy-os-financials__action"
+                                                data-financials-prepaid-open-payment={pos.paymentId}
+                                                onClick={() => push({ kind: "payment_detail", paymentId: pos.paymentId })}
+                                            >
+                                                Open payment — apply, reallocate or refund →
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        ) : (
+                            <p className="alloy-os-financials__note" data-financials-prepaid-empty="true">
+                                No payment on this account has unapplied money available.
+                            </p>
+                        )}
+                        {pending.length ? (
+                            <p className="alloy-os-financials__note" data-financials-prepaid-pending="true">
+                                {money(vm.prepaid.pendingCents, cur)} more is on payments still clearing — not available
+                                until they post.
+                            </p>
+                        ) : null}
+                    </UniversalCard>
+                </div>
+            );
+        }
+        if (overlay === "payment_detail" && surface?.kind === "payment_detail" && vm) {
+            const receipt = vm.payments.find((p) => p.paymentId === surface.paymentId) ?? null;
+            /* The reallocation layer needs the account's own receipts and targets beneath it. */
+            const detailsAreTheSurfaceOrBeneath = detailsAreTheSurface || stack.some((x) => x.kind === "detail");
+            const cur = receipt?.currencyCode || currency;
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="payment_detail"
+                    data-financials-payment-detail-for={surface.paymentId}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Payment details"
+                >
+                    <UniversalCard
+                        title="Payment details"
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="payment_detail"
+                        footerAction={null}
+                    >
+                        {receipt ? (
+                            <>
+                                {/* Charge Details' own fact-cell idiom: label over value, two columns. */}
+                                <span className="mb-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3" data-financials-payment-detail-facts="true">
+                                    {[
+                                        { label: receipt.direction === "outbound" ? "Sent" : "Received", value: receipt.receivedAt ? formatDisplayDate(receipt.receivedAt) || "—" : "—", testId: "received" },
+                                        /* W7-F032: the payment's own payer — the same rule as the row's Party — the household only when none is named. */
+                                        { label: "Payer", value: receipt.payerName ?? receipt.payerLabel ?? "Not named", testId: "payer" },
+                                        ...(receipt.reference ? [{ label: "Reference", value: receipt.reference, testId: "reference" }] : []),
+                                        ...(receipt.direction === "inbound"
+                                            ? [{
+                                                  label: (receipt.unappliedCents - (receipt.heldCents ?? 0)) > 0 && receipt.status === "posted" ? "Prepaid remaining" : "Remaining unapplied",
+                                                  value: money(Math.max(0, receipt.unappliedCents - (receipt.heldCents ?? 0)), cur),
+                                                  testId: "remaining-unapplied",
+                                              }]
+                                            : []),
+                                    ].map((f) => (
+                                        <span key={f.testId} className="flex min-w-0 flex-col" data-financials-payment-detail-line={f.testId}>
+                                            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{f.label}</span>
+                                            <span className="truncate text-sm text-alloy-midnight/85" title={f.value}>{f.value}</span>
+                                        </span>
+                                    ))}
+                                </span>
+                                {paymentBandFor(false, surface.paymentId)}
+                                {receipt.direction === "inbound" ? (
+                                    <section
+                                        className="alloy-os-financials__band"
+                                        data-financials-payment-applications="true"
+                                        data-financials-payment-settlement={receipt.settledAutomatically ? "automatic" : "explicit"}
+                                    >
+                                        {/* W7-F050: what Alloy did, as audit evidence — not a decision screen. */}
+                                        <p className="alloy-os-financials__band-label">
+                                            {receipt.settledAutomatically ? "Applied automatically" : "Applied to"}
+                                        </p>
+                                        {receipt.applications.length ? (
+                                            <ul className="alloy-os-financials__payments">
+                                                {receipt.applications.map((a) => (
+                                                    <li
+                                                        key={a.allocationId}
+                                                        className="alloy-os-financials__payment"
+                                                        data-financials-payment-application={a.allocationId}
+                                                        data-financials-payment-application-status={a.status}
+                                                    >
+                                                        {a.chargeId ? (
+                                                            <button
+                                                                type="button"
+                                                                className="alloy-os-financials__action alloy-os-financials__action--onrow"
+                                                                data-financials-payment-application-open={a.chargeId}
+                                                                onClick={() => push({ kind: "charge_detail", chargeId: a.chargeId!, label: a.chargeLabel })}
+                                                            >
+                                                                {a.chargeLabel}
+                                                            </button>
+                                                        ) : (
+                                                            <span>{a.chargeLabel}</span>
+                                                        )}
+                                                        <span>{money(a.appliedCents, cur)}</span>
+                                                        <span className="alloy-os-financials__note">
+                                                            {a.status === "active"
+                                                                ? `Applied${a.allocatedAt ? ` ${formatDisplayDate(a.allocatedAt) || ""}` : ""}`
+                                                                : `Reallocated${a.reversalReason ? ` · ${a.reversalReason}` : ""}`}
+                                                        </span>
+                                                        {/*
+                                                          * W7-F033: the named act, on the application it changes. The
+                                                          * receipt does not move — this application does.
+                                                          */}
+                                                        {a.status === "active" && detailsAreTheSurfaceOrBeneath ? (
+                                                            <button
+                                                                type="button"
+                                                                className="alloy-os-financials__action alloy-os-financials__action--onrow"
+                                                                data-financials-payment-reallocate={a.allocationId}
+                                                                data-charge-command="payment.reverse_application"
+                                                                disabled={running}
+                                                                onClick={() => openMovePayment({ paymentId: receipt.paymentId, allocationId: a.allocationId })}
+                                                            >
+                                                                Reallocate
+                                                            </button>
+                                                        ) : null}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="alloy-os-financials__note">Not applied to any charge yet.</p>
+                                        )}
+                                    </section>
+                                ) : null}
+                            </>
+                        ) : (
+                            <p className="alloy-os-financials__note" data-financials-payment-detail-missing="true">
+                                This payment is no longer on the account&rsquo;s record.
+                            </p>
+                        )}
+                        <div className="alloy-os-depthcard__actions alloy-os-chargedetail__actions" data-financials-card-actions="true">
+                            {/*
+                              * W7-F033: unrestricted money still answering nothing can be applied —
+                              * the same governed apply the ledger icon used to raise, now named.
+                              */}
+                            {receipt && receipt.direction === "inbound" && receipt.status === "posted"
+                                && receipt.unappliedCents - (receipt.heldCents ?? 0) > 0 && detailsAreTheSurfaceOrBeneath ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--primary"
+                                    data-financials-payment-apply={receipt.paymentId}
+                                    data-charge-command="payment.apply_to_charge"
+                                    disabled={running}
+                                    onClick={() => openApplyPayment({ paymentId: receipt.paymentId })}
+                                >
+                                    Apply to a charge
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close alloy-os-chargedetail__action alloy-os-chargedetail__action--neutral"
+                                data-financials-payment-detail-close="true"
+                                onClick={pop}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+        /*
+         * ── W7-F033: MONEY-MOVING ACTS ARE COMMAND LAYERS, NOT BANDS ABOVE THE CARD ───────────
+         *
+         * Reallocate / Apply payment, Release held deposit and Reverse adjustment rendered as inline
+         * panels pushed above the account card — the one interaction left that did not use the
+         * command shell Add charge, Reverse charge and the record cards use. Same governed actions,
+         * same preview-then-confirm, same testIds; the shell is the change. Each layer stays open
+         * while its pending act exists and closes itself when that act is cleared (Cancel, a
+         * completed confirm, or a partial move whose notice then reads on the account).
+         */
+        if (overlay === "payment_application" && (movePending || applyPending)) {
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="payment_application"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={movePending ? "Reallocate payment" : applyPending?.hold ? "Apply held deposit" : "Apply payment"}
+                >
+                    <UniversalCard
+                        title={movePending ? "Reallocate payment" : applyPending?.hold ? "Apply held deposit" : "Apply payment"}
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="payment_application"
+                        footerAction={null}
+                    >
+                    <div className="alloy-os-financials__commandbody" data-testid="payment-move-panel" data-financials-command="payment_application">
+                        {/*
+                          * W7-F033: WHICH MONEY, AND WHAT CHANGES. The receipt is named — amount, payer,
+                          * method — and, for a reallocation, the charge it currently answers. The
+                          * payment itself never moves: its APPLICATION does, as two governed acts
+                          * (reverse, then apply), and the note says what happens if the second fails.
+                          */}
+                        {paymentApplicationFacts ? (
+                            <dl className="alloy-os-financials__commandfacts" data-testid="payment-move-facts">
+                                <div><dt>Payment</dt><dd>{paymentApplicationFacts.payment}</dd></div>
+                                {paymentApplicationFacts.currently ? (
+                                    <div><dt>Currently applied to</dt><dd>{paymentApplicationFacts.currently}</dd></div>
+                                ) : null}
+                            </dl>
+                        ) : null}
+                        {movePending ? (
+                            <p className="alloy-os-financials__commandnote" data-testid="payment-move-effect">
+                                The payment and its payer stay the same. Its application to the current charge is
+                                reversed, then applied to the charge you choose. If the second step is refused, the
+                                money stays on the account as unapplied and nothing is lost.
+                            </p>
+                        ) : null}
+                        
+                        <div className="alloy-os-fdetail__movefield">
+                            <span>{movePending ? "Reallocate to" : "Apply to"}</span>
+                            <AlloySelect
+                                testId="payment-move-target"
+                                aria-label={movePending ? "Reallocate to" : "Apply to"}
+                                placeholder="Choose a charge…"
+                                value={moveTargetId}
+                                options={moveTargets.map((t) => ({
+                                    value: t.chargeId,
+                                    label:
+                                        `${t.label}`
+                                        + (t.serviceDate ? ` · ${formatDisplayDate(t.serviceDate)}` : "")
+                                        + ` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`,
+                                }))}
+                                onChange={(next) => {
+                                    setMoveTargetId(next);
+                                    // A new destination invalidates a preview taken for the old one.
+                                    setMovePreview(null);
+                                }}
+                            />
+                        </div>
+                        {/* A reversal must say why; applying unapplied money undoes nothing. */}
+                        {movePending ? (
+                            <label className="alloy-os-fdetail__movefield">
+                                <span>Reason</span>
+                                <input
+                                    data-testid="payment-move-reason"
+                                    value={moveReason}
+                                    onChange={(e) => {
+                                        setMoveReason(e.target.value);
+                                        setMovePreview(null);
+                                    }}
+                                    placeholder="Applied to the wrong charge"
+                                />
+                            </label>
+                        ) : null}
+                        {movePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="payment-move-preview">
+                                <strong>{movePreview.summary}</strong>
+                                {movePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {moveError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="payment-move-error">
+                                {moveError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            {/*
+                              * Preview first, and only for a Move: Confirm stays disabled until the
+                              * ACTION has said what reversing this application will do. Applying
+                              * unapplied money has no reversal to explain.
+                              */}
+                            {movePending ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-financials__action"
+                                    data-testid="payment-move-preview-button"
+                                    disabled={running || !moveReason.trim()}
+                                    onClick={() => void previewMove()}
+                                >
+                                    Preview
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                data-testid="payment-move-confirm"
+                                disabled={
+                                    running
+                                    || !moveTargetId
+                                    || (movePending ? !movePreview : false)
+                                }
+                                onClick={() => void (movePending ? confirmMove() : confirmApply())}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" className="alloy-os-financials__quiet" data-testid="payment-move-cancel" onClick={closeMovePanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+        if (overlay === "release_held" && releasePending) {
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="release_held"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={"Release held deposit"}
+                >
+                    <UniversalCard
+                        title={"Release held deposit"}
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="release_held"
+                        footerAction={null}
+                    >
+                    <div className="alloy-os-financials__commandbody" data-testid="deposit-release-panel" data-financials-command="release_held">
+                        
+                        {/*
+                          * WHAT RELEASING ACTUALLY DOES, said plainly. Operators read "release" as
+                          * "give it back", which is a refund. Releasing moves no money at all: the
+                          * restriction ends and the same money becomes spendable against what the
+                          * family owes. Saying so here is cheaper than a reversal later.
+                          */}
+                        <p className="alloy-os-fdetail__heldnote">
+                            {money(releasePending.remainingCents, currency)} stops being held and becomes
+                            available prepaid. No money moves and the family is not refunded.
+                        </p>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="deposit-release-reason"
+                                value={releaseReason}
+                                onChange={(e) => setReleaseReason(e.target.value)}
+                                placeholder="Agreement ended with no damages"
+                            />
+                        </label>
+                        {releaseError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="deposit-release-error">
+                                {releaseError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                data-testid="deposit-release-confirm"
+                                disabled={running}
+                                onClick={() => void confirmRelease()}
+                            >
+                                Release {money(releasePending.remainingCents, currency)}
+                            </button>
+                            <button type="button" className="alloy-os-financials__quiet" data-testid="deposit-release-cancel" onClick={closeMovePanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+        if (overlay === "reverse_adjustment" && reversePending) {
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="reverse_adjustment"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={"Reverse adjustment"}
+                >
+                    <UniversalCard
+                        title={"Reverse adjustment"}
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="reverse_adjustment"
+                        footerAction={null}
+                    >
+                    <div className="alloy-os-financials__commandbody" data-testid="adjustment-reverse-panel" data-financials-command="reverse_adjustment">
+                        
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="adjustment-reverse-reason"
+                                value={reverseReason}
+                                onChange={(e) => {
+                                    setReverseReason(e.target.value);
+                                    setReversePreview(null);
+                                }}
+                                placeholder="Recorded against the wrong enrolment"
+                            />
+                        </label>
+                        {reversePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-reverse-preview">
+                                <strong>{reversePreview.summary}</strong>
+                                {reversePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {reverseError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-reverse-error">
+                                {reverseError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-testid="adjustment-reverse-preview-button"
+                                disabled={running || !reverseReason.trim()}
+                                onClick={() => void previewReversal()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                data-testid="adjustment-reverse-confirm"
+                                disabled={running || !reversePreview}
+                                onClick={() => void confirmReversal()}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" className="alloy-os-financials__quiet" data-testid="adjustment-reverse-cancel" onClick={closeAdjustPanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+    if (overlay === "add_charge" && vm && reconciliation) {
+        /*
+         * Editing a template draft offers exactly that draft's template — its identity is not the
+         * operator's to change in an edit. Every other Add offers the catalog.
+         */
+        const templates = (
+            pending?.source === "template"
+                ? vm.draftTemplates.filter((tpl) => tpl.id === pending.templateId)
+                : vm.chargeTemplates
+        ).map((tpl) => {
+            const option = adaptChargeTemplateOption(tpl, currency);
+            /* A catalog item the command would refuse for THIS selection is shown with that reason. */
+            if (pending?.source === "template" || tpl.availability !== "offerable") return option;
+            return { ...option, unavailableReason: catalogChargeRefusalFor(tpl, chargeSubjects) };
+        });
+        const offerableTemplates = templates.filter((tpl) => !tpl.unavailableReason);
+        /*
+         * ── THE CHOICES ARE WHAT THIS OPERATOR CAN ADD HERE, AND NOTHING ELSE ─────────────────
+         *
+         * Charge type listed the whole Catalog: unsupported and blocked items sat in the select,
+         * disabled, each with a sentence of why — a list mostly of things nobody could choose. It
+         * now lists only items the command accepts for at least one subject on this account, by
+         * name. An item that does not apply to the CURRENT selection is still choosable — and still
+         * opens the command — because changing `Applies to` makes it addable (otherwise a child no
+         * item applies to would leave no way to choose the household or a sibling it does apply to);
+         * the refused subjects are disabled there. What the Catalog holds that cannot be charged
+         * here is Catalog configuration, and the server's eligibility rule — the one this list is
+         * read from — still refuses it if asked.
+         */
+        const choosableTemplates = addChargeTypeChoices(
+            templates,
+            vm.chargeTemplates.map((tpl) => tpl.availability),
+            pending?.source === "template",
+        );
+        const selected =
+            offerableTemplates.find((tpl) => tpl.key === pending?.templateId)
+            ?? choosableTemplates.find((tpl) => tpl.key === pending?.templateId)
+            ?? offerableTemplates[0]
+            ?? choosableTemplates[0]
+            ?? null;
+        /* The chosen item's refusal for THIS selection, said once and briefly beside Applies to. */
+        const selectedRefusal =
+            selected && pending?.source !== "template"
+                ? templates.find((tpl) => tpl.key === selected.key)?.unavailableReason ?? null
+                : null;
+        /* The chosen Catalog item's own price (cents), the default an amount override departs from. */
+        const selectedCatalogCents = selected
+            ? vm.chargeTemplates.find((tpl) => tpl.id === selected.key)?.amountCents ?? null
+            : null;
+        /*
+         * The subjects the chosen item may not be charged to. They stay listed and cannot be added —
+         * one already selected can still be removed — so the selection never reaches a refusal.
+         */
+        const selectedCatalog =
+            pending?.source === "template" ? null : vm.chargeTemplates.find((tpl) => tpl.id === (selected?.key ?? ""));
+        const refusedFor = (key: string) =>
+            Boolean(selectedCatalog?.unavailableForSubjects?.[key]);
+        const subjectLabel =
+            subjectFilter === "all" ?
+                "Household"
+            :   (vm.subjects.find((sub) => sub.customerMemberId === subjectFilter)?.displayName
+                ?? "Household");
+
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="add_charge"
+                data-financials-entry-mode={entryMode}>
+                {/*
+                 * ── ONE ENTRY, TWO OPERATIONS — AND BOTH HOSTED BY THE PLATFORM CARD ──────────
+                 *
+                 * A charge and an adjustment stay different financial objects with different
+                 * writers, different permissions and different audit meaning. What they stopped
+                 * being is two unrelated PLACES: Add charge was a command and Add adjustment was a
+                 * link under the ledger, so raising a credit meant knowing which of the two Alloy
+                 * files it under. The operator's job is one job — put a financial fact on this
+                 * account — and the mode belongs on the command.
+                 *
+                 * The mode control renders INSIDE the command's own card, never beside it. An
+                 * elevated Focus Panel cell makes every direct child inert and grants interaction
+                 * to `.alloy-os-ucard` alone; measured mounted, the control was visible, keyboard-
+                 * focusable and would not take a pointer click, with `elementFromPoint` returning
+                 * the depth scrim. Add charge and Payment each learned this before it.
+                 */}
+                {entryMode === "adjustment" && adjustmentReady ? (
+                    /*
+                     * The SAME canonical adjustment entry, in the command's shell rather than in a
+                     * band under the ledger. `billing.adjust_account` is unchanged and is still the
+                     * only writer; `openAddAdjustment` still chooses the enrolment.
+                     */
+                    /*
+                     * ── THE SAME SHELL BOTH OTHER COMMANDS USE ──────────────────────────────
+                     *
+                     * `adjust_charge` below and `AddChargeCommand` both wrap their card in a host
+                     * div; this one returned the `UniversalCard` bare, so Add → Adjustment was the
+                     * only command in this card whose layer was not observable in the DOM —
+                     * `data-financials-overlay` was absent, and a responsive measurement had
+                     * nothing to anchor on. The elevated-host rules are descendant selectors, so
+                     * the wrapper changes no geometry; it makes the layer nameable, which is what
+                     * the stacking measurement needs.
+                     */
+                    <div
+                        className="alloy-os-financials"
+                        data-financials-card="true"
+                        data-financials-overlay="add_adjustment"
+                        data-financials-command-shell="adjust"
+                    >
+                        <UniversalCard
+                            title="Add"
+                            insight=""
+                            iconName="Receipt"
+                            tier="work"
+                            archetype="status"
+                            modalClass="command"
+                            density="expanded"
+                            gridSpan="row"
+                            data-universal-card-key="add_adjustment"
+                            footerAction={null}
+                        >
+                            <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
+                                {entryModes}
+                                {adjustmentBand}
+                            </div>
+                        </UniversalCard>
+                    </div>
+                ) : selected ? (
+                    <AddChargeCommand
+                        editing={Boolean(replacingDraftId)}
+                        modeSlot={entryModes}
+                        templates={choosableTemplates}
+                        selectionRefusal={selectedRefusal}
+                        specimen={adaptAddChargeSpecimen({
+                            template: selected,
+                            subjectLabel,
+                            amount: chargeAmount || selected.amount || "—",
+                            note: chargeNote,
+                            period: vm.period.label,
+                            balanceCents: reconciliation.balanceCents,
+                            currency,
+                            previewSummary: pending?.summary ?? null,
+                            previewChanges: pending?.changes ?? [],
+                            /*
+                             * The resolver's figure for the discount this charge would get, so the
+                             * preview can state the net instead of leaving the operator to do the
+                             * subtraction they came here to have done for them.
+                             */
+                            discountCents: chargeDiscountCents,
+                        })}
+                        controls={{
+                            selectedTemplateId: selected.key,
+                            onSelectTemplate: (id) => {
+                                const tpl = choosableTemplates.find((x) => x.key === id);
+                                /*
+                                 * A CHANGE OF TYPE CAN INVALIDATE THE SUBJECT. Switching to a
+                                 * child-grained type while the command is anchored on the
+                                 * household would leave the selection pointing at an option the
+                                 * list no longer offers — the operator would read the first child
+                                 * and the payload would still say household. Move the anchor to a
+                                 * real subject instead of letting the two disagree.
+                                 */
+                                const cat = tpl?.categoryKey ?? "";
+                                if (subjectFilter === "all" && !categoryPermitsHouseholdGrain(cat)) {
+                                    const first = vm.subjects[0]?.customerMemberId;
+                                    if (first) setSubjectFilter(first);
+                                } else if (subjectFilter !== "all" && !categoryPermitsChildGrain(cat)) {
+                                    setSubjectFilter("all");
+                                }
+                                /* Another item has another price: an override never carries across. */
+                                if (overrideOn) {
+                                    resetAmountOverride();
+                                    setChargeAmount("");
+                                }
+                                void preview(id, tpl?.label ?? "", pending?.source ?? "catalog");
+                            },
+                            /*
+                             * ── ALSO BILL THESE CHILDREN ─────────────────────────────────────
+                             *
+                             * Offered only where widening is LEGITIMATE: the charge category must
+                             * permit child grain (the code-owned rule — a household account fee
+                             * cannot become a child's), the command must be anchored on a child
+                             * rather than the household, and there must be a sibling to add.
+                             *
+                             * Anchored at the household the control is absent BY DESIGN: a
+                             * household charge is reached by naming NO child, and offering
+                             * checkboxes there would invite an empty selection to mean "household",
+                             * which is precisely the ambiguity the grain model forbids.
+                             */
+                            alsoChildren:
+                                selected
+                                && categoryPermitsChildGrain(selected.categoryKey ?? "")
+                                && subjectFilter !== "all"
+                                && vm.subjects.length > 1
+                                    ? {
+                                          options: vm.subjects
+                                              .filter((sub) => sub.customerMemberId !== subjectFilter)
+                                              .map((sub) => ({ id: sub.customerMemberId, label: sub.displayName })),
+                                          selectedIds: selectedChildIds,
+                                          onToggle: (id: string) =>
+                                              setExtraChildIds((prev) =>
+                                                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                                              ),
+                                          perChildLabel: chargeAmount || selected.amount || null,
+                                      }
+                                    : undefined,
+                            /*
+                             * ── APPLIES TO, NARROWED BY WHAT THE CHARGE TYPE CAN MEAN ────────
+                             *
+                             * The same code-owned rule that governs "Also bill" governs this list.
+                             * It offered Household and every child for EVERY type, so an operator
+                             * could select Monthly tuition — a CHILD-grained charge — and apply it
+                             * to the household. The write path now refuses that, and a control that
+                             * offers a choice the domain will refuse is a worse surface than one
+                             * that never offers it.
+                             *
+                             * Both halves are conditional because both are real: a household
+                             * account fee cannot become a child's, and a child's tuition cannot
+                             * become the household's.
+                             */
+                            /*
+                             * ── ONE CONTROL, THE SAME GRAIN MODEL ────────────────────────────
+                             *
+                             * `subjectFilter` is still the anchor and `extraChildIds` still the
+                             * widening; nothing about the payload, the writer or per-child
+                             * obligation identity changes. What changes is that the operator sees
+                             * one question instead of two, and mutual exclusion is enforced in
+                             * the handlers rather than left to them to understand:
+                             *
+                             *   Household  → anchor "all", extras cleared
+                             *   a child    → anchor that child, the rest as extras
+                             *   last child untucked → anchor "all" would mean HOUSEHOLD, which an
+                             *                         empty selection must never mean, so the
+                             *                         anchor is parked on the child just removed
+                             *                         and the summary asks for a choice.
+                             */
+                            unifiedTarget:
+                                selected && categoryPermitsChildGrain(selected.categoryKey ?? "") && vm.subjects.length > 0
+                                    ? {
+                                          householdOffered: categoryPermitsHouseholdGrain(selected.categoryKey ?? ""),
+                                          householdDisabled:
+                                              subjectFilter !== "all" && refusedFor(HOUSEHOLD_CHARGE_SUBJECT),
+                                          householdSelected: subjectFilter === "all",
+                                          onSelectHousehold: () => {
+                                              setSubjectFilter("all");
+                                              setExtraChildIds([]);
+                                          },
+                                          children: vm.subjects.map((sub) => ({
+                                              id: sub.customerMemberId,
+                                              label: sub.displayName,
+                                              disabled:
+                                                  refusedFor(sub.customerMemberId)
+                                                  && !(subjectFilter !== "all" && selectedChildIds.includes(sub.customerMemberId)),
+                                          })),
+                                          selectedChildIds: subjectFilter === "all" ? [] : selectedChildIds,
+                                          onToggleChild: (id: string) => {
+                                              if (subjectFilter === "all") {
+                                                  /* Picking a child is leaving the household grain. */
+                                                  setSubjectFilter(id);
+                                                  setExtraChildIds([]);
+                                                  return;
+                                              }
+                                              if (id === subjectFilter) {
+                                                  /* Untucking the anchor promotes the next extra, or leaves none chosen. */
+                                                  const [next, ...rest] = extraChildIds;
+                                                  if (next) {
+                                                      setSubjectFilter(next);
+                                                      setExtraChildIds(rest);
+                                                  } else {
+                                                      /* No child left. NOT "all" — an empty
+                                                         selection must never become Household. */
+                                                      setSubjectFilter("");
+                                                      setExtraChildIds([]);
+                                                  }
+                                                  return;
+                                              }
+                                              setExtraChildIds((prev) =>
+                                                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                                              );
+                                          },
+                                          perChildLabel: chargeAmount || selected.amount || null,
+                                      }
+                                    : undefined,
+                            subjects: [
+                                ...(categoryPermitsHouseholdGrain(selected.categoryKey ?? "")
+                                    ? [{ id: "all", label: "Household" }]
+                                    : []),
+                                ...(categoryPermitsChildGrain(selected.categoryKey ?? "")
+                                    ? vm.subjects.map((sub) => ({
+                                          id: sub.customerMemberId,
+                                          label: sub.displayName,
+                                      }))
+                                    : []),
+                            ],
+                            selectedSubjectId: subjectFilter,
+                            onSelectSubject: setSubjectFilter,
+                            amount: chargeAmount,
+                            onAmount: setChargeAmount,
+                            amountOverride:
+                                canOverrideAmount && pending?.source !== "template" && selectedCatalogCents != null && selectedCatalogCents > 0
+                                    ? {
+                                          active: overrideOn,
+                                          catalogAmountCents: selectedCatalogCents,
+                                          amountCents: overrideCents,
+                                          reason: overrideReason,
+                                          onReason: setOverrideReason,
+                                          error: overrideError,
+                                          onToggle: (on: boolean) => {
+                                              setOverrideOn(on);
+                                              setOverrideReason("");
+                                              setChargeAmount(on ? (selectedCatalogCents / 100).toFixed(2) : "");
+                                          },
+                                      }
+                                    : null,
+                            note: chargeNote,
+                            onNote: setChargeNote,
+                            eventDate: chargeEventDate,
+                            onEventDate: setChargeEventDate,
+                            /*
+                             * WHO OWES THIS CHARGE — offered only when there are parties on record
+                             * to divide it between. With none, the account has no arrangement to
+                             * depart from and the control would be an empty form.
+                             */
+                            /*
+                             * W7-F011: a STANDING arrangement is a party on record too. A household
+                             * whose arrangement names Dana 50% · Rosa 50% and that has not been
+                             * charged yet has no allocations, and gating on those alone hid who owes
+                             * the very first charge. The parties are the union of both answers.
+                             */
+                            ...(chargeResponsibilityParties.length > 0
+                                ? {
+                                      chargeResponsibility: {
+                                          standingSummary: standingResponsibilitySummary,
+                                          parties: chargeResponsibilityParties,
+                                          changing: chargeToChanging,
+                                          onChanging: (changing: boolean) => {
+                                              setChargeToChanging(changing);
+                                              /*
+                                               * Opening the editor offers ONE empty share rather
+                                               * than a copy of the standing answer: a pre-filled
+                                               * copy would be committed unread, creating an
+                                               * override that overrides nothing and hides the next
+                                               * real change to the arrangement it duplicated.
+                                               */
+                                              if (changing && chargeShares.length === 0) {
+                                                  setChargeShares([
+                                                      { partyId: "", method: "percentage", value: "" },
+                                                  ]);
+                                              }
+                                          },
+                                          shares: chargeShares,
+                                          onShare: (
+                                              index: number,
+                                              patch: {
+                                                  partyId?: string;
+                                                  method?: "percentage" | "fixed" | "remainder";
+                                                  value?: string;
+                                              },
+                                          ) =>
+                                              setChargeShares((prior) =>
+                                                  prior.map((share, i) => (i === index ? { ...share, ...patch } : share)),
+                                              ),
+                                          onAddShare: () =>
+                                              setChargeShares((prior) => [
+                                                  ...prior,
+                                                  { partyId: "", method: "percentage", value: "" },
+                                              ]),
+                                          onRemoveShare: (index: number) =>
+                                              setChargeShares((prior) => prior.filter((_, i) => i !== index)),
+                                      },
+                                  }
+                                : {}),
+                            /*
+                             * ── ONE DISCOUNT DECISION, OVER THE ELIGIBLE SET ────────────────
+                             *
+                             * The options are the resolver's answer about THIS proposed charge —
+                             * category, amount and child — so a policy the family receives but
+                             * which does not cover this charge type is not offered. That is §36
+                             * made structural: the operator cannot overrule policy impossibility
+                             * because the impossible option never reaches the control.
+                             */
+                            ...(proposedDiscounts.options.length > 0 || proposedDiscounts.wouldApplyPolicyId
+                                ? {
+                                      chargeDiscount: {
+                                          options: proposedDiscounts.options.map((o) => ({
+                                              policyId: o.policyId,
+                                              label: o.basis === "percentage" && o.basisValue != null
+                                                  ? `${o.label} · ${o.basisValue}%`
+                                                  : o.label,
+                                              /*
+                                               * What the resolver said this policy takes off THIS
+                                               * charge, formatted and handed on. The card does not
+                                               * know how it was arrived at and must not.
+                                               */
+                                              expectedAmount:
+                                                  o.expectedCents != null ? money(o.expectedCents, currency) : null,
+                                          })),
+                                          /*
+                                           * UNANSWERED MEANS "WHAT RESOLUTION SAYS". The operator
+                                           * who changes nothing gets the discount that would have
+                                           * applied anyway, which is what "default to the
+                                           * canonical answer" means — and no exclusion is written
+                                           * for a decision they never made.
+                                           */
+                                          selectedPolicyId: chargeDiscountSelectedPolicyId,
+                                          onSelect: (policyId: string | null) => setChargeDiscountChoice(policyId),
+                                          /*
+                                           * A REASON ONLY WHERE ONE IS OWED. Declining a discount
+                                           * that WOULD otherwise apply takes money's worth from a
+                                           * family; declining one that was never going to apply
+                                           * is the truth and costs nothing to say.
+                                           */
+                                          reasonRequired:
+                                              chargeDiscountChoice === null && Boolean(chargeDiscountSuppresses),
+                                          reason: waiverReason,
+                                          onReason: setWaiverReason,
+                                      },
+                                  }
+                                : {}),
+                            onSubmit: () => void commit(),
+                            onCancel: () => {
+                                /* One level back. Raised from Details, this returns to Details. */
+                                pop();
+                                setPending(null);
+                                setCommandError(null);
+                                /* An abandoned command leaves no decision behind, because none was written. */
+                                resetChargeDecisions();
+                            },
+                            running,
+                            error: commandError,
+                        }}
+                    />
+                ) : (
+                    /*
+                     * A catalog with nothing chargeable here is a configuration state, not an error.
+                     * One line says what to do; the items that cannot be charged are not listed
+                     * here — they are configuration, changed in the Catalog.
+                     */
+                    <div className="alloy-os-financials__empty" data-financials-catalog-empty="true">
+                        <p>No charges can be added to this account yet.</p>
+                        <p>Add a one-time item with a GL Code in Organization › Financials › Catalog.</p>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    /*
+     * ── DETAILS — the approved ledger-first detail, in the same depth layer ──
+     *
+     * Same read model as the summary, so a number cannot differ between them. The ledger is grouped
+     * by billing period with prior periods closed, and carries no running balance: `ledger_transactions`
+     * guarantees no ordering, and computing one would present one defensible answer as the answer.
+     */
+    /*
+     * ── SETTLE, AS ITS OWN REPRESENTATION ──
+     *
+     * The band cannot be a sibling of the approved detail card: that card's header and title sit
+     * over anything beside it and intercept the pointer, so every control underneath rendered
+     * visible, enabled and unclickable — proven in the browser, above and below it alike. Add charge
+     * already answers this with its own overlay, and settling is the same kind of act, so it gets
+     * the same treatment rather than a CSS argument with a card that is not ours to restyle.
+     */
+    /*
+     * ── ADMINISTRATION AS DEPTH ───────────────────────────────────────────────────────────────
+     *
+     * Three surfaces, one shape, and it is the shape Add Charge and Payment already use: the
+     * platform card with the command modal class, hosted by the elevated cell that grants it
+     * interaction. Each hosts the component that already existed — this adds no second writer, no
+     * second read model and no second visual language.
+     *
+     * They return EARLY, like every other overlay, so Details is not rendering underneath them in
+     * the document flow. That is the whole difference between a depth card and an inline editor,
+     * and it is why the ledger no longer moves when an operator manages a discount.
+     */
+    if (overlay === "responsibility_admin" && vm && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="responsibility_admin" data-financials-manage-responsibility="depth-card">
+                <UniversalCard
+                    title="Responsibility"
+                    insight=""
+                    iconName="Users"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="responsibility_admin"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="responsibility_admin">
+                        <FinancialsResponsibilityPanel
+                            customerId={customerId}
+                            /*
+                             * ACCOUNT GRAIN. This is the standing arrangement, not one charge's —
+                             * the per-charge surface is `responsibility`, opened from a ledger row,
+                             * and it carries the charge it is about.
+                             */
+                            customerMemberId={null}
+                            parties={(vm.payers ?? [])
+                                .map((party) => ({ personId: party.personId ?? null, name: party.name }))
+                                .filter((party) => party.name.trim().length > 0)}
+                            memberOptions={responsibilityScopeMembers}
+                            hostedOpen
+                            onHostedClose={pop}
+                            onCommitted={async () => {
+                                await load();
+                                pop();
+                            }}
+                        />
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (overlay === "discount_admin" && vm && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="discount_admin" data-financials-manage-discounts="depth-card">
+                <UniversalCard
+                    title="Discounts"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="discount_admin"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="discount_admin">
+                        <FinancialsDiscountPanel
+                            customerId={customerId}
+                            /* Real content on the first frame; the panel re-reads and still owns it. */
+                            initialPosition={discountPositionBody}
+                            childLabelFor={(_ocmId: string, customerMemberId: string | null) =>
+                                (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
+                                    ?.displayName ?? null
+                            }
+                            /*
+                             * CANONICAL IDENTITY, LOOKED UP BY THE CHILD'S OWN ID. Keyed rather
+                             * than positional: a list resolved by index puts one sibling's face on
+                             * another the first time the two lists are ordered differently, and
+                             * they are ordered by different things.
+                             */
+                            childImageFor={(_ocmId: string, customerMemberId: string | null) =>
+                                (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
+                                    ?.imageUrl ?? null
+                            }
+                            hostedOpen
+                            onHostedClose={pop}
+                            onCommitted={async () => {
+                                await load();
+                            }}
+                        />
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (overlay === "payments_admin" && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payments_admin">
+                <UniversalCard
+                    title="Payments"
+                    insight=""
+                    iconName="CreditCard"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="payments_admin"
+                    footerAction={null}
+                >
+                    {/*
+                      * THE CANONICAL PAYMENTS SURFACES, REHOSTED — not rebuilt. Add card, add bank
+                      * account, the method list and Autopay all stay exactly the components
+                      * Payments W2/W5 own; what changed is where they are rendered, so Details no
+                      * longer carries a permanent setup band for an account that may never need
+                      * one.
+                      */}
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="payments_admin">
+                        <PaymentMethodsSection
+                            customerId={customerId}
+                            /*
+                             * THE CANONICAL PAYER, WIRED. This mount passed `customerId` alone, so
+                             * `payerName` never arrived and the Stripe billing-name prefill this
+                             * section already implements was dead in production — working code that
+                             * nothing ever invoked. Third time this sprint that a production mount
+                             * omitted canonical truth a component was ready to use.
+                             *
+                             * Ownership was never at risk: the server derives the method's payer.
+                             * What was lost was the prefill, silently.
+                             *
+                             * Household membership, never responsibility — a grandparent may pay and
+                             * owe nothing, and the payer list is ordered by primary contact for
+                             * exactly that reason.
+                             */
+                            payerEntityId={vm?.payerCandidates?.[0]?.personId ?? null}
+                            payerName={vm?.payerCandidates?.[0]?.name ?? null}
+                        />
+                        <AutopaySection
+                            customerId={customerId}
+                            /* The canonical candidates this form never received — see AutopaySection. */
+                            payerCandidates={vm?.payerCandidates ?? null}
+                        />
+                        {/*
+                          * A VISIBLE WAY BACK. The card ended after the Autopay copy with nothing
+                          * below it, so on an account with no methods it read as a surface that
+                          * had failed to finish loading rather than one waiting to be used.
+                          * Escape has always dismissed it; a keyboard gesture is not an answer to
+                          * "how do I get out of here".
+                          */}
+                        <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close"
+                                data-financials-payments-close="true"
+                                onClick={pop}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (overlay === "payment" && vm && reconciliation) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payment">
+                {/*
+                 * HOSTED BY THE PLATFORM CARD, because that is what the depth layer grants
+                 * interaction to.
+                 *
+                 * An elevated cell makes every direct child inert —
+                 * `.alloy-os-focus-panel-grid[data-fp-depth="active"] .…__cell[data-fp-elevated="true"] > *
+                 * { pointer-events: none }` — and hands `z-index: 60; pointer-events: auto` to
+                 * `.alloy-os-ucard` alone. Rendered as a bare div, this surface painted above the
+                 * scrim and could not be clicked: measured mounted, every ancestor of the commit
+                 * control up to `.alloy-os-financials` carried `pointer-events: none`, no element in
+                 * the chain created a stacking context, and `elementFromPoint` over the control
+                 * returned the scrim. Not a z-index defect — a host defect.
+                 *
+                 * Add charge learned this first ("It was rendering as a bare div inside the elevated
+                 * cell"), and the fix is the same one: the platform card, with the command modal
+                 * class. No new layer numbers, and the scrim keeps protecting the background.
+                 */}
+                <UniversalCard
+                    /*
+                     * "Payment", the same word the control that opens it now uses. A command whose
+                     * button says one thing and whose title says another reads as two commands.
+                     */
+                    title="Payment"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="payment"
+                    /*
+                     * "Back to details" is navigation language, and it only means something where a
+                     * details destination exists. In the Focus Panel the operator arrived here from
+                     * Details and going back is a real move. In Financials → Accounts there is no
+                     * Details — the account is already open behind this overlay — so the control
+                     * pointed at a place that does not exist, and the backdrop, Escape and Cancel
+                     * all already return there. Same flag that governs the drill-down itself.
+                     */
+                    footerAction={
+                        showDetailsAction ? (
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-payment-close="true"
+                                onClick={() => {
+                                    setPayTarget(null);
+                                    pop();
+                                }}
+                            >
+                                ← Back to details
+                            </button>
+                        ) : null
+                    }
+                >
+                    {paymentBandFor(false, undefined, true)}
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    /*
+     * ── THE ROW COMMANDS, IN THE SAME SHELL AS EVERY OTHER FINANCIALS COMMAND ─────────────────
+     *
+     * Reverse and Adjust are the two things an operator does TO a ledger row, and both used to be
+     * bands rendered inside the ledger itself. Add and Payment were already focused command cards,
+     * so the surface taught two different lessons about what a command looks like — and the raw
+     * one was attached to the operation that destroys money.
+     *
+     * Both are destinations now. Same `UniversalCard` shell, same `modalClass="command"`, same
+     * three dismissal gestures, and each sits ON TOP of Details in the stack so dismissing it
+     * returns to the ledger the operator was reading, in the state they left it.
+     */
+    if (surface?.kind === "responsibility" && vm) {
+        const row = vm.rows.find((r) => r.chargeId === surface.chargeId) ?? null;
+        const subjectName =
+            row?.subjectName
+            ?? vm.subjects.find((sub) => sub.customerMemberId === row?.subjectMemberId)?.displayName
+            ?? "Household";
+        const reallocating = surface.mode === "reallocate";
+        const target = { chargeId: surface.chargeId, mode: surface.mode };
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="responsibility"
+                data-financials-responsibility-mode={surface.mode}
+                data-financials-command-shell="responsibility"
+            >
+                <UniversalCard
+                    title={reallocating ? "Reallocate responsibility" : "Resolve responsibility"}
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="responsibility"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__commandbody" data-financials-command="responsibility">
+                        <dl className="alloy-os-financials__commandfacts" data-testid="responsibility-facts">
+                            <div>
+                                <dt>Obligation</dt>
+                                <dd data-testid="responsibility-charge">
+                                    {row?.description ?? row?.categoryLabel ?? surface.label}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Amount</dt>
+                                <dd data-testid="responsibility-amount">
+                                    {row ? money(row.amountCents, row.currencyCode || currency) : "—"}
+                                </dd>
+                            </div>
+                            {/* WHO IT IS FOR — and it is not what this command changes. */}
+                            <div>
+                                <dt>For</dt>
+                                <dd data-testid="responsibility-child">{subjectName}</dd>
+                            </div>
+                            <div>
+                                <dt>Dated</dt>
+                                <dd data-testid="responsibility-date">{formatDisplayDate(row?.date ?? null) || "—"}</dd>
+                            </div>
+                            <div>
+                                <dt>Owes it now</dt>
+                                <dd data-testid="responsibility-current">
+                                    {row?.responsiblePartyName || (row?.responsibilityUnassigned ? "Unassigned" : "Not allocated")}
+                                </dd>
+                            </div>
+                        </dl>
+                        {/*
+                          * CONFIGURE IS NOT RESOLVE, AND THE OPERATOR IS TOLD SO HERE. Naming who
+                          * should be responsible is an account-grain arrangement effective from a
+                          * date; it does not reach back over obligations that already stand. This
+                          * command applies the arrangement IN FORCE for this obligation's own
+                          * service date — and where none is, it says so rather than inventing one.
+                          */}
+                        <p className="alloy-os-financials__commandnote" data-testid="responsibility-effect">
+                            {reallocating
+                                ? "This moves what one party owes to another. The previous division stays readable beside the new one; nothing is edited in place."
+                                : "This divides the obligation between the parties named by the arrangement in force for its service date. Where no arrangement was in force then, it stays honestly unassigned — configuring one now does not reach backwards."}
+                        </p>
+                        {reallocating ? (
+                            <label className="alloy-os-financials__commandfield">
+                                <span>Why responsibility is moving</span>
+                                <input
+                                    data-testid="responsibility-reason"
+                                    className="alloy-os-addcharge__input"
+                                    value={reallocationReason}
+                                    onChange={(e) => setReallocationReason(e.target.value)}
+                                    placeholder="Required — this changes what one real person owes another"
+                                />
+                            </label>
+                        ) : null}
+                        {responsibilityPreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="responsibility-preview">
+                                <strong>{responsibilityPreview.summary}</strong>
+                                {responsibilityPreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {responsibilityError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="responsibility-error">
+                                {responsibilityError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                data-testid="responsibility-preview-button"
+                                className="alloy-os-financials__action"
+                                disabled={running}
+                                onClick={() => void previewResponsibility(target)}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="responsibility-confirm"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                disabled={running || !responsibilityPreview || (reallocating && reallocationReason.trim().length < 3)}
+                                onClick={() => void confirmResponsibility(target)}
+                            >
+                                {reallocating ? "Reallocate" : "Resolve responsibility"}
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="responsibility-cancel"
+                                className="alloy-os-financials__quiet"
+                                onClick={() => {
+                                    setResponsibilityPreview(null);
+                                    setResponsibilityError(null);
+                                    setReallocationReason("");
+                                    pop();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (surface?.kind === "reverse_charge" && vm) {
+        const row = vm.rows.find((r) => r.chargeId === surface.chargeId) ?? null;
+        const subjectName =
+            row?.subjectName
+            ?? vm.subjects.find((sub) => sub.customerMemberId === row?.subjectMemberId)?.displayName
+            ?? "Household";
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="reverse_charge"
+                data-financials-command-shell="reverse"
+            >
+                <UniversalCard
+                    title="Reverse charge"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="reverse_charge"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__commandbody" data-financials-command="reverse_charge">
+                        {/*
+                          * WHAT IS ABOUT TO BE UNDONE, stated before the button that undoes it. The
+                          * band said only the row's label; an operator reversing money is entitled to
+                          * the amount, the child it belongs to, the date it is filed under and the
+                          * status it stands in.
+                          */}
+                        <dl className="alloy-os-financials__commandfacts" data-testid="charge-reverse-facts">
+                            <div>
+                                <dt>Charge</dt>
+                                <dd data-testid="charge-reverse-subject">
+                                    {row?.description ?? row?.categoryLabel ?? surface.label}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Amount</dt>
+                                <dd data-testid="charge-reverse-amount">
+                                    {row ? money(row.amountCents, row.currencyCode || currency) : "—"}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>For</dt>
+                                <dd data-testid="charge-reverse-child">{subjectName}</dd>
+                            </div>
+                            <div>
+                                <dt>Dated</dt>
+                                <dd data-testid="charge-reverse-date">{formatDisplayDate(row?.date ?? null) || "—"}</dd>
+                            </div>
+                            <div>
+                                <dt>Status</dt>
+                                <dd data-testid="charge-reverse-status">{row?.lifecycleStatus ?? "—"}</dd>
+                            </div>
+                        </dl>
+                        <p className="alloy-os-financials__commandnote" data-testid="charge-reverse-effect">
+                            The charge stays on the record and a correction is appended beside it. What the
+                            family owes falls by this amount once the correction posts; nothing is deleted and
+                            the reversal itself can never be reversed.
+                        </p>
+                        {reverseChargePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="charge-reverse-preview">
+                                <strong>{reverseChargePreview.summary}</strong>
+                                {reverseChargePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {reverseChargeError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="charge-reverse-error">
+                                {reverseChargeError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-preview-button"
+                                className="alloy-os-financials__action"
+                                disabled={running}
+                                onClick={() => void previewReverseCharge()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-confirm"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                disabled={running || !reverseChargePreview}
+                                onClick={() => void confirmReverseCharge()}
+                            >
+                                Reverse charge
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-cancel"
+                                className="alloy-os-financials__quiet"
+                                onClick={() => {
+                                    setReverseCharge(null);
+                                    setReverseChargePreview(null);
+                                    setReverseChargeError(null);
+                                    pop();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    /*
+     * ADJUST, RAISED FROM A ROW. The same canonical adjustment entry the unified Add command hosts
+     * — same band, same `billing.adjust_account` — with no mode selector, because the operator did
+     * not ask to choose between a charge and an adjustment. They asked to correct one row.
+     */
+    if (surface?.kind === "adjust_charge" && adjustmentReady) {
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="adjust_charge"
+                data-financials-command-shell="adjust"
+            >
+                <UniversalCard
+                    title="Adjust charge"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="adjust_charge"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
+                        {adjustmentBand}
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+        return null;
+    })();
+
+    /*
+     * ── THE ACCOUNT'S OWN SURFACE, COLLECTED RATHER THAN RETURNED ───────────────────────────
+     *
+     * Where Details is the floor of the host, it is wanted whether or not it is the TOP layer —
+     * that is what being a floor means. Keyed off `overlay === "detail"` alone it rendered only
+     * while nothing sat above it, so every command emptied the pane behind itself.
+     */
+    const detailFloorWanted = detailsAreTheSurface || overlay === "detail";
+    const detailFloor = (() => {
+
+
+    /*
+     * ── ONE DETAILS SURFACE, AND IT IS THE FINAL ONE ────────────────────────────────────────────
+     *
+     * There used to be a second Details branch above this one that committed the SHAPE of Details
+     * while the deep read was still in flight — a metric row, five lenses and eight ledger columns
+     * over em dashes — on the reasoning that the anatomy is known the moment the operator asks and
+     * only the figures are outstanding.
+     *
+     * That reasoning was wrong about what an operator reads. A committed Details surface is a
+     * claim that they have arrived, and arriving at a ledger that then rewrites itself from three
+     * placeholder rows to fifty-six real ones is the "double load" reported in every pass of this
+     * thread. The honest intermediate is the one the operator was already looking at: the compact
+     * card.
+     *
+     * So there is exactly ONE Details branch, and its guard is total. `ledgerComplete` is in the
+     * condition, not merely passed down as a hint, which means no Details tree can be reached — by
+     * this path or any future one — while the read its ledger depends on is unresolved. The
+     * request is held in `detailPending` until then and the compact card stays on screen.
+     */
+    /*
+     * ── THE FLOOR IS THE ACCOUNT'S SURFACE, SO IT MOUNTS WITH THE ACCOUNT ───────────────────────
+     *
+     * Measured on deployed staging: the account list is interactive at ~856 ms and the selected
+     * Details pane arrives at ~1,196 ms after the click, because the guard below waits for BOTH the
+     * view model and the reconciliation. In the Accounts workspace, where Details IS the floor and
+     * not something the operator pushed on top, that is 1.2 seconds of an empty pane under a row
+     * that is already selected.
+     *
+     * ── WHY THIS IS NOT THE BRANCH THAT WAS REMOVED ────────────────────────────────────────────
+     *
+     * A previous branch committed the shape of Details while the deep read was in flight and was
+     * removed for a measured reason, recorded below: it drew the ledger over PLACEHOLDER ROWS, and
+     * three placeholder rows becoming fifty-six real ones is the "double load" that was reported in
+     * every pass of that thread. The objection was never the shape — it was the rows.
+     *
+     * `ledgerPending` is the difference. The ledger region draws its columns and says it is reading;
+     * it states no rows at all, so there is nothing to rewrite and the real ledger commits ONCE.
+     * Every figure is an em dash from `hydratingFinancialsEvidence`, never a zero, because a
+     * placeholder mistaken for $0.00 is worse than a wait.
+     *
+     * Scoped to `detailsAreTheSurface`. The Focus Panel keeps the compact card as its honest
+     * intermediate, which is what that earlier decision chose for the surface it was about.
+     *
+     * NO COMMANDS ARE RENDERED HERE, deliberately: Payment, Add, Responsibility and Discounts each
+     * need account-specific authority that has not resolved, and an action that is visible before
+     * its authority is an action that can be aimed at the wrong account.
+     */
+    if (detailFloorWanted && detailsAreTheSurface && !(vm && reconciliation) && !deniedRead) {
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="detail"
+                data-financials-detail-pending="true"
+                /*
+                 * NOT YET KNOWN vs UNAVAILABLE. `reservingAccount` is true while the read is still
+                 * in the air. Once it has answered and produced nothing usable, the surface must
+                 * stop saying it is reading — without ever saying the account is empty, which a
+                 * failed read has no standing to claim.
+                 */
+                data-financials-detail-truth={reservingAccount ? "not_yet_known" : "unavailable"}
+                data-financials-detail-account={subjectKey ?? ""}
+                data-financials-surface-role={financialsSurfaceRole({
+                    detailsAreTheSurface,
+                    stackDepth: stack.length,
+                    layerPosition: 1,
+                })}
+                /*
+                 * Beneath a command the floor stays in view, under the one backdrop — and out of
+                 * the focus order and the pointer, so the command is the only surface that acts.
+                 */
+                inert={detailsAreTheSurface && commandSurface ? true : undefined}
+                data-financials-floor-beneath-command={detailsAreTheSurface && commandSurface ? "true" : undefined}
+            >
+                <FinancialsDetailCard
+                    evidence={hydratingFinancialsEvidence()}
+                    periods={[]}
+                    hydrating
+                    ledgerPending
+                    unavailable={!reservingAccount}
+                    administration={{
+                        discountSummary: "",
+                        loading: true,
+                        onManagePayments: NO_COMMAND,
+                        onManageResponsibility: NO_COMMAND,
+                        onManageDiscount: NO_COMMAND,
+                    }}
+                />
+            </div>
+        );
+    }
+
+    if (detailFloorWanted && vm && reconciliation) {
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="detail"
+                /* Whose floor this is. Without it, "A truth under B" is not observable in the DOM. */
+                data-financials-detail-account={subjectKey ?? ""}
+                /*
+                 * ── IS THIS LAYER A COMMAND, OR IS IT THE HOST'S RESTING SURFACE? ────────────
+                 *
+                 * The workspace presents a command as a focused layer: a fixed, centred shell over
+                 * a full-viewport scrim. It decided which layers those were by asking whether ANY
+                 * `data-financials-overlay` existed — true, while Details was something the
+                 * operator pushed on top of the account.
+                 *
+                 * Convergence made Details the FLOOR of this host (`detailsAreTheSurface`), and
+                 * that assumption silently inverted: the floor is always present, so the scrim was
+                 * always up. Measured on deployed staging — the account list sat under a
+                 * full-viewport backdrop, every row refused an ordinary click, the selected account
+                 * never changed, and the ledger floated over the list belonging to a family whose
+                 * row had scrolled out of sight.
+                 *
+                 * So the card states the distinction it is the only one that can know, and the
+                 * stylesheet reads it instead of inferring it. A layer pushed ABOVE the floor is a
+                 * command in either host; the floor is a command in neither.
+                 */
+                data-financials-surface-role={financialsSurfaceRole({
+                    detailsAreTheSurface,
+                    stackDepth: stack.length,
+                    layerPosition: 1,
+                })}
+                /*
+                 * Beneath a command the floor stays in view, under the one backdrop — and out of
+                 * the focus order and the pointer, so the command is the only surface that acts.
+                 */
+                inert={detailsAreTheSurface && commandSurface ? true : undefined}
+                data-financials-floor-beneath-command={detailsAreTheSurface && commandSurface ? "true" : undefined}
+            >
+                {/*
+                  * The Move / Apply panel. One panel serves both intents because they differ only in
+                  * whether a reversal has to happen first — the destination question is identical, and
+                  * two panels asking it would be two places to get it wrong.
+                  */}
+                {moveNotice ? (
+                    <div className="alloy-os-fdetail__movenotice" data-testid="payment-move-notice">
+                        {moveNotice}
+                    </div>
+                ) : null}
+
+
+                {adjustNotice ? (
+                    <div className="alloy-os-fdetail__movenotice" data-testid="adjustment-notice">
+                        {adjustNotice}
+                    </div>
+                ) : null}
+
+                {/*
+                  * ADD ADJUSTMENT. Scoped to an enrolment agreement, because that is what the action
+                  * is scoped to — presenting it as account-wide would be a claim the backend cannot
+                  * honour. Confirm stays disabled until the ACTION has said what this will do.
+                  */}
+
+                {/*
+                  * REVERSE CHARGE IS NOT RENDERED HERE ANY MORE.
+                  *
+                  * It was a band inside the ledger — a horizontal strip of raw controls wearing the
+                  * Move-payment panel's classes. Reverse is a command, so it is a destination on the
+                  * stack and is drawn in the canonical command shell above, beside Add and Payment.
+                  * Nothing about the operation moved: `charge.reverse`, through the shared command
+                  * authority, is still the only writer.
+                  */}
+                {/* REVERSE. The original is never edited; its opposite is appended. */}
+
+                <FinancialsDetailCard
+                    /*
+                     * ── THE COMPACT ADMINISTRATION ROW, AND ITS THREE DOORS ───────────────────
+                     *
+                     * The summaries are read from canonical truth the card already holds — the
+                     * payers line means responsibility, and the discount position is the same
+                     * forecast the depth card shows. Nothing here computes money.
+                     *
+                     * Each door pushes a depth surface onto the SAME stack Add Charge and Payment
+                     * use, so Escape pops exactly one layer and Details survives underneath.
+                     */
+                    administration={
+                        customerId
+                            ? {
+                                  discountSummary: adminDiscountSummary,
+                                  loading: adminPositionsLoading,
+                                  onManagePayments: () =>
+                                      openAdmin("payments_admin", '[data-financials-manage-payments="open"]'),
+                                  onManageResponsibility: () =>
+                                      openAdmin("responsibility_admin", '[data-financials-manage-responsibility="gear"]'),
+                                  onManageDiscount: () =>
+                                      openAdmin("discount_admin", '[data-financials-manage-discounts="gear"]'),
+                              }
+                            : null
+                    }
+                    /*
+                     * PAYMENT METHODS (Payments W2) — administered here, in Details, beside the
+                     * ledger. Passed only when the household is actually resolved: a card with no
+                     * account cannot truthfully say "no payment method on file".
+                     */
+                    paymentMethodsAccount={customerId ? { customerId } : null}
+                    /*
+                     * The family's discount position. `load` is the card's own canonical re-read,
+                     * so after a governed exception the position, the ledger and the forecast all
+                     * come back from the server rather than being patched here.
+                     */
+                    discountAdmin={
+                        customerId
+                            ? {
+                                  customerId,
+                                  /*
+                                   * The card's subjects are keyed by `customerMemberId`, which is
+                                   * the child; the discount position is keyed by the RELATIONSHIP.
+                                   * The panel passes both, so the label is looked up by the one
+                                   * this view model actually holds rather than by position.
+                                   */
+                                  childLabelFor: (_ocmId, customerMemberId) =>
+                                      (vm?.subjects ?? []).find((s) => s.customerMemberId === customerMemberId)
+                                          ?.displayName ?? null,
+                                  onCommitted: async () => {
+                                      await load();
+                                  },
+                              }
+                            : null
+                    }
+                    /*
+                     * MANAGE RESPONSIBILITY, from Details. Parties come from the account view
+                     * model — the same `responsibility.parties` Accounts passes — so the operator
+                     * edits who is already on record rather than inventing a party. `load` is the
+                     * card's own canonical re-read: after a commit the panel, the responsibility
+                     * position and the ledger all come back from the server, and nothing here
+                     * guesses at the new state in the meantime.
+                     */
+                    responsibilityAdmin={
+                        customerId
+                            ? {
+                                  customerId,
+                                  parties: (vm?.responsibility?.parties ?? []) as {
+                                      personId: string | null;
+                                      name: string;
+                                  }[],
+                                  householdName: vm?.account?.label ?? null,
+                                  onCommitted: async () => {
+                                      await load();
+                                  },
+                              }
+                            : null
+                    }
+                    /* Only offered where an enrolment exists: the action is scoped to an agreement. */
+                    onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
+                    /* The held-money acts. Unsupplied, the section renders the position with no controls. */
+                    onApplyHeldFunds={openApplyHeldFunds}
+                    onReleaseHeldFunds={openReleaseHeldFunds}
+                    onRefundHeldFunds={openRefundHeldFunds}
+                    onPostCharge={({ chargeId }) => void runRowAction("post", rowForCharge(chargeId))}
+                    onReverseCharge={openReverseCharge}
+                    /*
+                     * Reverse and Adjust are NOT two names for one operation and are not offered as
+                     * such: Reverse unwinds a charge that should never have stood, Adjust leaves it
+                     * standing and writes a separate, auditable reduction against it. Both sit on
+                     * the row because both are about that row; only their meaning differs.
+                     */
+                    onAdjustCharge={adjustableSubjects.length > 0 ? openAdjustForCharge : undefined}
+                    /*
+                     * DETAILS ADMINISTERS RESPONSIBILITY. Summary reports it and is given neither
+                     * of these, which is the doctrine rather than an oversight.
+                     */
+                    onResolveResponsibility={(a) => openResponsibility({ ...a, mode: "resolve" })}
+                    onReallocateResponsibility={(a) => openResponsibility({ ...a, mode: "reallocate" })}
+                    /*
+                     * The surface is mounted; the ledger may still be reading. This is the ONLY
+                     * region allowed to say so, and it says it by reserving itself — never by
+                     * rendering rows, and never by changing the surface's geometry when the real
+                     * rows arrive.
+                     */
+                    ledgerPending={!ledgerComplete}
+                    /*
+                     * THE VIEW OUTLIVES THE COMMANDS. Lens and disclosure are held by this card, so
+                     * a row command and its dismissal cannot quietly reset the ledger the operator
+                     * was reading.
+                     */
+                    lens={detailLens ?? undefined}
+                    onLensChange={setDetailLens}
+                    expandedPeriods={expandedPeriods}
+                    onPeriodToggle={(label, isExpanded) =>
+                        setExpandedPeriods((prev) => ({ ...prev, [label]: isExpanded }))
+                    }
+                    evidence={adaptFinancialsVmToFinancialsCard({
+                        vm,
+                        reconciliation,
+                        pastDue,
+                        rows: vm.rows.filter(
+                            (r) =>
+                                r.periodKey === vm.period.key
+                                && rowInFinancialsSubjectScope(r, subjectFilter),
+                        ),
+                        currency,
+                    })}
+                    periods={adaptFinancialsVmToLedgerPeriods({
+                        vm,
+                        currency,
+                        openPeriodKey: vm.period.key,
+                    })}
+                    /*
+                     * ── THE ROWS AND THE TOTALS ARE SCOPED BY THE SAME STATE ─────────────────
+                     *
+                     * The KPI band above this ledger is derived from `subjectFilter`
+                     * (`reconciliationBySubject` / `pastDueBySubject`). The ledger used to be
+                     * scoped by a SECOND state this card held privately, keyed by display label,
+                     * and the two disagreed on deployed staging — the band answered for one child
+                     * while the control read "Everyone" and the rows showed the whole household.
+                     * One scope, passed to whoever renders under it.
+                     */
+                    subject={subjectFilter === "all" ? null : subjectFilter}
+                    onSubjectChange={(next) => setSubjectFilter(next ?? "all")}
+                    /*
+                     * `Payment` enters the settle operation. Slice H is that lane, so the control is
+                     * live: it selects the obligation the operator is most likely to settle — the
+                     * first charge the read model marks payable — and opens the same form the band's
+                     * own `Record payment →` menu opens. Still inert when nothing can take money,
+                     * because an enabled control that cannot act is the lie this comment used to
+                     * describe.
+                     */
+                    onPayment={openSettle}
+                    paymentUnavailableReason={paymentUnavailableReason}
+                    onAddCharge={() => push({ kind: "add_charge" })}
+                    /* The same reusable Details, from whichever host renders this card. */
+                    onOpenCharge={({ chargeId, label }) => push({ kind: "charge_detail", chargeId, label })}
+                    /*
+                     * W7-F026: a payment row opens the receipt's record, the way a charge row
+                     * opens Charge Details. The bottom payment band that used to be passed here is
+                     * gone: Payment above is the one entry into taking money, and a receipt's own
+                     * acts (Hold, Refund) live on its record.
+                     */
+                    onOpenPayment={({ paymentId }) => push({ kind: "payment_detail", paymentId })}
+                    /* W7-F044: the prepaid figure opens the receipts it is made of. */
+                    onOpenPrepaid={() => push({ kind: "prepaid_detail" })}
+                />
+                {/*
+                    WHAT ARRIVED, WHERE AN OPERATOR CAN STILL SEE IT.
+
+                    The payment band otherwise renders in exactly two places: the summary's side
+                    column, which a COMPACT card drops entirely, and the payment representation,
+                    which correctly stops being offered once an account has nothing left to collect.
+                    Certification found the consequence — on a compact card for a family who had just
+                    paid in full, there was no way to reach the receipt that settled it. The record
+                    of money arriving disappeared exactly when the account became healthy, which is
+                    the same reachability defect Slice H opened this band to fix.
+
+                    Details is where an operator works the ledger, and a ledger that cannot show what
+                    was received is only half of one.
+
+                    It is passed to the card as `paymentBand` above rather than rendered here, so it
+                    lives inside the surface that owns it.
+                */}
+            </div>
+        );
+    }
+
+        return null;
+    })();
+
+    /*
+     * ── THE DISPATCH: A COMMAND IS A LAYER OVER THE ACCOUNT, NEVER INSTEAD OF IT ─────────────
+     *
+     * In the Focus Panel there is no floor — the resting surface is the compact card — so a
+     * command returns alone, exactly as it always did. In Financials → Accounts the right pane IS
+     * the account, so the floor renders beneath the command and the operator keeps the thing they
+     * are charging in front of them.
+     *
+     * `financialsSurfaceRole` above already distinguishes the two for the stylesheet: the layer
+     * pushed above the floor is the command and takes the scrim, the floor is not. It was written
+     * for this and was simply never given a floor to describe.
+     */
+    if (commandSurface) {
+        return detailsAreTheSurface && detailFloor ? (
+            <>
+                {detailFloor}
+                {commandSurface}
+            </>
+        ) : (
+            <>{commandSurface}</>
+        );
+    }
+    if (detailFloor) {
+        return <>{detailFloor}</>;
+    }
+
+
+    if (!expanded && vm && reconciliation && !vm.unavailableReason) {
+        const periodRows = vm.rows.filter(
+            (r) => r.periodKey === vm.period.key && rowInFinancialsSubjectScope(r, subjectFilter),
+        );
+        return (
+            <div
+                // SAME SHELL REF as the fallback return below. The loaded card renders through THIS
+                // branch, so without the ref the footprint it is reserving on the next subject switch
+                // could never be measured — the reserved height silently fell back to the shared floor.
+                ref={shellRef}
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-subject={subjectFilter}
+                /* WHICH ACCOUNT IS ON SCREEN — the household, not the child filter. */
+                data-financials-account={vm.account?.customerId ?? undefined}
+            >
+                <ApprovedFinancialsCard
+                    evidence={adaptFinancialsVmToFinancialsCard({
+                        vm,
+                        reconciliation,
+                        pastDue,
+                        rows: periodRows,
+                        currency,
+                    })}
+                    /*
+                     * DENSITY SELECTS THE PRESENTATION, which is what density is for.
+                     *
+                     * `compact` is supporting financial context inside another operating process —
+                     * what is due, why at a glance, whether payment is healthy, and the ways in. It
+                     * deliberately does NOT reconcile: a half-stated breakdown is more misleading
+                     * than none. `standard` is the full period.
+                     *
+                     * Keyed off the model's density rather than its span because span is a LAYOUT
+                     * fact a published Surface may override — the case surface hands this card 8
+                     * columns while its composition asks for the compact policy, and the operator's
+                     * placement should not silently change which questions the card answers.
+                     */
+                    span={model.density === "compact" ? 1 : "row"}
+                    /* No drill-down where the account's own body is already open beneath this. */
+                    onDetails={showDetailsAction ? requestDetails : undefined}
+                    onAddCharge={() => push({ kind: "add_charge" })}
+                    /*
+                     * `Pay now` was always this card's primary action and the Focus Panel never wired
+                     * it, so it rendered inert while Slice H's settle operation had no way in at all.
+                     * It opens at the SAME depth as Add charge deliberately: reached from inside the
+                     * detail representation, the panel's armed depth scrim sits over the operation
+                     * and the commit button cannot be clicked — visible, enabled, and unreachable.
+                     */
+                    onPayNow={openSettleCurrentPeriod}
+                    summaryVariant={summaryVariant}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div
+            ref={shellRef}
+            className="alloy-os-financials"
+            data-financials-card="true"
+            data-financials-subject={subjectFilter}
+            /*
+             * WHICH ACCOUNT IS ON SCREEN — the household, not the child filter.
+             *
+             * `data-financials-subject` is the subject FILTER inside the account; it cannot answer
+             * "whose account is this". The sibling cards already name their subject this way
+             * (`data-attendance-subject`), and a stale-overwrite proof needs to read the answer off
+             * the rendered card rather than off the props it was handed.
+             */
+            data-financials-account={vm?.account?.customerId ?? undefined}
+            data-financials-reserved={reservesFootprint ? "true" : undefined}
+            style={
+                reservesFootprint
+                    ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT }
+                    : undefined
+            }
+        >
+            <UniversalCard
+                title={model.title}
+                insight={insightFor(vm, reconciliation, loading, currency)}
+                iconName={model.iconName}
+                tier={model.tier}
+                archetype={model.archetype}
+                density="compact"
+                gridSpan={expanded ? "row" : model.span}
+                receded={receded}
+                data-universal-card-key="financials"
+                footerAction={null}
+            >
+                {!vm ? (
+                    /*
+                     * FOUR STATES, AND ONLY ONE OF THEM IS TERMINAL.
+                     *
+                     * "No financial record" was wrong in every case it was shown. It reads as a
+                     * statement about the FAMILY — that they have no financial history — and having
+                     * no financial activity is a perfectly ordinary, fully supported state that
+                     * renders as $0.00 with Add charge available. What the card actually meant was
+                     * that it could not resolve an account to ask about.
+                     *
+                     * ── THE MERGE THAT PRODUCED THIS BRANCH ────────────────────────────────────
+                     *
+                     * Two independent corrections met here and BOTH are kept, because each answers
+                     * a question the other does not:
+                     *
+                     *   from staging   `deniedRead` and `provisioningAccount` — a reader without
+                     *                  permission must be told that, not shown "unavailable", and
+                     *                  an account still being provisioned is loading rather than
+                     *                  absent.
+                     *
+                     *   from 11A       LOADING IS NOT A SENTENCE. The unresolved state used to be
+                     *                  one line of text in an otherwise empty card, which in the
+                     *                  Financials workspace — where this card is the account's
+                     *                  primary summary — meant selecting an account produced a
+                     *                  large box reading "Loading the account…" while the detail
+                     *                  beneath it was already showing its ledger. The card's shape
+                     *                  is known before its figures are, so the shape is what it
+                     *                  draws.
+                     *
+                     * Taking either side wholesale would have dropped the other's fix.
+                     */
+                    deniedRead ? (
+                        <p className="alloy-os-financials__empty" data-financials-empty="permission">
+                            You do not have permission to view financial information.
+                        </p>
+                    ) : loading || subjectStillResolving || provisioningAccount || awaitingFirstAnswer ? (
+                        /*
+                         * The committed anatomy, with placeholders where values will land — never a
+                         * number and never a zero, because a placeholder mistaken for $0.00 is
+                         * worse than a wait.
+                         */
+                        summaryVariant === "account" ? (
+                            <AccountSummaryPending />
+                        ) : (
+                        <div className="alloy-os-financials__empty" data-financials-empty="loading" aria-busy="true">
+                            <div className="flex flex-wrap gap-x-8 gap-y-3">
+                                {/*
+                                  * The labels the summary actually settles into. They used to read
+                                  * "Current period", which is the one field this surface no longer
+                                  * carries — a skeleton promising a field that never arrives.
+                                  */}
+                                {["Balance", "Past due", "Payments"].map((label) => (
+                                    <div key={label}>
+                                        <p className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">{label}</p>
+                                        <span
+                                            aria-hidden
+                                            data-financials-card-skeleton="true"
+                                            className="mt-1 inline-block h-[1.1em] w-20 animate-pulse rounded bg-alloy-stone/25 align-middle"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        )
+                    ) : (
+                        <p
+                            className="alloy-os-financials__empty"
+                            data-financials-empty={noFinancialSubject ? "no-subject" : "no-account"}
+                        >
+                            Financial account unavailable
+                        </p>
+                    )
+                ) : (
+                    <>
+                        {/* ── CURRENT PERIOD · PAST DUE / PAYMENT ─────────────────────────────── */}
+                        {showBands ? (
+                        <div
+                            className="alloy-os-financials__bands"
+                            data-financials-density={isCompact ? "compact" : expanded ? "expanded" : "summary"}
+                        >
+                            <section className="alloy-os-financials__band" data-financials-band="current-period">
+                                <p className="alloy-os-financials__band-label">
+                                    Current period · {vm.period.label}
+                                </p>
+                                {isCompact ? (
+                                    /* Supporting context: what is owed, and whether anything is
+                                       overdue. The breakdown belongs to the summary density. */
+                                    <>
+                                        <Line
+                                            label="Balance"
+                                            cents={reconciliation!.balanceCents}
+                                            currency={currency}
+                                            strong
+                                            testId="balance"
+                                        />
+                                        {reconciliation!.scheduledCents !== 0 ? (
+                                            <Line
+                                                label="Scheduled"
+                                                cents={reconciliation!.scheduledCents}
+                                                currency={currency}
+                                                muted
+                                                testId="scheduled"
+                                            />
+                                        ) : null}
+                                        {pastDue ? (
+                                            <p className="alloy-os-financials__note">
+                                                {money(pastDue.amountCents, currency)} past due ·{" "}
+                                                {pastDue.agingDays} days
+                                            </p>
+                                        ) : null}
+                                    </>
+                                ) : (
+                                <>
+                                {/* Individual dollar rows stay regular and tabular; only the total
+                                    earns stronger type. */}
+                                <Line label="Charges" cents={reconciliation!.grossCents} currency={currency} />
+                                {reconciliation!.discountsCents !== 0 ? (
+                                    <Line
+                                        label="Discounts & credits"
+                                        cents={reconciliation!.discountsCents}
+                                        currency={currency}
+                                    />
+                                ) : null}
+                                {reconciliation!.fundingCents !== 0 ? (
+                                    <Line label="Funding" cents={reconciliation!.fundingCents} currency={currency} />
+                                ) : null}
+                                {reconciliation!.adjustmentsCents !== 0 ? (
+                                    <Line
+                                        label="Adjustments"
+                                        cents={reconciliation!.adjustmentsCents}
+                                        currency={currency}
+                                    />
+                                ) : null}
+                                {/* ── THE NET OBLIGATION, CALLED THAT ────────────────────────
+                                    This figure is gross plus discounts, funding and adjustments —
+                                    the type that produces it says so by construction. It was
+                                    labelled "Responsibility", which is also the word directly
+                                    beneath it for the split between named parties, so one word
+                                    stood for two different things: what the family owes after
+                                    reductions, and who owes it. An operator reading a total of
+                                    $900 above a list adding to $900 had no way to tell whether
+                                    the list explained the total or repeated it. */}
+                                <Line
+                                    label="Net obligation"
+                                    cents={reconciliation!.responsibilityCents}
+                                    currency={currency}
+                                    strong
+                                    testId="net-obligation"
+                                />
+                                {/* The part of that net someone has actually been made responsible
+                                    for. Allocated and unassigned sum to the net above, which is
+                                    what makes the two readable together. */}
+                                <Line
+                                    label="Responsibility"
+                                    cents={vm.responsibility.allocatedCents}
+                                    currency={currency}
+                                    testId="responsibility"
+                                />
+                                {/* ── WHO OWES IT ────────────────────────────────────────────
+                                    Persisted allocations, named parties, real cents. Thread 2
+                                    shipped this seam empty on purpose — there was a payer contact
+                                    role and no allocation store, so any split rendered here would
+                                    have assigned real money to real people on no record. The
+                                    record exists now, and the card reads it rather than deriving
+                                    anything of its own.
+
+                                    UNASSIGNED IS SHOWN, not hidden. Money nobody has been made
+                                    responsible for is the operator's most actionable fact on this
+                                    card, and quietly attributing it to the household is the exact
+                                    behaviour the platform decided against. */}
+                                {vm.responsibility.parties.map((party) => (
+                                    <Line
+                                        key={party.personId}
+                                        label={party.name}
+                                        cents={party.assignedCents}
+                                        currency={currency}
+                                        muted
+                                        testId={`responsibility-party-${party.personId}`}
+                                    />
+                                ))}
+                                {vm.responsibility.unassignedCents !== 0 ? (
+                                    <Line
+                                        label="Unassigned"
+                                        cents={vm.responsibility.unassignedCents}
+                                        currency={currency}
+                                        testId="responsibility-unassigned"
+                                    />
+                                ) : null}
+                                {/* ── WHAT MAY BE COLLECTED FROM THE FAMILY TODAY ────────────
+                                    Only shown when a submitted claim is actually suppressing
+                                    something. Outstanding is what is owed; collectible-now is what
+                                    an operator may ask this family for while an agency has been
+                                    told it will pay part of it. With no claim in flight the two
+                                    are the same number and a second line would be noise. The
+                                    figure is the canonical one — nothing here subtracts. */}
+                                {vm.collectible.submittedClaimSuppressionCents > 0 ? (
+                                    <Line
+                                        label="Collectible now"
+                                        cents={vm.collectible.currentlyCollectibleCents}
+                                        currency={currency}
+                                        testId="collectible-now"
+                                    />
+                                ) : null}
+                                {vm.expectedFunding.length > 0 ? (
+                                    <p className="alloy-os-financials__note" data-financials-expected-funding="true">
+                                        {/* EXPECTED, and said so. Funding that has not arrived is not
+                                            a payment and reduces nothing owed; stating it as a note
+                                            beside the figures keeps it out of every total. */}
+                                        Expected funding ·{" "}
+                                        {vm.expectedFunding.map((f) => f.label).join(", ")} · not yet received
+                                    </p>
+                                ) : null}
+                                {reconciliation!.scheduledCents !== 0 ? (
+                                    /* STATED BESIDE the balance, never inside it: a scheduled charge
+                                       is not yet owed, and folding it in would overstate the debt. */
+                                    <Line
+                                        label="Scheduled"
+                                        cents={reconciliation!.scheduledCents}
+                                        currency={currency}
+                                        muted
+                                        testId="scheduled"
+                                    />
+                                ) : null}
+                                </>
+                                )}
+                            </section>
+
+                            {isCompact ? null : (
+                            <div className="alloy-os-financials__side">
+                                <section className="alloy-os-financials__band" data-financials-band="past-due">
+                                    <p className="alloy-os-financials__band-label">Past due</p>
+                                    {pastDue ? (
+                                        <>
+                                            <Line
+                                                label={`${pastDue.agingDays} days`}
+                                                cents={pastDue.amountCents}
+                                                currency={currency}
+                                                strong
+                                                testId="past-due"
+                                            />
+                                            <p className="alloy-os-financials__note">
+                                                Oldest unpaid {humanDay(pastDue.oldestDueDate)}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="alloy-os-financials__note">Nothing past due.</p>
+                                    )}
+                                </section>
+
+                                {paymentBandFor(true)}
+                            </div>
+                            )}
+                        </div>
+                        ) : (
+                            /* The shallow top of the expanded view: what is owed, and whether
+                               anything is overdue. Everything else is a row in the ledger below. */
+                            <p className="alloy-os-financials__shallow" data-financials-shallow="true">
+                                <span className="alloy-os-financials__shallow-value">
+                                    {money(reconciliation!.balanceCents, currency)}
+                                </span>
+                                <span className="alloy-os-financials__shallow-label">
+                                    owed · {vm.period.label}
+                                </span>
+                                {pastDue ? (
+                                    <span className="alloy-os-financials__shallow-label">
+                                        · {money(pastDue.amountCents, currency)} past due
+                                    </span>
+                                ) : null}
+                                {reconciliation!.scheduledCents !== 0 ? (
+                                    <span className="alloy-os-financials__shallow-label">
+                                        · {money(reconciliation!.scheduledCents, currency)} scheduled
+                                    </span>
+                                ) : null}
+                            </p>
+                        )}
+
+                        {/* THE COMMAND BELONGS TO THE CARD, not to one band.
+                            It lived inside Current Period, so expanding the card — the density where
+                            an operator is actually working the ledger — removed the only way to add
+                            a charge. */}
+                        <div className="alloy-os-financials__actions" data-financials-actions="true">
+                        {vm.unavailableReason ? (
+                            /* Stated beneath the anatomy, never in place of it. */
+                            <span className="alloy-os-financials__note" data-financials-unavailable="true">
+                                {vm.unavailableReason}
+                            </span>
+                        ) : null}
+                        {vm.chargeTemplates.some((tpl) => tpl.availability === "offerable") ? (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__action"
+                                        data-financials-command="charge.add"
+                                        disabled={running}
+                                    >
+                                        Add charge →
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" sideOffset={4} data-financials-charge-menu="true">
+                                    {/* Only what can be charged here — an item Add charge refuses is not a menu entry. */}
+                                    {vm.chargeTemplates.filter((tpl) => tpl.availability === "offerable").map((tpl) => (
+                                        <DropdownMenuItem
+                                            key={tpl.id}
+                                            data-financials-charge-template={tpl.id}
+                                            data-financials-charge-availability={tpl.availability}
+                                            onSelect={() => void preview(tpl.id, tpl.label)}
+                                        >
+                                            {/* The tenant's own label. Never `template_key`. */}
+                                            {tpl.label}
+                                            {tpl.amountCents != null ? (
+                                                <span className="alloy-os-financials__menu-amount">
+                                                    {money(tpl.amountCents, tpl.currencyCode)}
+                                                </span>
+                                            ) : null}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        ) : null}
+                        {pending ? (
+                            <div className="alloy-os-financials__preview" data-financials-preview="true">
+                                <p className="alloy-os-financials__preview-summary">{pending.label}</p>
+                                {pending.changes.map((ch) => (
+                                    <p key={ch} className="alloy-os-financials__note">
+                                        {ch}
+                                    </p>
+                                ))}
+                                {/*
+                                    THE HONEST BALANCE IMPACT.
+                                    The design showed "$255 → $295". Add Charge creates a DRAFT, and a
+                                    draft is not owed — so the current balance does not move until the
+                                    charge is posted. Printing an arrow between two balances would
+                                    assert a change the backend does not make.
+                                */}
+                                <p className="alloy-os-financials__note" data-financials-preview-impact="true">
+                                    Creates a draft · the balance changes when it is posted
+                                </p>
+                                <span className="alloy-os-financials__preview-actions">
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__action"
+                                        data-financials-preview-commit="true"
+                                        disabled={running}
+                                        onClick={() => void commit()}
+                                    >
+                                        Add charge
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__action"
+                                        data-financials-preview-cancel="true"
+                                        disabled={running}
+                                        onClick={() => setPending(null)}
+                                    >
+                                        Cancel
+                                    </button>
+                                </span>
+                            </div>
+                        ) : null}
+                        {commandError ? (
+                            <span className="alloy-os-financials__error" data-financials-command-error="true">
+                                {commandError}
+                            </span>
+                        ) : null}
+                        {commandNotice ? (
+                            <span className="alloy-os-financials__note" data-financials-command-notice="true">
+                                {commandNotice}
+                            </span>
+                        ) : null}
+                        </div>
+
+                        {/* ── SUBJECT FILTER + LEDGER ─────────────────────────────────────────── */}
+                        {showLedger ? (
+                            <>
+                                {vm.subjects.length > 1 ? (
+                                    <div className="alloy-os-financials__filters" data-financials-filters="true">
+                                        <FilterChip
+                                            active={subjectFilter === "all"}
+                                            onClick={() => setSubjectFilter("all")}
+                                            value="all"
+                                        >
+                                            All
+                                        </FilterChip>
+                                        {vm.subjects.map((s) => (
+                                            <FilterChip
+                                                key={s.customerMemberId}
+                                                active={subjectFilter === s.customerMemberId}
+                                                onClick={() => setSubjectFilter(s.customerMemberId)}
+                                                value={s.customerMemberId}
+                                            >
+                                                {s.displayName}
+                                            </FilterChip>
+                                        ))}
+                                    </div>
+                                ) : null}
+
+                                <div className="alloy-os-financials__ledger" data-financials-ledger="true">
+                                    {vm.ledgerPeriods.map((group) => {
+                                        const groupRows = financialsRowsInSubjectScope(group.rows, subjectFilter);
+                                        if (groupRows.length === 0) return null;
+                                        return (
+                                            <section
+                                                key={group.period.key}
+                                                className="alloy-os-financials__period"
+                                                data-financials-period={group.period.key}
+                                            >
+                                                <p className="alloy-os-financials__period-label">
+                                                    {group.period.label.toUpperCase()}
+                                                </p>
+                                                {groupRows.map((row) => (
+                                                    <div
+                                                        key={row.chargeId}
+                                                        className="alloy-os-financials__row"
+                                                        data-financials-row={row.chargeId}
+                                                    >
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--date">
+                                                            {formatDisplayDate(row.date) || "—"}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell">
+                                                            {row.subjectName ?? "—"}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell">
+                                                            {row.categoryLabel}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--desc">
+                                                            {row.description ?? "—"}
+                                                        </span>
+                                                        <span
+                                                            className="alloy-os-financials__cell alloy-os-financials__cell--gl"
+                                                            data-financials-gl={row.glCode ?? "unmapped"}
+                                                        >
+                                                            {/* Explicit, never a silent blank. */}
+                                                            {row.glCode ?? "Unmapped"}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--amount">
+                                                            {money(row.amountCents, row.currencyCode)}
+                                                        </span>
+                                                        <span
+                                                            className="alloy-os-financials__cell alloy-os-financials__cell--status"
+                                                            data-financials-lifecycle={row.lifecycleStatus}
+                                                        >
+                                                            {row.lifecycleStatus}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--source">
+                                                            {row.source ?? "—"}
+                                                        </span>
+                                                        {/*
+                                                            ONE TRANSITION PER LIFECYCLE STATE, AND
+                                                            AT MOST ONE CORRECTION.
+
+                                                            A draft can be posted; posted money can
+                                                            only be corrected, and only once. A
+                                                            REVERSED row is no longer `posted` here,
+                                                            so it offers nothing — it used to still
+                                                            read `posted`, which is how the same
+                                                            charge was reversed twice and the family
+                                                            credited for money never charged. A
+                                                            CORRECTION row offers nothing either: a
+                                                            reversal is not itself reversed. A void
+                                                            row and a scheduled draft have no lawful
+                                                            next step here. `offersReverse` is the
+                                                            READ MODEL's answer, so the rule is not
+                                                            restated in JSX — and a certification can
+                                                            assert the very value that renders it.
+                                                        */}
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--row-action">
+                                                            {/* W7-F027: no Post on a row — a Scheduled charge activates by itself, and an
+                                                                exceptional draft is posted from its Charge Details, beside its reason. */}
+                                                            {row.offersReverse ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="alloy-os-financials__action"
+                                                                    data-financials-row-command="charge.reverse"
+                                                                    data-financials-row-charge={row.chargeId}
+                                                                    disabled={running}
+                                                                    onClick={() => void runRowAction("reverse", row)}
+                                                                >
+                                                                    Reverse
+                                                                </button>
+                                                            ) : null}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </section>
+                                        );
+                                    })}
+                                    {visibleRows.length === 0 ? (
+                                        <p className="alloy-os-financials__note">No financial activity yet.</p>
+                                    ) : null}
+                                </div>
+                            </>
+                        ) : null}
+
+                        {/*
+                         * ── DETAILS IS A DRILL-DOWN, AND SOME PLACEMENTS HAVE NOWHERE TO DRILL ──
+                         *
+                         * In the Focus Panel this card is financial CONTEXT beside some other
+                         * subject, so `Details →` is how an operator asks to see the account. In
+                         * Financials → Accounts they have already asked: they opened the Financials
+                         * workspace, chose Accounts, and selected a household. The account's own
+                         * activity is on screen beneath this card. Offering a drill-down there is
+                         * asking them to request what they are already looking at, and it opened a
+                         * scrimmed overlay over the surface that was already showing it.
+                         *
+                         * Defaults to present, so the Focus Panel is untouched.
+                         */}
+
+                        {showDetailsAction ? (
+                            <button
+                                type="button"
+                                className="alloy-os-financials__details"
+                                data-financials-details="true"
+                                // The overlay state owns elevation now; reporting perspective here as
+                                // well would give the depth layer two authorities for one card.
+                                onClick={() => (expanded ? pop() : requestDetails())}
+                                aria-busy={detailPending || undefined}
+                                data-financials-details-pending={detailPending ? "true" : undefined}
+                            >
+                                {expanded ? "Less" : "Details"}
+                            </button>
+                        ) : null}
+                    </>
+                )}
+            </UniversalCard>
+        </div>
+    );
+}
+
+/**
+ * The household this panel is about.
+ *
+ * `truth` carries the household under more than one binding depending on how the panel was reached,
+ * so this reads them in order of authority rather than assuming one. Returning null is ordinary — a
+ * panel with no household simply has no account.
+ */
+/**
+ * THE ACCOUNT THIS CARD IS ABOUT — the shared rule, not this card's opinion of it.
+ *
+ * These keys were written out twice: once where mounting is decided, once here where the read is
+ * addressed. They agreed only by coincidence, and the registry's own comment had already named the
+ * hazard — "admitting on one key and reading another is how a card mounts and then sits still".
+ * Both now call `resolveFinancialSubjectId`, so the two decisions cannot diverge.
+ */
+/**
+ * A DESTINATION, NOT A NAME.
+ *
+ * Every entry carries what its surface needs to render itself, so returning to one never means
+ * reconstructing it from whatever state happens to survive. `adjust_charge` and `reverse_charge`
+ * are row-scoped commands and say which row; `detail`, `add_charge` and `payment` need nothing
+ * beyond their kind.
+ */
+export type FinancialsSurface =
+    | { kind: "detail" }
+    | { kind: "add_charge" }
+    | { kind: "payment" }
+    /*
+     * ── ADMINISTRATION IS DEPTH, NOT DOCUMENT FLOW ────────────────────────────────────────────
+     *
+     * These three ride the same stack Add Charge and Payment ride, for the same reason: an
+     * elevated Focus Panel cell grants interaction to the platform card alone, so a surface that
+     * wants clicks has to BE one. Rendering them inside Details made them part of the record an
+     * operator scrolls, which is what pushed the ledger down a screen.
+     *
+     * Each hosts the component that already exists. None of them is a second writer.
+     *
+     * Named `_admin` deliberately: `responsibility` already exists below as the PER-CHARGE resolve
+     * and reallocate surface a ledger row opens, and the two are different acts. One changes what a
+     * household arranges; the other divides one obligation. Sharing a name would make the stack
+     * ambiguous about which was open.
+     */
+    | { kind: "responsibility_admin" }
+    | { kind: "discount_admin" }
+    | { kind: "payments_admin" }
+    /*
+     * ── OPENING A CHARGE'S RECORD IS A READ ──────────────────────────────────────────────────
+     *
+     * It rides the same stack as the commands because that is how this host presents any surface
+     * above the floor — but it raises no action, needs no capability, and writes nothing. It is
+     * here rather than on the command channel precisely so that reading a record cannot be
+     * mistaken for, or widened into, authority to change one.
+     */
+    /* W7-F029: `seed` is the clicked row's own facts, for an instant first paint. */
+    | { kind: "charge_detail"; chargeId: string; label: string; seed?: ChargeDetailSeed | null }
+    /* W7-F026: a receipt's record — the same kind of read as a charge's. */
+    | { kind: "payment_detail"; paymentId: string }
+    /* W7-F044: the receipts the account's prepaid figure is made of — a read, like the two above. */
+    | { kind: "prepaid_detail" }
+    | { kind: "adjust_charge"; chargeId: string }
+    /* W7-F033: the money-moving acts, as command layers. Their facts live in the card's pending state. */
+    | { kind: "payment_application" }
+    | { kind: "release_held" }
+    | { kind: "reverse_adjustment" }
+    | { kind: "reverse_charge"; chargeId: string; label: string }
+    /*
+     * WHO OWES ONE OBLIGATION. Row-scoped like the two above, and it carries its MODE because
+     * resolving and reallocating are different intents that happen to share a shell: one divides a
+     * charge nobody owes yet, the other moves what one real person owes to another.
+     */
+    | { kind: "responsibility"; chargeId: string; label: string; mode: "resolve" | "reallocate" };
+
+function householdIdFrom(context: OperationalContext): string | null {
+    /*
+     * THE SHARED RULE, NOT A COPY OF IT. The registry decides whether this card may mount from the
+     * same function — so a card can no longer be admitted because an account "is available" and then
+     * fail to find one in the very context that admitted it.
+     */
+    return resolveFinancialSubjectId(context);
+}
+
+function money(cents: number, currency: string): string {
+    return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
+}
+
+/**
+ * The header answer, in the SAME scope as the body.
+ *
+ * It read `vm.reconciliation` — the whole account — while the body could be filtered to one child, so
+ * the card announced $100.00 above a $75.00 breakdown. The scoped figure is passed in rather than
+ * re-derived, so the two cannot disagree again.
+ */
+function insightFor(
+    vm: FinancialsCardVM | null,
+    reconciliation: { balanceCents: number } | null,
+    loading: boolean,
+    currency: string,
+): string {
+    if (loading && !vm) return "";
+    if (!vm || vm.unavailableReason || !reconciliation) return "";
+    return `${money(reconciliation.balanceCents, currency)} · ${vm.period.label}`;
+}
+
+function Line(props: {
+    label: string;
+    cents: number;
+    currency: string;
+    strong?: boolean;
+    muted?: boolean;
+    testId?: string;
+}) {
+    return (
+        <span
+            className={[
+                "alloy-os-financials__line",
+                props.strong ? "alloy-os-financials__line--strong" : "",
+                props.muted ? "alloy-os-financials__line--muted" : "",
+            ]
+                .filter(Boolean)
+                .join(" ")}
+            data-financials-line={props.testId}
+        >
+            <span className="alloy-os-financials__line-label">{props.label}</span>
+            <span className="alloy-os-financials__line-value">{money(props.cents, props.currency)}</span>
+        </span>
+    );
+}
+
+function FilterChip(props: {
+    active: boolean;
+    value: string;
+    onClick: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            className={`alloy-os-financials__chip${props.active ? " alloy-os-financials__chip--active" : ""}`}
+            data-financials-filter={props.value}
+            data-active={props.active ? "true" : undefined}
+            onClick={props.onClick}
+        >
+            {props.children}
+        </button>
+    );
+}

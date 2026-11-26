@@ -1,0 +1,14 @@
+[
+  {
+    "tag": "D_one_period",
+    "start": "2026-09-22",
+    "cmId": null,
+    "stopped": "no child"
+  },
+  {
+    "tag": "E_two_periods",
+    "start": "2026-09-15",
+    "cmId": null,
+    "stopped": "no child"
+  }
+]

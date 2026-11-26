@@ -1,0 +1,18 @@
+{
+  "prepaid": {
+    "availablePrepaid": "Available prepaid $125.00",
+    "balance": "Balance $1,412.87",
+    "netted": false
+  },
+  "start": [],
+  "bothChildren": [
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "afterHousehold": [
+    "Household"
+  ],
+  "listAfterEscape": 0,
+  "focusAfterEscape": "BUTTON[addcharge-target](\"Applies to\")",
+  "summaryLine": "Household · one charge for the account"
+}

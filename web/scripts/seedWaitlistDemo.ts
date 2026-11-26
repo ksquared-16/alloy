@@ -267,6 +267,7 @@ async function upsertOpportunity(
     const meta = waitlistDemoMetadata(seedKey, {
         waitlist_demo_scenario: scenario,
         notes: `Waitlist demo — ${scenario}`,
+        // opportunity-level legacy metadata key — not the OCM column
         desired_start_date: "2025-09-01",
         enrollment_operational: { wait_since: isoDate(new Date("2024-06-15T12:00:00.000Z")) },
     });
@@ -326,7 +327,7 @@ async function upsertOcm(
         outcome_status_key: fields.outcome_status_key ?? "waitlisted",
         location_id: fields.location_id ?? null,
         program_room_cohort_key: fields.program_room_cohort_key ?? null,
-        desired_start_date: "2025-09-01",
+        start_date: "2025-09-01",
         metadata: waitlistDemoMetadata(fields.ocmSeed),
     };
 

@@ -1,6 +1,6 @@
 /**
  * Configuration Runtime core interaction — drift prevention.
- * @see docs/sprints/06_2026/configuration_runtime_core_interaction_doctrine.md
+ * @see docs/sprints/archive/06_2026/configuration_runtime_core_interaction_doctrine.md
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -44,6 +44,7 @@ describe("Configuration Runtime core interaction", () => {
     it("registers configuration mode nav surfaces", () => {
         expect(CONFIGURATION_MODE_DEFAULT_SURFACE).toBe("/settings/processes");
         const labels = CONFIGURATION_MODE_NAV_ITEMS.map((item) => item.label);
+        expect(labels).toContain("Entities");
         expect(labels).toContain("Processes");
         expect(labels).toContain("Surfaces");
         expect(labels).toContain("Access");
@@ -135,7 +136,7 @@ describe("Configuration Runtime core interaction", () => {
 
     it("core interaction doctrine doc forbids blue/gray admin styling", () => {
         const doc = readFileSync(
-            resolve(root, "../docs/sprints/06_2026/configuration_runtime_core_interaction_doctrine.md"),
+            resolve(root, "../docs/sprints/archive/06_2026/configuration_runtime_core_interaction_doctrine.md"),
             "utf8",
         );
         expect(doc).toContain("Context → Configuration Queue → Configuration Workspace → BOS");

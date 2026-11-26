@@ -115,7 +115,7 @@ export function FormPacketContextPanel({ formId, formName, hasPublished }: Props
             {loading ?
                 <p className={clsx("mt-2", opMutedMeta)}>Checking packet membership…</p>
             : loadErr ?
-                <p className={clsx("mt-2 text-sm text-amber-900")}>{loadErr}</p>
+                <p className={clsx("mt-2 text-sm text-alloy-ember")}>{loadErr}</p>
             : memberships.length > 0 ?
                 <ul className={clsx(opGroupedSurface, "mt-3")} data-testid="form-packet-membership-list">
                     {memberships.map((m) => (
@@ -127,7 +127,7 @@ export function FormPacketContextPanel({ formId, formName, hasPublished }: Props
                             </p>
                             <Link
                                 href={`${ADMIN_FORMS_UI_BASE}/packet-definitions/${encodeURIComponent(m.packetDefinitionId)}`}
-                                className="mt-1 inline-block text-xs font-semibold text-alloy-blue hover:underline"
+                                className="mt-1 inline-block text-xs font-semibold text-alloy-bend-pine hover:underline"
                                 data-testid={`form-packet-open-${m.packetDefinitionId}`}
                             >
                                 Open packet setup

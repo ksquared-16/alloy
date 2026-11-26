@@ -1,10 +1,14 @@
-import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { normalizePhoneForPersonWrite } from "@/lib/identity";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     applyChildScopedContactAssignments,
     ensureContactForPerson,
     type ChildScopedContactAssignment,
 } from "@/lib/admin/actions/createLeadChildScopedContactPersistence";
+import { applyCanonicalChildScopedRelationships } from "@/lib/admin/actions/createLeadPersonChildRelationshipPersistence";
+import { shouldWriteChildScopedRelationshipsToPcr } from "@/lib/admin/actions/childScopedContactRoleMapping";
+import { attachPersonChildRelationshipsToEntityRecord } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
 import {
     applyCreateLeadChildParticipationFromIdentity,
     type CreateLeadChildIdentity,
@@ -34,6 +38,9 @@ import {
     resolveRelationshipRoleKeyForAction,
 } from "@/lib/admin/relationship/relationshipActionRoleResolution";
 import { relationshipActionRegistryEntry } from "@/lib/admin/relationship/relationshipActionRegistry";
+import { linkHouseholdGuardianAtomically, RelationshipActionError } from "@/lib/admin/relationship/guardianLinkTransaction";
+import { decideRelationshipIdentity, findRelationshipIdentityCandidates, identityChoiceRequired } from "@/lib/admin/relationship/relationshipIdentity";
+import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
 import {
     resolveRelationshipScopeMemberIds,
     resolveRelationshipScopeTargets,
@@ -47,10 +54,10 @@ function trim(value: unknown): string {
 
 const EMPTY_CHILD_OCM: CreateLeadChildOcmFields = {
     location_id: null,
-    desired_program_type: null,
-    desired_program_category_id: null,
-    desired_schedule_type: null,
-    desired_start_date: null,
+    program_key: null,
+    program_category_id: null,
+    schedule_type: null,
+    start_date: null,
     program_room_cohort_key: null,
     notes: null,
 };
@@ -99,6 +106,7 @@ async function loadHouseholdChildren(
 async function resolvePersonId(
     supabase: SupabaseClient,
     orgId: string,
+    customerId: string,
     input: ExecuteRelationshipActionInput,
 ): Promise<string> {
     const existing = trim(input.selectedPersonId);
@@ -124,6 +132,12 @@ async function resolvePersonId(
     });
     if (validationError) throw new Error(validationError);
 
+    // One identity rule (relationshipIdentity): reuse only this household's own same-name person; an
+    // ambiguous match — another family's email/phone, or a same-name household member — is the operator's choice.
+    const decision = decideRelationshipIdentity(await findRelationshipIdentityCandidates(supabase, { orgId, customerId, draft }), draft);
+    if (decision.kind === "choose") throw identityChoiceRequired(decision.candidates);
+    if (decision.kind === "reuse") return decision.personId;
+
     const foundOrCreated = await findOrCreatePersonInOrgWithMeta(supabase, {
         org_id: orgId,
         first_name: trim(draft.first_name),
@@ -140,7 +154,8 @@ async function resolvePersonId(
             first_name: trim(draft.first_name),
             last_name: trim(draft.last_name),
             email: trim(draft.email) || null,
-            phone: trim(draft.phone) || null,
+            // Same stored form as the find-or-create writer above (E2E-16).
+            phone: normalizePhoneForPersonWrite(draft.phone),
         })
         .select("id")
         .single();
@@ -207,40 +222,13 @@ async function ensureOpportunityCustomerMemberLink(
     opportunityId: string,
     customerMemberId: string,
 ): Promise<{ ocmId: string; created: boolean }> {
-    const { data: existingOcm } = await supabase
-        .from("opportunity_customer_members")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("opportunity_id", opportunityId)
-        .eq("customer_member_id", customerMemberId)
-        .maybeSingle();
-    if (existingOcm?.id) return { ocmId: String(existingOcm.id), created: false };
-
-    const { data: inserted, error } = await supabase
-        .from("opportunity_customer_members")
-        .insert({
-            org_id: orgId,
-            opportunity_id: opportunityId,
-            customer_member_id: customerMemberId,
-            outcome_status_key: NEW_LEAD_STATUS_KEY,
-            metadata: { source: "relationship_action" },
-        })
-        .select("id")
-        .single();
-    if (error?.code === "23505") {
-        const { data: retry } = await supabase
-            .from("opportunity_customer_members")
-            .select("id")
-            .eq("org_id", orgId)
-            .eq("opportunity_id", opportunityId)
-            .eq("customer_member_id", customerMemberId)
-            .maybeSingle();
-        if (retry?.id) return { ocmId: String(retry.id), created: false };
-    }
-    if (error || !inserted?.id) {
-        throw new Error(error?.message ?? "Could not link child to opportunity.");
-    }
-    return { ocmId: String(inserted.id), created: true };
+    return ensureOpportunityCustomerMemberParticipation({
+        supabase,
+        orgId,
+        opportunityId,
+        customerMemberId,
+        source: "relationship_action",
+    });
 }
 
 async function refreshScopedContactLinks(
@@ -354,37 +342,37 @@ export async function executeRelationshipAction(
                 linksWritten += 1;
                 affectedPreview.push({
                     label: "Opportunity enrollment",
-                    table: "opportunity_customer_members",
-                    record_ids: [participation.ocm_id],
+                    table: "process_instances",
+                    record_ids: participation.process_instance_id ? [participation.process_instance_id] : [],
                 });
             } else {
-                const { data: cm, error } = await supabase
-                    .from("customer_members")
-                    .insert({
-                        org_id: orgId,
-                        customer_id: customerId,
-                        person_id: childPersonId,
-                        display_name: identity.display_name,
-                        first_name: identity.first_name,
-                        last_name: identity.last_name,
-                        dob: identity.dob,
-                        relationship: "child",
-                        is_active: true,
-                        metadata: { source: "relationship_action" },
-                    })
-                    .select("id")
-                    .single();
-                if (error?.code === "23505") {
-                    memberId = await findCustomerMemberForChild(supabase, orgId, customerId, childPersonId);
-                } else if (error || !cm) {
-                    throw new Error(error?.message ?? "Could not create customer member for child.");
-                } else {
-                    memberId = String((cm as { id: string }).id);
-                    linksWritten += 1;
-                }
+                // ONE child-member write authority. This branch used to insert directly and
+                // rescue the unique violation afterwards; the authority asks first, so a child
+                // already on this household is reused rather than raced into existence.
+                // Identity is still resolved by THIS path — the authority never guesses one.
+                const { member, created } = await createHouseholdChildMember(supabase, {
+                    orgId,
+                    customerId,
+                    personId: childPersonId,
+                    displayName: identity.display_name,
+                    firstName: identity.first_name,
+                    lastName: identity.last_name,
+                    dob: identity.dob,
+                    source: "relationship_action",
+                });
+                memberId = member.id;
+                if (created) linksWritten += 1;
                 affectedPreview.push({ label: "Household child member", table: "customer_members", record_ids: memberId ? [memberId] : [] });
             }
-        } else if (opportunityId && input.scope === "this_opportunity") {
+        } else if (
+            opportunityId
+            && input.scope === "this_opportunity"
+            // The bridge is written only by actions that DECLARE it. `add_child` no longer does:
+            // its participation owner is `process_instances`, and this branch was the last place
+            // the removed OCM bridge could still be created behind a stale declaration.
+            // `link_existing_child` keeps it, and keeps saying so.
+            && entry.writeTargets.includes("opportunity_customer_members")
+        ) {
             const ocmLink = await ensureOpportunityCustomerMemberLink(
                 supabase,
                 orgId,
@@ -401,8 +389,47 @@ export async function executeRelationshipAction(
             }
         }
         customerMemberId = memberId;
+    } else if (entry.executorKind === "guardian") {
+        /*
+         * THE GUARDIAN IS WRITTEN IN ONE TRANSACTION (relationship_link_household_guardian).
+         *
+         * Person, contact, household link and child links used to be four separate writes; a refusal
+         * at the child link left the person and household link behind. They now commit together or not
+         * at all, under one per-household lock, with household-scoped identity reuse.
+         */
+        if (!roleKey) throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+        if (!input.selectedPersonId && input.createPersonDraft) {
+            const validationError = validatePersonIdentityFields({
+                first_name: input.createPersonDraft.first_name,
+                last_name: input.createPersonDraft.last_name,
+                email: input.createPersonDraft.email ?? null,
+                phone: input.createPersonDraft.phone ?? null,
+            });
+            if (validationError) throw new RelationshipActionError("relationship_identity_insufficient", validationError);
+            // The transaction decides email/phone matches under its lock; a same-name household member with
+            // different contact details is asked about here, never silently duplicated.
+            const decision = decideRelationshipIdentity(
+                await findRelationshipIdentityCandidates(supabase, { orgId, customerId, draft: input.createPersonDraft }),
+                input.createPersonDraft,
+            );
+            if (decision.kind === "choose") throw identityChoiceRequired(decision.candidates);
+        }
+        const linked = await linkHouseholdGuardianAtomically(supabase, {
+            orgId,
+            customerId,
+            memberIds,
+            roleKey,
+            selectedPersonId: input.selectedPersonId ?? null,
+            draft: input.createPersonDraft ?? null,
+            source: "relationship_action",
+        });
+        personId = linked.personId;
+        contactId = linked.contactId;
+        linksWritten += linked.linksWritten;
+        affectedPreview.push({ label: "Household adult role", table: "customer_persons" });
+        affectedPreview.push({ label: "Child-scoped contact links", table: "customer_member_contacts", record_ids: memberIds });
     } else {
-        personId = await resolvePersonId(supabase, orgId, input);
+        personId = await resolvePersonId(supabase, orgId, customerId, input);
         contactId = await ensureContactForPerson(supabase, { orgId, customerId, personId });
 
         if (entry.writeTargets.includes("customer_persons") && roleKey) {
@@ -434,41 +461,67 @@ export async function executeRelationshipAction(
             affectedPreview.push({ label: "Opportunity contact role", table: "opportunity_persons" });
         }
 
-        if (entry.writeTargets.includes("customer_member_contacts") && roleKey && memberIds.length > 0) {
-            if (!roleKey) {
-                throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
-            }
+        const writeChildMemberRoles =
+            Boolean(roleKey)
+            && memberIds.length > 0
+            && (
+                shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey, actionKey })
+                || entry.writeTargets.includes("customer_member_contacts")
+            );
+
+        if (writeChildMemberRoles) {
             const assignments: ChildScopedContactAssignment[] = memberIds.map((id) => ({
                 customer_member_id: id,
                 person_id: personId!,
-                role_key: roleKey,
+                role_key: roleKey!,
                 source: "explicit_child",
             }));
-            const writeResult = await applyChildScopedContactAssignments(supabase, {
-                orgId,
-                customerId,
-                assignments,
-            });
-            linksWritten += writeResult.links_written;
-            linksSkippedInvalidRole += writeResult.links_skipped_invalid_role;
-            if (writeResult.links_skipped_invalid_role > 0 && writeResult.links_written === 0) {
-                throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+            if (shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey, actionKey })) {
+                const pcrWrite = await applyCanonicalChildScopedRelationships(supabase, {
+                    orgId,
+                    customerId,
+                    assignments,
+                });
+                linksWritten += pcrWrite.roles_written;
+                linksSkippedInvalidRole += pcrWrite.skipped;
+                if (pcrWrite.skipped > 0 && pcrWrite.roles_written === 0) {
+                    throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+                }
+                affectedPreview.push({
+                    label: "Person ↔ Child relationships",
+                    table: "person_child_relationships",
+                    record_ids: memberIds,
+                });
+            } else {
+                const writeResult = await applyChildScopedContactAssignments(supabase, {
+                    orgId,
+                    customerId,
+                    assignments,
+                });
+                linksWritten += writeResult.links_written;
+                linksSkippedInvalidRole += writeResult.links_skipped_invalid_role;
+                if (writeResult.links_skipped_invalid_role > 0 && writeResult.links_written === 0) {
+                    throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+                }
+                affectedPreview.push({
+                    label: "Child-scoped contact links",
+                    table: "customer_member_contacts",
+                    record_ids: memberIds,
+                });
             }
-            affectedPreview.push({
-                label: "Child-scoped contact links",
-                table: "customer_member_contacts",
-                record_ids: memberIds,
-            });
-        } else if (
-            entry.executorKind === "link_person"
-            && !entry.writeTargets.includes("customer_member_contacts")
-            && roleKey
-        ) {
-            linksWritten += 1;
         }
-    }
-
+        }
     const scopedLinks = await refreshScopedContactLinks(supabase, orgId, householdChildren);
+    const memberChildIds = new Map(
+        householdChildren.map((child) => [child.customer_member_id, child.child_person_id]),
+    );
+    const personChildRelationshipsByMember = await attachPersonChildRelationshipsToEntityRecord({
+        supabase,
+        orgId,
+        customerId,
+        customerMemberIds: memberIds.length > 0 ? memberIds : householdChildren.map((c) => c.customer_member_id),
+        memberChildIds,
+    });
     const affectedChildren = resolveRelationshipScopeTargets({
         scope: input.scope,
         anchorCustomerMemberId: anchorMemberId || null,
@@ -505,6 +558,7 @@ export async function executeRelationshipAction(
         affected_children: affectedChildren,
         affected_record_preview: affectedPreview,
         scoped_contact_links: scopedLinks,
+        person_child_relationships_by_member: personChildRelationshipsByMember,
         refresh_hints: buildRefreshHint(input),
     };
 }

@@ -11,6 +11,7 @@ import {
     type LayoutAssignmentSurfaceKey,
 } from "@/lib/layout/businessProcessLayoutAssignmentTypes";
 import { layoutAssignmentSlotsForStage } from "@/lib/layout/layoutAssignmentSlots";
+import type { LayoutSurface } from "@/lib/layout/layoutV2";
 import { listDefaultLayouts, listOrgLayouts } from "@/lib/layout/entityLayoutsRepo";
 import { upsertBusinessProcessLayoutAssignment } from "@/lib/layout/businessProcessLayoutAssignmentsRepo";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
@@ -19,7 +20,7 @@ async function latestPublishedLayoutKey(
     supabase: SupabaseClient,
     orgId: string,
     entityType: string,
-    surface: "drawer" | "queue",
+    surface: LayoutSurface,
     layoutKey: string,
 ): Promise<{ layoutKey: string; entityLayoutId: string | null }> {
     const [orgRecords, defaultRecords] = await Promise.all([

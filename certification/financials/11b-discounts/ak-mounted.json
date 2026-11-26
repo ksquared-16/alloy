@@ -1,0 +1,136 @@
+{
+  "build": {
+    "gitSha": "e29c223a8014e8dfccc5a013179fefcd793b9368",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1113 from ksquared-16/agent/financials-11a-regression-repair\n\nFinancials 11B — exception lifecycle repair (A-K closure)",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-mg4g7mde1-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_AiNurCNXYJ3aUdYXd5fKwGs8fRkX",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "eligibleBefore": {
+    "cf044308-3ee4-47ab-a8fb-205eb172aa48": [
+      {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -14500,
+        "explanation": "discount · 10% of $1450.00"
+      }
+    ],
+    "79f8011d-a236-4054-bee7-af10f1dbc632": [
+      {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -1850,
+        "explanation": "discount · 10% of $185.00"
+      }
+    ]
+  },
+  "F": {
+    "sectionBefore": {
+      "outcomes": [
+        {
+          "kind": "expected",
+          "reason": null,
+          "text": "discount · $18.50 expected to applyAdd exception"
+        }
+      ],
+      "exceptions": [
+        {
+          "applies": "false",
+          "live": "true",
+          "text": "discount · excluded from 2026-09-20 — A-K final — re-authored the same combination after endingEnd exception"
+        }
+      ],
+      "addOffered": 1,
+      "endOffered": 1,
+      "endedLabels": 0
+    },
+    "offered": true,
+    "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+    "draftOpened": true,
+    "confirmPresent": true,
+    "confirmDisabledWithoutReason": true,
+    "preview": "This policy will not apply to obligations for this assignment from today onward. Anything already posted keeps the terms it was posted under.",
+    "previewStatesApplicability": true,
+    "previewInventsNoAmount": true,
+    "confirmEnabledWithReason": true,
+    "errorShown": null,
+    "noRawDatabaseError": true,
+    "sectionAfter": {
+      "outcomes": [
+        {
+          "kind": "expected",
+          "reason": null,
+          "text": "discount · $18.50 expected to applyAdd exception"
+        }
+      ],
+      "exceptions": [
+        {
+          "applies": "false",
+          "live": "true",
+          "text": "discount · excluded from 2026-09-20 — A-K final — mounted authoring on the repaired deployed buildEnd exception"
+        }
+      ],
+      "addOffered": 1,
+      "endOffered": 1,
+      "endedLabels": 0
+    },
+    "canonicalReadBack": {
+      "id": "362c6562-827b-486c-b791-224d447913a1",
+      "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+      "policyLabel": "discount",
+      "effectiveStart": "2026-09-20",
+      "effectiveEnd": null,
+      "reason": "A-K final — mounted authoring on the repaired deployed build",
+      "appliesNow": false,
+      "isLiveNow": true,
+      "ended": false,
+      "superseded": false
+    },
+    "writeSucceeded": true
+  },
+  "subject": "79f8011d-a236-4054-bee7-af10f1dbc632",
+  "endThenReauthor": {
+    "endedTo": "2026-09-19",
+    "reauthorOk": true,
+    "reauthorError": null,
+    "endedRowStillReadable": true,
+    "rows": 12,
+    "liveRows": 1
+  },
+  "split12Write": {
+    "ok": true,
+    "error": null,
+    "window": {
+      "start": "2026-09-01",
+      "end": "2026-09-19"
+    }
+  },
+  "forecastVsLifecycle": {
+    "rowsGoverningThePeriodButNotLive": [
+      {
+        "start": "2026-09-01",
+        "end": "2026-09-19",
+        "appliesNow": true,
+        "isLiveNow": false,
+        "ended": true
+      }
+    ],
+    "uiEndOffered": 0,
+    "uiEndedLabels": 1,
+    "uiExceptions": [
+      {
+        "applies": "true",
+        "live": "false",
+        "text": "discount · ended 2026-09-19 — §12 — governed this period, and already endedEnded"
+      }
+    ],
+    "forecastStillSaysGoverned": true
+  }
+}

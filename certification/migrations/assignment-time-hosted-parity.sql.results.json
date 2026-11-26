@@ -1,0 +1,63 @@
+{
+  "trusted_host_action_id": "tha_4288313ad6f272",
+  "query_hash": "3489a047594a91b2f6491ea0415f93332acf371a376a92b24cd9f1c4b2435b2e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:46:54.611Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_4288313ad6f272",
+    "query_hash": "3489a047594a91b2f6491ea0415f93332acf371a376a92b24cd9f1c4b2435b2e",
+    "authorization_id": "grnt_a5a7dcfc9d694c52",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:46:57.596Z",
+    "question_ids": [
+      "hostedparity"
+    ],
+    "questions": {
+      "hostedparity": {
+        "question_id": "hostedparity",
+        "row_count": null,
+        "rows": [
+          {
+            "table_present": true,
+            "ledger_has_schema": true,
+            "ledger_has_backfill": true,
+            "ledger_has_trigger": true,
+            "total_assignments": 6,
+            "child_assignments": 2,
+            "staff_assignments": 4,
+            "with_pattern": 6,
+            "without_pattern": 0,
+            "patterns_total": 10,
+            "patterns_with_weekdays": 10,
+            "patterns_no_weekdays": 0,
+            "patterns_hours_valid": 5,
+            "patterns_hours_absent": 2,
+            "patterns_hours_malformed": 3,
+            "assignments_known_hours": 4,
+            "assignments_unknown_hours": 2,
+            "expected_rows": 30,
+            "expected_known_rows": 20,
+            "expected_unknown_rows": 10,
+            "actual_rows": 30,
+            "actual_known_rows": 20,
+            "actual_unknown_rows": 10,
+            "orphans": 0,
+            "invalid_intervals": 0,
+            "partial_time_rows": 0,
+            "hours_mismatch": 0,
+            "weekday_mismatch": 0,
+            "observed_at": "2026-09-21 21:46:57.565633+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

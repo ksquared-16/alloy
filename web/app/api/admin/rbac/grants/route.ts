@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
 /** GET: list permission_keys granted for org + role_key. Portal (admin/ops) or Users & Roles managers. */
 export async function GET(request: NextRequest) {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_READ);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT: replace all grants for org + role_key. Requires org admin or `settings.users_roles` permission. */
 export async function PUT(request: NextRequest) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -57,38 +60,130 @@ export async function PUT(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    const { data: activePerms } = await supabase
-        .from("permission_definitions")
-        .select("key")
-        .eq("is_active", true);
-    const validKeys = new Set((activePerms ?? []).map((p) => (p as { key: string }).key));
-    const invalid = permission_keys.filter((k) => !validKeys.has(k));
-    if (invalid.length > 0) {
-        return NextResponse.json({ error: `Invalid or inactive permission keys: ${invalid.join(", ")}` }, { status: 400 });
-    }
-
-    const { error: deleteErr } = await supabase
-        .from("role_permission_grants")
-        .delete()
+    // W-61 / `H3`: this handler validated one column of the composite key and not the other.
+    // `role_key` is FK-constrained, so an undefined role never produced a phantom grant — it
+    // produced a constraint error the operator could not read. The check belongs here so the
+    // rejection is stated, and it is made against the persisted row rather than against the
+    // retired default-role constant, which was the fifth role vocabulary.
+    const { data: roleRow, error: roleErr } = await supabase
+        .from("role_definitions")
+        .select("role_key")
         .eq("org_id", orgId)
-        .eq("role_key", role_key);
-
-    if (deleteErr) {
-        return NextResponse.json({ error: deleteErr.message }, { status: 500 });
+        .eq("role_key", role_key)
+        .eq("is_active", true)
+        .maybeSingle();
+    if (roleErr) {
+        return NextResponse.json(
+            { error: "Could not verify the role; the grants were not changed." },
+            { status: 500 },
+        );
+    }
+    if (!roleRow) {
+        return NextResponse.json({ error: `Invalid or inactive role_key: ${role_key}` }, { status: 400 });
     }
 
-    if (permission_keys.length > 0) {
-        const inserts = permission_keys.map((permission_key) => ({
-            org_id: orgId,
-            role_key,
-            permission_key,
-            allowed: true,
-        }));
-        const { error: insertErr } = await supabase.from("role_permission_grants").insert(inserts);
-        if (insertErr) {
-            return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    // Key validation is NOT performed here any more. It moved inside the transaction that writes,
+    // because a key deactivated between a check here and a write below was validated as live and
+    // written anyway. The RPC re-raises the same rejection, and it is mapped back to the same 400
+    // below, so the operator-visible contract is unchanged.
+
+    // W-28 / `S-12` / `T-23` — ONE database operation owns the transition.
+    //
+    // The history matters, because two earlier shapes were each better than the last and neither
+    // was atomic. It began as "delete every grant for the role, then insert the new set" as two
+    // untransacted statements, so a failed insert left the role holding ZERO grants. That became a
+    // fail-closed delta — read the current set, delete only the removals, upsert the additions,
+    // removals first — which bounded the blast radius to under-granting. But a delta computed in
+    // application code from a prior READ has a race no ordering can fix: two operators editing the
+    // same role each compute their removals against their own snapshot, the writes interleave, and
+    // the committed state matches NEITHER operator's intent.
+    //
+    // `replace_role_permission_grants` closes it. The function takes a row lock on the role before
+    // it reads anything, so concurrent replacements of the same role SERIALIZE — proven, not
+    // assumed: a second caller blocks until the first commits. Key validation moved inside that
+    // same transaction, so a key deactivated mid-flight can no longer be validated as live and
+    // written anyway. Delete and insert cannot half-happen.
+    //
+    // Authorization did not move. `requireUsersRolesManageAuth` above still decides WHO may ask;
+    // the function decides only WHAT the set becomes, and is `EXECUTE`-able by `service_role` alone.
+    // D2 — the actor and correlation the transaction owner records. Server-derived: the RPC refuses
+    // a change that names no actor, and a request body cannot name its own author.
+    const audit = accessMutationAudit(auth.access);
+    const { data: granted, error: replaceErr } = await supabase.rpc("replace_role_permission_grants", {
+        p_org_id: orgId,
+        p_role_key: role_key,
+        p_permission_keys: permission_keys,
+        p_actor_user_id: audit.actorUserId,
+        p_origin: audit.origin,
+        p_correlation_id: audit.correlationId,
+    });
+
+    if (replaceErr) {
+        // The function's rejections are re-raised as the same operator-visible 400s the route used
+        // to produce itself, so moving the check into the transaction changed nothing the operator
+        // sees. Anything else is a genuine failure and must not read as a partial success.
+        const message = replaceErr.message ?? "";
+        /*
+         * W-18 — the delegation ceiling refused this. The actor asked to introduce authority they do
+         * not hold, and the transaction owner rejected it before writing anything, so there is no
+         * partial grant set to explain. 403 rather than 400: the request was well-formed and the
+         * answer is about who is asking.
+         */
+        const unlinked = moneyCapableGrantRefusal(message);
+        if (unlinked) return NextResponse.json({ error: unlinked }, { status: 403 });
+        const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
+        if (beyond) {
+            return NextResponse.json(
+                {
+                    error:
+                        "You can only grant access you hold yourself. Not granted: "
+                        + beyond[1].split(",").join(", "),
+                    required_permission: beyond[1].split(",")[0],
+                },
+                { status: 403 },
+            );
         }
+        const invalid = message.match(/invalid_permission_keys:([^\s"]+)/);
+        if (invalid) {
+            return NextResponse.json(
+                { error: `Invalid or inactive permission keys: ${invalid[1].split(",").join(", ")}` },
+                { status: 400 },
+            );
+        }
+        if (/unknown_role_key:/.test(message)) {
+            return NextResponse.json({ error: `Invalid or inactive role_key: ${role_key}` }, { status: 400 });
+        }
+        return NextResponse.json(
+            { error: "The grants were not changed." },
+            { status: 500 },
+        );
     }
 
-    return NextResponse.json({ ok: true });
+/*
+ * W-13 — an authority change must reach the NEXT authoritative check, not the one after the cache
+ * expires.
+ *
+ * `adminShellContextCache` holds a resolved bundle per user for 120 seconds so navigation routes do
+ * not re-pay `resolveAdminAccessCore` at ~1.1s each. Its own docstring says mutations must not rely
+ * on it and names `invalidateAdminShellContextCache` as the hook for logout and org switch — and
+ * nothing in the tree had ever called it. So a grant edit took effect somewhere between immediately
+ * and two minutes later, depending on when the affected operator last loaded a page.
+ *
+ * That was survivable while the cache held only capabilities: a stale capability set is a stale
+ * screen. W-13 put ADMISSION in the same bundle, so the same staleness became *revoked access to
+ * the portal that still opens*, which is the one thing the revocation proof has to rule out.
+ *
+ * Cleared wholesale rather than per user, because a role's grants belong to every principal holding
+ * that role and this route does not know who they are. A role edit is an administrator action taken
+ * a few times a day; the cost is that those operators re-resolve once.
+ */
+    invalidateAdminShellContextCache();
+
+    // The function returns the resulting set. Echoing it means the operator's next render is the
+    // state the database committed, not the state the client hoped for.
+    const resulting = Array.isArray(granted)
+        ? (granted as { granted_permission_key: string }[]).map((r) => r.granted_permission_key)
+        : [];
+
+    return NextResponse.json({ ok: true, permission_keys: resulting });
 }

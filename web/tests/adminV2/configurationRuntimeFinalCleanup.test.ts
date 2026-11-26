@@ -29,25 +29,25 @@ describe("Configuration Runtime final ownership cleanup", () => {
         expect(labels).toContain("Automation");
     });
 
-    it("Actions route uses internal definition catalog page", () => {
-        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("ActionDefinitionCatalogPage");
-        expect(read("components/adminV2/settings/actions/ActionDefinitionCatalogPage.tsx")).toContain(
-            "action-definition-catalog-page",
-        );
-        expect(CONFIGURATION_MODE_INTERNAL_NAV_ITEMS.some((i) => i.href.includes("/actions"))).toBe(true);
+    it("Actions route uses configuration shell wrapper", () => {
+        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
+        expect(read("app/adminV2/settings/actions/page.tsx")).not.toContain("ConfigurationPatternPlaceholder");
     });
 
-    it("sidebar renders grouped Configuration nav without Actions", () => {
+    it("sidebar renders grouped Configuration nav without Actions or Financials", () => {
         const sidebar = read("app/adminV2/components/SidebarConfigurationModeNav.tsx");
         expect(sidebar).toContain("CONFIGURATION_MODE_NAV_GROUPS");
         expect(sidebar).not.toContain("config-mode-nav-actions");
+        expect(sidebar).not.toContain("config-mode-nav-financials");
+        expect(sidebar).toContain("config-mode-nav-settings-home");
     });
 
-    it("Access page shows people-first queue rows", () => {
-        const access = read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx");
-        expect(access).toContain('title="Access"');
-        expect(access).toContain("wrapTitle");
-        expect(access).toContain("memberSubtitle");
+    it("Access page uses Platform Configuration shell with the Access product workspace", () => {
+        const wrapper = read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx");
+        expect(wrapper).toContain("AccessWorkspaceSurface");
+        const surface = read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx");
+        expect(surface).toContain("ConfigurationShell");
+        expect(surface).toContain('title="Access"');
     });
 
     it("login page has password visibility toggle", () => {

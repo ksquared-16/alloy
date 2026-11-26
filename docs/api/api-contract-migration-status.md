@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy API Contract Migration Status
 
 > Internal-consistency tracker for the Alloy API contract. OpenAPI is intentionally

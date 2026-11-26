@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FIELDS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
@@ -10,6 +11,10 @@ import {
     isReservedInquiryChildFieldKey,
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import { isReservedCustomerMemberFieldKey } from "@/lib/fields/customerMemberFieldRegistry";
+import {
+    EMPLOYMENT_ENTITY_TYPE,
+    isReservedEmploymentFieldKey,
+} from "@/lib/employment/employmentFieldRegistry";
 
 const ALLOWED_ENTITY_TYPES = FIELD_DEFINITION_ENTITY_TYPES;
 
@@ -88,9 +93,8 @@ export async function POST(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, FIELDS_MANAGE);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {
@@ -125,6 +129,13 @@ export async function POST(request: NextRequest) {
     if (entity_type === "customer_member" && isReservedCustomerMemberFieldKey(field_key)) {
         return NextResponse.json(
             { error: `field_key '${field_key}' is reserved for a native or system customer member field` },
+            { status: 400 }
+        );
+    }
+
+    if (entity_type === EMPLOYMENT_ENTITY_TYPE && isReservedEmploymentFieldKey(field_key)) {
+        return NextResponse.json(
+            { error: `field_key '${field_key}' is reserved for a native employment field` },
             { status: 400 }
         );
     }

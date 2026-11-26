@@ -3,11 +3,14 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
+import { isTourSlotCapacityConflict } from "@/lib/tours/bookings/tourSlotCapacity";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
 import { parseTourManualLocalDateTime } from "@/lib/tours/bookings/parseTourManualLocalDateTime";
 import { resolveTourLocationSlotDurationMinutes } from "@/lib/tours/availability/resolveTourLocationSlotDurationMinutes";
 import { resolveTourLocationTimezone } from "@/lib/tours/availability/resolveTourLocationTimezone";
 import { assertBookingLocationMatchesOpportunity, fetchOpportunityForTourAdmin } from "@/lib/tours/admin/opportunityTourContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { TOURS_BOOK, requireToursCapability } from "@/lib/access/toursAuthority";
 
 type Body = {
     opportunity_id?: string;
@@ -27,8 +30,17 @@ type Body = {
  * Org scope comes from admin session; opportunity/location are validated via DB reads (`fetchOpportunityForTourAdmin`), not queue payloads.
  */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    /*
+     * TOURS BOOKING — books a tour for one family.
+     *
+     * `requireAdminOrOps()` stood here, and despite its name it resolves PORTAL
+     * ADMISSION and no role: every principal who could enter the portal could do this.
+     * `tours.book` is the authority now, held by grant and by nothing else.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireToursCapability(access, TOURS_BOOK);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
@@ -98,6 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     const approvalRequired = Boolean(body.approval_required);
+
     const input: CreateTourBookingInput = {
         orgId: ctx.orgId,
         opportunityId,
@@ -111,7 +124,6 @@ export async function POST(request: NextRequest) {
         primaryContactId: oppRes.row.primary_contact_id,
         approvalRequired,
         initialStatus: body.initial_status,
-        metadata: {},
     };
 
     try {
@@ -119,6 +131,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ booking: row }, { status: 201 });
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        // Another booking took the last seat between availability and write.
+        if (isTourSlotCapacityConflict(e)) {
+            return NextResponse.json({ error: "That time is no longer available.", code: "SLOT_UNAVAILABLE" }, { status: 409 });
+        }
         return NextResponse.json({ error: msg }, { status: 400 });
     }
 }

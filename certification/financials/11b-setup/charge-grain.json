@@ -1,0 +1,20 @@
+{
+  "queue": 21,
+  "results": {
+    "Certa": {
+      "arrangementScope": null,
+      "hasConfigurePanel": false,
+      "responsibility": "responsibility → / 1 responsible party from Sep 19, 2026. This charge is not divided under it yet. / RESPONSIBILITY ARRANGEMENT / Cert Certhouse / $25.00 / Expected funding — none. / Manage expected funding → / HISTORY / Charge is for / Aug 26, 2026 / COLLECTION / Outstand",
+      "posting": "Billing period September 2026 · next October 2026 / Recommended / $1,450.00/monthly / Program · Preschool / Attendance · full_time / Schedule · any / Billed · monthly / Organisation default / Effective 2026-07-01 / Accept tuition / Certa Certhouse / Program · school_age / Attendanc"
+    },
+    "Certb": {
+      "arrangementScope": null,
+      "hasConfigurePanel": false,
+      "responsibility": "responsibility → / 1 responsible party from Sep 18, 2026. This charge is not divided under it yet. / RESPONSIBILITY ARRANGEMENT / Cert Certhouse / $18.00 / Expected funding — none. / Manage expected funding → / HISTORY / Charge is for / Sep 1, 2026 / COLLECTION / Outstandi",
+      "posting": "Billing period September 2026 · next October 2026 / Recommended / $1,450.00/monthly / Program · Preschool / Attendance · full_time / Schedule · any / Billed · monthly / Organisation default / Effective 2026-07-01 / Accept tuition / Certa Certhouse / Program · school_age / Attendanc"
+    },
+    "Household (no child)": {
+      "missing": true
+    }
+  }
+}

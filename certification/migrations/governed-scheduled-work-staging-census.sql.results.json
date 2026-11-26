@@ -1,0 +1,46 @@
+{
+  "trusted_host_action_id": "tha_92a66b60707b38",
+  "query_hash": "c5df7941302175fc0f19461641e20e6002fabe2183ed9c032a1aec12feb4c09b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T17:52:44.075Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_92a66b60707b38",
+    "query_hash": "c5df7941302175fc0f19461641e20e6002fabe2183ed9c032a1aec12feb4c09b",
+    "authorization_id": "grnt_34ea6e676c9f4af9",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T17:52:46.093Z",
+    "question_ids": [
+      "gsw1"
+    ],
+    "questions": {
+      "gsw1": {
+        "question_id": "gsw1",
+        "row_count": null,
+        "rows": [
+          {
+            "tbl_scheduled_work": true,
+            "tbl_occurrences": true,
+            "tbl_attempts": true,
+            "rls_scheduled_work": true,
+            "rls_occurrences": true,
+            "rls_attempts": true,
+            "grants_to_authenticated_anon": 0,
+            "identity_unique_index": true,
+            "occurrence_columns": 6,
+            "attempt_columns": 4,
+            "ledger_20260929120000": true,
+            "employments_control": 4
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

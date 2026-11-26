@@ -1,6 +1,6 @@
 # Communications V1 — Staging-safe provider bindings (setup card)
 
-**Source sprint context:** [`docs/Sprints/05_2026/Communications.txt`](../../Sprints/05_2026/Communications.txt)
+**Source sprint context:** `docs/Sprints/05_2026/Communications.txt` (`../../Sprints/05_2026/Communications.txt`)
 
 This card is staging-oriented: placeholders only, **no production behavior changes**, **no real secrets**, and **leave `COMMUNICATION_DUAL_WRITE` unset/false**.
 

@@ -1,0 +1,138 @@
+{
+  "trusted_host_action_id": "tha_b3d2af4c793b51",
+  "query_hash": "61928931da887f8a41d90c407968511f7c2ac45703c97d9c1ca0434706a0df7d",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T16:54:41.659Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b3d2af4c793b51",
+    "query_hash": "61928931da887f8a41d90c407968511f7c2ac45703c97d9c1ca0434706a0df7d",
+    "authorization_id": "grnt_409862dae0944e02",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T16:54:47.184Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q4"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2",
+              "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+            ],
+            "location_count": 2,
+            "live_agreements": 4,
+            "spans_locations": true
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2",
+              "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+            ],
+            "location_count": 2,
+            "live_agreements": 2,
+            "spans_locations": true
+          },
+          {
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2"
+            ],
+            "location_count": 1,
+            "live_agreements": 5,
+            "spans_locations": false
+          },
+          {
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2"
+            ],
+            "location_count": 1,
+            "live_agreements": 1,
+            "spans_locations": false
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0001",
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2"
+            ],
+            "location_count": 1,
+            "live_agreements": 1,
+            "spans_locations": false
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "location_ids": [
+              "ae34d822-60ef-4f82-81eb-8f3513059627"
+            ],
+            "location_count": 1,
+            "live_agreements": 1,
+            "spans_locations": false
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2"
+            ],
+            "location_count": 1,
+            "live_agreements": 1,
+            "spans_locations": false
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "location_ids": [
+              "ae34d822-60ef-4f82-81eb-8f3513059627"
+            ],
+            "location_count": 1,
+            "live_agreements": 1,
+            "spans_locations": false
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "households": 6
+          },
+          {
+            "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "households": 2
+          },
+          {
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "households": 2
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "existing_billing_periods": 0
+          }
+        ]
+      }
+    },
+    "row_count": 12
+  }
+}

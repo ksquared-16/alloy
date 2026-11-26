@@ -1,7 +1,8 @@
-import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemScheduleFieldsPage() {
-    return <EntityFieldsClient entityType="schedule" title="Schedule Fields" />;
+/** Legacy route — schedule field settings route to Platform Configuration → Fields. */
+export default function AdminSystemScheduleFieldsRedirectPage() {
+    redirect("/settings/fields");
 }

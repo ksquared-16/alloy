@@ -1,0 +1,14 @@
+{
+  "published": {
+    "id": "a7ec300e-cbe2-451d-b4fe-c7e47e3f2afc",
+    "version": 129
+  },
+  "schedulingVisibility": "visible",
+  "areaCards": [
+    "current_work",
+    "billing_preview",
+    "children",
+    "household",
+    "scheduling"
+  ]
+}

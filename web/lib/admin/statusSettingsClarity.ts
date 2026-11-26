@@ -30,19 +30,19 @@ export const STATUS_DRAWER_SOURCE_TAG_LABELS: Record<StatusDrawerSourceTag, stri
 
 /** Operator-facing Settings → Statuses section titles (tenant labels may override via entity labels). */
 export const STATUS_SETTINGS_SECTION_TITLES: Record<string, string> = {
-    opportunities: "Lead / Case Statuses",
-    opportunity_customer_members: "Enrollment Statuses",
+    opportunities: "Lead Statuses",
+    opportunity_customer_members: "Enrollment Participation",
     persons: "People Statuses",
 };
 
 /** Section descriptions — what each Settings entity type controls. */
 export const STATUS_SETTINGS_SECTION_DESCRIPTIONS: Record<string, string> = {
     opportunities:
-        "Opportunity case container state — Open, Closed, Inactive, Archived. Not enrollment pipeline movement.",
+        "Lead durable state — Open, Closed. Stage position (New Lead / Tour / Decision) lives in the Business Process, not here.",
     persons:
         "Profile and identity statuses on people records. Stage rollups are assigned in Business Processes when needed.",
     opportunity_customer_members:
-        "Enrollment process movement — pipeline and disposition labels. Stage rollups are assigned in Business Processes.",
+        "Child enrollment participation — Waitlisted, Enrolling, Enrolled, Withdrawn, Not Enrolling. Work and stage movement live in the Business Process.",
 };
 
 /** Default section tags shown at entity-type level. */

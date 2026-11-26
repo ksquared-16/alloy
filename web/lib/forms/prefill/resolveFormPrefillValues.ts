@@ -1,3 +1,4 @@
+import { isPersonContactFactKey, readPersonContactFacts } from "@/lib/fields/personContactFacts/personContactFacts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
 import {
@@ -10,6 +11,8 @@ import {
     PREFILL_SOURCE_PATH_RE,
 } from "@/lib/forms/prefill/prefillFieldMap";
 import { buildCanonicalPrefillFieldMap } from "@/lib/forms/prefill/canonicalPrefillMap";
+import { buildRelationshipPrefillFieldMap } from "@/lib/forms/prefill/formsRelationshipPrefillMap";
+import { resolveFormsRelationshipPrefillValues } from "@/lib/forms/prefill/formsRelationshipPrefillResolver";
 import {
     CONTACT_COMPAT_SELECT,
     CUSTOMER_CANONICAL_ADMIN_SELECT,
@@ -71,8 +74,9 @@ export async function resolveFormPrefillValues(
     // match the legacy prefill_field_map keys (e.g. a child Name/DOB bound to customer_member).
     // The explicit prefill_field_map still wins on conflicts.
     const canonical = buildCanonicalPrefillFieldMap(schema);
+    const relationship = buildRelationshipPrefillFieldMap(schema);
     const explicit = mergeDefinitionAndLinkPrefillMaps(formDefinitionMetadata ?? null, linkMetadata) ?? {};
-    const combined = { ...canonical, ...explicit };
+    const combined = { ...canonical, ...relationship, ...explicit };
     if (Object.keys(combined).length === 0) return {};
 
     const allowed = collectScalarFormFieldIds(schema);
@@ -163,6 +167,15 @@ export async function resolveFormPrefillValues(
                 .maybeSingle();
             if (error) throw new Error(error.message);
             personRow = (data as Record<string, unknown>) ?? null;
+            // The adult's work and contact facts live as person field values, not columns. Read only
+            // when the form asks for one, and only for the adult already resolved above.
+            const wantsFacts = Object.values(map).some((path) => {
+                const col = path.match(PREFILL_SOURCE_PATH_RE)?.[2];
+                return path.startsWith("person.") && col !== undefined && isPersonContactFactKey(col);
+            });
+            if (personRow && wantsFacts) {
+                personRow = { ...(await readPersonContactFacts(supabase, { orgId, personId })), ...personRow };
+            }
         }
     }
 
@@ -221,6 +234,16 @@ export async function resolveFormPrefillValues(
         const s = typeof raw === "string" ? raw : String(raw);
         const t = s.trim();
         if (t.length > 0) values[fieldId] = t;
+    }
+
+    const canonicalRelationship = await resolveFormsRelationshipPrefillValues(
+        supabase,
+        orgId,
+        schema,
+        launchFks,
+    );
+    for (const [fieldId, value] of Object.entries(canonicalRelationship.values)) {
+        values[fieldId] = value;
     }
 
     return values;

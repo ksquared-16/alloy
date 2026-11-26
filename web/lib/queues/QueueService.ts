@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { applyWorkUnitScopeToOpportunityQuery } from "@/lib/queues/workUnitLeadMembership";
 import { attachStageWorkRuntimeToOpportunityQueueRows } from "@/lib/lifecycle/attachStageWorkRuntimeToQueueRows";
+import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
 import { isLayoutRuntimeOpportunityQueueBodyEnabledServer } from "@/lib/layout/featureFlag";
 import type { QueueConfig, QueueDefinitionV1, QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
@@ -48,7 +50,11 @@ import {
     assertLifecycleStageOpportunityQueryHasStatusFilters,
     LifecycleStageQueueFiltersEmptyError,
 } from "@/lib/lifecycle/lifecycleStageQueueFilters";
-import { resolveWorkUnitRowListUi } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import {
+    resolveWorkUnitRowListUi,
+    isLifecycleStageWorkUnitKey,
+    stageKeyFromLifecycleWorkUnitMetadata,
+} from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import {
     fetchEffectiveStatusDefinitions,
     fetchEffectiveStatusDefinitionsTagged,
@@ -76,6 +82,8 @@ import {
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { loadLocationProgramCategoriesForOrg } from "@/lib/locations/loadLocationProgramCategoriesForOrg";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import { projectResolvedProfilePhotosOntoInquiryChildrenRows } from "@/lib/documents/projectPersonProfilePhotos";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
@@ -111,7 +119,7 @@ import {
 } from "@/lib/adminV2/bos/recommendations/adapters/buildLegacySuggestionCompat";
 import { projectOperationalRecommendationQueuePreview } from "@/lib/adminV2/bos/recommendations/adapters/projectOperationalRecommendationQueuePreview";
 import { tryBuildOperationalRecommendationFromAttention } from "@/lib/adminV2/bos/recommendations/adapters/tryBuildOperationalRecommendationFromAttention";
-import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/ai/buildOperationalSummary";
+import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/operationalSummary/buildOperationalSummary";
 import { childDesiredStartSummaryFromOcmRows } from "@/lib/ui-v2/childDesiredStartQueuePresentation";
 import {
     buildOpportunityChildLifecycleSummary,
@@ -151,6 +159,7 @@ import {
     buildStageAttentionStatusKeyOrBranches,
     resolveStageAttentionCandidateStatusKeys,
 } from "@/lib/lifecycle/resolveStageAttentionCandidateStatusKeys";
+import { processMap } from "@/lib/perf/processCache";
 
 type JobRowPreview = {
     id: string;
@@ -570,6 +579,44 @@ function buildOpportunityPlan(
     return { ops, sort, calendar_meta: useCalendarMeta ? resolved.calendar_meta : undefined };
 }
 
+/**
+ * Lifecycle stage work units (and case-grain builder membership) select by persisted
+ * `opportunities.stage_key` after enrollment status collapse. Legacy lane status filters
+ * (`open` / `tour_scheduled`) must not empty the lane when the family is already on the stage.
+ *
+ * Exception — Tour lane: membership is active `tour_bookings` (operational fact), so
+ * Waitlist subjects with a booked Tour overlap Tours without leaving Waitlist.
+ */
+function applyLifecycleStageOpportunityOps(
+    ops: OpportunityQueryPlanOp[],
+    params: {
+        membership: OpportunityQueueLaneRouting["builderMembership"];
+        workUnitMetadata: unknown | null;
+        workUnitKey: string | null;
+    },
+): OpportunityQueryPlanOp[] {
+    let stageKey = "";
+    if (params.membership?.subject_type === "case") {
+        stageKey = String(params.membership.stage_key ?? "").trim();
+    }
+    if (!stageKey) {
+        stageKey = stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata)?.trim() ?? "";
+    }
+    if (!stageKey && isLifecycleStageWorkUnitKey(params.workUnitKey)) {
+        stageKey = String(params.workUnitKey).slice("lifecycle_wu_".length).trim();
+    }
+    const isLifecycleWu =
+        isLifecycleStageWorkUnitKey(params.workUnitKey)
+        || Boolean(stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata));
+    if (!stageKey || !isLifecycleWu) return ops;
+
+    const withoutStatus = ops.filter((op) => !(op.kind === "in" && op.column === "status_key"));
+    if (withoutStatus.some((op) => op.kind === "eq" && op.column === "stage_key")) {
+        return withoutStatus;
+    }
+    return [{ kind: "eq", column: "stage_key", value: stageKey }, ...withoutStatus];
+}
+
 function jobFilterToOps(f: QueueFilter, dayBounds: OrgLocalDayUtcBounds): JobQueryPlanOp[] {
     switch (f.type) {
         case "status": {
@@ -789,10 +836,9 @@ function inquiryProgramSecondaryFromRow(
 ): string | null {
     const row = raw as Record<string, unknown>;
     const fromOcm = resolveInquiryChildProgramCategoryLabel({
-        desired_program_category_id:
-            typeof row.desired_program_category_id === "string" ? row.desired_program_category_id : null,
-        desired_program_type:
-            typeof row.desired_program_type === "string" ? row.desired_program_type : null,
+        program_category_id:
+            typeof row.program_category_id === "string" ? row.program_category_id : null,
+        program_key: typeof row.program_key === "string" ? row.program_key : null,
         location_id: typeof row.location_id === "string" ? row.location_id : null,
         desired_program_label:
             typeof row.desired_program_label === "string" ? row.desired_program_label : null,
@@ -812,7 +858,7 @@ function inquiryProgramSecondaryFromRow(
 
 /**
  * Legacy metadata.inquiry_children program overlay — only for rows without OCM placement on the member.
- * OCM `desired_program_type` from enrich batch is authoritative for linked customer_members.
+ * OCM `program_category_id` from enrich batch is authoritative for linked customer_members.
  */
 function mergeInquiryChildrenIntoMemberStructuredLines(
     lines: { primary: string; secondary: string | null }[],
@@ -828,7 +874,7 @@ function mergeInquiryChildrenIntoMemberStructuredLines(
         const memberId = String(row.customer_member_id ?? "").trim();
         if (memberId && !memberId.startsWith("metadata_child:")) {
             const ocm = ocmByMemberId.get(memberId);
-            if (String(ocm?.desired_program_type ?? "").trim()) continue;
+            if (String(ocm?.program_category_id ?? "").trim()) continue;
         }
         const disp =
             typeof row.display_name === "string" ? row.display_name.trim().replace(/\s+/g, " ").toLowerCase() : "";
@@ -1154,7 +1200,7 @@ async function enrichOpportunityRows(params: {
      * CRM compact children always load from `customer_members` (relationship `child`, `is_active`)
      * via `opportunities.customer_id`. `enrichment` still controls other payload shaping / perf logging.
      */
-    enrichment?: "full" | "queue_preview" | "queue_list" | "queue_reveal";
+    enrichment?: "full" | "queue_preview" | "queue_list" | "queue_reveal" | "count_only";
     /** Bootstrap / reveal: skip tour_bookings + OCM desired-start batch fetches. */
     skipOptionalEnrichmentFetches?: boolean;
     /**
@@ -1186,6 +1232,10 @@ async function enrichOpportunityRows(params: {
     } | null;
     /** Builder stage key for stage-scoped queue lanes (used for stage work runtime projection). */
     queueStageKey?: string | null;
+    /** Access / workspace location scope for Effective Process Position rollup. */
+    allowedLocationIds?: readonly string[] | null;
+    /** When set, batch-resolves child profile photos onto `_inquiry_children` (no N+1). */
+    documentActor?: DocumentActor | null;
 }): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
     const {
         supabase,
@@ -1198,6 +1248,7 @@ async function enrichOpportunityRows(params: {
         viewerDisplayTimeZoneIana: viewerTzRaw,
         opportunityAttentionResolution,
         skipOptionalEnrichmentFetches = false,
+        documentActor = null,
     } = params;
     const displayTz = typeof viewerTzRaw === "string" && viewerTzRaw.trim() ? viewerTzRaw.trim() : UTC_FALLBACK_IANA;
     const previewLite =
@@ -1332,7 +1383,7 @@ async function enrichOpportunityRows(params: {
                   supabase
                       .from("opportunity_customer_members")
                       .select(
-                          "opportunity_id, customer_member_id, location_id, desired_start_date, desired_program_type, desired_program_category_id, customer_members(id, person_id, display_name, first_name, last_name, dob)",
+                          "opportunity_id, customer_member_id, location_id, start_date, program_category_id, location_program_categories(key, label), customer_members(id, person_id, display_name, first_name, last_name, dob)",
                       )
                       .eq("org_id", orgId)
                       .in("opportunity_id", opportunityIds as any)
@@ -1363,7 +1414,7 @@ async function enrichOpportunityRows(params: {
         if (label) locationLabelById.set(id, label);
     }
 
-    const ocmDesiredStartByOpportunityId = new Map<string, { desired_start_date?: string | null }[]>();
+    const ocmDesiredStartByOpportunityId = new Map<string, { start_date?: string | null }[]>();
     const ocmChildPersonLinesByOpportunityId = new Map<string, QueueRowOcmChildPersonLine[]>();
     const ocmPlacementRows: QueueOcmPlacementRow[] = [];
     for (const raw of (ocmDesiredStartTimed.v as { data?: unknown[] | null }).data ?? []) {
@@ -1371,24 +1422,31 @@ async function enrichOpportunityRows(params: {
             opportunity_id?: string;
             customer_member_id?: string;
             location_id?: string | null;
-            desired_start_date?: string | null;
-            desired_program_type?: string | null;
-            desired_program_category_id?: string | null;
+            start_date?: string | null;
+            program_category_id?: string | null;
+            location_program_categories?:
+                | { key?: string | null; label?: string | null }
+                | Array<{ key?: string | null; label?: string | null }>
+                | null;
             customer_members?: unknown;
         };
         const oid = String(row.opportunity_id ?? "").trim();
         if (!oid) continue;
         const list = ocmDesiredStartByOpportunityId.get(oid) ?? [];
-        list.push({ desired_start_date: row.desired_start_date ?? null });
+        list.push({ start_date: row.start_date ?? null });
         ocmDesiredStartByOpportunityId.set(oid, list);
         const memberId = String(row.customer_member_id ?? "").trim();
         if (memberId) {
+            const embeddedCategory = Array.isArray(row.location_program_categories)
+                ? (row.location_program_categories[0] ?? null)
+                : (row.location_program_categories ?? null);
             ocmPlacementRows.push({
                 opportunity_id: oid,
                 customer_member_id: memberId,
                 location_id: String(row.location_id ?? "").trim() || null,
-                desired_program_type: String(row.desired_program_type ?? "").trim() || null,
-                desired_program_category_id: String(row.desired_program_category_id ?? "").trim() || null,
+                program_key: String(embeddedCategory?.key ?? "").trim() || null,
+                program_label: String(embeddedCategory?.label ?? "").trim() || null,
+                program_category_id: String(row.program_category_id ?? "").trim() || null,
             });
         }
         const childLine = parseOcmChildPersonLinesFromBatchRow(row as Record<string, unknown>);
@@ -1399,7 +1457,14 @@ async function enrichOpportunityRows(params: {
         }
     }
     const ocmPlacementByOpportunityId = indexOcmPlacementByOpportunityAndMember(ocmPlacementRows);
-    const locationProgramCategories = await loadLocationProgramCategoriesForOrg(supabase, orgId);
+    // Program-category labels only feed program strings on `_crm_compact_children` / `_requested_program`
+    // (stripped from the condensed reveal wire) or placement/location display. The condensed rail skips
+    // locations + ocmDesiredStart, so this org-wide lookup is pure waste there — gate it. (Previously an
+    // unconditional serial await inside enrichment, part of the ~222ms gap.)
+    const needsProgramCategoryLabels = batch.locations || batch.ocmDesiredStart || enrichment === "full";
+    const locationProgramCategories = needsProgramCategoryLabels
+        ? await loadLocationProgramCategoriesForOrg(supabase, orgId)
+        : [];
     const placementOptionLabelLookup =
         ocmPlacementRows.length > 0
             ? await buildChildcarePlacementOptionLabelLookup(supabase, orgId, ocmPlacementRows)
@@ -1501,7 +1566,7 @@ async function enrichOpportunityRows(params: {
                   async () => {
                       const { data } = await supabase
                           .from("persons")
-                          .select("id, date_of_birth")
+                          .select("id, date_of_birth, metadata")
                           .eq("org_id", orgId)
                           .in("id", childPersonIdsToFetch as any);
                       return data ?? [];
@@ -1509,15 +1574,24 @@ async function enrichOpportunityRows(params: {
               )
             : ([] as any[]);
     const childDobByPersonId = new Map<string, string>();
+    const childMetadataByPersonId = new Map<string, Record<string, unknown> | null | undefined>();
     for (const p of (childPersons ?? []) as any[]) {
         const id = String(p.id ?? "").trim();
         const dob = String(p.date_of_birth ?? "").trim();
         if (id && dob) childDobByPersonId.set(id, dob);
+        if (id) {
+            childMetadataByPersonId.set(
+                id,
+                p.metadata && typeof p.metadata === "object" && !Array.isArray(p.metadata)
+                    ? (p.metadata as Record<string, unknown>)
+                    : null,
+            );
+        }
     }
     const childResolutionMs = Date.now() - tChild0;
 
     const tMap0 = Date.now();
-    const mapped = rows.map((r) => {
+    let mapped = rows.map((r) => {
         const pid = (r as unknown as { primary_person_id?: string | null }).primary_person_id ?? null;
         const person = pid ? personById.get(pid) : null;
         const contact = r.primary_contact_id ? contactById.get(r.primary_contact_id) : null;
@@ -1575,6 +1649,7 @@ async function enrichOpportunityRows(params: {
                 .filter(Boolean);
             programsDisplay = [...new Set(secondaryParts)].join(" · ") || null;
             // Household children + OCM are authoritative; do not overlay stale opportunity.metadata.inquiry_children.
+            // `desired_start_date` is the opportunity-level legacy metadata key — not the OCM column.
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
         } else if (inquiryChildren.length > 0) {
             const names: string[] = [];
@@ -1607,11 +1682,13 @@ async function enrichOpportunityRows(params: {
                 programsDisplay && ageGroup
                     ? `${programsDisplay} · ${ageGroup}`
                     : programsDisplay ?? opportunityProgramLineFromMetadata(md);
+            // `desired_start_date` is the opportunity-level legacy metadata key — not the OCM column.
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
         } else {
             childDisplay = null;
             programsDisplay = typeof md?.program_label === "string" ? md.program_label.trim() : null;
             programCombined = opportunityProgramLineFromMetadata(md);
+            // `desired_start_date` is the opportunity-level legacy metadata key — not the OCM column.
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
         }
 
@@ -1778,7 +1855,7 @@ async function enrichOpportunityRows(params: {
                 : {}),
             ...(inquiryChildren.length > 0 ? { _inquiry_children: inquiryChildren } : {}),
             _requested_program: programsDisplay ?? programCombined,
-            _desired_start_date: desiredStart,
+            _start_date: desiredStart,
             _child_desired_start_summary: childDesiredStartSummary,
             ...(childLifecycleSummary
                 ? {
@@ -1824,6 +1901,16 @@ async function enrichOpportunityRows(params: {
                 : {}),
         };
     });
+    // Batch profile-photo projection onto `_inquiry_children` (person_id keyed) before row context attach.
+    if (documentActor?.ok) {
+        mapped = (await projectResolvedProfilePhotosOntoInquiryChildrenRows({
+            supabase,
+            orgId,
+            actor: documentActor,
+            rows: mapped as Array<Record<string, unknown>>,
+            metadataByPersonId: childMetadataByPersonId,
+        })) as typeof mapped;
+    }
     // QueueRowContext attached on API return via withOpportunityQueueRowContext (QueueService finalize paths).
     const mapMs = Date.now() - tMap0;
     const enrichMs = Date.now() - tEnrich0;
@@ -1888,10 +1975,28 @@ async function enrichOpportunityRows(params: {
             departmentMetadata: deptMeta,
             queueStageKey: params.queueStageKey ?? null,
         });
-        return { rows: withStageRuntime, queueListSubtimings };
+        return {
+            rows: await attachEffectiveEnrollmentStagesToOpportunityRows({
+                supabase,
+                orgId,
+                rows: withStageRuntime,
+                allowedLocationIds: params.allowedLocationIds,
+                logLabel: "queue",
+            }),
+            queueListSubtimings,
+        };
     }
 
-    return { rows: mapped, queueListSubtimings };
+    return {
+        rows: await attachEffectiveEnrollmentStagesToOpportunityRows({
+            supabase,
+            orgId,
+            rows: mapped,
+            allowedLocationIds: params.allowedLocationIds,
+            logLabel: "queue",
+        }),
+        queueListSubtimings,
+    };
 }
 
 function buildOpportunityNeedsAttentionOrExpr(now: Date, minLifecycleStaleHours: number = defaultMinLifecycleStaleHours()): string {
@@ -1967,11 +2072,11 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(
 export const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
 
 const NEEDS_ATTENTION_OPPORTUNITY_SELECT_DEFAULT =
-    "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
+    "id, name, status_key, stage_key, stage_entered_at, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
 
 /** Dept bucket / count paths — same resolver fields, smaller row payload. */
 export const NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL =
-    "id, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at";
+    "id, status_key, stage_key, stage_entered_at, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at";
 
 /**
  * When queue summaries only need counts (department cards), use a smaller cap so we do not pull 5k rows
@@ -2311,7 +2416,7 @@ type WorkUnitQueueDefinitionCacheEntry = {
     departmentId: string | null;
     workUnitKey: string | null;
 };
-const WU_QUEUE_DEF_CACHE = new Map<string, WorkUnitQueueDefinitionCacheEntry>();
+const WU_QUEUE_DEF_CACHE = processMap<string, WorkUnitQueueDefinitionCacheEntry>("wu_queue_def");
 const WU_QUEUE_DEF_TTL_MS = 90_000;
 const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
@@ -2341,7 +2446,12 @@ function resolveOpportunityQueueScopeBundle(params: {
     return { scope, departmentWorkUnitIds: [params.workUnitId] };
 }
 
-async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
+/**
+ * Exported so the MANUAL-POSITION WRITER can rank against the same definition the renderer used.
+ * The writer must never derive its own notion of the queue; see
+ * `loadWaitlistSectionOrder`, which is the only other caller outside this module.
+ */
+export async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
     def: QueueDefinitionV1;
     normalized: NormalizedQueueDefinitionDocument;
     cacheHit: boolean;
@@ -2621,7 +2731,7 @@ export async function getWorkUnitQueueSummaries(params: {
     /**
      * When false, omit preview rows and skip enrichment (department KPI cards only need counts).
      * Opportunity `needs_attention` uses a capped candidate fetch (see `opportunity_needs_attention_semantics`
-     * on the returned summary and `docs/system/workspace-system.md`).
+     * on the returned summary and `docs/archive/2026-06-superseded-system/workspace-system.md`).
      */
     includePreviews?: boolean;
     /** Optional label for [queue-perf] logs (e.g. department id). */
@@ -2641,6 +2751,8 @@ export async function getWorkUnitQueueSummaries(params: {
     recordScopeConstraints?: RecordScopeConstraints | null;
     /** Restricted viewer scope could not resolve any rows — return zeroed summaries (never org-wide). */
     recordScopeImpossible?: boolean;
+    /** Admin document actor for request-scoped child profile-photo projection on summary previews. */
+    documentActor?: DocumentActor | null;
 }): Promise<WorkUnitQueueSummariesResult> {
     const includePreviews = params.includePreviews !== false;
     const countSel = queueCountSelect(params.countAccuracy);
@@ -2899,6 +3011,7 @@ export async function getWorkUnitQueueSummaries(params: {
             withOpportunityQueueRowContext(
                 preview,
                 opportunityRowContextLaneWithBuilderMembership(rowContextLane, laneRouting.builderMembership),
+                { allowedLocationIds: scopeFilter?.locationIds ?? null },
             );
         const ocmTrackLaneCtx = laneRouting.ocmTrackLaneCtx;
         if (ocmTrackLaneCtx) {
@@ -2947,6 +3060,8 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
                             viewerDisplayTimeZoneIana: viewerPreviewIana,
@@ -3042,6 +3157,8 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
                             viewerDisplayTimeZoneIana: viewerPreviewIana,
@@ -3124,6 +3241,8 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
                             viewerDisplayTimeZoneIana: viewerPreviewIana,
@@ -3164,7 +3283,11 @@ export async function getWorkUnitQueueSummaries(params: {
         let calendar_meta: QueueOperationalCalendarMeta | undefined;
         try {
             const plan = buildOpportunityPlan(q, refUtc, operationalDay);
-            ops = plan.ops;
+            ops = applyLifecycleStageOpportunityOps(plan.ops, {
+                membership: laneRouting.builderMembership,
+                workUnitMetadata,
+                workUnitKey,
+            });
             sort = plan.sort;
             calendar_meta = plan.calendar_meta;
             guardLifecycleStageOpportunityQueryFilters({
@@ -3248,6 +3371,8 @@ export async function getWorkUnitQueueSummaries(params: {
             const { rows: preview } = await enrichOpportunityRows({
                 supabase,
                 orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                 rows: previewRows,
                 effectiveStatusDefs: preloadStatusDefs,
                 enrichment: "queue_preview",
@@ -3325,7 +3450,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const countQ = applyOpsToJobQuery(oppScopedCountBase() as never, ops);
         let previewQ0 = supabase
             .from("opportunities")
-            .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
+            .select("id, name, title, status_key, stage_key, stage_entered_at, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
             .eq("org_id", params.orgId);
         if (opportunityScopeBundle) {
             previewQ0 = applyOpportunityQueueWorkUnitScope(
@@ -3334,7 +3459,7 @@ export async function getWorkUnitQueueSummaries(params: {
                 opportunityScopeBundle.departmentWorkUnitIds
             );
         } else {
-            previewQ0 = previewQ0.eq("work_unit_id", params.workUnitId);
+            previewQ0 = applyWorkUnitScopeToOpportunityQuery(previewQ0, params.workUnitId);
         }
         const previewQ0Scoped = scopeFilter ? applyRecordScopeConstraintsToQuery(previewQ0 as never, scopeFilter) : (previewQ0 as never);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0Scoped as never, ops) as never, sort);
@@ -3360,6 +3485,8 @@ export async function getWorkUnitQueueSummaries(params: {
         const { rows: preview } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: previewRows,
             effectiveStatusDefs,
             enrichment: "queue_preview",
@@ -3553,7 +3680,20 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
             ? Promise.resolve({ data: null as null, error: null as null })
             : supabase
                   .from("work_units")
-                  .select("id")
+                  /**
+                   * Selects the WHOLE row, not just `id`, so the per-work-unit summary below can be
+                   * handed its queue definition instead of fetching its own.
+                   *
+                   * `workUnitPreloadById` already existed for exactly this and no caller supplied
+                   * it, so every work unit issued its own single-row SELECT. Measured on a cold
+                   * Work Unit load: `work_units.queue_definition_row` x7, 355-757ms each, ~3.4s —
+                   * inside a `work-unit-queue-summaries` response that took 4,960ms of real server
+                   * time and is the largest single item on the cold critical path.
+                   *
+                   * These columns come from the row this query already reads; widening the select
+                   * costs one row-width, not one round trip.
+                   */
+                  .select("id, queue_definition, metadata, department_id, key")
                   .eq("org_id", params.orgId)
                   .eq("department_id", params.departmentId)
                   .order("sort_order", { ascending: true }),
@@ -3578,6 +3718,39 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
     if (!ids.length) {
         return { work_units: [] };
     }
+    /**
+     * Build the preload from the rows just fetched, unless the caller supplied its own (dept
+     * bootstrap). A row whose `queue_definition` is null is deliberately left OUT: the consumer
+     * only takes the preload branch when `queue_definition != null`, so such a work unit falls
+     * through to `loadWorkUnitQueueDefinitionWithMeta` and its existing not-configured error
+     * handling, exactly as before.
+     */
+    const derivedPreloadById =
+        params.workUnitPreloadById ??
+        (skipWuListQuery
+            ? undefined
+            : new Map(
+                  (wuListRes.data ?? [])
+                      .map((r) => r as {
+                          id?: unknown;
+                          queue_definition?: unknown;
+                          metadata?: unknown;
+                          department_id?: unknown;
+                          key?: unknown;
+                      })
+                      .filter((r) => typeof r.id === "string" && r.queue_definition != null)
+                      .map((r) => [
+                          String(r.id),
+                          {
+                              queue_definition: r.queue_definition,
+                              metadata: r.metadata ?? null,
+                              department_id: typeof r.department_id === "string" ? r.department_id : null,
+                              departmentMetadata: null,
+                              key: typeof r.key === "string" ? r.key : null,
+                          },
+                      ])
+              ));
+
     const previewLimit = clampLimit(params.limit ?? 50, 1, 100);
     const wuConc = clampLimit(params.workUnitConcurrency ?? DEPARTMENT_WU_SUMMARY_CONCURRENCY, 1, 8);
 
@@ -3586,7 +3759,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
         (workUnitId) => async (): Promise<DepartmentWorkUnitQueueSummaryRow> => {
             const tWu0 = Date.now();
             try {
-                const preload = params.workUnitPreloadById?.get(workUnitId);
+                const preload = derivedPreloadById?.get(workUnitId);
                 const { queues, work_unit_scope_total, work_unit_scope_queue_key } = await getWorkUnitQueueSummaries({
                     orgId: params.orgId,
                     workUnitId,
@@ -3702,9 +3875,11 @@ export async function getWorkUnitQueueItems(params: {
      * `queue_reveal` — slimmer enrichment for bootstrap / first paint (skips placement projection + optional fetches).
      * `queue_list` — default list API enrichment.
      */
-    rowEnrichment?: "queue_list" | "queue_reveal";
+    rowEnrichment?: "queue_list" | "queue_reveal" | "count_only";
     /** When set, skips departments.metadata fetch inside opportunity row loader. */
     preloadedDepartmentMetadata?: unknown | null;
+    /** Admin document actor for request-scoped child profile-photo projection on queue rows. */
+    documentActor?: DocumentActor | null;
 }): Promise<WorkUnitQueueItemsWithPerf> {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
@@ -3792,20 +3967,26 @@ export async function getWorkUnitQueueItems(params: {
     const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
     const rowEnrichment = params.rowEnrichment ?? "queue_list";
-    const enrichMode = rowEnrichment === "queue_reveal" ? "queue_reveal" : "queue_list";
+    const enrichMode =
+        rowEnrichment === "count_only"
+            ? "count_only"
+            : rowEnrichment === "queue_reveal"
+              ? "queue_reveal"
+              : "queue_list";
     const opportunityEnrichmentPlan =
         def.entity_type === "opportunity"
             ? buildOpportunityQueueEnrichmentPlan({
                   ui: rowListUi,
                   enrichmentMode: enrichMode,
                   executableQueueKey,
-                  skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
+                  skipOptionalEnrichmentFetches:
+                      rowEnrichment === "queue_reveal" || rowEnrichment === "count_only",
               })
             : null;
     const scopeFilter = params.recordScopeConstraints ?? null;
     const rowContextAttach = {
         attachCaseGrainRowContext: opportunityEnrichmentPlan?.attachCaseGrainRowContext ?? true,
-        allowedLocationIds: scopeFilter?.locationIds ?? null,
+                            allowedLocationIds: scopeFilter?.locationIds ?? null,
     };
     const rowContextLane: OpportunityQueueRowContextLaneParams = {
         entityType: def.entity_type,
@@ -4066,6 +4247,8 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
@@ -4148,6 +4331,8 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
@@ -4225,6 +4410,8 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
@@ -4277,7 +4464,12 @@ export async function getWorkUnitQueueItems(params: {
         }
     }
 
-    const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    const { ops: planOps, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    let ops = applyLifecycleStageOpportunityOps(planOps, {
+        membership: laneRouting.builderMembership,
+        workUnitMetadata,
+        workUnitKey,
+    });
     guardLifecycleStageOpportunityQueryFilters({
         workUnitKey,
         opportunityScopeMode: opportunityScopeBundle?.scope.mode,
@@ -4345,6 +4537,8 @@ export async function getWorkUnitQueueItems(params: {
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: slice,
             effectiveStatusDefs,
             enrichment: enrichMode,
@@ -4412,7 +4606,7 @@ export async function getWorkUnitQueueItems(params: {
 
     let itemsBaseRaw = supabase
         .from("opportunities")
-        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
+        .select("id, name, status_key, stage_key, stage_entered_at, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId);
     if (opportunityScopeBundle) {
         itemsBaseRaw = applyOpportunityQueueWorkUnitScope(
@@ -4455,6 +4649,8 @@ export async function getWorkUnitQueueItems(params: {
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: itemRows,
             effectiveStatusDefs,
             enrichment: enrichMode,
@@ -4584,6 +4780,8 @@ export async function getWorkUnitQueueItems(params: {
     const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
         supabase,
         orgId: params.orgId,
+        documentActor: params.documentActor ?? null,
+        allowedLocationIds: scopeFilter?.locationIds ?? null,
         rows: itemRows,
         effectiveStatusDefs,
         enrichment: enrichMode,

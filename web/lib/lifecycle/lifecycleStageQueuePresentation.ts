@@ -25,7 +25,7 @@ export function lifecycleStageQueueRowPreviewFields(stageKey: string): QueueUiRo
         "email",
         "child_name",
         "program",
-        "desired_start_date",
+        "start_date",
     ];
     if (mode === "waitlist_candidate") {
         return base;
@@ -33,7 +33,7 @@ export function lifecycleStageQueueRowPreviewFields(stageKey: string): QueueUiRo
     const operator = asOperatorStageKey(key);
     const isTourStage = operator === "tour" || /\btour\b/i.test(key);
     if (isTourStage) {
-        return [...base.filter((f) => f !== "desired_start_date"), "tour_date", "desired_start_date"];
+        return [...base.filter((f) => f !== "start_date"), "tour_date", "start_date"];
     }
     return [...base, "tour_date"];
 }

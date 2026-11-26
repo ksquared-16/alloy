@@ -2,11 +2,30 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { assertCommunicationsSendAllowed } from "@/lib/communications/communicationPermissions";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { canonicalSend } from "@/lib/communications/send/canonicalSend";
+import { buildRecordRenderContext } from "@/lib/communications/render/buildRecordRenderContext";
+import { renderOutboundMessage, type RenderContext } from "@/lib/communications/render/renderOutboundMessage";
 import { enforceConsentForSend } from "@/lib/communications/v2/consentEnforcement";
 import { resolveFamilyCommunicationWorkspace } from "@/lib/communications/v2/familyWorkspace";
 import { orchestrateFamilySend, type FamilySendChannel, type RecipientVM } from "@/lib/communications/v2/familyWorkspace";
+import { reconcileContactAttemptOnProviderAcceptance } from "@/lib/communications/contactAttemptOnProviderAcceptance";
+import {
+    FAMILY_SEND_WORK_CONSEQUENCE_FIELD,
+    parseFamilySendWorkConsequence,
+} from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
+import {
+    composerMarkupToEmailHtml,
+    composerMarkupToPlainText,
+} from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
+import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
+import { deliverQueuedEmailHtml } from "@/lib/communications/deliverQueuedEmailHtml";
+import { decideEmailSubject } from "@/lib/communications/email/replySubject";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * POST /api/admin/communications/family-send — UI-5G.
@@ -15,7 +34,47 @@ import { orchestrateFamilySend, type FamilySendChannel, type RecipientVM } from 
  * recipient/channel/category via enforceConsentForSend when comms_v2_compliance is on.
  * DARK behind comms_v2_command_center.
  */
+
+/** Stable short token over the authored content, for per-recipient idempotency. */
+function contentToken(body: string, subject: string | null): string {
+    const s = `${(subject ?? "").trim()}\u0000${body.trim()}`;
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The subject of the conversation a reply is going into, ORG-SCOPED.
+ *
+ * The org filter is the tenant boundary, not decoration: `reply_to_thread_id`
+ * arrives from a client, so naming a thread is never the same as being allowed
+ * to read it. A thread in another organization simply yields nothing, and the
+ * reply is then treated as having no subject to inherit.
+ *
+ * The FIRST email message in the conversation names it. Taking the most recent
+ * would let a parent's mail client rename an Alloy conversation just by editing
+ * the subject line on one reply.
+ */
+async function loadConversationSubject(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    threadId: string
+): Promise<string | null> {
+    const { data } = await supabase
+        .from("communication_messages")
+        .select("subject")
+        .eq("org_id", orgId)
+        .eq("thread_id", threadId)
+        .eq("channel", "email")
+        .not("subject", "is", null)
+        .order("created_at", { ascending: true })
+        .limit(1);
+    const first = (data ?? [])[0] as { subject?: string | null } | undefined;
+    const subject = String(first?.subject ?? "").trim();
+    return subject || null;
+}
 
 export async function POST(req: Request) {
     if (!isCommsV2FlagEnabled("comms_v2_command_center")) {
@@ -23,6 +82,19 @@ export async function POST(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
+
+    const sendAuth = await assertCommunicationsSendAllowed({
+        orgId: ctx.orgId,
+        actor: ctx.userId ? { userId: ctx.userId } : null,
+    });
+    if (!sendAuth.ok) {
+        return NextResponse.json(
+            { error: sendAuth.message, code: "communications_send_forbidden" },
+            { status: 403 }
+        );
+    }
 
     let body: Record<string, unknown>;
     try {
@@ -43,17 +115,76 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "channel must be email or sms (note send is not supported by family-send in 5G)" }, { status: 400 });
     }
     const channel = channelRaw as FamilySendChannel;
-    const subject = typeof body.subject === "string" ? body.subject : null;
-    const message = String(body.body ?? "").trim();
-    if (!message) return NextResponse.json({ error: "body is required" }, { status: 400 });
-    if (channel === "email" && !(subject && subject.trim())) return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
+    const suppliedSubject = typeof body.subject === "string" ? body.subject : null;
+    const messageRaw = String(body.body ?? "").trim();
+    if (!messageRaw) return NextResponse.json({ error: "body is required" }, { status: 400 });
     const confirm = body.confirm === true;
     const clientToken = typeof body.client_token === "string" ? body.client_token : null;
-    const replyToThreadId = typeof body.reply_to_thread_id === "string" ? body.reply_to_thread_id : null;
+    // Template lineage, when the draft was seeded from the Template Library (recorded on the message).
+    const templateIdRaw = typeof body.template_id === "string" ? body.template_id.trim() : "";
+    const templateId = UUID_RE.test(templateIdRaw) ? templateIdRaw : null;
+    const templateVersion =
+        typeof body.template_version === "number" || typeof body.template_version === "string" ? String(body.template_version) : null;
+    const replyToThreadIdRaw = typeof body.reply_to_thread_id === "string" ? body.reply_to_thread_id.trim() : "";
+    const replyToThreadId = UUID_RE.test(replyToThreadIdRaw) ? replyToThreadIdRaw : null;
+    const opportunityIdRaw = typeof body.opportunity_id === "string" ? body.opportunity_id.trim() : "";
+    const opportunityId = UUID_RE.test(opportunityIdRaw) ? opportunityIdRaw : null;
+    // Declared by the caller, never inferred from `opportunity_id` — see familySendWorkConsequence.
+    const workConsequence = parseFamilySendWorkConsequence(body[FAMILY_SEND_WORK_CONSEQUENCE_FIELD]);
+
+    // ---- SUBJECT, PART 1: the refusal that needs no database ---------------
+    // A NEW email with no subject is refused on the request alone. Deciding it
+    // here rather than after the customer lookup keeps the cheapest validation
+    // the cheapest, and means the refusal cannot be masked by an unrelated 404.
+    // The REPLY case genuinely needs a read, and waits until the tenant boundary
+    // below has been proven.
+    const isReply = replyToThreadId !== null;
+    if (channel === "email" && !isReply) {
+        const decision = decideEmailSubject({ supplied: suppliedSubject, isReply: false });
+        if (decision.kind === "subject_required") {
+            return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
+        }
+    }
+
+    let message = messageRaw;
+    let bodyIsHtml = false;
+    if (channel === "email") {
+        const converted = composerMarkupToEmailHtml(messageRaw);
+        if (!converted.ok) {
+            return NextResponse.json({ error: "Message body contains markup that is not allowed" }, { status: 400 });
+        }
+        message = converted.html;
+        bodyIsHtml = true;
+    } else {
+        message = composerMarkupToPlainText(messageRaw);
+        if (!message.trim()) return NextResponse.json({ error: "body is required" }, { status: 400 });
+    }
 
     const supabase = createAdminClient();
     const orgCheck = await assertRowOrg(supabase, "customers", customerId, ctx.orgId);
     if (!orgCheck.ok) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+
+    // ---- SUBJECT, PART 2: what a reply inherits -----------------------------
+    // Only reachable once the customer resolved, so the inheritance read sits
+    // inside a proven tenant boundary. A new email's subject was already settled
+    // above and is simply re-derived here from the same authority.
+    let subject: string | null = null;
+    if (channel === "email") {
+        const decision = decideEmailSubject({
+            supplied: suppliedSubject,
+            conversationSubject: replyToThreadId
+                ? await loadConversationSubject(supabase, ctx.orgId, replyToThreadId)
+                : null,
+            isReply,
+        });
+        if (decision.kind === "subject_required") {
+            return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
+        }
+        // `inherit_unavailable` deliberately proceeds with a null subject: the
+        // operator was never shown a field, and the RFC threading headers carry
+        // the correlation regardless.
+        subject = decision.kind === "subject" ? decision.subject : null;
+    }
 
     const enforceConsent = isCommsV2FlagEnabled("comms_v2_compliance");
 
@@ -62,40 +193,165 @@ export async function POST(req: Request) {
         const recipientById = new Map<string, RecipientVM>();
         for (const g of vm.recipientGroups) for (const r of g.recipients) recipientById.set(r.id, r);
 
+        // A TEMPLATE's tokens resolve per recipient from that recipient's canonical records — the same
+        // context the canonical enqueue renders with, so the preflight answer is the send answer.
+        const hasTokens = (text: string, subj: string | null) => text.includes("{{") || (subj ?? "").includes("{{");
+        const renderValuesByPerson = new Map<string, RenderContext["values"]>();
+        const renderedPreviewByPerson = new Map<string, { subject: string | null; body: string }>();
+        const renderValuesFor = async (personId: string) => {
+            let values = renderValuesByPerson.get(personId);
+            if (!values) {
+                values = await buildRecordRenderContext(supabase, ctx.orgId, { personId, customerId, opportunityId });
+                renderValuesByPerson.set(personId, values);
+            }
+            return values;
+        };
+
         const result = await orchestrateFamilySend(
             {
                 getRecipient: (id) => recipientById.get(id),
+                checkRender: async ({ personId, channel: ch, subject: subj, body: text }) => {
+                    if (!hasTokens(text, subj)) return null;
+                    const rendered = renderOutboundMessage({
+                        subject: ch === "email" ? (subj ?? null) : null,
+                        body: text,
+                        bodyIsHtml: ch === "email" && bodyIsHtml,
+                        context: { values: await renderValuesFor(personId), channel: ch },
+                    });
+                    if (!rendered.ok) return rendered.block.message;
+                    // What THIS recipient will actually read — shown at preflight instead of the draft's tokens.
+                    renderedPreviewByPerson.set(personId, { subject: rendered.output.subject, body: rendered.output.text });
+                    return null;
+                },
                 checkConsent: async (personId) => {
                     if (!enforceConsent) return null;
                     const decision = await enforceConsentForSend({ supabase, orgId: ctx.orgId, personId, channel, lifecycleStage: vm.family.lifecycleStage });
                     return { allowed: decision.allowed, reason: decision.reason ?? null };
                 },
                 runSend: async ({ personId, channel: ch, subject: subj, body: text }) => {
-                    const exec = await executeCommunicationsSend({
+                    // Phase 1 Slice 1: every recipient goes through the canonical
+                    // send command INDEPENDENTLY — its own resolution, purpose
+                    // check, render, eligibility evaluation, idempotency and
+                    // enqueue. One recipient's block cannot suppress another,
+                    // and one recipient's success authorizes nobody else.
+                    //
+                    // The household is context (it scopes which people the
+                    // operator may pick); the recipient is always an explicit
+                    // canonical Person. This route already required a non-empty
+                    // recipient_person_ids list, so no household auto-send path
+                    // existed to remove.
+                    const send = await canonicalSend({
                         supabase,
                         orgId: ctx.orgId,
-                        quickMessage: true,
+                        authorizingUserId: ctx.userId ?? null,
+                        sourceCapability: "communications.family_send",
+                        recipient: { kind: "person", personId },
+                        audience: "external",
+                        category: "operational",
+                        purpose: "family_communication",
+                        channel: ch,
                         primaryEntityType: "persons",
                         primaryEntityId: personId,
-                        channel: ch,
-                        textRaw: text,
-                        subjectRawEmail: ch === "email" ? (subj ?? undefined) : undefined,
-                        bindingIdOpt: "",
-                        recipientPersonIdRaw: personId,
-                        toRawInput: "",
-                        sendMetadataAugment: { source: "family_send", client_token: clientToken, reply_to_thread_id: replyToThreadId },
+                        bodyRaw: text,
+                        bodyIsHtml: ch === "email" && bodyIsHtml,
+                        ...(hasTokens(text, subj) ? { renderContext: await renderValuesFor(personId) } : {}),
+                        ...(templateId ? { templateId, templateVersion } : {}),
+                        subjectRaw: ch === "email" ? (subj ?? null) : null,
+                        userAuthored: true,
+                        // Per-recipient identity: a three-recipient bulk request
+                        // yields three independently protected operations. The
+                        // content hash keeps a later, genuinely different message
+                        // from colliding with an earlier one when the client
+                        // supplies no token.
+                        idempotencyKey: `family_send:${clientToken || contentToken(text, subj)}:${personId}`,
+                        metadata: {
+                            source: "family_send",
+                            customer_id: customerId,
+                            author_user_id: ctx.userId ?? null,
+                            ...(opportunityId ? { opportunity_id: opportunityId } : {}),
+                            ...(workConsequence === "contact_family_work" && opportunityId
+                                ? { work_consequence: "contact_family_work" }
+                                : {}),
+                        },
                     });
-                    return exec.ok
-                        ? { ok: true, thread_id: exec.thread_id, communication_message_id: exec.communication_message_id }
-                        : { ok: false, error: exec.error, code: exec.code, thread_id: exec.thread_id };
+                    return send.outcome === "sent_to_queue" || send.outcome === "duplicate"
+                        ? { ok: true, thread_id: send.threadId ?? null, communication_message_id: send.messageId ?? null }
+                        : { ok: false, error: send.message, code: send.reason, thread_id: send.threadId ?? null };
                 },
             },
             { recipientPersonIds, channel, subject, body: message, confirm }
         );
 
+        // Hand the queued messages to the provider now: email inline (Resend), SMS by waking the sender
+        // and waiting for it — the provider's answer is what decides whether this send was contact.
+        if (confirm && result.mode === "sent" && result.summary.sent > 0 && channel === "email") {
+            let needsQueue = false;
+            for (const row of result.results) {
+                const mid = row.communication_message_id;
+                if (!mid || row.status !== "sent") continue;
+                const delivered = await deliverQueuedEmailHtml({ supabase, messageId: mid });
+                if (!delivered.ok) needsQueue = true;
+            }
+            if (needsQueue) await triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => undefined);
+        } else if (confirm && result.mode === "sent" && result.summary.sent > 0) {
+            await triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => undefined);
+        }
+
+        // CONTACT IS PROVIDER ACCEPTANCE. Only when the caller declared Contact Family work: each accepted
+        // message becomes the lead's contact attempt (configured sufficiency decides what that does to the
+        // work); a rejected one records nothing and the work stays open. A message the provider has not
+        // answered yet is associated later by the webhook / scheduled sweep — never twice.
+        let contact_attempt_association:
+            | {
+                  associated: boolean;
+                  task_id?: string;
+                  outcome_key?: string;
+                  reason?: string;
+                  error?: string;
+              }
+            | undefined;
+        if (confirm && workConsequence === "contact_family_work" && opportunityId && result.mode === "sent" && result.summary.sent > 0) {
+            for (const row of result.results) {
+                const mid = row.communication_message_id;
+                if (!mid || row.status !== "sent") continue;
+                const r = await reconcileContactAttemptOnProviderAcceptance({ supabase, messageId: mid });
+                if (r.state === "associated") {
+                    contact_attempt_association = { associated: true, task_id: r.task_id, outcome_key: r.outcome_key };
+                    break;
+                }
+                contact_attempt_association = {
+                    associated: false,
+                    reason:
+                        r.state === "pending_provider_acceptance"
+                            ? "pending_provider_acceptance"
+                            : r.state === "not_accepted"
+                              ? `provider_${r.status}`
+                              : r.state === "not_applicable"
+                                ? r.reason
+                                : r.state,
+                    ...(r.state === "error" ? { error: r.error } : {}),
+                };
+            }
+        }
+
+        // The canonical render for the first recipient who is ready — the preflight preview. Absent when
+        // the draft has no tokens (the draft already IS the message).
+        const firstReady = result.results.find((r) => r.status === "ready" || r.status === "sent");
+        const rendered_preview = firstReady ? renderedPreviewByPerson.get(firstReady.person_id) ?? null : null;
+
         return NextResponse.json({
             ...result,
-            meta: { customer_id: customerId, channel, confirm, consent_enforced: enforceConsent },
+            rendered_preview,
+            contact_attempt_association,
+            meta: {
+                customer_id: customerId,
+                channel,
+                confirm,
+                consent_enforced: enforceConsent,
+                opportunity_id: opportunityId,
+                work_consequence: workConsequence,
+                reply_to_thread_id: replyToThreadId,
+            },
         });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Family send failed" }, { status: 500 });

@@ -1,0 +1,294 @@
+{
+  "run": "5abb1078",
+  "at": "2026-10-23T13:25:15.139Z",
+  "scenarios": {
+    "setup": {
+      "org": "8aa56c00-5433-4828-978b-f223c32808d6",
+      "opportunityId": "baa8d229-1849-49e5-8b0e-d0e29bb05a5b",
+      "kids": {
+        "ava": {
+          "memberId": "c89a80d7-515f-49db-9852-d723c822d55a",
+          "ocmId": "4575e1dc-45ee-45f6-9da2-e5a26627d710"
+        },
+        "ben": {
+          "memberId": "b81762c6-2d63-4f45-b175-fed84a1614a9",
+          "ocmId": "061aa791-34e8-4667-a178-23e45f1229e8"
+        }
+      },
+      "state": {
+        "family": {
+          "stage_key": "decision",
+          "status_key": "open"
+        },
+        "ava": {
+          "status": "new_inquiry",
+          "participation_stage": null,
+          "journeys": [],
+          "journey_states": []
+        },
+        "ben": {
+          "status": "new_inquiry",
+          "participation_stage": null,
+          "journeys": [],
+          "journey_states": []
+        }
+      },
+      "tasks": [
+        {
+          "id": "a3ab60b8-99a0-409a-972f-bf2812d2406c",
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null,
+          "stage": "tour"
+        },
+        {
+          "id": "f7452474-4138-4a41-882e-75c291571db8",
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null,
+          "stage": "lead"
+        },
+        {
+          "id": "4bae3b63-245e-4e32-8c63-1777fd8bf628",
+          "title": "Support Enrollment Decision",
+          "status": "open",
+          "child": null,
+          "stage": "decision"
+        }
+      ]
+    },
+    "d2_family_enrolling_refused": {
+      "status": 400,
+      "message": "\"Support Enrollment Decision\" cannot be completed yet — 0 of 2 children decided. Choose a path for each child first.",
+      "state_unchanged": true,
+      "work_open": true
+    },
+    "d5_ava_response": {
+      "status": 200,
+      "changed": true,
+      "affected": {
+        "opportunity_id": "baa8d229-1849-49e5-8b0e-d0e29bb05a5b",
+        "customer_member_id": "c89a80d7-515f-49db-9852-d723c822d55a",
+        "process_instance_id": "93760686-7b96-416b-8b8a-1a7d9fba04ef"
+      },
+      "degraded": [],
+      "family_work_completed": false,
+      "progress": {
+        "resolved": 1,
+        "total": 2,
+        "summary": "1 of 2 children decided",
+        "completion_hint": "",
+        "all_resolved": false
+      }
+    },
+    "d5_views_probe": {
+      "registration_via_enrolling_wu": {
+        "slug": "lifecycle_wu_enrolling",
+        "status": 200,
+        "terminal": "operational",
+        "code": null,
+        "rowGrain": "child",
+        "row_keys": [
+          "id",
+          "stageKey",
+          "statusKey",
+          "updatedAt",
+          "title",
+          "context"
+        ],
+        "rows": [
+          {
+            "id": "e52b8cb4-6028-49d8-b99a-1d98e127a37e",
+            "stage": "enrolling",
+            "status": "enrolling",
+            "member": null,
+            "title": "Ben D255abb1078"
+          }
+        ]
+      },
+      "waitlist_via_waitlist_wu": {
+        "slug": "lifecycle_wu_waitlist",
+        "status": 200,
+        "terminal": "operational",
+        "code": null,
+        "rowGrain": "child",
+        "row_keys": [
+          "id",
+          "stageKey",
+          "statusKey",
+          "updatedAt",
+          "title",
+          "context"
+        ],
+        "rows": [
+          {
+            "id": "93760686-7b96-416b-8b8a-1a7d9fba04ef",
+            "stage": "waitlist",
+            "status": "waitlisted",
+            "member": null,
+            "title": "Ava D255abb1078"
+          }
+        ]
+      },
+      "all": {
+        "slug": "lifecycle_wu_decision",
+        "status": 200,
+        "terminal": "operational",
+        "code": null,
+        "rowGrain": "family",
+        "row_keys": [
+          "id",
+          "stageKey",
+          "statusKey",
+          "updatedAt",
+          "title",
+          "context"
+        ],
+        "rows": [
+          {
+            "id": "baa8d229-1849-49e5-8b0e-d0e29bb05a5b",
+            "stage": "decision",
+            "status": "open",
+            "member": null,
+            "title": "D255abb1078 Family"
+          }
+        ]
+      }
+    },
+    "d5_per_child": {
+      "ava": {
+        "status": "waitlisted",
+        "participation_stage": null,
+        "journeys": [
+          "waitlist"
+        ],
+        "journey_states": [
+          "waitlisted"
+        ]
+      },
+      "ben": {
+        "status": "enrolling",
+        "participation_stage": null,
+        "journeys": [
+          "enrolling"
+        ],
+        "journey_states": [
+          "enrolling"
+        ]
+      },
+      "family": {
+        "stage_key": "decision",
+        "status_key": "open"
+      },
+      "family_work_completed_after_last_child": false,
+      "child_work": [
+        {
+          "id": "8a779b55-3704-4467-96ce-a8f60ac28a74",
+          "title": "Send Enrollment Packet",
+          "status": "open",
+          "child": "b81762c6-2d63-4f45-b175-fed84a1614a9",
+          "stage": "enrolling"
+        },
+        {
+          "id": "54a93b0e-5076-48e7-8f58-3f35266b7f03",
+          "title": "Review waitlist position",
+          "status": "open",
+          "child": "c89a80d7-515f-49db-9852-d723c822d55a",
+          "stage": "waitlist"
+        }
+      ],
+      "registration": {
+        "slug": "lifecycle_wu_decision",
+        "status": 200,
+        "terminal": "operational",
+        "code": null,
+        "rowGrain": "child",
+        "row_keys": [
+          "id",
+          "stageKey",
+          "statusKey",
+          "updatedAt",
+          "title",
+          "context"
+        ],
+        "rows": [
+          {
+            "id": "e52b8cb4-6028-49d8-b99a-1d98e127a37e",
+            "stage": "enrolling",
+            "status": "enrolling",
+            "member": null,
+            "title": "Ben D255abb1078"
+          }
+        ]
+      },
+      "waitlist": {
+        "slug": "lifecycle_wu_decision",
+        "status": 200,
+        "terminal": "operational",
+        "code": null,
+        "rowGrain": "child",
+        "row_keys": [
+          "id",
+          "stageKey",
+          "statusKey",
+          "updatedAt",
+          "title",
+          "context"
+        ],
+        "rows": [
+          {
+            "id": "93760686-7b96-416b-8b8a-1a7d9fba04ef",
+            "stage": "waitlist",
+            "status": "waitlisted",
+            "member": null,
+            "title": "Ava D255abb1078"
+          }
+        ]
+      }
+    },
+    "refusals": {
+      "child_work_as_family": {
+        "status": 400,
+        "error": "Child enrollment subject required for this stage outcome"
+      },
+      "repeat": {
+        "status": 200,
+        "changed": false,
+        "error": null
+      },
+      "missing_input": {
+        "status": 400,
+        "error": "Reason is required."
+      },
+      "unknown_decision": {
+        "status": 400,
+        "error": "That option is no longer configured for this step."
+      },
+      "seeded_roles": [
+        "admin",
+        "ops",
+        "regional_lead",
+        "school_director"
+      ],
+      "unauthorized": {
+        "via": "northwind mcert_proc_portal_only (no work.operate)",
+        "status": 403,
+        "error": "Forbidden"
+      }
+    },
+    "family_completion": {
+      "status": 200,
+      "children_unchanged": true
+    },
+    "d2_executor_refusal": {
+      "status": 400,
+      "message": "This family has 2 children and the decision does not say which are enrolling. Record the decision per child rather than moving them together.",
+      "transaction": "aborted",
+      "work_open": true,
+      "children_unchanged": true
+    }
+  },
+  "fixture_orgs_for_teardown": [
+    "8aa56c00-5433-4828-978b-f223c32808d6"
+  ]
+}

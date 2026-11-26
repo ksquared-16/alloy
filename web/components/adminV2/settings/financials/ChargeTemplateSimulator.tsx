@@ -19,6 +19,7 @@ import {
     ConfigField,
     ConfigFieldGrid,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigReadonlyPrimitives";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
 type PreviewResult = { intent: ChargeIntent; wouldWrite: string; existing: { id: string; status: string } | null };
 type MemberRow = { id: string; display_name: string | null; first_name: string | null; last_name: string | null };
@@ -186,8 +187,8 @@ export default function ChargeTemplateSimulator({ templates }: { templates: Char
                         <p className="config-typo-sublabel text-amber-700">Not eligible: {intent.reason}</p>
                     ) : (
                         <ConfigFieldGrid>
-                            <ConfigField label="Occurs on" value={intent.occursOn} />
-                            <ConfigField label="Billable on" value={intent.billableOn} />
+                            <ConfigField label="Occurs on" value={intent.occursOn ? humanDay(intent.occursOn) : intent.occursOn} />
+                            <ConfigField label="Billable on" value={intent.billableOn ? humanDay(intent.billableOn) : intent.billableOn} />
                             <ConfigField label="Lifecycle" value={intent.lifecycleStatus} />
                             <ConfigField label="Charge category" value={chargeCategoryLabel(intent.chargeCategory)} />
                             <ConfigField label="Amount strategy" value={intent.amountStrategy} />

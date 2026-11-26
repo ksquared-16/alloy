@@ -11,14 +11,27 @@ export async function fetchEntityLayoutRecord(id: string): Promise<EntityLayoutR
     return json;
 }
 
-export async function patchEntityLayoutDraft(id: string, name: string, doc: LayoutDoc): Promise<EntityLayoutRecord> {
+export async function patchEntityLayoutDraft(
+    id: string,
+    name: string,
+    doc: LayoutDoc,
+    opts?: { expectedUpdatedAt?: string | null },
+): Promise<EntityLayoutRecord> {
     const res = await fetch(`/api/admin/entity-layouts/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, doc }),
+        body: JSON.stringify({
+            name,
+            doc,
+            ...(opts && "expectedUpdatedAt" in opts ? { expectedUpdatedAt: opts.expectedUpdatedAt } : {}),
+        }),
     });
-    const json = (await res.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
-    if (!res.ok) throw new Error(json.error ?? "Save failed");
+    const json = (await res.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string; code?: string };
+    if (!res.ok) {
+        const err = new Error(json.error ?? "Save failed") as Error & { code?: string };
+        if (json.code) err.code = json.code;
+        throw err;
+    }
     return json;
 }
 

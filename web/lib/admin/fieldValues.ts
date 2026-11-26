@@ -4,6 +4,11 @@ import { payloadFromFieldType } from "@/lib/admin/typedFieldValues";
 /**
  * Persist custom field values from a PATCH body. Keys in body that are not in systemKeys
  * and that exist in field_definitions (org, entity_type, is_system=false) are upserted to field_values.
+ *
+ * REPORTS WHAT IT WROTE. A key with no matching field definition is skipped — correctly, since
+ * there is nowhere to put it — but the skip used to be silent and invisible to the caller, so a
+ * route could return 200 for a PATCH that persisted nothing. Returning the written and skipped
+ * keys lets the caller tell the operator the truth.
  */
 export async function upsertFieldValuesFromBody(
   supabase: SupabaseClient,
@@ -12,12 +17,12 @@ export async function upsertFieldValuesFromBody(
   entityId: string,
   body: Record<string, unknown>,
   systemKeys: readonly string[]
-): Promise<void> {
+): Promise<{ written: string[]; skipped: string[] }> {
   const systemSet = new Set(systemKeys as string[]);
   const customKeys = Object.keys(body).filter(
     (k) => !systemSet.has(k) && !k.startsWith("_") && body[k] !== undefined
   );
-  if (customKeys.length === 0) return;
+  if (customKeys.length === 0) return { written: [], skipped: [] };
 
   const { data: defRows } = await supabase
     .from("field_definitions")
@@ -29,9 +34,14 @@ export async function upsertFieldValuesFromBody(
   const defsList = (defRows ?? []) as { id: string; field_key: string; field_type: string }[];
   const byKey = new Map(defsList.map((r) => [r.field_key, r]));
 
+  const written: string[] = [];
+  const skipped: string[] = [];
   for (const field_key of customKeys) {
     const def = byKey.get(field_key);
-    if (!def) continue;
+    if (!def) {
+      skipped.push(field_key);
+      continue;
+    }
     const typed = payloadFromFieldType(def.field_type, body[field_key]);
     const { data: existing } = await supabase
       .from("field_values")
@@ -55,5 +65,7 @@ export async function upsertFieldValuesFromBody(
         ...typed,
       });
     }
+    written.push(field_key);
   }
+  return { written, skipped };
 }

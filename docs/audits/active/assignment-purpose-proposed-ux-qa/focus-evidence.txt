@@ -1,0 +1,14 @@
+SHOT F01-kurzman
+OPENERS=0
+SHOT F02-assignment-list
+LIST dayFilter=1 rows=1 add=1
+CREATE_CLICK_MS=1018
+SHOT F03-create
+PURPOSE_PICKER options=8
+SHOT F04-editor
+ROOM_OPEN_MS=157 options=7 evaluating=0 ready=seed
+SHOT F05-room-picker
+DETAIL grid=1 promote=0 purpose=1
+SHOT F06-detail
+API_STUDIO_CONFIG_MS=1378 rooms=7 wall=2322
+API_PURPOSES_MS=691 count=8 labels=["Primary Classroom","Before Care","After Care","Enrichment","Transportation","Therapy","Recurring Service","Homeroom"] wall=693

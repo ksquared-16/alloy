@@ -1,0 +1,116 @@
+{
+  "trusted_host_action_id": "tha_bf4503f3fcd8e1",
+  "query_hash": "1241974661d268941826a09c0b367f5c9a482fcba8e0d75c32690bdea910cf62",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-14T20:37:48.145Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_bf4503f3fcd8e1",
+    "query_hash": "1241974661d268941826a09c0b367f5c9a482fcba8e0d75c32690bdea910cf62",
+    "authorization_id": "grnt_85e6f2dc6d914414",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-14T20:37:53.416Z",
+    "question_ids": [
+      "template"
+    ],
+    "questions": {
+      "template": {
+        "question_id": "template",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "Enrollment fee (waived)",
+            "id": "c1609adc-5709-4988-9fa0-56df15964802",
+            "template_key": "waived_fee_1790630157816",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "occurs_on_strategy": "now",
+            "amount_strategy": "fixed",
+            "amount_cents": 0,
+            "charge_category": "one_time",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "label": "Field trip",
+            "id": "c8ddbfe3-c5b3-430e-a970-ebc245b29431",
+            "template_key": "field_trip",
+            "billable_on_strategy": "billing_policy",
+            "billable_offset_days": null,
+            "occurs_on_strategy": "event_date",
+            "amount_strategy": "fixed",
+            "amount_cents": 4000,
+            "charge_category": "one_time",
+            "is_active": true,
+            "effective_start": "2026-10-08",
+            "effective_end": null
+          },
+          {
+            "label": "Late pickup",
+            "id": "315d8b1d-9d1c-4613-97aa-22658a0cdb52",
+            "template_key": "late_pickup_fee",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "occurs_on_strategy": "now",
+            "amount_strategy": "fixed",
+            "amount_cents": 2500,
+            "charge_category": "late_pickup",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "label": "Materials",
+            "id": "27055d7e-72a3-441a-a4dd-ae01fbf1f421",
+            "template_key": "materials_fee",
+            "billable_on_strategy": "offset_days",
+            "billable_offset_days": 7,
+            "occurs_on_strategy": "now",
+            "amount_strategy": "fixed",
+            "amount_cents": 1800,
+            "charge_category": "consumable_fee",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "label": "Monthly tuition",
+            "id": "52400d60-54bf-440d-9ddd-6af1750c1903",
+            "template_key": "tuition",
+            "billable_on_strategy": "billing_policy",
+            "billable_offset_days": null,
+            "occurs_on_strategy": "service_period_start",
+            "amount_strategy": "fixed",
+            "amount_cents": 40000,
+            "charge_category": "tuition",
+            "is_active": true,
+            "effective_start": "2026-10-08",
+            "effective_end": null
+          },
+          {
+            "label": "Registration fee",
+            "id": "c03e638e-0f3e-49f0-9d41-696276c8fa21",
+            "template_key": "registration_fee",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "occurs_on_strategy": "now",
+            "amount_strategy": "fixed",
+            "amount_cents": 7500,
+            "charge_category": "fee",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

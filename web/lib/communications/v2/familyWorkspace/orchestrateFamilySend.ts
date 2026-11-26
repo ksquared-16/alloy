@@ -26,6 +26,12 @@ export type FamilySendDeps = {
     getRecipient: (personId: string) => RecipientVM | undefined;
     /** null => consent enforcement disabled (comms_v2_compliance off). */
     checkConsent: (personId: string, channel: FamilySendChannel) => Promise<ConsentCheck>;
+    /**
+     * The canonical render for this recipient (tokens filled from their records). A refusal blocks the
+     * recipient at PREFLIGHT, where the operator can still fix the message — not after confirm, where it
+     * used to be swallowed. Absent: no pre-check (the enqueue still renders and refuses).
+     */
+    checkRender?: (args: { personId: string; channel: FamilySendChannel; subject: string | null; body: string }) => Promise<string | null>;
     runSend: (args: { personId: string; channel: FamilySendChannel; subject: string | null; body: string }) => Promise<{
         ok: boolean;
         thread_id?: string | null;
@@ -62,6 +68,13 @@ export async function orchestrateFamilySend(deps: FamilySendDeps, args: FamilySe
         const consent = await deps.checkConsent(personId, args.channel);
         if (consent && !consent.allowed) {
             results.push({ ...base, status: "blocked", reason: consent.reason ?? "Consent not granted" });
+            continue;
+        }
+        const renderBlock = deps.checkRender
+            ? await deps.checkRender({ personId, channel: args.channel, subject: args.subject, body: args.body })
+            : null;
+        if (renderBlock) {
+            results.push({ ...base, status: "blocked", reason: renderBlock });
             continue;
         }
         if (!args.confirm) {

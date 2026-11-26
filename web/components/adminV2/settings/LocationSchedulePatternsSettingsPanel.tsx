@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * Canonical `schedule_patterns` · shared with Locations — this panel lists/creates/updates
+ * rows through the same `/api/admin/schedule-patterns` endpoints that
+ * `Operations → Studio → Patterns` uses (`OperationsStudio.tsx`'s `onMutatePattern`). There is
+ * no separate Locations-only pattern store; Studio is simply another client of this API.
+ *
+ * The editor moved hosts when Assignments was absorbed into Operations; the API, the table and this
+ * panel did not. That is the whole point of naming the endpoint here rather than the screen.
+ */
+
 import { useCallback, useEffect, useState } from "react";
 import {
     createSchedulePattern,
@@ -116,7 +126,7 @@ export default function LocationSchedulePatternsSettingsPanel({ siteId, onError,
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-alloy-pine">Schedules</h3>
                 <p className="mt-1 text-[11px] text-alloy-midnight/55">
                     Site schedule patterns. Matched at approval handoff from enrollment schedule proposals
-                    (`desired_schedule_type`).
+                    (`schedule_type`).
                 </p>
             </div>
 

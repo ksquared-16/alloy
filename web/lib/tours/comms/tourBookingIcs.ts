@@ -21,7 +21,10 @@ export type BuildTourBookingIcsInput = {
     locationLabel?: string | null;
     organizerName?: string | null;
     organizerEmail?: string | null;
+    /** Single attendee (legacy). Prefer `attendeeEmails` when multiple. */
     attendeeEmail?: string | null;
+    /** Staff attendees (primary host + optional additional). Deduped. */
+    attendeeEmails?: readonly string[] | null;
     status?: TourBookingIcsEventStatus;
     /** Monotonic version for reschedule (default 0). */
     sequence?: number;
@@ -163,9 +166,19 @@ export function buildTourBookingIcs(input: BuildTourBookingIcsInput): string {
         lines.push(foldIcsLine(`ORGANIZER${cn}:mailto:${orgEmail}`));
     }
 
-    const attendee = String(input.attendeeEmail ?? "").trim();
-    if (attendee) {
-        lines.push(foldIcsLine(`ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee}`));
+    const attendeeSet = new Set<string>();
+    const single = String(input.attendeeEmail ?? "").trim();
+    if (single) attendeeSet.add(single.toLowerCase());
+    for (const raw of input.attendeeEmails ?? []) {
+        const e = String(raw ?? "").trim();
+        if (e) attendeeSet.add(e.toLowerCase());
+    }
+    for (const attendee of attendeeSet) {
+        lines.push(
+            foldIcsLine(
+                `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee}`,
+            ),
+        );
     }
 
     if (input.opportunityId) {
