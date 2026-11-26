@@ -412,6 +412,7 @@ applied, is the [first-promotion briefing](environments-p1s-first-promotion-brie
 | Candidate | Why it is not a setting | Found at |
 |---|---|---|
 | `web:AI_ENRICHMENT_FORBIDDEN` | error code returned to the caller | `web/lib/ai/aiEnrichmentPermissions.ts:100` |
+| `web:AUDIT_EVENT_MISMATCH` | error code (added by PR #1647, W-C1) | `web/lib/documents/external/externalDocumentWrites.ts:315` |
 | `web:AUDIT_UNAVAILABLE` | error code | `web/lib/documents/external/externalDocumentWrites.ts:203` |
 | `web:CONTENT_MISMATCH` | error code | `web/lib/documents/external/externalDocumentWrites.ts:188` |
 | `web:FILE_TOO_LARGE` | error code | `web/lib/documents/external/externalDocumentWrites.ts:143` |
